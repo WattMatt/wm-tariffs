@@ -62,12 +62,16 @@ serve(async (req) => {
 
     console.log('Calling Lovable AI to extract meter data from schematic...');
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 90000); // 90 second timeout
+
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${LOVABLE_API_KEY}`,
         'Content-Type': 'application/json',
       },
+      signal: controller.signal,
       body: JSON.stringify({
         model: 'google/gemini-2.5-pro',
         messages: [
@@ -121,6 +125,8 @@ Return ONLY the JSON array, no markdown formatting, no explanatory text.`
       })
     });
 
+    clearTimeout(timeoutId);
+
     if (!response.ok) {
       const errorText = await response.text();
       console.error('Lovable AI error:', response.status, errorText);
@@ -139,15 +145,17 @@ Return ONLY the JSON array, no markdown formatting, no explanatory text.`
         );
       }
 
-      throw new Error(`AI API error: ${response.status}`);
+      throw new Error(`AI API error: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
+    console.log('AI request completed successfully');
     const content = data.choices?.[0]?.message?.content;
     
     console.log('AI Response:', content);
 
     if (!content) {
+      console.error('No content in AI response');
       throw new Error('No content in AI response');
     }
 
@@ -172,8 +180,17 @@ Return ONLY the JSON array, no markdown formatting, no explanatory text.`
       JSON.stringify({ meters }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
-
   } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.error('Request timeout after 90 seconds');
+      return new Response(
+        JSON.stringify({ 
+          error: 'Request timeout - the AI took too long to process the schematic. Please try again.',
+        }),
+        { status: 504, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
     console.error('Error in extract-schematic-meters:', error);
     return new Response(
       JSON.stringify({ 
