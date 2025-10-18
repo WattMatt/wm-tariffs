@@ -452,24 +452,35 @@ export default function PdfImportDialog() {
         continue;
       }
       
-      // Detect new tariff section (numbered tariff like "1. Tariff I:" or descriptive name)
-      if ((col0.match(/^\d+\./) || col0.toLowerCase().includes('tariff')) && !col1) {
+      // Detect new tariff section - improved detection for various formats
+      const isTariffHeader = 
+        // Pattern 1: Numbered sections like "1. Tariff I:"
+        col0.match(/^\d+\./) ||
+        // Pattern 2: Lines ending with colon that describe tariffs
+        (col0.endsWith(':') && !col1 && !col0.match(/^(Basic|Demand|Access|Service|Energy|Peak|Standard|Off)/i)) ||
+        // Pattern 3: ALL CAPS descriptive headers (min 15 chars to avoid false positives)
+        (col0 === col0.toUpperCase() && col0.length > 15 && !col1 && 
+         col0.match(/(DOMESTIC|BUSINESS|COMMERCIAL|INDUSTRIAL|AGRICULTURAL|RESELLER|BULK|SCALE)/)) ||
+        // Pattern 4: Specific tariff descriptors
+        (col0.match(/^(Domestic|Business|Commercial|Industrial|Agricultural).*(Tariff|Supply|Scale|Demand)/i) && !col1);
+      
+      if (isTariffHeader) {
         // Save previous tariff if exists
         if (currentTariff && (currentTariff.blocks.length > 0 || currentTariff.charges.length > 0 || currentTariff.touPeriods.length > 0)) {
           tariffStructures.push(currentTariff);
         }
         
         // Start new tariff
-        const tariffType = col0.toLowerCase().includes('domestic') || col0.toLowerCase().includes('indigent') ? 'domestic' :
-                          col0.toLowerCase().includes('business') || col0.toLowerCase().includes('commercial') ? 'commercial' :
+        const tariffType = col0.toLowerCase().includes('domestic') || col0.toLowerCase().includes('indigent') || col0.toLowerCase().includes('lifeline') ? 'domestic' :
+                          col0.toLowerCase().includes('business') || col0.toLowerCase().includes('commercial') || col0.toLowerCase().includes('reseller') ? 'commercial' :
                           col0.toLowerCase().includes('industrial') ? 'industrial' :
-                          col0.toLowerCase().includes('agricultural') ? 'agricultural' : 'commercial';
+                          col0.toLowerCase().includes('agricultural') || col0.toLowerCase().includes('farm') ? 'agricultural' : 'commercial';
         
         // Check if this is a TOU tariff
-        const isTou = col0.toLowerCase().includes('flex') || col0.toLowerCase().includes('tou');
+        const isTou = col0.toLowerCase().includes('flex') || col0.toLowerCase().includes('tou') || col0.toLowerCase().includes('time of use');
         
         currentTariff = {
-          name: col0.replace(/^\d+\.\s*/, ''), // Remove leading number
+          name: col0.replace(/^\d+\.\s*/, '').replace(/:$/, '').trim(), // Clean up name
           tariffType,
           meterConfiguration: col0.toLowerCase().includes('prepaid') ? 'prepaid' : 
                              col0.toLowerCase().includes('conventional') ? 'conventional' : null,
@@ -488,28 +499,45 @@ export default function PdfImportDialog() {
       
       if (!currentTariff) continue;
       
-      // Parse blocks with R/kWh values
+      // Parse blocks - improved to handle different formats
       if (col0.match(/Block \d+/i) && col1) {
         const blockMatch = col0.match(/Block \d+ \((.+?)\)/i);
         if (blockMatch) {
           const range = blockMatch[1];
-          const [from, to] = range.includes('-') ? 
-            range.split('-').map(s => parseFloat(s.replace(/[^\d.]/g, ''))) :
-            range.includes('>') ? [parseFloat(range.replace(/[^\d.]/g, '')), null] :
-            [0, null];
+          let from = 0;
+          let to: number | null = null;
           
-          // Parse value and convert R/kWh to c/kWh by multiplying by 100
+          // Parse range patterns
+          if (range.includes('–') || range.includes('-')) {
+            // Split on dash (including en-dash and em-dash)
+            const parts = range.split(/[–-]/).map(s => s.trim());
+            from = parseFloat(parts[0].replace(/[^\d.]/g, ''));
+            to = parts[1] ? parseFloat(parts[1].replace(/[^\d.]/g, '')) : null;
+          } else if (range.includes('>')) {
+            // Greater than pattern like ">650kWh"
+            from = parseFloat(range.replace(/[^\d.]/g, ''));
+            to = null;
+          } else {
+            // Single number or other format
+            from = parseFloat(range.replace(/[^\d.]/g, '')) || 0;
+          }
+          
+          // Parse value - handle both c/kWh (already in cents) and R/kWh (needs conversion)
           const valueStr = col1.toString().replace(/\s/g, '').replace(',', '.');
-          const energyCharge = parseFloat(valueStr) * 100; // Convert R to cents
+          let energyCharge = parseFloat(valueStr);
+          
+          // If value is less than 10, assume it's in R/kWh and convert to cents
+          if (energyCharge < 10) {
+            energyCharge = energyCharge * 100;
+          }
           
           // Only add block if energy charge is valid
-          if (!isNaN(energyCharge) && isFinite(energyCharge)) {
+          if (!isNaN(energyCharge) && isFinite(energyCharge) && energyCharge > 0) {
             currentTariff.blocks.push({
               blockNumber: currentTariff.blocks.length + 1,
               kwhFrom: from,
               kwhTo: to,
-              energyChargeCents: energyCharge,
-              season: currentSeason || undefined
+              energyChargeCents: energyCharge
             });
           } else {
             console.warn(`Skipping invalid block energy charge for "${col0}":`, col1);
@@ -518,21 +546,26 @@ export default function PdfImportDialog() {
         continue;
       }
       
-      // Parse TOU periods (Peak/Standard/Off-peak with R/kWh)
-      if (col0.match(/^(Peak|Standard|Off-peak)/i) && col1 && col0.includes('kWh')) {
+      // Parse TOU periods (Peak/Standard/Off-peak) - improved detection
+      if (col0.match(/^(Peak|Standard|Off-?peak)/i) && col1) {
         const periodType = col0.toLowerCase().includes('peak') && !col0.toLowerCase().includes('off') ? 'peak' :
                           col0.toLowerCase().includes('off') ? 'offpeak' : 'standard';
         
-        // Parse value and convert R/kWh to c/kWh by multiplying by 100
+        // Parse value - handle both c/kWh and R/kWh
         const valueStr = col1.toString().replace(/\s/g, '').replace(',', '.');
-        const energyCharge = parseFloat(valueStr) * 100; // Convert R to cents
+        let energyCharge = parseFloat(valueStr);
         
-        if (!isNaN(energyCharge) && isFinite(energyCharge) && currentSeason) {
+        // If value is less than 10, assume it's in R/kWh and convert to cents
+        if (energyCharge < 10) {
+          energyCharge = energyCharge * 100;
+        }
+        
+        if (!isNaN(energyCharge) && isFinite(energyCharge) && energyCharge > 0) {
           currentTariff.usesTou = true;
           currentTariff.touType = 'megaflex';
           
           // Map season to standard format
-          const season = currentSeason.toLowerCase().includes('summer') || currentSeason.toLowerCase().includes('low') ? 'summer' : 'winter';
+          const season = currentSeason && (currentSeason.toLowerCase().includes('summer') || currentSeason.toLowerCase().includes('low')) ? 'summer' : 'winter';
           
           // Default time ranges for different periods
           const timeRanges = {
@@ -544,7 +577,7 @@ export default function PdfImportDialog() {
           currentTariff.touPeriods.push({
             periodType,
             season,
-            dayType: 'weekday', // Default to weekday
+            dayType: 'weekday',
             startHour: timeRanges[periodType as keyof typeof timeRanges].start,
             endHour: timeRanges[periodType as keyof typeof timeRanges].end,
             energyChargeCents: energyCharge
@@ -553,23 +586,26 @@ export default function PdfImportDialog() {
         continue;
       }
       
-      // Parse fixed charges (Basic, Demand, Access, etc.) - keep as-is
-      if (col0.match(/(Basic|Demand|Access|Service).*Charge/i) && col1) {
+      // Parse fixed charges - improved to handle various charge types
+      if (col0.match(/(Basic|Demand|Access|Service|Capacity|Network|Fixed).*[Cc]harge/i) && col1) {
         const chargeType = col0.toLowerCase().includes('basic') || col0.toLowerCase().includes('monthly') ? 'basic_monthly' :
                           col0.toLowerCase().includes('demand') ? 'demand_kva' :
                           col0.toLowerCase().includes('access') ? 'access_charge' :
+                          col0.toLowerCase().includes('capacity') ? 'capacity_charge' :
+                          col0.toLowerCase().includes('network') ? 'network_charge' :
+                          col0.toLowerCase().includes('fixed') ? 'fixed_charge' :
                           col0.toLowerCase().includes('service') ? 'service_charge' : 'service_charge';
         
-        const unit = col0.includes('R/month') || col0.toLowerCase().includes('monthly') ? 'R/month' :
-                    col0.includes('R/kVA') || col0.toLowerCase().includes('kva') ? 'R/kVA/month' :
-                    col0.includes('R/kWh') ? 'R/kWh' : 'R/month';
+        const unit = col0.includes('R/month') || col0.toLowerCase().includes('monthly') || col0.toLowerCase().includes('/month') ? 'R/month' :
+                    col0.includes('R/kVA') || col0.toLowerCase().includes('kva') || col0.toLowerCase().includes('/kva') ? 'R/kVA/month' :
+                    col0.includes('R/kWh') || col0.toLowerCase().includes('/kwh') ? 'R/kWh' : 'R/month';
         
-        // Parse and validate charge amount - keep as-is (already in Rands)
+        // Parse and validate charge amount
         const valueStr = col1.toString().replace(/\s/g, '').replace(',', '.');
         const chargeAmount = parseFloat(valueStr);
         
-        // Only add charge if amount is a valid number
-        if (!isNaN(chargeAmount) && isFinite(chargeAmount)) {
+        // Only add charge if amount is a valid number and positive
+        if (!isNaN(chargeAmount) && isFinite(chargeAmount) && chargeAmount > 0) {
           currentTariff.charges.push({
             chargeType,
             chargeAmount,
@@ -582,20 +618,24 @@ export default function PdfImportDialog() {
         continue;
       }
       
-      // Parse energy charge lines (for simple seasonal tariffs)
-      if (col0.match(/Energy charge/i) && col1) {
-        // Parse value and convert R/kWh to c/kWh by multiplying by 100
+      // Parse energy charge lines (for simple tariffs without blocks)
+      if (col0.match(/Energy charge/i) && col1 && currentTariff.blocks.length === 0) {
+        // Parse value - handle both c/kWh and R/kWh
         const valueStr = col1.toString().replace(/\s/g, '').replace(',', '.');
-        const energyCharge = parseFloat(valueStr) * 100; // Convert R to cents
+        let energyCharge = parseFloat(valueStr);
         
-        if (!isNaN(energyCharge) && isFinite(energyCharge)) {
-          // Add as a block with no limits
+        // If value is less than 10, assume it's in R/kWh and convert to cents
+        if (energyCharge < 10) {
+          energyCharge = energyCharge * 100;
+        }
+        
+        if (!isNaN(energyCharge) && isFinite(energyCharge) && energyCharge > 0) {
+          // Add as a single-rate tariff (block with no limits)
           currentTariff.blocks.push({
-            blockNumber: currentTariff.blocks.length + 1,
+            blockNumber: 1,
             kwhFrom: 0,
             kwhTo: null,
-            energyChargeCents: energyCharge,
-            season: currentSeason || undefined
+            energyChargeCents: energyCharge
           });
         }
       }
