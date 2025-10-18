@@ -157,26 +157,57 @@ export default function PdfImportDialog() {
         const cellValue = row[0]?.toString() || '';
         
         // Pattern 1: "MUNICIPALITY - XX.XX%"
-        let match = cellValue.match(/^([A-Z\s&]+?)\s*-\s*(\d+\.?\d*)%/);
+        let match = cellValue.match(/^([A-Z\s&]+?)\s*-?\s*(\d+[,.]?\d*)%/);
         if (match) {
           const name = match[1].trim();
-          const nersaIncrease = parseFloat(match[2]);
+          const nersaIncrease = parseFloat(match[2].replace(',', '.'));
           
           foundMunicipalities.push({
             name,
             nersaIncrease,
             province: file!.name.includes('Eastern') ? 'Eastern Cape' : 
-                     file!.name.includes('Free') ? 'Free State' : 'Unknown',
+                     file!.name.includes('Free') ? 'Free State' : 
+                     file!.name.includes('Western') ? 'Western Cape' :
+                     file!.name.includes('Northern') ? 'Northern Cape' :
+                     file!.name.includes('Gauteng') ? 'Gauteng' :
+                     file!.name.includes('KwaZulu') || file!.name.includes('KZN') ? 'KwaZulu-Natal' :
+                     file!.name.includes('Limpopo') ? 'Limpopo' :
+                     file!.name.includes('Mpumalanga') ? 'Mpumalanga' :
+                     file!.name.includes('North West') || file!.name.includes('NorthWest') ? 'North West' : 'Unknown',
             status: 'pending'
           });
           municipalityFound = true;
           break;
         }
         
-        // Pattern 2: Look for cells containing percentage (e.g., "10.76%")
+        // Pattern 2: Municipality name followed by percentage in same cell or nearby (e.g., "Nkandla 10,89%")
+        const nameWithPercent = cellValue.match(/^([A-Z][A-Za-z\s&]+?)\s+(\d+[,.]?\d*)%/);
+        if (nameWithPercent && !municipalityFound) {
+          const name = nameWithPercent[1].trim();
+          const nersaIncrease = parseFloat(nameWithPercent[2].replace(',', '.'));
+          
+          foundMunicipalities.push({
+            name,
+            nersaIncrease,
+            province: file!.name.includes('Eastern') ? 'Eastern Cape' : 
+                     file!.name.includes('Free') ? 'Free State' : 
+                     file!.name.includes('Western') ? 'Western Cape' :
+                     file!.name.includes('Northern') ? 'Northern Cape' :
+                     file!.name.includes('Gauteng') ? 'Gauteng' :
+                     file!.name.includes('KwaZulu') || file!.name.includes('KZN') ? 'KwaZulu-Natal' :
+                     file!.name.includes('Limpopo') ? 'Limpopo' :
+                     file!.name.includes('Mpumalanga') ? 'Mpumalanga' :
+                     file!.name.includes('North West') || file!.name.includes('NorthWest') ? 'North West' : 'Unknown',
+            status: 'pending'
+          });
+          municipalityFound = true;
+          break;
+        }
+        
+        // Pattern 3: Look for cells containing percentage (e.g., "10,89%")
         for (let j = 0; j < row.length; j++) {
           const cell = row[j]?.toString() || '';
-          const percentMatch = cell.match(/(\d+\.?\d*)%/);
+          const percentMatch = cell.match(/(\d+[,.]?\d*)%/);
           if (percentMatch) {
             // Look for municipality name in nearby cells or previous rows
             let municipalityName = '';
@@ -199,9 +230,16 @@ export default function PdfImportDialog() {
             if (municipalityName && !foundMunicipalities.some(m => m.name === municipalityName)) {
               foundMunicipalities.push({
                 name: municipalityName,
-                nersaIncrease: parseFloat(percentMatch[1]),
+                nersaIncrease: parseFloat(percentMatch[1].replace(',', '.')),
                 province: file!.name.includes('Eastern') ? 'Eastern Cape' : 
-                         file!.name.includes('Free') ? 'Free State' : 'Unknown',
+                         file!.name.includes('Free') ? 'Free State' : 
+                         file!.name.includes('Western') ? 'Western Cape' :
+                         file!.name.includes('Northern') ? 'Northern Cape' :
+                         file!.name.includes('Gauteng') ? 'Gauteng' :
+                         file!.name.includes('KwaZulu') || file!.name.includes('KZN') ? 'KwaZulu-Natal' :
+                         file!.name.includes('Limpopo') ? 'Limpopo' :
+                         file!.name.includes('Mpumalanga') ? 'Mpumalanga' :
+                         file!.name.includes('North West') || file!.name.includes('NorthWest') ? 'North West' : 'Unknown',
                 status: 'pending'
               });
               municipalityFound = true;
@@ -458,11 +496,15 @@ export default function PdfImportDialog() {
         col0.match(/^\d+\./) ||
         // Pattern 2: Lines ending with colon that describe tariffs
         (col0.endsWith(':') && !col1 && !col0.match(/^(Basic|Demand|Access|Service|Energy|Peak|Standard|Off)/i)) ||
-        // Pattern 3: ALL CAPS descriptive headers (min 15 chars to avoid false positives)
-        (col0 === col0.toUpperCase() && col0.length > 15 && !col1 && 
+        // Pattern 3: ALL CAPS descriptive headers (min 10 chars to catch more patterns)
+        (col0 === col0.toUpperCase() && col0.length >= 10 && !col1 && 
          col0.match(/(DOMESTIC|BUSINESS|COMMERCIAL|INDUSTRIAL|AGRICULTURAL|RESELLER|BULK|SCALE)/)) ||
-        // Pattern 4: Specific tariff descriptors
-        (col0.match(/^(Domestic|Business|Commercial|Industrial|Agricultural).*(Tariff|Supply|Scale|Demand)/i) && !col1);
+        // Pattern 4: Specific tariff descriptors (more flexible - handles single word like "Commercial")
+        (col0.match(/^(Domestic|Business|Commercial|Industrial|Agricultural|Conventional|Prepaid)/i) && 
+         (!col1 || col1.toString().trim() === '') &&
+         col0.length > 5) ||
+        // Pattern 5: Lines that look like tariff headers even without keywords
+        (col0.match(/.*(Tariff|Supply|Scale|Demand|Meter).*$/i) && !col1 && col0.length > 8);
       
       if (isTariffHeader) {
         // Save previous tariff if exists
@@ -619,7 +661,9 @@ export default function PdfImportDialog() {
       }
       
       // Parse energy charge lines (for simple tariffs without blocks)
-      if (col0.match(/Energy charge/i) && col1 && currentTariff.blocks.length === 0) {
+      // Enhanced to handle bullet points and various formats
+      const energyChargeMatch = col0.match(/[o·•-]?\s*Energy [Cc]harge:?\s*(c\/kWh)?/i);
+      if (energyChargeMatch && col1 && currentTariff.blocks.length === 0) {
         // Parse value - handle both c/kWh and R/kWh
         const valueStr = col1.toString().replace(/\s/g, '').replace(',', '.');
         let energyCharge = parseFloat(valueStr);
@@ -630,13 +674,20 @@ export default function PdfImportDialog() {
         }
         
         if (!isNaN(energyCharge) && isFinite(energyCharge) && energyCharge > 0) {
-          // Add as a single-rate tariff (block with no limits)
-          currentTariff.blocks.push({
-            blockNumber: 1,
-            kwhFrom: 0,
-            kwhTo: null,
-            energyChargeCents: energyCharge
-          });
+          // Check if we already added this exact energy charge to avoid duplicates
+          const isDuplicate = currentTariff.blocks.some(b => 
+            Math.abs(b.energyChargeCents - energyCharge) < 0.01
+          );
+          
+          if (!isDuplicate) {
+            // Add as a single-rate tariff (block with no limits)
+            currentTariff.blocks.push({
+              blockNumber: currentTariff.blocks.length + 1,
+              kwhFrom: 0,
+              kwhTo: null,
+              energyChargeCents: energyCharge
+            });
+          }
         }
       }
     }
