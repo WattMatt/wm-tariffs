@@ -72,12 +72,23 @@ export default function PdfImportDialog() {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
-    if (selectedFile && selectedFile.type === "application/pdf") {
-      setFile(selectedFile);
-      setMunicipalities([]);
-      setCurrentMunicipality(null);
-    } else {
-      toast.error("Please select a PDF file");
+    if (selectedFile) {
+      const fileType = selectedFile.type;
+      const fileName = selectedFile.name.toLowerCase();
+      
+      if (
+        fileType === "application/pdf" || 
+        fileType === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+        fileType === "application/vnd.ms-excel" ||
+        fileName.endsWith('.xlsx') ||
+        fileName.endsWith('.xls')
+      ) {
+        setFile(selectedFile);
+        setMunicipalities([]);
+        setCurrentMunicipality(null);
+      } else {
+        toast.error("Please select a PDF or Excel file");
+      }
     }
   };
 
@@ -103,42 +114,93 @@ export default function PdfImportDialog() {
 
   const handleIdentifyMunicipalities = async () => {
     if (!file) {
-      toast.error("Please select a PDF file");
+      toast.error("Please select a file");
       return;
     }
 
     setIsProcessing(true);
-    console.log("Identifying municipalities in:", file.name);
+    const isExcel = file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls');
+    
+    console.log(`Processing ${isExcel ? 'Excel' : 'PDF'} file:`, file.name);
 
     try {
-      const documentContent = await extractTextFromPdf(file);
-      console.log("Extracted text length:", documentContent.length);
-
-      // Phase 1: Identify municipalities
-      const { data, error } = await supabase.functions.invoke("extract-tariff-data", {
-        body: { documentContent, phase: "identify" }
-      });
-
-      if (error) throw error;
-      if (!data.success || !data.municipalities) {
-        throw new Error("Failed to identify municipalities");
+      if (isExcel) {
+        await handleExcelIdentification();
+      } else {
+        await handlePdfIdentification();
       }
-
-      const foundMunicipalities: MunicipalityProgress[] = data.municipalities.map((m: MunicipalityInfo) => ({
-        name: m.name,
-        nersaIncrease: m.nersaIncrease,
-        province: m.province,
-        status: 'pending' as const
-      }));
-
-      setMunicipalities(foundMunicipalities);
-      toast.success(`Found ${foundMunicipalities.length} municipality/municipalities. Click each to extract and save.`);
     } catch (error: any) {
       console.error("Error identifying municipalities:", error);
       toast.error(error.message || "Failed to identify municipalities");
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  const handleExcelIdentification = async () => {
+    const XLSX = await import('xlsx');
+    const arrayBuffer = await file!.arrayBuffer();
+    const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+    
+    const foundMunicipalities: MunicipalityProgress[] = [];
+    
+    // Process each sheet
+    for (const sheetName of workbook.SheetNames) {
+      const worksheet = workbook.Sheets[sheetName];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+      
+      // Look for municipality header in first few rows
+      for (let i = 0; i < Math.min(5, jsonData.length); i++) {
+        const row = jsonData[i];
+        const cellValue = row[0]?.toString() || '';
+        
+        // Match pattern: "MUNICIPALITY - XX.XX%"
+        const match = cellValue.match(/^([A-Z\s&]+?)\s*-\s*(\d+\.?\d*)%/);
+        if (match) {
+          const name = match[1].trim();
+          const nersaIncrease = parseFloat(match[2]);
+          
+          foundMunicipalities.push({
+            name,
+            nersaIncrease,
+            province: 'Eastern Cape', // Can be extracted from filename or sheet
+            status: 'pending'
+          });
+          break; // Found municipality for this sheet, move to next
+        }
+      }
+    }
+    
+    if (foundMunicipalities.length === 0) {
+      throw new Error("No municipalities found in Excel file. Expected format: 'MUNICIPALITY - XX.XX%'");
+    }
+    
+    setMunicipalities(foundMunicipalities);
+    toast.success(`Found ${foundMunicipalities.length} municipality/municipalities in Excel. Ready to extract!`);
+  };
+
+  const handlePdfIdentification = async () => {
+    const documentContent = await extractTextFromPdf(file!);
+    console.log("Extracted text length:", documentContent.length);
+
+    const { data, error } = await supabase.functions.invoke("extract-tariff-data", {
+      body: { documentContent, phase: "identify" }
+    });
+
+    if (error) throw error;
+    if (!data.success || !data.municipalities) {
+      throw new Error("Failed to identify municipalities");
+    }
+
+    const foundMunicipalities: MunicipalityProgress[] = data.municipalities.map((m: MunicipalityInfo) => ({
+      name: m.name,
+      nersaIncrease: m.nersaIncrease,
+      province: m.province,
+      status: 'pending' as const
+    }));
+
+    setMunicipalities(foundMunicipalities);
+    toast.success(`Found ${foundMunicipalities.length} municipality/municipalities. Click each to extract and save.`);
   };
 
   const handleExtractAndSave = async (municipalityName: string, index: number) => {
@@ -149,21 +211,29 @@ export default function PdfImportDialog() {
       i === index ? { ...m, status: 'extracting' } : m
     ));
 
+    const isExcel = file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls');
+
     try {
-      const documentContent = await extractTextFromPdf(file);
+      let extractedData: ExtractedTariffData;
+      
+      if (isExcel) {
+        extractedData = await extractFromExcel(municipalityName);
+      } else {
+        const documentContent = await extractTextFromPdf(file);
+        console.log(`Extracting tariffs for: ${municipalityName}`);
+        
+        const { data, error } = await supabase.functions.invoke("extract-tariff-data", {
+          body: { documentContent, phase: "extract", municipalityName }
+        });
 
-      // Phase 2: Extract specific municipality
-      console.log(`Extracting tariffs for: ${municipalityName}`);
-      const { data, error } = await supabase.functions.invoke("extract-tariff-data", {
-        body: { documentContent, phase: "extract", municipalityName }
-      });
-
-      if (error) throw error;
-      if (!data.success || !data.data) {
-        throw new Error("Failed to extract tariff data");
+        if (error) throw error;
+        if (!data.success || !data.data) {
+          throw new Error("Failed to extract tariff data");
+        }
+        
+        extractedData = data.data;
       }
 
-      const extractedData: ExtractedTariffData = data.data;
       console.log(`Extracted ${extractedData.tariffStructures.length} tariff structures`);
 
       // Update status to saving
@@ -189,6 +259,132 @@ export default function PdfImportDialog() {
     } finally {
       setCurrentMunicipality(null);
     }
+  };
+
+  const extractFromExcel = async (municipalityName: string): Promise<ExtractedTariffData> => {
+    const XLSX = await import('xlsx');
+    const arrayBuffer = await file!.arrayBuffer();
+    const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+    
+    // Find the sheet for this municipality
+    let targetSheet = null;
+    for (const sheetName of workbook.SheetNames) {
+      const worksheet = workbook.Sheets[sheetName];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+      
+      // Check first few rows for municipality name
+      for (let i = 0; i < Math.min(5, jsonData.length); i++) {
+        const cellValue = jsonData[i][0]?.toString() || '';
+        if (cellValue.includes(municipalityName)) {
+          targetSheet = jsonData;
+          break;
+        }
+      }
+      if (targetSheet) break;
+    }
+    
+    if (!targetSheet) {
+      throw new Error(`Municipality ${municipalityName} not found in Excel file`);
+    }
+    
+    // Parse the sheet data
+    const tariffStructures: any[] = [];
+    let currentTariff: any = null;
+    let nersaIncrease = 0;
+    
+    for (let i = 0; i < targetSheet.length; i++) {
+      const row = targetSheet[i];
+      const col0 = row[0]?.toString().trim() || '';
+      const col1 = row[1];
+      
+      // Extract NERSA percentage from header
+      if (col0.includes('%')) {
+        const match = col0.match(/(\d+\.?\d*)%/);
+        if (match) nersaIncrease = parseFloat(match[1]);
+        continue;
+      }
+      
+      // Detect new tariff section (no value in col1, descriptive name)
+      if (col0 && !col1 && !col0.includes('Block') && !col0.includes('Charge') && !col0.includes('Season')) {
+        // Save previous tariff if exists
+        if (currentTariff && (currentTariff.blocks.length > 0 || currentTariff.charges.length > 0)) {
+          tariffStructures.push(currentTariff);
+        }
+        
+        // Start new tariff
+        const tariffType = col0.toLowerCase().includes('domestic') ? 'domestic' :
+                          col0.toLowerCase().includes('commercial') ? 'commercial' :
+                          col0.toLowerCase().includes('industrial') ? 'industrial' :
+                          col0.toLowerCase().includes('agricultural') ? 'agricultural' : 'commercial';
+        
+        currentTariff = {
+          name: col0,
+          tariffType,
+          meterConfiguration: col0.toLowerCase().includes('prepaid') ? 'prepaid' : 
+                             col0.toLowerCase().includes('conventional') ? 'conventional' : null,
+          effectiveFrom: '2025-07-01',
+          effectiveTo: null,
+          description: col0,
+          usesTou: false,
+          blocks: [],
+          charges: [],
+          touPeriods: []
+        };
+        continue;
+      }
+      
+      // Parse blocks
+      if (col0.includes('Block') && col1) {
+        const blockMatch = col0.match(/Block \d+ \((.+?)\)/);
+        if (blockMatch && currentTariff) {
+          const range = blockMatch[1];
+          const [from, to] = range.includes('-') ? 
+            range.split('-').map(s => parseFloat(s.trim())) :
+            range.includes('>') ? [parseFloat(range.replace('>', '')), null] :
+            [0, null];
+          
+          currentTariff.blocks.push({
+            blockNumber: currentTariff.blocks.length + 1,
+            kwhFrom: from,
+            kwhTo: to,
+            energyChargeCents: parseFloat(col1.toString().replace(/\s/g, ''))
+          });
+        }
+        continue;
+      }
+      
+      // Parse charges
+      if (col0.includes('Charge') && col1 && currentTariff) {
+        const chargeType = col0.includes('Basic') ? 'basic_monthly' :
+                          col0.includes('Demand') ? 'distribution_network_capacity' :
+                          col0.includes('Energy') ? 'service' : 'service';
+        
+        const unit = col0.includes('R/month') || col0.includes('month') ? 'R/month' :
+                    col0.includes('R/kVA') ? 'R/kVA/month' :
+                    col0.includes('c/kWh') || col0.includes('Energy') ? 'c/kWh' : 'R/month';
+        
+        currentTariff.charges.push({
+          chargeType,
+          chargeAmount: parseFloat(col1.toString().replace(/\s/g, '')),
+          description: col0,
+          unit
+        });
+      }
+    }
+    
+    // Add last tariff
+    if (currentTariff && (currentTariff.blocks.length > 0 || currentTariff.charges.length > 0)) {
+      tariffStructures.push(currentTariff);
+    }
+    
+    return {
+      supplyAuthority: {
+        name: municipalityName,
+        region: 'Eastern Cape',
+        nersaIncreasePercentage: nersaIncrease
+      },
+      tariffStructures
+    };
   };
 
   const saveTariffData = async (extractedData: ExtractedTariffData) => {
@@ -343,22 +539,25 @@ export default function PdfImportDialog() {
       </DialogTrigger>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Import Tariffs from PDF</DialogTitle>
+          <DialogTitle>Import Tariffs from PDF or Excel</DialogTitle>
           <DialogDescription>
-            Upload a NERSA tariff PDF. We'll identify all municipalities and extract tariffs one by one.
+            Upload a NERSA tariff document. Excel files (.xlsx) are recommended for faster, more accurate extraction.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="pdf-file">Select PDF Document</Label>
+            <Label htmlFor="pdf-file">Select Document</Label>
             <Input
               id="pdf-file"
               type="file"
-              accept=".pdf"
+              accept=".pdf,.xlsx,.xls"
               onChange={handleFileChange}
               disabled={isProcessing}
             />
+            <p className="text-xs text-muted-foreground">
+              Supported formats: PDF or Excel (.xlsx, .xls). Excel is faster and more accurate!
+            </p>
           </div>
 
           {file && municipalities.length === 0 && (
