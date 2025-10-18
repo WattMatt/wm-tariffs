@@ -9,9 +9,19 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, Gauge, Upload } from "lucide-react";
+import { Plus, Gauge, Upload, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import CsvImportDialog from "./CsvImportDialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface Meter {
   id: string;
@@ -40,6 +50,8 @@ export default function MetersTab({ siteId }: MetersTabProps) {
   const [isRevenueCritical, setIsRevenueCritical] = useState(false);
   const [csvImportMeterId, setCsvImportMeterId] = useState<string | null>(null);
   const [isCsvDialogOpen, setIsCsvDialogOpen] = useState(false);
+  const [editingMeter, setEditingMeter] = useState<Meter | null>(null);
+  const [deletingMeterId, setDeletingMeterId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchMeters();
@@ -64,9 +76,7 @@ export default function MetersTab({ siteId }: MetersTabProps) {
     setIsLoading(true);
 
     const formData = new FormData(e.currentTarget);
-
-    const { error } = await supabase.from("meters").insert({
-      site_id: siteId,
+    const meterData = {
       meter_number: formData.get("meter_number") as string,
       meter_type: formData.get("meter_type") as string,
       name: formData.get("name") as string,
@@ -78,18 +88,62 @@ export default function MetersTab({ siteId }: MetersTabProps) {
       ct_type: formData.get("ct_type") as string,
       tariff: formData.get("tariff") as string,
       is_revenue_critical: isRevenueCritical,
-    });
+    };
+
+    let error;
+    if (editingMeter) {
+      const { error: updateError } = await supabase
+        .from("meters")
+        .update(meterData)
+        .eq("id", editingMeter.id);
+      error = updateError;
+    } else {
+      const { error: insertError } = await supabase
+        .from("meters")
+        .insert({ ...meterData, site_id: siteId });
+      error = insertError;
+    }
 
     setIsLoading(false);
 
     if (error) {
       toast.error(error.message);
     } else {
-      toast.success("Meter created successfully");
+      toast.success(editingMeter ? "Meter updated successfully" : "Meter created successfully");
       setIsDialogOpen(false);
+      setEditingMeter(null);
       setIsRevenueCritical(false);
       fetchMeters();
     }
+  };
+
+  const handleEdit = (meter: Meter) => {
+    setEditingMeter(meter);
+    setIsRevenueCritical(meter.is_revenue_critical);
+    setIsDialogOpen(true);
+  };
+
+  const handleDelete = async () => {
+    if (!deletingMeterId) return;
+
+    const { error } = await supabase
+      .from("meters")
+      .delete()
+      .eq("id", deletingMeterId);
+
+    if (error) {
+      toast.error("Failed to delete meter");
+    } else {
+      toast.success("Meter deleted successfully");
+      fetchMeters();
+    }
+    setDeletingMeterId(null);
+  };
+
+  const handleCloseDialog = () => {
+    setIsDialogOpen(false);
+    setEditingMeter(null);
+    setIsRevenueCritical(false);
   };
 
   const getMeterTypeColor = (type: string) => {
@@ -125,7 +179,7 @@ export default function MetersTab({ siteId }: MetersTabProps) {
           <h2 className="text-2xl font-bold">Meters</h2>
           <p className="text-muted-foreground">Manage meters for this site</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <Dialog open={isDialogOpen} onOpenChange={handleCloseDialog}>
           <DialogTrigger asChild>
             <Button className="gap-2">
               <Plus className="w-4 h-4" />
@@ -134,19 +188,33 @@ export default function MetersTab({ siteId }: MetersTabProps) {
           </DialogTrigger>
           <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Add New Meter</DialogTitle>
-              <DialogDescription>Register a new electrical meter with all required details</DialogDescription>
+              <DialogTitle>{editingMeter ? "Edit Meter" : "Add New Meter"}</DialogTitle>
+              <DialogDescription>
+                {editingMeter ? "Update meter details" : "Register a new electrical meter with all required details"}
+              </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="meter_number">NO (Meter Number) *</Label>
-                  <Input id="meter_number" name="meter_number" required placeholder="DB-03" />
+                  <Input 
+                    id="meter_number" 
+                    name="meter_number" 
+                    required 
+                    placeholder="DB-03"
+                    defaultValue={editingMeter?.meter_number}
+                  />
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="name">NAME *</Label>
-                  <Input id="name" name="name" required placeholder="ACKERMANS" />
+                  <Input 
+                    id="name" 
+                    name="name" 
+                    required 
+                    placeholder="ACKERMANS"
+                    defaultValue={editingMeter?.name || ""}
+                  />
                 </div>
 
                 <div className="space-y-2">
@@ -157,13 +225,20 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                     type="number" 
                     step="0.01" 
                     required 
-                    placeholder="406" 
+                    placeholder="406"
+                    defaultValue={editingMeter?.area || ""}
                   />
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="rating">RATING *</Label>
-                  <Input id="rating" name="rating" required placeholder="100A TP" />
+                  <Input 
+                    id="rating" 
+                    name="rating" 
+                    required 
+                    placeholder="100A TP"
+                    defaultValue={editingMeter?.rating || ""}
+                  />
                 </div>
 
                 <div className="space-y-2 col-span-2">
@@ -172,23 +247,36 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                     id="cable_specification" 
                     name="cable_specification" 
                     required 
-                    placeholder="4C x 50mm² ALU ECC CABLE" 
+                    placeholder="4C x 50mm² ALU ECC CABLE"
+                    defaultValue={editingMeter?.cable_specification || ""}
                   />
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="serial_number">SERIAL *</Label>
-                  <Input id="serial_number" name="serial_number" required placeholder="35777285" />
+                  <Input 
+                    id="serial_number" 
+                    name="serial_number" 
+                    required 
+                    placeholder="35777285"
+                    defaultValue={editingMeter?.serial_number || ""}
+                  />
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="ct_type">CT *</Label>
-                  <Input id="ct_type" name="ct_type" required placeholder="DOL" />
+                  <Input 
+                    id="ct_type" 
+                    name="ct_type" 
+                    required 
+                    placeholder="DOL"
+                    defaultValue={editingMeter?.ct_type || ""}
+                  />
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="meter_type">Meter Type *</Label>
-                  <Select name="meter_type" required>
+                  <Select name="meter_type" required defaultValue={editingMeter?.meter_type}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select type" />
                     </SelectTrigger>
@@ -202,12 +290,22 @@ export default function MetersTab({ siteId }: MetersTabProps) {
 
                 <div className="space-y-2">
                   <Label htmlFor="location">Location</Label>
-                  <Input id="location" name="location" placeholder="Building A, Floor 2" />
+                  <Input 
+                    id="location" 
+                    name="location" 
+                    placeholder="Building A, Floor 2"
+                    defaultValue={editingMeter?.location || ""}
+                  />
                 </div>
 
                 <div className="space-y-2 col-span-2">
                   <Label htmlFor="tariff">Tariff</Label>
-                  <Input id="tariff" name="tariff" placeholder="Business Standard" />
+                  <Input 
+                    id="tariff" 
+                    name="tariff" 
+                    placeholder="Business Standard"
+                    defaultValue={editingMeter?.tariff || ""}
+                  />
                 </div>
               </div>
 
@@ -223,7 +321,7 @@ export default function MetersTab({ siteId }: MetersTabProps) {
               </div>
 
               <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? "Creating..." : "Create Meter"}
+                {isLoading ? (editingMeter ? "Updating..." : "Creating...") : (editingMeter ? "Update Meter" : "Create Meter")}
               </Button>
             </form>
           </DialogContent>
@@ -298,17 +396,32 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                       )}
                     </TableCell>
                     <TableCell>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setCsvImportMeterId(meter.id);
-                          setIsCsvDialogOpen(true);
-                        }}
-                      >
-                        <Upload className="w-4 h-4 mr-2" />
-                        Import CSV
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleEdit(meter)}
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setDeletingMeterId(meter.id)}
+                        >
+                          <Trash2 className="w-4 h-4 text-destructive" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setCsvImportMeterId(meter.id);
+                            setIsCsvDialogOpen(true);
+                          }}
+                        >
+                          <Upload className="w-4 h-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -329,6 +442,23 @@ export default function MetersTab({ siteId }: MetersTabProps) {
           toast.success("Readings imported successfully");
         }}
       />
+
+      <AlertDialog open={!!deletingMeterId} onOpenChange={() => setDeletingMeterId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Meter</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this meter? This action cannot be undone and will also delete all associated readings and connections.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
