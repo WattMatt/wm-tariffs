@@ -69,14 +69,18 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
+        model: 'google/gemini-2.5-pro',
         messages: [
           {
             role: 'user',
             content: [
               {
                 type: 'text',
-                text: `Extract all meter information from this electrical schematic diagram. For each meter/distribution board, extract:
+                text: `You are analyzing an electrical schematic diagram to extract meter information.
+
+CRITICAL REQUIREMENT: Position accuracy is MANDATORY. Each meter's position MUST be measured with precision.
+
+For each meter/distribution board visible on this schematic, extract:
 - NO (meter number, e.g., DB-03, MB-1)
 - NAME (meter name/location, e.g., ACKERMANS, MAIN BOARD 1)
 - AREA (in m² - extract just the number, e.g., 406)
@@ -84,18 +88,26 @@ serve(async (req) => {
 - CABLE (cable specification, e.g., 4C x 50mm² ALU ECC CABLE)
 - SERIAL (serial number, e.g., 35777285)
 - CT (CT type, e.g., DOL, 150/5A, 300/5A)
-- POSITION (CRITICAL: the EXACT center position of where this specific meter box/symbol appears on the schematic. Measure carefully as a percentage from top-left corner where x is horizontal distance from left edge (0-100%) and y is vertical distance from top edge (0-100%). For example, if a meter is at the horizontal center and 30% down from top, use {"x": 50, "y": 30}. Be as precise as possible - the position should point to the CENTER of the meter box or meter label on the diagram.)
 
-Analyze the meter details to determine the meter_type:
-- "council_bulk" - for main incoming council supply meters (typically highest rating, labeled as "INCOMING COUNCIL")
-- "check_meter" - for bulk check meters or sub-main check meters (labeled as "BULK CHECK METER" or "CHECK METER")
-- "distribution" - for distribution boards (labeled as DB-XX)
+POSITION MEASUREMENT INSTRUCTIONS (CRITICAL):
+- Look at the schematic carefully and identify where each meter box or symbol is drawn
+- Measure the EXACT CENTER of each meter box/symbol
+- Express as percentages: x = horizontal position from left edge (0% = far left, 100% = far right)
+                          y = vertical position from top edge (0% = top, 100% = bottom)
+- Use decimal precision (e.g., 23.5, 47.2) for accurate placement
+- Example: A meter in the upper left area might be {"x": 15.5, "y": 28.3}
+- Example: A meter in the center-right might be {"x": 72.0, "y": 55.0}
 
-IMPORTANT: Carefully measure the position of each meter on the schematic. The position should be exactly where that meter's box or symbol is located.
+METER TYPE CLASSIFICATION:
+- "council_bulk" - main incoming council supply meters (highest rating, labeled "INCOMING COUNCIL")
+- "check_meter" - bulk check meters or sub-main check meters (labeled "BULK CHECK METER" or "CHECK METER")
+- "distribution" - distribution boards (labeled as DB-XX)
 
-Return ONLY a JSON array of objects with these exact keys: meter_number, name, area (as number or null if not specified), rating, cable_specification, serial_number, ct_type, meter_type, position (with x and y percentages).
+ACCURACY IS CRITICAL: Users will click on visual markers placed at these exact positions. If positions are wrong, the interface becomes unusable.
 
-Important: Return ONLY the JSON array, no additional text or markdown formatting.`
+Return ONLY a valid JSON array with these exact keys: meter_number, name, area (number or null), rating, cable_specification, serial_number, ct_type, meter_type, position (object with x and y as numbers).
+
+Return ONLY the JSON array, no markdown formatting, no explanatory text.`
               },
               {
                 type: 'image_url',
