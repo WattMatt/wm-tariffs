@@ -176,14 +176,14 @@ OUTPUT STRUCTURE:
           "blockNumber": 1,
           "kwhFrom": 0,
           "kwhTo": 600,
-          "energyChargeCents": 150.50
+          "energyChargeCents": 192.00
         }
       ],
       "charges": [
         {
           "chargeType": "service_charge|demand_kva|basic_monthly|capacity_charge",
-          "chargeAmount": 10000.00,
-          "description": "Service charge",
+          "chargeAmount": 246.19,
+          "description": "Basic Monthly Charge",
           "unit": "R/month"
         }
       ],
@@ -192,24 +192,25 @@ OUTPUT STRUCTURE:
   ]
 }
 
-CRITICAL VALUE CONVERSION - ALL CHARGES STORED AS-IS:
-1. DO NOT multiply any values - store exactly as extracted from Excel
-   - Basic Charge: 2,376.68 R/month → store chargeAmount as 2376.68
-   - Energy Charge: 173.10 c/kWh → store chargeAmount as 173.10
-   - Demand Charge: 434.27 R/kVA → store chargeAmount as 434.27
-2. Block energy charges stored as-is (in c/kWh)
-3. TOU period charges stored as-is (in c/kWh)
-4. The display layer will handle formatting based on the unit column
+CRITICAL VALUE CONVERSION:
+1. Energy charges in R/kWh → MULTIPLY BY 100 to store as c/kWh
+   - Excel shows: "1,92 R/kWh" → store energyChargeCents as 192.00
+   - Excel shows: "3.53 R/kWh" → store energyChargeCents as 353.00
+2. Fixed charges in R/month, R/kVA → KEEP AS-IS (do not multiply)
+   - Excel shows: "246.19 R/month" → store chargeAmount as 246.19
+   - Excel shows: "243.73 R/kVA" → store chargeAmount as 243.73
+3. Block energy charges: Multiply R/kWh values by 100
+4. TOU period charges: Multiply R/kWh values by 100
 
 EXTRACTION STRATEGY:
 1. Locate "${municipalityName}" section boundaries
 2. Identify all tariff subsections within
 3. For each tariff, extract:
    - Tariff name and type
-   - Energy charges (already in c/kWh)
-   - Fixed charges in Rands → MULTIPLY BY 100 to store as cents
-   - Blocks if tiered pricing
-   - TOU periods if time-based
+   - Energy charges in R/kWh → MULTIPLY BY 100 to convert to c/kWh for storage
+   - Fixed charges (R/month, R/kVA) → KEEP AS-IS (no multiplication)
+   - Blocks with tiered pricing (convert R/kWh to c/kWh by multiplying by 100)
+   - TOU periods if time-based (convert R/kWh to c/kWh by multiplying by 100)
 
 Return ONLY valid JSON, no markdown.`;
 

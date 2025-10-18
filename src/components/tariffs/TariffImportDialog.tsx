@@ -431,6 +431,7 @@ export default function PdfImportDialog() {
     const tariffStructures: any[] = [];
     let currentTariff: any = null;
     let nersaIncrease = 0;
+    let currentSeason: string | null = null; // Track Summer/Winter or Low/High Season
     
     for (let i = 0; i < targetSheet.length; i++) {
       const row = targetSheet[i];
@@ -439,51 +440,67 @@ export default function PdfImportDialog() {
       
       // Extract NERSA percentage from header
       if (col0.includes('%')) {
-        const match = col0.match(/(\d+\.?\d*)%/);
-        if (match) nersaIncrease = parseFloat(match[1]);
+        const match = col0.match(/(\d+[,.]?\d*)%/);
+        if (match) nersaIncrease = parseFloat(match[1].replace(',', '.'));
         continue;
       }
       
-      // Detect new tariff section (no value in col1, descriptive name)
-      if (col0 && !col1 && !col0.includes('Block') && !col0.includes('Charge') && !col0.includes('Season')) {
+      // Track season context
+      if (col0.match(/^(Summer|Winter|Low Season|High Season)$/i) && !col1) {
+        currentSeason = col0;
+        console.log(`Season context: ${currentSeason}`);
+        continue;
+      }
+      
+      // Detect new tariff section (numbered tariff like "1. Tariff I:" or descriptive name)
+      if ((col0.match(/^\d+\./) || col0.toLowerCase().includes('tariff')) && !col1) {
         // Save previous tariff if exists
-        if (currentTariff && (currentTariff.blocks.length > 0 || currentTariff.charges.length > 0)) {
+        if (currentTariff && (currentTariff.blocks.length > 0 || currentTariff.charges.length > 0 || currentTariff.touPeriods.length > 0)) {
           tariffStructures.push(currentTariff);
         }
         
         // Start new tariff
-        const tariffType = col0.toLowerCase().includes('domestic') ? 'domestic' :
-                          col0.toLowerCase().includes('commercial') ? 'commercial' :
+        const tariffType = col0.toLowerCase().includes('domestic') || col0.toLowerCase().includes('indigent') ? 'domestic' :
+                          col0.toLowerCase().includes('business') || col0.toLowerCase().includes('commercial') ? 'commercial' :
                           col0.toLowerCase().includes('industrial') ? 'industrial' :
                           col0.toLowerCase().includes('agricultural') ? 'agricultural' : 'commercial';
         
+        // Check if this is a TOU tariff
+        const isTou = col0.toLowerCase().includes('flex') || col0.toLowerCase().includes('tou');
+        
         currentTariff = {
-          name: col0,
+          name: col0.replace(/^\d+\.\s*/, ''), // Remove leading number
           tariffType,
           meterConfiguration: col0.toLowerCase().includes('prepaid') ? 'prepaid' : 
                              col0.toLowerCase().includes('conventional') ? 'conventional' : null,
           effectiveFrom: '2025-07-01',
           effectiveTo: null,
           description: col0,
-          usesTou: false,
+          usesTou: isTou,
+          touType: isTou ? 'megaflex' : null,
           blocks: [],
           charges: [],
           touPeriods: []
         };
+        currentSeason = null; // Reset season for new tariff
         continue;
       }
       
-      // Parse blocks
-      if (col0.includes('Block') && col1) {
-        const blockMatch = col0.match(/Block \d+ \((.+?)\)/);
-        if (blockMatch && currentTariff) {
+      if (!currentTariff) continue;
+      
+      // Parse blocks with R/kWh values
+      if (col0.match(/Block \d+/i) && col1) {
+        const blockMatch = col0.match(/Block \d+ \((.+?)\)/i);
+        if (blockMatch) {
           const range = blockMatch[1];
           const [from, to] = range.includes('-') ? 
-            range.split('-').map(s => parseFloat(s.trim())) :
-            range.includes('>') ? [parseFloat(range.replace('>', '')), null] :
+            range.split('-').map(s => parseFloat(s.replace(/[^\d.]/g, ''))) :
+            range.includes('>') ? [parseFloat(range.replace(/[^\d.]/g, '')), null] :
             [0, null];
           
-          const energyCharge = parseFloat(col1.toString().replace(/\s/g, ''));
+          // Parse value and convert R/kWh to c/kWh by multiplying by 100
+          const valueStr = col1.toString().replace(/\s/g, '').replace(',', '.');
+          const energyCharge = parseFloat(valueStr) * 100; // Convert R to cents
           
           // Only add block if energy charge is valid
           if (!isNaN(energyCharge) && isFinite(energyCharge)) {
@@ -491,7 +508,8 @@ export default function PdfImportDialog() {
               blockNumber: currentTariff.blocks.length + 1,
               kwhFrom: from,
               kwhTo: to,
-              energyChargeCents: energyCharge
+              energyChargeCents: energyCharge,
+              season: currentSeason || undefined
             });
           } else {
             console.warn(`Skipping invalid block energy charge for "${col0}":`, col1);
@@ -500,19 +518,55 @@ export default function PdfImportDialog() {
         continue;
       }
       
-      // Parse charges
-      if (col0.includes('Charge') && col1 && currentTariff) {
-        const chargeType = col0.toLowerCase().includes('basic') ? 'basic_monthly' :
+      // Parse TOU periods (Peak/Standard/Off-peak with R/kWh)
+      if (col0.match(/^(Peak|Standard|Off-peak)/i) && col1 && col0.includes('kWh')) {
+        const periodType = col0.toLowerCase().includes('peak') && !col0.toLowerCase().includes('off') ? 'peak' :
+                          col0.toLowerCase().includes('off') ? 'offpeak' : 'standard';
+        
+        // Parse value and convert R/kWh to c/kWh by multiplying by 100
+        const valueStr = col1.toString().replace(/\s/g, '').replace(',', '.');
+        const energyCharge = parseFloat(valueStr) * 100; // Convert R to cents
+        
+        if (!isNaN(energyCharge) && isFinite(energyCharge) && currentSeason) {
+          currentTariff.usesTou = true;
+          currentTariff.touType = 'megaflex';
+          
+          // Map season to standard format
+          const season = currentSeason.toLowerCase().includes('summer') || currentSeason.toLowerCase().includes('low') ? 'summer' : 'winter';
+          
+          // Default time ranges for different periods
+          const timeRanges = {
+            peak: { start: 7, end: 10 },
+            standard: { start: 6, end: 22 },
+            offpeak: { start: 22, end: 6 }
+          };
+          
+          currentTariff.touPeriods.push({
+            periodType,
+            season,
+            dayType: 'weekday', // Default to weekday
+            startHour: timeRanges[periodType as keyof typeof timeRanges].start,
+            endHour: timeRanges[periodType as keyof typeof timeRanges].end,
+            energyChargeCents: energyCharge
+          });
+        }
+        continue;
+      }
+      
+      // Parse fixed charges (Basic, Demand, Access, etc.) - keep as-is
+      if (col0.match(/(Basic|Demand|Access|Service).*Charge/i) && col1) {
+        const chargeType = col0.toLowerCase().includes('basic') || col0.toLowerCase().includes('monthly') ? 'basic_monthly' :
                           col0.toLowerCase().includes('demand') ? 'demand_kva' :
-                          col0.toLowerCase().includes('amp') ? 'amp_charge' :
-                          'service_charge';
+                          col0.toLowerCase().includes('access') ? 'capacity_charge' :
+                          col0.toLowerCase().includes('service') ? 'service_charge' : 'service_charge';
         
-        const unit = col0.includes('R/month') || col0.toLowerCase().includes('month') ? 'R/month' :
+        const unit = col0.includes('R/month') || col0.toLowerCase().includes('monthly') ? 'R/month' :
                     col0.includes('R/kVA') || col0.toLowerCase().includes('kva') ? 'R/kVA/month' :
-                    col0.includes('c/kWh') || col0.toLowerCase().includes('energy') ? 'c/kWh' : 'R/month';
+                    col0.includes('R/kWh') ? 'R/kWh' : 'R/month';
         
-        // Parse and validate charge amount
-        const chargeAmount = parseFloat(col1.toString().replace(/\s/g, ''));
+        // Parse and validate charge amount - keep as-is (already in Rands)
+        const valueStr = col1.toString().replace(/\s/g, '').replace(',', '.');
+        const chargeAmount = parseFloat(valueStr);
         
         // Only add charge if amount is a valid number
         if (!isNaN(chargeAmount) && isFinite(chargeAmount)) {
@@ -525,18 +579,45 @@ export default function PdfImportDialog() {
         } else {
           console.warn(`Skipping invalid charge amount for "${col0}":`, col1);
         }
+        continue;
+      }
+      
+      // Parse energy charge lines (for simple seasonal tariffs)
+      if (col0.match(/Energy charge/i) && col1) {
+        // Parse value and convert R/kWh to c/kWh by multiplying by 100
+        const valueStr = col1.toString().replace(/\s/g, '').replace(',', '.');
+        const energyCharge = parseFloat(valueStr) * 100; // Convert R to cents
+        
+        if (!isNaN(energyCharge) && isFinite(energyCharge)) {
+          // Add as a block with no limits
+          currentTariff.blocks.push({
+            blockNumber: currentTariff.blocks.length + 1,
+            kwhFrom: 0,
+            kwhTo: null,
+            energyChargeCents: energyCharge,
+            season: currentSeason || undefined
+          });
+        }
       }
     }
     
     // Add last tariff
-    if (currentTariff && (currentTariff.blocks.length > 0 || currentTariff.charges.length > 0)) {
+    if (currentTariff && (currentTariff.blocks.length > 0 || currentTariff.charges.length > 0 || currentTariff.touPeriods.length > 0)) {
       tariffStructures.push(currentTariff);
     }
     
     return {
       supplyAuthority: {
         name: municipalityName,
-        region: 'Eastern Cape',
+        region: file!.name.includes('Eastern') ? 'Eastern Cape' : 
+               file!.name.includes('Free') ? 'Free State' : 
+               file!.name.includes('Western') ? 'Western Cape' :
+               file!.name.includes('Northern') ? 'Northern Cape' :
+               file!.name.includes('Gauteng') ? 'Gauteng' :
+               file!.name.includes('KwaZulu') || file!.name.includes('KZN') ? 'KwaZulu-Natal' :
+               file!.name.includes('Limpopo') ? 'Limpopo' :
+               file!.name.includes('Mpumalanga') ? 'Mpumalanga' :
+               file!.name.includes('North West') || file!.name.includes('NorthWest') ? 'North West' : 'Unknown',
         nersaIncreasePercentage: nersaIncrease
       },
       tariffStructures
