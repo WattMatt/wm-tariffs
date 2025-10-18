@@ -25,16 +25,38 @@ interface Client {
   name: string;
 }
 
+interface SupplyAuthority {
+  id: string;
+  name: string;
+  region: string;
+}
+
 export default function Sites() {
   const [sites, setSites] = useState<Site[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
+  const [supplyAuthorities, setSupplyAuthorities] = useState<SupplyAuthority[]>([]);
+  const [provinces, setProvinces] = useState<string[]>([]);
+  const [selectedProvince, setSelectedProvince] = useState<string>("");
+  const [filteredAuthorities, setFilteredAuthorities] = useState<SupplyAuthority[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     fetchSites();
     fetchClients();
+    fetchSupplyAuthorities();
   }, []);
+
+  useEffect(() => {
+    if (selectedProvince) {
+      const filtered = supplyAuthorities.filter(
+        auth => auth.region === selectedProvince
+      );
+      setFilteredAuthorities(filtered);
+    } else {
+      setFilteredAuthorities([]);
+    }
+  }, [selectedProvince, supplyAuthorities]);
 
   const fetchSites = async () => {
     const { data, error } = await supabase
@@ -57,17 +79,33 @@ export default function Sites() {
     setClients(data || []);
   };
 
+  const fetchSupplyAuthorities = async () => {
+    const { data } = await supabase
+      .from("supply_authorities")
+      .select("id, name, region")
+      .eq("active", true)
+      .order("region, name");
+    
+    if (data) {
+      setSupplyAuthorities(data);
+      const uniqueProvinces = [...new Set(data.map(auth => auth.region))].filter(Boolean);
+      setProvinces(uniqueProvinces.sort());
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
 
     const formData = new FormData(e.currentTarget);
+    const supplyAuthorityId = formData.get("supply_authority") as string;
 
     const { error } = await supabase.from("sites").insert({
       name: formData.get("name") as string,
       client_id: formData.get("client") as string,
       address: formData.get("address") as string,
       council_connection_point: formData.get("connection") as string,
+      supply_authority_id: supplyAuthorityId || null,
     });
 
     setIsLoading(false);
@@ -77,6 +115,8 @@ export default function Sites() {
     } else {
       toast.success("Site created successfully");
       setIsDialogOpen(false);
+      setSelectedProvince("");
+      setFilteredAuthorities([]);
       fetchSites();
     }
   };
@@ -98,7 +138,7 @@ export default function Sites() {
                 Add Site
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-lg">
               <DialogHeader>
                 <DialogTitle>Add New Site</DialogTitle>
                 <DialogDescription>
@@ -107,12 +147,12 @@ export default function Sites() {
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="client">Client</Label>
+                  <Label htmlFor="client">Client *</Label>
                   <Select name="client" required>
-                    <SelectTrigger>
+                    <SelectTrigger className="bg-background">
                       <SelectValue placeholder="Select client" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="bg-background z-50">
                       {clients.map((client) => (
                         <SelectItem key={client.id} value={client.id}>
                           {client.name}
@@ -121,18 +161,68 @@ export default function Sites() {
                     </SelectContent>
                   </Select>
                 </div>
+
                 <div className="space-y-2">
-                  <Label htmlFor="name">Site Name</Label>
+                  <Label htmlFor="name">Site Name *</Label>
                   <Input id="name" name="name" required placeholder="Main Distribution Center" />
                 </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="address">Address</Label>
                   <Input id="address" name="address" placeholder="123 Industrial Rd, City" />
                 </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="connection">Council Connection Point</Label>
-                  <Input id="connection" name="connection" placeholder="CCP-001" />
+                  <Input id="connection" name="connection" placeholder="800kVA" />
                 </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="province">Province</Label>
+                    <Select 
+                      value={selectedProvince} 
+                      onValueChange={setSelectedProvince}
+                    >
+                      <SelectTrigger className="bg-background">
+                        <SelectValue placeholder="Select province" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-background z-50">
+                        {provinces.map((province) => (
+                          <SelectItem key={province} value={province}>
+                            {province}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="supply_authority">Municipality / Eskom</Label>
+                    <Select 
+                      name="supply_authority" 
+                      disabled={!selectedProvince || filteredAuthorities.length === 0}
+                    >
+                      <SelectTrigger className="bg-background">
+                        <SelectValue placeholder={
+                          !selectedProvince 
+                            ? "Select province first" 
+                            : filteredAuthorities.length === 0 
+                              ? "No authorities" 
+                              : "Select authority"
+                        } />
+                      </SelectTrigger>
+                      <SelectContent className="bg-background z-50">
+                        {filteredAuthorities.map((auth) => (
+                          <SelectItem key={auth.id} value={auth.id}>
+                            {auth.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading ? "Creating..." : "Create Site"}
                 </Button>
