@@ -48,6 +48,8 @@ export default function SchematicEditor({ schematicId, schematicUrl, siteId }: S
   const [isAddMeterDialogOpen, setIsAddMeterDialogOpen] = useState(false);
   const [pendingMeterPosition, setPendingMeterPosition] = useState<{ x: number; y: number } | null>(null);
   const [isCsvDialogOpen, setIsCsvDialogOpen] = useState(false);
+  const [extractedMeters, setExtractedMeters] = useState<any[]>([]);
+  const [selectedMeterIndex, setSelectedMeterIndex] = useState<number | null>(null);
   const [selectedMeterId, setSelectedMeterId] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
 
@@ -491,6 +493,10 @@ export default function SchematicEditor({ schematicId, schematicUrl, siteId }: S
             fetchMeters();
             fetchMeterPositions();
           }}
+          extractedMeters={extractedMeters}
+          onMetersUpdate={setExtractedMeters}
+          selectedMeterIndex={selectedMeterIndex}
+          onMeterSelect={setSelectedMeterIndex}
         />
         <div className="flex-1" />
         <div className="flex gap-2 items-center">

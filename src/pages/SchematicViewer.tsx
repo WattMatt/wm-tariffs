@@ -1,13 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, ZoomIn, ZoomOut, Maximize2, Edit } from "lucide-react";
+import { ArrowLeft, Edit } from "lucide-react";
 import { toast } from "sonner";
 import SchematicEditor from "@/components/schematic/SchematicEditor";
+import { MeterDataExtractor } from "@/components/schematic/MeterDataExtractor";
 
 interface SchematicData {
   id: string;
@@ -32,14 +33,36 @@ interface MeterPosition {
   } | null;
 }
 
+interface ExtractedMeterData {
+  meter_number: string;
+  name: string;
+  area: number | null;
+  rating: string;
+  cable_specification: string;
+  serial_number: string;
+  ct_type: string;
+  meter_type: string;
+  location?: string;
+  tariff?: string;
+  status?: 'pending' | 'approved' | 'rejected';
+  position?: { x: number; y: number };
+}
+
 export default function SchematicViewer() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [schematic, setSchematic] = useState<SchematicData | null>(null);
   const [imageUrl, setImageUrl] = useState<string>("");
   const [meterPositions, setMeterPositions] = useState<MeterPosition[]>([]);
-  const [zoom, setZoom] = useState(100);
   const [editMode, setEditMode] = useState(false);
+  const [extractedMeters, setExtractedMeters] = useState<ExtractedMeterData[]>([]);
+  const [selectedMeterIndex, setSelectedMeterIndex] = useState<number | null>(null);
+  const [convertedImageUrl, setConvertedImageUrl] = useState<string | null>(null);
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (id) {
@@ -80,16 +103,56 @@ export default function SchematicViewer() {
     setMeterPositions(data || []);
   };
 
-  const handleZoomIn = () => {
-    setZoom((prev) => Math.min(prev + 20, 200));
+  const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const delta = e.deltaY * -0.01;
+    const newZoom = Math.min(Math.max(0.5, zoom + delta), 3);
+    setZoom(newZoom);
   };
 
-  const handleZoomOut = () => {
-    setZoom((prev) => Math.max(prev - 20, 50));
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if ((e.button === 0 || e.button === 1) && !(e.target as HTMLElement).closest('.meter-marker')) {
+      e.preventDefault();
+      setIsDragging(true);
+      setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
+      if (containerRef.current) {
+        containerRef.current.style.cursor = 'grabbing';
+      }
+    }
   };
 
-  const handleResetZoom = () => {
-    setZoom(100);
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (isDragging) {
+      setPan({
+        x: e.clientX - dragStart.x,
+        y: e.clientY - dragStart.y
+      });
+    }
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+    if (containerRef.current) {
+      containerRef.current.style.cursor = 'grab';
+    }
+  };
+
+  const handleMouseLeave = () => {
+    if (isDragging) {
+      setIsDragging(false);
+      if (containerRef.current) {
+        containerRef.current.style.cursor = 'grab';
+      }
+    }
+  };
+
+  const handleResetView = () => {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+  };
+
+  const handleMeterSelect = (index: number) => {
+    setSelectedMeterIndex(index);
   };
 
   const getMeterColor = (type: string) => {
@@ -102,6 +165,14 @@ export default function SchematicViewer() {
         return "bg-accent";
       default:
         return "bg-muted";
+    }
+  };
+
+  const getMeterStatusColor = (status?: 'pending' | 'approved' | 'rejected') => {
+    switch (status) {
+      case 'approved': return 'bg-green-500 border-green-600';
+      case 'rejected': return 'bg-red-500 border-red-600';
+      default: return 'bg-yellow-500 border-yellow-600';
     }
   };
 
@@ -141,19 +212,13 @@ export default function SchematicViewer() {
               <Edit className="w-4 h-4 mr-2" />
               {editMode ? "View Mode" : "Edit Mode"}
             </Button>
-            {!editMode && (
+            {!editMode && extractedMeters.length === 0 && (
               <>
-                <Button variant="outline" size="sm" onClick={handleZoomOut}>
-                  <ZoomOut className="w-4 h-4" />
-                </Button>
-                <Badge variant="outline" className="px-4">
-                  {zoom}%
-                </Badge>
-                <Button variant="outline" size="sm" onClick={handleZoomIn}>
-                  <ZoomIn className="w-4 h-4" />
-                </Button>
-                <Button variant="outline" size="sm" onClick={handleResetZoom}>
-                  <Maximize2 className="w-4 h-4" />
+                <div className="text-xs text-muted-foreground">
+                  Zoom: {Math.round(zoom * 100)}%
+                </div>
+                <Button variant="outline" size="sm" onClick={handleResetView}>
+                  Reset View
                 </Button>
               </>
             )}
@@ -180,58 +245,126 @@ export default function SchematicViewer() {
                 siteId={schematic.site_id}
               />
             ) : (
-              <div className="relative overflow-auto bg-muted/20 rounded-lg">
-                <div
-                  className="relative inline-block"
-                  style={{
-                    transform: `scale(${zoom / 100})`,
-                    transformOrigin: "top left",
-                  }}
+              <>
+                {/* Meter Extraction Controls */}
+                {extractedMeters.length === 0 && (
+                  <div className="mb-4">
+                    <MeterDataExtractor
+                      siteId={schematic.site_id}
+                      schematicId={id!}
+                      imageUrl={imageUrl}
+                      onMetersExtracted={fetchMeterPositions}
+                      onConvertedImageReady={setConvertedImageUrl}
+                      extractedMeters={extractedMeters}
+                      onMetersUpdate={setExtractedMeters}
+                      selectedMeterIndex={selectedMeterIndex}
+                      onMeterSelect={setSelectedMeterIndex}
+                    />
+                  </div>
+                )}
+
+                {/* Schematic Viewer with Pan/Zoom */}
+                <div 
+                  ref={containerRef}
+                  className="relative overflow-hidden bg-muted/20 rounded-lg cursor-grab select-none"
+                  style={{ minHeight: '600px' }}
+                  onWheel={extractedMeters.length > 0 ? handleWheel : undefined}
+                  onMouseDown={extractedMeters.length > 0 ? handleMouseDown : undefined}
+                  onMouseMove={extractedMeters.length > 0 ? handleMouseMove : undefined}
+                  onMouseUp={extractedMeters.length > 0 ? handleMouseUp : undefined}
+                  onMouseLeave={extractedMeters.length > 0 ? handleMouseLeave : undefined}
                 >
-                  {schematic.file_type === "application/pdf" ? (
-                    <div className="flex items-center justify-center p-16 bg-background rounded">
-                      <div className="text-center">
-                        <p className="text-lg font-medium mb-2">PDF Viewer</p>
-                        <p className="text-sm text-muted-foreground mb-4">
-                          PDF files require a specialized viewer
-                        </p>
-                        <Button
-                          onClick={() => window.open(imageUrl, "_blank")}
-                          variant="outline"
-                        >
-                          Open in New Tab
-                        </Button>
-                      </div>
+                  <div 
+                    className="absolute inset-0 flex items-center justify-center"
+                    style={{
+                      transform: extractedMeters.length > 0 ? `translate(${pan.x}px, ${pan.y}px)` : 'none',
+                      transition: isDragging ? 'none' : 'transform 0.1s ease-out'
+                    }}
+                  >
+                    <div
+                      className="relative"
+                      style={{
+                        transform: extractedMeters.length > 0 ? `scale(${zoom})` : `scale(1)`,
+                        transformOrigin: 'center center',
+                        transition: 'transform 0.2s ease-out'
+                      }}
+                    >
+                      {schematic.file_type === "application/pdf" ? (
+                        convertedImageUrl ? (
+                          <>
+                            <img
+                              src={convertedImageUrl}
+                              alt={schematic.name}
+                              className="max-w-none pointer-events-none"
+                              style={{ minWidth: '1000px', minHeight: '750px' }}
+                              draggable={false}
+                            />
+                            
+                            {/* Extracted Meter Markers */}
+                            {extractedMeters.map((meter, index) => (
+                              <div
+                                key={index}
+                                className={`meter-marker absolute w-10 h-10 rounded-full ${getMeterStatusColor(meter.status)} border-2 cursor-pointer hover:scale-125 transition-all flex items-center justify-center text-white font-bold text-sm shadow-lg ${
+                                  selectedMeterIndex === index ? 'ring-4 ring-blue-500 scale-125' : ''
+                                }`}
+                                style={{
+                                  left: `${meter.position?.x || 0}%`,
+                                  top: `${meter.position?.y || 0}%`,
+                                  transform: 'translate(-50%, -50%)',
+                                  zIndex: selectedMeterIndex === index ? 20 : 10
+                                }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleMeterSelect(index);
+                                }}
+                                onMouseDown={(e) => e.stopPropagation()}
+                                title={`${meter.meter_number} - Click to review`}
+                              >
+                                {index + 1}
+                              </div>
+                            ))}
+                          </>
+                        ) : (
+                          <div className="flex items-center justify-center p-16 bg-background rounded">
+                            <div className="text-center">
+                              <p className="text-lg font-medium mb-2">PDF Schematic</p>
+                              <p className="text-sm text-muted-foreground">
+                                Convert PDF to image to extract meters
+                              </p>
+                            </div>
+                          </div>
+                        )
+                      ) : (
+                        <>
+                          <img
+                            src={imageUrl}
+                            alt={schematic.name}
+                            className="max-w-full h-auto"
+                          />
+                          
+                          {/* Existing Meter Position Markers */}
+                          {meterPositions.map((position) => (
+                            <div
+                              key={position.id}
+                              className={`absolute w-6 h-6 rounded-full ${getMeterColor(
+                                position.meters?.meter_type || ""
+                              )} border-2 border-white shadow-lg flex items-center justify-center cursor-pointer hover:scale-110 transition-transform`}
+                              style={{
+                                left: `${position.x_position}%`,
+                                top: `${position.y_position}%`,
+                                transform: "translate(-50%, -50%)",
+                              }}
+                              title={`${position.meters?.meter_number} - ${position.label || ""}`}
+                            >
+                              <span className="text-[8px] font-bold text-white">M</span>
+                            </div>
+                          ))}
+                        </>
+                      )}
                     </div>
-                  ) : (
-                    <>
-                      <img
-                        src={imageUrl}
-                        alt={schematic.name}
-                        className="max-w-full h-auto"
-                      />
-                      
-                      {/* Meter Position Markers */}
-                      {meterPositions.map((position) => (
-                        <div
-                          key={position.id}
-                          className={`absolute w-6 h-6 rounded-full ${getMeterColor(
-                            position.meters?.meter_type || ""
-                          )} border-2 border-white shadow-lg flex items-center justify-center cursor-pointer hover:scale-110 transition-transform`}
-                          style={{
-                            left: `${position.x_position}%`,
-                            top: `${position.y_position}%`,
-                            transform: "translate(-50%, -50%)",
-                          }}
-                          title={`${position.meters?.meter_number} - ${position.label || ""}`}
-                        >
-                          <span className="text-[8px] font-bold text-white">M</span>
-                        </div>
-                      ))}
-                    </>
-                  )}
+                  </div>
                 </div>
-              </div>
+              </>
             )}
           </CardContent>
         </Card>

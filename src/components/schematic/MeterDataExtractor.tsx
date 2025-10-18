@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Loader2, Check, X, Edit } from "lucide-react";
@@ -29,23 +29,30 @@ interface MeterDataExtractorProps {
   schematicId: string;
   imageUrl: string;
   onMetersExtracted: () => void;
+  onConvertedImageReady?: (imageUrl: string) => void;
+  extractedMeters: ExtractedMeterData[];
+  onMetersUpdate: (meters: ExtractedMeterData[]) => void;
+  selectedMeterIndex: number | null;
+  onMeterSelect: (index: number | null) => void;
 }
 
-export const MeterDataExtractor = ({ siteId, schematicId, imageUrl, onMetersExtracted }: MeterDataExtractorProps) => {
+export const MeterDataExtractor = ({ 
+  siteId, 
+  schematicId, 
+  imageUrl, 
+  onMetersExtracted,
+  onConvertedImageReady,
+  extractedMeters,
+  onMetersUpdate,
+  selectedMeterIndex,
+  onMeterSelect
+}: MeterDataExtractorProps) => {
   const [isExtracting, setIsExtracting] = useState(false);
-  const [extractedMeters, setExtractedMeters] = useState<ExtractedMeterData[]>([]);
-  const [showApprovalDialog, setShowApprovalDialog] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editedMeter, setEditedMeter] = useState<ExtractedMeterData | null>(null);
   const [convertedImageUrl, setConvertedImageUrl] = useState<string | null>(null);
-  const [selectedMeterIndex, setSelectedMeterIndex] = useState<number | null>(null);
-  const [zoom, setZoom] = useState(1);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 
   const isPdf = imageUrl.toLowerCase().includes('.pdf');
-  
   const approvedCount = extractedMeters.filter(m => m.status === 'approved').length;
   const totalCount = extractedMeters.length;
 
@@ -101,10 +108,7 @@ export const MeterDataExtractor = ({ siteId, schematicId, imageUrl, onMetersExtr
         };
       });
       
-      setExtractedMeters(metersWithPosition);
-      setShowApprovalDialog(true);
-      setZoom(1);
-      setPan({ x: 0, y: 0 });
+      onMetersUpdate(metersWithPosition);
       toast.success(`Extracted ${data.meters.length} meters - review and approve each one`);
     } catch (error) {
       console.error('Error extracting meters:', error);
@@ -117,6 +121,7 @@ export const MeterDataExtractor = ({ siteId, schematicId, imageUrl, onMetersExtr
   const handleImageGenerated = (imageDataUrl: string) => {
     console.log('PDF converted to image, ready for extraction');
     setConvertedImageUrl(imageDataUrl);
+    onConvertedImageReady?.(imageDataUrl);
     toast.success('PDF converted! Now click "Extract Meters" to analyze.');
   };
 
@@ -129,7 +134,7 @@ export const MeterDataExtractor = ({ siteId, schematicId, imageUrl, onMetersExtr
     if (editingIndex !== null && editedMeter) {
       const updated = [...extractedMeters];
       updated[editingIndex] = editedMeter;
-      setExtractedMeters(updated);
+      onMetersUpdate(updated);
       setEditingIndex(null);
       setEditedMeter(null);
     }
@@ -138,66 +143,18 @@ export const MeterDataExtractor = ({ siteId, schematicId, imageUrl, onMetersExtr
   const handleRemoveMeter = (index: number) => {
     const updated = [...extractedMeters];
     updated[index].status = 'rejected';
-    setExtractedMeters(updated);
-    setSelectedMeterIndex(null);
+    onMetersUpdate(updated);
+    onMeterSelect(null);
   };
 
   const handleApproveMeter = (index: number) => {
     const updated = [...extractedMeters];
     updated[index].status = 'approved';
-    setExtractedMeters(updated);
-    setSelectedMeterIndex(null);
+    onMetersUpdate(updated);
+    onMeterSelect(null);
     toast.success(`Approved: ${updated[index].meter_number}`);
   };
 
-  const handleSelectMeter = (index: number) => {
-    setSelectedMeterIndex(index);
-    setEditingIndex(null);
-    setEditedMeter(null);
-  };
-
-  const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    const delta = e.deltaY * -0.01;
-    const newZoom = Math.min(Math.max(0.5, zoom + delta), 3);
-    setZoom(newZoom);
-  };
-
-  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-    // Left click or middle click for panning
-    if ((e.button === 0 || e.button === 1) && !(e.target as HTMLElement).closest('.meter-marker')) {
-      e.preventDefault();
-      setIsDragging(true);
-      setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
-      e.currentTarget.style.cursor = 'grabbing';
-    }
-  };
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (isDragging) {
-      setPan({
-        x: e.clientX - dragStart.x,
-        y: e.clientY - dragStart.y
-      });
-    }
-  };
-
-  const handleMouseUp = (e: React.MouseEvent<HTMLDivElement>) => {
-    setIsDragging(false);
-    e.currentTarget.style.cursor = 'grab';
-  };
-
-  const handleMouseLeave = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (isDragging) {
-      setIsDragging(false);
-      e.currentTarget.style.cursor = 'grab';
-    }
-  };
-
-  const handleResetView = () => {
-    setZoom(1);
-    setPan({ x: 0, y: 0 });
-  };
 
   const handleApproveAndSave = async () => {
     const approvedMeters = extractedMeters.filter(m => m.status === 'approved');
@@ -230,8 +187,7 @@ export const MeterDataExtractor = ({ siteId, schematicId, imageUrl, onMetersExtr
       if (error) throw error;
 
       toast.success(`Successfully saved ${approvedMeters.length} approved meters`);
-      setShowApprovalDialog(false);
-      setExtractedMeters([]);
+      onMetersUpdate([]);
       setConvertedImageUrl(null);
       onMetersExtracted();
     } catch (error) {
@@ -248,290 +204,192 @@ export const MeterDataExtractor = ({ siteId, schematicId, imageUrl, onMetersExtr
     }
   };
 
-  return (
-    <>
-      {isPdf && !convertedImageUrl && (
-        <PdfToImageConverter
-          pdfUrl={imageUrl}
-          onImageGenerated={handleImageGenerated}
-        />
-      )}
-      
-      <Button
-        onClick={extractMetersFromSchematic}
-        disabled={isExtracting || (isPdf && !convertedImageUrl)}
-        className="gap-2"
-      >
-        {isExtracting ? (
-          <>
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Extracting Data...
-          </>
-        ) : (
-          "Extract Meters from Schematic"
-        )}
-      </Button>
+  // Render meter details panel
+  const renderMeterDetailsPanel = () => {
+    if (selectedMeterIndex === null) return null;
 
-      <Dialog open={showApprovalDialog} onOpenChange={setShowApprovalDialog}>
-        <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
-          <DialogHeader>
-            <DialogTitle>
-              Review Extracted Meters ({approvedCount}/{totalCount} approved)
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="flex-1 grid grid-cols-2 gap-4 overflow-hidden">
-            {/* Left side: Visual schematic with markers */}
-            <div className="space-y-2 flex flex-col">
-              <div className="flex items-center justify-between">
-                <div className="text-sm text-muted-foreground flex items-center gap-2">
-                  <div className="flex items-center gap-1">
-                    <div className="w-3 h-3 rounded-full bg-yellow-500 border-2 border-yellow-600" />
-                    <span>Pending</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <div className="w-3 h-3 rounded-full bg-green-500 border-2 border-green-600" />
-                    <span>Approved</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <div className="w-3 h-3 rounded-full bg-red-500 border-2 border-red-600" />
-                    <span>Rejected</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="text-xs text-muted-foreground">
-                    <div>Zoom: {Math.round(zoom * 100)}%</div>
-                    <div className="opacity-60">Scroll: Zoom | Drag: Pan</div>
-                  </div>
-                  <Button size="sm" variant="outline" onClick={handleResetView}>Reset View</Button>
-                </div>
-              </div>
-              
-              <div 
-                className="relative flex-1 border rounded-lg overflow-hidden bg-muted/20 cursor-grab select-none"
-                onWheel={handleWheel}
-                onMouseDown={handleMouseDown}
-                onMouseMove={handleMouseMove}
-                onMouseUp={handleMouseUp}
-                onMouseLeave={handleMouseLeave}
-              >
-                <div 
-                  className="absolute inset-0 flex items-center justify-center"
-                  style={{
-                    transform: `translate(${pan.x}px, ${pan.y}px)`,
-                    transition: isDragging ? 'none' : 'transform 0.1s ease-out'
-                  }}
-                >
-                  {convertedImageUrl && (
-                    <div 
-                      className="relative transition-transform duration-200"
-                      style={{ 
-                        transform: `scale(${zoom})`,
-                        transformOrigin: 'center center'
-                      }}
+    return (
+      <Card className="border-border/50">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center justify-between">
+            <span>Meter #{selectedMeterIndex + 1}: {extractedMeters[selectedMeterIndex].meter_number}</span>
+            <div className="flex gap-2">
+              {editingIndex !== selectedMeterIndex && (
+                <>
+                  <Button
+                    size="sm"
+                    onClick={() => handleEditMeter(selectedMeterIndex)}
+                    variant="outline"
+                  >
+                    <Edit className="h-4 w-4 mr-1" />
+                    Edit
+                  </Button>
+                  {extractedMeters[selectedMeterIndex].status !== 'approved' && (
+                    <Button
+                      size="sm"
+                      onClick={() => handleApproveMeter(selectedMeterIndex)}
+                      className="bg-green-600 hover:bg-green-700"
                     >
-                      <img 
-                        src={convertedImageUrl} 
-                        alt="Schematic" 
-                        className="max-w-none pointer-events-none"
-                        style={{ minWidth: '1000px', minHeight: '750px' }}
-                        draggable={false}
-                      />
-                      
-                      {/* Meter markers overlaid on schematic */}
-                      {extractedMeters.map((meter, index) => (
-                        <div
-                          key={index}
-                          className={`meter-marker absolute w-10 h-10 rounded-full ${getMeterStatusColor(meter.status)} border-2 cursor-pointer hover:scale-125 transition-all flex items-center justify-center text-white font-bold text-sm shadow-lg ${
-                            selectedMeterIndex === index ? 'ring-4 ring-blue-500 scale-125' : ''
-                          }`}
-                          style={{
-                            left: `${meter.position?.x || 0}%`,
-                            top: `${meter.position?.y || 0}%`,
-                            transform: 'translate(-50%, -50%)',
-                            zIndex: selectedMeterIndex === index ? 20 : 10
-                          }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleSelectMeter(index);
-                          }}
-                          onMouseDown={(e) => e.stopPropagation()}
-                          title={`${meter.meter_number} - Click to review`}
-                        >
-                          {index + 1}
-                        </div>
-                      ))}
-                    </div>
+                      <Check className="h-4 w-4 mr-1" />
+                      Approve
+                    </Button>
                   )}
-                </div>
-              </div>
-            </div>
-
-            {/* Right side: Meter details */}
-            <div className="flex flex-col gap-2 overflow-auto">
-              {selectedMeterIndex !== null ? (
-                <div className="border rounded-lg p-4 space-y-4 bg-background">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-semibold text-lg">
-                      Meter #{selectedMeterIndex + 1}: {extractedMeters[selectedMeterIndex].meter_number}
-                    </h3>
-                    <div className="flex gap-2">
-                      {editingIndex !== selectedMeterIndex && (
-                        <>
-                          <Button
-                            size="sm"
-                            onClick={() => handleEditMeter(selectedMeterIndex)}
-                            variant="outline"
-                          >
-                            <Edit className="h-4 w-4 mr-1" />
-                            Edit
-                          </Button>
-                          {extractedMeters[selectedMeterIndex].status !== 'approved' && (
-                            <Button
-                              size="sm"
-                              onClick={() => handleApproveMeter(selectedMeterIndex)}
-                              className="bg-green-600 hover:bg-green-700"
-                            >
-                              <Check className="h-4 w-4 mr-1" />
-                              Approve
-                            </Button>
-                          )}
-                          <Button
-                            size="sm"
-                            onClick={() => handleRemoveMeter(selectedMeterIndex)}
-                            variant="destructive"
-                          >
-                            <X className="h-4 w-4 mr-1" />
-                            Reject
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-
-                  {editingIndex === selectedMeterIndex ? (
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <Label>Meter Number</Label>
-                        <Input
-                          value={editedMeter?.meter_number || ""}
-                          onChange={(e) => setEditedMeter(prev => prev ? { ...prev, meter_number: e.target.value } : null)}
-                        />
-                      </div>
-                      <div>
-                        <Label>Name</Label>
-                        <Input
-                          value={editedMeter?.name || ""}
-                          onChange={(e) => setEditedMeter(prev => prev ? { ...prev, name: e.target.value } : null)}
-                        />
-                      </div>
-                      <div>
-                        <Label>Area (m²)</Label>
-                        <Input
-                          type="number"
-                          value={editedMeter?.area || ""}
-                          onChange={(e) => setEditedMeter(prev => prev ? { ...prev, area: parseFloat(e.target.value) || null } : null)}
-                        />
-                      </div>
-                      <div>
-                        <Label>Rating</Label>
-                        <Input
-                          value={editedMeter?.rating || ""}
-                          onChange={(e) => setEditedMeter(prev => prev ? { ...prev, rating: e.target.value } : null)}
-                        />
-                      </div>
-                      <div className="col-span-2">
-                        <Label>Cable Specification</Label>
-                        <Input
-                          value={editedMeter?.cable_specification || ""}
-                          onChange={(e) => setEditedMeter(prev => prev ? { ...prev, cable_specification: e.target.value } : null)}
-                        />
-                      </div>
-                      <div>
-                        <Label>Serial Number</Label>
-                        <Input
-                          value={editedMeter?.serial_number || ""}
-                          onChange={(e) => setEditedMeter(prev => prev ? { ...prev, serial_number: e.target.value } : null)}
-                        />
-                      </div>
-                      <div>
-                        <Label>CT Type</Label>
-                        <Input
-                          value={editedMeter?.ct_type || ""}
-                          onChange={(e) => setEditedMeter(prev => prev ? { ...prev, ct_type: e.target.value } : null)}
-                        />
-                      </div>
-                      <div>
-                        <Label>Meter Type</Label>
-                        <Select
-                          value={editedMeter?.meter_type || ""}
-                          onValueChange={(value) => setEditedMeter(prev => prev ? { ...prev, meter_type: value } : null)}
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="council_bulk">Council Bulk</SelectItem>
-                            <SelectItem value="check_meter">Check Meter</SelectItem>
-                            <SelectItem value="distribution">Distribution</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="col-span-2 flex gap-2">
-                        <Button onClick={handleSaveEdit} size="sm" className="gap-2">
-                          <Check className="h-4 w-4" />
-                          Save Changes
-                        </Button>
-                        <Button onClick={() => {
-                          setEditingIndex(null);
-                          setEditedMeter(null);
-                        }} size="sm" variant="outline">
-                          Cancel
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-3 text-sm">
-                      <div><span className="font-medium">Name:</span> {extractedMeters[selectedMeterIndex].name}</div>
-                      <div><span className="font-medium">Area:</span> {extractedMeters[selectedMeterIndex].area}m²</div>
-                      <div><span className="font-medium">Rating:</span> {extractedMeters[selectedMeterIndex].rating}</div>
-                      <div><span className="font-medium">Type:</span> {extractedMeters[selectedMeterIndex].meter_type}</div>
-                      <div className="col-span-2"><span className="font-medium">Cable:</span> {extractedMeters[selectedMeterIndex].cable_specification}</div>
-                      <div><span className="font-medium">Serial:</span> {extractedMeters[selectedMeterIndex].serial_number}</div>
-                      <div><span className="font-medium">CT:</span> {extractedMeters[selectedMeterIndex].ct_type}</div>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="border rounded-lg p-8 text-center text-muted-foreground">
-                  Click on a numbered marker on the schematic to review meter details
-                </div>
+                  <Button
+                    size="sm"
+                    onClick={() => handleRemoveMeter(selectedMeterIndex)}
+                    variant="destructive"
+                  >
+                    <X className="h-4 w-4 mr-1" />
+                    Reject
+                  </Button>
+                </>
               )}
             </div>
-          </div>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {editingIndex === selectedMeterIndex ? (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Meter Number</Label>
+                <Input
+                  value={editedMeter?.meter_number || ""}
+                  onChange={(e) => setEditedMeter(prev => prev ? { ...prev, meter_number: e.target.value } : null)}
+                />
+              </div>
+              <div>
+                <Label>Name</Label>
+                <Input
+                  value={editedMeter?.name || ""}
+                  onChange={(e) => setEditedMeter(prev => prev ? { ...prev, name: e.target.value } : null)}
+                />
+              </div>
+              <div>
+                <Label>Area (m²)</Label>
+                <Input
+                  type="number"
+                  value={editedMeter?.area || ""}
+                  onChange={(e) => setEditedMeter(prev => prev ? { ...prev, area: parseFloat(e.target.value) || null } : null)}
+                />
+              </div>
+              <div>
+                <Label>Rating</Label>
+                <Input
+                  value={editedMeter?.rating || ""}
+                  onChange={(e) => setEditedMeter(prev => prev ? { ...prev, rating: e.target.value } : null)}
+                />
+              </div>
+              <div className="col-span-2">
+                <Label>Cable Specification</Label>
+                <Input
+                  value={editedMeter?.cable_specification || ""}
+                  onChange={(e) => setEditedMeter(prev => prev ? { ...prev, cable_specification: e.target.value } : null)}
+                />
+              </div>
+              <div>
+                <Label>Serial Number</Label>
+                <Input
+                  value={editedMeter?.serial_number || ""}
+                  onChange={(e) => setEditedMeter(prev => prev ? { ...prev, serial_number: e.target.value } : null)}
+                />
+              </div>
+              <div>
+                <Label>CT Type</Label>
+                <Input
+                  value={editedMeter?.ct_type || ""}
+                  onChange={(e) => setEditedMeter(prev => prev ? { ...prev, ct_type: e.target.value } : null)}
+                />
+              </div>
+              <div>
+                <Label>Meter Type</Label>
+                <Select
+                  value={editedMeter?.meter_type || ""}
+                  onValueChange={(value) => setEditedMeter(prev => prev ? { ...prev, meter_type: value } : null)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="council_bulk">Council Bulk</SelectItem>
+                    <SelectItem value="check_meter">Check Meter</SelectItem>
+                    <SelectItem value="distribution">Distribution</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="col-span-2 flex gap-2">
+                <Button onClick={handleSaveEdit} size="sm" className="gap-2">
+                  <Check className="h-4 w-4" />
+                  Save Changes
+                </Button>
+                <Button onClick={() => {
+                  setEditingIndex(null);
+                  setEditedMeter(null);
+                }} size="sm" variant="outline">
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div><span className="font-medium">Name:</span> {extractedMeters[selectedMeterIndex].name}</div>
+              <div><span className="font-medium">Area:</span> {extractedMeters[selectedMeterIndex].area}m²</div>
+              <div><span className="font-medium">Rating:</span> {extractedMeters[selectedMeterIndex].rating}</div>
+              <div><span className="font-medium">Type:</span> {extractedMeters[selectedMeterIndex].meter_type}</div>
+              <div className="col-span-2"><span className="font-medium">Cable:</span> {extractedMeters[selectedMeterIndex].cable_specification}</div>
+              <div><span className="font-medium">Serial:</span> {extractedMeters[selectedMeterIndex].serial_number}</div>
+              <div><span className="font-medium">CT:</span> {extractedMeters[selectedMeterIndex].ct_type}</div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    );
+  };
 
-          <DialogFooter className="flex items-center justify-between">
+  return (
+    <div className="space-y-4">
+      {isPdf && !convertedImageUrl && (
+        <Card className="border-border/50">
+          <CardContent className="pt-6">
+            <PdfToImageConverter
+              pdfUrl={imageUrl}
+              onImageGenerated={handleImageGenerated}
+            />
+          </CardContent>
+        </Card>
+      )}
+      
+      <div className="flex items-center justify-between">
+        <Button
+          onClick={extractMetersFromSchematic}
+          disabled={isExtracting || (isPdf && !convertedImageUrl)}
+          className="gap-2"
+        >
+          {isExtracting ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Extracting Data...
+            </>
+          ) : (
+            "Extract Meters from Schematic"
+          )}
+        </Button>
+
+        {extractedMeters.length > 0 && (
+          <div className="flex items-center gap-4">
             <div className="text-sm text-muted-foreground">
-              {approvedCount > 0 && `${approvedCount} meter${approvedCount !== 1 ? 's' : ''} approved`}
+              {approvedCount}/{totalCount} approved
             </div>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => {
-                setShowApprovalDialog(false);
-                setExtractedMeters([]);
-                setConvertedImageUrl(null);
-              }}>
-                Cancel
-              </Button>
-              <Button 
-                onClick={handleApproveAndSave} 
-                disabled={approvedCount === 0}
-              >
-                Save {approvedCount > 0 ? `${approvedCount} Approved` : 'Approved'} Meter{approvedCount !== 1 ? 's' : ''}
-              </Button>
-            </div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
+            <Button 
+              onClick={handleApproveAndSave} 
+              disabled={approvedCount === 0}
+            >
+              Save {approvedCount > 0 ? `${approvedCount} Approved` : 'Approved'} Meter{approvedCount !== 1 ? 's' : ''}
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {renderMeterDetailsPanel()}
+    </div>
   );
 };
