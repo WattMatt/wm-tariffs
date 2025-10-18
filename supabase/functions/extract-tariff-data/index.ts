@@ -181,8 +181,8 @@ OUTPUT STRUCTURE:
       ],
       "charges": [
         {
-          "chargeType": "service|capacity|basic_monthly",
-          "chargeAmount": 100.00,
+          "chargeType": "service_charge|demand_kva|basic_monthly|capacity_charge",
+          "chargeAmount": 10000.00,
           "description": "Service charge",
           "unit": "R/month"
         }
@@ -192,13 +192,21 @@ OUTPUT STRUCTURE:
   ]
 }
 
+CRITICAL VALUE CONVERSION RULES:
+1. ALL charge amounts MUST be stored in CENTS (multiply Rand values by 100)
+   - Basic Charge: 2,376.68 R/month → store as 237668.00
+   - Energy Charge: 173.10 c/kWh → store as 173.10 (already in cents)
+   - Demand Charge: 434.27 R/kVA → store as 43427.00
+2. Block energy charges are ALREADY in c/kWh (no conversion needed)
+3. TOU period charges are ALREADY in c/kWh (no conversion needed)
+
 EXTRACTION STRATEGY:
 1. Locate "${municipalityName}" section boundaries
 2. Identify all tariff subsections within
 3. For each tariff, extract:
    - Tariff name and type
-   - Energy charges (convert c/kWh to cents)
-   - Fixed charges (R/month, R/day, R/kVA)
+   - Energy charges (already in c/kWh)
+   - Fixed charges in Rands → MULTIPLY BY 100 to store as cents
    - Blocks if tiered pricing
    - TOU periods if time-based
 
