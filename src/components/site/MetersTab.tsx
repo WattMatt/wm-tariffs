@@ -9,8 +9,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, Gauge } from "lucide-react";
+import { Plus, Gauge, Upload } from "lucide-react";
 import { toast } from "sonner";
+import CsvImportDialog from "./CsvImportDialog";
 
 interface Meter {
   id: string;
@@ -31,6 +32,8 @@ export default function MetersTab({ siteId }: MetersTabProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isRevenueCritical, setIsRevenueCritical] = useState(false);
+  const [csvImportMeterId, setCsvImportMeterId] = useState<string | null>(null);
+  const [isCsvDialogOpen, setIsCsvDialogOpen] = useState(false);
 
   useEffect(() => {
     fetchMeters();
@@ -195,6 +198,7 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                   <TableHead>Location</TableHead>
                   <TableHead>Tariff</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -215,6 +219,19 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                         </Badge>
                       )}
                     </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setCsvImportMeterId(meter.id);
+                          setIsCsvDialogOpen(true);
+                        }}
+                      >
+                        <Upload className="w-4 h-4 mr-2" />
+                        Import CSV
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -222,6 +239,18 @@ export default function MetersTab({ siteId }: MetersTabProps) {
           </CardContent>
         </Card>
       )}
+
+      <CsvImportDialog
+        isOpen={isCsvDialogOpen}
+        onClose={() => {
+          setIsCsvDialogOpen(false);
+          setCsvImportMeterId(null);
+        }}
+        meterId={csvImportMeterId || ""}
+        onImportComplete={() => {
+          toast.success("Readings imported successfully");
+        }}
+      />
     </div>
   );
 }
