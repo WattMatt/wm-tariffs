@@ -341,7 +341,7 @@ export default function PdfImportDialog() {
                               {structure.blocks.map((block, bidx) => (
                                 <p key={bidx} className="text-sm">
                                   Block {block.blockNumber}: {block.kwhFrom} - {block.kwhTo || '∞'} kWh 
-                                  @ {block.energyChargeCents}c/kWh
+                                  @ R{(block.energyChargeCents / 100).toFixed(4)}/kWh
                                 </p>
                               ))}
                             </div>
@@ -368,7 +368,7 @@ export default function PdfImportDialog() {
                               {structure.touPeriods.map((period, pidx) => (
                                 <p key={pidx} className="text-sm">
                                   {period.periodType} ({period.season}, {period.dayType}): 
-                                  {period.startHour}:00-{period.endHour}:00 @ {period.energyChargeCents}c/kWh
+                                  {period.startHour}:00-{period.endHour}:00 @ R{(period.energyChargeCents / 100).toFixed(4)}/kWh
                                 </p>
                               ))}
                             </div>

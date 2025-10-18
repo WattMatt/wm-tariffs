@@ -322,7 +322,7 @@ export default function CostCalculationTab({ siteId }: CostCalculationTabProps) 
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-muted-foreground mb-1">Average Cost per kWh</p>
-                  <p className="text-lg font-semibold">R {costData.avgCostPerKwh.toFixed(4)}</p>
+                  <p className="text-lg font-semibold">R{costData.avgCostPerKwh.toFixed(4)}/kWh</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground mb-1">Calculation Period</p>

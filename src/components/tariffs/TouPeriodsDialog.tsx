@@ -55,6 +55,8 @@ export default function TouPeriodsDialog({ tariffId, onClose }: TouPeriodsDialog
     setIsLoading(true);
 
     const formData = new FormData(e.currentTarget);
+    const energyChargeRands = parseFloat(formData.get("energy_charge_rands") as string);
+    const energyChargeCents = energyChargeRands * 100;
 
     const { error } = await supabase.from("tariff_time_periods").insert({
       tariff_structure_id: tariffId,
@@ -63,7 +65,7 @@ export default function TouPeriodsDialog({ tariffId, onClose }: TouPeriodsDialog
       day_type: formData.get("day_type") as string,
       start_hour: parseInt(formData.get("start_hour") as string),
       end_hour: parseInt(formData.get("end_hour") as string),
-      energy_charge_cents: parseFloat(formData.get("energy_charge_cents") as string),
+      energy_charge_cents: energyChargeCents,
     });
 
     setIsLoading(false);
@@ -165,14 +167,14 @@ export default function TouPeriodsDialog({ tariffId, onClose }: TouPeriodsDialog
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="energy_charge_cents">Energy Charge (cents/kWh)</Label>
+                  <Label htmlFor="energy_charge_rands">Energy Charge (R/kWh)</Label>
                   <Input
-                    id="energy_charge_cents"
-                    name="energy_charge_cents"
+                    id="energy_charge_rands"
+                    name="energy_charge_rands"
                     type="number"
-                    step="0.01"
+                    step="0.0001"
                     required
-                    placeholder="150.50"
+                    placeholder="1.5050"
                   />
                 </div>
 
@@ -227,7 +229,7 @@ export default function TouPeriodsDialog({ tariffId, onClose }: TouPeriodsDialog
                   <TableHead>Season</TableHead>
                   <TableHead>Days</TableHead>
                   <TableHead>Hours</TableHead>
-                  <TableHead>Rate (c/kWh)</TableHead>
+                  <TableHead>Rate (R/kWh)</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -249,7 +251,7 @@ export default function TouPeriodsDialog({ tariffId, onClose }: TouPeriodsDialog
                       {String(period.start_hour).padStart(2, "0")}:00 -{" "}
                       {String(period.end_hour).padStart(2, "0")}:00
                     </TableCell>
-                    <TableCell>{period.energy_charge_cents}</TableCell>
+                    <TableCell>R{(period.energy_charge_cents / 100).toFixed(4)}</TableCell>
                     <TableCell>
                       <Button
                         variant="ghost"
