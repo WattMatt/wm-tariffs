@@ -8,9 +8,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, FileText, Eye } from "lucide-react";
+import { Plus, FileText, Clock } from "lucide-react";
 import { toast } from "sonner";
+import TouPeriodsDialog from "./TouPeriodsDialog";
 
 interface TariffStructure {
   id: string;
@@ -19,6 +21,8 @@ interface TariffStructure {
   meter_configuration: string | null;
   effective_from: string;
   active: boolean;
+  uses_tou: boolean;
+  tou_type: string | null;
   supply_authorities: {
     name: string;
   } | null;
@@ -34,6 +38,8 @@ export default function TariffStructuresTab() {
   const [authorities, setAuthorities] = useState<SupplyAuthority[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [usesTou, setUsesTou] = useState(false);
+  const [selectedTariffForTou, setSelectedTariffForTou] = useState<string | null>(null);
 
   useEffect(() => {
     fetchStructures();
@@ -75,6 +81,8 @@ export default function TariffStructuresTab() {
       meter_configuration: formData.get("meter_config") as string,
       description: formData.get("description") as string,
       effective_from: formData.get("effective_from") as string,
+      uses_tou: usesTou,
+      tou_type: usesTou ? (formData.get("tou_type") as string) : null,
       active: true,
     });
 
@@ -85,6 +93,7 @@ export default function TariffStructuresTab() {
     } else {
       toast.success("Tariff structure created");
       setIsDialogOpen(false);
+      setUsesTou(false);
       fetchStructures();
     }
   };
@@ -184,6 +193,40 @@ export default function TariffStructuresTab() {
                 />
               </div>
 
+              <div className="flex items-center space-x-2 p-4 bg-muted/50 rounded-lg">
+                <Switch
+                  id="uses_tou"
+                  checked={usesTou}
+                  onCheckedChange={setUsesTou}
+                />
+                <div className="flex-1">
+                  <Label htmlFor="uses_tou" className="cursor-pointer">
+                    Time-of-Use (TOU) Tariff
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    Enable for Eskom TOU structures (Nightsave, Megaflex, etc.)
+                  </p>
+                </div>
+              </div>
+
+              {usesTou && (
+                <div className="space-y-2">
+                  <Label htmlFor="tou_type">TOU Type</Label>
+                  <Select name="tou_type" required>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select TOU type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="nightsave">Nightsave (Urban Large/Small, Rural)</SelectItem>
+                      <SelectItem value="megaflex">Megaflex/Miniflex/Homeflex</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Define time periods after creating the tariff
+                  </p>
+                </div>
+              )}
+
               <Button type="submit" className="w-full" disabled={isLoading}>
                 {isLoading ? "Creating..." : "Create Tariff"}
               </Button>
@@ -224,9 +267,10 @@ export default function TariffStructuresTab() {
                   <TableHead>Name</TableHead>
                   <TableHead>Authority</TableHead>
                   <TableHead>Type</TableHead>
-                  <TableHead>Meter Config</TableHead>
+                  <TableHead>TOU</TableHead>
                   <TableHead>Effective From</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -240,10 +284,13 @@ export default function TariffStructuresTab() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      {structure.meter_configuration ? (
-                        <span className="text-sm capitalize">{structure.meter_configuration}</span>
+                      {structure.uses_tou ? (
+                        <div className="flex items-center gap-1">
+                          <Clock className="w-4 h-4 text-primary" />
+                          <span className="text-sm capitalize">{structure.tou_type}</span>
+                        </div>
                       ) : (
-                        "—"
+                        <span className="text-muted-foreground">—</span>
                       )}
                     </TableCell>
                     <TableCell className="text-muted-foreground">
@@ -256,12 +303,31 @@ export default function TariffStructuresTab() {
                         <Badge variant="outline">Inactive</Badge>
                       )}
                     </TableCell>
+                    <TableCell>
+                      {structure.uses_tou && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setSelectedTariffForTou(structure.id)}
+                        >
+                          <Clock className="w-4 h-4 mr-2" />
+                          TOU Periods
+                        </Button>
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
           </CardContent>
         </Card>
+      )}
+
+      {selectedTariffForTou && (
+        <TouPeriodsDialog
+          tariffId={selectedTariffForTou}
+          onClose={() => setSelectedTariffForTou(null)}
+        />
       )}
     </div>
   );

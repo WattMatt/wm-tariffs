@@ -454,7 +454,9 @@ export type Database = {
           name: string
           supply_authority_id: string
           tariff_type: string
+          tou_type: string | null
           updated_at: string | null
+          uses_tou: boolean | null
         }
         Insert: {
           active?: boolean | null
@@ -467,7 +469,9 @@ export type Database = {
           name: string
           supply_authority_id: string
           tariff_type: string
+          tou_type?: string | null
           updated_at?: string | null
+          uses_tou?: boolean | null
         }
         Update: {
           active?: boolean | null
@@ -480,7 +484,9 @@ export type Database = {
           name?: string
           supply_authority_id?: string
           tariff_type?: string
+          tou_type?: string | null
           updated_at?: string | null
+          uses_tou?: boolean | null
         }
         Relationships: [
           {
@@ -488,6 +494,50 @@ export type Database = {
             columns: ["supply_authority_id"]
             isOneToOne: false
             referencedRelation: "supply_authorities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tariff_time_periods: {
+        Row: {
+          created_at: string | null
+          day_type: string
+          end_hour: number
+          energy_charge_cents: number
+          id: string
+          period_type: string
+          season: string
+          start_hour: number
+          tariff_structure_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          day_type: string
+          end_hour: number
+          energy_charge_cents: number
+          id?: string
+          period_type: string
+          season: string
+          start_hour: number
+          tariff_structure_id: string
+        }
+        Update: {
+          created_at?: string | null
+          day_type?: string
+          end_hour?: number
+          energy_charge_cents?: number
+          id?: string
+          period_type?: string
+          season?: string
+          start_hour?: number
+          tariff_structure_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tariff_time_periods_tariff_structure_id_fkey"
+            columns: ["tariff_structure_id"]
+            isOneToOne: false
+            referencedRelation: "tariff_structures"
             referencedColumns: ["id"]
           },
         ]

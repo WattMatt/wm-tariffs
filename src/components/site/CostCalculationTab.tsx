@@ -85,27 +85,71 @@ export default function CostCalculationTab({ siteId }: CostCalculationTabProps) 
       // Fetch tariff structure details
       const { data: tariff } = await supabase
         .from("tariff_structures")
-        .select("*, tariff_blocks(*), tariff_charges(*)")
+        .select("*, tariff_blocks(*), tariff_charges(*), tariff_time_periods(*)")
         .eq("id", selectedTariff)
         .single();
 
-      // Calculate costs based on blocks
       let energyCost = 0;
-      let remainingKwh = totalKwh;
 
-      if (tariff?.tariff_blocks && tariff.tariff_blocks.length > 0) {
-        const sortedBlocks = tariff.tariff_blocks.sort((a: any, b: any) => a.block_number - b.block_number);
-        
-        for (const block of sortedBlocks) {
-          const blockSize = block.kwh_to ? block.kwh_to - block.kwh_from : Infinity;
-          const kwhInBlock = Math.min(remainingKwh, blockSize);
-          
-          if (kwhInBlock > 0) {
-            energyCost += (kwhInBlock * block.energy_charge_cents) / 100;
-            remainingKwh -= kwhInBlock;
+      // Check if this is a TOU tariff
+      if (tariff?.uses_tou && tariff.tariff_time_periods?.length > 0) {
+        // TOU calculation based on time periods
+        const { data: readings } = await supabase
+          .from("meter_readings")
+          .select("kwh_value, reading_timestamp")
+          .in("meter_id", meters.map(m => m.id))
+          .gte("reading_timestamp", dateFrom.toISOString())
+          .lte("reading_timestamp", dateTo.toISOString());
+
+        if (readings && readings.length > 0) {
+          for (const reading of readings) {
+            const timestamp = new Date(reading.reading_timestamp);
+            const hour = timestamp.getHours();
+            const dayOfWeek = timestamp.getDay();
+            const month = timestamp.getMonth() + 1;
+            
+            // Determine season (June-Aug = high demand, Sep-May = low demand)
+            const season = month >= 6 && month <= 8 ? "high_demand" : "low_demand";
+            
+            // Determine day type
+            let dayType = "weekday";
+            if (dayOfWeek === 0) dayType = "sunday";
+            else if (dayOfWeek === 6) dayType = "saturday";
+            
+            // Find matching TOU period
+            const period = tariff.tariff_time_periods.find((p: any) => {
+              const seasonMatch = p.season === "all_year" || p.season === season;
+              const dayMatch = p.day_type === "all_days" || 
+                              p.day_type === dayType ||
+                              (p.day_type === "weekend" && (dayOfWeek === 0 || dayOfWeek === 6));
+              const hourMatch = hour >= p.start_hour && hour < p.end_hour;
+              
+              return seasonMatch && dayMatch && hourMatch;
+            });
+            
+            if (period) {
+              energyCost += (Number(reading.kwh_value) * period.energy_charge_cents) / 100;
+            }
           }
+        }
+      } else {
+        // Standard block-based calculation
+        let remainingKwh = totalKwh;
+
+        if (tariff?.tariff_blocks && tariff.tariff_blocks.length > 0) {
+          const sortedBlocks = tariff.tariff_blocks.sort((a: any, b: any) => a.block_number - b.block_number);
           
-          if (remainingKwh <= 0) break;
+          for (const block of sortedBlocks) {
+            const blockSize = block.kwh_to ? block.kwh_to - block.kwh_from : Infinity;
+            const kwhInBlock = Math.min(remainingKwh, blockSize);
+            
+            if (kwhInBlock > 0) {
+              energyCost += (kwhInBlock * block.energy_charge_cents) / 100;
+              remainingKwh -= kwhInBlock;
+            }
+            
+            if (remainingKwh <= 0) break;
+          }
         }
       }
 
