@@ -158,31 +158,15 @@ export const MeterDataExtractor = ({ siteId, schematicId, imageUrl, onMetersExtr
 
   const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
     e.preventDefault();
-    
-    // Ctrl/Cmd + wheel = zoom
-    if (e.ctrlKey || e.metaKey) {
-      const delta = e.deltaY * -0.001;
-      const newZoom = Math.min(Math.max(0.5, zoom + delta), 3);
-      setZoom(newZoom);
-    } 
-    // Shift + wheel = horizontal pan
-    else if (e.shiftKey) {
-      setPan(prev => ({
-        x: prev.x - e.deltaY,
-        y: prev.y
-      }));
-    }
-    // Regular wheel = vertical pan
-    else {
-      setPan(prev => ({
-        x: prev.x,
-        y: prev.y - e.deltaY
-      }));
-    }
+    const delta = e.deltaY * -0.01;
+    const newZoom = Math.min(Math.max(0.5, zoom + delta), 3);
+    setZoom(newZoom);
   };
 
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (e.button === 0 && !(e.target as HTMLElement).closest('.meter-marker')) {
+    // Left click or middle click for panning
+    if ((e.button === 0 || e.button === 1) && !(e.target as HTMLElement).closest('.meter-marker')) {
+      e.preventDefault();
       setIsDragging(true);
       setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
       e.currentTarget.style.cursor = 'grabbing';
@@ -317,7 +301,7 @@ export const MeterDataExtractor = ({ siteId, schematicId, imageUrl, onMetersExtr
                 <div className="flex items-center gap-2">
                   <div className="text-xs text-muted-foreground">
                     <div>Zoom: {Math.round(zoom * 100)}%</div>
-                    <div className="opacity-60">Ctrl+Wheel: Zoom | Wheel: Pan | Drag: Pan</div>
+                    <div className="opacity-60">Scroll: Zoom | Drag: Pan</div>
                   </div>
                   <Button size="sm" variant="outline" onClick={handleResetView}>Reset View</Button>
                 </div>
