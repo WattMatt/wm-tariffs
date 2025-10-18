@@ -3,8 +3,13 @@ import { Canvas as FabricCanvas, Circle, Line, Text, FabricImage } from "fabric"
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Save, Zap, Link2, Trash2, Move } from "lucide-react";
+import { Save, Zap, Link2, Trash2, Move, Upload, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import CsvImportDialog from "@/components/site/CsvImportDialog";
 
 interface SchematicEditorProps {
   schematicId: string;
@@ -39,6 +44,10 @@ export default function SchematicEditor({ schematicId, schematicUrl, siteId }: S
   const [meters, setMeters] = useState<any[]>([]);
   const [selectedMeterForConnection, setSelectedMeterForConnection] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isAddMeterDialogOpen, setIsAddMeterDialogOpen] = useState(false);
+  const [pendingMeterPosition, setPendingMeterPosition] = useState<{ x: number; y: number } | null>(null);
+  const [isCsvDialogOpen, setIsCsvDialogOpen] = useState(false);
+  const [selectedMeterId, setSelectedMeterId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchMeters();
@@ -221,30 +230,61 @@ export default function SchematicEditor({ schematicId, schematicUrl, siteId }: S
     const pointer = fabricCanvas?.getPointer(e.e);
     if (!pointer) return;
 
-    // Show meter selection dialog or create new meter position
-    // For now, just create a placeholder
-    const availableMeter = meters.find(m => 
-      !meterPositions.some(p => p.meter_id === m.id)
-    );
+    // Open dialog to create new meter at this position
+    setPendingMeterPosition({ x: pointer.x, y: pointer.y });
+    setIsAddMeterDialogOpen(true);
+  };
 
-    if (!availableMeter) {
-      toast.error("All meters have been placed on the schematic");
+  const handleCreateMeter = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!pendingMeterPosition) return;
+
+    const formData = new FormData(e.currentTarget);
+    
+    // Create the meter first
+    const { data: newMeter, error: meterError } = await supabase
+      .from("meters")
+      .insert({
+        site_id: siteId,
+        meter_number: formData.get("meter_number") as string,
+        name: formData.get("name") as string,
+        meter_type: formData.get("meter_type") as string,
+        area: formData.get("area") ? parseFloat(formData.get("area") as string) : null,
+        rating: formData.get("rating") as string,
+        cable_specification: formData.get("cable_specification") as string,
+        serial_number: formData.get("serial_number") as string,
+        ct_type: formData.get("ct_type") as string,
+        location: formData.get("location") as string,
+        tariff: formData.get("tariff") as string,
+        is_revenue_critical: false,
+      })
+      .select()
+      .single();
+
+    if (meterError || !newMeter) {
+      toast.error("Failed to create meter");
       return;
     }
 
-    const { error } = await supabase
+    // Then create the position on schematic
+    const { error: posError } = await supabase
       .from("meter_positions")
       .insert({
         schematic_id: schematicId,
-        meter_id: availableMeter.id,
-        x_position: pointer.x,
-        y_position: pointer.y,
-        label: availableMeter.meter_number
+        meter_id: newMeter.id,
+        x_position: pendingMeterPosition.x,
+        y_position: pendingMeterPosition.y,
+        label: newMeter.meter_number
       });
 
-    if (!error) {
-      toast.success("Meter added to schematic");
+    if (!posError) {
+      toast.success("Meter created and placed on schematic");
+      setIsAddMeterDialogOpen(false);
+      setPendingMeterPosition(null);
+      fetchMeters();
       fetchMeterPositions();
+    } else {
+      toast.error("Failed to place meter on schematic");
     }
   };
 
@@ -313,7 +353,7 @@ export default function SchematicEditor({ schematicId, schematicUrl, siteId }: S
           onClick={() => setActiveTool("meter")}
           size="sm"
         >
-          <Zap className="w-4 h-4 mr-2" />
+          <Plus className="w-4 h-4 mr-2" />
           Add Meter
         </Button>
         <Button
@@ -333,6 +373,12 @@ export default function SchematicEditor({ schematicId, schematicUrl, siteId }: S
           <Save className="w-4 h-4 mr-2" />
           Save
         </Button>
+      </div>
+
+      <div className="text-sm text-muted-foreground">
+        {activeTool === "meter" && "Click on the schematic to place a new meter"}
+        {activeTool === "connection" && "Click on two meters to connect them"}
+        {activeTool === "select" && "Drag meters to reposition them"}
       </div>
 
       <div className="flex gap-2">
@@ -358,12 +404,138 @@ export default function SchematicEditor({ schematicId, schematicUrl, siteId }: S
         <canvas ref={canvasRef} />
       </div>
 
+      {meterPositions.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          {meterPositions.map((pos) => {
+            const meter = meters.find(m => m.id === pos.meter_id);
+            return (
+              <Button
+                key={pos.id}
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setSelectedMeterId(meter?.id);
+                  setIsCsvDialogOpen(true);
+                }}
+                className="justify-between"
+              >
+                <span className="font-mono text-xs">{meter?.meter_number}</span>
+                <Upload className="w-3 h-3" />
+              </Button>
+            );
+          })}
+        </div>
+      )}
+
       {activeTool === 'connection' && selectedMeterForConnection && (
         <div className="p-4 bg-primary/10 rounded-lg">
           <p className="text-sm">
             Connection mode: Select the parent meter to connect to
           </p>
         </div>
+      )}
+
+      <Dialog open={isAddMeterDialogOpen} onOpenChange={setIsAddMeterDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Add Meter to Schematic</DialogTitle>
+            <DialogDescription>
+              Create a new meter and place it at the selected position
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleCreateMeter} className="space-y-6">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="meter_number">NO (Meter Number) *</Label>
+                <Input id="meter_number" name="meter_number" required placeholder="DB-03" />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="name">NAME *</Label>
+                <Input id="name" name="name" required placeholder="ACKERMANS" />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="area">AREA (m²) *</Label>
+                <Input 
+                  id="area" 
+                  name="area" 
+                  type="number" 
+                  step="0.01" 
+                  required 
+                  placeholder="406" 
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="rating">RATING *</Label>
+                <Input id="rating" name="rating" required placeholder="100A TP" />
+              </div>
+
+              <div className="space-y-2 col-span-2">
+                <Label htmlFor="cable_specification">CABLE *</Label>
+                <Input 
+                  id="cable_specification" 
+                  name="cable_specification" 
+                  required 
+                  placeholder="4C x 50mm² ALU ECC CABLE" 
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="serial_number">SERIAL *</Label>
+                <Input id="serial_number" name="serial_number" required placeholder="35777285" />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="ct_type">CT *</Label>
+                <Input id="ct_type" name="ct_type" required placeholder="DOL" />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="meter_type">Meter Type *</Label>
+                <Select name="meter_type" required>
+                  <SelectTrigger className="bg-background">
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-background z-50">
+                    <SelectItem value="council_bulk">Council Bulk Supply</SelectItem>
+                    <SelectItem value="check_meter">Check Meter</SelectItem>
+                    <SelectItem value="distribution">Distribution Meter</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="location">Location</Label>
+                <Input id="location" name="location" placeholder="Building A, Floor 2" />
+              </div>
+
+              <div className="space-y-2 col-span-2">
+                <Label htmlFor="tariff">Tariff</Label>
+                <Input id="tariff" name="tariff" placeholder="Business Standard" />
+              </div>
+            </div>
+
+            <Button type="submit" className="w-full">
+              Create Meter & Place on Schematic
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {selectedMeterId && (
+        <CsvImportDialog
+          isOpen={isCsvDialogOpen}
+          onClose={() => {
+            setIsCsvDialogOpen(false);
+            setSelectedMeterId(null);
+          }}
+          meterId={selectedMeterId}
+          onImportComplete={() => {
+            toast.success("Readings imported successfully");
+          }}
+        />
       )}
     </div>
   );
