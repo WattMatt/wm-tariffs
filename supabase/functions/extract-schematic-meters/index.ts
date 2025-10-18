@@ -84,12 +84,14 @@ serve(async (req) => {
 - CABLE (cable specification, e.g., 4C x 50mm² ALU ECC CABLE)
 - SERIAL (serial number, e.g., 35777285)
 - CT (CT type, e.g., DOL, 150/5A, 300/5A)
-- POSITION (the approximate position of this meter on the schematic as a percentage from top-left corner, e.g., {"x": 25, "y": 30} means 25% from left edge and 30% from top edge)
+- POSITION (CRITICAL: the EXACT center position of where this specific meter box/symbol appears on the schematic. Measure carefully as a percentage from top-left corner where x is horizontal distance from left edge (0-100%) and y is vertical distance from top edge (0-100%). For example, if a meter is at the horizontal center and 30% down from top, use {"x": 50, "y": 30}. Be as precise as possible - the position should point to the CENTER of the meter box or meter label on the diagram.)
 
 Analyze the meter details to determine the meter_type:
 - "council_bulk" - for main incoming council supply meters (typically highest rating, labeled as "INCOMING COUNCIL")
 - "check_meter" - for bulk check meters or sub-main check meters (labeled as "BULK CHECK METER" or "CHECK METER")
 - "distribution" - for distribution boards (labeled as DB-XX)
+
+IMPORTANT: Carefully measure the position of each meter on the schematic. The position should be exactly where that meter's box or symbol is located.
 
 Return ONLY a JSON array of objects with these exact keys: meter_number, name, area (as number or null if not specified), rating, cable_specification, serial_number, ct_type, meter_type, position (with x and y percentages).
 

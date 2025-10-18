@@ -353,7 +353,7 @@ export default function SchematicViewer() {
                                 return (
                                   <div
                                     key={index}
-                                    className={`meter-marker absolute rounded-full border-4 cursor-pointer transition-all flex items-center justify-center text-white font-bold shadow-xl ${
+                                    className={`meter-marker absolute rounded-full border-4 cursor-pointer transition-all flex flex-col items-center justify-center text-white font-bold shadow-xl ${
                                       selectedMeterIndex === index 
                                         ? 'ring-4 ring-blue-400 ring-offset-2' 
                                         : 'hover:scale-110'
@@ -374,9 +374,10 @@ export default function SchematicViewer() {
                                       handleMeterSelect(index);
                                     }}
                                     onMouseDown={(e) => e.stopPropagation()}
-                                    title={`${meter.meter_number} - Click to review`}
+                                    title={`${meter.meter_number} - ${meter.name}`}
                                   >
-                                    <span>{index + 1}</span>
+                                    <span className="text-xs leading-none mb-0.5">{index + 1}</span>
+                                    <span className="text-[8px] leading-none font-mono opacity-90">{meter.meter_number}</span>
                                   </div>
                                 );
                               })}
