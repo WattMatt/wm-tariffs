@@ -534,14 +534,14 @@ export default function PdfImportDialog() {
       <DialogTrigger asChild>
         <Button className="gap-2">
           <FileUp className="w-4 h-4" />
-          Import from PDF
+          Import Tariffs
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Import Tariffs from PDF or Excel</DialogTitle>
+          <DialogTitle>Import Tariff Data</DialogTitle>
           <DialogDescription>
-            Upload a NERSA tariff document. Excel files (.xlsx) are recommended for faster, more accurate extraction.
+            Upload a NERSA tariff document (PDF or Excel). Excel files are recommended for faster, more accurate extraction.
           </DialogDescription>
         </DialogHeader>
 

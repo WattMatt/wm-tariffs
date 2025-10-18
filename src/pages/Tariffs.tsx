@@ -7,7 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Building2, Plus } from "lucide-react";
 import SupplyAuthoritiesTab from "@/components/tariffs/SupplyAuthoritiesTab";
 import TariffStructuresTab from "@/components/tariffs/TariffStructuresTab";
-import PdfImportDialog from "@/components/tariffs/PdfImportDialog";
+import TariffImportDialog from "@/components/tariffs/TariffImportDialog";
 
 export default function Tariffs() {
   return (
@@ -20,7 +20,7 @@ export default function Tariffs() {
               Manage supply authorities and tariff structures for accurate cost calculations
             </p>
           </div>
-          <PdfImportDialog />
+          <TariffImportDialog />
         </div>
 
         <Tabs defaultValue="authorities" className="space-y-6">
