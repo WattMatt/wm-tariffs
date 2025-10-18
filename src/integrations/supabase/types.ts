@@ -77,6 +77,48 @@ export type Database = {
         }
         Relationships: []
       }
+      meter_connections: {
+        Row: {
+          child_meter_id: string
+          connection_type: string
+          created_at: string | null
+          id: string
+          parent_meter_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          child_meter_id: string
+          connection_type: string
+          created_at?: string | null
+          id?: string
+          parent_meter_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          child_meter_id?: string
+          connection_type?: string
+          created_at?: string | null
+          id?: string
+          parent_meter_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meter_connections_child_meter_id_fkey"
+            columns: ["child_meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meter_connections_parent_meter_id_fkey"
+            columns: ["parent_meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meter_positions: {
         Row: {
           created_at: string | null
@@ -227,6 +269,59 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      schematic_lines: {
+        Row: {
+          color: string | null
+          created_at: string | null
+          from_x: number
+          from_y: number
+          id: string
+          line_type: string | null
+          metadata: Json | null
+          schematic_id: string
+          stroke_width: number | null
+          to_x: number
+          to_y: number
+          updated_at: string | null
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string | null
+          from_x: number
+          from_y: number
+          id?: string
+          line_type?: string | null
+          metadata?: Json | null
+          schematic_id: string
+          stroke_width?: number | null
+          to_x: number
+          to_y: number
+          updated_at?: string | null
+        }
+        Update: {
+          color?: string | null
+          created_at?: string | null
+          from_x?: number
+          from_y?: number
+          id?: string
+          line_type?: string | null
+          metadata?: Json | null
+          schematic_id?: string
+          stroke_width?: number | null
+          to_x?: number
+          to_y?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schematic_lines_schematic_id_fkey"
+            columns: ["schematic_id"]
+            isOneToOne: false
+            referencedRelation: "schematics"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       schematics: {
         Row: {

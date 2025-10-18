@@ -5,8 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, ZoomIn, ZoomOut, Maximize2 } from "lucide-react";
+import { ArrowLeft, ZoomIn, ZoomOut, Maximize2, Edit } from "lucide-react";
 import { toast } from "sonner";
+import SchematicEditor from "@/components/schematic/SchematicEditor";
 
 interface SchematicData {
   id: string;
@@ -16,6 +17,7 @@ interface SchematicData {
   file_type: string;
   page_number: number;
   total_pages: number;
+  site_id: string;
   sites: { name: string; clients: { name: string } | null } | null;
 }
 
@@ -37,6 +39,7 @@ export default function SchematicViewer() {
   const [imageUrl, setImageUrl] = useState<string>("");
   const [meterPositions, setMeterPositions] = useState<MeterPosition[]>([]);
   const [zoom, setZoom] = useState(100);
+  const [editMode, setEditMode] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -130,18 +133,30 @@ export default function SchematicViewer() {
           </div>
 
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={handleZoomOut}>
-              <ZoomOut className="w-4 h-4" />
+            <Button 
+              variant={editMode ? "default" : "outline"} 
+              size="sm" 
+              onClick={() => setEditMode(!editMode)}
+            >
+              <Edit className="w-4 h-4 mr-2" />
+              {editMode ? "View Mode" : "Edit Mode"}
             </Button>
-            <Badge variant="outline" className="px-4">
-              {zoom}%
-            </Badge>
-            <Button variant="outline" size="sm" onClick={handleZoomIn}>
-              <ZoomIn className="w-4 h-4" />
-            </Button>
-            <Button variant="outline" size="sm" onClick={handleResetZoom}>
-              <Maximize2 className="w-4 h-4" />
-            </Button>
+            {!editMode && (
+              <>
+                <Button variant="outline" size="sm" onClick={handleZoomOut}>
+                  <ZoomOut className="w-4 h-4" />
+                </Button>
+                <Badge variant="outline" className="px-4">
+                  {zoom}%
+                </Badge>
+                <Button variant="outline" size="sm" onClick={handleZoomIn}>
+                  <ZoomIn className="w-4 h-4" />
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleResetZoom}>
+                  <Maximize2 className="w-4 h-4" />
+                </Button>
+              </>
+            )}
           </div>
         </div>
 
@@ -158,58 +173,66 @@ export default function SchematicViewer() {
 
         <Card className="border-border/50">
           <CardContent className="p-6">
-            <div className="relative overflow-auto bg-muted/20 rounded-lg">
-              <div
-                className="relative inline-block"
-                style={{
-                  transform: `scale(${zoom / 100})`,
-                  transformOrigin: "top left",
-                }}
-              >
-                {schematic.file_type === "application/pdf" ? (
-                  <div className="flex items-center justify-center p-16 bg-background rounded">
-                    <div className="text-center">
-                      <p className="text-lg font-medium mb-2">PDF Viewer</p>
-                      <p className="text-sm text-muted-foreground mb-4">
-                        PDF files require a specialized viewer
-                      </p>
-                      <Button
-                        onClick={() => window.open(imageUrl, "_blank")}
-                        variant="outline"
-                      >
-                        Open in New Tab
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <img
-                      src={imageUrl}
-                      alt={schematic.name}
-                      className="max-w-full h-auto"
-                    />
-                    
-                    {/* Meter Position Markers */}
-                    {meterPositions.map((position) => (
-                      <div
-                        key={position.id}
-                        className={`absolute w-6 h-6 rounded-full ${getMeterColor(
-                          position.meters?.meter_type || ""
-                        )} border-2 border-white shadow-lg flex items-center justify-center cursor-pointer hover:scale-110 transition-transform`}
-                        style={{
-                          left: `${position.x_position}%`,
-                          top: `${position.y_position}%`,
-                          transform: "translate(-50%, -50%)",
-                        }}
-                        title={`${position.meters?.meter_number} - ${position.label || ""}`}
-                      >
-                        <span className="text-[8px] font-bold text-white">M</span>
+            {editMode ? (
+              <SchematicEditor
+                schematicId={id!}
+                schematicUrl={imageUrl}
+                siteId={schematic.site_id}
+              />
+            ) : (
+              <div className="relative overflow-auto bg-muted/20 rounded-lg">
+                <div
+                  className="relative inline-block"
+                  style={{
+                    transform: `scale(${zoom / 100})`,
+                    transformOrigin: "top left",
+                  }}
+                >
+                  {schematic.file_type === "application/pdf" ? (
+                    <div className="flex items-center justify-center p-16 bg-background rounded">
+                      <div className="text-center">
+                        <p className="text-lg font-medium mb-2">PDF Viewer</p>
+                        <p className="text-sm text-muted-foreground mb-4">
+                          PDF files require a specialized viewer
+                        </p>
+                        <Button
+                          onClick={() => window.open(imageUrl, "_blank")}
+                          variant="outline"
+                        >
+                          Open in New Tab
+                        </Button>
                       </div>
-                    ))}
-                  </>
-                )}
+                    </div>
+                  ) : (
+                    <>
+                      <img
+                        src={imageUrl}
+                        alt={schematic.name}
+                        className="max-w-full h-auto"
+                      />
+                      
+                      {/* Meter Position Markers */}
+                      {meterPositions.map((position) => (
+                        <div
+                          key={position.id}
+                          className={`absolute w-6 h-6 rounded-full ${getMeterColor(
+                            position.meters?.meter_type || ""
+                          )} border-2 border-white shadow-lg flex items-center justify-center cursor-pointer hover:scale-110 transition-transform`}
+                          style={{
+                            left: `${position.x_position}%`,
+                            top: `${position.y_position}%`,
+                            transform: "translate(-50%, -50%)",
+                          }}
+                          title={`${position.meters?.meter_number} - ${position.label || ""}`}
+                        >
+                          <span className="text-[8px] font-bold text-white">M</span>
+                        </div>
+                      ))}
+                    </>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
           </CardContent>
         </Card>
 

@@ -9,8 +9,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, FileText, Upload, Eye } from "lucide-react";
+import { Plus, FileText, Upload, Eye, Network } from "lucide-react";
 import { toast } from "sonner";
+import MeterConnectionsDialog from "@/components/schematic/MeterConnectionsDialog";
 
 interface Schematic {
   id: string;
@@ -33,6 +34,7 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [showConnectionsDialog, setShowConnectionsDialog] = useState(false);
 
   useEffect(() => {
     fetchSchematics();
@@ -129,7 +131,12 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
           <h2 className="text-2xl font-bold">Schematics</h2>
           <p className="text-muted-foreground">Electrical distribution diagrams for this site</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setShowConnectionsDialog(true)} className="gap-2">
+            <Network className="w-4 h-4" />
+            Meter Connections
+          </Button>
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button className="gap-2">
               <Plus className="w-4 h-4" />
@@ -204,7 +211,15 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
             </form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
+
+      {showConnectionsDialog && (
+        <MeterConnectionsDialog
+          siteId={siteId}
+          onClose={() => setShowConnectionsDialog(false)}
+        />
+      )}
 
       {schematics.length === 0 ? (
         <Card className="border-border/50">
