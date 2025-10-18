@@ -27,18 +27,15 @@ export default function Tariffs() {
   }, []);
 
   useEffect(() => {
-    if (selectedProvince) {
+    if (selectedProvince && selectedProvince !== "all") {
       const filtered = authorities.filter(a => a.region === selectedProvince);
       setFilteredAuthorities(filtered);
       
-      // Auto-select first authority in the province
-      if (filtered.length > 0) {
-        setSelectedAuthority(filtered[0].id);
-      } else {
-        setSelectedAuthority(null);
-      }
+      // Clear selection when changing province
+      setSelectedAuthority(null);
     } else {
-      setFilteredAuthorities([]);
+      // Show all authorities if no province selected or "all" selected
+      setFilteredAuthorities(authorities);
       setSelectedAuthority(null);
     }
   }, [selectedProvince, authorities]);
@@ -66,9 +63,9 @@ export default function Tariffs() {
       const uniqueProvinces = [...new Set(data.map(a => a.region).filter(Boolean))] as string[];
       setProvinces(uniqueProvinces.sort());
       
-      // Auto-select first province if available
-      if (uniqueProvinces.length > 0 && !selectedProvince) {
-        setSelectedProvince(uniqueProvinces[0]);
+      // Set to "all" by default to show all municipalities
+      if (!selectedProvince) {
+        setSelectedProvince("all");
       }
     }
   };
@@ -96,12 +93,13 @@ export default function Tariffs() {
           <CardContent>
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="province-select">Province</Label>
+                <Label htmlFor="province-select">Filter by Province (Optional)</Label>
                 <Select value={selectedProvince || ""} onValueChange={setSelectedProvince}>
                   <SelectTrigger id="province-select" className="w-full bg-background">
-                    <SelectValue placeholder="Select province..." />
+                    <SelectValue placeholder="Filter by province..." />
                   </SelectTrigger>
                   <SelectContent className="bg-background z-50">
+                    <SelectItem value="all">All Provinces</SelectItem>
                     {provinces.map((province) => (
                       <SelectItem key={province} value={province}>
                         {province}
@@ -111,23 +109,33 @@ export default function Tariffs() {
                 </Select>
               </div>
 
-              {selectedProvince && (
-                <div className="space-y-2">
-                  <Label htmlFor="authority-select">Municipality / Supply Authority</Label>
-                  <Select value={selectedAuthority || ""} onValueChange={setSelectedAuthority}>
-                    <SelectTrigger id="authority-select" className="w-full bg-background">
-                      <SelectValue placeholder="Select municipality..." />
-                    </SelectTrigger>
-                    <SelectContent className="bg-background z-50">
-                      {filteredAuthorities.map((auth) => (
-                        <SelectItem key={auth.id} value={auth.id}>
-                          {auth.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
+              <div className="space-y-2">
+                <Label htmlFor="authority-select">
+                  Municipality / Supply Authority 
+                  {selectedProvince && selectedProvince !== "all" && (
+                    <span className="text-muted-foreground text-sm ml-2">
+                      ({filteredAuthorities.length} in {selectedProvince})
+                    </span>
+                  )}
+                  {(!selectedProvince || selectedProvince === "all") && (
+                    <span className="text-muted-foreground text-sm ml-2">
+                      ({filteredAuthorities.length} total)
+                    </span>
+                  )}
+                </Label>
+                <Select value={selectedAuthority || ""} onValueChange={setSelectedAuthority}>
+                  <SelectTrigger id="authority-select" className="w-full bg-background">
+                    <SelectValue placeholder="Select municipality..." />
+                  </SelectTrigger>
+                  <SelectContent className="bg-background z-50 max-h-[300px]">
+                    {filteredAuthorities.map((auth) => (
+                      <SelectItem key={auth.id} value={auth.id}>
+                        {auth.name} {auth.region && `(${auth.region})`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
               {selectedAuthorityData && (
                 <div className="flex gap-4 p-4 bg-muted/50 rounded-lg">
@@ -156,19 +164,11 @@ export default function Tariffs() {
             supplyAuthorityId={selectedAuthority}
             supplyAuthorityName={selectedAuthorityData?.name || ""}
           />
-        ) : selectedProvince ? (
-          <Card className="border-border/50">
-            <CardContent className="flex flex-col items-center justify-center py-16">
-              <p className="text-muted-foreground">
-                Please select a municipality to view its tariff structures
-              </p>
-            </CardContent>
-          </Card>
         ) : (
           <Card className="border-border/50">
             <CardContent className="flex flex-col items-center justify-center py-16">
               <p className="text-muted-foreground">
-                Please select a province to begin
+                Please select a municipality to view its tariff structures
               </p>
             </CardContent>
           </Card>
