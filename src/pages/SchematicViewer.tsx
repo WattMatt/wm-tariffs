@@ -46,6 +46,7 @@ interface ExtractedMeterData {
   tariff?: string;
   status?: 'pending' | 'approved' | 'rejected';
   position?: { x: number; y: number };
+  isDragging?: boolean;
 }
 
 export default function SchematicViewer() {
@@ -65,6 +66,8 @@ export default function SchematicViewer() {
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const [imageLoaded, setImageLoaded] = useState(false);
+  const [draggedMeterIndex, setDraggedMeterIndex] = useState<number | null>(null);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
     if (id) {
@@ -113,6 +116,7 @@ export default function SchematicViewer() {
   };
 
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    // Only pan if not clicking on a meter marker
     if ((e.button === 0 || e.button === 1) && !(e.target as HTMLElement).closest('.meter-marker')) {
       e.preventDefault();
       setIsDragging(true);
@@ -123,8 +127,50 @@ export default function SchematicViewer() {
     }
   };
 
+  const handleMeterMarkerMouseDown = (e: React.MouseEvent, index: number) => {
+    if (e.button !== 0) return; // Only left click
+    e.stopPropagation();
+    
+    setDraggedMeterIndex(index);
+    
+    if (imageRef.current) {
+      const imageRect = imageRef.current.getBoundingClientRect();
+      const meterPos = extractedMeters[index].position || { x: 0, y: 0 };
+      
+      // Calculate current marker position in pixels
+      const markerX = (meterPos.x / 100) * imageRect.width + imageRect.left;
+      const markerY = (meterPos.y / 100) * imageRect.height + imageRect.top;
+      
+      // Store offset from mouse to marker center
+      setDragOffset({
+        x: e.clientX - markerX,
+        y: e.clientY - markerY
+      });
+    }
+  };
+
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (isDragging) {
+    if (draggedMeterIndex !== null && imageRef.current) {
+      // Dragging a meter marker
+      e.stopPropagation();
+      const imageRect = imageRef.current.getBoundingClientRect();
+      
+      // Calculate new position relative to image
+      const newX = ((e.clientX - dragOffset.x - imageRect.left) / imageRect.width) * 100;
+      const newY = ((e.clientY - dragOffset.y - imageRect.top) / imageRect.height) * 100;
+      
+      // Clamp to image bounds
+      const clampedX = Math.max(0, Math.min(100, newX));
+      const clampedY = Math.max(0, Math.min(100, newY));
+      
+      const updated = [...extractedMeters];
+      updated[draggedMeterIndex] = {
+        ...updated[draggedMeterIndex],
+        position: { x: clampedX, y: clampedY }
+      };
+      setExtractedMeters(updated);
+    } else if (isDragging) {
+      // Panning the view
       setPan({
         x: e.clientX - dragStart.x,
         y: e.clientY - dragStart.y
@@ -133,6 +179,10 @@ export default function SchematicViewer() {
   };
 
   const handleMouseUp = () => {
+    if (draggedMeterIndex !== null) {
+      setDraggedMeterIndex(null);
+      toast.success('Marker position updated');
+    }
     setIsDragging(false);
     if (containerRef.current) {
       containerRef.current.style.cursor = 'grab';
@@ -289,6 +339,9 @@ export default function SchematicViewer() {
                           <span className="text-xs">Rejected</span>
                         </div>
                       </div>
+                      <div className="text-xs text-muted-foreground border-l pl-3 ml-2">
+                        💡 Drag markers to correct positions
+                      </div>
                     </div>
                     <div className="flex items-center gap-3">
                       <div className="text-sm text-muted-foreground">
@@ -353,10 +406,11 @@ export default function SchematicViewer() {
                                 return (
                                   <div
                                     key={index}
-                                    className={`meter-marker absolute rounded-full border-4 cursor-pointer transition-all flex flex-col items-center justify-center text-white font-bold shadow-xl ${
+                                    className={`meter-marker absolute rounded-full border-4 transition-all flex flex-col items-center justify-center text-white font-bold shadow-xl ${
+                                      draggedMeterIndex === index ? 'cursor-move scale-110' :
                                       selectedMeterIndex === index 
-                                        ? 'ring-4 ring-blue-400 ring-offset-2' 
-                                        : 'hover:scale-110'
+                                        ? 'ring-4 ring-blue-400 ring-offset-2 cursor-move' 
+                                        : 'hover:scale-110 cursor-move'
                                     } ${getMeterStatusColor(meter.status)}`}
                                     style={{
                                       left: `${meter.position?.x || 0}%`,
@@ -366,15 +420,18 @@ export default function SchematicViewer() {
                                       fontSize: `${selectedMeterIndex === index ? 16 : 14}px`,
                                       transform: `translate(-50%, -50%) scale(${1 / zoom})`,
                                       transformOrigin: 'center',
-                                      zIndex: selectedMeterIndex === index ? 50 : 30,
-                                      pointerEvents: 'auto'
+                                      zIndex: draggedMeterIndex === index ? 100 : selectedMeterIndex === index ? 50 : 30,
+                                      pointerEvents: 'auto',
+                                      opacity: draggedMeterIndex === index ? 0.8 : 1
                                     }}
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      handleMeterSelect(index);
+                                      if (draggedMeterIndex === null) {
+                                        handleMeterSelect(index);
+                                      }
                                     }}
-                                    onMouseDown={(e) => e.stopPropagation()}
-                                    title={`${meter.meter_number} - ${meter.name}`}
+                                    onMouseDown={(e) => handleMeterMarkerMouseDown(e, index)}
+                                    title={`${meter.meter_number} - ${meter.name} (Drag to reposition)`}
                                   >
                                     <span className="text-xs leading-none mb-0.5">{index + 1}</span>
                                     <span className="text-[8px] leading-none font-mono opacity-90">{meter.meter_number}</span>
