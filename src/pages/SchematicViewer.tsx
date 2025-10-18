@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Edit } from "lucide-react";
+import { ArrowLeft, Edit, Check, X } from "lucide-react";
 import { toast } from "sonner";
 import SchematicEditor from "@/components/schematic/SchematicEditor";
 import { MeterDataExtractor } from "@/components/schematic/MeterDataExtractor";
@@ -245,126 +245,283 @@ export default function SchematicViewer() {
                 siteId={schematic.site_id}
               />
             ) : (
-              <>
-                {/* Meter Extraction Controls */}
+              <div className="space-y-4">
+                {/* Meter Extraction Controls - Only show if no meters extracted yet */}
                 {extractedMeters.length === 0 && (
-                  <div className="mb-4">
-                    <MeterDataExtractor
-                      siteId={schematic.site_id}
-                      schematicId={id!}
-                      imageUrl={imageUrl}
-                      onMetersExtracted={fetchMeterPositions}
-                      onConvertedImageReady={setConvertedImageUrl}
-                      extractedMeters={extractedMeters}
-                      onMetersUpdate={setExtractedMeters}
-                      selectedMeterIndex={selectedMeterIndex}
-                      onMeterSelect={setSelectedMeterIndex}
-                    />
+                  <MeterDataExtractor
+                    siteId={schematic.site_id}
+                    schematicId={id!}
+                    imageUrl={imageUrl}
+                    onMetersExtracted={fetchMeterPositions}
+                    onConvertedImageReady={setConvertedImageUrl}
+                    extractedMeters={extractedMeters}
+                    onMetersUpdate={setExtractedMeters}
+                    selectedMeterIndex={selectedMeterIndex}
+                    onMeterSelect={setSelectedMeterIndex}
+                  />
+                )}
+
+                {/* Status Legend - Show when meters are extracted */}
+                {extractedMeters.length > 0 && (
+                  <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
+                    <div className="flex items-center gap-4">
+                      <div className="text-sm font-medium">Review Extracted Meters:</div>
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-3 h-3 rounded-full bg-yellow-500 border-2 border-yellow-600" />
+                          <span className="text-xs">Pending</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-3 h-3 rounded-full bg-green-500 border-2 border-green-600" />
+                          <span className="text-xs">Approved</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-3 h-3 rounded-full bg-red-500 border-2 border-red-600" />
+                          <span className="text-xs">Rejected</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="text-sm text-muted-foreground">
+                        Zoom: {Math.round(zoom * 100)}% | Scroll to zoom, Drag to pan
+                      </div>
+                      <Button size="sm" variant="outline" onClick={handleResetView}>
+                        Reset View
+                      </Button>
+                    </div>
                   </div>
                 )}
 
-                {/* Schematic Viewer with Pan/Zoom */}
-                <div 
-                  ref={containerRef}
-                  className="relative overflow-hidden bg-muted/20 rounded-lg cursor-grab select-none"
-                  style={{ minHeight: '600px' }}
-                  onWheel={extractedMeters.length > 0 ? handleWheel : undefined}
-                  onMouseDown={extractedMeters.length > 0 ? handleMouseDown : undefined}
-                  onMouseMove={extractedMeters.length > 0 ? handleMouseMove : undefined}
-                  onMouseUp={extractedMeters.length > 0 ? handleMouseUp : undefined}
-                  onMouseLeave={extractedMeters.length > 0 ? handleMouseLeave : undefined}
-                >
+                {/* Main Schematic View */}
+                <div className={extractedMeters.length > 0 ? "grid grid-cols-[1fr_400px] gap-4" : ""}>
+                  {/* Schematic with markers */}
                   <div 
-                    className="absolute inset-0 flex items-center justify-center"
-                    style={{
-                      transform: extractedMeters.length > 0 ? `translate(${pan.x}px, ${pan.y}px)` : 'none',
-                      transition: isDragging ? 'none' : 'transform 0.1s ease-out'
+                    ref={containerRef}
+                    className="relative overflow-hidden bg-muted/20 rounded-lg border-2 border-border/50"
+                    style={{ 
+                      minHeight: '700px',
+                      cursor: extractedMeters.length > 0 ? (isDragging ? 'grabbing' : 'grab') : 'default'
                     }}
+                    onWheel={extractedMeters.length > 0 ? handleWheel : undefined}
+                    onMouseDown={extractedMeters.length > 0 ? handleMouseDown : undefined}
+                    onMouseMove={extractedMeters.length > 0 ? handleMouseMove : undefined}
+                    onMouseUp={extractedMeters.length > 0 ? handleMouseUp : undefined}
+                    onMouseLeave={extractedMeters.length > 0 ? handleMouseLeave : undefined}
                   >
-                    <div
-                      className="relative"
+                    <div 
+                      className="absolute inset-0 flex items-center justify-center"
                       style={{
-                        transform: extractedMeters.length > 0 ? `scale(${zoom})` : `scale(1)`,
-                        transformOrigin: 'center center',
-                        transition: 'transform 0.2s ease-out'
+                        transform: extractedMeters.length > 0 ? `translate(${pan.x}px, ${pan.y}px)` : 'none',
+                        transition: isDragging ? 'none' : 'transform 0.1s ease-out'
                       }}
                     >
-                      {schematic.file_type === "application/pdf" ? (
-                        convertedImageUrl ? (
+                      <div
+                        className="relative"
+                        style={{
+                          transform: extractedMeters.length > 0 ? `scale(${zoom})` : 'scale(1)',
+                          transformOrigin: 'center center',
+                          transition: 'transform 0.2s ease-out'
+                        }}
+                      >
+                        {schematic.file_type === "application/pdf" ? (
+                          convertedImageUrl ? (
+                            <>
+                              <img
+                                src={convertedImageUrl}
+                                alt={schematic.name}
+                                className="max-w-none pointer-events-none"
+                                style={{ maxWidth: '100%', height: 'auto' }}
+                                draggable={false}
+                              />
+                              
+                              {/* Extracted Meter Markers */}
+                              {extractedMeters.map((meter, index) => (
+                                <div
+                                  key={index}
+                                  className={`meter-marker absolute w-12 h-12 rounded-full ${getMeterStatusColor(meter.status)} border-3 cursor-pointer hover:scale-110 transition-all flex items-center justify-center text-white font-bold shadow-lg ${
+                                    selectedMeterIndex === index ? 'ring-4 ring-blue-500 scale-125 z-20' : 'z-10'
+                                  }`}
+                                  style={{
+                                    left: `${meter.position?.x || 0}%`,
+                                    top: `${meter.position?.y || 0}%`,
+                                    transform: 'translate(-50%, -50%)'
+                                  }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleMeterSelect(index);
+                                  }}
+                                  onMouseDown={(e) => e.stopPropagation()}
+                                  title={`${meter.meter_number} - Click to review`}
+                                >
+                                  <span className="text-sm">{index + 1}</span>
+                                </div>
+                              ))}
+                            </>
+                          ) : (
+                            <div className="flex items-center justify-center p-16">
+                              <div className="text-center text-muted-foreground">
+                                <p className="text-lg font-medium mb-2">PDF Schematic</p>
+                                <p className="text-sm">
+                                  Convert PDF to image above to extract meters
+                                </p>
+                              </div>
+                            </div>
+                          )
+                        ) : (
                           <>
                             <img
-                              src={convertedImageUrl}
+                              src={imageUrl}
                               alt={schematic.name}
-                              className="max-w-none pointer-events-none"
-                              style={{ minWidth: '1000px', minHeight: '750px' }}
-                              draggable={false}
+                              className="max-w-full h-auto"
                             />
                             
-                            {/* Extracted Meter Markers */}
-                            {extractedMeters.map((meter, index) => (
+                            {/* Existing Meter Position Markers */}
+                            {meterPositions.map((position) => (
                               <div
-                                key={index}
-                                className={`meter-marker absolute w-10 h-10 rounded-full ${getMeterStatusColor(meter.status)} border-2 cursor-pointer hover:scale-125 transition-all flex items-center justify-center text-white font-bold text-sm shadow-lg ${
-                                  selectedMeterIndex === index ? 'ring-4 ring-blue-500 scale-125' : ''
-                                }`}
+                                key={position.id}
+                                className={`absolute w-6 h-6 rounded-full ${getMeterColor(
+                                  position.meters?.meter_type || ""
+                                )} border-2 border-white shadow-lg flex items-center justify-center cursor-pointer hover:scale-110 transition-transform`}
                                 style={{
-                                  left: `${meter.position?.x || 0}%`,
-                                  top: `${meter.position?.y || 0}%`,
-                                  transform: 'translate(-50%, -50%)',
-                                  zIndex: selectedMeterIndex === index ? 20 : 10
+                                  left: `${position.x_position}%`,
+                                  top: `${position.y_position}%`,
+                                  transform: "translate(-50%, -50%)",
                                 }}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleMeterSelect(index);
-                                }}
-                                onMouseDown={(e) => e.stopPropagation()}
-                                title={`${meter.meter_number} - Click to review`}
+                                title={`${position.meters?.meter_number} - ${position.label || ""}`}
                               >
-                                {index + 1}
+                                <span className="text-[8px] font-bold text-white">M</span>
                               </div>
                             ))}
                           </>
-                        ) : (
-                          <div className="flex items-center justify-center p-16 bg-background rounded">
-                            <div className="text-center">
-                              <p className="text-lg font-medium mb-2">PDF Schematic</p>
-                              <p className="text-sm text-muted-foreground">
-                                Convert PDF to image to extract meters
-                              </p>
-                            </div>
-                          </div>
-                        )
-                      ) : (
-                        <>
-                          <img
-                            src={imageUrl}
-                            alt={schematic.name}
-                            className="max-w-full h-auto"
-                          />
-                          
-                          {/* Existing Meter Position Markers */}
-                          {meterPositions.map((position) => (
-                            <div
-                              key={position.id}
-                              className={`absolute w-6 h-6 rounded-full ${getMeterColor(
-                                position.meters?.meter_type || ""
-                              )} border-2 border-white shadow-lg flex items-center justify-center cursor-pointer hover:scale-110 transition-transform`}
-                              style={{
-                                left: `${position.x_position}%`,
-                                top: `${position.y_position}%`,
-                                transform: "translate(-50%, -50%)",
-                              }}
-                              title={`${position.meters?.meter_number} - ${position.label || ""}`}
-                            >
-                              <span className="text-[8px] font-bold text-white">M</span>
-                            </div>
-                          ))}
-                        </>
-                      )}
+                        )}
+                      </div>
                     </div>
                   </div>
+
+                  {/* Meter Details Side Panel - Only show when meters extracted */}
+                  {extractedMeters.length > 0 && (
+                    <div className="space-y-4">
+                      {selectedMeterIndex !== null ? (
+                        <Card className="border-border/50 sticky top-4">
+                          <CardHeader className="pb-3">
+                            <CardTitle className="text-base flex items-center justify-between">
+                              <span>Meter #{selectedMeterIndex + 1}</span>
+                              <Badge 
+                                variant={
+                                  extractedMeters[selectedMeterIndex].status === 'approved' ? 'default' : 
+                                  extractedMeters[selectedMeterIndex].status === 'rejected' ? 'destructive' : 
+                                  'secondary'
+                                }
+                              >
+                                {extractedMeters[selectedMeterIndex].status || 'pending'}
+                              </Badge>
+                            </CardTitle>
+                            <CardDescription className="font-mono text-sm">
+                              {extractedMeters[selectedMeterIndex].meter_number}
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent className="space-y-4">
+                            <div className="grid grid-cols-2 gap-3 text-sm">
+                              <div>
+                                <div className="text-muted-foreground text-xs mb-1">Name</div>
+                                <div className="font-medium">{extractedMeters[selectedMeterIndex].name}</div>
+                              </div>
+                              <div>
+                                <div className="text-muted-foreground text-xs mb-1">Area</div>
+                                <div className="font-medium">{extractedMeters[selectedMeterIndex].area}m²</div>
+                              </div>
+                              <div>
+                                <div className="text-muted-foreground text-xs mb-1">Rating</div>
+                                <div className="font-medium">{extractedMeters[selectedMeterIndex].rating}</div>
+                              </div>
+                              <div>
+                                <div className="text-muted-foreground text-xs mb-1">Type</div>
+                                <div className="font-medium">{extractedMeters[selectedMeterIndex].meter_type}</div>
+                              </div>
+                              <div className="col-span-2">
+                                <div className="text-muted-foreground text-xs mb-1">Cable</div>
+                                <div className="font-medium text-xs">{extractedMeters[selectedMeterIndex].cable_specification}</div>
+                              </div>
+                              <div>
+                                <div className="text-muted-foreground text-xs mb-1">Serial</div>
+                                <div className="font-medium">{extractedMeters[selectedMeterIndex].serial_number}</div>
+                              </div>
+                              <div>
+                                <div className="text-muted-foreground text-xs mb-1">CT Type</div>
+                                <div className="font-medium">{extractedMeters[selectedMeterIndex].ct_type}</div>
+                              </div>
+                            </div>
+
+                            <div className="flex flex-col gap-2 pt-2">
+                              {extractedMeters[selectedMeterIndex].status !== 'approved' && (
+                                <Button
+                                  onClick={() => {
+                                    const updated = [...extractedMeters];
+                                    updated[selectedMeterIndex].status = 'approved';
+                                    setExtractedMeters(updated);
+                                    toast.success(`Approved: ${updated[selectedMeterIndex].meter_number}`);
+                                  }}
+                                  className="w-full bg-green-600 hover:bg-green-700"
+                                  size="sm"
+                                >
+                                  <Check className="h-4 w-4 mr-2" />
+                                  Approve Meter
+                                </Button>
+                              )}
+                              <Button
+                                onClick={() => {
+                                  const updated = [...extractedMeters];
+                                  updated[selectedMeterIndex].status = 'rejected';
+                                  setExtractedMeters(updated);
+                                  setSelectedMeterIndex(null);
+                                  toast.error(`Rejected: ${updated[selectedMeterIndex].meter_number}`);
+                                }}
+                                variant="destructive"
+                                size="sm"
+                                className="w-full"
+                              >
+                                <X className="h-4 w-4 mr-2" />
+                                Reject Meter
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ) : (
+                        <Card className="border-border/50">
+                          <CardContent className="p-8 text-center text-muted-foreground">
+                            <p className="text-sm">Click on a meter marker to review details</p>
+                          </CardContent>
+                        </Card>
+                      )}
+
+                      {/* Summary Card */}
+                      <Card className="border-border/50">
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-sm">Progress</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Total Meters</span>
+                            <span className="font-medium">{extractedMeters.length}</span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Approved</span>
+                            <span className="font-medium text-green-600">
+                              {extractedMeters.filter(m => m.status === 'approved').length}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Rejected</span>
+                            <span className="font-medium text-red-600">
+                              {extractedMeters.filter(m => m.status === 'rejected').length}
+                            </span>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  )}
                 </div>
-              </>
+              </div>
             )}
           </CardContent>
         </Card>
