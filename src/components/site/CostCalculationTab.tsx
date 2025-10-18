@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { supabase } from "@/integrations/supabase/client";
-import { CalendarIcon, DollarSign } from "lucide-react";
+import { CalendarIcon, Coins } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -341,7 +341,7 @@ export default function CostCalculationTab({ siteId }: CostCalculationTabProps) 
       {!costData && (
         <Card className="border-border/50">
           <CardContent className="flex flex-col items-center justify-center py-16">
-            <DollarSign className="w-16 h-16 text-muted-foreground mb-4" />
+            <Coins className="w-16 h-16 text-muted-foreground mb-4" />
             <p className="text-muted-foreground">
               Select parameters and calculate costs to see results
             </p>

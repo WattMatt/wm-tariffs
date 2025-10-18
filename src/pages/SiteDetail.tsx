@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Gauge, BarChart3, FileText, Building2, DollarSign } from "lucide-react";
+import { ArrowLeft, Gauge, BarChart3, FileText, Building2, Coins } from "lucide-react";
 import { toast } from "sonner";
 import MetersTab from "@/components/site/MetersTab";
 import SchematicsTab from "@/components/site/SchematicsTab";
@@ -125,7 +125,7 @@ export default function SiteDetail() {
               Reconciliation
             </TabsTrigger>
             <TabsTrigger value="costs" className="gap-2">
-              <DollarSign className="w-4 h-4" />
+              <Coins className="w-4 h-4" />
               Costs
             </TabsTrigger>
           </TabsList>
