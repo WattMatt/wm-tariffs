@@ -38,63 +38,28 @@ export const MeterDataExtractor = ({ siteId, schematicId, imageUrl, onMetersExtr
   const extractMetersFromSchematic = async () => {
     setIsExtracting(true);
     try {
-      const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${import.meta.env.VITE_LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
-          messages: [
-            {
-              role: "user",
-              content: [
-                {
-                  type: "text",
-                  text: `Extract all meter information from this electrical schematic. For each meter, extract:
-- NO (meter number)
-- NAME (meter name/location)
-- AREA (in m² - extract just the number)
-- RATING (with units, e.g., 100A TP)
-- CABLE (cable specification)
-- SERIAL (serial number)
-- CT (CT type)
-
-Return the data as a JSON array of objects with these exact keys: meter_number, name, area (as number), rating, cable_specification, serial_number, ct_type.
-For meter_type, analyze the rating and CT to determine if it's "main", "sub_main", or "distribution".
-Only return the JSON array, no other text.`
-                },
-                {
-                  type: "image_url",
-                  image_url: {
-                    url: imageUrl
-                  }
-                }
-              ]
-            }
-          ]
-        })
+      console.log('Extracting meters from schematic:', imageUrl);
+      
+      const { data, error } = await supabase.functions.invoke('extract-schematic-meters', {
+        body: { imageUrl }
       });
 
-      const data = await response.json();
-      const content = data.choices?.[0]?.message?.content;
-      
-      if (content) {
-        // Extract JSON from response
-        const jsonMatch = content.match(/\[[\s\S]*\]/);
-        if (jsonMatch) {
-          const meters = JSON.parse(jsonMatch[0]);
-          setExtractedMeters(meters);
-          setShowApprovalDialog(true);
-          toast.success(`Extracted ${meters.length} meters from schematic`);
-        } else {
-          throw new Error("Could not parse meter data");
-        }
+      if (error) {
+        console.error('Edge function error:', error);
+        throw error;
       }
+
+      if (!data || !data.meters) {
+        throw new Error('No meter data returned');
+      }
+
+      console.log('Extracted meters:', data.meters);
+      setExtractedMeters(data.meters);
+      setShowApprovalDialog(true);
+      toast.success(`Extracted ${data.meters.length} meters from schematic`);
     } catch (error) {
-      console.error("Error extracting meters:", error);
-      toast.error("Failed to extract meter data from schematic");
+      console.error('Error extracting meters:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to extract meter data from schematic');
     } finally {
       setIsExtracting(false);
     }
