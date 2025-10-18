@@ -3,7 +3,7 @@ import { Canvas as FabricCanvas, Circle, Line, Text, FabricImage } from "fabric"
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Save, Zap, Link2, Trash2, Move, Upload, Plus } from "lucide-react";
+import { Save, Zap, Link2, Trash2, Move, Upload, Plus, ZoomIn, ZoomOut, Maximize2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -49,6 +49,7 @@ export default function SchematicEditor({ schematicId, schematicUrl, siteId }: S
   const [pendingMeterPosition, setPendingMeterPosition] = useState<{ x: number; y: number } | null>(null);
   const [isCsvDialogOpen, setIsCsvDialogOpen] = useState(false);
   const [selectedMeterId, setSelectedMeterId] = useState<string | null>(null);
+  const [zoom, setZoom] = useState(1);
 
   useEffect(() => {
     fetchMeters();
@@ -60,9 +61,63 @@ export default function SchematicEditor({ schematicId, schematicUrl, siteId }: S
     if (!canvasRef.current) return;
 
     const canvas = new FabricCanvas(canvasRef.current, {
-      width: 1200,
-      height: 800,
+      width: 1400,
+      height: 900,
       backgroundColor: "#f8f9fa",
+    });
+
+    // Enable mouse wheel zoom
+    canvas.on('mouse:wheel', (opt) => {
+      const delta = opt.e.deltaY;
+      let newZoom = canvas.getZoom();
+      newZoom *= 0.999 ** delta;
+      if (newZoom > 3) newZoom = 3;
+      if (newZoom < 0.5) newZoom = 0.5;
+      
+      const pointer = canvas.getPointer(opt.e);
+      canvas.zoomToPoint(pointer, newZoom);
+      setZoom(newZoom);
+      opt.e.preventDefault();
+      opt.e.stopPropagation();
+    });
+
+    // Enable panning with shift + drag or right mouse button
+    let isPanningLocal = false;
+    let lastX = 0;
+    let lastY = 0;
+
+    canvas.on('mouse:down', (opt) => {
+      const evt = opt.e as MouseEvent;
+      if (opt.e.shiftKey || evt.button === 2) {
+        isPanningLocal = true;
+        lastX = evt.clientX;
+        lastY = evt.clientY;
+        canvas.selection = false;
+      }
+    });
+
+    canvas.on('mouse:move', (opt) => {
+      if (isPanningLocal) {
+        const evt = opt.e as MouseEvent;
+        const vpt = canvas.viewportTransform;
+        if (vpt) {
+          vpt[4] += evt.clientX - lastX;
+          vpt[5] += evt.clientY - lastY;
+          canvas.requestRenderAll();
+          lastX = evt.clientX;
+          lastY = evt.clientY;
+        }
+      }
+    });
+
+    canvas.on('mouse:up', () => {
+      isPanningLocal = false;
+      canvas.selection = true;
+    });
+
+    // Prevent context menu on right click
+    canvas.getElement().addEventListener('contextmenu', (e) => {
+      e.preventDefault();
     });
 
     setFabricCanvas(canvas);
@@ -71,7 +126,8 @@ export default function SchematicEditor({ schematicId, schematicUrl, siteId }: S
     FabricImage.fromURL(schematicUrl, {
       crossOrigin: 'anonymous'
     }).then((img) => {
-      img.scaleToWidth(1200);
+      const scale = Math.min(1400 / img.width!, 900 / img.height!);
+      img.scale(scale);
       img.selectable = false;
       img.evented = false;
       canvas.add(img);
@@ -368,6 +424,30 @@ export default function SchematicEditor({ schematicId, schematicUrl, siteId }: S
     }
   };
 
+  const handleZoomIn = () => {
+    if (!fabricCanvas) return;
+    const newZoom = Math.min(zoom * 1.2, 3);
+    fabricCanvas.setZoom(newZoom);
+    setZoom(newZoom);
+    fabricCanvas.renderAll();
+  };
+
+  const handleZoomOut = () => {
+    if (!fabricCanvas) return;
+    const newZoom = Math.max(zoom * 0.8, 0.5);
+    fabricCanvas.setZoom(newZoom);
+    setZoom(newZoom);
+    fabricCanvas.renderAll();
+  };
+
+  const handleResetZoom = () => {
+    if (!fabricCanvas) return;
+    fabricCanvas.setZoom(1);
+    fabricCanvas.viewportTransform = [1, 0, 0, 1, 0, 0];
+    setZoom(1);
+    fabricCanvas.renderAll();
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex gap-2 items-center flex-wrap">
@@ -413,6 +493,20 @@ export default function SchematicEditor({ schematicId, schematicUrl, siteId }: S
           }}
         />
         <div className="flex-1" />
+        <div className="flex gap-2 items-center">
+          <Button variant="outline" size="sm" onClick={handleZoomOut}>
+            <ZoomOut className="w-4 h-4" />
+          </Button>
+          <Badge variant="outline" className="px-3">
+            {Math.round(zoom * 100)}%
+          </Badge>
+          <Button variant="outline" size="sm" onClick={handleZoomIn}>
+            <ZoomIn className="w-4 h-4" />
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleResetZoom}>
+            <Maximize2 className="w-4 h-4" />
+          </Button>
+        </div>
         <Button onClick={handleClearLines} variant="destructive" size="sm">
           <Trash2 className="w-4 h-4 mr-2" />
           Clear Lines
@@ -423,11 +517,16 @@ export default function SchematicEditor({ schematicId, schematicUrl, siteId }: S
         </Button>
       </div>
 
-      <div className="text-sm text-muted-foreground">
-        {activeTool === "meter" && "Click on the schematic to place a new meter"}
-        {activeTool === "move" && "Drag meters to reposition them on the schematic"}
-        {activeTool === "connection" && "Click on two meters to connect them"}
-        {activeTool === "select" && "View mode - select a tool to edit"}
+      <div className="text-sm text-muted-foreground space-y-1">
+        <div>
+          {activeTool === "meter" && "Click on the schematic to place a new meter"}
+          {activeTool === "move" && "Drag meters to reposition them on the schematic"}
+          {activeTool === "connection" && "Click on two meters to connect them"}
+          {activeTool === "select" && "View mode - select a tool to edit"}
+        </div>
+        <div className="text-xs">
+          💡 Use mouse wheel to zoom • Hold Shift + drag to pan • Right-click + drag to pan
+        </div>
       </div>
 
       <div className="flex gap-2">
