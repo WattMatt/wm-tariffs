@@ -33,23 +33,34 @@ interface SupplyAuthority {
   name: string;
 }
 
-export default function TariffStructuresTab() {
+interface TariffStructuresTabProps {
+  supplyAuthorityId: string;
+  supplyAuthorityName: string;
+}
+
+interface TariffStructuresTabProps {
+  supplyAuthorityId: string;
+  supplyAuthorityName: string;
+}
+
+export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthorityName }: TariffStructuresTabProps) {
   const [structures, setStructures] = useState<TariffStructure[]>([]);
-  const [authorities, setAuthorities] = useState<SupplyAuthority[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [usesTou, setUsesTou] = useState(false);
   const [selectedTariffForTou, setSelectedTariffForTou] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchStructures();
-    fetchAuthorities();
-  }, []);
+    if (supplyAuthorityId) {
+      fetchStructures();
+    }
+  }, [supplyAuthorityId]);
 
   const fetchStructures = async () => {
     const { data, error } = await supabase
       .from("tariff_structures")
       .select("*, supply_authorities(name)")
+      .eq("supply_authority_id", supplyAuthorityId)
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -59,15 +70,6 @@ export default function TariffStructuresTab() {
     }
   };
 
-  const fetchAuthorities = async () => {
-    const { data } = await supabase
-      .from("supply_authorities")
-      .select("id, name")
-      .eq("active", true)
-      .order("name");
-    setAuthorities(data || []);
-  };
-
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
@@ -75,7 +77,7 @@ export default function TariffStructuresTab() {
     const formData = new FormData(e.currentTarget);
 
     const { error } = await supabase.from("tariff_structures").insert({
-      supply_authority_id: formData.get("authority") as string,
+      supply_authority_id: supplyAuthorityId,
       name: formData.get("name") as string,
       tariff_type: formData.get("type") as string,
       meter_configuration: formData.get("meter_config") as string,
@@ -113,7 +115,7 @@ export default function TariffStructuresTab() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold">Tariff Structures</h2>
-          <p className="text-muted-foreground">Configure pricing blocks and charges</p>
+          <p className="text-muted-foreground">for {supplyAuthorityName}</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
@@ -128,22 +130,6 @@ export default function TariffStructuresTab() {
               <DialogDescription>Create a new tariff configuration</DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="authority">Supply Authority</Label>
-                <Select name="authority" required>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select authority" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {authorities.map((auth) => (
-                      <SelectItem key={auth.id} value={auth.id}>
-                        {auth.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
               <div className="space-y-2">
                 <Label htmlFor="name">Tariff Name</Label>
                 <Input id="name" name="name" required placeholder="Domestic Prepaid" />
@@ -243,13 +229,10 @@ export default function TariffStructuresTab() {
             <p className="text-muted-foreground mb-4">
               Create tariff structures with pricing blocks
             </p>
-            <Button onClick={() => setIsDialogOpen(true)} disabled={authorities.length === 0}>
+            <Button onClick={() => setIsDialogOpen(true)}>
               <Plus className="w-4 h-4 mr-2" />
               Add Tariff
             </Button>
-            {authorities.length === 0 && (
-              <p className="text-sm text-warning mt-2">Please add supply authorities first</p>
-            )}
           </CardContent>
         </Card>
       ) : (
