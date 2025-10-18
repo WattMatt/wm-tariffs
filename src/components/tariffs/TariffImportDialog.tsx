@@ -149,13 +149,15 @@ export default function PdfImportDialog() {
       const worksheet = workbook.Sheets[sheetName];
       const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
       
-      // Look for municipality header in first few rows
-      for (let i = 0; i < Math.min(5, jsonData.length); i++) {
+      let municipalityFound = false;
+      
+      // Look for municipality header in first 10 rows
+      for (let i = 0; i < Math.min(10, jsonData.length); i++) {
         const row = jsonData[i];
         const cellValue = row[0]?.toString() || '';
         
-        // Match pattern: "MUNICIPALITY - XX.XX%"
-        const match = cellValue.match(/^([A-Z\s&]+?)\s*-\s*(\d+\.?\d*)%/);
+        // Pattern 1: "MUNICIPALITY - XX.XX%"
+        let match = cellValue.match(/^([A-Z\s&]+?)\s*-\s*(\d+\.?\d*)%/);
         if (match) {
           const name = match[1].trim();
           const nersaIncrease = parseFloat(match[2]);
@@ -163,16 +165,68 @@ export default function PdfImportDialog() {
           foundMunicipalities.push({
             name,
             nersaIncrease,
-            province: 'Eastern Cape', // Can be extracted from filename or sheet
+            province: file!.name.includes('Eastern') ? 'Eastern Cape' : 
+                     file!.name.includes('Free') ? 'Free State' : 'Unknown',
             status: 'pending'
           });
-          break; // Found municipality for this sheet, move to next
+          municipalityFound = true;
+          break;
         }
+        
+        // Pattern 2: Look for cells containing percentage (e.g., "10.76%")
+        for (let j = 0; j < row.length; j++) {
+          const cell = row[j]?.toString() || '';
+          const percentMatch = cell.match(/(\d+\.?\d*)%/);
+          if (percentMatch) {
+            // Look for municipality name in nearby cells or previous rows
+            let municipalityName = '';
+            
+            // Check current row for municipality name
+            if (j > 0) {
+              municipalityName = row[j - 1]?.toString().trim() || '';
+            }
+            
+            // Check previous rows if not found
+            if (!municipalityName && i > 0) {
+              municipalityName = jsonData[i - 1][0]?.toString().trim() || '';
+            }
+            
+            // Use sheet name if still not found
+            if (!municipalityName) {
+              municipalityName = sheetName;
+            }
+            
+            if (municipalityName && !foundMunicipalities.some(m => m.name === municipalityName)) {
+              foundMunicipalities.push({
+                name: municipalityName,
+                nersaIncrease: parseFloat(percentMatch[1]),
+                province: file!.name.includes('Eastern') ? 'Eastern Cape' : 
+                         file!.name.includes('Free') ? 'Free State' : 'Unknown',
+                status: 'pending'
+              });
+              municipalityFound = true;
+              break;
+            }
+          }
+        }
+        
+        if (municipalityFound) break;
+      }
+      
+      // If still no pattern found, use sheet name as municipality
+      if (!municipalityFound && sheetName && !sheetName.match(/^Sheet\d+$/i)) {
+        foundMunicipalities.push({
+          name: sheetName,
+          nersaIncrease: 0,
+          province: file!.name.includes('Eastern') ? 'Eastern Cape' : 
+                   file!.name.includes('Free') ? 'Free State' : 'Unknown',
+          status: 'pending'
+        });
       }
     }
     
     if (foundMunicipalities.length === 0) {
-      throw new Error("No municipalities found in Excel file. Expected format: 'MUNICIPALITY - XX.XX%'");
+      throw new Error("No municipalities found in Excel file. Please ensure each sheet contains municipality data.");
     }
     
     setMunicipalities(foundMunicipalities);
