@@ -491,6 +491,8 @@ export default function PdfImportDialog() {
         .maybeSingle();
 
       let tariff;
+      let isNewTariff = false;
+      
       if (existingTariff) {
         console.log(`Tariff "${structure.name}" already exists, skipping...`);
         tariff = existingTariff;
@@ -516,10 +518,13 @@ export default function PdfImportDialog() {
 
         if (tariffError) throw new Error(`Failed to create tariff "${structure.name}": ${tariffError.message}`);
         tariff = newTariff;
+        isNewTariff = true;
       }
 
-      // Insert blocks
-      if (structure.blocks && structure.blocks.length > 0) {
+      // Only insert blocks, charges, and TOU periods if this is a new tariff
+      if (isNewTariff) {
+        // Insert blocks
+        if (structure.blocks && structure.blocks.length > 0) {
         const blockInserts = structure.blocks.map(block => ({
           tariff_structure_id: tariff.id,
           block_number: block.blockNumber,
@@ -533,10 +538,10 @@ export default function PdfImportDialog() {
           .insert(blockInserts);
 
         if (blocksError) throw new Error(`Failed to create blocks: ${blocksError.message}`);
-      }
+        }
 
-      // Insert charges
-      if (structure.charges && structure.charges.length > 0) {
+        // Insert charges
+        if (structure.charges && structure.charges.length > 0) {
         const chargeInserts = structure.charges.map(charge => ({
           tariff_structure_id: tariff.id,
           charge_type: charge.chargeType,
@@ -550,10 +555,10 @@ export default function PdfImportDialog() {
           .insert(chargeInserts);
 
         if (chargesError) throw new Error(`Failed to create charges: ${chargesError.message}`);
-      }
+        }
 
-      // Insert TOU periods
-      if (structure.usesTou && structure.touPeriods && structure.touPeriods.length > 0) {
+        // Insert TOU periods
+        if (structure.usesTou && structure.touPeriods && structure.touPeriods.length > 0) {
         const touInserts = structure.touPeriods.map(period => ({
           tariff_structure_id: tariff.id,
           period_type: period.periodType,
@@ -569,6 +574,7 @@ export default function PdfImportDialog() {
           .insert(touInserts);
 
         if (touError) throw new Error(`Failed to create TOU periods: ${touError.message}`);
+        }
       }
     }
   };
