@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Loader2, Check, X, Edit } from "lucide-react";
+import { PdfToImageConverter } from "./PdfToImageConverter";
 
 interface ExtractedMeterData {
   meter_number: string;
@@ -34,20 +35,27 @@ export const MeterDataExtractor = ({ siteId, schematicId, imageUrl, onMetersExtr
   const [showApprovalDialog, setShowApprovalDialog] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editedMeter, setEditedMeter] = useState<ExtractedMeterData | null>(null);
+  const [convertedImageUrl, setConvertedImageUrl] = useState<string | null>(null);
+
+  const isPdf = imageUrl.toLowerCase().includes('.pdf');
 
   const extractMetersFromSchematic = async () => {
+    if (!convertedImageUrl && isPdf) {
+      toast.error('Please convert PDF to image first');
+      return;
+    }
+
     setIsExtracting(true);
     try {
-      console.log('Extracting meters from schematic:', imageUrl);
+      console.log('Extracting meters from schematic');
       
-      // Extract the file path from the URL for PDF detection
-      const urlParts = imageUrl.split('/');
-      const filePath = urlParts[urlParts.length - 1];
+      // Use converted image if available, otherwise use original
+      const urlToProcess = convertedImageUrl || imageUrl;
       
       const { data, error } = await supabase.functions.invoke('extract-schematic-meters', {
         body: { 
-          imageUrl,
-          filePath: decodeURIComponent(filePath)
+          imageUrl: urlToProcess,
+          filePath: null // We're using data URL now
         }
       });
 
@@ -70,6 +78,12 @@ export const MeterDataExtractor = ({ siteId, schematicId, imageUrl, onMetersExtr
     } finally {
       setIsExtracting(false);
     }
+  };
+
+  const handleImageGenerated = (imageDataUrl: string) => {
+    console.log('PDF converted to image, ready for extraction');
+    setConvertedImageUrl(imageDataUrl);
+    toast.success('PDF converted! Now click "Extract Meters" to analyze.');
   };
 
   const handleEditMeter = (index: number) => {
@@ -126,9 +140,16 @@ export const MeterDataExtractor = ({ siteId, schematicId, imageUrl, onMetersExtr
 
   return (
     <>
+      {isPdf && !convertedImageUrl && (
+        <PdfToImageConverter
+          pdfUrl={imageUrl}
+          onImageGenerated={handleImageGenerated}
+        />
+      )}
+      
       <Button
         onClick={extractMetersFromSchematic}
-        disabled={isExtracting}
+        disabled={isExtracting || (isPdf && !convertedImageUrl)}
         className="gap-2"
       >
         {isExtracting ? (
