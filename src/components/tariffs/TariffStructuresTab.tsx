@@ -10,9 +10,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, FileText, Clock } from "lucide-react";
+import { Plus, FileText, Clock, Eye } from "lucide-react";
 import { toast } from "sonner";
 import TouPeriodsDialog from "./TouPeriodsDialog";
+import TariffDetailsDialog from "./TariffDetailsDialog";
 
 interface TariffStructure {
   id: string;
@@ -49,6 +50,7 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
   const [isLoading, setIsLoading] = useState(false);
   const [usesTou, setUsesTou] = useState(false);
   const [selectedTariffForTou, setSelectedTariffForTou] = useState<string | null>(null);
+  const [selectedTariffForDetails, setSelectedTariffForDetails] = useState<{ id: string; name: string } | null>(null);
 
   useEffect(() => {
     if (supplyAuthorityId) {
@@ -287,16 +289,26 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
                       )}
                     </TableCell>
                     <TableCell>
-                      {structure.uses_tou && (
+                      <div className="flex gap-2">
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => setSelectedTariffForTou(structure.id)}
+                          onClick={() => setSelectedTariffForDetails({ id: structure.id, name: structure.name })}
                         >
-                          <Clock className="w-4 h-4 mr-2" />
-                          TOU Periods
+                          <Eye className="w-4 h-4 mr-2" />
+                          View Details
                         </Button>
-                      )}
+                        {structure.uses_tou && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setSelectedTariffForTou(structure.id)}
+                          >
+                            <Clock className="w-4 h-4 mr-2" />
+                            TOU Periods
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -310,6 +322,14 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
         <TouPeriodsDialog
           tariffId={selectedTariffForTou}
           onClose={() => setSelectedTariffForTou(null)}
+        />
+      )}
+
+      {selectedTariffForDetails && (
+        <TariffDetailsDialog
+          tariffId={selectedTariffForDetails.id}
+          tariffName={selectedTariffForDetails.name}
+          onClose={() => setSelectedTariffForDetails(null)}
         />
       )}
     </div>
