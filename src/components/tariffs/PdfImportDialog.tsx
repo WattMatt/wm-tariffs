@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { supabase } from "@/integrations/supabase/client";
 import { FileUp, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
+import ExtractionSteps from "./ExtractionSteps";
 
 interface ExtractedTariffData {
   supplyAuthority: {
@@ -57,6 +58,14 @@ export default function PdfImportDialog() {
   const [extractedData, setExtractedData] = useState<ExtractedTariffData | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
+  const getCurrentStep = () => {
+    if (isSaving) return "save";
+    if (extractedData) return "review";
+    if (isProcessing) return "extract";
+    if (file) return "upload";
+    return "upload";
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile && selectedFile.type === "application/pdf") {
@@ -98,27 +107,52 @@ export default function PdfImportDialog() {
     }
 
     setIsProcessing(true);
+    console.log("Starting PDF processing for:", file.name);
 
     try {
       // Extract text from PDF
+      console.log("Extracting text from PDF...");
       const documentContent = await extractTextFromPdf(file);
+      console.log("Extracted text length:", documentContent.length, "characters");
+
+      if (!documentContent || documentContent.length < 100) {
+        throw new Error("Failed to extract meaningful text from PDF. The file may be image-based or corrupted.");
+      }
 
       // Call edge function to extract structured data
+      console.log("Calling edge function to extract tariff data...");
       const { data, error } = await supabase.functions.invoke("extract-tariff-data", {
         body: { documentContent }
       });
 
-      if (error) throw error;
+      console.log("Edge function response:", { data, error });
+
+      if (error) {
+        console.error("Edge function error:", error);
+        throw error;
+      }
+
+      if (!data) {
+        throw new Error("No response from extraction service");
+      }
 
       if (!data.success) {
+        console.error("Extraction failed:", data.error);
         throw new Error(data.error || "Failed to extract data");
       }
 
+      if (!data.data || !data.data.supplyAuthority || !data.data.tariffStructures) {
+        console.error("Invalid data structure:", data);
+        throw new Error("Extracted data is missing required fields");
+      }
+
+      console.log("Successfully extracted tariff data:", data.data);
       setExtractedData(data.data);
-      toast.success("Tariff data extracted successfully");
+      toast.success(`Extracted ${data.data.tariffStructures.length} tariff structure(s). Review and save to database.`);
     } catch (error: any) {
       console.error("Error processing PDF:", error);
       toast.error(error.message || "Failed to process PDF");
+      setExtractedData(null);
     } finally {
       setIsProcessing(false);
     }
@@ -128,9 +162,11 @@ export default function PdfImportDialog() {
     if (!extractedData) return;
 
     setIsSaving(true);
+    console.log("Starting to save extracted data to database...");
 
     try {
       // 1. Insert supply authority
+      console.log("Inserting supply authority:", extractedData.supplyAuthority.name);
       const { data: authority, error: authorityError } = await supabase
         .from("supply_authorities")
         .insert({
@@ -142,10 +178,18 @@ export default function PdfImportDialog() {
         .select()
         .single();
 
-      if (authorityError) throw authorityError;
+      if (authorityError) {
+        console.error("Error inserting supply authority:", authorityError);
+        throw new Error(`Failed to create supply authority: ${authorityError.message}`);
+      }
+
+      console.log("Supply authority created:", authority);
 
       // 2. Insert tariff structures
+      let structuresCreated = 0;
       for (const structure of extractedData.tariffStructures) {
+        console.log(`Inserting tariff structure ${structuresCreated + 1}:`, structure.name);
+        
         const { data: tariff, error: tariffError } = await supabase
           .from("tariff_structures")
           .insert({
@@ -165,10 +209,16 @@ export default function PdfImportDialog() {
           .select()
           .single();
 
-        if (tariffError) throw tariffError;
+        if (tariffError) {
+          console.error(`Error inserting tariff structure ${structure.name}:`, tariffError);
+          throw new Error(`Failed to create tariff "${structure.name}": ${tariffError.message}`);
+        }
+
+        console.log("Tariff structure created:", tariff);
 
         // 3. Insert blocks
         if (structure.blocks && structure.blocks.length > 0) {
+          console.log(`Inserting ${structure.blocks.length} blocks for ${structure.name}`);
           const blockInserts = structure.blocks.map(block => ({
             tariff_structure_id: tariff.id,
             block_number: block.blockNumber,
@@ -181,11 +231,16 @@ export default function PdfImportDialog() {
             .from("tariff_blocks")
             .insert(blockInserts);
 
-          if (blocksError) throw blocksError;
+          if (blocksError) {
+            console.error(`Error inserting blocks for ${structure.name}:`, blocksError);
+            throw new Error(`Failed to create blocks for "${structure.name}": ${blocksError.message}`);
+          }
+          console.log(`Blocks inserted successfully`);
         }
 
         // 4. Insert charges
         if (structure.charges && structure.charges.length > 0) {
+          console.log(`Inserting ${structure.charges.length} charges for ${structure.name}`);
           const chargeInserts = structure.charges.map(charge => ({
             tariff_structure_id: tariff.id,
             charge_type: charge.chargeType,
@@ -198,11 +253,16 @@ export default function PdfImportDialog() {
             .from("tariff_charges")
             .insert(chargeInserts);
 
-          if (chargesError) throw chargesError;
+          if (chargesError) {
+            console.error(`Error inserting charges for ${structure.name}:`, chargesError);
+            throw new Error(`Failed to create charges for "${structure.name}": ${chargesError.message}`);
+          }
+          console.log(`Charges inserted successfully`);
         }
 
         // 5. Insert TOU periods if applicable
         if (structure.usesTou && structure.touPeriods && structure.touPeriods.length > 0) {
+          console.log(`Inserting ${structure.touPeriods.length} TOU periods for ${structure.name}`);
           const touInserts = structure.touPeriods.map(period => ({
             tariff_structure_id: tariff.id,
             period_type: period.periodType,
@@ -217,11 +277,18 @@ export default function PdfImportDialog() {
             .from("tariff_time_periods")
             .insert(touInserts);
 
-          if (touError) throw touError;
+          if (touError) {
+            console.error(`Error inserting TOU periods for ${structure.name}:`, touError);
+            throw new Error(`Failed to create TOU periods for "${structure.name}": ${touError.message}`);
+          }
+          console.log(`TOU periods inserted successfully`);
         }
+
+        structuresCreated++;
       }
 
-      toast.success("Tariff data saved successfully");
+      console.log(`Successfully saved ${structuresCreated} tariff structures`);
+      toast.success(`Successfully saved ${structuresCreated} tariff structure(s) to database!`);
       setIsOpen(false);
       setFile(null);
       setExtractedData(null);
@@ -252,6 +319,8 @@ export default function PdfImportDialog() {
           </DialogDescription>
         </DialogHeader>
 
+        <ExtractionSteps currentStep={getCurrentStep()} />
+
         <div className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="pdf-file">Select PDF Document</Label>
@@ -265,27 +334,46 @@ export default function PdfImportDialog() {
           </div>
 
           {file && !extractedData && (
-            <Button
-              onClick={handleProcess}
-              disabled={isProcessing}
-              className="w-full"
-            >
-              {isProcessing ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Processing PDF...
-                </>
-              ) : (
-                <>
-                  <CheckCircle2 className="w-4 h-4 mr-2" />
-                  Extract Tariff Data
-                </>
-              )}
-            </Button>
+            <div className="space-y-2">
+              <div className="text-sm text-muted-foreground">
+                Selected: <strong>{file.name}</strong> ({(file.size / 1024).toFixed(2)} KB)
+              </div>
+              <Button
+                onClick={handleProcess}
+                disabled={isProcessing}
+                className="w-full"
+              >
+                {isProcessing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Processing PDF (this may take 30-60 seconds)...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-4 h-4 mr-2" />
+                    Extract Tariff Data with AI
+                  </>
+                )}
+              </Button>
+              <p className="text-xs text-muted-foreground text-center">
+                The AI will analyze the document and extract tariff structures, charges, and TOU periods
+              </p>
+            </div>
           )}
 
           {extractedData && (
-            <ScrollArea className="h-[500px] border rounded-lg p-4">
+            <div className="space-y-4">
+              <div className="bg-primary/10 border border-primary/20 rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <CheckCircle2 className="w-5 h-5 text-primary" />
+                  <h3 className="font-semibold">Extraction Complete - Review Before Saving</h3>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  The AI has extracted the following tariff data. Please review carefully before saving to the database.
+                </p>
+              </div>
+
+              <ScrollArea className="h-[500px] border rounded-lg p-4">
               <div className="space-y-6">
                 <Card>
                   <CardHeader>
@@ -379,19 +467,23 @@ export default function PdfImportDialog() {
                   ))}
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex gap-2 pt-4 border-t">
                   <Button
                     onClick={handleSave}
                     disabled={isSaving}
                     className="flex-1"
+                    size="lg"
                   >
                     {isSaving ? (
                       <>
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Saving...
+                        Saving to Database...
                       </>
                     ) : (
-                      "Save to Database"
+                      <>
+                        <CheckCircle2 className="w-4 h-4 mr-2" />
+                        Confirm & Save to Database
+                      </>
                     )}
                   </Button>
                   <Button
@@ -400,12 +492,14 @@ export default function PdfImportDialog() {
                       setExtractedData(null);
                       setFile(null);
                     }}
+                    disabled={isSaving}
                   >
                     Cancel
                   </Button>
                 </div>
               </div>
-            </ScrollArea>
+              </ScrollArea>
+            </div>
           )}
 
           {!extractedData && !file && (
