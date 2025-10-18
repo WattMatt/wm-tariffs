@@ -203,15 +203,8 @@ export default function PdfImportDialog() {
     toast.success(`Found ${foundMunicipalities.length} municipality/municipalities. Click each to extract and save.`);
   };
 
-  const handleExtractAndSave = async (municipalityName: string, index: number) => {
-    if (!file) return;
-
-    setCurrentMunicipality(municipalityName);
-    setMunicipalities(prev => prev.map((m, i) => 
-      i === index ? { ...m, status: 'extracting' } : m
-    ));
-
-    const isExcel = file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls');
+  const processSingleMunicipality = async (municipalityName: string, index: number) => {
+    const isExcel = file!.name.toLowerCase().endsWith('.xlsx') || file!.name.toLowerCase().endsWith('.xls');
 
     try {
       let extractedData: ExtractedTariffData;
@@ -219,7 +212,7 @@ export default function PdfImportDialog() {
       if (isExcel) {
         extractedData = await extractFromExcel(municipalityName);
       } else {
-        const documentContent = await extractTextFromPdf(file);
+        const documentContent = await extractTextFromPdf(file!);
         console.log(`Extracting tariffs for: ${municipalityName}`);
         
         const { data, error } = await supabase.functions.invoke("extract-tariff-data", {
@@ -249,15 +242,78 @@ export default function PdfImportDialog() {
         i === index ? { ...m, status: 'complete' } : m
       ));
 
-      toast.success(`Successfully saved tariffs for ${municipalityName}`);
+      return true;
     } catch (error: any) {
       console.error(`Error processing ${municipalityName}:`, error);
       setMunicipalities(prev => prev.map((m, i) => 
         i === index ? { ...m, status: 'error', error: error.message } : m
       ));
+      throw error;
+    }
+  };
+
+  const handleExtractAndSave = async (municipalityName: string, index: number) => {
+    if (!file) return;
+
+    setCurrentMunicipality(municipalityName);
+    setMunicipalities(prev => prev.map((m, i) => 
+      i === index ? { ...m, status: 'extracting' } : m
+    ));
+
+    try {
+      await processSingleMunicipality(municipalityName, index);
+      toast.success(`Successfully saved tariffs for ${municipalityName}`);
+    } catch (error: any) {
       toast.error(`Failed to process ${municipalityName}: ${error.message}`);
     } finally {
       setCurrentMunicipality(null);
+    }
+  };
+
+  const handleBulkExtractAndSave = async () => {
+    if (!file) return;
+
+    setIsProcessing(true);
+    let successCount = 0;
+    let failCount = 0;
+
+    console.log(`Starting bulk processing of ${municipalities.length} municipalities`);
+
+    for (let i = 0; i < municipalities.length; i++) {
+      const municipality = municipalities[i];
+      
+      // Skip already completed or currently processing
+      if (municipality.status === 'complete') {
+        successCount++;
+        continue;
+      }
+
+      setCurrentMunicipality(municipality.name);
+      setMunicipalities(prev => prev.map((m, idx) => 
+        idx === i ? { ...m, status: 'extracting' } : m
+      ));
+
+      try {
+        await processSingleMunicipality(municipality.name, i);
+        successCount++;
+        console.log(`✓ Completed ${municipality.name} (${successCount}/${municipalities.length})`);
+      } catch (error: any) {
+        failCount++;
+        console.error(`✗ Failed ${municipality.name}:`, error.message);
+        // Continue with next municipality even if this one fails
+      }
+
+      // Small delay between municipalities to avoid overwhelming the system
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+
+    setCurrentMunicipality(null);
+    setIsProcessing(false);
+
+    if (failCount === 0) {
+      toast.success(`Successfully processed all ${successCount} municipalities!`);
+    } else {
+      toast.warning(`Completed ${successCount} municipalities, ${failCount} failed. Check logs for details.`);
     }
   };
 
@@ -583,10 +639,35 @@ export default function PdfImportDialog() {
           {municipalities.length > 0 && (
             <div className="space-y-4">
               <div className="bg-primary/10 border border-primary/20 rounded-lg p-4">
-                <h3 className="font-semibold mb-2">Found {municipalities.length} Municipality/Municipalities</h3>
-                <p className="text-sm text-muted-foreground">
-                  Click "Extract & Save" for each municipality to process them individually.
-                </p>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <h3 className="font-semibold mb-2">Found {municipalities.length} Municipality/Municipalities</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Process all at once or select individual municipalities.
+                    </p>
+                  </div>
+                  <Button
+                    onClick={handleBulkExtractAndSave}
+                    disabled={
+                      isProcessing || 
+                      municipalities.every(m => m.status === 'complete')
+                    }
+                    size="sm"
+                    className="whitespace-nowrap"
+                  >
+                    {isProcessing ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-4 h-4 mr-2" />
+                        Extract & Save All
+                      </>
+                    )}
+                  </Button>
+                </div>
               </div>
 
               <ScrollArea className="h-[400px] border rounded-lg p-4">
@@ -608,16 +689,16 @@ export default function PdfImportDialog() {
                               )}
                             </div>
                           </div>
-                          <Button
-                            onClick={() => handleExtractAndSave(municipality.name, index)}
-                            disabled={
-                              municipality.status !== 'pending' || 
-                              currentMunicipality !== null
-                            }
-                            size="sm"
-                          >
-                            {municipality.status === 'pending' ? 'Extract & Save' : getStatusText(municipality.status)}
-                          </Button>
+                          {municipality.status === 'pending' && (
+                            <Button
+                              onClick={() => handleExtractAndSave(municipality.name, index)}
+                              disabled={currentMunicipality !== null || isProcessing}
+                              size="sm"
+                              variant="outline"
+                            >
+                              Process Only This
+                            </Button>
+                          )}
                         </div>
                       </CardHeader>
                       {municipality.data && municipality.status === 'complete' && (
