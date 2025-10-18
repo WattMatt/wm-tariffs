@@ -81,8 +81,13 @@ export default function TariffDetailsDialog({ tariffId, tariffName, onClose }: T
     setIsLoading(false);
   };
 
-  const formatCurrency = (cents: number) => {
-    return `R${(cents / 100).toFixed(2)}`;
+  const formatCharge = (amount: number, unit: string) => {
+    // Check if unit contains "c/" (cents) - display as cents
+    if (unit.toLowerCase().includes('c/')) {
+      return `${amount.toFixed(2)}c`;
+    }
+    // Otherwise it's Rands - display as Rands
+    return `R${amount.toFixed(2)}`;
   };
 
   const formatCents = (cents: number) => {
@@ -193,7 +198,7 @@ export default function TariffDetailsDialog({ tariffId, tariffName, onClose }: T
                             </TableCell>
                             <TableCell>{charge.description}</TableCell>
                             <TableCell className="text-right font-semibold">
-                              {formatCurrency(charge.charge_amount)}
+                              {formatCharge(charge.charge_amount, charge.unit)}
                             </TableCell>
                             <TableCell className="text-muted-foreground">{charge.unit}</TableCell>
                           </TableRow>

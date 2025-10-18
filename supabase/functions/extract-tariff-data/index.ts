@@ -192,16 +192,14 @@ OUTPUT STRUCTURE:
   ]
 }
 
-CRITICAL VALUE CONVERSION - CHECK THE UNIT:
-1. Charges with Rand units (R/month, R/kVA, R/day, etc.) → MULTIPLY BY 100 to store as cents
-   - Basic Charge: 2,376.68 R/month → store chargeAmount as 237668.00, unit as "R/month"
-   - Demand Charge: 434.27 R/kVA → store chargeAmount as 43427.00, unit as "R/kVA/month"
-2. Charges with cents units (c/kWh) → STORE AS-IS (already in cents)
-   - Energy Charge: 173.10 c/kWh → store chargeAmount as 173.10, unit as "c/kWh"
-3. Block energy charges are ALREADY in c/kWh (no conversion needed)
-4. TOU period charges are ALREADY in c/kWh (no conversion needed)
-
-IMPORTANT: Look at the unit description in the Excel file to determine if conversion is needed!
+CRITICAL VALUE CONVERSION - ALL CHARGES STORED AS-IS:
+1. DO NOT multiply any values - store exactly as extracted from Excel
+   - Basic Charge: 2,376.68 R/month → store chargeAmount as 2376.68
+   - Energy Charge: 173.10 c/kWh → store chargeAmount as 173.10
+   - Demand Charge: 434.27 R/kVA → store chargeAmount as 434.27
+2. Block energy charges stored as-is (in c/kWh)
+3. TOU period charges stored as-is (in c/kWh)
+4. The display layer will handle formatting based on the unit column
 
 EXTRACTION STRATEGY:
 1. Locate "${municipalityName}" section boundaries
