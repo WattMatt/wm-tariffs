@@ -68,10 +68,6 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const navItems = [
     { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
     { icon: Building2, label: "Clients", path: "/clients" },
-    { icon: MapPin, label: "Sites", path: "/sites" },
-    { icon: Gauge, label: "Meters", path: "/meters" },
-    { icon: FileText, label: "Schematics", path: "/schematics" },
-    { icon: BarChart3, label: "Reconciliation", path: "/reconciliation" },
     { icon: Users, label: "Users", path: "/users" },
   ];
 

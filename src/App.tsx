@@ -7,6 +7,8 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Clients from "./pages/Clients";
+import ClientDetail from "./pages/ClientDetail";
+import SiteDetail from "./pages/SiteDetail";
 import Sites from "./pages/Sites";
 import Meters from "./pages/Meters";
 import Reconciliation from "./pages/Reconciliation";
@@ -28,6 +30,9 @@ const App = () => (
           <Route path="/auth" element={<Auth />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/clients" element={<Clients />} />
+          <Route path="/clients/:id" element={<ClientDetail />} />
+          <Route path="/sites/:id" element={<SiteDetail />} />
+          {/* Legacy routes for backwards compatibility */}
           <Route path="/sites" element={<Sites />} />
           <Route path="/meters" element={<Meters />} />
           <Route path="/reconciliation" element={<Reconciliation />} />
