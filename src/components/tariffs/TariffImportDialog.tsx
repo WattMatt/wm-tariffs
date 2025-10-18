@@ -481,26 +481,42 @@ export default function PdfImportDialog() {
     for (const structure of extractedData.tariffStructures) {
       console.log(`Saving tariff structure: ${structure.name}`);
       
-      const { data: tariff, error: tariffError } = await supabase
+      // Check if tariff already exists
+      const { data: existingTariff } = await supabase
         .from("tariff_structures")
-        .insert({
-          supply_authority_id: authorityId,
-          name: structure.name,
-          tariff_type: structure.tariffType,
-          voltage_level: structure.voltageLevel,
-          transmission_zone: structure.transmissionZone,
-          meter_configuration: structure.meterConfiguration,
-          description: structure.description,
-          effective_from: structure.effectiveFrom,
-          effective_to: structure.effectiveTo,
-          uses_tou: structure.usesTou,
-          tou_type: structure.touType,
-          active: true
-        })
-        .select()
-        .single();
+        .select("id")
+        .eq("supply_authority_id", authorityId)
+        .eq("name", structure.name)
+        .eq("effective_from", structure.effectiveFrom)
+        .maybeSingle();
 
-      if (tariffError) throw new Error(`Failed to create tariff "${structure.name}": ${tariffError.message}`);
+      let tariff;
+      if (existingTariff) {
+        console.log(`Tariff "${structure.name}" already exists, skipping...`);
+        tariff = existingTariff;
+      } else {
+        const { data: newTariff, error: tariffError } = await supabase
+          .from("tariff_structures")
+          .insert({
+            supply_authority_id: authorityId,
+            name: structure.name,
+            tariff_type: structure.tariffType,
+            voltage_level: structure.voltageLevel,
+            transmission_zone: structure.transmissionZone,
+            meter_configuration: structure.meterConfiguration,
+            description: structure.description,
+            effective_from: structure.effectiveFrom,
+            effective_to: structure.effectiveTo,
+            uses_tou: structure.usesTou,
+            tou_type: structure.touType,
+            active: true
+          })
+          .select()
+          .single();
+
+        if (tariffError) throw new Error(`Failed to create tariff "${structure.name}": ${tariffError.message}`);
+        tariff = newTariff;
+      }
 
       // Insert blocks
       if (structure.blocks && structure.blocks.length > 0) {
