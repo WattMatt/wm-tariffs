@@ -455,8 +455,10 @@ export type Database = {
           supply_authority_id: string
           tariff_type: string
           tou_type: string | null
+          transmission_zone: string | null
           updated_at: string | null
           uses_tou: boolean | null
+          voltage_level: string | null
         }
         Insert: {
           active?: boolean | null
@@ -470,8 +472,10 @@ export type Database = {
           supply_authority_id: string
           tariff_type: string
           tou_type?: string | null
+          transmission_zone?: string | null
           updated_at?: string | null
           uses_tou?: boolean | null
+          voltage_level?: string | null
         }
         Update: {
           active?: boolean | null
@@ -485,8 +489,10 @@ export type Database = {
           supply_authority_id?: string
           tariff_type?: string
           tou_type?: string | null
+          transmission_zone?: string | null
           updated_at?: string | null
           uses_tou?: boolean | null
+          voltage_level?: string | null
         }
         Relationships: [
           {

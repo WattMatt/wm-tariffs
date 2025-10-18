@@ -19,6 +19,8 @@ interface ExtractedTariffData {
   tariffStructures: Array<{
     name: string;
     tariffType: string;
+    voltageLevel?: string;
+    transmissionZone?: string;
     meterConfiguration?: string;
     effectiveFrom: string;
     effectiveTo?: string;
@@ -150,6 +152,8 @@ export default function PdfImportDialog() {
             supply_authority_id: authority.id,
             name: structure.name,
             tariff_type: structure.tariffType,
+            voltage_level: structure.voltageLevel,
+            transmission_zone: structure.transmissionZone,
             meter_configuration: structure.meterConfiguration,
             description: structure.description,
             effective_from: structure.effectiveFrom,
@@ -311,8 +315,16 @@ export default function PdfImportDialog() {
                           {structure.name}
                           <Badge>{structure.tariffType}</Badge>
                           {structure.usesTou && <Badge variant="outline">TOU</Badge>}
+                          {structure.voltageLevel && (
+                            <Badge variant="secondary" className="text-xs">{structure.voltageLevel}</Badge>
+                          )}
                         </CardTitle>
-                        <CardDescription>{structure.description}</CardDescription>
+                        <CardDescription>
+                          {structure.description}
+                          {structure.transmissionZone && (
+                            <span className="ml-2 text-xs">Zone: {structure.transmissionZone}</span>
+                          )}
+                        </CardDescription>
                       </CardHeader>
                       <CardContent className="space-y-4">
                         <div>

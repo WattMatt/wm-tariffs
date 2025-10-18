@@ -25,37 +25,54 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    const systemPrompt = `You are a specialized data extraction assistant for South African NERSA tariff documents. Your task is to extract structured tariff information from municipality energy tariff documents.
+    const systemPrompt = `You are a specialized data extraction assistant for South African electricity tariff documents (NERSA-approved and Eskom tariffs). Your task is to extract structured tariff information.
 
-Extract the following information:
-1. Supply Authority/Municipality details (name, region, NERSA increase percentage if mentioned)
-2. Tariff Structures with:
-   - Name (e.g., "Domestic Prepaid", "Commercial Conventional")
-   - Type (domestic, commercial, industrial, agricultural)
-   - Meter configuration (prepaid, conventional, both)
+CRITICAL INSTRUCTIONS:
+- Extract ALL tariff structures found in the document
+- For Eskom tariffs, handle voltage levels (< 500V, ≥ 500V & < 66kV, ≥ 66kV & ≤132kV, > 132kV)
+- For Eskom tariffs, handle transmission zones (≤ 300km, > 300km, > 600km, > 900km) if present
+- Handle TOU periods: peak, standard, off-peak with seasonal variations
+- Extract both High-demand season (Jun-Aug) and Low-demand season (Sep-May) rates
+- Pay attention to c/kWh (energy charges), R/kVA/m (capacity charges), R/POD/day (service charges)
+- For Eskom, the supply authority name is always "Eskom Holdings SOC Ltd"
+
+Extract:
+1. Supply Authority details (name like "Eskom Holdings SOC Ltd" or municipality name, region if mentioned, NERSA increase %)
+2. Tariff Structures - create SEPARATE structures for each major tariff type found:
+   - Name (e.g., "Megaflex", "Miniflex", "Nightsave Urban", "Homepower", "Homelight", etc.)
+   - Type (domestic/commercial/industrial/agricultural)
+   - Voltage level (if Eskom tariff: "< 500V", "≥ 500V & < 66kV", "≥ 66kV & ≤132kV", "> 132kV")
+   - Transmission zone (if applicable: "≤ 300km", "> 300km", "> 600km", "> 900km")
+   - Meter configuration (prepaid/conventional/both)
    - Effective dates
-   - Whether it uses Time-of-Use (TOU) pricing
-3. For each tariff structure, extract:
-   - Tariff blocks (block number, kWh from, kWh to, energy charge in cents)
-   - Fixed charges (charge type like "basic_monthly", amount, description, unit)
-   - If TOU: time periods (period type: peak/standard/off_peak, season, day type, hours, energy charge)
+   - Whether it uses TOU pricing
+   - TOU type (nightsave/megaflex if applicable)
 
-Return valid JSON only, no additional text. Structure:
+3. For each tariff structure:
+   - If TOU tariff, extract time periods with rates for peak/standard/off-peak
+   - Extract blocks if present (for non-TOU residential tariffs)
+   - Extract ALL fixed charges: generation capacity, transmission network, distribution network, service, administration
+   - Extract variable charges: legacy charges, ancillary service, reactive energy
+   - Extract subsidy charges if present
+
+Return valid JSON only, no markdown formatting. Structure:
 {
   "supplyAuthority": {
-    "name": "string",
-    "region": "string",
-    "nersaIncreasePercentage": number
+    "name": "string (e.g., 'Eskom Holdings SOC Ltd' or municipality name)",
+    "region": "string (optional)",
+    "nersaIncreasePercentage": number (optional)
   },
   "tariffStructures": [{
-    "name": "string",
+    "name": "string (e.g., 'Megaflex < 500V', 'Nightsave Urban Large', 'Homepower Standard')",
     "tariffType": "domestic|commercial|industrial|agricultural",
-    "meterConfiguration": "prepaid|conventional|both",
+    "voltageLevel": "string (for Eskom: '< 500V', '≥ 500V & < 66kV', '≥ 66kV & ≤132kV', '> 132kV')",
+    "transmissionZone": "string (for Eskom: '≤ 300km', '> 300km', '> 600km', '> 900km', or null)",
+    "meterConfiguration": "prepaid|conventional|both|null",
     "effectiveFrom": "YYYY-MM-DD",
     "effectiveTo": "YYYY-MM-DD or null",
     "description": "string",
     "usesTou": boolean,
-    "touType": "nightsave|megaflex|null",
+    "touType": "nightsave|megaflex|miniflex|homeflex|ruraflex|null",
     "blocks": [{
       "blockNumber": number,
       "kwhFrom": number,
@@ -63,10 +80,10 @@ Return valid JSON only, no additional text. Structure:
       "energyChargeCents": number
     }],
     "charges": [{
-      "chargeType": "basic_monthly|demand|service",
+      "chargeType": "generation_capacity|transmission_network|distribution_network_capacity|distribution_network_demand|service|administration|legacy|ancillary|reactive_energy|affordability_subsidy|rural_subsidy|basic_monthly",
       "chargeAmount": number,
       "description": "string",
-      "unit": "R/month|R/kVA|R/day"
+      "unit": "R/kVA/month|R/POD/day|c/kWh|c/kVArh|R/month"
     }],
     "touPeriods": [{
       "periodType": "peak|standard|off_peak",
@@ -77,7 +94,14 @@ Return valid JSON only, no additional text. Structure:
       "energyChargeCents": number
     }]
   }]
-}`;
+}
+
+IMPORTANT: 
+- For Eskom tariffs, create SEPARATE tariff structures for EACH voltage level if rates differ
+- Include ALL charge types found (generation capacity, transmission, distribution, service, admin, etc.)
+- For TOU tariffs, extract rates for BOTH high-demand and low-demand seasons
+- Always check for VAT-inclusive values and use those when available
+- If a tariff has multiple voltage levels, create one structure per voltage level with the voltage in the name`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -86,10 +110,10 @@ Return valid JSON only, no additional text. Structure:
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "google/gemini-2.5-pro",
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: `Extract tariff data from this document:\n\n${documentContent.slice(0, 50000)}` }
+          { role: "user", content: `Extract tariff data from this document:\n\n${documentContent.slice(0, 100000)}` }
         ],
         temperature: 0.1,
       }),
