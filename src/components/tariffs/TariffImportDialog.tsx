@@ -557,7 +557,7 @@ export default function PdfImportDialog() {
       if (col0.match(/(Basic|Demand|Access|Service).*Charge/i) && col1) {
         const chargeType = col0.toLowerCase().includes('basic') || col0.toLowerCase().includes('monthly') ? 'basic_monthly' :
                           col0.toLowerCase().includes('demand') ? 'demand_kva' :
-                          col0.toLowerCase().includes('access') ? 'capacity_charge' :
+                          col0.toLowerCase().includes('access') ? 'access_charge' :
                           col0.toLowerCase().includes('service') ? 'service_charge' : 'service_charge';
         
         const unit = col0.includes('R/month') || col0.toLowerCase().includes('monthly') ? 'R/month' :
