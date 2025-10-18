@@ -53,15 +53,21 @@ async function identifyMunicipalities(documentContent: string) {
     throw new Error("LOVABLE_API_KEY is not configured");
   }
 
-  const identifyPrompt = `You are analyzing a South African electricity tariff document. Identify ALL municipalities/supply authorities mentioned in this document.
+  const identifyPrompt = `You are analyzing a South African electricity tariff document. Quickly identify ALL municipalities/supply authorities.
 
-For Eskom documents, the supply authority is "Eskom Holdings SOC Ltd".
-For municipal documents, identify each unique municipality name.
+LOOK FOR THIS FORMAT:
+- Municipality names are often in GREEN HEADERS followed by a percentage
+- Format: "MUNICIPALITY_NAME - XX.XX%" (e.g., "AMAHLATHI - 10.76%")
+- For Eskom: look for "Eskom Holdings SOC Ltd" or just "Eskom"
 
-Return ONLY a JSON array of supply authority names, no markdown formatting.
-Example: ["Eskom Holdings SOC Ltd"] or ["City of Cape Town", "City of Johannesburg"]
+INSTRUCTIONS:
+- Extract ONLY the municipality/authority names (without the percentage)
+- Return a JSON array of unique names
+- Be fast - don't analyze details, just identify names
 
-IMPORTANT: Return a simple string array only.`;
+Example output: ["AMAHLATHI", "BUFFALO CITY"] or ["Eskom Holdings SOC Ltd"]
+
+Return ONLY the JSON array, no markdown, no explanations.`;
 
   const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
@@ -70,10 +76,10 @@ IMPORTANT: Return a simple string array only.`;
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "google/gemini-2.5-flash",
+      model: "google/gemini-2.5-flash-lite",
       messages: [
         { role: "system", content: identifyPrompt },
-        { role: "user", content: `Identify all municipalities/supply authorities in this document:\n\n${documentContent.slice(0, 50000)}` }
+        { role: "user", content: `Identify municipalities in this document (first 20000 chars):\n\n${documentContent.slice(0, 20000)}` }
       ],
     }),
   });
