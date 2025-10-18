@@ -77,6 +77,54 @@ export type Database = {
         }
         Relationships: []
       }
+      meter_positions: {
+        Row: {
+          created_at: string | null
+          id: string
+          label: string | null
+          meter_id: string
+          schematic_id: string
+          updated_at: string | null
+          x_position: number
+          y_position: number
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          label?: string | null
+          meter_id: string
+          schematic_id: string
+          updated_at?: string | null
+          x_position: number
+          y_position: number
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          label?: string | null
+          meter_id?: string
+          schematic_id?: string
+          updated_at?: string | null
+          x_position?: number
+          y_position?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meter_positions_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meter_positions_schematic_id_fkey"
+            columns: ["schematic_id"]
+            isOneToOne: false
+            referencedRelation: "schematics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meter_readings: {
         Row: {
           created_at: string | null
@@ -179,6 +227,56 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      schematics: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          file_path: string
+          file_type: string
+          id: string
+          name: string
+          page_number: number | null
+          site_id: string
+          total_pages: number | null
+          updated_at: string | null
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          file_path: string
+          file_type: string
+          id?: string
+          name: string
+          page_number?: number | null
+          site_id: string
+          total_pages?: number | null
+          updated_at?: string | null
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          file_path?: string
+          file_type?: string
+          id?: string
+          name?: string
+          page_number?: number | null
+          site_id?: string
+          total_pages?: number | null
+          updated_at?: string | null
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schematics_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       sites: {
         Row: {

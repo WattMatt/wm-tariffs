@@ -11,6 +11,8 @@ import Sites from "./pages/Sites";
 import Meters from "./pages/Meters";
 import Reconciliation from "./pages/Reconciliation";
 import Users from "./pages/Users";
+import Schematics from "./pages/Schematics";
+import SchematicViewer from "./pages/SchematicViewer";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -29,6 +31,8 @@ const App = () => (
           <Route path="/sites" element={<Sites />} />
           <Route path="/meters" element={<Meters />} />
           <Route path="/reconciliation" element={<Reconciliation />} />
+          <Route path="/schematics" element={<Schematics />} />
+          <Route path="/schematics/:id" element={<SchematicViewer />} />
           <Route path="/users" element={<Users />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
