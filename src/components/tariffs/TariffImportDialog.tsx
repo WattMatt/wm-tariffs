@@ -453,12 +453,19 @@ export default function PdfImportDialog() {
             range.includes('>') ? [parseFloat(range.replace('>', '')), null] :
             [0, null];
           
-          currentTariff.blocks.push({
-            blockNumber: currentTariff.blocks.length + 1,
-            kwhFrom: from,
-            kwhTo: to,
-            energyChargeCents: parseFloat(col1.toString().replace(/\s/g, ''))
-          });
+          const energyCharge = parseFloat(col1.toString().replace(/\s/g, ''));
+          
+          // Only add block if energy charge is valid
+          if (!isNaN(energyCharge) && isFinite(energyCharge)) {
+            currentTariff.blocks.push({
+              blockNumber: currentTariff.blocks.length + 1,
+              kwhFrom: from,
+              kwhTo: to,
+              energyChargeCents: energyCharge
+            });
+          } else {
+            console.warn(`Skipping invalid block energy charge for "${col0}":`, col1);
+          }
         }
         continue;
       }
@@ -474,12 +481,20 @@ export default function PdfImportDialog() {
                     col0.includes('R/kVA') || col0.toLowerCase().includes('kva') ? 'R/kVA/month' :
                     col0.includes('c/kWh') || col0.toLowerCase().includes('energy') ? 'c/kWh' : 'R/month';
         
-        currentTariff.charges.push({
-          chargeType,
-          chargeAmount: parseFloat(col1.toString().replace(/\s/g, '')),
-          description: col0,
-          unit
-        });
+        // Parse and validate charge amount
+        const chargeAmount = parseFloat(col1.toString().replace(/\s/g, ''));
+        
+        // Only add charge if amount is a valid number
+        if (!isNaN(chargeAmount) && isFinite(chargeAmount)) {
+          currentTariff.charges.push({
+            chargeType,
+            chargeAmount,
+            description: col0,
+            unit
+          });
+        } else {
+          console.warn(`Skipping invalid charge amount for "${col0}":`, col1);
+        }
       }
     }
     
@@ -614,6 +629,12 @@ export default function PdfImportDialog() {
               .maybeSingle();
 
             if (!existingCharge) {
+              // Validate charge amount before inserting
+              if (isNaN(charge.chargeAmount) || !isFinite(charge.chargeAmount)) {
+                console.error(`Invalid charge amount for ${charge.chargeType}:`, charge);
+                continue; // Skip this charge
+              }
+              
               const { error: chargeError } = await supabase
                 .from("tariff_charges")
                 .insert({
