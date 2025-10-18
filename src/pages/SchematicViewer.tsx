@@ -350,25 +350,27 @@ export default function SchematicViewer() {
                               
                               {/* Extracted Meter Markers - positioned relative to image */}
                               {imageLoaded && extractedMeters.map((meter, index) => {
-                                console.log(`Rendering marker ${index} at position`, meter.position);
                                 return (
                                   <div
                                     key={index}
                                     className={`meter-marker absolute rounded-full border-4 cursor-pointer transition-all flex items-center justify-center text-white font-bold shadow-xl ${
                                       selectedMeterIndex === index 
-                                        ? 'w-16 h-16 text-base ring-4 ring-blue-400 ring-offset-2' 
-                                        : 'w-12 h-12 text-sm hover:w-14 hover:h-14'
+                                        ? 'ring-4 ring-blue-400 ring-offset-2' 
+                                        : 'hover:scale-110'
                                     } ${getMeterStatusColor(meter.status)}`}
                                     style={{
                                       left: `${meter.position?.x || 0}%`,
                                       top: `${meter.position?.y || 0}%`,
-                                      transform: 'translate(-50%, -50%)',
+                                      width: `${selectedMeterIndex === index ? 64 : 48}px`,
+                                      height: `${selectedMeterIndex === index ? 64 : 48}px`,
+                                      fontSize: `${selectedMeterIndex === index ? 16 : 14}px`,
+                                      transform: `translate(-50%, -50%) scale(${1 / zoom})`,
+                                      transformOrigin: 'center',
                                       zIndex: selectedMeterIndex === index ? 50 : 30,
                                       pointerEvents: 'auto'
                                     }}
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      console.log('Clicked marker', index);
                                       handleMeterSelect(index);
                                     }}
                                     onMouseDown={(e) => e.stopPropagation()}
