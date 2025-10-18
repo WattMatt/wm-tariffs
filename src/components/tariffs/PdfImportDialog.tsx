@@ -51,8 +51,13 @@ interface ExtractedTariffData {
   }>;
 }
 
-interface MunicipalityProgress {
+interface MunicipalityInfo {
   name: string;
+  nersaIncrease: number;
+  province?: string;
+}
+
+interface MunicipalityProgress extends MunicipalityInfo {
   status: 'pending' | 'extracting' | 'saving' | 'complete' | 'error';
   error?: string;
   data?: ExtractedTariffData;
@@ -119,8 +124,10 @@ export default function PdfImportDialog() {
         throw new Error("Failed to identify municipalities");
       }
 
-      const foundMunicipalities: MunicipalityProgress[] = data.municipalities.map((name: string) => ({
-        name,
+      const foundMunicipalities: MunicipalityProgress[] = data.municipalities.map((m: MunicipalityInfo) => ({
+        name: m.name,
+        nersaIncrease: m.nersaIncrease,
+        province: m.province,
         status: 'pending' as const
       }));
 
@@ -185,26 +192,46 @@ export default function PdfImportDialog() {
   };
 
   const saveTariffData = async (extractedData: ExtractedTariffData) => {
-    // 1. Insert supply authority
-    const { data: authority, error: authorityError } = await supabase
+    console.log("Saving tariff data:", extractedData);
+    
+    // 1. Check if supply authority already exists
+    const { data: existingAuthority } = await supabase
       .from("supply_authorities")
-      .insert({
-        name: extractedData.supplyAuthority.name,
-        region: extractedData.supplyAuthority.region,
-        nersa_increase_percentage: extractedData.supplyAuthority.nersaIncreasePercentage,
-        active: true
-      })
-      .select()
-      .single();
+      .select("id")
+      .eq("name", extractedData.supplyAuthority.name)
+      .maybeSingle();
 
-    if (authorityError) throw new Error(`Failed to create supply authority: ${authorityError.message}`);
+    let authorityId: string;
+
+    if (existingAuthority) {
+      console.log("Using existing supply authority:", existingAuthority.id);
+      authorityId = existingAuthority.id;
+    } else {
+      // Insert new supply authority
+      const { data: newAuthority, error: authorityError } = await supabase
+        .from("supply_authorities")
+        .insert({
+          name: extractedData.supplyAuthority.name,
+          region: extractedData.supplyAuthority.region,
+          nersa_increase_percentage: extractedData.supplyAuthority.nersaIncreasePercentage,
+          active: true
+        })
+        .select()
+        .single();
+
+      if (authorityError) throw new Error(`Failed to create supply authority: ${authorityError.message}`);
+      console.log("Created new supply authority:", newAuthority.id);
+      authorityId = newAuthority.id;
+    }
 
     // 2. Insert tariff structures
     for (const structure of extractedData.tariffStructures) {
+      console.log(`Saving tariff structure: ${structure.name}`);
+      
       const { data: tariff, error: tariffError } = await supabase
         .from("tariff_structures")
         .insert({
-          supply_authority_id: authority.id,
+          supply_authority_id: authorityId,
           name: structure.name,
           tariff_type: structure.tariffType,
           voltage_level: structure.voltageLevel,
@@ -373,7 +400,10 @@ export default function PdfImportDialog() {
                             {getStatusIcon(municipality.status)}
                             <div>
                               <CardTitle className="text-lg">{municipality.name}</CardTitle>
-                              <CardDescription>{getStatusText(municipality.status)}</CardDescription>
+                              <CardDescription>
+                                {municipality.province && `${municipality.province} · `}
+                                NERSA: {municipality.nersaIncrease}% · {getStatusText(municipality.status)}
+                              </CardDescription>
                               {municipality.error && (
                                 <p className="text-sm text-destructive mt-1">{municipality.error}</p>
                               )}

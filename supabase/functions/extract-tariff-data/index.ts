@@ -20,12 +20,12 @@ serve(async (req) => {
       );
     }
 
-    // Phase 1: Identify municipalities
+    // Phase 1: Identify province/municipality structure
     if (phase === "identify") {
-      return await identifyMunicipalities(documentContent);
+      return await identifyStructure(documentContent);
     }
     
-    // Phase 2: Extract specific municipality
+    // Phase 2: Extract specific municipality tariffs
     if (phase === "extract" && municipalityName) {
       return await extractMunicipalityTariffs(documentContent, municipalityName);
     }
@@ -47,27 +47,41 @@ serve(async (req) => {
   }
 });
 
-async function identifyMunicipalities(documentContent: string) {
+async function identifyStructure(documentContent: string) {
   const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
   if (!LOVABLE_API_KEY) {
     throw new Error("LOVABLE_API_KEY is not configured");
   }
 
-  const identifyPrompt = `You are analyzing a South African electricity tariff document. Quickly identify ALL municipalities/supply authorities.
+  console.log("Phase 1: Identifying province/municipality structure");
 
-LOOK FOR THIS FORMAT:
-- Municipality names are often in GREEN HEADERS followed by a percentage
-- Format: "MUNICIPALITY_NAME - XX.XX%" (e.g., "AMAHLATHI - 10.76%")
-- For Eskom: look for "Eskom Holdings SOC Ltd" or just "Eskom"
+  const identifyPrompt = `Analyze this South African electricity tariff document and identify the structure.
 
-INSTRUCTIONS:
-- Extract ONLY the municipality/authority names (without the percentage)
-- Return a JSON array of unique names
-- Be fast - don't analyze details, just identify names
+DOCUMENT FORMAT:
+- Provinces contain municipalities
+- Municipalities are shown as "MUNICIPALITY_NAME - XX.XX%" (e.g., "AMAHLATHI - 10.76%")
+- Each municipality has multiple tariff structures
+- For Eskom: "Eskom Holdings SOC Ltd"
 
-Example output: ["AMAHLATHI", "BUFFALO CITY"] or ["Eskom Holdings SOC Ltd"]
+TASK: Extract municipality names with their NERSA increase percentages.
 
-Return ONLY the JSON array, no markdown, no explanations.`;
+Return ONLY a JSON array of objects:
+[
+  {
+    "name": "AMAHLATHI",
+    "nersaIncrease": 10.76,
+    "province": "Eastern Cape"
+  }
+]
+
+Rules:
+- Extract ONLY municipality names (uppercase, no "- XX%")
+- Include the percentage as a number
+- Include province if visible
+- Be thorough - scan entire document
+- For Eskom, use: {"name": "Eskom Holdings SOC Ltd", "nersaIncrease": XX, "province": "National"}
+
+Return ONLY valid JSON, no markdown.`;
 
   const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
@@ -76,10 +90,10 @@ Return ONLY the JSON array, no markdown, no explanations.`;
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "google/gemini-2.5-flash-lite",
+      model: "google/gemini-2.5-flash",
       messages: [
         { role: "system", content: identifyPrompt },
-        { role: "user", content: `Identify municipalities in this document (first 20000 chars):\n\n${documentContent.slice(0, 20000)}` }
+        { role: "user", content: `Extract municipality structure:\n\n${documentContent.slice(0, 30000)}` }
       ],
     }),
   });
@@ -87,7 +101,7 @@ Return ONLY the JSON array, no markdown, no explanations.`;
   if (!response.ok) {
     const errorText = await response.text();
     console.error("AI gateway error:", response.status, errorText);
-    throw new Error("AI processing failed");
+    throw new Error(`AI processing failed: ${response.status}`);
   }
 
   const aiResponse = await response.json();
@@ -101,6 +115,8 @@ Return ONLY the JSON array, no markdown, no explanations.`;
     const cleanedText = extractedText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     const municipalities = JSON.parse(cleanedText);
     
+    console.log(`Found ${municipalities.length} municipalities:`, municipalities);
+    
     return new Response(
       JSON.stringify({ success: true, municipalities }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -108,7 +124,7 @@ Return ONLY the JSON array, no markdown, no explanations.`;
   } catch (parseError) {
     console.error("Failed to parse municipalities:", extractedText);
     return new Response(
-      JSON.stringify({ error: "Failed to parse municipalities", details: extractedText }),
+      JSON.stringify({ error: "Failed to parse structure", details: extractedText }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
@@ -120,76 +136,73 @@ async function extractMunicipalityTariffs(documentContent: string, municipalityN
     throw new Error("LOVABLE_API_KEY is not configured");
   }
 
-  const systemPrompt = `You are a specialized data extraction assistant for South African electricity tariff documents. Extract tariff information ONLY for: ${municipalityName}
+  console.log(`Phase 2: Extracting tariffs for ${municipalityName}`);
 
-CRITICAL INSTRUCTIONS:
-- Extract ONLY tariffs for "${municipalityName}"
-- Ignore tariffs from other municipalities
-- For Eskom tariffs, handle voltage levels (< 500V, ≥ 500V & < 66kV, ≥ 66kV & ≤132kV, > 132kV)
-- For Eskom tariffs, handle transmission zones (≤ 300km, > 300km, > 600km, > 900km) if present
-- Handle TOU periods: peak, standard, off-peak with seasonal variations
-- Extract both High-demand season (Jun-Aug) and Low-demand season (Sep-May) rates
-- Pay attention to c/kWh (energy charges), R/kVA/m (capacity charges), R/POD/day (service charges)
+  const systemPrompt = `Extract electricity tariff data ONLY for: "${municipalityName}"
 
-Extract:
-1. Supply Authority details (name, region if mentioned, NERSA increase %)
-2. Tariff Structures - create SEPARATE structures for each major tariff type found:
-   - Name (e.g., "Megaflex", "Miniflex", "Nightsave Urban", "Homepower", "Homelight", etc.)
-   - Type (domestic/commercial/industrial/agricultural)
-   - Voltage level (if Eskom tariff)
-   - Transmission zone (if applicable)
-   - Meter configuration (prepaid/conventional/both)
-   - Effective dates
-   - Whether it uses TOU pricing
-   - TOU type (nightsave/megaflex if applicable)
+CRITICAL RULES:
+1. Extract ONLY tariffs for "${municipalityName}" - ignore all other municipalities
+2. Each municipality has multiple tariff categories (Domestic, Commercial, Industrial, etc.)
+3. Look for section headers indicating tariff types
+4. Extract ALL charges: energy charges (c/kWh), capacity charges (R/kVA), service charges (R/day)
+5. Handle TOU periods if present (Peak/Standard/Off-peak with times)
+6. Handle blocks for domestic tariffs (0-600 kWh, 600+ kWh, etc.)
 
-3. For each tariff structure:
-   - If TOU tariff, extract time periods with rates for peak/standard/off-peak
-   - Extract blocks if present (for non-TOU residential tariffs)
-   - Extract ALL fixed charges: generation capacity, transmission network, distribution network, service, administration
-   - Extract variable charges: legacy charges, ancillary service, reactive energy
-   - Extract subsidy charges if present
+SEARCH PATTERN:
+- Find "${municipalityName}" header
+- Extract all tariff sections until next municipality
+- Each tariff has: name, type, charges, blocks/TOU periods
 
-Return valid JSON only, no markdown formatting. Structure:
+OUTPUT STRUCTURE:
 {
   "supplyAuthority": {
-    "name": "string",
-    "region": "string (optional)",
-    "nersaIncreasePercentage": number (optional)
+    "name": "${municipalityName}",
+    "region": "province if found",
+    "nersaIncreasePercentage": number
   },
-  "tariffStructures": [{
-    "name": "string",
-    "tariffType": "domestic|commercial|industrial|agricultural",
-    "voltageLevel": "string (optional)",
-    "transmissionZone": "string (optional)",
-    "meterConfiguration": "prepaid|conventional|both|null",
-    "effectiveFrom": "YYYY-MM-DD",
-    "effectiveTo": "YYYY-MM-DD or null",
-    "description": "string",
-    "usesTou": boolean,
-    "touType": "nightsave|megaflex|miniflex|homeflex|ruraflex|null",
-    "blocks": [{
-      "blockNumber": number,
-      "kwhFrom": number,
-      "kwhTo": number or null,
-      "energyChargeCents": number
-    }],
-    "charges": [{
-      "chargeType": "generation_capacity|transmission_network|distribution_network_capacity|distribution_network_demand|service|administration|legacy|ancillary|reactive_energy|affordability_subsidy|rural_subsidy|basic_monthly",
-      "chargeAmount": number,
-      "description": "string",
-      "unit": "R/kVA/month|R/POD/day|c/kWh|c/kVArh|R/month"
-    }],
-    "touPeriods": [{
-      "periodType": "peak|standard|off_peak",
-      "season": "high_demand|low_demand|all_year",
-      "dayType": "weekday|saturday|sunday|weekend|all_days",
-      "startHour": number (0-23),
-      "endHour": number (0-23),
-      "energyChargeCents": number
-    }]
-  }]
-}`;
+  "tariffStructures": [
+    {
+      "name": "Tariff name (e.g., Domestic Conventional, Business)",
+      "tariffType": "domestic|commercial|industrial|agricultural",
+      "voltageLevel": "if specified",
+      "meterConfiguration": "prepaid|conventional|both",
+      "effectiveFrom": "2025-07-01",
+      "effectiveTo": null,
+      "description": "Brief description",
+      "usesTou": false,
+      "touType": null,
+      "blocks": [
+        {
+          "blockNumber": 1,
+          "kwhFrom": 0,
+          "kwhTo": 600,
+          "energyChargeCents": 150.50
+        }
+      ],
+      "charges": [
+        {
+          "chargeType": "service|capacity|basic_monthly",
+          "chargeAmount": 100.00,
+          "description": "Service charge",
+          "unit": "R/month"
+        }
+      ],
+      "touPeriods": []
+    }
+  ]
+}
+
+EXTRACTION STRATEGY:
+1. Locate "${municipalityName}" section boundaries
+2. Identify all tariff subsections within
+3. For each tariff, extract:
+   - Tariff name and type
+   - Energy charges (convert c/kWh to cents)
+   - Fixed charges (R/month, R/day, R/kVA)
+   - Blocks if tiered pricing
+   - TOU periods if time-based
+
+Return ONLY valid JSON, no markdown.`;
 
   const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
@@ -201,7 +214,7 @@ Return valid JSON only, no markdown formatting. Structure:
       model: "google/gemini-2.5-pro",
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content: `Extract tariff data for ${municipalityName}:\n\n${documentContent.slice(0, 100000)}` }
+        { role: "user", content: `Document to extract from:\n\n${documentContent.slice(0, 100000)}` }
       ],
     }),
   });
@@ -222,7 +235,7 @@ Return valid JSON only, no markdown formatting. Structure:
     const errorText = await response.text();
     console.error("AI gateway error:", response.status, errorText);
     return new Response(
-      JSON.stringify({ error: "AI processing failed" }),
+      JSON.stringify({ error: `AI processing failed: ${response.status}` }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
@@ -234,18 +247,25 @@ Return valid JSON only, no markdown formatting. Structure:
     throw new Error("No content in AI response");
   }
 
+  console.log(`Extraction result length: ${extractedText.length} characters`);
+
   try {
     const cleanedText = extractedText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     const extractedData = JSON.parse(cleanedText);
+    
+    console.log(`Extracted ${extractedData.tariffStructures?.length || 0} tariff structures`);
     
     return new Response(
       JSON.stringify({ success: true, data: extractedData }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (parseError) {
-    console.error("Failed to parse AI response as JSON:", extractedText);
+    console.error("Failed to parse extraction result:", extractedText.slice(0, 500));
     return new Response(
-      JSON.stringify({ error: "Failed to parse extracted data", details: extractedText }),
+      JSON.stringify({ 
+        error: "Failed to parse tariff data", 
+        details: extractedText.slice(0, 1000)
+      }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
