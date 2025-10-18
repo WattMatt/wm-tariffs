@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import CsvImportDialog from "@/components/site/CsvImportDialog";
+import { MeterDataExtractor } from "./MeterDataExtractor";
 
 interface SchematicEditorProps {
   schematicId: string;
@@ -38,7 +39,7 @@ interface SchematicLine {
 export default function SchematicEditor({ schematicId, schematicUrl, siteId }: SchematicEditorProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [fabricCanvas, setFabricCanvas] = useState<FabricCanvas | null>(null);
-  const [activeTool, setActiveTool] = useState<"select" | "meter" | "connection">("select");
+  const [activeTool, setActiveTool] = useState<"select" | "meter" | "connection" | "move">("select");
   const [meterPositions, setMeterPositions] = useState<MeterPosition[]>([]);
   const [lines, setLines] = useState<SchematicLine[]>([]);
   const [meters, setMeters] = useState<any[]>([]);
@@ -123,6 +124,8 @@ export default function SchematicEditor({ schematicId, schematicUrl, siteId }: S
         originX: 'center',
         originY: 'center',
         hasControls: false,
+        selectable: activeTool === 'move',
+        hoverCursor: activeTool === 'move' ? 'move' : (activeTool === 'connection' ? 'pointer' : 'default'),
       });
 
       const text = new Text(pos.label || meter?.meter_number || 'M', {
@@ -141,6 +144,34 @@ export default function SchematicEditor({ schematicId, schematicUrl, siteId }: S
           handleMeterClickForConnection(pos.meter_id, pos.x_position, pos.y_position);
         }
       });
+
+      // Handle dragging for move tool
+      if (activeTool === 'move') {
+        circle.on('moving', () => {
+          text.set({
+            left: circle.left,
+            top: (circle.top || 0) + 25,
+          });
+        });
+
+        circle.on('modified', async () => {
+          // Update position in database after drag
+          const { error } = await supabase
+            .from('meter_positions')
+            .update({
+              x_position: circle.left,
+              y_position: circle.top,
+            })
+            .eq('id', pos.id);
+
+          if (!error) {
+            toast.success('Meter position updated');
+            fetchMeterPositions();
+          } else {
+            toast.error('Failed to update position');
+          }
+        });
+      }
 
       fabricCanvas.add(circle);
       fabricCanvas.add(text);
@@ -345,7 +376,7 @@ export default function SchematicEditor({ schematicId, schematicUrl, siteId }: S
           onClick={() => setActiveTool("select")}
           size="sm"
         >
-          <Move className="w-4 h-4 mr-2" />
+          <Zap className="w-4 h-4 mr-2" />
           Select
         </Button>
         <Button
@@ -357,6 +388,14 @@ export default function SchematicEditor({ schematicId, schematicUrl, siteId }: S
           Add Meter
         </Button>
         <Button
+          variant={activeTool === "move" ? "default" : "outline"}
+          onClick={() => setActiveTool("move")}
+          size="sm"
+        >
+          <Move className="w-4 h-4 mr-2" />
+          Move
+        </Button>
+        <Button
           variant={activeTool === "connection" ? "default" : "outline"}
           onClick={() => setActiveTool("connection")}
           size="sm"
@@ -364,6 +403,15 @@ export default function SchematicEditor({ schematicId, schematicUrl, siteId }: S
           <Link2 className="w-4 h-4 mr-2" />
           Connect
         </Button>
+        <MeterDataExtractor
+          siteId={siteId}
+          schematicId={schematicId}
+          imageUrl={schematicUrl}
+          onMetersExtracted={() => {
+            fetchMeters();
+            fetchMeterPositions();
+          }}
+        />
         <div className="flex-1" />
         <Button onClick={handleClearLines} variant="destructive" size="sm">
           <Trash2 className="w-4 h-4 mr-2" />
@@ -377,8 +425,9 @@ export default function SchematicEditor({ schematicId, schematicUrl, siteId }: S
 
       <div className="text-sm text-muted-foreground">
         {activeTool === "meter" && "Click on the schematic to place a new meter"}
+        {activeTool === "move" && "Drag meters to reposition them on the schematic"}
         {activeTool === "connection" && "Click on two meters to connect them"}
-        {activeTool === "select" && "Drag meters to reposition them"}
+        {activeTool === "select" && "View mode - select a tool to edit"}
       </div>
 
       <div className="flex gap-2">
