@@ -637,7 +637,21 @@ export default function PdfImportDialog() {
     let authorityId: string;
 
     if (existingAuthority) {
-      console.log("Using existing supply authority:", existingAuthority.id);
+      console.log("Updating existing supply authority:", existingAuthority.id);
+      
+      // Update the region and NERSA percentage to ensure they're current
+      const { error: updateError } = await supabase
+        .from("supply_authorities")
+        .update({
+          region: extractedData.supplyAuthority.region,
+          nersa_increase_percentage: extractedData.supplyAuthority.nersaIncreasePercentage
+        })
+        .eq("id", existingAuthority.id);
+      
+      if (updateError) {
+        console.error("Failed to update supply authority:", updateError);
+      }
+      
       authorityId = existingAuthority.id;
     } else {
       // Insert new supply authority
