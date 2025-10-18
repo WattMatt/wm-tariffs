@@ -7,16 +7,20 @@ import { supabase } from "@/integrations/supabase/client";
 import { Building2, Plus } from "lucide-react";
 import SupplyAuthoritiesTab from "@/components/tariffs/SupplyAuthoritiesTab";
 import TariffStructuresTab from "@/components/tariffs/TariffStructuresTab";
+import PdfImportDialog from "@/components/tariffs/PdfImportDialog";
 
 export default function Tariffs() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-4xl font-bold mb-2">NERSA Tariffs</h1>
-          <p className="text-muted-foreground">
-            Manage supply authorities and tariff structures for accurate cost calculations
-          </p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-4xl font-bold mb-2">NERSA Tariffs</h1>
+            <p className="text-muted-foreground">
+              Manage supply authorities and tariff structures for accurate cost calculations
+            </p>
+          </div>
+          <PdfImportDialog />
         </div>
 
         <Tabs defaultValue="authorities" className="space-y-6">
