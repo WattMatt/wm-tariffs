@@ -68,6 +68,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const navItems = [
     { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
     { icon: Building2, label: "Clients", path: "/clients" },
+    { icon: FileText, label: "Tariffs", path: "/tariffs" },
     { icon: Users, label: "Users", path: "/users" },
   ];
 

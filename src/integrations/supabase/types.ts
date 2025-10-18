@@ -286,6 +286,8 @@ export type Database = {
           created_at: string | null
           id: string
           name: string
+          supply_authority_id: string | null
+          tariff_structure_id: string | null
           updated_at: string | null
         }
         Insert: {
@@ -295,6 +297,8 @@ export type Database = {
           created_at?: string | null
           id?: string
           name: string
+          supply_authority_id?: string | null
+          tariff_structure_id?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -304,6 +308,8 @@ export type Database = {
           created_at?: string | null
           id?: string
           name?: string
+          supply_authority_id?: string | null
+          tariff_structure_id?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -312,6 +318,176 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sites_supply_authority_id_fkey"
+            columns: ["supply_authority_id"]
+            isOneToOne: false
+            referencedRelation: "supply_authorities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sites_tariff_structure_id_fkey"
+            columns: ["tariff_structure_id"]
+            isOneToOne: false
+            referencedRelation: "tariff_structures"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supply_authorities: {
+        Row: {
+          active: boolean | null
+          created_at: string | null
+          id: string
+          name: string
+          nersa_increase_percentage: number | null
+          region: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          active?: boolean | null
+          created_at?: string | null
+          id?: string
+          name: string
+          nersa_increase_percentage?: number | null
+          region?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          active?: boolean | null
+          created_at?: string | null
+          id?: string
+          name?: string
+          nersa_increase_percentage?: number | null
+          region?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      tariff_blocks: {
+        Row: {
+          block_number: number
+          created_at: string | null
+          energy_charge_cents: number
+          id: string
+          kwh_from: number
+          kwh_to: number | null
+          tariff_structure_id: string
+        }
+        Insert: {
+          block_number: number
+          created_at?: string | null
+          energy_charge_cents: number
+          id?: string
+          kwh_from: number
+          kwh_to?: number | null
+          tariff_structure_id: string
+        }
+        Update: {
+          block_number?: number
+          created_at?: string | null
+          energy_charge_cents?: number
+          id?: string
+          kwh_from?: number
+          kwh_to?: number | null
+          tariff_structure_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tariff_blocks_tariff_structure_id_fkey"
+            columns: ["tariff_structure_id"]
+            isOneToOne: false
+            referencedRelation: "tariff_structures"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tariff_charges: {
+        Row: {
+          charge_amount: number
+          charge_type: string
+          created_at: string | null
+          description: string | null
+          id: string
+          tariff_structure_id: string
+          unit: string
+        }
+        Insert: {
+          charge_amount: number
+          charge_type: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          tariff_structure_id: string
+          unit: string
+        }
+        Update: {
+          charge_amount?: number
+          charge_type?: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          tariff_structure_id?: string
+          unit?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tariff_charges_tariff_structure_id_fkey"
+            columns: ["tariff_structure_id"]
+            isOneToOne: false
+            referencedRelation: "tariff_structures"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tariff_structures: {
+        Row: {
+          active: boolean | null
+          created_at: string | null
+          description: string | null
+          effective_from: string
+          effective_to: string | null
+          id: string
+          meter_configuration: string | null
+          name: string
+          supply_authority_id: string
+          tariff_type: string
+          updated_at: string | null
+        }
+        Insert: {
+          active?: boolean | null
+          created_at?: string | null
+          description?: string | null
+          effective_from: string
+          effective_to?: string | null
+          id?: string
+          meter_configuration?: string | null
+          name: string
+          supply_authority_id: string
+          tariff_type: string
+          updated_at?: string | null
+        }
+        Update: {
+          active?: boolean | null
+          created_at?: string | null
+          description?: string | null
+          effective_from?: string
+          effective_to?: string | null
+          id?: string
+          meter_configuration?: string | null
+          name?: string
+          supply_authority_id?: string
+          tariff_type?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tariff_structures_supply_authority_id_fkey"
+            columns: ["supply_authority_id"]
+            isOneToOne: false
+            referencedRelation: "supply_authorities"
             referencedColumns: ["id"]
           },
         ]
