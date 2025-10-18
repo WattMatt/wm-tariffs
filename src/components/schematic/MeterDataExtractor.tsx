@@ -76,19 +76,24 @@ export const MeterDataExtractor = ({ siteId, schematicId, imageUrl, onMetersExtr
 
       console.log('Extracted meters:', data.meters);
       
-      // Distribute meters across the schematic in a grid pattern for visual placement
+      // Use positions from AI extraction, fallback to grid if not provided
       const metersWithPosition = data.meters.map((meter: any, index: number) => {
-        const cols = Math.ceil(Math.sqrt(data.meters.length));
-        const row = Math.floor(index / cols);
-        const col = index % cols;
+        // If AI provided position, use it; otherwise distribute in grid
+        let position = meter.position;
+        if (!position || typeof position.x !== 'number' || typeof position.y !== 'number') {
+          const cols = Math.ceil(Math.sqrt(data.meters.length));
+          const row = Math.floor(index / cols);
+          const col = index % cols;
+          position = {
+            x: 10 + (col * (80 / cols)),
+            y: 10 + (row * (80 / (Math.ceil(data.meters.length / cols))))
+          };
+        }
         
         return {
           ...meter,
           status: 'pending' as const,
-          position: {
-            x: 10 + (col * (80 / cols)),
-            y: 10 + (row * (80 / (Math.ceil(data.meters.length / cols))))
-          }
+          position
         };
       });
       
@@ -246,32 +251,34 @@ export const MeterDataExtractor = ({ siteId, schematicId, imageUrl, onMetersExtr
               
               <div className="relative flex-1 border rounded-lg overflow-auto bg-muted/20">
                 {convertedImageUrl && (
-                  <>
+                  <div className="relative min-w-full min-h-full inline-block">
                     <img 
                       src={convertedImageUrl} 
                       alt="Schematic" 
-                      className="w-full h-auto"
+                      className="max-w-none"
+                      style={{ minWidth: '800px', minHeight: '600px' }}
                     />
                     
-                    {/* Meter markers */}
+                    {/* Meter markers overlaid on schematic */}
                     {extractedMeters.map((meter, index) => (
                       <div
                         key={index}
-                        className={`absolute w-8 h-8 rounded-full ${getMeterStatusColor(meter.status)} border-2 cursor-pointer hover:scale-125 transition-transform flex items-center justify-center text-white font-bold text-sm shadow-lg ${
-                          selectedMeterIndex === index ? 'ring-4 ring-blue-500' : ''
+                        className={`absolute w-10 h-10 rounded-full ${getMeterStatusColor(meter.status)} border-2 cursor-pointer hover:scale-125 transition-transform flex items-center justify-center text-white font-bold text-sm shadow-lg ${
+                          selectedMeterIndex === index ? 'ring-4 ring-blue-500 scale-110' : ''
                         }`}
                         style={{
                           left: `${meter.position?.x || 0}%`,
                           top: `${meter.position?.y || 0}%`,
-                          transform: 'translate(-50%, -50%)'
+                          transform: 'translate(-50%, -50%)',
+                          zIndex: selectedMeterIndex === index ? 20 : 10
                         }}
                         onClick={() => handleSelectMeter(index)}
-                        title={meter.meter_number}
+                        title={`${meter.meter_number} - Click to review`}
                       >
                         {index + 1}
                       </div>
                     ))}
-                  </>
+                  </div>
                 )}
               </div>
             </div>

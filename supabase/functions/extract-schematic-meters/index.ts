@@ -84,13 +84,14 @@ serve(async (req) => {
 - CABLE (cable specification, e.g., 4C x 50mm² ALU ECC CABLE)
 - SERIAL (serial number, e.g., 35777285)
 - CT (CT type, e.g., DOL, 150/5A, 300/5A)
+- POSITION (the approximate position of this meter on the schematic as a percentage from top-left corner, e.g., {"x": 25, "y": 30} means 25% from left edge and 30% from top edge)
 
 Analyze the meter details to determine the meter_type:
 - "council_bulk" - for main incoming council supply meters (typically highest rating, labeled as "INCOMING COUNCIL")
 - "check_meter" - for bulk check meters or sub-main check meters (labeled as "BULK CHECK METER" or "CHECK METER")
 - "distribution" - for distribution boards (labeled as DB-XX)
 
-Return ONLY a JSON array of objects with these exact keys: meter_number, name, area (as number or null if not specified), rating, cable_specification, serial_number, ct_type, meter_type.
+Return ONLY a JSON array of objects with these exact keys: meter_number, name, area (as number or null if not specified), rating, cable_specification, serial_number, ct_type, meter_type, position (with x and y percentages).
 
 Important: Return ONLY the JSON array, no additional text or markdown formatting.`
               },
