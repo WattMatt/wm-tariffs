@@ -63,6 +63,8 @@ export default function SchematicViewer() {
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
+  const imageRef = useRef<HTMLImageElement>(null);
+  const [imageLoaded, setImageLoaded] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -154,6 +156,13 @@ export default function SchematicViewer() {
   const handleMeterSelect = (index: number) => {
     setSelectedMeterIndex(index);
   };
+
+  useEffect(() => {
+    // Reset image loaded state when converted image changes
+    if (convertedImageUrl) {
+      setImageLoaded(false);
+    }
+  }, [convertedImageUrl]);
 
   const getMeterColor = (type: string) => {
     switch (type) {
@@ -325,38 +334,51 @@ export default function SchematicViewer() {
                       >
                         {schematic.file_type === "application/pdf" ? (
                           convertedImageUrl ? (
-                            <>
+                            <div className="relative inline-block">
                               <img
+                                ref={imageRef}
                                 src={convertedImageUrl}
                                 alt={schematic.name}
-                                className="max-w-none pointer-events-none"
-                                style={{ maxWidth: '100%', height: 'auto' }}
+                                className="max-w-none pointer-events-none select-none"
+                                style={{ maxWidth: '100%', height: 'auto', display: 'block' }}
                                 draggable={false}
+                                onLoad={() => {
+                                  console.log('Image loaded, dimensions:', imageRef.current?.naturalWidth, imageRef.current?.naturalHeight);
+                                  setImageLoaded(true);
+                                }}
                               />
                               
-                              {/* Extracted Meter Markers */}
-                              {extractedMeters.map((meter, index) => (
-                                <div
-                                  key={index}
-                                  className={`meter-marker absolute w-12 h-12 rounded-full ${getMeterStatusColor(meter.status)} border-3 cursor-pointer hover:scale-110 transition-all flex items-center justify-center text-white font-bold shadow-lg ${
-                                    selectedMeterIndex === index ? 'ring-4 ring-blue-500 scale-125 z-20' : 'z-10'
-                                  }`}
-                                  style={{
-                                    left: `${meter.position?.x || 0}%`,
-                                    top: `${meter.position?.y || 0}%`,
-                                    transform: 'translate(-50%, -50%)'
-                                  }}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleMeterSelect(index);
-                                  }}
-                                  onMouseDown={(e) => e.stopPropagation()}
-                                  title={`${meter.meter_number} - Click to review`}
-                                >
-                                  <span className="text-sm">{index + 1}</span>
-                                </div>
-                              ))}
-                            </>
+                              {/* Extracted Meter Markers - positioned relative to image */}
+                              {imageLoaded && extractedMeters.map((meter, index) => {
+                                console.log(`Rendering marker ${index} at position`, meter.position);
+                                return (
+                                  <div
+                                    key={index}
+                                    className={`meter-marker absolute rounded-full border-4 cursor-pointer transition-all flex items-center justify-center text-white font-bold shadow-xl ${
+                                      selectedMeterIndex === index 
+                                        ? 'w-16 h-16 text-base ring-4 ring-blue-400 ring-offset-2' 
+                                        : 'w-12 h-12 text-sm hover:w-14 hover:h-14'
+                                    } ${getMeterStatusColor(meter.status)}`}
+                                    style={{
+                                      left: `${meter.position?.x || 0}%`,
+                                      top: `${meter.position?.y || 0}%`,
+                                      transform: 'translate(-50%, -50%)',
+                                      zIndex: selectedMeterIndex === index ? 50 : 30,
+                                      pointerEvents: 'auto'
+                                    }}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      console.log('Clicked marker', index);
+                                      handleMeterSelect(index);
+                                    }}
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                    title={`${meter.meter_number} - Click to review`}
+                                  >
+                                    <span>{index + 1}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
                           ) : (
                             <div className="flex items-center justify-center p-16">
                               <div className="text-center text-muted-foreground">
