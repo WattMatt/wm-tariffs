@@ -411,13 +411,14 @@ export default function PdfImportDialog() {
       
       // Parse charges
       if (col0.includes('Charge') && col1 && currentTariff) {
-        const chargeType = col0.includes('Basic') ? 'basic_monthly' :
-                          col0.includes('Demand') ? 'distribution_network_capacity' :
-                          col0.includes('Energy') ? 'service' : 'service';
+        const chargeType = col0.toLowerCase().includes('basic') ? 'basic_monthly' :
+                          col0.toLowerCase().includes('demand') ? 'demand_kva' :
+                          col0.toLowerCase().includes('amp') ? 'amp_charge' :
+                          'service_charge';
         
-        const unit = col0.includes('R/month') || col0.includes('month') ? 'R/month' :
-                    col0.includes('R/kVA') ? 'R/kVA/month' :
-                    col0.includes('c/kWh') || col0.includes('Energy') ? 'c/kWh' : 'R/month';
+        const unit = col0.includes('R/month') || col0.toLowerCase().includes('month') ? 'R/month' :
+                    col0.includes('R/kVA') || col0.toLowerCase().includes('kva') ? 'R/kVA/month' :
+                    col0.includes('c/kWh') || col0.toLowerCase().includes('energy') ? 'c/kWh' : 'R/month';
         
         currentTariff.charges.push({
           chargeType,
