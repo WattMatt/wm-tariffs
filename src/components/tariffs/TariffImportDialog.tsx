@@ -523,57 +523,86 @@ export default function PdfImportDialog() {
 
       // Only insert blocks, charges, and TOU periods if this is a new tariff
       if (isNewTariff) {
-        // Insert blocks
+        // Insert blocks (check for duplicates first)
         if (structure.blocks && structure.blocks.length > 0) {
-        const blockInserts = structure.blocks.map(block => ({
-          tariff_structure_id: tariff.id,
-          block_number: block.blockNumber,
-          kwh_from: block.kwhFrom,
-          kwh_to: block.kwhTo,
-          energy_charge_cents: block.energyChargeCents
-        }));
+          for (const block of structure.blocks) {
+            const { data: existingBlock } = await supabase
+              .from("tariff_blocks")
+              .select("id")
+              .eq("tariff_structure_id", tariff.id)
+              .eq("block_number", block.blockNumber)
+              .maybeSingle();
 
-        const { error: blocksError } = await supabase
-          .from("tariff_blocks")
-          .insert(blockInserts);
+            if (!existingBlock) {
+              const { error: blockError } = await supabase
+                .from("tariff_blocks")
+                .insert({
+                  tariff_structure_id: tariff.id,
+                  block_number: block.blockNumber,
+                  kwh_from: block.kwhFrom,
+                  kwh_to: block.kwhTo,
+                  energy_charge_cents: block.energyChargeCents
+                });
 
-        if (blocksError) throw new Error(`Failed to create blocks: ${blocksError.message}`);
+              if (blockError) throw new Error(`Failed to create block ${block.blockNumber}: ${blockError.message}`);
+            }
+          }
         }
 
-        // Insert charges
+        // Insert charges (check for duplicates first)
         if (structure.charges && structure.charges.length > 0) {
-        const chargeInserts = structure.charges.map(charge => ({
-          tariff_structure_id: tariff.id,
-          charge_type: charge.chargeType,
-          charge_amount: charge.chargeAmount,
-          description: charge.description,
-          unit: charge.unit
-        }));
+          for (const charge of structure.charges) {
+            const { data: existingCharge } = await supabase
+              .from("tariff_charges")
+              .select("id")
+              .eq("tariff_structure_id", tariff.id)
+              .eq("charge_type", charge.chargeType)
+              .maybeSingle();
 
-        const { error: chargesError } = await supabase
-          .from("tariff_charges")
-          .insert(chargeInserts);
+            if (!existingCharge) {
+              const { error: chargeError } = await supabase
+                .from("tariff_charges")
+                .insert({
+                  tariff_structure_id: tariff.id,
+                  charge_type: charge.chargeType,
+                  charge_amount: charge.chargeAmount,
+                  description: charge.description,
+                  unit: charge.unit
+                });
 
-        if (chargesError) throw new Error(`Failed to create charges: ${chargesError.message}`);
+              if (chargeError) throw new Error(`Failed to create charge "${charge.chargeType}": ${chargeError.message}`);
+            }
+          }
         }
 
-        // Insert TOU periods
+        // Insert TOU periods (check for duplicates first)
         if (structure.usesTou && structure.touPeriods && structure.touPeriods.length > 0) {
-        const touInserts = structure.touPeriods.map(period => ({
-          tariff_structure_id: tariff.id,
-          period_type: period.periodType,
-          season: period.season,
-          day_type: period.dayType,
-          start_hour: period.startHour,
-          end_hour: period.endHour,
-          energy_charge_cents: period.energyChargeCents
-        }));
+          for (const period of structure.touPeriods) {
+            const { data: existingPeriod } = await supabase
+              .from("tariff_time_periods")
+              .select("id")
+              .eq("tariff_structure_id", tariff.id)
+              .eq("period_type", period.periodType)
+              .eq("season", period.season)
+              .eq("day_type", period.dayType)
+              .maybeSingle();
 
-        const { error: touError } = await supabase
-          .from("tariff_time_periods")
-          .insert(touInserts);
+            if (!existingPeriod) {
+              const { error: touError } = await supabase
+                .from("tariff_time_periods")
+                .insert({
+                  tariff_structure_id: tariff.id,
+                  period_type: period.periodType,
+                  season: period.season,
+                  day_type: period.dayType,
+                  start_hour: period.startHour,
+                  end_hour: period.endHour,
+                  energy_charge_cents: period.energyChargeCents
+                });
 
-        if (touError) throw new Error(`Failed to create TOU periods: ${touError.message}`);
+              if (touError) throw new Error(`Failed to create TOU period: ${touError.message}`);
+            }
+          }
         }
       }
     }
