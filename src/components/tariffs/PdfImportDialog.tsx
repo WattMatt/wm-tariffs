@@ -51,26 +51,26 @@ interface ExtractedTariffData {
   }>;
 }
 
+interface MunicipalityProgress {
+  name: string;
+  status: 'pending' | 'extracting' | 'saving' | 'complete' | 'error';
+  error?: string;
+  data?: ExtractedTariffData;
+}
+
 export default function PdfImportDialog() {
   const [isOpen, setIsOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [extractedData, setExtractedData] = useState<ExtractedTariffData | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-
-  const getCurrentStep = () => {
-    if (isSaving) return "save";
-    if (extractedData) return "review";
-    if (isProcessing) return "extract";
-    if (file) return "upload";
-    return "upload";
-  };
+  const [municipalities, setMunicipalities] = useState<MunicipalityProgress[]>([]);
+  const [currentMunicipality, setCurrentMunicipality] = useState<string | null>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile && selectedFile.type === "application/pdf") {
       setFile(selectedFile);
-      setExtractedData(null);
+      setMunicipalities([]);
+      setCurrentMunicipality(null);
     } else {
       toast.error("Please select a PDF file");
     }
@@ -78,16 +78,12 @@ export default function PdfImportDialog() {
 
   const extractTextFromPdf = async (pdfFile: File): Promise<string> => {
     const pdfjsLib = await import("pdfjs-dist");
-    
-    // Set worker source
     pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
     const arrayBuffer = await pdfFile.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
     
     let fullText = "";
-    
-    // Extract text from all pages
     for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
       const page = await pdf.getPage(pageNum);
       const textContent = await page.getTextContent();
@@ -100,206 +96,213 @@ export default function PdfImportDialog() {
     return fullText;
   };
 
-  const handleProcess = async () => {
+  const handleIdentifyMunicipalities = async () => {
     if (!file) {
       toast.error("Please select a PDF file");
       return;
     }
 
     setIsProcessing(true);
-    console.log("Starting PDF processing for:", file.name);
+    console.log("Identifying municipalities in:", file.name);
 
     try {
-      // Extract text from PDF
-      console.log("Extracting text from PDF...");
       const documentContent = await extractTextFromPdf(file);
-      console.log("Extracted text length:", documentContent.length, "characters");
+      console.log("Extracted text length:", documentContent.length);
 
-      if (!documentContent || documentContent.length < 100) {
-        throw new Error("Failed to extract meaningful text from PDF. The file may be image-based or corrupted.");
-      }
-
-      // Call edge function to extract structured data
-      console.log("Calling edge function to extract tariff data...");
+      // Phase 1: Identify municipalities
       const { data, error } = await supabase.functions.invoke("extract-tariff-data", {
-        body: { documentContent }
+        body: { documentContent, phase: "identify" }
       });
 
-      console.log("Edge function response:", { data, error });
-
-      if (error) {
-        console.error("Edge function error:", error);
-        throw error;
+      if (error) throw error;
+      if (!data.success || !data.municipalities) {
+        throw new Error("Failed to identify municipalities");
       }
 
-      if (!data) {
-        throw new Error("No response from extraction service");
-      }
+      const foundMunicipalities: MunicipalityProgress[] = data.municipalities.map((name: string) => ({
+        name,
+        status: 'pending' as const
+      }));
 
-      if (!data.success) {
-        console.error("Extraction failed:", data.error);
-        throw new Error(data.error || "Failed to extract data");
-      }
-
-      if (!data.data || !data.data.supplyAuthority || !data.data.tariffStructures) {
-        console.error("Invalid data structure:", data);
-        throw new Error("Extracted data is missing required fields");
-      }
-
-      console.log("Successfully extracted tariff data:", data.data);
-      setExtractedData(data.data);
-      toast.success(`Extracted ${data.data.tariffStructures.length} tariff structure(s). Review and save to database.`);
+      setMunicipalities(foundMunicipalities);
+      toast.success(`Found ${foundMunicipalities.length} municipality/municipalities. Click each to extract and save.`);
     } catch (error: any) {
-      console.error("Error processing PDF:", error);
-      toast.error(error.message || "Failed to process PDF");
-      setExtractedData(null);
+      console.error("Error identifying municipalities:", error);
+      toast.error(error.message || "Failed to identify municipalities");
     } finally {
       setIsProcessing(false);
     }
   };
 
-  const handleSave = async () => {
-    if (!extractedData) return;
+  const handleExtractAndSave = async (municipalityName: string, index: number) => {
+    if (!file) return;
 
-    setIsSaving(true);
-    console.log("Starting to save extracted data to database...");
+    setCurrentMunicipality(municipalityName);
+    setMunicipalities(prev => prev.map((m, i) => 
+      i === index ? { ...m, status: 'extracting' } : m
+    ));
 
     try {
-      // 1. Insert supply authority
-      console.log("Inserting supply authority:", extractedData.supplyAuthority.name);
-      const { data: authority, error: authorityError } = await supabase
-        .from("supply_authorities")
+      const documentContent = await extractTextFromPdf(file);
+
+      // Phase 2: Extract specific municipality
+      console.log(`Extracting tariffs for: ${municipalityName}`);
+      const { data, error } = await supabase.functions.invoke("extract-tariff-data", {
+        body: { documentContent, phase: "extract", municipalityName }
+      });
+
+      if (error) throw error;
+      if (!data.success || !data.data) {
+        throw new Error("Failed to extract tariff data");
+      }
+
+      const extractedData: ExtractedTariffData = data.data;
+      console.log(`Extracted ${extractedData.tariffStructures.length} tariff structures`);
+
+      // Update status to saving
+      setMunicipalities(prev => prev.map((m, i) => 
+        i === index ? { ...m, status: 'saving', data: extractedData } : m
+      ));
+
+      // Save to database
+      await saveTariffData(extractedData);
+
+      // Mark as complete
+      setMunicipalities(prev => prev.map((m, i) => 
+        i === index ? { ...m, status: 'complete' } : m
+      ));
+
+      toast.success(`Successfully saved tariffs for ${municipalityName}`);
+    } catch (error: any) {
+      console.error(`Error processing ${municipalityName}:`, error);
+      setMunicipalities(prev => prev.map((m, i) => 
+        i === index ? { ...m, status: 'error', error: error.message } : m
+      ));
+      toast.error(`Failed to process ${municipalityName}: ${error.message}`);
+    } finally {
+      setCurrentMunicipality(null);
+    }
+  };
+
+  const saveTariffData = async (extractedData: ExtractedTariffData) => {
+    // 1. Insert supply authority
+    const { data: authority, error: authorityError } = await supabase
+      .from("supply_authorities")
+      .insert({
+        name: extractedData.supplyAuthority.name,
+        region: extractedData.supplyAuthority.region,
+        nersa_increase_percentage: extractedData.supplyAuthority.nersaIncreasePercentage,
+        active: true
+      })
+      .select()
+      .single();
+
+    if (authorityError) throw new Error(`Failed to create supply authority: ${authorityError.message}`);
+
+    // 2. Insert tariff structures
+    for (const structure of extractedData.tariffStructures) {
+      const { data: tariff, error: tariffError } = await supabase
+        .from("tariff_structures")
         .insert({
-          name: extractedData.supplyAuthority.name,
-          region: extractedData.supplyAuthority.region,
-          nersa_increase_percentage: extractedData.supplyAuthority.nersaIncreasePercentage,
+          supply_authority_id: authority.id,
+          name: structure.name,
+          tariff_type: structure.tariffType,
+          voltage_level: structure.voltageLevel,
+          transmission_zone: structure.transmissionZone,
+          meter_configuration: structure.meterConfiguration,
+          description: structure.description,
+          effective_from: structure.effectiveFrom,
+          effective_to: structure.effectiveTo,
+          uses_tou: structure.usesTou,
+          tou_type: structure.touType,
           active: true
         })
         .select()
         .single();
 
-      if (authorityError) {
-        console.error("Error inserting supply authority:", authorityError);
-        throw new Error(`Failed to create supply authority: ${authorityError.message}`);
+      if (tariffError) throw new Error(`Failed to create tariff "${structure.name}": ${tariffError.message}`);
+
+      // Insert blocks
+      if (structure.blocks && structure.blocks.length > 0) {
+        const blockInserts = structure.blocks.map(block => ({
+          tariff_structure_id: tariff.id,
+          block_number: block.blockNumber,
+          kwh_from: block.kwhFrom,
+          kwh_to: block.kwhTo,
+          energy_charge_cents: block.energyChargeCents
+        }));
+
+        const { error: blocksError } = await supabase
+          .from("tariff_blocks")
+          .insert(blockInserts);
+
+        if (blocksError) throw new Error(`Failed to create blocks: ${blocksError.message}`);
       }
 
-      console.log("Supply authority created:", authority);
+      // Insert charges
+      if (structure.charges && structure.charges.length > 0) {
+        const chargeInserts = structure.charges.map(charge => ({
+          tariff_structure_id: tariff.id,
+          charge_type: charge.chargeType,
+          charge_amount: charge.chargeAmount,
+          description: charge.description,
+          unit: charge.unit
+        }));
 
-      // 2. Insert tariff structures
-      let structuresCreated = 0;
-      for (const structure of extractedData.tariffStructures) {
-        console.log(`Inserting tariff structure ${structuresCreated + 1}:`, structure.name);
-        
-        const { data: tariff, error: tariffError } = await supabase
-          .from("tariff_structures")
-          .insert({
-            supply_authority_id: authority.id,
-            name: structure.name,
-            tariff_type: structure.tariffType,
-            voltage_level: structure.voltageLevel,
-            transmission_zone: structure.transmissionZone,
-            meter_configuration: structure.meterConfiguration,
-            description: structure.description,
-            effective_from: structure.effectiveFrom,
-            effective_to: structure.effectiveTo,
-            uses_tou: structure.usesTou,
-            tou_type: structure.touType,
-            active: true
-          })
-          .select()
-          .single();
+        const { error: chargesError } = await supabase
+          .from("tariff_charges")
+          .insert(chargeInserts);
 
-        if (tariffError) {
-          console.error(`Error inserting tariff structure ${structure.name}:`, tariffError);
-          throw new Error(`Failed to create tariff "${structure.name}": ${tariffError.message}`);
-        }
-
-        console.log("Tariff structure created:", tariff);
-
-        // 3. Insert blocks
-        if (structure.blocks && structure.blocks.length > 0) {
-          console.log(`Inserting ${structure.blocks.length} blocks for ${structure.name}`);
-          const blockInserts = structure.blocks.map(block => ({
-            tariff_structure_id: tariff.id,
-            block_number: block.blockNumber,
-            kwh_from: block.kwhFrom,
-            kwh_to: block.kwhTo,
-            energy_charge_cents: block.energyChargeCents
-          }));
-
-          const { error: blocksError } = await supabase
-            .from("tariff_blocks")
-            .insert(blockInserts);
-
-          if (blocksError) {
-            console.error(`Error inserting blocks for ${structure.name}:`, blocksError);
-            throw new Error(`Failed to create blocks for "${structure.name}": ${blocksError.message}`);
-          }
-          console.log(`Blocks inserted successfully`);
-        }
-
-        // 4. Insert charges
-        if (structure.charges && structure.charges.length > 0) {
-          console.log(`Inserting ${structure.charges.length} charges for ${structure.name}`);
-          const chargeInserts = structure.charges.map(charge => ({
-            tariff_structure_id: tariff.id,
-            charge_type: charge.chargeType,
-            charge_amount: charge.chargeAmount,
-            description: charge.description,
-            unit: charge.unit
-          }));
-
-          const { error: chargesError } = await supabase
-            .from("tariff_charges")
-            .insert(chargeInserts);
-
-          if (chargesError) {
-            console.error(`Error inserting charges for ${structure.name}:`, chargesError);
-            throw new Error(`Failed to create charges for "${structure.name}": ${chargesError.message}`);
-          }
-          console.log(`Charges inserted successfully`);
-        }
-
-        // 5. Insert TOU periods if applicable
-        if (structure.usesTou && structure.touPeriods && structure.touPeriods.length > 0) {
-          console.log(`Inserting ${structure.touPeriods.length} TOU periods for ${structure.name}`);
-          const touInserts = structure.touPeriods.map(period => ({
-            tariff_structure_id: tariff.id,
-            period_type: period.periodType,
-            season: period.season,
-            day_type: period.dayType,
-            start_hour: period.startHour,
-            end_hour: period.endHour,
-            energy_charge_cents: period.energyChargeCents
-          }));
-
-          const { error: touError } = await supabase
-            .from("tariff_time_periods")
-            .insert(touInserts);
-
-          if (touError) {
-            console.error(`Error inserting TOU periods for ${structure.name}:`, touError);
-            throw new Error(`Failed to create TOU periods for "${structure.name}": ${touError.message}`);
-          }
-          console.log(`TOU periods inserted successfully`);
-        }
-
-        structuresCreated++;
+        if (chargesError) throw new Error(`Failed to create charges: ${chargesError.message}`);
       }
 
-      console.log(`Successfully saved ${structuresCreated} tariff structures`);
-      toast.success(`Successfully saved ${structuresCreated} tariff structure(s) to database!`);
-      setIsOpen(false);
-      setFile(null);
-      setExtractedData(null);
-      
-      // Refresh the page to show new data
-      window.location.reload();
-    } catch (error: any) {
-      console.error("Error saving tariff data:", error);
-      toast.error(error.message || "Failed to save tariff data");
-    } finally {
-      setIsSaving(false);
+      // Insert TOU periods
+      if (structure.usesTou && structure.touPeriods && structure.touPeriods.length > 0) {
+        const touInserts = structure.touPeriods.map(period => ({
+          tariff_structure_id: tariff.id,
+          period_type: period.periodType,
+          season: period.season,
+          day_type: period.dayType,
+          start_hour: period.startHour,
+          end_hour: period.endHour,
+          energy_charge_cents: period.energyChargeCents
+        }));
+
+        const { error: touError } = await supabase
+          .from("tariff_time_periods")
+          .insert(touInserts);
+
+        if (touError) throw new Error(`Failed to create TOU periods: ${touError.message}`);
+      }
+    }
+  };
+
+  const getStatusIcon = (status: MunicipalityProgress['status']) => {
+    switch (status) {
+      case 'pending':
+        return <AlertCircle className="w-5 h-5 text-muted-foreground" />;
+      case 'extracting':
+      case 'saving':
+        return <Loader2 className="w-5 h-5 animate-spin text-primary" />;
+      case 'complete':
+        return <CheckCircle2 className="w-5 h-5 text-green-500" />;
+      case 'error':
+        return <AlertCircle className="w-5 h-5 text-destructive" />;
+    }
+  };
+
+  const getStatusText = (status: MunicipalityProgress['status']) => {
+    switch (status) {
+      case 'pending':
+        return 'Ready to process';
+      case 'extracting':
+        return 'Extracting tariffs...';
+      case 'saving':
+        return 'Saving to database...';
+      case 'complete':
+        return 'Complete';
+      case 'error':
+        return 'Failed';
     }
   };
 
@@ -313,13 +316,11 @@ export default function PdfImportDialog() {
       </DialogTrigger>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Import Tariff from PDF</DialogTitle>
+          <DialogTitle>Import Tariffs from PDF</DialogTitle>
           <DialogDescription>
-            Upload a NERSA tariff PDF document to automatically extract and import tariff structures
+            Upload a NERSA tariff PDF. We'll identify all municipalities and extract tariffs one by one.
           </DialogDescription>
         </DialogHeader>
-
-        <ExtractionSteps currentStep={getCurrentStep()} />
 
         <div className="space-y-4">
           <div className="space-y-2">
@@ -329,185 +330,96 @@ export default function PdfImportDialog() {
               type="file"
               accept=".pdf"
               onChange={handleFileChange}
-              disabled={isProcessing || isSaving}
+              disabled={isProcessing}
             />
           </div>
 
-          {file && !extractedData && (
-            <div className="space-y-2">
-              <div className="text-sm text-muted-foreground">
-                Selected: <strong>{file.name}</strong> ({(file.size / 1024).toFixed(2)} KB)
-              </div>
-              <Button
-                onClick={handleProcess}
-                disabled={isProcessing}
-                className="w-full"
-              >
-                {isProcessing ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Processing PDF (this may take 30-60 seconds)...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle2 className="w-4 h-4 mr-2" />
-                    Extract Tariff Data with AI
-                  </>
-                )}
-              </Button>
-              <p className="text-xs text-muted-foreground text-center">
-                The AI will analyze the document and extract tariff structures, charges, and TOU periods
-              </p>
-            </div>
+          {file && municipalities.length === 0 && (
+            <Button
+              onClick={handleIdentifyMunicipalities}
+              disabled={isProcessing}
+              className="w-full"
+            >
+              {isProcessing ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Identifying Municipalities...
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="w-4 h-4 mr-2" />
+                  Identify Municipalities
+                </>
+              )}
+            </Button>
           )}
 
-          {extractedData && (
+          {municipalities.length > 0 && (
             <div className="space-y-4">
               <div className="bg-primary/10 border border-primary/20 rounded-lg p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <CheckCircle2 className="w-5 h-5 text-primary" />
-                  <h3 className="font-semibold">Extraction Complete - Review Before Saving</h3>
-                </div>
+                <h3 className="font-semibold mb-2">Found {municipalities.length} Municipality/Municipalities</h3>
                 <p className="text-sm text-muted-foreground">
-                  The AI has extracted the following tariff data. Please review carefully before saving to the database.
+                  Click "Extract & Save" for each municipality to process them individually.
                 </p>
               </div>
 
-              <ScrollArea className="h-[500px] border rounded-lg p-4">
-              <div className="space-y-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Supply Authority</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
-                      <p><strong>Name:</strong> {extractedData.supplyAuthority.name}</p>
-                      {extractedData.supplyAuthority.region && (
-                        <p><strong>Region:</strong> {extractedData.supplyAuthority.region}</p>
-                      )}
-                      {extractedData.supplyAuthority.nersaIncreasePercentage && (
-                        <p><strong>NERSA Increase:</strong> {extractedData.supplyAuthority.nersaIncreasePercentage}%</p>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold">
-                    Tariff Structures ({extractedData.tariffStructures.length})
-                  </h3>
-                  {extractedData.tariffStructures.map((structure, idx) => (
-                    <Card key={idx}>
-                      <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                          {structure.name}
-                          <Badge>{structure.tariffType}</Badge>
-                          {structure.usesTou && <Badge variant="outline">TOU</Badge>}
-                          {structure.voltageLevel && (
-                            <Badge variant="secondary" className="text-xs">{structure.voltageLevel}</Badge>
-                          )}
-                        </CardTitle>
-                        <CardDescription>
-                          {structure.description}
-                          {structure.transmissionZone && (
-                            <span className="ml-2 text-xs">Zone: {structure.transmissionZone}</span>
-                          )}
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        <div>
-                          <p className="text-sm text-muted-foreground">
-                            Effective: {structure.effectiveFrom}
-                            {structure.effectiveTo && ` - ${structure.effectiveTo}`}
-                          </p>
+              <ScrollArea className="h-[400px] border rounded-lg p-4">
+                <div className="space-y-3">
+                  {municipalities.map((municipality, index) => (
+                    <Card key={index}>
+                      <CardHeader className="pb-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            {getStatusIcon(municipality.status)}
+                            <div>
+                              <CardTitle className="text-lg">{municipality.name}</CardTitle>
+                              <CardDescription>{getStatusText(municipality.status)}</CardDescription>
+                              {municipality.error && (
+                                <p className="text-sm text-destructive mt-1">{municipality.error}</p>
+                              )}
+                            </div>
+                          </div>
+                          <Button
+                            onClick={() => handleExtractAndSave(municipality.name, index)}
+                            disabled={
+                              municipality.status !== 'pending' || 
+                              currentMunicipality !== null
+                            }
+                            size="sm"
+                          >
+                            {municipality.status === 'pending' ? 'Extract & Save' : getStatusText(municipality.status)}
+                          </Button>
                         </div>
-
-                        {structure.blocks.length > 0 && (
-                          <div>
-                            <h4 className="font-semibold mb-2">Blocks ({structure.blocks.length})</h4>
-                            <div className="space-y-1">
-                              {structure.blocks.map((block, bidx) => (
-                                <p key={bidx} className="text-sm">
-                                  Block {block.blockNumber}: {block.kwhFrom} - {block.kwhTo || '∞'} kWh 
-                                  @ R{(block.energyChargeCents / 100).toFixed(4)}/kWh
-                                </p>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {structure.charges.length > 0 && (
-                          <div>
-                            <h4 className="font-semibold mb-2">Charges ({structure.charges.length})</h4>
-                            <div className="space-y-1">
-                              {structure.charges.map((charge, cidx) => (
-                                <p key={cidx} className="text-sm">
-                                  {charge.description}: R{charge.chargeAmount} {charge.unit}
-                                </p>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {structure.touPeriods && structure.touPeriods.length > 0 && (
-                          <div>
-                            <h4 className="font-semibold mb-2">TOU Periods ({structure.touPeriods.length})</h4>
-                            <div className="space-y-1">
-                              {structure.touPeriods.map((period, pidx) => (
-                                <p key={pidx} className="text-sm">
-                                  {period.periodType} ({period.season}, {period.dayType}): 
-                                  {period.startHour}:00-{period.endHour}:00 @ R{(period.energyChargeCents / 100).toFixed(4)}/kWh
-                                </p>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </CardContent>
+                      </CardHeader>
+                      {municipality.data && municipality.status === 'complete' && (
+                        <CardContent className="pt-0">
+                          <p className="text-sm text-muted-foreground">
+                            Saved {municipality.data.tariffStructures.length} tariff structure(s)
+                          </p>
+                        </CardContent>
+                      )}
                     </Card>
                   ))}
                 </div>
+              </ScrollArea>
 
-                <div className="flex gap-2 pt-4 border-t">
+              {municipalities.every(m => m.status === 'complete') && (
+                <div className="flex gap-2">
                   <Button
-                    onClick={handleSave}
-                    disabled={isSaving}
+                    onClick={() => {
+                      setIsOpen(false);
+                      setFile(null);
+                      setMunicipalities([]);
+                      window.location.reload();
+                    }}
                     className="flex-1"
                     size="lg"
                   >
-                    {isSaving ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Saving to Database...
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle2 className="w-4 h-4 mr-2" />
-                        Confirm & Save to Database
-                      </>
-                    )}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setExtractedData(null);
-                      setFile(null);
-                    }}
-                    disabled={isSaving}
-                  >
-                    Cancel
+                    <CheckCircle2 className="w-4 h-4 mr-2" />
+                    Done - Refresh Page
                   </Button>
                 </div>
-              </div>
-              </ScrollArea>
-            </div>
-          )}
-
-          {!extractedData && !file && (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <AlertCircle className="w-12 h-12 text-muted-foreground mb-4" />
-              <p className="text-muted-foreground">
-                Select a NERSA tariff PDF document to begin
-              </p>
+              )}
             </div>
           )}
         </div>
