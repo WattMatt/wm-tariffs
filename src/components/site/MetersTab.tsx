@@ -17,7 +17,13 @@ interface Meter {
   id: string;
   meter_number: string;
   meter_type: string;
+  name: string | null;
   location: string | null;
+  area: number | null;
+  rating: string | null;
+  cable_specification: string | null;
+  serial_number: string | null;
+  ct_type: string | null;
   tariff: string | null;
   is_revenue_critical: boolean;
   created_at: string;
@@ -63,7 +69,13 @@ export default function MetersTab({ siteId }: MetersTabProps) {
       site_id: siteId,
       meter_number: formData.get("meter_number") as string,
       meter_type: formData.get("meter_type") as string,
+      name: formData.get("name") as string,
       location: formData.get("location") as string,
+      area: formData.get("area") ? parseFloat(formData.get("area") as string) : null,
+      rating: formData.get("rating") as string,
+      cable_specification: formData.get("cable_specification") as string,
+      serial_number: formData.get("serial_number") as string,
+      ct_type: formData.get("ct_type") as string,
       tariff: formData.get("tariff") as string,
       is_revenue_critical: isRevenueCritical,
     });
@@ -120,37 +132,85 @@ export default function MetersTab({ siteId }: MetersTabProps) {
               Add Meter
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Add New Meter</DialogTitle>
-              <DialogDescription>Register a new electrical meter</DialogDescription>
+              <DialogDescription>Register a new electrical meter with all required details</DialogDescription>
             </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="meter_number">Meter Number</Label>
-                <Input id="meter_number" name="meter_number" required placeholder="MTR-12345" />
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="meter_number">NO (Meter Number) *</Label>
+                  <Input id="meter_number" name="meter_number" required placeholder="DB-03" />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="name">NAME *</Label>
+                  <Input id="name" name="name" required placeholder="ACKERMANS" />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="area">AREA (m²) *</Label>
+                  <Input 
+                    id="area" 
+                    name="area" 
+                    type="number" 
+                    step="0.01" 
+                    required 
+                    placeholder="406" 
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="rating">RATING *</Label>
+                  <Input id="rating" name="rating" required placeholder="100A TP" />
+                </div>
+
+                <div className="space-y-2 col-span-2">
+                  <Label htmlFor="cable_specification">CABLE *</Label>
+                  <Input 
+                    id="cable_specification" 
+                    name="cable_specification" 
+                    required 
+                    placeholder="4C x 50mm² ALU ECC CABLE" 
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="serial_number">SERIAL *</Label>
+                  <Input id="serial_number" name="serial_number" required placeholder="35777285" />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="ct_type">CT *</Label>
+                  <Input id="ct_type" name="ct_type" required placeholder="DOL" />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="meter_type">Meter Type *</Label>
+                  <Select name="meter_type" required>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="council_bulk">Council Bulk Supply</SelectItem>
+                      <SelectItem value="check_meter">Check Meter</SelectItem>
+                      <SelectItem value="distribution">Distribution Meter</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="location">Location</Label>
+                  <Input id="location" name="location" placeholder="Building A, Floor 2" />
+                </div>
+
+                <div className="space-y-2 col-span-2">
+                  <Label htmlFor="tariff">Tariff</Label>
+                  <Input id="tariff" name="tariff" placeholder="Business Standard" />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="meter_type">Meter Type</Label>
-                <Select name="meter_type" required>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="council_bulk">Council Bulk Supply</SelectItem>
-                    <SelectItem value="check_meter">Check Meter</SelectItem>
-                    <SelectItem value="distribution">Distribution Meter</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="location">Location</Label>
-                <Input id="location" name="location" placeholder="Building A, Floor 2" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="tariff">Tariff</Label>
-                <Input id="tariff" name="tariff" placeholder="Business Standard" />
-              </div>
+
               <div className="flex items-center space-x-2">
                 <Checkbox
                   id="revenue_critical"
@@ -161,6 +221,7 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                   Mark as revenue critical
                 </Label>
               </div>
+
               <Button type="submit" className="w-full" disabled={isLoading}>
                 {isLoading ? "Creating..." : "Create Meter"}
               </Button>
@@ -193,10 +254,12 @@ export default function MetersTab({ siteId }: MetersTabProps) {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Meter Number</TableHead>
+                  <TableHead>NO</TableHead>
+                  <TableHead>Name</TableHead>
                   <TableHead>Type</TableHead>
-                  <TableHead>Location</TableHead>
-                  <TableHead>Tariff</TableHead>
+                  <TableHead>Area</TableHead>
+                  <TableHead>Rating</TableHead>
+                  <TableHead>Serial</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
@@ -206,12 +269,27 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                   <TableRow key={meter.id}>
                     <TableCell className="font-mono font-medium">{meter.meter_number}</TableCell>
                     <TableCell>
+                      <div>
+                        <p className="font-medium">{meter.name || "—"}</p>
+                        {meter.location && (
+                          <p className="text-xs text-muted-foreground">{meter.location}</p>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
                       <Badge className={getMeterTypeColor(meter.meter_type)}>
                         {getMeterTypeLabel(meter.meter_type)}
                       </Badge>
                     </TableCell>
-                    <TableCell>{meter.location || "—"}</TableCell>
-                    <TableCell>{meter.tariff || "—"}</TableCell>
+                    <TableCell>
+                      {meter.area ? `${meter.area}m²` : "—"}
+                    </TableCell>
+                    <TableCell className="font-mono text-sm">
+                      {meter.rating || "—"}
+                    </TableCell>
+                    <TableCell className="font-mono text-xs">
+                      {meter.serial_number || "—"}
+                    </TableCell>
                     <TableCell>
                       {meter.is_revenue_critical && (
                         <Badge variant="outline" className="text-destructive border-destructive">

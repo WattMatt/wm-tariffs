@@ -207,34 +207,52 @@ export type Database = {
       }
       meters: {
         Row: {
+          area: number | null
+          cable_specification: string | null
           created_at: string | null
+          ct_type: string | null
           id: string
           is_revenue_critical: boolean | null
           location: string | null
           meter_number: string
           meter_type: string
+          name: string | null
+          rating: string | null
+          serial_number: string | null
           site_id: string
           tariff: string | null
           updated_at: string | null
         }
         Insert: {
+          area?: number | null
+          cable_specification?: string | null
           created_at?: string | null
+          ct_type?: string | null
           id?: string
           is_revenue_critical?: boolean | null
           location?: string | null
           meter_number: string
           meter_type: string
+          name?: string | null
+          rating?: string | null
+          serial_number?: string | null
           site_id: string
           tariff?: string | null
           updated_at?: string | null
         }
         Update: {
+          area?: number | null
+          cable_specification?: string | null
           created_at?: string | null
+          ct_type?: string | null
           id?: string
           is_revenue_critical?: boolean | null
           location?: string | null
           meter_number?: string
           meter_type?: string
+          name?: string | null
+          rating?: string | null
+          serial_number?: string | null
           site_id?: string
           tariff?: string | null
           updated_at?: string | null
