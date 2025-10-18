@@ -40,8 +40,15 @@ export const MeterDataExtractor = ({ siteId, schematicId, imageUrl, onMetersExtr
     try {
       console.log('Extracting meters from schematic:', imageUrl);
       
+      // Extract the file path from the URL for PDF detection
+      const urlParts = imageUrl.split('/');
+      const filePath = urlParts[urlParts.length - 1];
+      
       const { data, error } = await supabase.functions.invoke('extract-schematic-meters', {
-        body: { imageUrl }
+        body: { 
+          imageUrl,
+          filePath: decodeURIComponent(filePath)
+        }
       });
 
       if (error) {

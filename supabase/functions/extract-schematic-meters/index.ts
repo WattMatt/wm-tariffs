@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -11,11 +12,11 @@ serve(async (req) => {
   }
 
   try {
-    const { imageUrl } = await req.json();
+    const { imageUrl, filePath } = await req.json();
     
-    if (!imageUrl) {
+    if (!imageUrl && !filePath) {
       return new Response(
-        JSON.stringify({ error: 'Image URL is required' }),
+        JSON.stringify({ error: 'Image URL or file path is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -23,6 +24,40 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {
       throw new Error('LOVABLE_API_KEY is not configured');
+    }
+
+    // Check if the file is a PDF and needs conversion
+    let processedImageUrl = imageUrl;
+    
+    if (filePath && filePath.toLowerCase().endsWith('.pdf')) {
+      console.log('PDF detected, converting to image...');
+      
+      // For PDFs, we'll fetch the file and convert the first page to an image
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      const supabase = createClient(supabaseUrl, supabaseKey);
+      
+      // Download the PDF from storage
+      const { data: pdfData, error: downloadError } = await supabase
+        .storage
+        .from('schematics')
+        .download(filePath);
+        
+      if (downloadError || !pdfData) {
+        console.error('Error downloading PDF:', downloadError);
+        throw new Error('Failed to download PDF file');
+      }
+
+      console.log('PDF downloaded, converting to base64 image...');
+      
+      // Convert PDF blob to array buffer
+      const arrayBuffer = await pdfData.arrayBuffer();
+      const base64Pdf = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+      
+      // Use PDF as base64 data URL - the AI can handle PDFs as images
+      processedImageUrl = `data:application/pdf;base64,${base64Pdf}`;
+      
+      console.log('PDF converted to base64 data URL');
     }
 
     console.log('Calling Lovable AI to extract meter data from schematic...');
@@ -62,7 +97,7 @@ Important: Return ONLY the JSON array, no additional text or markdown formatting
               {
                 type: 'image_url',
                 image_url: {
-                  url: imageUrl
+                  url: processedImageUrl
                 }
               }
             ]
