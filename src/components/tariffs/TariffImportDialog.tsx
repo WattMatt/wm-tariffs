@@ -378,23 +378,53 @@ export default function PdfImportDialog() {
     
     // Find the sheet for this municipality
     let targetSheet = null;
+    let matchedSheetName = '';
+    const normalizedMunicipality = municipalityName.toLowerCase().trim();
+    
+    // First try: Check if sheet name matches municipality
     for (const sheetName of workbook.SheetNames) {
-      const worksheet = workbook.Sheets[sheetName];
-      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
-      
-      // Check first few rows for municipality name
-      for (let i = 0; i < Math.min(5, jsonData.length); i++) {
-        const cellValue = jsonData[i][0]?.toString() || '';
-        if (cellValue.includes(municipalityName)) {
-          targetSheet = jsonData;
-          break;
-        }
+      if (sheetName.toLowerCase().includes(normalizedMunicipality) || 
+          normalizedMunicipality.includes(sheetName.toLowerCase())) {
+        const worksheet = workbook.Sheets[sheetName];
+        targetSheet = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+        matchedSheetName = sheetName;
+        console.log(`Found municipality by sheet name: ${sheetName}`);
+        break;
       }
-      if (targetSheet) break;
+    }
+    
+    // Second try: Check sheet content for municipality name
+    if (!targetSheet) {
+      for (const sheetName of workbook.SheetNames) {
+        const worksheet = workbook.Sheets[sheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+        
+        // Check first 10 rows for municipality name (case-insensitive partial match)
+        for (let i = 0; i < Math.min(10, jsonData.length); i++) {
+          const cellValue = jsonData[i][0]?.toString().toLowerCase() || '';
+          if (cellValue.includes(normalizedMunicipality) || 
+              normalizedMunicipality.includes(cellValue)) {
+            targetSheet = jsonData;
+            matchedSheetName = sheetName;
+            console.log(`Found municipality in sheet content: ${sheetName}`);
+            break;
+          }
+        }
+        if (targetSheet) break;
+      }
+    }
+    
+    // Third try: If still not found and there's only one sheet, use it
+    if (!targetSheet && workbook.SheetNames.length === 1) {
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      targetSheet = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+      matchedSheetName = sheetName;
+      console.log(`Using single sheet: ${sheetName}`);
     }
     
     if (!targetSheet) {
-      throw new Error(`Municipality ${municipalityName} not found in Excel file`);
+      throw new Error(`Municipality "${municipalityName}" not found in Excel file. Available sheets: ${workbook.SheetNames.join(', ')}`);
     }
     
     // Parse the sheet data
