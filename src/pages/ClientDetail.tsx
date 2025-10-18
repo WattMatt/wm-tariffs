@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, MapPin, ArrowLeft, Building2 } from "lucide-react";
+import { Plus, MapPin, ArrowLeft, Building2, Pencil } from "lucide-react";
 import { toast } from "sonner";
 
 interface Client {
@@ -34,6 +34,7 @@ export default function ClientDetail() {
   const [sites, setSites] = useState<Site[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -95,6 +96,33 @@ export default function ClientDetail() {
     }
   };
 
+  const handleEditClient = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsLoading(true);
+
+    const formData = new FormData(e.currentTarget);
+
+    const { error } = await supabase
+      .from("clients")
+      .update({
+        name: formData.get("name") as string,
+        code: formData.get("code") as string,
+        contact_email: formData.get("email") as string,
+        contact_phone: formData.get("phone") as string,
+      })
+      .eq("id", id);
+
+    setIsLoading(false);
+
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success("Client updated successfully");
+      setIsEditDialogOpen(false);
+      fetchClient();
+    }
+  };
+
   if (!client) {
     return (
       <DashboardLayout>
@@ -123,7 +151,12 @@ export default function ClientDetail() {
               </div>
             </div>
           </div>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(true)}>
+              <Pencil className="w-4 h-4 mr-2" />
+              Edit Client
+            </Button>
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button className="gap-2">
                 <Plus className="w-4 h-4" />
@@ -154,7 +187,62 @@ export default function ClientDetail() {
               </form>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
+
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit Client</DialogTitle>
+              <DialogDescription>Update client organization details</DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleEditClient} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Client Name</Label>
+                <Input 
+                  id="name" 
+                  name="name" 
+                  required 
+                  placeholder="Acme Corporation"
+                  defaultValue={client?.name}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="code">Client Code</Label>
+                <Input 
+                  id="code" 
+                  name="code" 
+                  required 
+                  placeholder="ACM001"
+                  defaultValue={client?.code}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="email">Contact Email</Label>
+                <Input 
+                  id="email" 
+                  name="email" 
+                  type="email" 
+                  placeholder="contact@acme.com"
+                  defaultValue={client?.contact_email || ""}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="phone">Contact Phone</Label>
+                <Input 
+                  id="phone" 
+                  name="phone" 
+                  type="tel" 
+                  placeholder="+27 11 123 4567"
+                  defaultValue={client?.contact_phone || ""}
+                />
+              </div>
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading ? "Updating..." : "Update Client"}
+              </Button>
+            </form>
+          </DialogContent>
+        </Dialog>
 
         {sites.length === 0 ? (
           <Card className="border-border/50">
