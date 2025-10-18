@@ -39,6 +39,10 @@ export const MeterDataExtractor = ({ siteId, schematicId, imageUrl, onMetersExtr
   const [editedMeter, setEditedMeter] = useState<ExtractedMeterData | null>(null);
   const [convertedImageUrl, setConvertedImageUrl] = useState<string | null>(null);
   const [selectedMeterIndex, setSelectedMeterIndex] = useState<number | null>(null);
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 
   const isPdf = imageUrl.toLowerCase().includes('.pdf');
   
@@ -99,6 +103,8 @@ export const MeterDataExtractor = ({ siteId, schematicId, imageUrl, onMetersExtr
       
       setExtractedMeters(metersWithPosition);
       setShowApprovalDialog(true);
+      setZoom(1);
+      setPan({ x: 0, y: 0 });
       toast.success(`Extracted ${data.meters.length} meters - review and approve each one`);
     } catch (error) {
       console.error('Error extracting meters:', error);
@@ -148,6 +154,47 @@ export const MeterDataExtractor = ({ siteId, schematicId, imageUrl, onMetersExtr
     setSelectedMeterIndex(index);
     setEditingIndex(null);
     setEditedMeter(null);
+  };
+
+  const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const delta = e.deltaY * -0.001;
+    const newZoom = Math.min(Math.max(0.5, zoom + delta), 3);
+    setZoom(newZoom);
+  };
+
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.button === 0 && !(e.target as HTMLElement).closest('.meter-marker')) {
+      setIsDragging(true);
+      setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
+      e.currentTarget.style.cursor = 'grabbing';
+    }
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (isDragging) {
+      setPan({
+        x: e.clientX - dragStart.x,
+        y: e.clientY - dragStart.y
+      });
+    }
+  };
+
+  const handleMouseUp = (e: React.MouseEvent<HTMLDivElement>) => {
+    setIsDragging(false);
+    e.currentTarget.style.cursor = 'grab';
+  };
+
+  const handleMouseLeave = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (isDragging) {
+      setIsDragging(false);
+      e.currentTarget.style.cursor = 'grab';
+    }
+  };
+
+  const handleResetView = () => {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
   };
 
   const handleApproveAndSave = async () => {
@@ -234,52 +281,84 @@ export const MeterDataExtractor = ({ siteId, schematicId, imageUrl, onMetersExtr
           <div className="flex-1 grid grid-cols-2 gap-4 overflow-hidden">
             {/* Left side: Visual schematic with markers */}
             <div className="space-y-2 flex flex-col">
-              <div className="text-sm text-muted-foreground flex items-center gap-2">
-                <div className="flex items-center gap-1">
-                  <div className="w-3 h-3 rounded-full bg-yellow-500 border-2 border-yellow-600" />
-                  <span>Pending</span>
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-muted-foreground flex items-center gap-2">
+                  <div className="flex items-center gap-1">
+                    <div className="w-3 h-3 rounded-full bg-yellow-500 border-2 border-yellow-600" />
+                    <span>Pending</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="w-3 h-3 rounded-full bg-green-500 border-2 border-green-600" />
+                    <span>Approved</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="w-3 h-3 rounded-full bg-red-500 border-2 border-red-600" />
+                    <span>Rejected</span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-1">
-                  <div className="w-3 h-3 rounded-full bg-green-500 border-2 border-green-600" />
-                  <span>Approved</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <div className="w-3 h-3 rounded-full bg-red-500 border-2 border-red-600" />
-                  <span>Rejected</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">Zoom: {Math.round(zoom * 100)}%</span>
+                  <Button size="sm" variant="outline" onClick={handleResetView}>Reset View</Button>
                 </div>
               </div>
               
-              <div className="relative flex-1 border rounded-lg overflow-auto bg-muted/20">
-                {convertedImageUrl && (
-                  <div className="relative min-w-full min-h-full inline-block">
-                    <img 
-                      src={convertedImageUrl} 
-                      alt="Schematic" 
-                      className="max-w-none"
-                      style={{ minWidth: '800px', minHeight: '600px' }}
-                    />
-                    
-                    {/* Meter markers overlaid on schematic */}
-                    {extractedMeters.map((meter, index) => (
-                      <div
-                        key={index}
-                        className={`absolute w-10 h-10 rounded-full ${getMeterStatusColor(meter.status)} border-2 cursor-pointer hover:scale-125 transition-transform flex items-center justify-center text-white font-bold text-sm shadow-lg ${
-                          selectedMeterIndex === index ? 'ring-4 ring-blue-500 scale-110' : ''
-                        }`}
-                        style={{
-                          left: `${meter.position?.x || 0}%`,
-                          top: `${meter.position?.y || 0}%`,
-                          transform: 'translate(-50%, -50%)',
-                          zIndex: selectedMeterIndex === index ? 20 : 10
-                        }}
-                        onClick={() => handleSelectMeter(index)}
-                        title={`${meter.meter_number} - Click to review`}
-                      >
-                        {index + 1}
-                      </div>
-                    ))}
-                  </div>
-                )}
+              <div 
+                className="relative flex-1 border rounded-lg overflow-hidden bg-muted/20 cursor-grab select-none"
+                onWheel={handleWheel}
+                onMouseDown={handleMouseDown}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseLeave}
+              >
+                <div 
+                  className="absolute inset-0 flex items-center justify-center"
+                  style={{
+                    transform: `translate(${pan.x}px, ${pan.y}px)`,
+                    transition: isDragging ? 'none' : 'transform 0.1s ease-out'
+                  }}
+                >
+                  {convertedImageUrl && (
+                    <div 
+                      className="relative transition-transform duration-200"
+                      style={{ 
+                        transform: `scale(${zoom})`,
+                        transformOrigin: 'center center'
+                      }}
+                    >
+                      <img 
+                        src={convertedImageUrl} 
+                        alt="Schematic" 
+                        className="max-w-none pointer-events-none"
+                        style={{ minWidth: '1000px', minHeight: '750px' }}
+                        draggable={false}
+                      />
+                      
+                      {/* Meter markers overlaid on schematic */}
+                      {extractedMeters.map((meter, index) => (
+                        <div
+                          key={index}
+                          className={`meter-marker absolute w-10 h-10 rounded-full ${getMeterStatusColor(meter.status)} border-2 cursor-pointer hover:scale-125 transition-all flex items-center justify-center text-white font-bold text-sm shadow-lg ${
+                            selectedMeterIndex === index ? 'ring-4 ring-blue-500 scale-125' : ''
+                          }`}
+                          style={{
+                            left: `${meter.position?.x || 0}%`,
+                            top: `${meter.position?.y || 0}%`,
+                            transform: 'translate(-50%, -50%)',
+                            zIndex: selectedMeterIndex === index ? 20 : 10
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSelectMeter(index);
+                          }}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          title={`${meter.meter_number} - Click to review`}
+                        >
+                          {index + 1}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
