@@ -48,6 +48,7 @@ export const MeterDataExtractor = ({
   onMeterSelect
 }: MeterDataExtractorProps) => {
   const [isExtracting, setIsExtracting] = useState(false);
+  const [extractionProgress, setExtractionProgress] = useState(0);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editedMeter, setEditedMeter] = useState<ExtractedMeterData | null>(null);
   const [convertedImageUrl, setConvertedImageUrl] = useState<string | null>(null);
@@ -63,21 +64,43 @@ export const MeterDataExtractor = ({
     }
 
     setIsExtracting(true);
+    setExtractionProgress(0);
+    
+    // Progress simulator
+    const progressInterval = setInterval(() => {
+      setExtractionProgress(prev => Math.min(prev + 1, 95));
+    }, 1000);
+
     try {
       console.log('Extracting meters from schematic');
       
       // Use converted image if available, otherwise use original
       const urlToProcess = convertedImageUrl || imageUrl;
       
+      // Create abort controller with 100 second timeout (slightly longer than edge function's 90s)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        controller.abort();
+        console.error('Request timeout after 100 seconds');
+      }, 100000);
+
       const { data, error } = await supabase.functions.invoke('extract-schematic-meters', {
         body: { 
           imageUrl: urlToProcess,
           filePath: null // We're using data URL now
-        }
+        },
+        signal: controller.signal
       });
+
+      clearTimeout(timeoutId);
+      clearInterval(progressInterval);
+      setExtractionProgress(100);
 
       if (error) {
         console.error('Edge function error:', error);
+        if (error.message?.includes('aborted')) {
+          throw new Error('Extraction timed out after 100 seconds. The schematic may be too complex. Try with a simpler schematic or smaller file.');
+        }
         throw error;
       }
 
@@ -112,9 +135,11 @@ export const MeterDataExtractor = ({
       toast.success(`Extracted ${data.meters.length} meters - review and approve each one`);
     } catch (error) {
       console.error('Error extracting meters:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to extract meter data from schematic');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to extract meter data from schematic';
+      toast.error(errorMessage, { duration: 5000 });
     } finally {
       setIsExtracting(false);
+      setExtractionProgress(0);
     }
   };
 
@@ -359,20 +384,27 @@ export const MeterDataExtractor = ({
       )}
       
       <div className="flex items-center justify-between">
-        <Button
-          onClick={extractMetersFromSchematic}
-          disabled={isExtracting || (isPdf && !convertedImageUrl)}
-          className="gap-2"
-        >
-          {isExtracting ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Extracting Data...
-            </>
-          ) : (
-            "Extract Meters from Schematic"
+        <div className="flex-1">
+          <Button
+            onClick={extractMetersFromSchematic}
+            disabled={isExtracting || (isPdf && !convertedImageUrl)}
+            className="gap-2"
+          >
+            {isExtracting ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Analyzing Schematic... {extractionProgress}%
+              </>
+            ) : (
+              "Extract Meters from Schematic"
+            )}
+          </Button>
+          {isExtracting && (
+            <p className="text-xs text-muted-foreground mt-2">
+              AI is analyzing the schematic diagram. This may take up to 90 seconds for complex schematics.
+            </p>
           )}
-        </Button>
+        </div>
 
         {extractedMeters.length > 0 && (
           <div className="flex items-center gap-4">
