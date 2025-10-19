@@ -88,8 +88,7 @@ export const MeterDataExtractor = ({
         body: { 
           imageUrl: urlToProcess,
           filePath: null // We're using data URL now
-        },
-        signal: controller.signal
+        }
       });
 
       clearTimeout(timeoutId);
@@ -98,14 +97,17 @@ export const MeterDataExtractor = ({
 
       if (error) {
         console.error('Edge function error:', error);
+        if (error.message?.includes('Failed to send a request')) {
+          throw new Error('Connection failed. The extraction service may be busy. Please try again.');
+        }
         if (error.message?.includes('aborted')) {
           throw new Error('Extraction timed out after 100 seconds. The schematic may be too complex. Try with a simpler schematic or smaller file.');
         }
-        throw error;
+        throw new Error(error.message || 'Failed to extract meters');
       }
 
       if (!data || !data.meters) {
-        throw new Error('No meter data returned');
+        throw new Error('No meter data returned from extraction service');
       }
 
       console.log('Extracted meters:', data.meters);

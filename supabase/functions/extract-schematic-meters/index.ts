@@ -73,7 +73,7 @@ serve(async (req) => {
       },
       signal: controller.signal,
       body: JSON.stringify({
-        model: 'google/gemini-2.5-pro',
+        model: 'google/gemini-2.5-flash',
         messages: [
           {
             role: 'user',
@@ -145,19 +145,25 @@ Return ONLY the JSON array, no markdown formatting, no explanatory text.`
         );
       }
 
-      throw new Error(`AI API error: ${response.status} - ${errorText}`);
+      return new Response(
+        JSON.stringify({ error: `AI API error: ${response.status} - ${errorText}` }),
+        { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     const data = await response.json();
     console.log('AI request completed successfully');
     const content = data.choices?.[0]?.message?.content;
     
-    console.log('AI Response:', content);
-
     if (!content) {
       console.error('No content in AI response');
-      throw new Error('No content in AI response');
+      return new Response(
+        JSON.stringify({ error: 'No content in AI response' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
+
+    console.log('AI Response preview:', content.substring(0, 500));
 
     // Extract JSON from response (handle markdown code blocks)
     let jsonMatch = content.match(/\[[\s\S]*\]/);
@@ -168,11 +174,23 @@ Return ONLY the JSON array, no markdown formatting, no explanatory text.`
     }
 
     if (!jsonMatch) {
-      console.error('Could not find JSON in response:', content);
-      throw new Error('Could not parse meter data from AI response');
+      console.error('Could not find JSON in response:', content.substring(0, 200));
+      return new Response(
+        JSON.stringify({ error: 'Could not parse meter data from AI response. Response did not contain valid JSON array.' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    const meters = JSON.parse(jsonMatch[0]);
+    let meters;
+    try {
+      meters = JSON.parse(jsonMatch[0]);
+    } catch (parseError) {
+      console.error('Failed to parse JSON:', parseError, 'Content:', jsonMatch[0].substring(0, 200));
+      return new Response(
+        JSON.stringify({ error: 'Failed to parse meter data JSON from AI response' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
     
     console.log(`Successfully extracted ${meters.length} meters`);
 
