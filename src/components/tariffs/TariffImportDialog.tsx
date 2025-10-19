@@ -321,6 +321,11 @@ export default function PdfImportDialog() {
 
       console.log(`Extracted ${extractedData.tariffStructures.length} tariff structures`);
 
+      // Validate that we actually extracted tariff data
+      if (extractedData.tariffStructures.length === 0) {
+        throw new Error(`No tariff data found for ${municipalityName}. The sheet may be empty or formatted differently.`);
+      }
+
       // Update status to saving
       setMunicipalities(prev => prev.map((m, i) => 
         i === index ? { ...m, status: 'saving', data: extractedData } : m
@@ -414,6 +419,9 @@ export default function PdfImportDialog() {
     const arrayBuffer = await file!.arrayBuffer();
     const workbook = XLSX.read(arrayBuffer, { type: 'array' });
     
+    console.log(`\n=== Starting extraction for ${municipalityName} ===`);
+    console.log(`Available sheets: ${workbook.SheetNames.join(', ')}`);
+    
     // Find the sheet for this municipality
     let targetSheet = null;
     let matchedSheetName = '';
@@ -426,7 +434,7 @@ export default function PdfImportDialog() {
         const worksheet = workbook.Sheets[sheetName];
         targetSheet = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
         matchedSheetName = sheetName;
-        console.log(`Found municipality by sheet name: ${sheetName}`);
+        console.log(`✓ Found municipality by sheet name: ${sheetName}`);
         break;
       }
     }
@@ -444,7 +452,7 @@ export default function PdfImportDialog() {
               normalizedMunicipality.includes(cellValue)) {
             targetSheet = jsonData;
             matchedSheetName = sheetName;
-            console.log(`Found municipality in sheet content: ${sheetName}`);
+            console.log(`✓ Found municipality in sheet content: ${sheetName}`);
             break;
           }
         }
@@ -458,18 +466,25 @@ export default function PdfImportDialog() {
       const worksheet = workbook.Sheets[sheetName];
       targetSheet = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
       matchedSheetName = sheetName;
-      console.log(`Using single sheet: ${sheetName}`);
+      console.log(`✓ Using single sheet: ${sheetName}`);
     }
     
     if (!targetSheet) {
       throw new Error(`Municipality "${municipalityName}" not found in Excel file. Available sheets: ${workbook.SheetNames.join(', ')}`);
     }
     
+    // Log sheet diagnostics
+    console.log(`Sheet "${matchedSheetName}" has ${targetSheet.length} rows`);
+    console.log(`First 5 rows:`, targetSheet.slice(0, 5));
+    
     // Parse the sheet data
     const tariffStructures: any[] = [];
     let currentTariff: any = null;
     let nersaIncrease = 0;
     let currentSeason: string | null = null; // Track Summer/Winter or Low/High Season
+    let tariffHeadersFound = 0;
+    let blocksFound = 0;
+    let chargesFound = 0;
     
     for (let i = 0; i < targetSheet.length; i++) {
       const row = targetSheet[i];
@@ -497,7 +512,7 @@ export default function PdfImportDialog() {
         // Pattern 2: Lines ending with colon that describe tariffs
         (col0.endsWith(':') && !col1 && !col0.match(/^(Basic|Demand|Access|Service|Energy|Peak|Standard|Off)/i)) ||
         // Pattern 3: ALL CAPS descriptive headers (min 10 chars to catch more patterns)
-        (col0 === col0.toUpperCase() && col0.length >= 10 && !col1 && 
+        (col0 === col0.toUpperCase() && col0.length >= 10 && !col1 &&
          col0.match(/(DOMESTIC|BUSINESS|COMMERCIAL|INDUSTRIAL|AGRICULTURAL|RESELLER|BULK|SCALE)/)) ||
         // Pattern 4: Specific tariff descriptors (more flexible - handles single word like "Commercial")
         (col0.match(/^(Domestic|Business|Commercial|Industrial|Agricultural|Conventional|Prepaid)/i) && 
@@ -507,8 +522,12 @@ export default function PdfImportDialog() {
         (col0.match(/.*(Tariff|Supply|Scale|Demand|Meter).*$/i) && !col1 && col0.length > 8);
       
       if (isTariffHeader) {
+        tariffHeadersFound++;
+        console.log(`Found tariff header (${tariffHeadersFound}): "${col0}"`);
+        
         // Save previous tariff if exists
         if (currentTariff && (currentTariff.blocks.length > 0 || currentTariff.charges.length > 0 || currentTariff.touPeriods.length > 0)) {
+          console.log(`  Saving previous tariff: ${currentTariff.name} (${currentTariff.blocks.length} blocks, ${currentTariff.charges.length} charges)`);
           tariffStructures.push(currentTariff);
         }
         
@@ -581,6 +600,8 @@ export default function PdfImportDialog() {
               kwhTo: to,
               energyChargeCents: energyCharge
             });
+            blocksFound++;
+            console.log(`  Added block: ${from}-${to || '∞'} kWh @ ${energyCharge}c/kWh`);
           } else {
             console.warn(`Skipping invalid block energy charge for "${col0}":`, col1);
           }
@@ -648,12 +669,14 @@ export default function PdfImportDialog() {
         
         // Only add charge if amount is a valid number and positive
         if (!isNaN(chargeAmount) && isFinite(chargeAmount) && chargeAmount > 0) {
+          chargesFound++;
           currentTariff.charges.push({
             chargeType,
             chargeAmount,
             description: col0,
             unit
           });
+          console.log(`  Added charge: ${chargeType} = R${chargeAmount} ${unit}`);
         } else {
           console.warn(`Skipping invalid charge amount for "${col0}":`, col1);
         }
@@ -694,7 +717,22 @@ export default function PdfImportDialog() {
     
     // Add last tariff
     if (currentTariff && (currentTariff.blocks.length > 0 || currentTariff.charges.length > 0 || currentTariff.touPeriods.length > 0)) {
+      console.log(`Saving final tariff: ${currentTariff.name} (${currentTariff.blocks.length} blocks, ${currentTariff.charges.length} charges)`);
       tariffStructures.push(currentTariff);
+    }
+    
+    // Log extraction summary
+    console.log(`\n=== Extraction Summary for ${municipalityName} ===`);
+    console.log(`Tariff headers found: ${tariffHeadersFound}`);
+    console.log(`Total blocks parsed: ${blocksFound}`);
+    console.log(`Total charges parsed: ${chargesFound}`);
+    console.log(`Final tariff structures: ${tariffStructures.length}`);
+    console.log(`NERSA increase: ${nersaIncrease}%`);
+    
+    if (tariffStructures.length === 0) {
+      console.error(`❌ No tariff structures created for ${municipalityName}`);
+      console.error(`This usually means the sheet format is different from expected.`);
+      console.error(`Check the first 10 rows above to see the actual sheet structure.`);
     }
     
     return {
