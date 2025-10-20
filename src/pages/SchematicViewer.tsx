@@ -211,8 +211,18 @@ export default function SchematicViewer() {
     // Reset image loaded state when converted image changes
     if (convertedImageUrl) {
       setImageLoaded(false);
+      console.log('🔄 Converted image URL changed, resetting imageLoaded to false');
     }
   }, [convertedImageUrl]);
+
+  // Ensure markers show when extractedMeters updates
+  useEffect(() => {
+    if (extractedMeters.length > 0) {
+      console.log('📍 Extracted meters updated:', extractedMeters.length, 'meters');
+      console.log('🖼️ Image loaded state:', imageLoaded);
+      console.log('🎯 First meter position:', extractedMeters[0]?.position);
+    }
+  }, [extractedMeters, imageLoaded]);
 
   const getMeterColor = (type: string) => {
     switch (type) {
@@ -395,14 +405,24 @@ export default function SchematicViewer() {
                                 className="max-w-none pointer-events-none select-none"
                                 style={{ maxWidth: '100%', height: 'auto', display: 'block' }}
                                 draggable={false}
-                                onLoad={() => {
-                                  console.log('Image loaded, dimensions:', imageRef.current?.naturalWidth, imageRef.current?.naturalHeight);
+                                onLoad={(e) => {
+                                  const img = e.target as HTMLImageElement;
+                                  console.log('✅ Image loaded successfully');
+                                  console.log('   Dimensions:', img.naturalWidth, 'x', img.naturalHeight);
+                                  console.log('   Extracted meters count:', extractedMeters.length);
                                   setImageLoaded(true);
+                                }}
+                                onError={(e) => {
+                                  console.error('❌ Image failed to load:', e);
                                 }}
                               />
                               
                               {/* Extracted Meter Markers - positioned relative to image */}
-                              {imageLoaded && extractedMeters.map((meter, index) => {
+                              {imageLoaded ? (
+                                extractedMeters.map((meter, index) => {
+                                  if (index === 0) {
+                                    console.log('🎨 Rendering', extractedMeters.length, 'meter markers');
+                                  }
                                 const markerSize = selectedMeterIndex === index ? 40 : 32;
                                 const isDraggingThis = draggedMeterIndex === index;
                                 
@@ -472,7 +492,14 @@ export default function SchematicViewer() {
                                     </div>
                                   </div>
                                 );
-                              })}
+                              })
+                              ) : (
+                                extractedMeters.length > 0 && (
+                                  <div className="absolute top-4 left-4 bg-yellow-500 text-white px-3 py-2 rounded text-sm">
+                                    ⚠️ Image not loaded yet - {extractedMeters.length} meters waiting to display
+                                  </div>
+                                )
+                              )}
                             </div>
                           ) : (
                             <div className="flex items-center justify-center p-16">
