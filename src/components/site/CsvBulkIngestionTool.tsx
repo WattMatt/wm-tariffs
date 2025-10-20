@@ -18,14 +18,32 @@ import {
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Upload, Play, Download, Trash2, FileText, CheckCircle2, AlertCircle } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+import { Upload, Play, Download, Trash2, FileText, CheckCircle2, AlertCircle, Eye, Settings2 } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { Input } from "@/components/ui/input";
 
 interface CsvBulkIngestionToolProps {
   siteId: string;
   onDataChange?: () => void;
+}
+
+interface CsvPreview {
+  headers: string[];
+  rows: string[][];
+  detectedColumns: {
+    dateColumn: number;
+    timeColumn?: number;
+    valueColumn: number;
+    metadataColumns: number[];
+  };
 }
 
 interface FileItem {
@@ -41,6 +59,8 @@ interface FileItem {
   duplicatesSkipped?: number;
   parseErrors?: number;
   isNew?: boolean;
+  preview?: CsvPreview;
+  metadataFieldNames?: Record<number, string>;
 }
 
 export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIngestionToolProps) {
@@ -51,6 +71,8 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
   const [dateFormat, setDateFormat] = useState<string>("auto");
   const [isProcessing, setIsProcessing] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("upload");
+  const [previewingFile, setPreviewingFile] = useState<FileItem | null>(null);
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -124,11 +146,50 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
     }
   };
 
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const parseCsvPreview = async (file: File, sep: string): Promise<CsvPreview | null> => {
+    try {
+      const text = await file.text();
+      const lines = text.split('\n').filter(l => l.trim()).slice(0, 10); // First 10 lines
+      
+      const separatorChar = sep === "tab" ? "\t" : 
+                           sep === "comma" ? "," : 
+                           sep === "semicolon" ? ";" : 
+                           sep === "space" ? " " : "\t";
+      
+      const rows = lines.map(line => {
+        if (separatorChar === " ") {
+          return line.split(/\s+/).filter(col => col.trim());
+        }
+        const escapedSep = separatorChar.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const splitRegex = new RegExp(escapedSep + '+');
+        return line.split(splitRegex).filter(col => col.trim());
+      });
+      
+      const headers = rows[0] || [];
+      const dataRows = rows.slice(1);
+      
+      // Auto-detect columns
+      const detectedColumns = {
+        dateColumn: 0,
+        timeColumn: headers.length > 2 ? 1 : undefined,
+        valueColumn: headers.length > 2 ? 2 : 1,
+        metadataColumns: Array.from({ length: Math.max(0, headers.length - 3) }, (_, i) => i + 3)
+      };
+      
+      return { headers, rows: dataRows, detectedColumns };
+    } catch (err) {
+      console.error("Preview parse error:", err);
+      return null;
+    }
+  };
+
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = event.target.files;
     if (!selectedFiles) return;
 
-    const newFiles: FileItem[] = Array.from(selectedFiles).map((file) => {
+    const newFiles: FileItem[] = [];
+
+    for (const file of Array.from(selectedFiles)) {
       const fileName = file.name.replace(/\.csv$/i, "");
       const numberMatch = fileName.match(/\d+/);
       const fileNumber = numberMatch ? numberMatch[0] : null;
@@ -151,16 +212,21 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
         );
       });
 
-      return {
+      // Generate preview
+      const preview = await parseCsvPreview(file, separator);
+
+      newFiles.push({
         file,
         name: file.name,
         meterId: matchedMeter?.id || null,
         meterNumber: matchedMeter?.meter_number,
         size: file.size,
         status: "pending" as const,
-        isNew: true
-      };
-    });
+        isNew: true,
+        preview,
+        metadataFieldNames: {}
+      });
+    }
 
     setFiles(prev => [...prev, ...newFiles]);
     event.target.value = "";
@@ -171,6 +237,35 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
     setFiles(prev =>
       prev.map((f, i) => i === index ? { ...f, meterId, meterNumber: meter?.meter_number } : f)
     );
+  };
+
+  const updateMetadataFieldName = (fileIndex: number, columnIndex: number, fieldName: string) => {
+    setFiles(prev =>
+      prev.map((f, i) => 
+        i === fileIndex 
+          ? { 
+              ...f, 
+              metadataFieldNames: { 
+                ...f.metadataFieldNames, 
+                [columnIndex]: fieldName 
+              } 
+            } 
+          : f
+      )
+    );
+  };
+
+  const handlePreviewFile = async (fileItem: FileItem) => {
+    setPreviewingFile(fileItem);
+    
+    if (!fileItem.preview && fileItem.file) {
+      setIsLoadingPreview(true);
+      const preview = await parseCsvPreview(fileItem.file, separator);
+      setFiles(prev =>
+        prev.map(f => f.name === fileItem.name ? { ...f, preview } : f)
+      );
+      setIsLoadingPreview(false);
+    }
   };
 
   const removeFile = (index: number) => {
@@ -438,6 +533,20 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                   className="mt-1 block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 disabled:opacity-50"
                 />
               </div>
+              <div>
+                <Label>Column Separator (for preview)</Label>
+                <Select value={separator} onValueChange={setSeparator}>
+                  <SelectTrigger className="bg-background mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="tab">Tab</SelectItem>
+                    <SelectItem value="comma">Comma (,)</SelectItem>
+                    <SelectItem value="semicolon">Semicolon (;)</SelectItem>
+                    <SelectItem value="space">Space</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             {files.filter(f => f.status === "pending").length === 0 ? (
@@ -462,46 +571,151 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                 {files.filter(f => f.status === "pending").map((fileItem, index) => {
                   const actualIndex = files.indexOf(fileItem);
                   return (
-                    <Card key={actualIndex} className="border-border/50">
-                      <CardContent className="pt-4">
-                        <div className="flex items-center gap-3">
-                          {getStatusIcon(fileItem.status)}
-                          
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{fileItem.name}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {fileItem.size ? `${(fileItem.size / 1024).toFixed(1)} KB` : 'Unknown size'}
-                            </p>
-                          </div>
+                    <Collapsible key={actualIndex}>
+                      <Card className="border-border/50">
+                        <CardContent className="pt-4">
+                          <div className="flex items-center gap-3">
+                            {getStatusIcon(fileItem.status)}
+                            
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{fileItem.name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {fileItem.size ? `${(fileItem.size / 1024).toFixed(1)} KB` : 'Unknown size'}
+                                {fileItem.preview && ` • ${fileItem.preview.headers.length} columns detected`}
+                              </p>
+                            </div>
 
-                          <Select
-                            value={fileItem.meterId || ""}
-                            onValueChange={(value) => updateFileMapping(actualIndex, value)}
-                            disabled={isProcessing}
-                          >
-                            <SelectTrigger className="w-[250px]">
-                              <SelectValue placeholder="Select meter..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {meters.map((meter) => (
-                                <SelectItem key={meter.id} value={meter.id}>
-                                  {getMeterLabel(meter)}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                            <Select
+                              value={fileItem.meterId || ""}
+                              onValueChange={(value) => updateFileMapping(actualIndex, value)}
+                              disabled={isProcessing}
+                            >
+                              <SelectTrigger className="w-[250px]">
+                                <SelectValue placeholder="Select meter..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {meters.map((meter) => (
+                                  <SelectItem key={meter.id} value={meter.id}>
+                                    {getMeterLabel(meter)}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
 
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => removeFile(actualIndex)}
-                            disabled={isProcessing}
-                          >
-                            <Trash2 className="w-4 h-4" />
+                            <CollapsibleTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                onClick={() => handlePreviewFile(fileItem)}
+                              >
+                                <Settings2 className="w-4 h-4" />
+                              </Button>
+                            </CollapsibleTrigger>
+
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => removeFile(actualIndex)}
+                              disabled={isProcessing}
+                            >
+                              <Trash2 className="w-4 h-4" />
                           </Button>
                         </div>
                       </CardContent>
+                      
+                      <CollapsibleContent>
+                        <CardContent className="pt-0 border-t">
+                          {isLoadingPreview ? (
+                            <div className="py-4 text-center text-sm text-muted-foreground">
+                              Loading preview...
+                            </div>
+                          ) : fileItem.preview ? (
+                            <div className="space-y-3 py-4">
+                              <div className="flex items-center gap-2 text-sm font-medium">
+                                <Eye className="w-4 h-4" />
+                                Data Structure Preview
+                              </div>
+                              
+                              <ScrollArea className="h-48 rounded-md border">
+                                <div className="p-2">
+                                  <table className="w-full text-xs">
+                                    <thead>
+                                      <tr className="border-b">
+                                        {fileItem.preview.headers.map((header, idx) => (
+                                          <th key={idx} className="px-2 py-1 text-left font-medium bg-muted/50">
+                                            <div className="space-y-1">
+                                              <div className="truncate max-w-[120px]">{header}</div>
+                                              <Badge variant="outline" className="text-[10px] h-4">
+                                                {idx === fileItem.preview!.detectedColumns.dateColumn ? "Date" :
+                                                 idx === fileItem.preview!.detectedColumns.timeColumn ? "Time" :
+                                                 idx === fileItem.preview!.detectedColumns.valueColumn ? "kWh" :
+                                                 "Metadata"}
+                                              </Badge>
+                                            </div>
+                                          </th>
+                                        ))}
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {fileItem.preview.rows.slice(0, 5).map((row, rowIdx) => (
+                                        <tr key={rowIdx} className="border-b">
+                                          {row.map((cell, cellIdx) => (
+                                            <td key={cellIdx} className="px-2 py-1 truncate max-w-[120px]">
+                                              {cell}
+                                            </td>
+                                          ))}
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </ScrollArea>
+                              
+                              {fileItem.preview.detectedColumns.metadataColumns.length > 0 && (
+                                <div className="space-y-2">
+                                  <Label className="text-xs">Metadata Field Names (optional - for reconciliation)</Label>
+                                  <div className="grid grid-cols-2 gap-2">
+                                    {fileItem.preview.detectedColumns.metadataColumns.map((colIdx) => (
+                                      <div key={colIdx} className="space-y-1">
+                                        <Label className="text-[10px] text-muted-foreground">
+                                          Column {colIdx + 1}: {fileItem.preview!.headers[colIdx]}
+                                        </Label>
+                                        <Input
+                                          placeholder="e.g., Active_Energy, Reactive_Power"
+                                          value={fileItem.metadataFieldNames?.[colIdx] || ""}
+                                          onChange={(e) => updateMetadataFieldName(actualIndex, colIdx, e.target.value)}
+                                          className="h-7 text-xs"
+                                        />
+                                      </div>
+                                    ))}
+                                  </div>
+                                  <p className="text-[10px] text-muted-foreground">
+                                    These names will be used to identify fields during reconciliation
+                                  </p>
+                                </div>
+                              )}
+                              
+                              <div className="rounded-md bg-muted/50 p-3 text-xs space-y-1">
+                                <p className="font-medium">What will be stored:</p>
+                                <ul className="list-disc list-inside space-y-0.5 text-muted-foreground">
+                                  <li>Date & Time → reading_timestamp</li>
+                                  <li>kWh Value → kwh_value</li>
+                                  <li>File name → metadata.source_file</li>
+                                  {fileItem.preview.detectedColumns.metadataColumns.length > 0 && (
+                                    <li>All other columns → metadata.imported_fields (for reconciliation)</li>
+                                  )}
+                                </ul>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="py-4 text-center text-sm text-muted-foreground">
+                              No preview available
+                            </div>
+                          )}
+                        </CardContent>
+                      </CollapsibleContent>
                     </Card>
+                  </Collapsible>
                   );
                 })}
               </div>
@@ -509,125 +723,158 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
           </TabsContent>
 
           <TabsContent value="parse" className="flex-1 overflow-y-auto space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-4 border-b">
-              <div>
-                <Label>Column Separator</Label>
-                <Select value={separator} onValueChange={setSeparator} disabled={isProcessing}>
-                  <SelectTrigger className="bg-background mt-1">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="tab">Tab</SelectItem>
-                    <SelectItem value="comma">Comma (,)</SelectItem>
-                    <SelectItem value="semicolon">Semicolon (;)</SelectItem>
-                    <SelectItem value="space">Space</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Date Format</Label>
-                <Select value={dateFormat} onValueChange={setDateFormat} disabled={isProcessing}>
-                  <SelectTrigger className="bg-background mt-1">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="auto">Auto-detect</SelectItem>
-                    <SelectItem value="YYYY-MM-DD">YYYY-MM-DD</SelectItem>
-                    <SelectItem value="DD/MM/YYYY">DD/MM/YYYY</SelectItem>
-                    <SelectItem value="MM/DD/YYYY">MM/DD/YYYY</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+            <Card className="bg-muted/30">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Settings2 className="w-4 h-4" />
+                  Parsing Configuration
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label>Column Separator</Label>
+                    <Select value={separator} onValueChange={setSeparator} disabled={isProcessing}>
+                      <SelectTrigger className="bg-background mt-1">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="tab">Tab</SelectItem>
+                        <SelectItem value="comma">Comma (,)</SelectItem>
+                        <SelectItem value="semicolon">Semicolon (;)</SelectItem>
+                        <SelectItem value="space">Space</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Date Format</Label>
+                    <Select value={dateFormat} onValueChange={setDateFormat} disabled={isProcessing}>
+                      <SelectTrigger className="bg-background mt-1">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="auto">Auto-detect</SelectItem>
+                        <SelectItem value="YYYY-MM-DD">YYYY-MM-DD</SelectItem>
+                        <SelectItem value="DD/MM/YYYY">DD/MM/YYYY</SelectItem>
+                        <SelectItem value="MM/DD/YYYY">MM/DD/YYYY</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="rounded-md bg-background p-3 text-xs text-muted-foreground">
+                  <p className="font-medium mb-1">Metadata Preservation:</p>
+                  <p>All columns beyond Date, Time, and kWh will be automatically captured as metadata fields and preserved for reconciliation analysis.</p>
+                </div>
+              </CardContent>
+            </Card>
 
-            {files.filter(f => f.status !== "pending").length === 0 ? (
+            {files.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
                 <FileText className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                <p>No uploaded files yet. Upload files first.</p>
+                <p>No files available. Upload files first.</p>
               </div>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="font-semibold text-sm">
-                    {files.filter(f => f.status === "uploaded" || f.status === "error").length} file(s) ready to parse
+                    All Files ({files.length} total)
                   </h3>
                   <Button
                     onClick={handleParseAll}
                     disabled={isProcessing || files.filter(f => f.status === "uploaded" || f.status === "error").length === 0}
                   >
                     <Play className="w-4 h-4 mr-2" />
-                    Parse All
+                    Parse All Ready Files
                   </Button>
                 </div>
 
-                {files.filter(f => f.status !== "pending").map((fileItem, index) => {
-                  const actualIndex = files.indexOf(fileItem);
-                  return (
-                    <Card key={actualIndex} className="border-border/50">
-                      <CardContent className="pt-4">
-                        <div className="flex items-center gap-3">
-                          {getStatusIcon(fileItem.status)}
-                          
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{fileItem.name}</p>
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                              <span>{fileItem.meterNumber}</span>
-                              {fileItem.size && <span>• {(fileItem.size / 1024).toFixed(1)} KB</span>}
-                            </div>
+                {files.map((fileItem, index) => (
+                  <Card key={index} className="border-border/50">
+                    <CardContent className="pt-4">
+                      <div className="flex items-center gap-3">
+                        {getStatusIcon(fileItem.status)}
+                        
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{fileItem.name}</p>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <span>{fileItem.meterNumber || "No meter assigned"}</span>
+                            {fileItem.size && <span>• {(fileItem.size / 1024).toFixed(1)} KB</span>}
+                            {fileItem.preview && <span>• {fileItem.preview.headers.length} cols</span>}
                           </div>
+                          {fileItem.errorMessage && (
+                            <p className="text-xs text-destructive mt-1">{fileItem.errorMessage}</p>
+                          )}
+                        </div>
 
-                          <div className="flex items-center gap-2">
-                            {fileItem.status === "success" && (
+                        <div className="flex items-center gap-2">
+                          {fileItem.status === "pending" && (
+                            <Badge variant="secondary">Ready to Upload</Badge>
+                          )}
+                          
+                          {fileItem.status === "uploaded" && (
+                            <Badge variant="outline">Ready to Parse</Badge>
+                          )}
+                          
+                          {fileItem.status === "success" && (
+                            <>
                               <Badge variant="outline" className="text-green-600 border-green-600">
-                                {fileItem.readingsInserted} imported
+                                ✓ {fileItem.readingsInserted} imported
                               </Badge>
-                            )}
-                            
-                            {fileItem.status === "error" && (
-                              <Badge variant="outline" className="text-destructive border-destructive">
-                                Failed
-                              </Badge>
-                            )}
+                              {fileItem.duplicatesSkipped ? (
+                                <Badge variant="outline" className="text-amber-600 border-amber-600 text-xs">
+                                  {fileItem.duplicatesSkipped} skipped
+                                </Badge>
+                              ) : null}
+                            </>
+                          )}
+                          
+                          {fileItem.status === "error" && (
+                            <Badge variant="outline" className="text-destructive border-destructive">
+                              Failed
+                            </Badge>
+                          )}
 
-                            {fileItem.status === "parsing" && (
-                              <Badge variant="outline">Parsing...</Badge>
-                            )}
+                          {fileItem.status === "parsing" && (
+                            <Badge variant="outline">Parsing...</Badge>
+                          )}
 
-                            {(fileItem.status === "error" || fileItem.status === "uploaded") && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleRetryParse(fileItem)}
-                                disabled={isProcessing}
-                              >
-                                <Play className="w-4 h-4" />
-                              </Button>
-                            )}
+                          {(fileItem.status === "error" || fileItem.status === "uploaded") && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleRetryParse(fileItem)}
+                              disabled={isProcessing}
+                              title="Parse this file"
+                            >
+                              <Play className="w-4 h-4" />
+                            </Button>
+                          )}
 
-                            {fileItem.path && (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => handleDownload(fileItem)}
-                              >
-                                <Download className="w-4 h-4" />
-                              </Button>
-                            )}
-
+                          {fileItem.path && (
                             <Button
                               size="sm"
                               variant="ghost"
-                              onClick={() => handleDeleteFile(fileItem, actualIndex)}
-                              disabled={isProcessing}
+                              onClick={() => handleDownload(fileItem)}
+                              title="Download file"
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Download className="w-4 h-4" />
                             </Button>
-                          </div>
+                          )}
+
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleDeleteFile(fileItem, index)}
+                            disabled={isProcessing}
+                            title="Delete file"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
                         </div>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
             )}
           </TabsContent>
