@@ -490,17 +490,24 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
       setIsProcessing(true);
       const pathsToDelete = Array.from(selectedFiles);
       
-      const { error } = await supabase.storage
+      console.log('Attempting to delete paths:', pathsToDelete);
+      
+      const { data, error } = await supabase.storage
         .from('meter-csvs')
         .remove(pathsToDelete);
 
-      if (error) throw error;
+      console.log('Delete response:', { data, error });
+
+      if (error) {
+        console.error('Delete error:', error);
+        throw error;
+      }
 
       // Clear selection and reload files from storage
       setSelectedFiles(new Set());
       await loadSavedFiles();
       
-      toast.success(`Deleted ${pathsToDelete.length} file(s) from storage and list`);
+      toast.success(`Deleted ${pathsToDelete.length} file(s) from storage`);
     } catch (err: any) {
       console.error("Bulk delete error:", err);
       toast.error("Bulk delete failed: " + err.message);
