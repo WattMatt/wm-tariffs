@@ -843,8 +843,8 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                       Already in Storage ({files.filter(f => !f.isNew && f.path).length} files)
                     </h3>
                   </div>
-                  <ScrollArea className="max-h-[200px] rounded-md border bg-muted/30 p-3">
-                    <div className="space-y-1">
+                  <ScrollArea className="h-[200px] rounded-md border bg-muted/30">
+                    <div className="p-3 space-y-1">
                       {files.filter(f => !f.isNew && f.path).map((fileItem, idx) => (
                         <div key={idx} className="flex items-center justify-between text-xs p-2 rounded hover:bg-background/50">
                           <div className="flex items-center gap-2 flex-1 min-w-0">
