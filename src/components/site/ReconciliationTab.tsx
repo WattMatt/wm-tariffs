@@ -49,10 +49,10 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
       // Fetch readings for each meter within date range (deduplicated by timestamp)
       const meterData = await Promise.all(
         meters.map(async (meter) => {
-          // First get distinct timestamps with their max value (in case of duplicates)
+          // Get all readings with metadata
           const { data: readings, error: readingsError } = await supabase
             .from("meter_readings")
-            .select("kwh_value, reading_timestamp")
+            .select("kwh_value, reading_timestamp, metadata")
             .eq("meter_id", meter.id)
             .gte("reading_timestamp", dateFrom.toISOString())
             .lte("reading_timestamp", dateTo.toISOString())
@@ -72,8 +72,24 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
 
           // Sum all interval readings (each represents consumption for that period)
           let totalKwh = 0;
+          const columnTotals: Record<string, number> = {};
+          
           if (uniqueReadings.length > 0) {
             totalKwh = uniqueReadings.reduce((sum, r) => sum + Number(r.kwh_value), 0);
+            
+            // Sum all numeric columns from metadata
+            uniqueReadings.forEach(reading => {
+              const importedFields = (reading.metadata as any)?.imported_fields || {};
+              Object.entries(importedFields).forEach(([key, value]) => {
+                // Skip timestamp columns and non-numeric values
+                if (key.toLowerCase().includes('time') || key.toLowerCase().includes('date')) return;
+                
+                const numValue = Number(value);
+                if (!isNaN(numValue) && value !== null && value !== '') {
+                  columnTotals[key] = (columnTotals[key] || 0) + numValue;
+                }
+              });
+            });
             
             // Debug logging
             console.log(`Meter ${meter.meter_number} (${meter.meter_type}):`, {
@@ -81,6 +97,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
               uniqueReadings: uniqueReadings.length,
               duplicatesRemoved: (readings?.length || 0) - uniqueReadings.length,
               totalKwh: totalKwh.toFixed(2),
+              columnTotals,
               firstTimestamp: uniqueReadings[0].reading_timestamp,
               lastTimestamp: uniqueReadings[uniqueReadings.length - 1].reading_timestamp
             });
@@ -91,6 +108,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
           return {
             ...meter,
             totalKwh,
+            columnTotals,
             readingsCount: uniqueReadings.length,
           };
         })
@@ -307,10 +325,22 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                         {reconciliationData.councilBulk.map((meter: any) => (
                           <div
                             key={meter.id}
-                            className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
+                            className="space-y-2 p-3 rounded-lg bg-muted/50"
                           >
-                            <span className="font-mono text-sm">{meter.meter_number}</span>
-                            <span className="font-semibold">{meter.totalKwh.toFixed(2)} kWh</span>
+                            <div className="flex items-center justify-between">
+                              <span className="font-mono text-sm font-semibold">{meter.meter_number}</span>
+                              <span className="font-semibold">{meter.totalKwh.toFixed(2)} kWh</span>
+                            </div>
+                            {meter.columnTotals && Object.keys(meter.columnTotals).length > 0 && (
+                              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border/50">
+                                {Object.entries(meter.columnTotals).map(([col, val]: [string, any]) => (
+                                  <div key={col} className="flex justify-between text-xs">
+                                    <span className="text-muted-foreground">{col}:</span>
+                                    <span className="font-mono">{Number(val).toFixed(2)}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -324,10 +354,22 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                         {reconciliationData.solarMeters.map((meter: any) => (
                           <div
                             key={meter.id}
-                            className="flex items-center justify-between p-3 rounded-lg bg-green-50 border border-green-200"
+                            className="space-y-2 p-3 rounded-lg bg-green-50 border border-green-200"
                           >
-                            <span className="font-mono text-sm">{meter.meter_number}</span>
-                            <span className="font-semibold text-green-700">{meter.totalKwh.toFixed(2)} kWh</span>
+                            <div className="flex items-center justify-between">
+                              <span className="font-mono text-sm font-semibold">{meter.meter_number}</span>
+                              <span className="font-semibold text-green-700">{meter.totalKwh.toFixed(2)} kWh</span>
+                            </div>
+                            {meter.columnTotals && Object.keys(meter.columnTotals).length > 0 && (
+                              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-green-300">
+                                {Object.entries(meter.columnTotals).map(([col, val]: [string, any]) => (
+                                  <div key={col} className="flex justify-between text-xs">
+                                    <span className="text-green-600">{col}:</span>
+                                    <span className="font-mono text-green-700">{Number(val).toFixed(2)}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -341,10 +383,22 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                         {reconciliationData.checkMeters.map((meter: any) => (
                           <div
                             key={meter.id}
-                            className="flex items-center justify-between p-3 rounded-lg bg-blue-50 border border-blue-200"
+                            className="space-y-2 p-3 rounded-lg bg-blue-50 border border-blue-200"
                           >
-                            <span className="font-mono text-sm">{meter.meter_number}</span>
-                            <span className="font-semibold text-blue-700">{meter.totalKwh.toFixed(2)} kWh</span>
+                            <div className="flex items-center justify-between">
+                              <span className="font-mono text-sm font-semibold">{meter.meter_number}</span>
+                              <span className="font-semibold text-blue-700">{meter.totalKwh.toFixed(2)} kWh</span>
+                            </div>
+                            {meter.columnTotals && Object.keys(meter.columnTotals).length > 0 && (
+                              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-blue-300">
+                                {Object.entries(meter.columnTotals).map(([col, val]: [string, any]) => (
+                                  <div key={col} className="flex justify-between text-xs">
+                                    <span className="text-blue-600">{col}:</span>
+                                    <span className="font-mono text-blue-700">{Number(val).toFixed(2)}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -373,15 +427,27 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                           return (
                             <div
                               key={meter.id}
-                              className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
+                              className="space-y-2 p-3 rounded-lg bg-muted/50"
                             >
-                              <span className="font-mono text-sm">{meter.meter_number}</span>
-                              <div className="flex items-center gap-3">
-                                <span className="font-semibold">{meter.totalKwh.toFixed(2)} kWh</span>
-                                <span className="text-xs text-muted-foreground bg-background px-2 py-1 rounded border border-border">
-                                  {percentage.toFixed(1)}%
-                                </span>
+                              <div className="flex items-center justify-between">
+                                <span className="font-mono text-sm font-semibold">{meter.meter_number}</span>
+                                <div className="flex items-center gap-3">
+                                  <span className="font-semibold">{meter.totalKwh.toFixed(2)} kWh</span>
+                                  <span className="text-xs text-muted-foreground bg-background px-2 py-1 rounded border border-border">
+                                    {percentage.toFixed(1)}%
+                                  </span>
+                                </div>
                               </div>
+                              {meter.columnTotals && Object.keys(meter.columnTotals).length > 0 && (
+                                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border/50">
+                                  {Object.entries(meter.columnTotals).map(([col, val]: [string, any]) => (
+                                    <div key={col} className="flex justify-between text-xs">
+                                      <span className="text-muted-foreground">{col}:</span>
+                                      <span className="font-mono">{Number(val).toFixed(2)}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           );
                         })}
