@@ -7,8 +7,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, Building2, Pencil, Trash2 } from "lucide-react";
+import { Plus, Building2, Pencil, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -27,6 +28,7 @@ interface Client {
   code: string;
   contact_email: string | null;
   contact_phone: string | null;
+  logo_url: string | null;
   created_at: string;
 }
 
@@ -37,6 +39,8 @@ export default function Clients() {
   const [isLoading, setIsLoading] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [deletingClientId, setDeletingClientId] = useState<string | null>(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
 
   useEffect(() => {
     fetchClients();
@@ -55,6 +59,31 @@ export default function Clients() {
     }
   };
 
+  const handleLogoUpload = async (file: File, clientId?: string) => {
+    setUploadingLogo(true);
+    
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${clientId || Date.now()}.${fileExt}`;
+    const filePath = fileName;
+
+    const { error: uploadError } = await supabase.storage
+      .from('client-logos')
+      .upload(filePath, file, { upsert: true });
+
+    setUploadingLogo(false);
+
+    if (uploadError) {
+      toast.error("Failed to upload logo");
+      return null;
+    }
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('client-logos')
+      .getPublicUrl(filePath);
+
+    return publicUrl;
+  };
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
@@ -68,6 +97,8 @@ export default function Clients() {
     };
 
     let error;
+    let clientId = editingClient?.id;
+    
     if (editingClient) {
       const { error: updateError } = await supabase
         .from("clients")
@@ -76,10 +107,24 @@ export default function Clients() {
       error = updateError;
     } else {
       const { data: { user } } = await supabase.auth.getUser();
-      const { error: insertError } = await supabase
+      const { data: newClient, error: insertError } = await supabase
         .from("clients")
-        .insert({ ...clientData, created_by: user?.id });
+        .insert({ ...clientData, created_by: user?.id })
+        .select()
+        .single();
       error = insertError;
+      clientId = newClient?.id;
+    }
+
+    // Upload logo if one was selected
+    if (!error && logoFile && clientId) {
+      const logoUrl = await handleLogoUpload(logoFile, clientId);
+      if (logoUrl) {
+        await supabase
+          .from("clients")
+          .update({ logo_url: logoUrl })
+          .eq("id", clientId);
+      }
     }
 
     setIsLoading(false);
@@ -90,6 +135,7 @@ export default function Clients() {
       toast.success(editingClient ? "Client updated successfully" : "Client created successfully");
       setIsDialogOpen(false);
       setEditingClient(null);
+      setLogoFile(null);
       fetchClients();
     }
   };
@@ -120,6 +166,7 @@ export default function Clients() {
   const handleCloseDialog = () => {
     setIsDialogOpen(false);
     setEditingClient(null);
+    setLogoFile(null);
   };
 
   return (
@@ -147,6 +194,27 @@ export default function Clients() {
                 </DialogDescription>
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="logo">Client Logo</Label>
+                  <div className="flex items-center gap-4">
+                    {(logoFile || editingClient?.logo_url) && (
+                      <Avatar className="w-16 h-16">
+                        <AvatarImage src={logoFile ? URL.createObjectURL(logoFile) : editingClient?.logo_url || ""} />
+                        <AvatarFallback><Building2 className="w-8 h-8" /></AvatarFallback>
+                      </Avatar>
+                    )}
+                    <div className="flex-1">
+                      <Input
+                        id="logo"
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => setLogoFile(e.target.files?.[0] || null)}
+                        className="cursor-pointer"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">Upload a logo for this client</p>
+                    </div>
+                  </div>
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="name">Client Name</Label>
                   <Input 
@@ -187,8 +255,8 @@ export default function Clients() {
                     defaultValue={editingClient?.contact_phone || ""}
                   />
                 </div>
-                <Button type="submit" className="w-full" disabled={isLoading}>
-                  {isLoading ? (editingClient ? "Updating..." : "Creating...") : (editingClient ? "Update Client" : "Create Client")}
+                <Button type="submit" className="w-full" disabled={isLoading || uploadingLogo}>
+                  {isLoading || uploadingLogo ? (editingClient ? "Updating..." : "Creating...") : (editingClient ? "Update Client" : "Create Client")}
                 </Button>
               </form>
             </DialogContent>
@@ -217,11 +285,10 @@ export default function Clients() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Name</TableHead>
+                    <TableHead>Client</TableHead>
                     <TableHead>Code</TableHead>
                     <TableHead>Contact Email</TableHead>
                     <TableHead>Contact Phone</TableHead>
-                    <TableHead>Created</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -232,14 +299,19 @@ export default function Clients() {
                         className="font-medium cursor-pointer hover:underline"
                         onClick={() => navigate(`/clients/${client.id}`)}
                       >
-                        {client.name}
+                        <div className="flex items-center gap-3">
+                          <Avatar className="w-10 h-10">
+                            <AvatarImage src={client.logo_url || ""} />
+                            <AvatarFallback>
+                              <Building2 className="w-5 h-5" />
+                            </AvatarFallback>
+                          </Avatar>
+                          <span>{client.name}</span>
+                        </div>
                       </TableCell>
                       <TableCell><span className="font-mono text-sm">{client.code}</span></TableCell>
                       <TableCell>{client.contact_email || "—"}</TableCell>
                       <TableCell>{client.contact_phone || "—"}</TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {new Date(client.created_at).toLocaleDateString()}
-                      </TableCell>
                       <TableCell className="text-right">
                         <div className="flex gap-2 justify-end">
                           <Button

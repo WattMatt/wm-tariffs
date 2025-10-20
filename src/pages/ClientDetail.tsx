@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { supabase } from "@/integrations/supabase/client";
 import { Plus, MapPin, ArrowLeft, Building2, Pencil } from "lucide-react";
 import { toast } from "sonner";
@@ -17,6 +18,7 @@ interface Client {
   code: string;
   contact_email: string | null;
   contact_phone: string | null;
+  logo_url: string | null;
 }
 
 interface Site {
@@ -35,6 +37,8 @@ export default function ClientDetail() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
 
   useEffect(() => {
     if (id) {
@@ -96,20 +100,56 @@ export default function ClientDetail() {
     }
   };
 
+  const handleLogoUpload = async (file: File) => {
+    if (!id) return null;
+    
+    setUploadingLogo(true);
+    
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${id}.${fileExt}`;
+    const filePath = fileName;
+
+    const { error: uploadError } = await supabase.storage
+      .from('client-logos')
+      .upload(filePath, file, { upsert: true });
+
+    setUploadingLogo(false);
+
+    if (uploadError) {
+      toast.error("Failed to upload logo");
+      return null;
+    }
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('client-logos')
+      .getPublicUrl(filePath);
+
+    return publicUrl;
+  };
+
   const handleEditClient = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
 
     const formData = new FormData(e.currentTarget);
+    const updateData: any = {
+      name: formData.get("name") as string,
+      code: formData.get("code") as string,
+      contact_email: formData.get("email") as string,
+      contact_phone: formData.get("phone") as string,
+    };
+
+    // Upload logo if one was selected
+    if (logoFile) {
+      const logoUrl = await handleLogoUpload(logoFile);
+      if (logoUrl) {
+        updateData.logo_url = logoUrl;
+      }
+    }
 
     const { error } = await supabase
       .from("clients")
-      .update({
-        name: formData.get("name") as string,
-        code: formData.get("code") as string,
-        contact_email: formData.get("email") as string,
-        contact_phone: formData.get("phone") as string,
-      })
+      .update(updateData)
       .eq("id", id);
 
     setIsLoading(false);
@@ -119,6 +159,7 @@ export default function ClientDetail() {
     } else {
       toast.success("Client updated successfully");
       setIsEditDialogOpen(false);
+      setLogoFile(null);
       fetchClient();
     }
   };
@@ -142,6 +183,12 @@ export default function ClientDetail() {
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back to Clients
             </Button>
+            <Avatar className="w-16 h-16">
+              <AvatarImage src={client.logo_url || ""} />
+              <AvatarFallback>
+                <Building2 className="w-8 h-8" />
+              </AvatarFallback>
+            </Avatar>
             <div>
               <h1 className="text-4xl font-bold mb-2">{client.name}</h1>
               <div className="flex items-center gap-4 text-sm text-muted-foreground">
@@ -198,6 +245,25 @@ export default function ClientDetail() {
             </DialogHeader>
             <form onSubmit={handleEditClient} className="space-y-4">
               <div className="space-y-2">
+                <Label htmlFor="logo">Client Logo</Label>
+                <div className="flex items-center gap-4">
+                  <Avatar className="w-16 h-16">
+                    <AvatarImage src={logoFile ? URL.createObjectURL(logoFile) : client?.logo_url || ""} />
+                    <AvatarFallback><Building2 className="w-8 h-8" /></AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1">
+                    <Input
+                      id="logo"
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => setLogoFile(e.target.files?.[0] || null)}
+                      className="cursor-pointer"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Upload a new logo (optional)</p>
+                  </div>
+                </div>
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor="name">Client Name</Label>
                 <Input 
                   id="name" 
@@ -237,8 +303,8 @@ export default function ClientDetail() {
                   defaultValue={client?.contact_phone || ""}
                 />
               </div>
-              <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? "Updating..." : "Update Client"}
+              <Button type="submit" className="w-full" disabled={isLoading || uploadingLogo}>
+                {isLoading || uploadingLogo ? "Updating..." : "Update Client"}
               </Button>
             </form>
           </DialogContent>
