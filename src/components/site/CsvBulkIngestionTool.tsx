@@ -133,14 +133,14 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
               if (file.name.endsWith('.csv')) {
                 const filePath = `${siteId}/${folder.name}/${file.name}`;
                 
-                // Check if this file has been parsed by looking for readings with this source_file
-                const { data: readingsData, error: readingsError } = await supabase
+                // Check if this file has been parsed by checking metadata->source_file
+                const { count } = await supabase
                   .from('meter_readings')
                   .select('id', { count: 'exact', head: true })
                   .eq('meter_id', folder.name)
-                  .contains('metadata', { source_file: file.name });
+                  .filter('metadata->source_file', 'eq', file.name);
 
-                const isParsed = !readingsError && (readingsData || []).length > 0;
+                const isParsed = (count ?? 0) > 0;
                 
                 filesList.push({
                   name: file.name,
@@ -149,7 +149,8 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                   meterNumber: meter?.meter_number,
                   size: file.metadata?.size,
                   status: isParsed ? "success" : "uploaded",
-                  isNew: false
+                  isNew: false,
+                  readingsInserted: isParsed ? count : undefined
                 });
               }
             }
@@ -864,15 +865,6 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                             <Badge variant="outline" className="text-[10px] shrink-0">
                               {fileItem.meterNumber || "No meter"}
                             </Badge>
-                            {fileItem.status === "success" ? (
-                              <Badge variant="outline" className="text-[10px] text-green-600 border-green-600 shrink-0">
-                                ✓ Parsed
-                              </Badge>
-                            ) : (
-                              <Badge variant="outline" className="text-[10px] text-orange-600 border-orange-600 shrink-0">
-                                Not Parsed
-                              </Badge>
-                            )}
                           </div>
                           <span className="text-muted-foreground shrink-0 ml-2">
                             {fileItem.size ? `${(fileItem.size / 1024).toFixed(1)} KB` : ''}
