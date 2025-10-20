@@ -157,16 +157,81 @@ export default function Schematics() {
     setConvertingIds(prev => new Set(prev).add(schematic.id));
     
     try {
-      toast.info("Converting PDF to image...");
+      toast.info("Converting PDF to image in browser...");
       
-      const { data, error } = await supabase.functions.invoke('convert-pdf-to-image', {
-        body: {
-          schematicId: schematic.id,
-          filePath: schematic.file_path,
-        },
-      });
+      // Download the PDF from storage
+      const { data: pdfBlob, error: downloadError } = await supabase
+        .storage
+        .from('schematics')
+        .download(schematic.file_path);
+      
+      if (downloadError || !pdfBlob) {
+        throw new Error('Failed to download PDF');
+      }
 
-      if (error) throw error;
+      // Convert blob to array buffer
+      const arrayBuffer = await pdfBlob.arrayBuffer();
+      
+      // Load PDF with PDF.js
+      const pdfjsLib = await import('pdfjs-dist');
+      pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+      
+      const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+      const pdf = await loadingTask.promise;
+      
+      // Get first page
+      const page = await pdf.getPage(1);
+      const viewport = page.getViewport({ scale: 2.0 }); // 2x for better quality
+      
+      // Create canvas
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      
+      if (!context) throw new Error('Could not get canvas context');
+      
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      
+      // Render PDF page to canvas
+      const renderContext = {
+        canvasContext: context,
+        viewport: viewport,
+      };
+      await page.render(renderContext as any).promise;
+      
+      // Convert canvas to blob
+      const imageBlob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob(
+          (blob) => {
+            if (blob) resolve(blob);
+            else reject(new Error('Failed to create blob'));
+          },
+          'image/png',
+          1.0
+        );
+      });
+      
+      // Generate unique filename for converted image
+      const imagePath = `${schematic.file_path.replace('.pdf', '')}_converted.png`;
+      
+      // Upload converted image to storage
+      const { error: uploadError } = await supabase
+        .storage
+        .from('schematics')
+        .upload(imagePath, imageBlob, {
+          contentType: 'image/png',
+          upsert: true,
+        });
+      
+      if (uploadError) throw uploadError;
+      
+      // Update schematic record with converted image path
+      const { error: updateError } = await supabase
+        .from('schematics')
+        .update({ converted_image_path: imagePath })
+        .eq('id', schematic.id);
+      
+      if (updateError) throw updateError;
 
       toast.success("PDF converted successfully!");
       fetchSchematics();

@@ -87,6 +87,7 @@ export default function SchematicViewer() {
   const [isPlacingMeter, setIsPlacingMeter] = useState(false);
   const [showQuickMeterDialog, setShowQuickMeterDialog] = useState(false);
   const [clickedPosition, setClickedPosition] = useState<{ x: number; y: number } | null>(null);
+  const [isConverting, setIsConverting] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -140,26 +141,91 @@ export default function SchematicViewer() {
   };
 
   const convertPdfToImage = async (schematicId: string, filePath: string) => {
+    console.log("Converting PDF to image in browser...");
+    setIsConverting(true);
+    
     try {
-      console.log('Auto-converting PDF to image...');
-      toast.info('Converting PDF to image for easier viewing...');
+      // Download the PDF from storage
+      const { data: pdfBlob, error: downloadError } = await supabase
+        .storage
+        .from('schematics')
+        .download(filePath);
       
-      const { data, error } = await supabase.functions.invoke('convert-pdf-to-image', {
-        body: { schematicId, filePath }
-      });
-
-      if (error) throw error;
-
-      if (data?.imageUrl) {
-        setConvertedImageUrl(data.imageUrl);
-        setImageUrl(data.imageUrl);
-        toast.success('PDF converted successfully');
-        // Refresh schematic data to get updated converted_image_path
-        fetchSchematic();
+      if (downloadError || !pdfBlob) {
+        throw new Error('Failed to download PDF');
       }
+
+      // Convert blob to array buffer
+      const arrayBuffer = await pdfBlob.arrayBuffer();
+      
+      // Load PDF with PDF.js
+      const pdfjsLib = await import('pdfjs-dist');
+      pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+      
+      const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+      const pdf = await loadingTask.promise;
+      
+      // Get first page
+      const page = await pdf.getPage(1);
+      const viewport = page.getViewport({ scale: 2.0 }); // 2x for better quality
+      
+      // Create canvas
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      
+      if (!context) throw new Error('Could not get canvas context');
+      
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      
+      // Render PDF page to canvas
+      const renderContext = {
+        canvasContext: context,
+        viewport: viewport,
+      };
+      await page.render(renderContext as any).promise;
+      
+      // Convert canvas to blob
+      const imageBlob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob(
+          (blob) => {
+            if (blob) resolve(blob);
+            else reject(new Error('Failed to create blob'));
+          },
+          'image/png',
+          1.0
+        );
+      });
+      
+      // Generate unique filename for converted image
+      const imagePath = `${filePath.replace('.pdf', '')}_converted.png`;
+      
+      // Upload converted image to storage
+      const { error: uploadError } = await supabase
+        .storage
+        .from('schematics')
+        .upload(imagePath, imageBlob, {
+          contentType: 'image/png',
+          upsert: true,
+        });
+      
+      if (uploadError) throw uploadError;
+      
+      // Update schematic record with converted image path
+      const { error: updateError } = await supabase
+        .from('schematics')
+        .update({ converted_image_path: imagePath })
+        .eq('id', schematicId);
+      
+      if (updateError) throw updateError;
+      
+      toast.success("PDF converted to image successfully!");
+      fetchSchematic();
     } catch (error) {
-      console.error('PDF conversion error:', error);
-      toast.error('Failed to convert PDF. You can still view the original PDF.');
+      console.error("PDF conversion error:", error);
+      toast.error("Failed to convert PDF. You can still view the original PDF.");
+    } finally {
+      setIsConverting(false);
     }
   };
 
