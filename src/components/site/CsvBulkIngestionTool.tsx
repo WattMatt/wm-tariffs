@@ -53,7 +53,7 @@ interface FileItem {
   meterId: string | null;
   meterNumber?: string;
   size?: number;
-  status: "pending" | "uploaded" | "parsing" | "success" | "error";
+  status: "pending" | "uploaded" | "parsing" | "success" | "error" | "duplicate";
   errorMessage?: string;
   readingsInserted?: number;
   duplicatesSkipped?: number;
@@ -61,6 +61,8 @@ interface FileItem {
   isNew?: boolean;
   preview?: CsvPreview;
   metadataFieldNames?: Record<number, string>;
+  contentHash?: string;
+  isDuplicate?: boolean;
 }
 
 export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIngestionToolProps) {
@@ -146,6 +148,13 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
     }
   };
 
+  const generateFileHash = async (file: File): Promise<string> => {
+    const buffer = await file.arrayBuffer();
+    const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  };
+
   const parseCsvPreview = async (file: File, sep: string): Promise<CsvPreview | null> => {
     try {
       const text = await file.text();
@@ -188,6 +197,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
     if (!selectedFiles) return;
 
     const newFiles: FileItem[] = [];
+    const existingHashes = new Set(files.map(f => f.contentHash).filter(Boolean));
 
     for (const file of Array.from(selectedFiles)) {
       const fileName = file.name.replace(/\.csv$/i, "");
@@ -212,6 +222,10 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
         );
       });
 
+      // Generate content hash
+      const contentHash = await generateFileHash(file);
+      const isDuplicate = existingHashes.has(contentHash);
+
       // Generate preview
       const preview = await parseCsvPreview(file, separator);
 
@@ -221,11 +235,22 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
         meterId: matchedMeter?.id || null,
         meterNumber: matchedMeter?.meter_number,
         size: file.size,
-        status: "pending" as const,
+        status: isDuplicate ? "duplicate" : "pending",
         isNew: true,
         preview,
-        metadataFieldNames: {}
+        metadataFieldNames: {},
+        contentHash,
+        isDuplicate
       });
+
+      if (!isDuplicate) {
+        existingHashes.add(contentHash);
+      }
+    }
+
+    const duplicateCount = newFiles.filter(f => f.isDuplicate).length;
+    if (duplicateCount > 0) {
+      toast.warning(`${duplicateCount} duplicate file(s) detected and skipped`);
     }
 
     setFiles(prev => [...prev, ...newFiles]);
@@ -284,13 +309,46 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
 
     for (const fileItem of pendingFiles) {
       try {
-        const filePath = `${siteId}/${fileItem.meterId}/${Date.now()}_${fileItem.name}`;
+        // Use content hash as filename to prevent duplicates
+        const filePath = `${siteId}/${fileItem.meterId}/${fileItem.contentHash}.csv`;
         
+        // Check if file already exists
+        const { data: existingFile } = await supabase.storage
+          .from('meter-csvs')
+          .list(`${siteId}/${fileItem.meterId}`, {
+            search: `${fileItem.contentHash}.csv`
+          });
+
+        if (existingFile && existingFile.length > 0) {
+          setFiles(prev =>
+            prev.map(f =>
+              f.name === fileItem.name && f.isNew
+                ? { ...f, status: "duplicate", path: filePath, isNew: false }
+                : f
+            )
+          );
+          toast.info(`${fileItem.meterNumber}: Already exists, skipped`);
+          continue;
+        }
+
         const { error: uploadError } = await supabase.storage
           .from('meter-csvs')
-          .upload(filePath, fileItem.file!);
+          .upload(filePath, fileItem.file!, { upsert: false });
 
-        if (uploadError) throw uploadError;
+        if (uploadError) {
+          if (uploadError.message.includes('already exists')) {
+            setFiles(prev =>
+              prev.map(f =>
+                f.name === fileItem.name && f.isNew
+                  ? { ...f, status: "duplicate", path: filePath, isNew: false }
+                  : f
+              )
+            );
+            toast.info(`${fileItem.meterNumber}: Already exists, skipped`);
+            continue;
+          }
+          throw uploadError;
+        }
 
         setFiles(prev =>
           prev.map(f =>
@@ -317,9 +375,46 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
     setActiveTab("parse");
   };
 
+  const handleCleanupDuplicates = async () => {
+    try {
+      setIsProcessing(true);
+      toast.info("Scanning for duplicate files...");
+
+      const filesByHash: Record<string, FileItem[]> = {};
+      
+      // Group files by content hash (filename without extension)
+      files.filter(f => f.path).forEach(file => {
+        const hash = file.path!.split('/').pop()?.replace('.csv', '') || '';
+        if (!filesByHash[hash]) filesByHash[hash] = [];
+        filesByHash[hash].push(file);
+      });
+
+      let deletedCount = 0;
+      for (const [hash, duplicates] of Object.entries(filesByHash)) {
+        if (duplicates.length > 1) {
+          // Keep only the first file, delete the rest
+          for (let i = 1; i < duplicates.length; i++) {
+            const { error } = await supabase.storage
+              .from('meter-csvs')
+              .remove([duplicates[i].path!]);
+            
+            if (!error) deletedCount++;
+          }
+        }
+      }
+
+      await loadSavedFiles();
+      toast.success(`Cleaned up ${deletedCount} duplicate file(s)`);
+    } catch (err: any) {
+      toast.error("Cleanup failed");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const handleParseAll = async () => {
     const uploadedFiles = files.filter(f => 
-      (f.status === "uploaded" || f.status === "error") && f.path
+      (f.status === "uploaded" || f.status === "error") && f.path && !f.isDuplicate
     );
     
     if (uploadedFiles.length === 0) {
@@ -497,6 +592,8 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
 
   const getStatusIcon = (status: string) => {
     switch (status) {
+      case "duplicate":
+        return <Badge variant="outline" className="gap-1"><AlertCircle className="h-3 w-3" />Duplicate</Badge>;
       case "success":
         return <CheckCircle2 className="w-4 h-4 text-green-600" />;
       case "error":
@@ -806,17 +903,28 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
               </div>
             ) : (
               <div className="space-y-4">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <h3 className="font-semibold text-sm">
                     All Files ({files.length} total)
                   </h3>
-                  <Button
-                    onClick={handleParseAll}
-                    disabled={isProcessing || files.filter(f => f.status === "uploaded" || f.status === "error").length === 0}
-                  >
-                    <Play className="w-4 h-4 mr-2" />
-                    Parse All Ready Files
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={handleCleanupDuplicates}
+                      disabled={isProcessing}
+                      variant="outline"
+                      size="sm"
+                    >
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Clean Duplicates
+                    </Button>
+                    <Button
+                      onClick={handleParseAll}
+                      disabled={isProcessing || files.filter(f => f.status === "uploaded" || f.status === "error").length === 0}
+                    >
+                      <Play className="w-4 h-4 mr-2" />
+                      Parse All Ready Files
+                    </Button>
+                  </div>
                 </div>
 
                 {files.map((fileItem, index) => (
