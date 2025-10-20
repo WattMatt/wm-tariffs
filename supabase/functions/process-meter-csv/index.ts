@@ -19,6 +19,9 @@ Deno.serve(async (req) => {
 
     console.log(`Processing CSV for meter ${meterId} from ${filePath} with separator "${separator}" and dateFormat "${dateFormat}"`);
 
+    // Extract filename from path
+    const fileName = filePath.split('/').pop() || 'unknown.csv';
+
     // Download CSV from storage
     const { data: fileData, error: downloadError } = await supabase.storage
       .from('meter-csvs')
@@ -37,6 +40,20 @@ Deno.serve(async (req) => {
     
     // Log first few lines for debugging
     console.log('First 3 lines:', lines.slice(0, 3));
+
+    // Parse header to identify all columns
+    let headerColumns: string[] = [];
+    if (lines.length > 0) {
+      const headerLine = lines[0].trim();
+      if (separator === ' ') {
+        headerColumns = headerLine.split(/\s+/).filter(col => col.trim());
+      } else {
+        const escapedSeparator = separator.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const splitRegex = new RegExp(escapedSeparator + '+');
+        headerColumns = headerLine.split(splitRegex).filter(col => col.trim());
+      }
+      console.log(`Header columns (${headerColumns.length}):`, headerColumns);
+    }
 
     // Get existing timestamps to avoid duplicates
     const { data: existingReadings } = await supabase
@@ -88,6 +105,7 @@ Deno.serve(async (req) => {
       try {
         // Handle different column layouts
         let dateStr, timeStr, valueStr;
+        const extraFields: Record<string, any> = {};
         
         if (columns.length === 2) {
           // Format: DateTime Value
@@ -95,10 +113,21 @@ Deno.serve(async (req) => {
           valueStr = columns[1]?.trim()?.replace(',', '.');
           timeStr = null;
         } else {
-          // Format: Date Time Value (most common)
+          // Format: Date Time Value [Extra Columns...]
           dateStr = columns[0]?.trim();
           timeStr = columns[1]?.trim();
           valueStr = columns[2]?.trim()?.replace(',', '.');
+          
+          // Capture all extra columns beyond the first 3
+          for (let colIdx = 3; colIdx < columns.length; colIdx++) {
+            const colValue = columns[colIdx]?.trim();
+            if (colValue && colValue !== '' && colValue !== '-') {
+              const colName = headerColumns[colIdx] || `Column_${colIdx + 1}`;
+              // Try to parse as number, otherwise store as string
+              const numValue = parseFloat(colValue.replace(',', '.'));
+              extraFields[colName] = isNaN(numValue) ? colValue : numValue;
+            }
+          }
         }
 
         if (!dateStr || !valueStr) continue;
@@ -194,10 +223,22 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        // Build metadata object
+        const metadata: any = {
+          source_file: fileName,
+          imported_at: new Date().toISOString(),
+        };
+        
+        // Only add imported_fields if there are extra columns
+        if (Object.keys(extraFields).length > 0) {
+          metadata.imported_fields = extraFields;
+        }
+
         readings.push({
           meter_id: meterId,
           reading_timestamp: isoTimestamp,
           kwh_value: value,
+          metadata: metadata,
         });
       } catch (err: any) {
         if (errors.length < 5) errors.push(`Line ${i + 1}: ${err?.message || String(err)}`);

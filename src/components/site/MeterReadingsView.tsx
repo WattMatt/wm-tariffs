@@ -172,17 +172,17 @@ export default function MeterReadingsView({ isOpen, onClose, meterId, meterNumbe
           <div className="space-y-4">
             <div className="overflow-x-auto">
               <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Timestamp</TableHead>
-                    <TableHead>kWh Value</TableHead>
-                    {getMetadataColumns().slice(0, 5).map(col => (
-                      <TableHead key={col}>{col}</TableHead>
-                    ))}
-                    <TableHead>Source</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Timestamp</TableHead>
+                      <TableHead>kWh Value</TableHead>
+                      {getMetadataColumns().map(col => (
+                        <TableHead key={col}>{col}</TableHead>
+                      ))}
+                      <TableHead>Source</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
                 <TableBody>
                   {readings.map((reading) => (
                     <TableRow key={reading.id}>
@@ -213,7 +213,7 @@ export default function MeterReadingsView({ isOpen, onClose, meterId, meterNumbe
                           <span className="font-mono">{reading.kwh_value.toFixed(3)}</span>
                         )}
                       </TableCell>
-                      {getMetadataColumns().slice(0, 5).map(col => (
+                      {getMetadataColumns().map(col => (
                         <TableCell key={col} className="text-sm">
                           {reading.metadata?.imported_fields?.[col] || "—"}
                         </TableCell>
