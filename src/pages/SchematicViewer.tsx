@@ -495,7 +495,7 @@ export default function SchematicViewer() {
               <Edit className="w-4 h-4 mr-2" />
               {editMode ? "View Mode" : "Edit Mode"}
             </Button>
-            {!editMode && extractedMeters.length === 0 && (
+            {!editMode && (
               <>
                 <div className="text-xs text-muted-foreground">
                   Zoom: {Math.round(zoom * 100)}%
@@ -543,17 +543,34 @@ export default function SchematicViewer() {
                 {/* Main Schematic View */}
                 <div className={meterPositions.length > 0 ? "grid grid-cols-[1fr_400px] gap-4" : ""}>
                   {/* Schematic with markers */}
-                  <div 
-                    ref={containerRef}
-                    className="relative overflow-hidden bg-muted/20 rounded-lg border-2 border-border/50"
-                    style={{ 
-                      minHeight: '700px',
-                      cursor: isPlacingMeter ? 'crosshair' : 'default'
-                    }}
-                    onClick={handleSchematicClick}
-                  >
+                  <div className="space-y-2">
+                    {/* Help text */}
+                    {!isPlacingMeter && (
+                      <div className="text-xs text-muted-foreground text-center py-1 bg-muted/30 rounded">
+                        💡 Scroll to zoom • Click and drag to pan
+                      </div>
+                    )}
+                    <div 
+                      ref={containerRef}
+                      className="relative overflow-hidden bg-muted/20 rounded-lg border-2 border-border/50"
+                      style={{ 
+                        minHeight: '700px',
+                        cursor: isPlacingMeter ? 'crosshair' : isDragging ? 'grabbing' : 'grab'
+                      }}
+                      onClick={handleSchematicClick}
+                      onWheel={handleWheel}
+                      onMouseDown={handleMouseDown}
+                      onMouseMove={handleMouseMove}
+                      onMouseUp={handleMouseUp}
+                      onMouseLeave={handleMouseLeave}
+                    >
                     <div 
                       className="absolute inset-0 flex items-center justify-center"
+                      style={{
+                        transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+                        transformOrigin: 'center center',
+                        transition: isDragging ? 'none' : 'transform 0.1s ease-out'
+                      }}
                     >
                       <div className="relative">
                         {/* Show converted image or original image */}
@@ -833,6 +850,7 @@ export default function SchematicViewer() {
                       </Card>
                     </div>
                   )}
+                  </div>
                 </div>
               </div>
             )}
