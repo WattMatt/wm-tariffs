@@ -53,37 +53,42 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
         const data = results.data as any[][];
         console.log('✅ CSV parsed. Total rows:', data.length);
         
-        // Auto-detect header row by finding first row with text
+        // Smart header detection: check if first data row looks like actual headers
         let headerRowIndex = 0;
-        for (let i = 0; i < Math.min(5, data.length); i++) {
-          const row = data[i];
-          if (row.some((cell: any) => typeof cell === 'string' && cell.trim().length > 0)) {
-            headerRowIndex = i;
-            break;
+        let dataStartIndex = 1;
+        
+        // Check first few rows to find the real headers
+        for (let i = 0; i < Math.min(3, data.length); i++) {
+          const currentRow = data[i];
+          const nextRow = data[i + 1];
+          
+          if (currentRow && nextRow) {
+            // If current row has text like "Time", "P1 (kWh)" and next row has timestamps/numbers
+            const currentHasTimeHeader = currentRow.some((cell: any) => 
+              typeof cell === 'string' && cell.toLowerCase().trim() === 'time'
+            );
+            const nextHasTimestamp = nextRow.some((cell: any) => 
+              typeof cell === 'string' && /\d{4}-\d{2}-\d{2}/.test(cell)
+            );
+            
+            if (currentHasTimeHeader && nextHasTimestamp) {
+              headerRowIndex = i;
+              dataStartIndex = i + 1;
+              console.log('✨ Real headers found at row:', i);
+              break;
+            }
           }
         }
-        console.log('📋 Header row detected at index:', headerRowIndex);
 
         const headers = data[headerRowIndex];
-        console.log('📊 Headers found:', headers);
-        console.log('📊 Number of columns:', headers.length);
+        console.log('📊 Headers:', headers);
         
-        const dataRows = data.slice(headerRowIndex + 1).filter(row => row.some((cell: any) => cell !== null && cell !== ''));
-        console.log('📈 Data rows after filtering:', dataRows.length);
+        const dataRows = data.slice(dataStartIndex).filter(row => 
+          row.some((cell: any) => cell !== null && cell !== '' && cell !== undefined)
+        );
+        console.log('📈 Data rows:', dataRows.length);
         
-        // Create preview (first 10 rows)
         const preview = dataRows.slice(0, 10);
-        console.log('👁️ Preview rows created:', preview.length);
-
-        // Log each column with sample data
-        headers.forEach((header: string, idx: number) => {
-          const sampleValues = preview.map(row => row[idx]).filter(v => v != null);
-          console.log(`🔍 Column ${idx}: "${header}"`, {
-            samples: sampleValues.slice(0, 3),
-            totalNonNull: sampleValues.length,
-            hasNumeric: sampleValues.some(v => !isNaN(parseFloat(v)))
-          });
-        });
 
         setCsvData({
           headers,
@@ -91,42 +96,39 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
           preview,
         });
         
-        // Auto-detect timestamp column - prioritize exact matches first
+        // Auto-detect timestamp column
         const timeColumnIndex = headers.findIndex((h: string) => {
+          if (!h) return false;
           const lower = h.toLowerCase().trim();
-          return lower === 'time' || 
-                 lower === 'timestamp' || 
-                 lower === 'date' ||
-                 lower.includes('time') || 
-                 lower.includes('date');
+          return lower === 'time' || lower === 'timestamp' || lower === 'date';
         });
+        
         if (timeColumnIndex >= 0) {
-          console.log('⏰ Auto-detected timestamp column:', headers[timeColumnIndex], 'at index', timeColumnIndex);
+          console.log('⏰ Timestamp column:', headers[timeColumnIndex]);
           setTimestampColumn(headers[timeColumnIndex]);
-        } else {
-          console.warn('⚠️ No timestamp column auto-detected');
         }
 
-        // Auto-detect primary kWh column - look for P1 (kWh) first, then other kWh patterns
+        // Auto-detect kWh column - look for P1 (kWh)
         const kwhColumnIndex = headers.findIndex((h: string) => {
+          if (!h) return false;
           const lower = h.toLowerCase().trim();
-          return lower.includes('p1') && lower.includes('kwh') ||
-                 lower.includes('kwh') ||
-                 lower.includes('p1');
+          return lower.includes('kwh') || lower.includes('p1');
         });
+        
         if (kwhColumnIndex >= 0) {
-          console.log('⚡ Auto-detected kWh column:', headers[kwhColumnIndex], 'at index', kwhColumnIndex);
+          console.log('⚡ Value column:', headers[kwhColumnIndex]);
           setValueColumn(headers[kwhColumnIndex]);
-        } else {
-          console.warn('⚠️ No kWh column auto-detected');
         }
 
-        // Auto-select ALL columns for complete data capture
-        const allAvailableColumns = headers.filter((h: string) => h && h.trim());
-        console.log('📦 All available columns:', allAvailableColumns);
-
-        setStep("confirm");
-        toast.success("CSV parsed successfully - review your data below");
+        // If we found both columns, skip directly to import
+        if (timeColumnIndex >= 0 && kwhColumnIndex >= 0) {
+          console.log('✅ All columns detected automatically');
+          setStep("confirm");
+          toast.success(`Ready to import ${dataRows.length} readings from ${headers.length} columns`);
+        } else {
+          setStep("confirm");
+          toast.warning("Please verify detected columns");
+        }
       },
       error: (error) => {
         console.error('❌ CSV parse error:', error);
