@@ -11,7 +11,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, FileText, Upload, Eye, Trash2 } from "lucide-react";
+import { Plus, FileText, Upload, Eye, Trash2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 
@@ -44,6 +44,7 @@ export default function Schematics() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [schematicToDelete, setSchematicToDelete] = useState<Schematic | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [convertingIds, setConvertingIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetchSchematics();
@@ -150,6 +151,35 @@ export default function Schematics() {
   const handleDeleteClick = (schematic: Schematic) => {
     setSchematicToDelete(schematic);
     setDeleteDialogOpen(true);
+  };
+
+  const handleConvertPdf = async (schematic: Schematic) => {
+    setConvertingIds(prev => new Set(prev).add(schematic.id));
+    
+    try {
+      toast.info("Converting PDF to image...");
+      
+      const { data, error } = await supabase.functions.invoke('convert-pdf-to-image', {
+        body: {
+          schematicId: schematic.id,
+          filePath: schematic.file_path,
+        },
+      });
+
+      if (error) throw error;
+
+      toast.success("PDF converted successfully!");
+      fetchSchematics();
+    } catch (error: any) {
+      console.error("Conversion error:", error);
+      toast.error(error.message || "Failed to convert PDF");
+    } finally {
+      setConvertingIds(prev => {
+        const next = new Set(prev);
+        next.delete(schematic.id);
+        return next;
+      });
+    }
   };
 
   const handleDeleteConfirm = async () => {
@@ -405,6 +435,17 @@ export default function Schematics() {
                             <Eye className="w-4 h-4 mr-2" />
                             View
                           </Button>
+                          {schematic.file_type === 'application/pdf' && !schematic.converted_image_path && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleConvertPdf(schematic)}
+                              disabled={convertingIds.has(schematic.id)}
+                            >
+                              <RefreshCw className={`w-4 h-4 mr-2 ${convertingIds.has(schematic.id) ? 'animate-spin' : ''}`} />
+                              Convert
+                            </Button>
+                          )}
                           <Button
                             variant="outline"
                             size="sm"
