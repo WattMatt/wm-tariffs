@@ -307,19 +307,39 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
 
     setIsProcessing(true);
 
+    // Get site and client info for naming
+    const { data: siteData } = await supabase
+      .from('sites')
+      .select('name, client_id, clients(code)')
+      .eq('id', siteId)
+      .single();
+
+    const clientCode = siteData?.clients?.code || 'UNKNOWN';
+    const siteName = siteData?.name?.replace(/[^a-zA-Z0-9]/g, '_') || 'SITE';
+
     for (const fileItem of pendingFiles) {
       try {
-        // Use content hash as filename to prevent duplicates
-        const filePath = `${siteId}/${fileItem.meterId}/${fileItem.contentHash}.csv`;
+        // Get meter details
+        const meter = meters.find(m => m.id === fileItem.meterId);
+        const meterSerial = meter?.serial_number?.replace(/[^a-zA-Z0-9]/g, '_') || 
+                           meter?.meter_number?.replace(/[^a-zA-Z0-9]/g, '_') || 
+                           'METER';
         
-        // Check if file already exists
-        const { data: existingFile } = await supabase.storage
+        // Create readable filename: ClientCode_SiteName_MeterSerial_ShortHash.csv
+        const shortHash = fileItem.contentHash?.substring(0, 8) || Date.now().toString();
+        const fileName = `${clientCode}_${siteName}_${meterSerial}_${shortHash}.csv`;
+        const filePath = `${siteId}/${fileItem.meterId}/${fileName}`;
+        
+        // Check if file with same hash already exists
+        const { data: existingFiles } = await supabase.storage
           .from('meter-csvs')
-          .list(`${siteId}/${fileItem.meterId}`, {
-            search: `${fileItem.contentHash}.csv`
-          });
+          .list(`${siteId}/${fileItem.meterId}`);
 
-        if (existingFile && existingFile.length > 0) {
+        const duplicateExists = existingFiles?.some(f => 
+          f.name.includes(shortHash) || f.name.includes(fileItem.contentHash || '')
+        );
+
+        if (duplicateExists) {
           setFiles(prev =>
             prev.map(f =>
               f.name === fileItem.name && f.isNew
@@ -358,7 +378,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
           )
         );
 
-        toast.success(`${fileItem.meterNumber}: Uploaded`);
+        toast.success(`${fileItem.meterNumber}: Uploaded as ${fileName}`);
       } catch (err: any) {
         setFiles(prev =>
           prev.map(f =>
