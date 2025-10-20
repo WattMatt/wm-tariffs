@@ -296,9 +296,15 @@ export default function SchematicEditor({
       else if (meterType.includes('check')) color = '#f59e0b'; // orange
       else if (meterType.includes('sub')) color = '#10b981'; // green
 
+      // Convert percentage positions to pixel positions for canvas
+      const canvasWidth = fabricCanvas.getWidth();
+      const canvasHeight = fabricCanvas.getHeight();
+      const x = (pos.x_position / 100) * canvasWidth;
+      const y = (pos.y_position / 100) * canvasHeight;
+
       const circle = new Circle({
-        left: pos.x_position,
-        top: pos.y_position,
+        left: x,
+        top: y,
         fill: color,
         radius: 15,
         originX: 'center',
@@ -309,8 +315,8 @@ export default function SchematicEditor({
       });
 
       const text = new Text(pos.label || meter?.meter_number || 'M', {
-        left: pos.x_position,
-        top: pos.y_position + 25,
+        left: x,
+        top: y + 25,
         fontSize: 12,
         fill: '#000',
         originX: 'center',
@@ -321,7 +327,7 @@ export default function SchematicEditor({
       
       circle.on('mousedown', () => {
         if (activeTool === 'connection') {
-          handleMeterClickForConnection(pos.meter_id, pos.x_position, pos.y_position);
+          handleMeterClickForConnection(pos.meter_id, x, y);
         }
       });
 
@@ -335,12 +341,18 @@ export default function SchematicEditor({
         });
 
         circle.on('modified', async () => {
+          // Convert pixel positions back to percentages for storage
+          const canvasWidth = fabricCanvas.getWidth();
+          const canvasHeight = fabricCanvas.getHeight();
+          const xPercent = ((circle.left || 0) / canvasWidth) * 100;
+          const yPercent = ((circle.top || 0) / canvasHeight) * 100;
+
           // Update position in database after drag
           const { error } = await supabase
             .from('meter_positions')
             .update({
-              x_position: circle.left,
-              y_position: circle.top,
+              x_position: xPercent,
+              y_position: yPercent,
             })
             .eq('id', pos.id);
 
@@ -400,7 +412,13 @@ export default function SchematicEditor({
 
   const createConnection = async (childId: string, parentId: string, toX: number, toY: number) => {
     const childPos = meterPositions.find(p => p.meter_id === childId);
-    if (!childPos) return;
+    if (!childPos || !fabricCanvas) return;
+
+    // Convert percentage positions to pixel for line drawing
+    const canvasWidth = fabricCanvas.getWidth();
+    const canvasHeight = fabricCanvas.getHeight();
+    const fromX = (childPos.x_position / 100) * canvasWidth;
+    const fromY = (childPos.y_position / 100) * canvasHeight;
 
     // Save meter connection
     const { error: connError } = await supabase
@@ -421,8 +439,8 @@ export default function SchematicEditor({
       .from("schematic_lines")
       .insert({
         schematic_id: schematicId,
-        from_x: childPos.x_position,
-        from_y: childPos.y_position,
+        from_x: fromX,
+        from_y: fromY,
         to_x: toX,
         to_y: toY,
         color: '#3b82f6',
@@ -478,13 +496,19 @@ export default function SchematicEditor({
     }
 
     // Then create the position on schematic
+    // Convert pixel positions to percentages
+    const canvasWidth = fabricCanvas?.getWidth() || 1400;
+    const canvasHeight = fabricCanvas?.getHeight() || 900;
+    const xPercent = (pendingMeterPosition.x / canvasWidth) * 100;
+    const yPercent = (pendingMeterPosition.y / canvasHeight) * 100;
+
     const { error: posError } = await supabase
       .from("meter_positions")
       .insert({
         schematic_id: schematicId,
         meter_id: newMeter.id,
-        x_position: pendingMeterPosition.x,
-        y_position: pendingMeterPosition.y,
+        x_position: xPercent,
+        y_position: yPercent,
         label: newMeter.meter_number
       });
 
