@@ -6,10 +6,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, FileText, Upload, Eye, Network } from "lucide-react";
+import { Plus, FileText, Upload, Eye, Network, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import MeterConnectionsDialog from "@/components/schematic/MeterConnectionsDialog";
 
@@ -36,6 +37,9 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [showConnectionsDialog, setShowConnectionsDialog] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [schematicToDelete, setSchematicToDelete] = useState<Schematic | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     fetchSchematics();
@@ -151,6 +155,62 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
     if (type === "application/pdf") return "📄";
     if (type.startsWith("image/")) return "🖼️";
     return "📋";
+  };
+
+  const handleDeleteClick = (schematic: Schematic) => {
+    setSchematicToDelete(schematic);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!schematicToDelete) return;
+
+    setIsDeleting(true);
+    try {
+      // First, delete associated meter positions
+      const { error: positionsError } = await supabase
+        .from("meter_positions")
+        .delete()
+        .eq("schematic_id", schematicToDelete.id);
+
+      if (positionsError) {
+        console.error("Error deleting meter positions:", positionsError);
+        // Continue anyway, non-critical
+      }
+
+      // Delete the files from storage
+      const filesToDelete = [schematicToDelete.file_path];
+      if (schematicToDelete.converted_image_path) {
+        filesToDelete.push(schematicToDelete.converted_image_path);
+      }
+
+      const { error: storageError } = await supabase.storage
+        .from("schematics")
+        .remove(filesToDelete);
+
+      if (storageError) {
+        console.error("Error deleting files from storage:", storageError);
+        // Continue anyway to delete the database record
+      }
+
+      // Delete the schematic record
+      const { error: dbError } = await supabase
+        .from("schematics")
+        .delete()
+        .eq("id", schematicToDelete.id);
+
+      if (dbError) throw dbError;
+
+      toast.success("Schematic deleted successfully");
+      fetchSchematics();
+    } catch (error: any) {
+      console.error("Error deleting schematic:", error);
+      toast.error(error.message || "Failed to delete schematic");
+    } finally {
+      setIsDeleting(false);
+      setDeleteDialogOpen(false);
+      setSchematicToDelete(null);
+    }
   };
 
   return (
@@ -316,22 +376,59 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
                       {new Date(schematic.created_at).toLocaleDateString()}
                     </TableCell>
                     <TableCell>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => navigate(`/schematics/${schematic.id}`)}
-                      >
-                        <Eye className="w-4 h-4 mr-2" />
-                        View
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => navigate(`/schematics/${schematic.id}`)}
+                        >
+                          <Eye className="w-4 h-4 mr-2" />
+                          View
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDeleteClick(schematic)}
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
           </CardContent>
-        </Card>
-      )}
-    </div>
-  );
-}
+          </Card>
+        )}
+
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Schematic?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will permanently delete "{schematicToDelete?.name}" and all associated data including:
+                <ul className="list-disc list-inside mt-2 space-y-1">
+                  <li>The schematic file and converted image</li>
+                  <li>All meter positions on this schematic</li>
+                </ul>
+                <p className="mt-2 font-semibold">This action cannot be undone.</p>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDeleteConfirm}
+                disabled={isDeleting}
+                className="bg-destructive hover:bg-destructive/90"
+              >
+                {isDeleting ? "Deleting..." : "Delete Schematic"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+    );
+  }
