@@ -318,17 +318,33 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                   
               {reconciliationData.distribution.length > 0 && (
                     <div>
-                      <h4 className="font-semibold mb-3 text-sm text-muted-foreground">Downstream Meters</h4>
+                      <h4 className="font-semibold mb-3 text-sm text-muted-foreground">
+                        Downstream Meters
+                        <span className="ml-2 text-xs font-normal">
+                          (Total: {reconciliationData.distributionTotal.toFixed(2)} kWh)
+                        </span>
+                      </h4>
                       <div className="space-y-2">
-                        {reconciliationData.distribution.map((meter: any) => (
-                          <div
-                            key={meter.id}
-                            className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
-                          >
-                            <span className="font-mono text-sm">{meter.meter_number}</span>
-                            <span className="font-semibold">{meter.totalKwh.toFixed(2)} kWh</span>
-                          </div>
-                        ))}
+                        {reconciliationData.distribution.map((meter: any) => {
+                          const percentage = reconciliationData.distributionTotal > 0 
+                            ? (meter.totalKwh / reconciliationData.distributionTotal) * 100 
+                            : 0;
+                          
+                          return (
+                            <div
+                              key={meter.id}
+                              className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
+                            >
+                              <span className="font-mono text-sm">{meter.meter_number}</span>
+                              <div className="flex items-center gap-3">
+                                <span className="font-semibold">{meter.totalKwh.toFixed(2)} kWh</span>
+                                <span className="text-xs text-muted-foreground bg-background px-2 py-1 rounded border border-border">
+                                  {percentage.toFixed(1)}%
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
               )}
