@@ -53,7 +53,7 @@ interface FileItem {
   meterId: string | null;
   meterNumber?: string;
   size?: number;
-  status: "pending" | "uploaded" | "parsing" | "success" | "error" | "duplicate";
+  status: "pending" | "uploaded" | "parsing" | "success" | "error";
   errorMessage?: string;
   readingsInserted?: number;
   duplicatesSkipped?: number;
@@ -62,7 +62,6 @@ interface FileItem {
   preview?: CsvPreview;
   metadataFieldNames?: Record<number, string>;
   contentHash?: string;
-  isDuplicate?: boolean;
 }
 
 export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIngestionToolProps) {
@@ -235,28 +234,27 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
       // Generate preview
       const preview = await parseCsvPreview(file, separator);
 
-      newFiles.push({
-        file,
-        name: file.name,
-        meterId: matchedMeter?.id || null,
-        meterNumber: matchedMeter?.meter_number,
-        size: file.size,
-        status: isDuplicate ? "duplicate" : "pending",
-        isNew: true,
-        preview,
-        metadataFieldNames: {},
-        contentHash,
-        isDuplicate
-      });
-
+      // Skip duplicate files entirely
       if (!isDuplicate) {
+        newFiles.push({
+          file,
+          name: file.name,
+          meterId: matchedMeter?.id || null,
+          meterNumber: matchedMeter?.meter_number,
+          size: file.size,
+          status: "pending",
+          isNew: true,
+          preview,
+          metadataFieldNames: {},
+          contentHash
+        });
         existingHashes.add(contentHash);
       }
     }
 
-    const duplicateCount = newFiles.filter(f => f.isDuplicate).length;
+    const duplicateCount = Array.from(selectedFiles).length - newFiles.length;
     if (duplicateCount > 0) {
-      toast.warning(`${duplicateCount} duplicate file(s) detected and skipped`);
+      toast.warning(`${duplicateCount} duplicate file(s) detected and automatically removed`);
     }
 
     setFiles(prev => [...prev, ...newFiles]);
@@ -346,13 +344,6 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
         );
 
         if (duplicateExists) {
-          setFiles(prev =>
-            prev.map(f =>
-              f.name === fileItem.name && f.isNew
-                ? { ...f, status: "duplicate", path: filePath, isNew: false }
-                : f
-            )
-          );
           toast.info(`${fileItem.meterNumber}: Already exists, skipped`);
           continue;
         }
@@ -363,13 +354,6 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
 
         if (uploadError) {
           if (uploadError.message.includes('already exists')) {
-            setFiles(prev =>
-              prev.map(f =>
-                f.name === fileItem.name && f.isNew
-                  ? { ...f, status: "duplicate", path: filePath, isNew: false }
-                  : f
-              )
-            );
             toast.info(`${fileItem.meterNumber}: Already exists, skipped`);
             continue;
           }
@@ -522,7 +506,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
 
   const handleParseAll = async () => {
     const uploadedFiles = files.filter(f => 
-      (f.status === "uploaded" || f.status === "error") && f.path && !f.isDuplicate
+      (f.status === "uploaded" || f.status === "error") && f.path
     );
     
     if (uploadedFiles.length === 0) {
@@ -716,8 +700,6 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case "duplicate":
-        return <Badge variant="outline" className="gap-1"><AlertCircle className="h-3 w-3" />Duplicate</Badge>;
       case "success":
         return <CheckCircle2 className="w-4 h-4 text-green-600" />;
       case "error":
