@@ -334,18 +334,22 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
         const fileName = `${clientCode}_${siteName}_${meterSerial}_${shortHash}.csv`;
         const filePath = `${siteId}/${fileItem.meterId}/${fileName}`;
         
-        // Check if file with same hash already exists
+        // Check if file with same hash already exists and delete old duplicates
         const { data: existingFiles } = await supabase.storage
           .from('meter-csvs')
           .list(`${siteId}/${fileItem.meterId}`);
 
-        const duplicateExists = existingFiles?.some(f => 
+        const duplicateFiles = existingFiles?.filter(f => 
           f.name.includes(shortHash) || f.name.includes(fileItem.contentHash || '')
-        );
+        ) || [];
 
-        if (duplicateExists) {
-          toast.info(`${fileItem.meterNumber}: Already exists, skipped`);
-          continue;
+        // Delete old duplicate files before uploading new one
+        if (duplicateFiles.length > 0) {
+          const pathsToDelete = duplicateFiles.map(f => `${siteId}/${fileItem.meterId}/${f.name}`);
+          await supabase.storage
+            .from('meter-csvs')
+            .remove(pathsToDelete);
+          toast.info(`${fileItem.meterNumber}: Removed ${duplicateFiles.length} old duplicate(s)`);
         }
 
         const { error: uploadError } = await supabase.storage
