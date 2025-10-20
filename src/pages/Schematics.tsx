@@ -171,21 +171,24 @@ export default function Schematics() {
 
       // Convert blob to array buffer
       const arrayBuffer = await pdfBlob.arrayBuffer();
+      const uint8Array = new Uint8Array(arrayBuffer);
       
-      // Load PDF with PDF.js
-      const pdfjsLib = await import('pdfjs-dist');
-      pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+      // Load PDF with PDF.js (using the worker already configured in dependencies)
+      const { getDocument, GlobalWorkerOptions } = await import('pdfjs-dist');
       
-      const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+      // Use unpkg CDN for worker (more reliable)
+      GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+      
+      const loadingTask = getDocument({ data: uint8Array });
       const pdf = await loadingTask.promise;
       
       // Get first page
       const page = await pdf.getPage(1);
-      const viewport = page.getViewport({ scale: 2.0 }); // 2x for better quality
+      const viewport = page.getViewport({ scale: 2.0 });
       
       // Create canvas
       const canvas = document.createElement('canvas');
-      const context = canvas.getContext('2d');
+      const context = canvas.getContext('2d', { willReadFrequently: false });
       
       if (!context) throw new Error('Could not get canvas context');
       
@@ -193,21 +196,22 @@ export default function Schematics() {
       canvas.height = viewport.height;
       
       // Render PDF page to canvas
-      const renderContext = {
+      await page.render({
         canvasContext: context,
         viewport: viewport,
-      };
-      await page.render(renderContext as any).promise;
+      } as any).promise;
       
       // Convert canvas to blob
       const imageBlob = await new Promise<Blob>((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('Blob conversion timeout')), 10000);
         canvas.toBlob(
           (blob) => {
+            clearTimeout(timeout);
             if (blob) resolve(blob);
             else reject(new Error('Failed to create blob'));
           },
           'image/png',
-          1.0
+          0.95
         );
       });
       
