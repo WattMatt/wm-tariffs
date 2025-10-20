@@ -5,10 +5,13 @@ import { Label } from "@/components/ui/label";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { supabase } from "@/integrations/supabase/client";
-import { CalendarIcon, Download } from "lucide-react";
+import { CalendarIcon, Download, Eye } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 
 interface ReconciliationTabProps {
   siteId: string;
@@ -19,10 +22,106 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
   const [dateTo, setDateTo] = useState<Date>();
   const [reconciliationData, setReconciliationData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [previewData, setPreviewData] = useState<any>(null);
+  const [selectedColumns, setSelectedColumns] = useState<Set<string>>(new Set());
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+
+  const handlePreview = async () => {
+    if (!dateFrom || !dateTo) {
+      toast.error("Please select a date range");
+      return;
+    }
+
+    setIsLoadingPreview(true);
+
+    try {
+      // Fetch bulk check meter
+      const { data: bulkMeters, error: metersError } = await supabase
+        .from("meters")
+        .select("id, meter_number, meter_type")
+        .eq("site_id", siteId)
+        .eq("meter_type", "council_bulk");
+
+      if (metersError || !bulkMeters || bulkMeters.length === 0) {
+        toast.error("No bulk check meter found for this site");
+        setIsLoadingPreview(false);
+        return;
+      }
+
+      const bulkMeter = bulkMeters[0];
+
+      // Fetch readings
+      const { data: readings, error: readingsError } = await supabase
+        .from("meter_readings")
+        .select("kwh_value, reading_timestamp, metadata")
+        .eq("meter_id", bulkMeter.id)
+        .gte("reading_timestamp", dateFrom.toISOString())
+        .lte("reading_timestamp", dateTo.toISOString())
+        .order("reading_timestamp", { ascending: true });
+
+      if (readingsError) {
+        throw readingsError;
+      }
+
+      // Deduplicate by timestamp
+      const uniqueReadings = readings ? 
+        Array.from(
+          new Map(
+            readings.map(r => [r.reading_timestamp, r])
+          ).values()
+        ) : [];
+
+      if (uniqueReadings.length === 0) {
+        toast.error("No readings found for bulk check meter in selected date range");
+        setIsLoadingPreview(false);
+        return;
+      }
+
+      // Extract available columns from metadata
+      const availableColumns = new Set<string>();
+      uniqueReadings.forEach(reading => {
+        const importedFields = (reading.metadata as any)?.imported_fields || {};
+        Object.keys(importedFields).forEach(key => {
+          if (!key.toLowerCase().includes('time') && !key.toLowerCase().includes('date')) {
+            availableColumns.add(key);
+          }
+        });
+      });
+
+      // Auto-select all columns initially
+      setSelectedColumns(new Set(availableColumns));
+
+      setPreviewData({
+        meterNumber: bulkMeter.meter_number,
+        totalReadings: uniqueReadings.length,
+        firstReading: uniqueReadings[0],
+        lastReading: uniqueReadings[uniqueReadings.length - 1],
+        sampleReadings: uniqueReadings.slice(0, 5),
+        availableColumns: Array.from(availableColumns)
+      });
+
+      toast.success("Preview loaded successfully");
+    } catch (error) {
+      console.error("Preview error:", error);
+      toast.error("Failed to load preview");
+    } finally {
+      setIsLoadingPreview(false);
+    }
+  };
 
   const handleReconcile = async () => {
     if (!dateFrom || !dateTo) {
       toast.error("Please select a date range");
+      return;
+    }
+
+    if (!previewData) {
+      toast.error("Please preview data first");
+      return;
+    }
+
+    if (selectedColumns.size === 0) {
+      toast.error("Please select at least one column to calculate");
       return;
     }
 
@@ -85,6 +184,9 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
               Object.entries(importedFields).forEach(([key, value]) => {
                 // Skip timestamp columns
                 if (key.toLowerCase().includes('time') || key.toLowerCase().includes('date')) return;
+                
+                // Only process selected columns for council_bulk meters
+                if (meter.meter_type === 'council_bulk' && !selectedColumns.has(key)) return;
                 
                 const numValue = Number(value);
                 if (!isNaN(numValue) && value !== null && value !== '') {
@@ -222,11 +324,127 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
             </div>
           </div>
 
-          <Button onClick={handleReconcile} disabled={isLoading} className="w-full">
-            {isLoading ? "Analyzing..." : "Run Reconciliation"}
+          <Button onClick={handlePreview} disabled={isLoadingPreview || !dateFrom || !dateTo} className="w-full">
+            <Eye className="mr-2 h-4 w-4" />
+            {isLoadingPreview ? "Loading Preview..." : "Preview Bulk Meter Data"}
           </Button>
         </CardContent>
       </Card>
+
+      {previewData && (
+        <Card className="border-border/50 bg-accent/5">
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between">
+              <span>Bulk Check Meter Preview - {previewData.meterNumber}</span>
+              <Badge variant="outline">{previewData.totalReadings} readings</Badge>
+            </CardTitle>
+            <CardDescription>
+              Select columns to include in reconciliation calculations
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold">First Reading</Label>
+                <div className="p-3 rounded-lg bg-muted/50 space-y-1">
+                  <div className="text-sm font-mono">
+                    {format(new Date(previewData.firstReading.reading_timestamp), "PPpp")}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    kWh: {previewData.firstReading.kwh_value}
+                  </div>
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold">Last Reading</Label>
+                <div className="p-3 rounded-lg bg-muted/50 space-y-1">
+                  <div className="text-sm font-mono">
+                    {format(new Date(previewData.lastReading.reading_timestamp), "PPpp")}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    kWh: {previewData.lastReading.kwh_value}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <Label className="text-sm font-semibold">Available Columns - Select to Include in Calculations</Label>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                {previewData.availableColumns.map((column: string) => (
+                  <div key={column} className="flex items-center space-x-2 p-2 rounded-lg hover:bg-muted/50">
+                    <Checkbox
+                      id={`column-${column}`}
+                      checked={selectedColumns.has(column)}
+                      onCheckedChange={(checked) => {
+                        const newSelected = new Set(selectedColumns);
+                        if (checked) {
+                          newSelected.add(column);
+                        } else {
+                          newSelected.delete(column);
+                        }
+                        setSelectedColumns(newSelected);
+                      }}
+                    />
+                    <Label
+                      htmlFor={`column-${column}`}
+                      className="text-sm cursor-pointer flex-1"
+                    >
+                      {column}
+                    </Label>
+                  </div>
+                ))}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {selectedColumns.size} of {previewData.availableColumns.length} columns selected
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <Label className="text-sm font-semibold">Sample Data (First 5 Readings)</Label>
+              <div className="border rounded-lg overflow-auto max-h-96">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="sticky top-0 bg-background">Timestamp</TableHead>
+                      <TableHead className="sticky top-0 bg-background">kWh</TableHead>
+                      {Array.from(selectedColumns).map(col => (
+                        <TableHead key={col} className="sticky top-0 bg-background">{col}</TableHead>
+                      ))}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {previewData.sampleReadings.map((reading: any, idx: number) => {
+                      const importedFields = reading.metadata?.imported_fields || {};
+                      return (
+                        <TableRow key={idx}>
+                          <TableCell className="font-mono text-xs">
+                            {format(new Date(reading.reading_timestamp), "MMM dd, HH:mm")}
+                          </TableCell>
+                          <TableCell className="font-mono">{reading.kwh_value}</TableCell>
+                          {Array.from(selectedColumns).map(col => (
+                            <TableCell key={col} className="font-mono text-xs">
+                              {importedFields[col] || '-'}
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+              <div className="text-xs text-muted-foreground italic">
+                Verify these values match your CSV file before proceeding with reconciliation
+              </div>
+            </div>
+
+            <Button onClick={handleReconcile} disabled={isLoading || selectedColumns.size === 0} className="w-full">
+              {isLoading ? "Analyzing..." : "Run Reconciliation with Selected Columns"}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {reconciliationData && (
         <>
