@@ -217,7 +217,9 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
   };
 
   const handleParseAll = async () => {
-    const uploadedFiles = files.filter(f => f.status === "uploaded" && f.path);
+    const uploadedFiles = files.filter(f => 
+      (f.status === "uploaded" || f.status === "error") && f.path
+    );
     
     if (uploadedFiles.length === 0) {
       toast.error("No files to parse");
@@ -274,6 +276,63 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
         );
         toast.error(`${fileItem.meterNumber}: Parse failed`);
       }
+    }
+
+    setIsProcessing(false);
+    onDataChange?.();
+  };
+
+  const handleRetryParse = async (fileItem: FileItem) => {
+    if (!fileItem.path) return;
+
+    setIsProcessing(true);
+    
+    setFiles(prev =>
+      prev.map(f => f.path === fileItem.path ? { ...f, status: "parsing" } : f)
+    );
+
+    try {
+      const { data, error } = await supabase.functions.invoke('process-meter-csv', {
+        body: {
+          meterId: fileItem.meterId,
+          filePath: fileItem.path,
+          separator: separator === "tab" ? "\t" : 
+                    separator === "comma" ? "," : 
+                    separator === "semicolon" ? ";" : 
+                    separator === "space" ? " " : "\t",
+          dateFormat: dateFormat
+        }
+      });
+
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error);
+
+      setFiles(prev =>
+        prev.map(f =>
+          f.path === fileItem.path
+            ? {
+                ...f,
+                status: "success",
+                readingsInserted: data.readingsInserted,
+                duplicatesSkipped: data.duplicatesSkipped,
+                parseErrors: data.parseErrors
+              }
+            : f
+        )
+      );
+
+      toast.success(
+        `${fileItem.meterNumber}: ${data.readingsInserted} readings imported`
+      );
+    } catch (err: any) {
+      setFiles(prev =>
+        prev.map(f =>
+          f.path === fileItem.path
+            ? { ...f, status: "error", errorMessage: err.message }
+            : f
+        )
+      );
+      toast.error(`${fileItem.meterNumber}: Parse failed`);
     }
 
     setIsProcessing(false);
@@ -484,11 +543,11 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <h3 className="font-semibold text-sm">
-                    {files.filter(f => f.status === "uploaded").length} file(s) ready to parse
+                    {files.filter(f => f.status === "uploaded" || f.status === "error").length} file(s) ready to parse
                   </h3>
                   <Button
                     onClick={handleParseAll}
-                    disabled={isProcessing || files.filter(f => f.status === "uploaded").length === 0}
+                    disabled={isProcessing || files.filter(f => f.status === "uploaded" || f.status === "error").length === 0}
                   >
                     <Play className="w-4 h-4 mr-2" />
                     Parse All
@@ -526,6 +585,17 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
 
                             {fileItem.status === "parsing" && (
                               <Badge variant="outline">Parsing...</Badge>
+                            )}
+
+                            {(fileItem.status === "error" || fileItem.status === "uploaded") && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleRetryParse(fileItem)}
+                                disabled={isProcessing}
+                              >
+                                <Play className="w-4 h-4" />
+                              </Button>
                             )}
 
                             {fileItem.path && (
