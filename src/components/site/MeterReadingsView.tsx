@@ -42,12 +42,22 @@ export default function MeterReadingsView({ isOpen, onClose, meterId, meterNumbe
   const fetchReadings = async () => {
     setIsLoading(true);
     
+    console.log("Fetching readings for meter:", meterId, "page:", page);
+    
     // Get total count
-    const { count } = await supabase
+    const { count, error: countError } = await supabase
       .from("meter_readings")
       .select("*", { count: "exact", head: true })
       .eq("meter_id", meterId);
     
+    if (countError) {
+      console.error("Error fetching count:", countError);
+      toast.error("Failed to fetch reading count: " + countError.message);
+      setIsLoading(false);
+      return;
+    }
+    
+    console.log("Total count for meter:", count);
     setTotalCount(count || 0);
 
     // Get paginated data
@@ -59,8 +69,10 @@ export default function MeterReadingsView({ isOpen, onClose, meterId, meterNumbe
       .range(page * pageSize, (page + 1) * pageSize - 1);
 
     if (error) {
-      toast.error("Failed to fetch readings");
+      console.error("Error fetching readings:", error);
+      toast.error("Failed to fetch readings: " + error.message);
     } else {
+      console.log("Fetched readings:", data?.length, "records");
       setReadings(data || []);
     }
     setIsLoading(false);
