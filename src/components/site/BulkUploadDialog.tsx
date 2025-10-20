@@ -120,8 +120,6 @@ export default function BulkUploadDialog({ siteId, onDataChange }: BulkUploadDia
     setIsUploading(true);
 
     try {
-      const userId = (await supabase.auth.getUser()).data.user?.id;
-
       for (let i = 0; i < validMappings.length; i++) {
         const mapping = validMappings[i];
         const meter = meters.find((m) => m.id === mapping.meterId);
@@ -131,7 +129,7 @@ export default function BulkUploadDialog({ siteId, onDataChange }: BulkUploadDia
         );
 
         try {
-          // Upload CSV to storage
+          // Just upload CSV to storage
           const filePath = `${siteId}/${mapping.meterId}/${Date.now()}_${mapping.file.name}`;
           
           const { error: uploadError } = await supabase.storage
@@ -140,41 +138,15 @@ export default function BulkUploadDialog({ siteId, onDataChange }: BulkUploadDia
 
           if (uploadError) throw uploadError;
 
-          // Call backend to process
-          const { data, error: processError } = await supabase.functions.invoke(
-            'process-meter-csv',
-            {
-              body: {
-                meterId: mapping.meterId,
-                filePath,
-                separator: separator === "tab" ? "\t" : separator === "comma" ? "," : separator === "semicolon" ? ";" : separator === "space" ? " " : "\t",
-              },
-            }
-          );
-
-          if (processError) throw processError;
-
-          if (!data.success) {
-            throw new Error(data.error || 'Processing failed');
-          }
-
           setFileMappings((prev) =>
             prev.map((m) =>
               m.file === mapping.file
-                ? {
-                    ...m,
-                    status: "success" as const,
-                    readingsCount: data.readingsInserted,
-                  }
+                ? { ...m, status: "success" as const }
                 : m
             )
           );
 
-          toast.success(
-            `${meter?.meter_number}: ${data.readingsInserted} readings imported${
-              data.duplicatesSkipped > 0 ? `, ${data.duplicatesSkipped} duplicates skipped` : ""
-            }${data.parseErrors > 0 ? `, ${data.parseErrors} parse errors` : ""}`
-          );
+          toast.success(`${meter?.meter_number}: File saved successfully`);
         } catch (err: any) {
           console.error("Upload error:", err);
           setFileMappings((prev) =>
@@ -193,7 +165,7 @@ export default function BulkUploadDialog({ siteId, onDataChange }: BulkUploadDia
       }
 
       const successCount = fileMappings.filter((m) => m.status === "success").length;
-      toast.success(`Upload complete! ${successCount} files processed successfully`);
+      toast.success(`${successCount} files saved successfully. Use CSV Import to parse them.`);
       onDataChange?.();
     } finally {
       setIsUploading(false);
@@ -295,10 +267,8 @@ export default function BulkUploadDialog({ siteId, onDataChange }: BulkUploadDia
                       {mapping.status === "uploading" && (
                         <span className="text-sm text-blue-600">Uploading...</span>
                       )}
-                      {mapping.status === "success" && (
-                        <span className="text-sm text-green-600">
-                          ✓ {mapping.readingsCount} readings
-                        </span>
+                       {mapping.status === "success" && (
+                        <span className="text-sm text-green-600">✓ Saved</span>
                       )}
                       {mapping.status === "error" && (
                         <span className="text-sm text-destructive">✗ Failed</span>
@@ -316,7 +286,7 @@ export default function BulkUploadDialog({ siteId, onDataChange }: BulkUploadDia
               disabled={isUploading || fileMappings.filter((m) => m.meterId).length === 0}
               className="flex-1"
             >
-              {isUploading ? "Uploading..." : `Upload ${fileMappings.filter((m) => m.meterId).length} Files`}
+              {isUploading ? "Saving..." : `Save ${fileMappings.filter((m) => m.meterId).length} Files`}
             </Button>
             <Button variant="outline" onClick={() => setIsOpen(false)} disabled={isUploading}>
               Close
