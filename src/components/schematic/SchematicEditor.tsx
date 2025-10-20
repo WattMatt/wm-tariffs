@@ -73,7 +73,7 @@ export default function SchematicEditor({ schematicId, schematicUrl, siteId }: S
       const delta = opt.e.deltaY;
       let newZoom = canvas.getZoom();
       newZoom *= 0.999 ** delta;
-      if (newZoom > 3) newZoom = 3;
+      if (newZoom > 10) newZoom = 10;
       if (newZoom < 0.5) newZoom = 0.5;
       
       const pointer = canvas.getPointer(opt.e);
@@ -83,18 +83,30 @@ export default function SchematicEditor({ schematicId, schematicUrl, siteId }: S
       opt.e.stopPropagation();
     });
 
-    // Enable panning with shift + drag or right mouse button
+    // Enable panning with click + drag (when not clicking on objects or in select mode)
     let isPanningLocal = false;
     let lastX = 0;
     let lastY = 0;
 
     canvas.on('mouse:down', (opt) => {
       const evt = opt.e as MouseEvent;
-      if (opt.e.shiftKey || evt.button === 2) {
+      const target = opt.target;
+      
+      // Pan if: left click on empty space, or middle/right mouse button
+      if (evt.button === 0 && !target) {
+        // Left click on empty space
         isPanningLocal = true;
         lastX = evt.clientX;
         lastY = evt.clientY;
         canvas.selection = false;
+        canvas.defaultCursor = 'grabbing';
+      } else if (evt.button === 1 || evt.button === 2) {
+        // Middle or right mouse button
+        isPanningLocal = true;
+        lastX = evt.clientX;
+        lastY = evt.clientY;
+        canvas.selection = false;
+        canvas.defaultCursor = 'grabbing';
       }
     });
 
@@ -113,9 +125,16 @@ export default function SchematicEditor({ schematicId, schematicUrl, siteId }: S
     });
 
     canvas.on('mouse:up', () => {
-      isPanningLocal = false;
-      canvas.selection = true;
+      if (isPanningLocal) {
+        isPanningLocal = false;
+        canvas.selection = true;
+        canvas.defaultCursor = 'grab';
+      }
     });
+
+    // Set default cursor to grab
+    canvas.defaultCursor = 'grab';
+    canvas.hoverCursor = 'grab';
 
     // Prevent context menu on right click
     canvas.getElement().addEventListener('contextmenu', (e) => {
@@ -428,7 +447,7 @@ export default function SchematicEditor({ schematicId, schematicUrl, siteId }: S
 
   const handleZoomIn = () => {
     if (!fabricCanvas) return;
-    const newZoom = Math.min(zoom * 1.2, 3);
+    const newZoom = Math.min(zoom * 1.2, 10);
     fabricCanvas.setZoom(newZoom);
     setZoom(newZoom);
     fabricCanvas.renderAll();
@@ -531,7 +550,7 @@ export default function SchematicEditor({ schematicId, schematicUrl, siteId }: S
           {activeTool === "select" && "View mode - select a tool to edit"}
         </div>
         <div className="text-xs">
-          💡 Use mouse wheel to zoom • Hold Shift + drag to pan • Right-click + drag to pan
+          💡 Scroll wheel to zoom (up to 1000%) • Click + drag on empty space to pan
         </div>
       </div>
 
