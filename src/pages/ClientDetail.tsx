@@ -183,12 +183,17 @@ export default function ClientDetail() {
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back to Clients
             </Button>
-            <Avatar className="w-16 h-16">
-              <AvatarImage src={client.logo_url || ""} />
-              <AvatarFallback>
-                <Building2 className="w-8 h-8" />
-              </AvatarFallback>
-            </Avatar>
+            <div className="w-20 h-20 rounded-lg border bg-card flex items-center justify-center overflow-hidden flex-shrink-0">
+              {client.logo_url ? (
+                <img 
+                  src={client.logo_url} 
+                  alt={`${client.name} logo`}
+                  className="w-full h-full object-contain p-2"
+                />
+              ) : (
+                <Building2 className="w-10 h-10 text-muted-foreground" />
+              )}
+            </div>
             <div>
               <h1 className="text-4xl font-bold mb-2">{client.name}</h1>
               <div className="flex items-center gap-4 text-sm text-muted-foreground">
@@ -247,10 +252,17 @@ export default function ClientDetail() {
               <div className="space-y-2">
                 <Label htmlFor="logo">Client Logo</Label>
                 <div className="flex items-center gap-4">
-                  <Avatar className="w-16 h-16">
-                    <AvatarImage src={logoFile ? URL.createObjectURL(logoFile) : client?.logo_url || ""} />
-                    <AvatarFallback><Building2 className="w-8 h-8" /></AvatarFallback>
-                  </Avatar>
+                  <div className="w-24 h-24 rounded-lg border bg-card flex items-center justify-center overflow-hidden">
+                    {logoFile || client?.logo_url ? (
+                      <img 
+                        src={logoFile ? URL.createObjectURL(logoFile) : client?.logo_url || ""} 
+                        alt="Client logo"
+                        className="w-full h-full object-contain p-2"
+                      />
+                    ) : (
+                      <Building2 className="w-10 h-10 text-muted-foreground" />
+                    )}
+                  </div>
                   <div className="flex-1">
                     <Input
                       id="logo"

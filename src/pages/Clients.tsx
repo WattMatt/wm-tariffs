@@ -200,10 +200,17 @@ export default function Clients() {
                   <Label htmlFor="logo">Client Logo</Label>
                   <div className="flex items-center gap-4">
                     {(logoFile || editingClient?.logo_url) && (
-                      <Avatar className="w-16 h-16">
-                        <AvatarImage src={logoFile ? URL.createObjectURL(logoFile) : editingClient?.logo_url || ""} />
-                        <AvatarFallback><Building2 className="w-8 h-8" /></AvatarFallback>
-                      </Avatar>
+                      <div className="w-24 h-24 rounded-lg border bg-card flex items-center justify-center overflow-hidden">
+                        {logoFile || editingClient?.logo_url ? (
+                          <img 
+                            src={logoFile ? URL.createObjectURL(logoFile) : editingClient?.logo_url || ""} 
+                            alt="Client logo"
+                            className="w-full h-full object-contain p-2"
+                          />
+                        ) : (
+                          <Building2 className="w-10 h-10 text-muted-foreground" />
+                        )}
+                      </div>
                     )}
                     <div className="flex-1">
                       <Input
@@ -302,12 +309,17 @@ export default function Clients() {
                         onClick={() => navigate(`/clients/${client.id}`)}
                       >
                         <div className="flex items-center gap-3">
-                          <Avatar className="w-10 h-10">
-                            <AvatarImage src={client.logo_url || ""} />
-                            <AvatarFallback>
-                              <Building2 className="w-5 h-5" />
-                            </AvatarFallback>
-                          </Avatar>
+                          <div className="w-12 h-12 rounded border bg-card flex items-center justify-center overflow-hidden flex-shrink-0">
+                            {client.logo_url ? (
+                              <img 
+                                src={client.logo_url} 
+                                alt={`${client.name} logo`}
+                                className="w-full h-full object-contain p-1.5"
+                              />
+                            ) : (
+                              <Building2 className="w-6 h-6 text-muted-foreground" />
+                            )}
+                          </div>
                           <span>{client.name}</span>
                         </div>
                       </TableCell>
