@@ -364,8 +364,13 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
           )
         );
 
+        const totalProcessed = data.readingsInserted + data.duplicatesSkipped;
+        const newPercent = totalProcessed > 0 ? ((data.readingsInserted / totalProcessed) * 100).toFixed(1) : "0";
+        const existingPercent = totalProcessed > 0 ? ((data.duplicatesSkipped / totalProcessed) * 100).toFixed(1) : "0";
+
         toast.success(
-          `${fileItem.meterNumber}: ${data.readingsInserted} readings imported`
+          `${fileItem.meterNumber}: ✓ ${data.readingsInserted} new (${newPercent}%) | ${data.duplicatesSkipped} already in DB (${existingPercent}%)`,
+          { duration: 6000 }
         );
       } catch (err: any) {
         setFiles(prev =>
@@ -422,8 +427,13 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
         )
       );
 
+      const totalProcessed = data.readingsInserted + data.duplicatesSkipped;
+      const newPercent = totalProcessed > 0 ? ((data.readingsInserted / totalProcessed) * 100).toFixed(1) : "0";
+      const existingPercent = totalProcessed > 0 ? ((data.duplicatesSkipped / totalProcessed) * 100).toFixed(1) : "0";
+
       toast.success(
-        `${fileItem.meterNumber}: ${data.readingsInserted} readings imported`
+        `${fileItem.meterNumber}: ✓ ${data.readingsInserted} new (${newPercent}%) | ${data.duplicatesSkipped} already in DB (${existingPercent}%)`,
+        { duration: 6000 }
       );
     } catch (err: any) {
       setFiles(prev =>
@@ -836,16 +846,21 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                           )}
                           
                           {fileItem.status === "success" && (
-                            <>
+                            <div className="flex items-center gap-2">
                               <Badge variant="outline" className="text-green-600 border-green-600">
-                                ✓ {fileItem.readingsInserted} imported
+                                ✓ {fileItem.readingsInserted} new
                               </Badge>
-                              {fileItem.duplicatesSkipped ? (
-                                <Badge variant="outline" className="text-amber-600 border-amber-600 text-xs">
-                                  {fileItem.duplicatesSkipped} skipped
-                                </Badge>
-                              ) : null}
-                            </>
+                              {fileItem.duplicatesSkipped !== undefined && fileItem.duplicatesSkipped > 0 && (
+                                <>
+                                  <Badge variant="outline" className="text-muted-foreground border-muted-foreground text-xs">
+                                    {fileItem.duplicatesSkipped} existing
+                                  </Badge>
+                                  <span className="text-[10px] text-muted-foreground">
+                                    ({((fileItem.readingsInserted / (fileItem.readingsInserted + fileItem.duplicatesSkipped)) * 100).toFixed(0)}% new)
+                                  </span>
+                                </>
+                              )}
+                            </div>
                           )}
                           
                           {fileItem.status === "error" && (
