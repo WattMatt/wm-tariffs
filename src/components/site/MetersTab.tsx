@@ -463,7 +463,7 @@ export default function MetersTab({ siteId }: MetersTabProps) {
         }}
         meterId={csvImportMeterId || ""}
         onImportComplete={() => {
-          toast.success("Readings imported successfully");
+          fetchMeters();
         }}
       />
 
