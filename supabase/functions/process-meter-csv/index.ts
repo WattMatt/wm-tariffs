@@ -34,6 +34,9 @@ Deno.serve(async (req) => {
     const lines = csvText.split('\n');
     
     console.log(`Processing ${lines.length} lines`);
+    
+    // Log first few lines for debugging
+    console.log('First 3 lines:', lines.slice(0, 3));
 
     // Get existing timestamps to avoid duplicates
     const { data: existingReadings } = await supabase
@@ -55,66 +58,96 @@ Deno.serve(async (req) => {
       const line = lines[i].trim();
       if (!line) continue;
 
-      const columns = line.split(/[,\t]/);
-      if (columns.length < 3) continue;
+      // Split by tab or comma, handling multiple tabs/commas
+      const columns = line.split(/[\t,]+/).filter(col => col.trim());
+      
+      // Log first data row for debugging
+      if (i === 1) {
+        console.log(`First data row columns (${columns.length}):`, columns);
+      }
+      
+      if (columns.length < 2) continue;
 
-      // Skip header rows
+      // Skip header rows (check for common header keywords)
       const firstCol = columns[0]?.trim().toLowerCase();
-      if (firstCol === 'date' || firstCol === 'time' || firstCol === 'datetime' || i === 0 && /[a-z]/i.test(firstCol)) {
+      if (firstCol === 'date' || firstCol === 'time' || firstCol === 'datetime' || 
+          firstCol.includes('timestamp') || (i === 0 && /[a-z]/i.test(firstCol))) {
+        console.log(`Skipping header at line ${i + 1}: ${line}`);
         continue;
       }
 
       try {
-        const dateStr = columns[0]?.trim();
-        const timeStr = columns[1]?.trim();
-        const valueStr = columns[2]?.trim()?.replace(',', '.');
-
-        if (!dateStr || !timeStr || !valueStr) continue;
-
-        // Parse date YYYY/MM/DD or YYYY-MM-DD or DD/MM/YYYY
-        const dateParts = dateStr.split(/[\/\-]/);
-        if (dateParts.length !== 3) {
-          if (errors.length < 5) errors.push(`Line ${i + 1}: Invalid date format "${dateStr}"`);
-          parseErrors++;
-          continue;
+        // Handle different column layouts
+        let dateStr, timeStr, valueStr;
+        
+        if (columns.length === 2) {
+          // Format: DateTime Value
+          dateStr = columns[0]?.trim();
+          valueStr = columns[1]?.trim()?.replace(',', '.');
+          timeStr = null;
+        } else {
+          // Format: Date Time Value (most common)
+          dateStr = columns[0]?.trim();
+          timeStr = columns[1]?.trim();
+          valueStr = columns[2]?.trim()?.replace(',', '.');
         }
 
-        let year: number, month: number, day: number;
-        
-        // Determine date format
-        if (parseInt(dateParts[0]) > 31) {
-          // YYYY/MM/DD or YYYY-MM-DD
-          [year, month, day] = dateParts.map(Number);
-        } else {
-          // DD/MM/YYYY
-          [day, month, year] = dateParts.map(Number);
-        }
+        if (!dateStr || !valueStr) continue;
 
-        // Parse time - handle both HH:MM:SS and decimal formats
-        let hours = 0, minutes = 0, seconds = 0;
+        let date: Date;
         
-        if (timeStr.includes(':')) {
-          // HH:MM:SS or HH:MM format
-          const timeParts = timeStr.split(':');
-          [hours, minutes, seconds = 0] = timeParts.map(Number);
+        // Check if dateStr contains both date and time (combined format)
+        if (!timeStr && (dateStr.includes(' ') || dateStr.includes('T'))) {
+          // Combined DateTime format (e.g., "2025-04-01 12:30:00" or "2025-04-01T12:30:00")
+          date = new Date(dateStr.replace(' ', 'T'));
         } else {
-          // Decimal format (e.g., 0.5 = 12 hours, 0.04166667 = 1 hour)
-          const decimalTime = parseFloat(timeStr);
-          if (isNaN(decimalTime)) {
-            if (errors.length < 5) errors.push(`Line ${i + 1}: Invalid time format "${timeStr}"`);
+          // Separate date and time columns
+          const dateParts = dateStr.split(/[\/\- ]/);
+          if (dateParts.length < 3) {
+            if (errors.length < 5) errors.push(`Line ${i + 1}: Invalid date format "${dateStr}"`);
             parseErrors++;
             continue;
           }
-          
-          // Convert decimal days to hours/minutes/seconds
-          const totalSeconds = decimalTime * 24 * 60 * 60;
-          hours = Math.floor(totalSeconds / 3600);
-          minutes = Math.floor((totalSeconds % 3600) / 60);
-          seconds = Math.floor(totalSeconds % 60);
-        }
 
-        // Create date
-        const date = new Date(year, month - 1, day, hours, minutes, seconds);
+          let year: number, month: number, day: number;
+          
+          // Determine date format
+          if (parseInt(dateParts[0]) > 31) {
+            // YYYY/MM/DD or YYYY-MM-DD
+            [year, month, day] = dateParts.map(Number);
+          } else {
+            // DD/MM/YYYY
+            [day, month, year] = dateParts.map(Number);
+          }
+
+          // Parse time - handle both HH:MM:SS and decimal formats
+          let hours = 0, minutes = 0, seconds = 0;
+          
+          if (timeStr) {
+            if (timeStr.includes(':')) {
+              // HH:MM:SS or HH:MM format
+              const timeParts = timeStr.split(':');
+              [hours, minutes, seconds = 0] = timeParts.map(Number);
+            } else {
+              // Decimal format (e.g., 0.5 = 12 hours, 0.04166667 = 1 hour)
+              const decimalTime = parseFloat(timeStr);
+              if (isNaN(decimalTime)) {
+                if (errors.length < 5) errors.push(`Line ${i + 1}: Invalid time format "${timeStr}"`);
+                parseErrors++;
+                continue;
+              }
+              
+              // Convert decimal days to hours/minutes/seconds
+              const totalSeconds = decimalTime * 24 * 60 * 60;
+              hours = Math.floor(totalSeconds / 3600);
+              minutes = Math.floor((totalSeconds % 3600) / 60);
+              seconds = Math.floor(totalSeconds % 60);
+            }
+          }
+
+          // Create date
+          date = new Date(year, month - 1, day, hours, minutes, seconds);
+        }
 
         if (isNaN(date.getTime())) {
           if (errors.length < 5) errors.push(`Line ${i + 1}: Invalid date/time`);
