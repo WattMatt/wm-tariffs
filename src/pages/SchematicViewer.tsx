@@ -111,7 +111,7 @@ export default function SchematicViewer() {
   const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
     e.preventDefault();
     const delta = e.deltaY * -0.01;
-    const newZoom = Math.min(Math.max(0.5, zoom + delta), 3);
+    const newZoom = Math.min(Math.max(0.5, zoom + delta), 10);
     setZoom(newZoom);
   };
 
@@ -344,8 +344,8 @@ export default function SchematicViewer() {
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
-                      <div className="text-sm text-muted-foreground">
-                        Zoom: {Math.round(zoom * 100)}% | Scroll to zoom, Drag to pan
+                      <div className={`text-sm font-medium ${zoom > 5 ? 'text-green-600' : 'text-muted-foreground'}`}>
+                        Zoom: {Math.round(zoom * 100)}% {zoom > 5 ? '(High precision)' : '| Scroll to zoom further'}
                       </div>
                       <Button size="sm" variant="outline" onClick={handleResetView}>
                         Reset View
@@ -403,38 +403,73 @@ export default function SchematicViewer() {
                               
                               {/* Extracted Meter Markers - positioned relative to image */}
                               {imageLoaded && extractedMeters.map((meter, index) => {
+                                const markerSize = selectedMeterIndex === index ? 40 : 32;
+                                const isDraggingThis = draggedMeterIndex === index;
+                                
                                 return (
-                                  <div
-                                    key={index}
-                                    className={`meter-marker absolute rounded-full border-4 transition-all flex flex-col items-center justify-center text-white font-bold shadow-xl ${
-                                      draggedMeterIndex === index ? 'cursor-move scale-110' :
-                                      selectedMeterIndex === index 
-                                        ? 'ring-4 ring-blue-400 ring-offset-2 cursor-move' 
-                                        : 'hover:scale-110 cursor-move'
-                                    } ${getMeterStatusColor(meter.status)}`}
-                                    style={{
-                                      left: `${meter.position?.x || 0}%`,
-                                      top: `${meter.position?.y || 0}%`,
-                                      width: `${selectedMeterIndex === index ? 64 : 48}px`,
-                                      height: `${selectedMeterIndex === index ? 64 : 48}px`,
-                                      fontSize: `${selectedMeterIndex === index ? 16 : 14}px`,
-                                      transform: `translate(-50%, -50%) scale(${1 / zoom})`,
-                                      transformOrigin: 'center',
-                                      zIndex: draggedMeterIndex === index ? 100 : selectedMeterIndex === index ? 50 : 30,
-                                      pointerEvents: 'auto',
-                                      opacity: draggedMeterIndex === index ? 0.8 : 1
-                                    }}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      if (draggedMeterIndex === null) {
-                                        handleMeterSelect(index);
-                                      }
-                                    }}
-                                    onMouseDown={(e) => handleMeterMarkerMouseDown(e, index)}
-                                    title={`${meter.meter_number} - ${meter.name} (Drag to reposition)`}
-                                  >
-                                    <span className="text-xs leading-none mb-0.5">{index + 1}</span>
-                                    <span className="text-[8px] leading-none font-mono opacity-90">{meter.meter_number}</span>
+                                  <div key={index}>
+                                    {/* Crosshair guide when dragging */}
+                                    {isDraggingThis && (
+                                      <>
+                                        <div
+                                          className="absolute pointer-events-none"
+                                          style={{
+                                            left: `${meter.position?.x || 0}%`,
+                                            top: 0,
+                                            width: '2px',
+                                            height: '100%',
+                                            background: 'linear-gradient(to bottom, rgba(59, 130, 246, 0.3) 0%, rgba(59, 130, 246, 0.6) 50%, rgba(59, 130, 246, 0.3) 100%)',
+                                            transform: 'translateX(-50%)',
+                                            zIndex: 90
+                                          }}
+                                        />
+                                        <div
+                                          className="absolute pointer-events-none"
+                                          style={{
+                                            left: 0,
+                                            top: `${meter.position?.y || 0}%`,
+                                            width: '100%',
+                                            height: '2px',
+                                            background: 'linear-gradient(to right, rgba(59, 130, 246, 0.3) 0%, rgba(59, 130, 246, 0.6) 50%, rgba(59, 130, 246, 0.3) 100%)',
+                                            transform: 'translateY(-50%)',
+                                            zIndex: 90
+                                          }}
+                                        />
+                                      </>
+                                    )}
+                                    
+                                    {/* Meter marker */}
+                                    <div
+                                      className={`meter-marker absolute rounded-full border-3 transition-all flex flex-col items-center justify-center text-white font-bold shadow-2xl ${
+                                        isDraggingThis ? 'cursor-move scale-110 ring-4 ring-blue-400' :
+                                        selectedMeterIndex === index 
+                                          ? 'ring-4 ring-blue-400 cursor-move' 
+                                          : 'hover:scale-110 cursor-move hover:ring-2 hover:ring-blue-300'
+                                      } ${getMeterStatusColor(meter.status)}`}
+                                      style={{
+                                        left: `${meter.position?.x || 0}%`,
+                                        top: `${meter.position?.y || 0}%`,
+                                        width: `${markerSize}px`,
+                                        height: `${markerSize}px`,
+                                        fontSize: `${markerSize / 3}px`,
+                                        transform: `translate(-50%, -50%) scale(${1 / zoom})`,
+                                        transformOrigin: 'center',
+                                        zIndex: isDraggingThis ? 100 : selectedMeterIndex === index ? 50 : 30,
+                                        pointerEvents: 'auto',
+                                        opacity: isDraggingThis ? 0.9 : 1
+                                      }}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (draggedMeterIndex === null) {
+                                          handleMeterSelect(index);
+                                        }
+                                      }}
+                                      onMouseDown={(e) => handleMeterMarkerMouseDown(e, index)}
+                                      title={`${meter.meter_number} - ${meter.name} (Drag to reposition)`}
+                                    >
+                                      <span className="leading-none mb-0.5">{index + 1}</span>
+                                      <span className="text-[7px] leading-none font-mono opacity-90">{meter.meter_number.substring(0, 6)}</span>
+                                    </div>
                                   </div>
                                 );
                               })}
