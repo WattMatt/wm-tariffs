@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
-import { Database, Trash2, Edit, Save, X, ChevronLeft, ChevronRight } from "lucide-react";
+import { Database, Trash2, Edit, Save, X, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
 interface MeterReading {
@@ -122,13 +122,26 @@ export default function MeterReadingsView({ isOpen, onClose, meterId, meterNumbe
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Database className="w-5 h-5" />
-            Meter Readings - {meterNumber}
-          </DialogTitle>
-          <DialogDescription>
-            View and manage imported CSV data ({totalCount} total readings)
-          </DialogDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <DialogTitle className="flex items-center gap-2">
+                <Database className="w-5 h-5" />
+                Meter Readings - {meterNumber}
+              </DialogTitle>
+              <DialogDescription>
+                View and manage imported CSV data ({totalCount} total readings)
+              </DialogDescription>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={fetchReadings}
+              disabled={isLoading}
+            >
+              <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+          </div>
         </DialogHeader>
 
         {isLoading ? (
