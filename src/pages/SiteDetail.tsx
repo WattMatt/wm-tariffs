@@ -11,6 +11,7 @@ import MetersTab from "@/components/site/MetersTab";
 import SchematicsTab from "@/components/site/SchematicsTab";
 import ReconciliationTab from "@/components/site/ReconciliationTab";
 import CostCalculationTab from "@/components/site/CostCalculationTab";
+import SiteReportExport from "@/components/site/SiteReportExport";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -166,10 +167,13 @@ export default function SiteDetail() {
               )}
             </div>
           </div>
-          <Button variant="outline" onClick={() => setIsEditDialogOpen(true)}>
-            <Pencil className="w-4 h-4 mr-2" />
-            Edit Site
-          </Button>
+          <div className="flex gap-2">
+            <SiteReportExport site={site} />
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(true)}>
+              <Pencil className="w-4 h-4 mr-2" />
+              Edit Site
+            </Button>
+          </div>
         </div>
 
         {(site.address || site.council_connection_point) && (
