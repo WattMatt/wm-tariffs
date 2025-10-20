@@ -9,7 +9,6 @@ import { CalendarIcon, Download } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import DatabaseManagementDialog from "./DatabaseManagementDialog";
 
 interface ReconciliationTabProps {
   siteId: string;
@@ -136,17 +135,14 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between">
-        <div>
-          <h2 className="text-2xl font-bold mb-2">Energy Reconciliation</h2>
+      <div>
+        <h2 className="text-2xl font-bold mb-2">Energy Reconciliation</h2>
         <p className="text-muted-foreground">
           Balance total supply (grid + solar) against downstream distribution
         </p>
-          <p className="text-xs text-muted-foreground mt-1">
-            Bulk Check Meter + Solar Generation = Total Supply ≈ Sum of all Distribution Meters
-          </p>
-        </div>
-        <DatabaseManagementDialog siteId={siteId} />
+        <p className="text-xs text-muted-foreground mt-1">
+          Bulk Check Meter + Solar Generation = Total Supply ≈ Sum of all Distribution Meters
+        </p>
       </div>
 
       <Card className="border-border/50">

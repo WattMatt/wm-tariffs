@@ -14,6 +14,7 @@ import NegativeReadingsDetector from "./NegativeReadingsDetector";
 import { toast } from "sonner";
 import CsvImportDialog from "./CsvImportDialog";
 import MeterReadingsView from "./MeterReadingsView";
+import DatabaseManagementDialog from "./DatabaseManagementDialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -197,19 +198,21 @@ export default function MetersTab({ siteId }: MetersTabProps) {
     <div className="space-y-6">
       <NegativeReadingsDetector siteId={siteId} />
       
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <div>
           <h2 className="text-2xl font-bold">Meters</h2>
           <p className="text-muted-foreground">Manage meters for this site</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={handleCloseDialog}>
-          <DialogTrigger asChild>
-            <Button className="gap-2">
-              <Plus className="w-4 h-4" />
-              Add Meter
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <div className="flex gap-2">
+          <DatabaseManagementDialog siteId={siteId} />
+          <Dialog open={isDialogOpen} onOpenChange={handleCloseDialog}>
+            <DialogTrigger asChild>
+              <Button className="gap-2">
+                <Plus className="w-4 h-4" />
+                Add Meter
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{editingMeter ? "Edit Meter" : "Add New Meter"}</DialogTitle>
               <DialogDescription>
@@ -350,6 +353,7 @@ export default function MetersTab({ siteId }: MetersTabProps) {
             </form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {meters.length === 0 ? (
