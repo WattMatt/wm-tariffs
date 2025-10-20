@@ -65,6 +65,7 @@ export default function MetersTab({ siteId }: MetersTabProps) {
   }, [siteId]);
 
   const fetchMeters = async () => {
+    console.log("Fetching meters for siteId:", siteId);
     const { data, error } = await supabase
       .from("meters")
       .select("*")
@@ -81,6 +82,8 @@ export default function MetersTab({ siteId }: MetersTabProps) {
             .from("meter_readings")
             .select("*", { count: "exact", head: true })
             .eq("meter_id", meter.id);
+          
+          console.log(`Meter ${meter.meter_number}: ${count} readings`);
           
           return {
             ...meter,
