@@ -593,6 +593,7 @@ export default function SchematicViewer() {
                                   left: `${position.x_position}%`,
                                   top: `${position.y_position}%`,
                                   transform: "translate(-50%, -50%)",
+                                  transformOrigin: 'center center',
                                   width: '28px',
                                   height: '28px',
                                   backgroundColor: position.meters?.meter_type === 'council_bulk' ? 'hsl(var(--primary))' :
