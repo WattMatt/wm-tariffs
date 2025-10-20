@@ -68,6 +68,18 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
             const firstReading = Number(readings[0].kwh_value);
             const lastReading = Number(readings[readings.length - 1].kwh_value);
             totalKwh = lastReading - firstReading;
+            
+            // Debug logging
+            console.log(`Meter ${meter.meter_number} (${meter.meter_type}):`, {
+              readingsCount: readings.length,
+              firstReading,
+              lastReading,
+              totalKwh,
+              firstTimestamp: readings[0].reading_timestamp,
+              lastTimestamp: readings[readings.length - 1].reading_timestamp
+            });
+          } else {
+            console.log(`Meter ${meter.meter_number}: No readings in date range`);
           }
 
           return {
