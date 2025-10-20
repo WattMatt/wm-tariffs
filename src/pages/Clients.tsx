@@ -164,9 +164,11 @@ export default function Clients() {
   };
 
   const handleCloseDialog = () => {
-    setIsDialogOpen(false);
-    setEditingClient(null);
-    setLogoFile(null);
+    if (isDialogOpen) {
+      setIsDialogOpen(false);
+      setEditingClient(null);
+      setLogoFile(null);
+    }
   };
 
   return (
@@ -179,7 +181,7 @@ export default function Clients() {
               Manage your client organizations
             </p>
           </div>
-          <Dialog open={isDialogOpen} onOpenChange={handleCloseDialog}>
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button className="gap-2">
                 <Plus className="w-4 h-4" />
