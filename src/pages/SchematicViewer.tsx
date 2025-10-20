@@ -8,10 +8,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Edit, Check, X } from "lucide-react";
+import { ArrowLeft, Edit, Check, X, MapPin } from "lucide-react";
 import { toast } from "sonner";
 import SchematicEditor from "@/components/schematic/SchematicEditor";
 import { MeterDataExtractor } from "@/components/schematic/MeterDataExtractor";
+import { QuickMeterDialog } from "@/components/schematic/QuickMeterDialog";
 
 interface SchematicData {
   id: string;
@@ -83,6 +84,9 @@ export default function SchematicViewer() {
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isEditingMeter, setIsEditingMeter] = useState(false);
   const [editedMeterData, setEditedMeterData] = useState<EditableMeterFields | null>(null);
+  const [isPlacingMeter, setIsPlacingMeter] = useState(false);
+  const [showQuickMeterDialog, setShowQuickMeterDialog] = useState(false);
+  const [clickedPosition, setClickedPosition] = useState<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     if (id) {
@@ -265,6 +269,29 @@ export default function SchematicViewer() {
     setEditedMeterData(null);
   };
 
+  const handleSchematicClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isPlacingMeter || !imageRef.current) return;
+    
+    // Don't trigger if clicking on existing markers
+    if ((e.target as HTMLElement).closest('.meter-marker')) return;
+    
+    const imageRect = imageRef.current.getBoundingClientRect();
+    const x = ((e.clientX - imageRect.left) / imageRect.width) * 100;
+    const y = ((e.clientY - imageRect.top) / imageRect.height) * 100;
+    
+    // Clamp to valid range
+    const clampedX = Math.max(0, Math.min(100, x));
+    const clampedY = Math.max(0, Math.min(100, y));
+    
+    setClickedPosition({ x: clampedX, y: clampedY });
+    setShowQuickMeterDialog(true);
+  };
+
+  const handleMeterPlaced = () => {
+    fetchMeterPositions();
+    setIsPlacingMeter(false);
+  };
+
   useEffect(() => {
     // Reset image loaded state when converted image changes
     if (convertedImageUrl) {
@@ -331,10 +358,23 @@ export default function SchematicViewer() {
           </div>
 
           <div className="flex items-center gap-2">
+            {!editMode && (
+              <Button
+                variant={isPlacingMeter ? "default" : "outline"}
+                size="sm"
+                onClick={() => setIsPlacingMeter(!isPlacingMeter)}
+              >
+                <MapPin className="w-4 h-4 mr-2" />
+                {isPlacingMeter ? "Cancel Placement" : "Place Meter"}
+              </Button>
+            )}
             <Button 
               variant={editMode ? "default" : "outline"} 
               size="sm" 
-              onClick={() => setEditMode(!editMode)}
+              onClick={() => {
+                setEditMode(!editMode);
+                setIsPlacingMeter(false);
+              }}
             >
               <Edit className="w-4 h-4 mr-2" />
               {editMode ? "View Mode" : "Edit Mode"}
@@ -375,86 +415,31 @@ export default function SchematicViewer() {
               />
             ) : (
               <div className="space-y-4">
-                {/* Meter Extraction Controls - Only show if no meters extracted yet */}
-                {extractedMeters.length === 0 && (
-                  <MeterDataExtractor
-                    siteId={schematic.site_id}
-                    schematicId={id!}
-                    imageUrl={imageUrl}
-                    onMetersExtracted={fetchMeterPositions}
-                    onConvertedImageReady={setConvertedImageUrl}
-                    extractedMeters={extractedMeters}
-                    onMetersUpdate={setExtractedMeters}
-                    selectedMeterIndex={selectedMeterIndex}
-                    onMeterSelect={setSelectedMeterIndex}
-                  />
-                )}
-
-                {/* Status Legend - Show when meters are extracted */}
-                {extractedMeters.length > 0 && (
-                  <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
-                      <div className="flex items-center gap-4">
-                        <div className="text-sm font-medium">Review Extracted Meters:</div>
-                        <div className="flex items-center gap-3">
-                          <div className="flex items-center gap-1.5">
-                            <div className="w-3 h-3 rounded-full bg-yellow-500 border-2 border-yellow-700 shadow-sm" />
-                            <span className="text-xs">Pending</span>
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            <div className="w-3 h-3 rounded-full bg-green-500 border-2 border-green-700 shadow-sm shadow-green-500/50" />
-                            <span className="text-xs font-medium">Approved</span>
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            <div className="w-3 h-3 rounded-full bg-red-500 border-2 border-red-700 shadow-sm" />
-                            <span className="text-xs">Rejected</span>
-                          </div>
-                        </div>
-                      <div className="text-xs text-muted-foreground border-l pl-3 ml-2">
-                        💡 Drag markers to correct positions
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className={`text-sm font-medium ${zoom > 5 ? 'text-green-600' : 'text-muted-foreground'}`}>
-                        Zoom: {Math.round(zoom * 100)}% {zoom > 5 ? '(High precision)' : '| Scroll to zoom further'}
-                      </div>
-                      <Button size="sm" variant="outline" onClick={handleResetView}>
-                        Reset View
-                      </Button>
-                    </div>
+                {/* Placement Mode Banner */}
+                {isPlacingMeter && (
+                  <div className="bg-primary/10 border-2 border-primary rounded-lg p-4 text-center">
+                    <MapPin className="w-6 h-6 mx-auto mb-2 text-primary" />
+                    <p className="font-semibold text-primary">Click anywhere on the schematic to place a meter</p>
+                    <p className="text-sm text-muted-foreground mt-1">You can then select an existing meter or create a new one</p>
                   </div>
                 )}
 
                 {/* Main Schematic View */}
-                <div className={extractedMeters.length > 0 ? "grid grid-cols-[1fr_400px] gap-4" : ""}>
+                <div className={meterPositions.length > 0 ? "grid grid-cols-[1fr_400px] gap-4" : ""}>
                   {/* Schematic with markers */}
                   <div 
                     ref={containerRef}
                     className="relative overflow-hidden bg-muted/20 rounded-lg border-2 border-border/50"
                     style={{ 
                       minHeight: '700px',
-                      cursor: extractedMeters.length > 0 ? (isDragging ? 'grabbing' : 'grab') : 'default'
+                      cursor: isPlacingMeter ? 'crosshair' : 'default'
                     }}
-                    onWheel={extractedMeters.length > 0 ? handleWheel : undefined}
-                    onMouseDown={extractedMeters.length > 0 ? handleMouseDown : undefined}
-                    onMouseMove={extractedMeters.length > 0 ? handleMouseMove : undefined}
-                    onMouseUp={extractedMeters.length > 0 ? handleMouseUp : undefined}
-                    onMouseLeave={extractedMeters.length > 0 ? handleMouseLeave : undefined}
+                    onClick={handleSchematicClick}
                   >
                     <div 
                       className="absolute inset-0 flex items-center justify-center"
-                      style={{
-                        transform: extractedMeters.length > 0 ? `translate(${pan.x}px, ${pan.y}px)` : 'none',
-                        transition: isDragging ? 'none' : 'transform 0.1s ease-out'
-                      }}
                     >
-                      <div
-                        className="relative"
-                        style={{
-                          transform: extractedMeters.length > 0 ? `scale(${zoom})` : 'scale(1)',
-                          transformOrigin: 'center center',
-                          transition: 'transform 0.2s ease-out'
-                        }}
-                      >
+                      <div className="relative">
                         {schematic.file_type === "application/pdf" ? (
                           convertedImageUrl ? (
                             <div className="relative inline-block">
@@ -465,104 +450,8 @@ export default function SchematicViewer() {
                                 className="max-w-none pointer-events-none select-none"
                                 style={{ maxWidth: '100%', height: 'auto', display: 'block' }}
                                 draggable={false}
-                                onLoad={(e) => {
-                                  const img = e.target as HTMLImageElement;
-                                  console.log('✅ Image loaded successfully');
-                                  console.log('   Dimensions:', img.naturalWidth, 'x', img.naturalHeight);
-                                  console.log('   Extracted meters count:', extractedMeters.length);
-                                  setImageLoaded(true);
-                                }}
-                                onError={(e) => {
-                                  console.error('❌ Image failed to load:', e);
-                                }}
                               />
                               
-                              {/* Extracted Meter Markers - positioned relative to image */}
-                              {imageLoaded ? (
-                                extractedMeters.map((meter, index) => {
-                                  if (index === 0) {
-                                    console.log('🎨 Rendering', extractedMeters.length, 'meter markers');
-                                  }
-                                const markerSize = selectedMeterIndex === index ? 40 : 32;
-                                const isDraggingThis = draggedMeterIndex === index;
-                                
-                                return (
-                                  <div key={index}>
-                                    {/* Crosshair guide when dragging */}
-                                    {isDraggingThis && (
-                                      <>
-                                        <div
-                                          className="absolute pointer-events-none"
-                                          style={{
-                                            left: `${meter.position?.x || 0}%`,
-                                            top: 0,
-                                            width: '2px',
-                                            height: '100%',
-                                            background: 'linear-gradient(to bottom, rgba(59, 130, 246, 0.3) 0%, rgba(59, 130, 246, 0.6) 50%, rgba(59, 130, 246, 0.3) 100%)',
-                                            transform: 'translateX(-50%)',
-                                            zIndex: 90
-                                          }}
-                                        />
-                                        <div
-                                          className="absolute pointer-events-none"
-                                          style={{
-                                            left: 0,
-                                            top: `${meter.position?.y || 0}%`,
-                                            width: '100%',
-                                            height: '2px',
-                                            background: 'linear-gradient(to right, rgba(59, 130, 246, 0.3) 0%, rgba(59, 130, 246, 0.6) 50%, rgba(59, 130, 246, 0.3) 100%)',
-                                            transform: 'translateY(-50%)',
-                                            zIndex: 90
-                                          }}
-                                        />
-                                      </>
-                                    )}
-                                    
-                                    {/* Meter marker with enhanced styling */}
-                                    <div
-                                      className={`meter-marker absolute rounded-full border-4 transition-all flex flex-col items-center justify-center text-white font-bold ${
-                                        isDraggingThis ? 'cursor-move scale-125 ring-4 ring-blue-400 shadow-2xl' :
-                                        selectedMeterIndex === index 
-                                          ? 'ring-4 ring-blue-400 cursor-move shadow-2xl scale-110' 
-                                          : 'hover:scale-110 cursor-move hover:ring-2 hover:ring-blue-300 shadow-lg'
-                                      } ${getMeterStatusColor(meter.status)}`}
-                                      style={{
-                                        left: `${meter.position?.x || 0}%`,
-                                        top: `${meter.position?.y || 0}%`,
-                                        width: `${markerSize}px`,
-                                        height: `${markerSize}px`,
-                                        fontSize: `${markerSize / 3.2}px`,
-                                        transform: `translate(-50%, -50%) scale(${1 / zoom})`,
-                                        transformOrigin: 'center',
-                                        zIndex: isDraggingThis ? 100 : selectedMeterIndex === index ? 50 : 30,
-                                        pointerEvents: 'auto',
-                                        opacity: isDraggingThis ? 0.9 : 1,
-                                        ...(meter.status === 'approved' && {
-                                          boxShadow: '0 0 20px rgba(34, 197, 94, 0.6), 0 0 40px rgba(34, 197, 94, 0.3)'
-                                        })
-                                      }}
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        if (draggedMeterIndex === null) {
-                                          handleMeterSelect(index);
-                                        }
-                                      }}
-                                      onMouseDown={(e) => handleMeterMarkerMouseDown(e, index)}
-                                      title={`${meter.meter_number} - ${meter.name} (Drag to reposition)`}
-                                    >
-                                      <span className="leading-none mb-0.5">{index + 1}</span>
-                                      <span className="text-[7px] leading-none font-mono opacity-90">{meter.meter_number.substring(0, 6)}</span>
-                                    </div>
-                                  </div>
-                                );
-                              })
-                              ) : (
-                                extractedMeters.length > 0 && (
-                                  <div className="absolute top-4 left-4 bg-yellow-500 text-white px-3 py-2 rounded text-sm">
-                                    ⚠️ Image not loaded yet - {extractedMeters.length} meters waiting to display
-                                  </div>
-                                )
-                              )}
                             </div>
                           ) : (
                             <div className="flex items-center justify-center p-16">
@@ -575,31 +464,37 @@ export default function SchematicViewer() {
                             </div>
                           )
                         ) : (
-                          <>
+                          <div className="relative inline-block">
                             <img
+                              ref={imageRef}
                               src={imageUrl}
                               alt={schematic.name}
                               className="max-w-full h-auto"
+                              draggable={false}
                             />
                             
                             {/* Existing Meter Position Markers */}
                             {meterPositions.map((position) => (
                               <div
                                 key={position.id}
-                                className={`absolute w-6 h-6 rounded-full ${getMeterColor(
-                                  position.meters?.meter_type || ""
-                                )} border-2 border-white shadow-lg flex items-center justify-center cursor-pointer hover:scale-110 transition-transform`}
+                                className="meter-marker absolute rounded-full border-3 border-white shadow-lg flex items-center justify-center cursor-pointer hover:scale-110 transition-all"
                                 style={{
                                   left: `${position.x_position}%`,
                                   top: `${position.y_position}%`,
                                   transform: "translate(-50%, -50%)",
+                                  width: '28px',
+                                  height: '28px',
+                                  backgroundColor: position.meters?.meter_type === 'council_bulk' ? 'hsl(var(--primary))' :
+                                                  position.meters?.meter_type === 'check_meter' ? '#f59e0b' :
+                                                  '#8b5cf6',
+                                  zIndex: 30,
                                 }}
                                 title={`${position.meters?.meter_number} - ${position.label || ""}`}
                               >
-                                <span className="text-[8px] font-bold text-white">M</span>
+                                <span className="text-[9px] font-bold text-white leading-none">{position.meters?.meter_number?.substring(0, 3)}</span>
                               </div>
                             ))}
-                          </>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -868,12 +763,27 @@ export default function SchematicViewer() {
                       {position.label && (
                         <p className="text-xs text-muted-foreground">{position.label}</p>
                       )}
-                    </div>
+                     </div>
                   </div>
                 ))}
               </div>
             </CardContent>
           </Card>
+        )}
+
+        {/* Quick Meter Placement Dialog */}
+        {clickedPosition && (
+          <QuickMeterDialog
+            open={showQuickMeterDialog}
+            onClose={() => {
+              setShowQuickMeterDialog(false);
+              setClickedPosition(null);
+            }}
+            siteId={schematic.site_id}
+            schematicId={id!}
+            position={clickedPosition}
+            onMeterPlaced={handleMeterPlaced}
+          />
         )}
       </div>
     </DashboardLayout>
