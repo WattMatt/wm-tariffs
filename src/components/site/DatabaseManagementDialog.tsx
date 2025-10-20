@@ -128,50 +128,39 @@ export default function DatabaseManagementDialog({ siteId, onDataChange }: Datab
 
       let totalReadingsInserted = 0;
       const filesArray = Array.from(files);
+      const uploadResults: any[] = [];
 
       for (let fileIndex = 0; fileIndex < filesArray.length; fileIndex++) {
         const file = filesArray[fileIndex];
         setUploadProgress(`Processing file ${fileIndex + 1}/${filesArray.length}: ${file.name}`);
 
-        // Try to match file name to meter serial number (with flexible matching)
+        // Extract number from filename for matching
         const fileName = file.name.replace(/\.csv$/i, "");
-        
-        // Extract potential meter number (numbers only)
         const numberMatch = fileName.match(/\d+/);
         const fileNumber = numberMatch ? numberMatch[0] : null;
-        
+
+        // Try to match file to meter
         const matchedMeter = meters.find((m) => {
           const serialLower = m.serial_number?.toLowerCase() || "";
           const meterNumLower = m.meter_number?.toLowerCase() || "";
           const nameLower = m.name?.toLowerCase() || "";
           const fileNameLower = fileName.toLowerCase();
-          
-          // Exact matches
-          if (serialLower === fileNameLower || meterNumLower === fileNameLower || nameLower === fileNameLower) {
-            return true;
-          }
-          
-          // Number-based matching
-          if (fileNumber) {
-            if (serialLower === fileNumber || meterNumLower === fileNumber || nameLower === fileNumber) {
-              return true;
-            }
-            // Check if meter identifiers contain the number
-            if (serialLower.includes(fileNumber) || meterNumLower.includes(fileNumber) || nameLower.includes(fileNumber)) {
-              return true;
-            }
-          }
-          
-          // Partial match (filename contains meter identifier)
-          if (fileNameLower.includes(serialLower) || fileNameLower.includes(meterNumLower) || fileNameLower.includes(nameLower)) {
-            return true;
-          }
-          
-          return false;
+
+          // Exact or contains matching
+          return (
+            serialLower === fileNameLower ||
+            meterNumLower === fileNameLower ||
+            nameLower === fileNameLower ||
+            (fileNumber &&
+              (serialLower === fileNumber ||
+                meterNumLower === fileNumber ||
+                serialLower.includes(fileNumber) ||
+                meterNumLower.includes(fileNumber)))
+          );
         });
 
         if (!matchedMeter) {
-          toast.warning(`No meter match found for file: ${file.name}`);
+          uploadResults.push({ file: file.name, status: "No meter match", readings: 0 });
           continue;
         }
 
@@ -185,14 +174,26 @@ export default function DatabaseManagementDialog({ siteId, onDataChange }: Datab
 
         const rows = parsed.data as string[][];
 
+        // Get existing timestamps for this meter to avoid duplicates
+        setUploadProgress(`Checking existing data for ${matchedMeter.meter_number}...`);
+        const { data: existingReadings } = await supabase
+          .from("meter_readings")
+          .select("reading_timestamp")
+          .eq("meter_id", matchedMeter.id);
+
+        const existingTimestamps = new Set(
+          existingReadings?.map((r) => new Date(r.reading_timestamp).toISOString()) || []
+        );
+
         // Process rows
         const readings: any[] = [];
+        let skippedDuplicates = 0;
+
         for (let i = 0; i < rows.length; i++) {
           const row = rows[i];
           if (row.length < 3) continue;
 
           try {
-            // Assuming format: Date, Time, Value
             const dateStr = row[0]?.trim();
             const timeStr = row[1]?.trim();
             const valueStr = row[2]?.trim()?.replace(",", ".");
@@ -208,9 +209,17 @@ export default function DatabaseManagementDialog({ siteId, onDataChange }: Datab
             const value = parseFloat(valueStr);
             if (isNaN(value)) continue;
 
+            const isoTimestamp = date.toISOString();
+
+            // Skip if duplicate
+            if (existingTimestamps.has(isoTimestamp)) {
+              skippedDuplicates++;
+              continue;
+            }
+
             readings.push({
               meter_id: matchedMeter.id,
-              reading_timestamp: date.toISOString(),
+              reading_timestamp: isoTimestamp,
               kwh_value: value,
               uploaded_by: (await supabase.auth.getUser()).data.user?.id,
             });
@@ -220,16 +229,24 @@ export default function DatabaseManagementDialog({ siteId, onDataChange }: Datab
         }
 
         if (readings.length === 0) {
-          toast.warning(`No valid readings found in ${file.name}`);
+          uploadResults.push({
+            file: file.name,
+            meter: matchedMeter.meter_number,
+            status: skippedDuplicates > 0 ? "All duplicates" : "No valid readings",
+            readings: 0,
+            skipped: skippedDuplicates,
+          });
           continue;
         }
 
         // Insert in batches
         const batchSize = 1000;
+        let insertedCount = 0;
+
         for (let i = 0; i < readings.length; i += batchSize) {
           const batch = readings.slice(i, i + batchSize);
           setUploadProgress(
-            `Inserting readings ${i + 1}-${Math.min(i + batchSize, readings.length)}/${readings.length} for ${
+            `Inserting ${i + 1}-${Math.min(i + batchSize, readings.length)}/${readings.length} for ${
               matchedMeter.meter_number
             }`
           );
@@ -240,13 +257,30 @@ export default function DatabaseManagementDialog({ siteId, onDataChange }: Datab
             console.error("Insert error:", insertError);
             throw insertError;
           }
+
+          insertedCount += batch.length;
         }
 
-        totalReadingsInserted += readings.length;
-        toast.success(`Imported ${readings.length} readings for meter ${matchedMeter.meter_number}`);
+        totalReadingsInserted += insertedCount;
+        uploadResults.push({
+          file: file.name,
+          meter: matchedMeter.meter_number,
+          status: "Success",
+          readings: insertedCount,
+          skipped: skippedDuplicates,
+        });
       }
 
-      toast.success(`Bulk upload complete! Total readings imported: ${totalReadingsInserted}`);
+      // Show detailed results
+      console.log("Upload Results:", uploadResults);
+      
+      const successCount = uploadResults.filter((r) => r.readings > 0).length;
+      const failedCount = uploadResults.filter((r) => r.readings === 0).length;
+
+      toast.success(
+        `Upload complete! ${successCount} files processed, ${totalReadingsInserted} readings imported, ${failedCount} files skipped`
+      );
+      
       event.target.value = "";
       onDataChange?.();
     } catch (error) {
