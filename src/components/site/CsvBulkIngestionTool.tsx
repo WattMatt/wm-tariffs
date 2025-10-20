@@ -59,6 +59,12 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
     }
   }, [isOpen]);
 
+  useEffect(() => {
+    if (activeTab === "parse") {
+      loadSavedFiles();
+    }
+  }, [activeTab]);
+
   const loadMeters = async () => {
     const { data } = await supabase
       .from("meters")
