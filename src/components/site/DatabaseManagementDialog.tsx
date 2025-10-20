@@ -39,56 +39,22 @@ export default function DatabaseManagementDialog({ siteId, onDataChange }: Datab
     try {
       console.log("Clearing database for siteId:", siteId);
       
-      // Get all meters for this site
-      const { data: meters, error: metersError } = await supabase
-        .from("meters")
-        .select("id, meter_number")
-        .eq("site_id", siteId);
+      toast.info("Starting database clear - this may take a few minutes for large datasets...");
+      
+      // Call edge function for optimized batch deletion
+      const { data, error } = await supabase.functions.invoke('clear-site-readings', {
+        body: { siteId }
+      });
 
-      console.log("Meters found:", meters?.length, "Error:", metersError);
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error);
 
-      if (metersError) {
-        console.error("Meters fetch error:", metersError);
-        throw new Error(`Failed to fetch meters: ${metersError.message}`);
-      }
+      console.log(`Deletion complete: ${data.totalDeleted} readings deleted`);
 
-      if (!meters || meters.length === 0) {
-        toast.info("No meters found for this site");
-        setShowClearConfirm(false);
-        setIsClearing(false);
-        return;
-      }
-
-      // Delete readings for each meter individually to avoid RLS issues
-      let totalDeleted = 0;
-      for (const meter of meters) {
-        const { error: deleteError, count } = await supabase
-          .from("meter_readings")
-          .delete({ count: "exact" })
-          .eq("meter_id", meter.id);
-
-        if (deleteError) {
-          console.error(`Error deleting readings for meter ${meter.meter_number}:`, deleteError);
-          throw new Error(`Failed to delete readings: ${deleteError.message}`);
-        }
-
-        console.log(`Deleted ${count || 0} readings for meter ${meter.meter_number}`);
-        totalDeleted += count || 0;
-      }
-
-      // Verify deletion
-      const { count: remainingCount } = await supabase
-        .from("meter_readings")
-        .select("*", { count: "exact", head: true })
-        .in("meter_id", meters.map(m => m.id));
-
-      console.log(`Total deleted: ${totalDeleted}, Remaining: ${remainingCount}`);
-
-      if ((remainingCount || 0) === 0) {
-        toast.success(`Database cleared successfully - ${totalDeleted} readings deleted`);
-      } else {
-        toast.warning(`Partially cleared - ${remainingCount} readings remaining`);
-      }
+      toast.success(
+        `Database cleared successfully - ${data.totalDeleted.toLocaleString()} readings deleted from ${data.metersProcessed} meters`,
+        { duration: 5000 }
+      );
       
       setShowClearConfirm(false);
       
@@ -96,9 +62,9 @@ export default function DatabaseManagementDialog({ siteId, onDataChange }: Datab
       setTimeout(() => {
         onDataChange?.();
       }, 500);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error clearing database:", error);
-      toast.error("Failed to clear database");
+      toast.error(`Failed to clear database: ${error.message || 'Unknown error'}`);
     } finally {
       setIsClearing(false);
     }
