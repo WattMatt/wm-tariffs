@@ -4,6 +4,9 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { ArrowLeft, Edit, Check, X } from "lucide-react";
 import { toast } from "sonner";
@@ -49,6 +52,16 @@ interface ExtractedMeterData {
   isDragging?: boolean;
 }
 
+interface EditableMeterFields {
+  meter_number: string;
+  name: string;
+  area: string;
+  rating: string;
+  cable_specification: string;
+  serial_number: string;
+  ct_type: string;
+}
+
 export default function SchematicViewer() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -68,6 +81,8 @@ export default function SchematicViewer() {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [draggedMeterIndex, setDraggedMeterIndex] = useState<number | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [isEditingMeter, setIsEditingMeter] = useState(false);
+  const [editedMeterData, setEditedMeterData] = useState<EditableMeterFields | null>(null);
 
   useEffect(() => {
     if (id) {
@@ -205,6 +220,49 @@ export default function SchematicViewer() {
 
   const handleMeterSelect = (index: number) => {
     setSelectedMeterIndex(index);
+    setIsEditingMeter(false);
+    setEditedMeterData(null);
+  };
+
+  const handleStartEdit = () => {
+    if (selectedMeterIndex !== null) {
+      const meter = extractedMeters[selectedMeterIndex];
+      setEditedMeterData({
+        meter_number: meter.meter_number,
+        name: meter.name,
+        area: meter.area?.toString() || '',
+        rating: meter.rating,
+        cable_specification: meter.cable_specification,
+        serial_number: meter.serial_number,
+        ct_type: meter.ct_type,
+      });
+      setIsEditingMeter(true);
+    }
+  };
+
+  const handleSaveEdit = () => {
+    if (selectedMeterIndex !== null && editedMeterData) {
+      const updated = [...extractedMeters];
+      updated[selectedMeterIndex] = {
+        ...updated[selectedMeterIndex],
+        meter_number: editedMeterData.meter_number,
+        name: editedMeterData.name,
+        area: editedMeterData.area ? parseFloat(editedMeterData.area) : null,
+        rating: editedMeterData.rating,
+        cable_specification: editedMeterData.cable_specification,
+        serial_number: editedMeterData.serial_number,
+        ct_type: editedMeterData.ct_type,
+      };
+      setExtractedMeters(updated);
+      setIsEditingMeter(false);
+      setEditedMeterData(null);
+      toast.success('Meter data updated');
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditingMeter(false);
+    setEditedMeterData(null);
   };
 
   useEffect(() => {
@@ -570,6 +628,84 @@ export default function SchematicViewer() {
                             </CardDescription>
                           </CardHeader>
                           <CardContent className="space-y-4">
+                            {isEditingMeter && editedMeterData ? (
+                              // Edit Mode
+                              <div className="space-y-3">
+                                <div>
+                                  <Label className="text-xs">Meter Number</Label>
+                                  <Input
+                                    value={editedMeterData.meter_number}
+                                    onChange={(e) => setEditedMeterData({ ...editedMeterData, meter_number: e.target.value })}
+                                    className="text-sm"
+                                  />
+                                </div>
+                                <div>
+                                  <Label className="text-xs">Name</Label>
+                                  <Input
+                                    value={editedMeterData.name}
+                                    onChange={(e) => setEditedMeterData({ ...editedMeterData, name: e.target.value })}
+                                    className="text-sm"
+                                  />
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div>
+                                    <Label className="text-xs">Area (m²)</Label>
+                                    <Input
+                                      type="number"
+                                      value={editedMeterData.area}
+                                      onChange={(e) => setEditedMeterData({ ...editedMeterData, area: e.target.value })}
+                                      className="text-sm"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label className="text-xs">Rating</Label>
+                                    <Input
+                                      value={editedMeterData.rating}
+                                      onChange={(e) => setEditedMeterData({ ...editedMeterData, rating: e.target.value })}
+                                      className="text-sm"
+                                    />
+                                  </div>
+                                </div>
+                                <div>
+                                  <Label className="text-xs">Cable Specification</Label>
+                                  <Input
+                                    value={editedMeterData.cable_specification}
+                                    onChange={(e) => setEditedMeterData({ ...editedMeterData, cable_specification: e.target.value })}
+                                    className="text-sm"
+                                  />
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div>
+                                    <Label className="text-xs">Serial Number</Label>
+                                    <Input
+                                      value={editedMeterData.serial_number}
+                                      onChange={(e) => setEditedMeterData({ ...editedMeterData, serial_number: e.target.value })}
+                                      className="text-sm"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label className="text-xs">CT Type</Label>
+                                    <Input
+                                      value={editedMeterData.ct_type}
+                                      onChange={(e) => setEditedMeterData({ ...editedMeterData, ct_type: e.target.value })}
+                                      className="text-sm"
+                                    />
+                                  </div>
+                                </div>
+                                <div className="flex gap-2 pt-2">
+                                  <Button onClick={handleSaveEdit} size="sm" className="flex-1">
+                                    <Check className="h-4 w-4 mr-1" />
+                                    Save
+                                  </Button>
+                                  <Button onClick={handleCancelEdit} size="sm" variant="outline" className="flex-1">
+                                    <X className="h-4 w-4 mr-1" />
+                                    Cancel
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : (
+                              // View Mode
+                              <>
                             {/* Structured meter info table like reference image */}
                             <div className="border border-border rounded-lg overflow-hidden">
                               <div className="grid grid-cols-[120px_1fr]">
@@ -620,6 +756,15 @@ export default function SchematicViewer() {
                             </div>
 
                             <div className="flex flex-col gap-2 pt-2">
+                              <Button
+                                onClick={handleStartEdit}
+                                variant="outline"
+                                size="sm"
+                                className="w-full"
+                              >
+                                <Edit className="h-4 w-4 mr-2" />
+                                Edit Meter Data
+                              </Button>
                               {extractedMeters[selectedMeterIndex].status !== 'approved' && (
                                 <Button
                                   onClick={() => {
@@ -651,6 +796,8 @@ export default function SchematicViewer() {
                                 Reject Meter
                               </Button>
                             </div>
+                              </>
+                            )}
                           </CardContent>
                         </Card>
                       ) : (

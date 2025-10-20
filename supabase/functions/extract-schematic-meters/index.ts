@@ -80,38 +80,53 @@ serve(async (req) => {
             content: [
               {
                 type: 'text',
-                text: `You are analyzing an electrical schematic diagram to extract meter information.
+                text: `You are an expert electrical engineer analyzing an electrical schematic diagram to extract meter information with PIXEL-PERFECT position accuracy.
 
-CRITICAL REQUIREMENT: Position accuracy is MANDATORY. Each meter's position MUST be measured with precision.
+CRITICAL: Your position measurements will directly control marker placement on the visual schematic. Inaccurate positions render the system unusable.
 
-For each meter/distribution board visible on this schematic, extract:
-- NO (meter number, e.g., DB-03, MB-1)
-- NAME (meter name/location, e.g., ACKERMANS, MAIN BOARD 1)
-- AREA (in m² - extract just the number, e.g., 406)
-- RATING (with units, e.g., 100A TP, 150A TP)
-- CABLE (cable specification, e.g., 4C x 50mm² ALU ECC CABLE)
-- SERIAL (serial number, e.g., 35777285)
-- CT (CT type, e.g., DOL, 150/5A, 300/5A)
+STEP 1: ANALYZE THE SCHEMATIC LAYOUT
+- Carefully examine the entire schematic image
+- Identify every meter box, distribution board symbol, and meter connection point
+- Note the visual structure and how meters are arranged
 
-POSITION MEASUREMENT INSTRUCTIONS (CRITICAL):
-- Look at the schematic carefully and identify where each meter box or symbol is drawn
-- Measure the EXACT CENTER of each meter box/symbol
-- Express as percentages: x = horizontal position from left edge (0% = far left, 100% = far right)
-                          y = vertical position from top edge (0% = top, 100% = bottom)
-- Use decimal precision (e.g., 23.5, 47.2) for accurate placement
-- Example: A meter in the upper left area might be {"x": 15.5, "y": 28.3}
-- Example: A meter in the center-right might be {"x": 72.0, "y": 55.0}
+STEP 2: EXTRACT DATA FOR EACH METER
+For each meter/distribution board visible, extract:
+- NO (meter number): e.g., DB-03, MB-1, INCOMING-01
+- NAME (location/description): e.g., ACKERMANS, MAIN BOARD 1, INCOMING COUNCIL
+- AREA (m²): Extract numeric value only, e.g., 406
+- RATING: Include units, e.g., 100A TP, 150A TP, 250A TP
+- CABLE: Full cable specification, e.g., 4C x 50mm² ALU ECC CABLE
+- SERIAL: Serial number, e.g., 35777285
+- CT: CT type/rating, e.g., DOL, 150/5A, 300/5A
+
+STEP 3: MEASURE EXACT POSITIONS (MOST CRITICAL)
+For EVERY meter, measure its position with extreme precision:
+
+1. Locate the VISUAL CENTER of the meter's box/symbol on the schematic
+2. Measure from the image edges:
+   - x = Distance from LEFT edge as percentage (0.0 = far left, 100.0 = far right)  
+   - y = Distance from TOP edge as percentage (0.0 = top, 100.0 = bottom)
+3. Use ONE decimal place precision (e.g., 23.5, 47.2, 88.1)
+4. Verify each position visually before finalizing
+
+POSITION EXAMPLES:
+- Top-left corner meter: {"x": 12.5, "y": 15.3}
+- Center meter: {"x": 50.0, "y": 50.0}
+- Bottom-right meter: {"x": 87.3, "y": 91.2}
 
 METER TYPE CLASSIFICATION:
-- "council_bulk" - main incoming council supply meters (highest rating, labeled "INCOMING COUNCIL")
-- "check_meter" - bulk check meters or sub-main check meters (labeled "BULK CHECK METER" or "CHECK METER")
-- "distribution" - distribution boards (labeled as DB-XX)
+- "council_bulk": Main incoming council supply (highest rating, labeled "INCOMING" or "COUNCIL")
+- "check_meter": Check/verification meters (labeled "CHECK METER")  
+- "distribution": Distribution boards (typically labeled DB-XX or similar)
 
-ACCURACY IS CRITICAL: Users will click on visual markers placed at these exact positions. If positions are wrong, the interface becomes unusable.
+VALIDATION:
+- Every meter MUST have a position with valid x and y numbers
+- Positions should match the visual layout of the schematic
+- Adjacent meters should have adjacent position values
 
-Return ONLY a valid JSON array with these exact keys: meter_number, name, area (number or null), rating, cable_specification, serial_number, ct_type, meter_type, position (object with x and y as numbers).
+Return ONLY valid JSON array with exact keys: meter_number, name, area (number or null), rating, cable_specification, serial_number, ct_type, meter_type, position (object with x and y as numbers 0-100).
 
-Return ONLY the JSON array, no markdown formatting, no explanatory text.`
+NO markdown, NO explanations, ONLY the JSON array starting with [ and ending with ]`
               },
               {
                 type: 'image_url',

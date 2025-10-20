@@ -112,19 +112,23 @@ export const MeterDataExtractor = ({
 
       console.log('Extracted meters:', data.meters);
       
-      // Use positions from AI extraction, fallback to grid if not provided
+      // Validate positions from AI extraction - positions should be 0-100 percentages
       const metersWithPosition = data.meters.map((meter: any, index: number) => {
-        // If AI provided position, use it; otherwise distribute in grid
         let position = meter.position;
+        
+        // Validate position exists and has proper format
         if (!position || typeof position.x !== 'number' || typeof position.y !== 'number') {
-          const cols = Math.ceil(Math.sqrt(data.meters.length));
-          const row = Math.floor(index / cols);
-          const col = index % cols;
+          console.warn(`⚠️ Meter ${index + 1} (${meter.meter_number}) missing valid position from AI`);
+          // Center position as fallback with warning
           position = {
-            x: 10 + (col * (80 / cols)),
-            y: 10 + (row * (80 / (Math.ceil(data.meters.length / cols))))
+            x: 50,
+            y: 50
           };
         }
+        
+        // Ensure positions are within 0-100 range
+        position.x = Math.max(0, Math.min(100, position.x));
+        position.y = Math.max(0, Math.min(100, position.y));
         
         return {
           ...meter,
@@ -192,7 +196,7 @@ export const MeterDataExtractor = ({
     }
 
     try {
-      // Insert all approved meters
+      // Insert all approved meters with their positions
       const metersToInsert = approvedMeters.map(meter => ({
         site_id: siteId,
         meter_number: meter.meter_number,
@@ -207,13 +211,37 @@ export const MeterDataExtractor = ({
         tariff: meter.tariff,
       }));
 
-      const { error } = await supabase
+      const { data: insertedMeters, error: meterError } = await supabase
         .from("meters")
-        .insert(metersToInsert);
+        .insert(metersToInsert)
+        .select();
 
-      if (error) throw error;
+      if (meterError) throw meterError;
 
-      toast.success(`Successfully saved ${approvedMeters.length} approved meters`);
+      // Now save meter positions to link them to the schematic
+      if (insertedMeters && insertedMeters.length > 0) {
+        const positionsToInsert = insertedMeters.map((meter, idx) => {
+          const originalMeter = approvedMeters[idx];
+          return {
+            schematic_id: schematicId,
+            meter_id: meter.id,
+            x_position: originalMeter.position?.x || 50,
+            y_position: originalMeter.position?.y || 50,
+            label: originalMeter.name
+          };
+        });
+
+        const { error: posError } = await supabase
+          .from("meter_positions")
+          .insert(positionsToInsert);
+
+        if (posError) {
+          console.error("Warning: Failed to save meter positions:", posError);
+          toast.error("Meters saved but positions could not be linked to schematic");
+        }
+      }
+
+      toast.success(`Successfully saved ${approvedMeters.length} approved meters with positions`);
       onMetersUpdate([]);
       setConvertedImageUrl(null);
       onMetersExtracted();
