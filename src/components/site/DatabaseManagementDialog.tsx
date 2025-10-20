@@ -84,7 +84,7 @@ export default function DatabaseManagementDialog({ siteId, onDataChange }: Datab
 
       console.log(`Total deleted: ${totalDeleted}, Remaining: ${remainingCount}`);
 
-      if (remainingCount === 0) {
+      if ((remainingCount || 0) === 0) {
         toast.success(`Database cleared successfully - ${totalDeleted} readings deleted`);
       } else {
         toast.warning(`Partially cleared - ${remainingCount} readings remaining`);
