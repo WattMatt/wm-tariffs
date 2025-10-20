@@ -10,8 +10,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, FileText, Upload, Eye, Trash2, RefreshCw } from "lucide-react";
+import { Plus, FileText, Upload, Eye, Trash2, RefreshCw, Home } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 
@@ -25,7 +26,8 @@ interface Schematic {
   total_pages: number;
   created_at: string;
   converted_image_path: string | null;
-  sites: { name: string; clients: { name: string } | null } | null;
+  site_id: string;
+  sites: { id: string; name: string; clients: { name: string } | null } | null;
 }
 
 interface Site {
@@ -54,7 +56,7 @@ export default function Schematics() {
   const fetchSchematics = async () => {
     const { data, error } = await supabase
       .from("schematics")
-      .select("*, sites(name, clients(name))")
+      .select("*, sites(id, name, clients(name))")
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -305,6 +307,27 @@ export default function Schematics() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
+        <Breadcrumb className="mb-4">
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbLink onClick={() => navigate('/dashboard')} className="cursor-pointer flex items-center gap-1">
+                <Home className="w-4 h-4" />
+                Dashboard
+              </BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbLink onClick={() => navigate('/sites')} className="cursor-pointer">
+                Sites
+              </BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbPage>Schematics</BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
+
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-4xl font-bold mb-2">Schematics</h1>
@@ -474,7 +497,13 @@ export default function Schematics() {
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-col">
-                          <span className="font-medium">{schematic.sites?.name || "—"}</span>
+                          <Button
+                            variant="link"
+                            className="p-0 h-auto font-medium justify-start"
+                            onClick={() => navigate(`/sites/${schematic.site_id}`)}
+                          >
+                            {schematic.sites?.name || "—"}
+                          </Button>
                           {schematic.sites?.clients && (
                             <span className="text-xs text-muted-foreground">
                               {schematic.sites.clients.name}
