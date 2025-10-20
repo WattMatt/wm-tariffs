@@ -58,10 +58,17 @@ Deno.serve(async (req) => {
       const line = lines[i].trim();
       if (!line) continue;
 
-      // Split by the specified separator
-      const escapedSeparator = separator.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const splitRegex = new RegExp(escapedSeparator + '+');
-      const columns = line.split(splitRegex).filter(col => col.trim());
+      // Split by the specified separator (multiple consecutive separators treated as one)
+      let columns: string[];
+      if (separator === ' ') {
+        // For space: split by one or more spaces
+        columns = line.split(/\s+/).filter(col => col.trim());
+      } else {
+        // For other separators: split by one or more occurrences
+        const escapedSeparator = separator.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const splitRegex = new RegExp(escapedSeparator + '+');
+        columns = line.split(splitRegex).filter(col => col.trim());
+      }
       
       // Log first data row for debugging
       if (i === 1) {

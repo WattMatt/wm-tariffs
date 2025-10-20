@@ -61,17 +61,44 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
 
   const parseCSV = (file: File) => {
     console.log('📄 Starting CSV parse for file:', file.name, 'Size:', file.size);
+    console.log('🔧 Using separator:', separator);
     
-    const delimiterMap: Record<string, string> = {
-      tab: "\t",
-      comma: ",",
-      semicolon: ";",
-      space: " "
-    };
-    
-    Papa.parse(file, {
-      delimiter: delimiterMap[separator],
-      complete: (results) => {
+    // For space separator, we need to pre-process the file
+    if (separator === 'space') {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const text = e.target?.result as string;
+        // Replace multiple spaces with single tab
+        const normalized = text.split('\n').map(line => 
+          line.trim().replace(/\s+/g, '\t')
+        ).join('\n');
+        
+        // Parse with tab delimiter
+        Papa.parse(normalized, {
+          delimiter: "\t",
+          skipEmptyLines: true,
+          complete: processResults,
+          error: handleError,
+        });
+      };
+      reader.readAsText(file);
+    } else {
+      const delimiterMap: Record<string, string> = {
+        tab: "\t",
+        comma: ",",
+        semicolon: ";"
+      };
+      
+      Papa.parse(file, {
+        delimiter: delimiterMap[separator],
+        skipEmptyLines: true,
+        complete: processResults,
+        error: handleError,
+      });
+    }
+  };
+  
+  const processResults = (results: any) => {
         const data = results.data as any[][];
         console.log('✅ CSV parsed. Total rows:', data.length);
         
@@ -142,21 +169,19 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
           setValueColumn(headers[kwhColumnIndex]);
         }
 
-        // If we found both columns, skip directly to import
+        // Always show confirmation step
+        setStep("confirm");
         if (timeColumnIndex >= 0 && kwhColumnIndex >= 0) {
           console.log('✅ All columns detected automatically');
-          setStep("confirm");
-          toast.success(`Ready to import ${dataRows.length} readings from ${headers.length} columns`);
+          toast.success(`Parsed ${dataRows.length} rows with ${headers.length} columns. Review and confirm to import.`);
         } else {
-          setStep("confirm");
-          toast.warning("Please verify detected columns");
+          toast.warning("Please verify the detected columns before importing");
         }
-      },
-      error: (error) => {
-        console.error('❌ CSV parse error:', error);
-        toast.error(`Failed to parse CSV: ${error.message}`);
-      },
-    });
+  };
+  
+  const handleError = (error: any) => {
+    console.error('❌ CSV parse error:', error);
+    toast.error(`Failed to parse CSV: ${error.message}`);
   };
 
   const handleImport = async () => {
@@ -402,26 +427,27 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
 
         {step === "confirm" && csvData && (
           <div className="space-y-6">
-            <Card className="border-border/50 bg-primary/5 border-primary/20">
+            <Card className="border-border/50 bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800">
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
-                  <CheckCircle2 className="w-5 h-5 text-primary" />
-                  Ready to Import
+                  <AlertCircle className="w-5 h-5 text-blue-600" />
+                  Review Parsed Data
                 </CardTitle>
                 <CardDescription>
-                  {csvData.rows.length} rows • {csvData.headers.length} columns detected (Time, P1, Q1-Q4, S, Status, etc.)
+                  Separator: <span className="font-semibold">{separator === 'tab' ? 'Tab' : separator === 'comma' ? 'Comma' : separator === 'semicolon' ? 'Semicolon' : 'Space'}</span> • 
+                  {csvData.rows.length} rows • {csvData.headers.length} columns detected
                 </CardDescription>
               </CardHeader>
             </Card>
 
-            <Card className="border-border/50 bg-green-500/5 border-green-500/20">
+            <Card className="border-border/50 bg-muted/30">
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
-                  <CheckCircle2 className="w-5 h-5 text-green-600" />
-                  Data Preview - All Columns Will Be Imported
+                  <CheckCircle2 className="w-5 h-5 text-accent" />
+                  Data Preview
                 </CardTitle>
                 <CardDescription>
-                  First 10 rows showing all columns including: Time, P1 (kWh), Q1-Q4 (kvarh), S (kVA/kVAh), Status
+                  First 10 rows. Review the column separation and data format before importing.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -461,79 +487,25 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
               </CardContent>
             </Card>
 
-            <div className="flex justify-between">
-              <Button variant="outline" onClick={() => setStep("upload")}>
-                Back
+            <div className="flex gap-3 pt-4 border-t">
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setStep("upload");
+                  setCsvData(null);
+                  setTimestampColumn("");
+                  setValueColumn("");
+                }}
+                className="flex-1"
+              >
+                Cancel / Change Separator
               </Button>
               <Button
-                onClick={() => setStep("confirm")}
-                disabled={!timestampColumn || !valueColumn}
+                onClick={handleImport}
+                disabled={!timestampColumn || !valueColumn || isUploading}
+                className="flex-1 bg-primary"
               >
-                Continue
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {step === "confirm" && csvData && (
-          <div className="space-y-6">
-            <Card className="border-border/50 bg-accent/5">
-              <CardHeader>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-5 h-5 text-accent" />
-                  <CardTitle className="text-base">Import Summary</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">Source File</p>
-                    <p className="font-medium">{selectedFile?.name}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">Total Rows</p>
-                    <p className="font-medium">{csvData.rows.length.toLocaleString()}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">Timestamp Column</p>
-                    <p className="font-medium font-mono text-sm">{timestampColumn}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">Value Column</p>
-                    <p className="font-medium font-mono text-sm">{valueColumn}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">Total Columns</p>
-                    <p className="font-medium text-sm">{csvData.headers.length} columns captured</p>
-                  </div>
-                </div>
-
-                <div className="border-t pt-4">
-                  <p className="text-sm text-muted-foreground mb-2">Sample Data Preview:</p>
-                  <div className="space-y-2">
-                    {csvData.preview.slice(0, 3).map((row, idx) => {
-                      const timestampIdx = csvData.headers.indexOf(timestampColumn);
-                      const valueIdx = csvData.headers.indexOf(valueColumn);
-                      return (
-                        <div key={idx} className="flex items-center gap-4 p-2 rounded bg-muted/50 text-sm">
-                          <span className="text-muted-foreground">Row {idx + 1}:</span>
-                          <span className="font-mono">{row[timestampIdx]}</span>
-                          <span className="text-muted-foreground">→</span>
-                          <span className="font-bold">{row[valueIdx]} kWh</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <div className="flex justify-between">
-              <Button variant="outline" onClick={() => setStep("upload")}>
-                Back
-              </Button>
-              <Button onClick={handleImport} disabled={isUploading}>
-                {isUploading ? "Importing..." : `Import ${csvData.rows.length} Readings`}
+                {isUploading ? "Importing..." : `✓ Confirm & Import ${csvData.rows.length} Readings`}
               </Button>
             </div>
           </div>
