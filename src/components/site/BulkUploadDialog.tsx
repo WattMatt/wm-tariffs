@@ -152,8 +152,10 @@ export default function BulkUploadDialog({ siteId, onDataChange }: BulkUploadDia
           const readings: any[] = [];
           let skipped = 0;
           let parseErrors = 0;
+          let firstError = "";
 
-          for (const row of rows) {
+          for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+            const row = rows[rowIndex];
             if (row.length < 3) continue;
 
             try {
@@ -163,15 +165,38 @@ export default function BulkUploadDialog({ siteId, onDataChange }: BulkUploadDia
 
               if (!dateStr || !timeStr || !valueStr) continue;
 
-              const timestamp = `${dateStr} ${timeStr}`;
-              const date = new Date(timestamp);
+              // Parse date in format YYYY/MM/DD or YYYY-MM-DD
+              const dateParts = dateStr.split(/[\/\-]/);
+              if (dateParts.length !== 3) {
+                if (!firstError) firstError = `Row ${rowIndex + 1}: Invalid date format "${dateStr}"`;
+                parseErrors++;
+                continue;
+              }
+
+              const [year, month, day] = dateParts.map(Number);
+              
+              // Parse time in format HH:MM:SS
+              const timeParts = timeStr.split(":");
+              if (timeParts.length < 2) {
+                if (!firstError) firstError = `Row ${rowIndex + 1}: Invalid time format "${timeStr}"`;
+                parseErrors++;
+                continue;
+              }
+
+              const [hours, minutes, seconds = 0] = timeParts.map(Number);
+
+              // Create date object
+              const date = new Date(year, month - 1, day, hours, minutes, seconds);
+              
               if (isNaN(date.getTime())) {
+                if (!firstError) firstError = `Row ${rowIndex + 1}: Invalid date/time "${dateStr} ${timeStr}"`;
                 parseErrors++;
                 continue;
               }
 
               const value = parseFloat(valueStr);
               if (isNaN(value)) {
+                if (!firstError) firstError = `Row ${rowIndex + 1}: Invalid value "${valueStr}"`;
                 parseErrors++;
                 continue;
               }
@@ -190,12 +215,14 @@ export default function BulkUploadDialog({ siteId, onDataChange }: BulkUploadDia
                 uploaded_by: (await supabase.auth.getUser()).data.user?.id,
               });
             } catch (err) {
+              if (!firstError) firstError = `Row ${rowIndex + 1}: ${err}`;
               console.error("Row parse error:", err);
               parseErrors++;
             }
           }
 
           console.log(`${mapping.file.name}: ${rows.length} rows, ${readings.length} valid, ${skipped} duplicates, ${parseErrors} parse errors`);
+          if (firstError) console.error(`First error: ${firstError}`);
 
           // Insert in batches
           if (readings.length > 0) {
