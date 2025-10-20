@@ -835,12 +835,44 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
               </div>
             </div>
 
-            {files.filter(f => f.status === "pending").length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">
-                <Upload className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                <p>Select one or more .csv or .txt files to get started</p>
-              </div>
-            ) : (
+            <div className="space-y-4">
+              {files.filter(f => !f.isNew && f.path).length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-semibold text-sm text-muted-foreground">
+                      Already in Storage ({files.filter(f => !f.isNew && f.path).length} files)
+                    </h3>
+                  </div>
+                  <ScrollArea className="max-h-[200px] rounded-md border bg-muted/30 p-3">
+                    <div className="space-y-1">
+                      {files.filter(f => !f.isNew && f.path).map((fileItem, idx) => (
+                        <div key={idx} className="flex items-center justify-between text-xs p-2 rounded hover:bg-background/50">
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <FileText className="w-3 h-3 text-muted-foreground shrink-0" />
+                            <span className="truncate">{fileItem.name}</span>
+                            <Badge variant="outline" className="text-[10px] shrink-0">
+                              {fileItem.meterNumber || "No meter"}
+                            </Badge>
+                          </div>
+                          <span className="text-muted-foreground shrink-0 ml-2">
+                            {fileItem.size ? `${(fileItem.size / 1024).toFixed(1)} KB` : ''}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </div>
+              )}
+
+              {files.filter(f => f.status === "pending").length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <Upload className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                  <p>Select one or more .csv or .txt files to get started</p>
+                  {files.filter(f => !f.isNew && f.path).length > 0 && (
+                    <p className="text-xs mt-2">Files already in storage are shown above</p>
+                  )}
+                </div>
+              ) : (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <h3 className="font-semibold text-sm">
@@ -1025,8 +1057,9 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                   </Collapsible>
                   );
                 })}
-              </div>
-            )}
+               </div>
+             )}
+            </div>
           </TabsContent>
 
           <TabsContent value="parse" className="flex-1 overflow-y-auto space-y-4">
