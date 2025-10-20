@@ -40,12 +40,35 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [schematicToDelete, setSchematicToDelete] = useState<Schematic | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isFetching, setIsFetching] = useState(true);
 
   useEffect(() => {
     fetchSchematics();
+    
+    // Set up realtime subscription for schematics changes
+    const channel = supabase
+      .channel('schematics-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'schematics',
+          filter: `site_id=eq.${siteId}`
+        },
+        () => {
+          fetchSchematics();
+        }
+      )
+      .subscribe();
+      
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [siteId]);
 
   const fetchSchematics = async () => {
+    setIsFetching(true);
     const { data, error } = await supabase
       .from("schematics")
       .select("*")
@@ -53,10 +76,13 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
       .order("created_at", { ascending: false });
 
     if (error) {
+      console.error("Error fetching schematics:", error);
       toast.error("Failed to fetch schematics");
+      setSchematics([]);
     } else {
       setSchematics(data || []);
     }
+    setIsFetching(false);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -310,7 +336,14 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
         />
       )}
 
-      {schematics.length === 0 ? (
+      {isFetching ? (
+        <Card className="border-border/50">
+          <CardContent className="flex flex-col items-center justify-center py-16">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
+            <p className="text-muted-foreground">Loading schematics...</p>
+          </CardContent>
+        </Card>
+      ) : schematics.length === 0 ? (
         <Card className="border-border/50">
           <CardContent className="flex flex-col items-center justify-center py-16">
             <FileText className="w-16 h-16 text-muted-foreground mb-4" />
