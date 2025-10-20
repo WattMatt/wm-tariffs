@@ -143,54 +143,76 @@ export default function SchematicViewer() {
   const convertPdfToImage = async (schematicId: string, filePath: string) => {
     console.log("Converting PDF to image in browser...");
     setIsConverting(true);
+    toast.info("Converting PDF to image...");
     
     try {
       // Download the PDF from storage
+      console.log("Downloading PDF from storage...");
       const { data: pdfBlob, error: downloadError } = await supabase
         .storage
         .from('schematics')
         .download(filePath);
       
       if (downloadError || !pdfBlob) {
+        console.error("Download error:", downloadError);
         throw new Error('Failed to download PDF');
       }
+      console.log("PDF downloaded, size:", pdfBlob.size);
 
       // Convert blob to array buffer
       const arrayBuffer = await pdfBlob.arrayBuffer();
+      console.log("Converted to array buffer");
       
       // Load PDF with PDF.js
+      console.log("Loading PDF.js library...");
       const pdfjsLib = await import('pdfjs-dist');
-      pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
       
+      // Configure worker
+      const workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+      console.log("Setting worker source:", workerSrc);
+      pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
+      
+      console.log("Loading PDF document...");
       const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
       const pdf = await loadingTask.promise;
+      console.log("PDF loaded, pages:", pdf.numPages);
       
       // Get first page
+      console.log("Getting first page...");
       const page = await pdf.getPage(1);
       const viewport = page.getViewport({ scale: 2.0 }); // 2x for better quality
+      console.log("Viewport:", viewport.width, "x", viewport.height);
       
       // Create canvas
       const canvas = document.createElement('canvas');
-      const context = canvas.getContext('2d');
+      const context = canvas.getContext('2d', { willReadFrequently: false });
       
       if (!context) throw new Error('Could not get canvas context');
       
       canvas.width = viewport.width;
       canvas.height = viewport.height;
+      console.log("Canvas created");
       
       // Render PDF page to canvas
+      console.log("Rendering PDF to canvas...");
       const renderContext = {
         canvasContext: context,
         viewport: viewport,
       };
       await page.render(renderContext as any).promise;
+      console.log("PDF rendered to canvas");
       
       // Convert canvas to blob
+      console.log("Converting canvas to blob...");
       const imageBlob = await new Promise<Blob>((resolve, reject) => {
         canvas.toBlob(
           (blob) => {
-            if (blob) resolve(blob);
-            else reject(new Error('Failed to create blob'));
+            if (blob) {
+              console.log("Blob created, size:", blob.size);
+              resolve(blob);
+            } else {
+              reject(new Error('Failed to create blob'));
+            }
           },
           'image/png',
           1.0
@@ -199,6 +221,7 @@ export default function SchematicViewer() {
       
       // Generate unique filename for converted image
       const imagePath = `${filePath.replace('.pdf', '')}_converted.png`;
+      console.log("Uploading to:", imagePath);
       
       // Upload converted image to storage
       const { error: uploadError } = await supabase
@@ -209,7 +232,11 @@ export default function SchematicViewer() {
           upsert: true,
         });
       
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error("Upload error:", uploadError);
+        throw uploadError;
+      }
+      console.log("Image uploaded successfully");
       
       // Update schematic record with converted image path
       const { error: updateError } = await supabase
@@ -217,13 +244,18 @@ export default function SchematicViewer() {
         .update({ converted_image_path: imagePath })
         .eq('id', schematicId);
       
-      if (updateError) throw updateError;
+      if (updateError) {
+        console.error("Database update error:", updateError);
+        throw updateError;
+      }
+      console.log("Database updated successfully");
       
       toast.success("PDF converted to image successfully!");
       fetchSchematic();
-    } catch (error) {
+    } catch (error: any) {
       console.error("PDF conversion error:", error);
-      toast.error("Failed to convert PDF. You can still view the original PDF.");
+      console.error("Error stack:", error?.stack);
+      toast.error(`Failed to convert PDF: ${error?.message || 'Unknown error'}`);
     } finally {
       setIsConverting(false);
     }
