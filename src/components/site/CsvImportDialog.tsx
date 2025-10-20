@@ -65,7 +65,8 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
     const delimiterMap: Record<string, string> = {
       tab: "\t",
       comma: ",",
-      semicolon: ";"
+      semicolon: ";",
+      space: " "
     };
     
     Papa.parse(file, {
@@ -354,6 +355,7 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
                   <SelectItem value="tab">Tab</SelectItem>
                   <SelectItem value="comma">Comma (,)</SelectItem>
                   <SelectItem value="semicolon">Semicolon (;)</SelectItem>
+                  <SelectItem value="space">Space</SelectItem>
                 </SelectContent>
               </Select>
             </div>

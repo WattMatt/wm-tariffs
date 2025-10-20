@@ -147,7 +147,7 @@ export default function BulkUploadDialog({ siteId, onDataChange }: BulkUploadDia
               body: {
                 meterId: mapping.meterId,
                 filePath,
-                separator: separator === "tab" ? "\t" : separator === "comma" ? "," : separator === "semicolon" ? ";" : "\t",
+                separator: separator === "tab" ? "\t" : separator === "comma" ? "," : separator === "semicolon" ? ";" : separator === "space" ? " " : "\t",
               },
             }
           );
@@ -232,6 +232,7 @@ export default function BulkUploadDialog({ siteId, onDataChange }: BulkUploadDia
                   <SelectItem value="tab">Tab</SelectItem>
                   <SelectItem value="comma">Comma (,)</SelectItem>
                   <SelectItem value="semicolon">Semicolon (;)</SelectItem>
+                  <SelectItem value="space">Space</SelectItem>
                 </SelectContent>
               </Select>
             </div>
