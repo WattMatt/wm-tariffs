@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import CsvImportDialog from "./CsvImportDialog";
 import MeterReadingsView from "./MeterReadingsView";
 import DatabaseManagementDialog from "./DatabaseManagementDialog";
+import BulkUploadDialog from "./BulkUploadDialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -208,6 +209,7 @@ export default function MetersTab({ siteId }: MetersTabProps) {
         </div>
         <div className="flex gap-2">
           <DatabaseManagementDialog siteId={siteId} onDataChange={fetchMeters} />
+          <BulkUploadDialog siteId={siteId} onDataChange={fetchMeters} />
           <Dialog open={isDialogOpen} onOpenChange={handleCloseDialog}>
             <DialogTrigger asChild>
               <Button className="gap-2">
