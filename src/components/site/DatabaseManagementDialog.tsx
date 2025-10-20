@@ -39,20 +39,23 @@ export default function DatabaseManagementDialog({ siteId, onDataChange }: Datab
     try {
       console.log("Clearing database for siteId:", siteId);
       
-      toast.info("Starting database clear - this may take a few minutes for large datasets...");
+      toast.info("Starting database clear - this may take a few minutes for large datasets...", { duration: 10000 });
       
-      // Call edge function for optimized batch deletion
-      const { data, error } = await supabase.functions.invoke('clear-site-readings', {
-        body: { siteId }
+      // Use database function for efficient bulk deletion
+      const { data, error } = await supabase.rpc('delete_site_readings', {
+        p_site_id: siteId
       });
 
-      if (error) throw error;
-      if (!data.success) throw new Error(data.error);
+      if (error) {
+        console.error("Delete RPC error:", error);
+        throw error;
+      }
 
-      console.log(`Deletion complete: ${data.totalDeleted} readings deleted`);
+      const totalDeleted = data || 0;
+      console.log(`Deletion complete: ${totalDeleted} readings deleted`);
 
       toast.success(
-        `Database cleared successfully - ${data.totalDeleted.toLocaleString()} readings deleted from ${data.metersProcessed} meters`,
+        `Database cleared successfully - ${totalDeleted.toLocaleString()} readings deleted`,
         { duration: 5000 }
       );
       
@@ -61,10 +64,10 @@ export default function DatabaseManagementDialog({ siteId, onDataChange }: Datab
       // Wait for database propagation
       setTimeout(() => {
         onDataChange?.();
-      }, 500);
+      }, 1000);
     } catch (error: any) {
       console.error("Error clearing database:", error);
-      toast.error(`Failed to clear database: ${error.message || 'Unknown error'}`);
+      toast.error(`Failed to clear database: ${error.message || 'Unknown error'}. Try refreshing the page and trying again.`);
     } finally {
       setIsClearing(false);
     }

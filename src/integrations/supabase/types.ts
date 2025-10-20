@@ -696,6 +696,12 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      delete_site_readings: {
+        Args: { p_site_id: string }
+        Returns: {
+          total_deleted: number
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
