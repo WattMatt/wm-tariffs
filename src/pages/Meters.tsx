@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, Gauge } from "lucide-react";
+import { Plus, Gauge, Database } from "lucide-react";
 import { toast } from "sonner";
 
 interface Meter {
@@ -22,6 +22,7 @@ interface Meter {
   is_revenue_critical: boolean;
   created_at: string;
   sites: { name: string; clients: { name: string } | null } | null;
+  has_readings?: boolean;
 }
 
 interface Site {
@@ -51,7 +52,22 @@ export default function Meters() {
     if (error) {
       toast.error("Failed to fetch meters");
     } else {
-      setMeters(data || []);
+      // Check which meters have readings
+      const metersWithReadingStatus = await Promise.all(
+        (data || []).map(async (meter) => {
+          const { count } = await supabase
+            .from("meter_readings")
+            .select("*", { count: "exact", head: true })
+            .eq("meter_id", meter.id);
+          
+          return {
+            ...meter,
+            has_readings: (count ?? 0) > 0
+          };
+        })
+      );
+      
+      setMeters(metersWithReadingStatus);
     }
   };
 
@@ -254,11 +270,19 @@ export default function Meters() {
                       <TableCell>{meter.location || "—"}</TableCell>
                       <TableCell>{meter.tariff || "—"}</TableCell>
                       <TableCell>
-                        {meter.is_revenue_critical && (
-                          <Badge variant="outline" className="text-destructive border-destructive">
-                            Critical
-                          </Badge>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {meter.is_revenue_critical && (
+                            <Badge variant="outline" className="text-destructive border-destructive">
+                              Critical
+                            </Badge>
+                          )}
+                          {meter.has_readings && (
+                            <Badge variant="outline" className="gap-1">
+                              <Database className="w-3 h-3" />
+                              Data
+                            </Badge>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
