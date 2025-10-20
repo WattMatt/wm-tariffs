@@ -490,24 +490,21 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
       setIsProcessing(true);
       const pathsToDelete = Array.from(selectedFiles);
       
-      console.log('Attempting to delete paths:', pathsToDelete);
+      toast.info(`Deleting ${pathsToDelete.length} file(s)...`);
       
-      const { data, error } = await supabase.storage
-        .from('meter-csvs')
-        .remove(pathsToDelete);
+      // Use edge function with service role for guaranteed deletion
+      const { data, error } = await supabase.functions.invoke('delete-meter-csvs', {
+        body: { filePaths: pathsToDelete }
+      });
 
-      console.log('Delete response:', { data, error });
-
-      if (error) {
-        console.error('Delete error:', error);
-        throw error;
-      }
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error || 'Deletion failed');
 
       // Clear selection and reload files from storage
       setSelectedFiles(new Set());
       await loadSavedFiles();
       
-      toast.success(`Deleted ${pathsToDelete.length} file(s) from storage`);
+      toast.success(`✓ Successfully deleted ${data.deletedCount} file(s) from storage`);
     } catch (err: any) {
       console.error("Bulk delete error:", err);
       toast.error("Bulk delete failed: " + err.message);
@@ -686,18 +683,19 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
     try {
       setIsProcessing(true);
 
-      // Delete from storage
-      const { error } = await supabase.storage
-        .from('meter-csvs')
-        .remove([fileItem.path]);
+      // Use edge function with service role for guaranteed deletion
+      const { data, error } = await supabase.functions.invoke('delete-meter-csvs', {
+        body: { filePaths: [fileItem.path] }
+      });
 
       if (error) throw error;
+      if (!data.success) throw new Error(data.error || 'Deletion failed');
 
       // Remove from local state and reload
       setFiles(prev => prev.filter((_, i) => i !== index));
       await loadSavedFiles();
       
-      toast.success(`File deleted from storage: ${fileItem.name}`);
+      toast.success(`✓ File deleted from storage: ${fileItem.name}`);
     } catch (err: any) {
       console.error("Delete error:", err);
       toast.error("Delete failed: " + err.message);
