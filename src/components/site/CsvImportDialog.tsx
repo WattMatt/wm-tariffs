@@ -120,12 +120,10 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
           console.warn('⚠️ No kWh column auto-detected');
         }
 
-        // Auto-select all other columns for additional data
-        const otherColumns = headers.filter((h: string, idx: number) => 
-          idx !== timeColumnIndex && idx !== kwhColumnIndex && h && h.trim()
-        );
-        console.log('📦 Additional columns available:', otherColumns);
-        setAdditionalColumns(otherColumns);
+        // Auto-select ALL columns for complete data capture
+        const allAvailableColumns = headers.filter((h: string) => h && h.trim());
+        console.log('📦 All available columns:', allAvailableColumns);
+        setAdditionalColumns(allAvailableColumns);
 
         setStep("map");
         toast.success("CSV parsed successfully");
@@ -379,21 +377,35 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Additional Columns to Import</Label>
+                  <div className="flex items-center justify-between">
+                    <Label>All Columns Being Imported</Label>
+                    <Badge variant="secondary">{additionalColumns.length} columns</Badge>
+                  </div>
                   <p className="text-xs text-muted-foreground mb-2">
-                    Select additional columns to store in metadata (e.g., kVAr, kVA, temperatures, etc.)
+                    All columns from your CSV will be stored. Click any column to exclude it from import.
                   </p>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-2 p-4 bg-muted/30 rounded-lg max-h-32 overflow-y-auto">
                     {csvData.headers
-                      .filter(h => h !== timestampColumn && h !== valueColumn && h && h.trim())
+                      .filter(h => h && h.trim())
                       .map((header, idx) => {
+                        const isTimestamp = header === timestampColumn;
+                        const isValue = header === valueColumn;
                         const isSelected = additionalColumns.includes(header);
+                        const columnType = getColumnType(header, csvData.preview.map(row => row[idx]));
+                        
                         return (
                           <Badge
                             key={idx}
-                            variant={isSelected ? "default" : "outline"}
-                            className="cursor-pointer hover:bg-primary/80 transition-colors"
+                            variant={isTimestamp || isValue ? "default" : (isSelected ? "secondary" : "outline")}
+                            className={`cursor-pointer transition-all ${
+                              isTimestamp || isValue 
+                                ? "bg-primary" 
+                                : isSelected 
+                                  ? "hover:bg-secondary/80" 
+                                  : "hover:bg-muted opacity-50"
+                            }`}
                             onClick={() => {
+                              if (isTimestamp || isValue) return; // Can't deselect required columns
                               if (isSelected) {
                                 setAdditionalColumns(prev => prev.filter(col => col !== header));
                               } else {
@@ -401,15 +413,14 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
                               }
                             }}
                           >
+                            {isTimestamp && "📅 "}
+                            {isValue && "⚡ "}
                             {header}
-                            {isSelected && " ✓"}
+                            {(isTimestamp || isValue) && " (required)"}
                           </Badge>
                         );
                       })}
                   </div>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    {additionalColumns.length} additional column{additionalColumns.length !== 1 ? 's' : ''} selected
-                  </p>
                 </div>
 
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">

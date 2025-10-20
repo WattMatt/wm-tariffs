@@ -9,9 +9,10 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, Gauge, Upload, Pencil, Trash2, Database } from "lucide-react";
+import { Plus, Gauge, Upload, Pencil, Trash2, Database, Eye } from "lucide-react";
 import { toast } from "sonner";
 import CsvImportDialog from "./CsvImportDialog";
+import MeterReadingsView from "./MeterReadingsView";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -51,6 +52,9 @@ export default function MetersTab({ siteId }: MetersTabProps) {
   const [isRevenueCritical, setIsRevenueCritical] = useState(false);
   const [csvImportMeterId, setCsvImportMeterId] = useState<string | null>(null);
   const [isCsvDialogOpen, setIsCsvDialogOpen] = useState(false);
+  const [viewReadingsMeterId, setViewReadingsMeterId] = useState<string | null>(null);
+  const [viewReadingsMeterNumber, setViewReadingsMeterNumber] = useState<string>("");
+  const [isReadingsViewOpen, setIsReadingsViewOpen] = useState(false);
   const [editingMeter, setEditingMeter] = useState<Meter | null>(null);
   const [deletingMeterId, setDeletingMeterId] = useState<string | null>(null);
 
@@ -425,6 +429,7 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                           variant="ghost"
                           size="sm"
                           onClick={() => handleEdit(meter)}
+                          title="Edit meter"
                         >
                           <Pencil className="w-4 h-4" />
                         </Button>
@@ -432,6 +437,7 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                           variant="ghost"
                           size="sm"
                           onClick={() => setDeletingMeterId(meter.id)}
+                          title="Delete meter"
                         >
                           <Trash2 className="w-4 h-4 text-destructive" />
                         </Button>
@@ -442,9 +448,24 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                             setCsvImportMeterId(meter.id);
                             setIsCsvDialogOpen(true);
                           }}
+                          title="Upload CSV data"
                         >
                           <Upload className="w-4 h-4" />
                         </Button>
+                        {meter.has_readings && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setViewReadingsMeterId(meter.id);
+                              setViewReadingsMeterNumber(meter.meter_number);
+                              setIsReadingsViewOpen(true);
+                            }}
+                            title="View uploaded data"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -465,6 +486,17 @@ export default function MetersTab({ siteId }: MetersTabProps) {
         onImportComplete={() => {
           fetchMeters();
         }}
+      />
+
+      <MeterReadingsView
+        isOpen={isReadingsViewOpen}
+        onClose={() => {
+          setIsReadingsViewOpen(false);
+          setViewReadingsMeterId(null);
+          setViewReadingsMeterNumber("");
+        }}
+        meterId={viewReadingsMeterId || ""}
+        meterNumber={viewReadingsMeterNumber}
       />
 
       <AlertDialog open={!!deletingMeterId} onOpenChange={() => setDeletingMeterId(null)}>
