@@ -45,18 +45,27 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
       meters.map(async (meter) => {
         const { data: readings } = await supabase
           .from("meter_readings")
-          .select("kwh_value")
+          .select("kwh_value, reading_timestamp")
           .eq("meter_id", meter.id)
           .gte("reading_timestamp", dateFrom.toISOString())
           .lte("reading_timestamp", dateTo.toISOString())
-          .order("reading_timestamp");
+          .order("reading_timestamp", { ascending: true });
 
-        const totalKwh = readings?.reduce((sum, r) => sum + Number(r.kwh_value), 0) || 0;
+        // Calculate consumption as: Last Reading - First Reading
+        // This is for cumulative meter readings (like an odometer)
+        let totalKwh = 0;
+        if (readings && readings.length > 0) {
+          const firstReading = Number(readings[0].kwh_value);
+          const lastReading = Number(readings[readings.length - 1].kwh_value);
+          totalKwh = lastReading - firstReading;
+        }
 
         return {
           ...meter,
           totalKwh,
           readingsCount: readings?.length || 0,
+          firstReading: readings?.[0]?.kwh_value || 0,
+          lastReading: readings?.[readings.length - 1]?.kwh_value || 0,
         };
       })
     );
