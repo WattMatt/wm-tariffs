@@ -46,9 +46,10 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
         return;
       }
 
-      // Fetch readings for each meter within date range
+      // Fetch readings for each meter within date range (deduplicated by timestamp)
       const meterData = await Promise.all(
         meters.map(async (meter) => {
+          // First get distinct timestamps with their max value (in case of duplicates)
           const { data: readings, error: readingsError } = await supabase
             .from("meter_readings")
             .select("kwh_value, reading_timestamp")
@@ -61,18 +62,28 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
             console.error(`Error fetching readings for meter ${meter.meter_number}:`, readingsError);
           }
 
-          // Sum all interval readings (these are consumption per reading period, not cumulative)
+          // Deduplicate by timestamp (take first occurrence of each unique timestamp)
+          const uniqueReadings = readings ? 
+            Array.from(
+              new Map(
+                readings.map(r => [r.reading_timestamp, r])
+              ).values()
+            ) : [];
+
+          // Sum all interval readings (these are consumption per reading period)
           let totalKwh = 0;
-          if (readings && readings.length > 0) {
-            totalKwh = readings.reduce((sum, r) => sum + Number(r.kwh_value), 0);
+          if (uniqueReadings.length > 0) {
+            totalKwh = uniqueReadings.reduce((sum, r) => sum + Number(r.kwh_value), 0);
             
             // Debug logging
             console.log(`Meter ${meter.meter_number} (${meter.meter_type}):`, {
-              readingsCount: readings.length,
+              originalReadings: readings?.length || 0,
+              uniqueReadings: uniqueReadings.length,
+              duplicatesRemoved: (readings?.length || 0) - uniqueReadings.length,
               totalKwh: totalKwh.toFixed(2),
-              avgPerReading: (totalKwh / readings.length).toFixed(2),
-              firstTimestamp: readings[0].reading_timestamp,
-              lastTimestamp: readings[readings.length - 1].reading_timestamp
+              avgPerReading: (totalKwh / uniqueReadings.length).toFixed(2),
+              firstTimestamp: uniqueReadings[0].reading_timestamp,
+              lastTimestamp: uniqueReadings[uniqueReadings.length - 1].reading_timestamp
             });
           } else {
             console.log(`Meter ${meter.meter_number}: No readings in date range`);
@@ -81,7 +92,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
           return {
             ...meter,
             totalKwh,
-            readingsCount: readings?.length || 0,
+            readingsCount: uniqueReadings.length,
           };
         })
       );
