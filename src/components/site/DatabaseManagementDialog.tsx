@@ -62,9 +62,21 @@ export default function DatabaseManagementDialog({ siteId, onDataChange }: Datab
 
       if (deleteError) throw deleteError;
 
-      toast.success("Database cleared successfully");
+      // Verify deletion
+      const { count: remainingCount } = await supabase
+        .from("meter_readings")
+        .select("*", { count: "exact", head: true })
+        .in("meter_id", meterIds);
+
+      console.log(`Database cleared for site ${siteId}. Remaining readings: ${remainingCount}`);
+
+      toast.success(`Database cleared successfully`);
       setShowClearConfirm(false);
-      onDataChange?.();
+      
+      // Wait a moment for database to propagate changes
+      setTimeout(() => {
+        onDataChange?.();
+      }, 500);
     } catch (error) {
       console.error("Error clearing database:", error);
       toast.error("Failed to clear database");
