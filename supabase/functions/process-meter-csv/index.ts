@@ -104,7 +104,7 @@ Deno.serve(async (req) => {
 
       try {
         // Handle different column layouts
-        let dateStr, timeStr, valueStr;
+        let dateStr, timeStr, valueStr, kvaStr = null;
         const extraFields: Record<string, any> = {};
         
         if (columns.length === 2) {
@@ -123,6 +123,14 @@ Deno.serve(async (req) => {
             const colValue = columns[colIdx]?.trim();
             if (colValue && colValue !== '' && colValue !== '-') {
               const colName = headerColumns[colIdx] || `Column_${colIdx + 1}`;
+              
+              // Check if this is the kVA column
+              const colNameLower = colName.toLowerCase();
+              if (colNameLower.includes('kva') || colNameLower === 's (kva)') {
+                kvaStr = colValue.replace(',', '.');
+                continue; // Don't add to extraFields, it's a core field
+              }
+              
               // Try to parse as number, otherwise store as string
               const numValue = parseFloat(colValue.replace(',', '.'));
               extraFields[colName] = isNaN(numValue) ? colValue : numValue;
@@ -215,6 +223,9 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        // Parse kVA value if present
+        const kvaValue = kvaStr ? parseFloat(kvaStr) : null;
+
         const isoTimestamp = date.toISOString();
 
         // Skip duplicates
@@ -238,6 +249,7 @@ Deno.serve(async (req) => {
           meter_id: meterId,
           reading_timestamp: isoTimestamp,
           kwh_value: value,
+          kva_value: kvaValue,
           metadata: metadata,
         });
       } catch (err: any) {

@@ -712,6 +712,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                   <ul className="list-disc list-inside space-y-0.5 text-muted-foreground ml-2">
                                     <li>Date & Time → <code className="text-[10px] bg-background px-1 rounded">reading_timestamp</code></li>
                                     <li>kWh Value → <code className="text-[10px] bg-background px-1 rounded">kwh_value</code></li>
+                                    <li>kVA Value → <code className="text-[10px] bg-background px-1 rounded">kva_value</code> (if present)</li>
                                   </ul>
                                 </div>
                                 <div className="space-y-1">
