@@ -453,6 +453,69 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
     }
   };
 
+  const handleCleanupOrphans = async () => {
+    const confirmed = window.confirm(
+      `Delete all CSV files where the meter no longer exists?\n\nThis will scan all storage files and remove any that belong to deleted meters.`
+    );
+    if (!confirmed) return;
+
+    try {
+      setIsProcessing(true);
+      toast.info("Scanning for orphaned files...");
+
+      // Get all meter IDs from storage
+      const { data: folders, error: listError } = await supabase.storage
+        .from('meter-csvs')
+        .list(siteId, { limit: 1000 });
+
+      if (listError) throw listError;
+
+      const orphanedPaths: string[] = [];
+
+      for (const folder of folders || []) {
+        if (folder.name && !folder.name.includes('.')) {
+          const meterExists = meters.some(m => m.id === folder.name);
+          
+          if (!meterExists) {
+            // This meter doesn't exist anymore, delete all its files
+            const { data: meterFiles } = await supabase.storage
+              .from('meter-csvs')
+              .list(`${siteId}/${folder.name}`, { limit: 1000 });
+
+            if (meterFiles) {
+              meterFiles.forEach(file => {
+                if (file.name.endsWith('.csv')) {
+                  orphanedPaths.push(`${siteId}/${folder.name}/${file.name}`);
+                }
+              });
+            }
+          }
+        }
+      }
+
+      if (orphanedPaths.length === 0) {
+        toast.info("No orphaned files found");
+        return;
+      }
+
+      // Delete using edge function
+      const { data, error } = await supabase.functions.invoke('delete-meter-csvs', {
+        body: { filePaths: orphanedPaths }
+      });
+
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error || 'Deletion failed');
+
+      await loadSavedFiles();
+      toast.success(`✓ Deleted ${data.deletedCount} orphaned file(s)`);
+    } catch (err: any) {
+      console.error("Orphan cleanup error:", err);
+      toast.error("Orphan cleanup failed: " + err.message);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const toggleFileSelection = (filePath: string) => {
     setSelectedFiles(prev => {
       const newSet = new Set(prev);
@@ -1045,13 +1108,22 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                         Delete Selected ({selectedFiles.size})
                       </Button>
                     )}
-                    <Button
-                      onClick={handleParseAll}
-                      disabled={isProcessing || files.filter(f => f.status === "uploaded" || f.status === "error").length === 0}
-                    >
-                      <Play className="w-4 h-4 mr-2" />
-                      Parse All Ready Files
-                    </Button>
+                     <Button
+                       onClick={handleCleanupOrphans}
+                       disabled={isProcessing}
+                       variant="outline"
+                       size="sm"
+                     >
+                       <Trash2 className="w-4 h-4 mr-2" />
+                       Cleanup Orphans
+                     </Button>
+                     <Button
+                       onClick={handleParseAll}
+                       disabled={isProcessing || files.filter(f => f.status === "uploaded" || f.status === "error").length === 0}
+                     >
+                       <Play className="w-4 h-4 mr-2" />
+                       Parse All Ready Files
+                     </Button>
                   </div>
                 </div>
 
