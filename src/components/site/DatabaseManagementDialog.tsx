@@ -100,14 +100,42 @@ export default function DatabaseManagementDialog({ siteId }: DatabaseManagementD
         const file = filesArray[fileIndex];
         setUploadProgress(`Processing file ${fileIndex + 1}/${filesArray.length}: ${file.name}`);
 
-        // Try to match file name to meter serial number
+        // Try to match file name to meter serial number (with flexible matching)
         const fileName = file.name.replace(/\.csv$/i, "");
-        const matchedMeter = meters.find(
-          (m) =>
-            m.serial_number?.toLowerCase() === fileName.toLowerCase() ||
-            m.meter_number?.toLowerCase() === fileName.toLowerCase() ||
-            m.name?.toLowerCase() === fileName.toLowerCase()
-        );
+        
+        // Extract potential meter number (numbers only)
+        const numberMatch = fileName.match(/\d+/);
+        const fileNumber = numberMatch ? numberMatch[0] : null;
+        
+        const matchedMeter = meters.find((m) => {
+          const serialLower = m.serial_number?.toLowerCase() || "";
+          const meterNumLower = m.meter_number?.toLowerCase() || "";
+          const nameLower = m.name?.toLowerCase() || "";
+          const fileNameLower = fileName.toLowerCase();
+          
+          // Exact matches
+          if (serialLower === fileNameLower || meterNumLower === fileNameLower || nameLower === fileNameLower) {
+            return true;
+          }
+          
+          // Number-based matching
+          if (fileNumber) {
+            if (serialLower === fileNumber || meterNumLower === fileNumber || nameLower === fileNumber) {
+              return true;
+            }
+            // Check if meter identifiers contain the number
+            if (serialLower.includes(fileNumber) || meterNumLower.includes(fileNumber) || nameLower.includes(fileNumber)) {
+              return true;
+            }
+          }
+          
+          // Partial match (filename contains meter identifier)
+          if (fileNameLower.includes(serialLower) || fileNameLower.includes(meterNumLower) || fileNameLower.includes(nameLower)) {
+            return true;
+          }
+          
+          return false;
+        });
 
         if (!matchedMeter) {
           toast.warning(`No meter match found for file: ${file.name}`);
