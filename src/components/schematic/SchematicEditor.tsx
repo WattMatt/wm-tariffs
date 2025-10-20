@@ -16,6 +16,8 @@ interface SchematicEditorProps {
   schematicId: string;
   schematicUrl: string;
   siteId: string;
+  extractedMeters?: any[];
+  onExtractedMetersUpdate?: (meters: any[]) => void;
 }
 
 interface MeterPosition {
@@ -36,7 +38,13 @@ interface SchematicLine {
   stroke_width: number;
 }
 
-export default function SchematicEditor({ schematicId, schematicUrl, siteId }: SchematicEditorProps) {
+export default function SchematicEditor({ 
+  schematicId, 
+  schematicUrl, 
+  siteId, 
+  extractedMeters: propExtractedMeters = [],
+  onExtractedMetersUpdate 
+}: SchematicEditorProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [fabricCanvas, setFabricCanvas] = useState<FabricCanvas | null>(null);
   const [activeTool, setActiveTool] = useState<"select" | "meter" | "connection" | "move">("select");
@@ -48,7 +56,12 @@ export default function SchematicEditor({ schematicId, schematicUrl, siteId }: S
   const [isAddMeterDialogOpen, setIsAddMeterDialogOpen] = useState(false);
   const [pendingMeterPosition, setPendingMeterPosition] = useState<{ x: number; y: number } | null>(null);
   const [isCsvDialogOpen, setIsCsvDialogOpen] = useState(false);
-  const [extractedMeters, setExtractedMeters] = useState<any[]>([]);
+  const [extractedMeters, setExtractedMeters] = useState<any[]>(propExtractedMeters);
+
+  // Sync extracted meters from props
+  useEffect(() => {
+    setExtractedMeters(propExtractedMeters);
+  }, [propExtractedMeters]);
   const [selectedMeterIndex, setSelectedMeterIndex] = useState<number | null>(null);
   const [selectedMeterId, setSelectedMeterId] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
@@ -183,7 +196,97 @@ export default function SchematicEditor({ schematicId, schematicUrl, siteId }: S
       fabricCanvas.add(fabricLine);
     });
 
-    // Render meter positions
+    // Render extracted meters (from AI extraction)
+    extractedMeters.forEach((meter, index) => {
+      if (!meter.position) return;
+      
+      const canvasWidth = fabricCanvas.getWidth();
+      const canvasHeight = fabricCanvas.getHeight();
+      
+      // Convert percentage position to pixel position
+      const x = (meter.position.x / 100) * canvasWidth;
+      const y = (meter.position.y / 100) * canvasHeight;
+      
+      // Color based on status
+      let color = '#eab308'; // yellow for pending
+      if (meter.status === 'approved') color = '#22c55e'; // green
+      else if (meter.status === 'rejected') color = '#ef4444'; // red
+      
+      const circle = new Circle({
+        left: x,
+        top: y,
+        fill: color,
+        radius: 20,
+        stroke: color === '#22c55e' ? '#166534' : color === '#ef4444' ? '#991b1b' : '#854d0e',
+        strokeWidth: 3,
+        originX: 'center',
+        originY: 'center',
+        hasControls: false,
+        selectable: activeTool === 'move',
+        hoverCursor: activeTool === 'move' ? 'move' : 'pointer',
+        opacity: 0.9,
+      });
+
+      const text = new Text(`${index + 1}`, {
+        left: x,
+        top: y - 5,
+        fontSize: 14,
+        fill: '#fff',
+        fontWeight: 'bold',
+        originX: 'center',
+        originY: 'center',
+        selectable: false,
+      });
+
+      const label = new Text(meter.meter_number.substring(0, 10), {
+        left: x,
+        top: y + 30,
+        fontSize: 10,
+        fill: '#000',
+        originX: 'center',
+        selectable: false,
+        backgroundColor: 'rgba(255, 255, 255, 0.8)',
+      });
+
+      circle.set('data', { type: 'extracted', index });
+      
+      // Handle dragging for extracted meters
+      if (activeTool === 'move') {
+        circle.on('moving', () => {
+          text.set({
+            left: circle.left,
+            top: (circle.top || 0) - 5,
+          });
+          label.set({
+            left: circle.left,
+            top: (circle.top || 0) + 30,
+          });
+        });
+
+        circle.on('modified', () => {
+          // Update position in extracted meters state
+          const newX = ((circle.left || 0) / canvasWidth) * 100;
+          const newY = ((circle.top || 0) / canvasHeight) * 100;
+          
+          const updatedMeters = [...extractedMeters];
+          updatedMeters[index] = {
+            ...updatedMeters[index],
+            position: { x: newX, y: newY }
+          };
+          setExtractedMeters(updatedMeters);
+          if (onExtractedMetersUpdate) {
+            onExtractedMetersUpdate(updatedMeters);
+          }
+          toast.success('Meter position updated');
+        });
+      }
+
+      fabricCanvas.add(circle);
+      fabricCanvas.add(text);
+      fabricCanvas.add(label);
+    });
+
+    // Render saved meter positions
     meterPositions.forEach(pos => {
       const meter = meters.find(m => m.id === pos.meter_id);
       const meterType = meter?.meter_type || 'unknown';
@@ -255,7 +358,7 @@ export default function SchematicEditor({ schematicId, schematicUrl, siteId }: S
     });
 
     fabricCanvas.renderAll();
-  }, [fabricCanvas, meterPositions, lines, meters, activeTool]);
+  }, [fabricCanvas, meterPositions, lines, meters, activeTool, extractedMeters]);
 
   const fetchMeters = async () => {
     const { data } = await supabase
@@ -513,7 +616,12 @@ export default function SchematicEditor({ schematicId, schematicUrl, siteId }: S
             fetchMeterPositions();
           }}
           extractedMeters={extractedMeters}
-          onMetersUpdate={setExtractedMeters}
+          onMetersUpdate={(meters) => {
+            setExtractedMeters(meters);
+            if (onExtractedMetersUpdate) {
+              onExtractedMetersUpdate(meters);
+            }
+          }}
           selectedMeterIndex={selectedMeterIndex}
           onMeterSelect={setSelectedMeterIndex}
         />
@@ -554,7 +662,8 @@ export default function SchematicEditor({ schematicId, schematicUrl, siteId }: S
         </div>
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex gap-2 flex-wrap">
+        <div className="text-xs font-medium text-muted-foreground mr-2 flex items-center">Saved Meters:</div>
         <Badge variant="outline">
           <div className="w-3 h-3 rounded-full bg-[#ef4444] mr-2" />
           Bulk Meter
@@ -571,6 +680,25 @@ export default function SchematicEditor({ schematicId, schematicUrl, siteId }: S
           <div className="w-3 h-3 rounded-full bg-[#3b82f6] mr-2" />
           Other
         </Badge>
+        
+        {extractedMeters.length > 0 && (
+          <>
+            <div className="w-px h-6 bg-border mx-2" />
+            <div className="text-xs font-medium text-muted-foreground mr-2 flex items-center">Extracted Meters:</div>
+            <Badge variant="outline">
+              <div className="w-3 h-3 rounded-full bg-[#eab308] border-2 border-[#854d0e] mr-2" />
+              Pending
+            </Badge>
+            <Badge variant="outline">
+              <div className="w-3 h-3 rounded-full bg-[#22c55e] border-2 border-[#166534] mr-2 shadow-sm shadow-green-500/50" />
+              Approved
+            </Badge>
+            <Badge variant="outline">
+              <div className="w-3 h-3 rounded-full bg-[#ef4444] border-2 border-[#991b1b] mr-2" />
+              Rejected
+            </Badge>
+          </>
+        )}
       </div>
 
       <div className="border border-border rounded-lg overflow-hidden shadow-lg">

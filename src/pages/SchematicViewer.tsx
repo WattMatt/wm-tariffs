@@ -312,6 +312,8 @@ export default function SchematicViewer() {
                 schematicId={id!}
                 schematicUrl={imageUrl}
                 siteId={schematic.site_id}
+                extractedMeters={extractedMeters}
+                onExtractedMetersUpdate={setExtractedMeters}
               />
             ) : (
               <div className="space-y-4">
