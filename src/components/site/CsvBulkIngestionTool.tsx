@@ -79,16 +79,17 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
 
   useEffect(() => {
     if (isOpen) {
-      loadMeters();
-      loadSavedFiles();
+      loadMeters().then(() => {
+        loadSavedFiles();
+      });
     }
   }, [isOpen]);
 
   useEffect(() => {
-    if (activeTab === "parse") {
+    if (activeTab === "parse" && meters.length > 0) {
       loadSavedFiles();
     }
-  }, [activeTab]);
+  }, [activeTab, meters.length]);
 
   const loadMeters = async () => {
     const { data } = await supabase
@@ -97,7 +98,11 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
       .eq("site_id", siteId)
       .order("meter_number");
     
-    if (data) setMeters(data);
+    if (data) {
+      setMeters(data);
+      return data;
+    }
+    return [];
   };
 
   const loadSavedFiles = async () => {
