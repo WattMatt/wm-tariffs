@@ -496,9 +496,9 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
 
       if (error) throw error;
 
-      // Remove files from local state immediately
-      setFiles(prev => prev.filter(f => !f.path || !selectedFiles.has(f.path)));
+      // Clear selection and reload files from storage
       setSelectedFiles(new Set());
+      await loadSavedFiles();
       
       toast.success(`Deleted ${pathsToDelete.length} file(s) from storage and list`);
     } catch (err: any) {
