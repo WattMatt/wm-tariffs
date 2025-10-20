@@ -28,77 +28,92 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
 
     setIsLoading(true);
 
-    // Fetch all meters for the site
-    const { data: meters } = await supabase
-      .from("meters")
-      .select("id, meter_number, meter_type")
-      .eq("site_id", siteId);
+    try {
+      // Fetch all meters for the site
+      const { data: meters, error: metersError } = await supabase
+        .from("meters")
+        .select("id, meter_number, meter_type")
+        .eq("site_id", siteId);
 
-    if (!meters || meters.length === 0) {
-      toast.error("No meters found for this site");
+      if (metersError) {
+        console.error("Error fetching meters:", metersError);
+        throw new Error("Failed to fetch meters");
+      }
+
+      if (!meters || meters.length === 0) {
+        toast.error("No meters found for this site");
+        setIsLoading(false);
+        return;
+      }
+
+      // Fetch readings for each meter within date range
+      const meterData = await Promise.all(
+        meters.map(async (meter) => {
+          const { data: readings, error: readingsError } = await supabase
+            .from("meter_readings")
+            .select("kwh_value, reading_timestamp")
+            .eq("meter_id", meter.id)
+            .gte("reading_timestamp", dateFrom.toISOString())
+            .lte("reading_timestamp", dateTo.toISOString())
+            .order("reading_timestamp", { ascending: true });
+
+          if (readingsError) {
+            console.error(`Error fetching readings for meter ${meter.meter_number}:`, readingsError);
+          }
+
+          // Calculate consumption as: Last Reading - First Reading
+          // This is for cumulative meter readings (like an odometer)
+          let totalKwh = 0;
+          if (readings && readings.length > 0) {
+            const firstReading = Number(readings[0].kwh_value);
+            const lastReading = Number(readings[readings.length - 1].kwh_value);
+            totalKwh = lastReading - firstReading;
+          }
+
+          return {
+            ...meter,
+            totalKwh,
+            readingsCount: readings?.length || 0,
+            firstReading: readings?.[0]?.kwh_value || 0,
+            lastReading: readings?.[readings.length - 1]?.kwh_value || 0,
+          };
+        })
+      );
+
+      const councilBulk = meterData.filter((m) => m.meter_type === "council_bulk");
+      const checkMeters = meterData.filter((m) => m.meter_type === "check_meter");
+      const solarMeters = meterData.filter((m) => m.meter_type === "solar");
+      const distribution = meterData.filter((m) => m.meter_type === "distribution");
+
+      const councilTotal = councilBulk.reduce((sum, m) => sum + m.totalKwh, 0);
+      const solarTotal = solarMeters.reduce((sum, m) => sum + m.totalKwh, 0);
+      const distributionTotal = distribution.reduce((sum, m) => sum + m.totalKwh, 0);
+      
+      // Total supply = Council (from grid) + Solar (on-site generation)
+      const totalSupply = councilTotal + solarTotal;
+      const recoveryRate = totalSupply > 0 ? (distributionTotal / totalSupply) * 100 : 0;
+      const discrepancy = totalSupply - distributionTotal;
+
+      setReconciliationData({
+        councilBulk,
+        checkMeters,
+        solarMeters,
+        distribution,
+        councilTotal,
+        solarTotal,
+        totalSupply,
+        distributionTotal,
+        recoveryRate,
+        discrepancy,
+      });
+
+      toast.success("Reconciliation complete");
+    } catch (error) {
+      console.error("Reconciliation error:", error);
+      toast.error("Failed to complete reconciliation. Please try again.");
+    } finally {
       setIsLoading(false);
-      return;
     }
-
-    // Fetch readings for each meter within date range
-    const meterData = await Promise.all(
-      meters.map(async (meter) => {
-        const { data: readings } = await supabase
-          .from("meter_readings")
-          .select("kwh_value, reading_timestamp")
-          .eq("meter_id", meter.id)
-          .gte("reading_timestamp", dateFrom.toISOString())
-          .lte("reading_timestamp", dateTo.toISOString())
-          .order("reading_timestamp", { ascending: true });
-
-        // Calculate consumption as: Last Reading - First Reading
-        // This is for cumulative meter readings (like an odometer)
-        let totalKwh = 0;
-        if (readings && readings.length > 0) {
-          const firstReading = Number(readings[0].kwh_value);
-          const lastReading = Number(readings[readings.length - 1].kwh_value);
-          totalKwh = lastReading - firstReading;
-        }
-
-        return {
-          ...meter,
-          totalKwh,
-          readingsCount: readings?.length || 0,
-          firstReading: readings?.[0]?.kwh_value || 0,
-          lastReading: readings?.[readings.length - 1]?.kwh_value || 0,
-        };
-      })
-    );
-
-    const councilBulk = meterData.filter((m) => m.meter_type === "council_bulk");
-    const checkMeters = meterData.filter((m) => m.meter_type === "check_meter");
-    const solarMeters = meterData.filter((m) => m.meter_type === "solar");
-    const distribution = meterData.filter((m) => m.meter_type === "distribution");
-
-    const councilTotal = councilBulk.reduce((sum, m) => sum + m.totalKwh, 0);
-    const solarTotal = solarMeters.reduce((sum, m) => sum + m.totalKwh, 0);
-    const distributionTotal = distribution.reduce((sum, m) => sum + m.totalKwh, 0);
-    
-    // Total supply = Council (from grid) + Solar (on-site generation)
-    const totalSupply = councilTotal + solarTotal;
-    const recoveryRate = totalSupply > 0 ? (distributionTotal / totalSupply) * 100 : 0;
-    const discrepancy = totalSupply - distributionTotal;
-
-    setReconciliationData({
-      councilBulk,
-      checkMeters,
-      solarMeters,
-      distribution,
-      councilTotal,
-      solarTotal,
-      totalSupply,
-      distributionTotal,
-      recoveryRate,
-      discrepancy,
-    });
-
-    setIsLoading(false);
-    toast.success("Reconciliation complete");
   };
 
   return (
