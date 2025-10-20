@@ -88,35 +88,35 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
 
       const filesList: FileItem[] = [];
       
-      if (data) {
-        for (const folder of data) {
-          if (folder.id) {
-            const { data: meterFiles } = await supabase.storage
-              .from('meter-csvs')
-              .list(`${siteId}/${folder.name}`, {
-                limit: 1000,
-                sortBy: { column: 'created_at', order: 'desc' }
-              });
+    if (data) {
+      for (const folder of data) {
+        if (folder.name && !folder.name.includes('.')) {
+          const { data: meterFiles } = await supabase.storage
+            .from('meter-csvs')
+            .list(`${siteId}/${folder.name}`, {
+              limit: 1000,
+              sortBy: { column: 'created_at', order: 'desc' }
+            });
 
-            if (meterFiles) {
-              const meter = meters.find(m => m.id === folder.name);
-              meterFiles.forEach(file => {
-                if (file.name.endsWith('.csv')) {
-                  filesList.push({
-                    name: file.name,
-                    path: `${siteId}/${folder.name}/${file.name}`,
-                    meterId: folder.name,
-                    meterNumber: meter?.meter_number,
-                    size: file.metadata?.size,
-                    status: "uploaded",
-                    isNew: false
-                  });
-                }
-              });
-            }
+          if (meterFiles) {
+            const meter = meters.find(m => m.id === folder.name);
+            meterFiles.forEach(file => {
+              if (file.name.endsWith('.csv')) {
+                filesList.push({
+                  name: file.name,
+                  path: `${siteId}/${folder.name}/${file.name}`,
+                  meterId: folder.name,
+                  meterNumber: meter?.meter_number,
+                  size: file.metadata?.size,
+                  status: "uploaded",
+                  isNew: false
+                });
+              }
+            });
           }
         }
       }
+    }
 
       setFiles(prev => [...prev.filter(f => f.isNew), ...filesList]);
     } catch (err: any) {
