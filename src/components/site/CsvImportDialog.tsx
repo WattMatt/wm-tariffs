@@ -32,6 +32,7 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
   const [isUploading, setIsUploading] = useState(false);
   const [step, setStep] = useState<"upload" | "confirm">("upload");
   const [separator, setSeparator] = useState<string>("tab");
+  const [columnSplits, setColumnSplits] = useState<Record<number, string>>({});
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -300,7 +301,27 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
     setValueColumn("");
     setStep("upload");
     setSeparator("tab");
+    setColumnSplits({});
     onClose();
+  };
+
+  const applySplits = (row: any[], columnIndex: number): any[] => {
+    const splitType = columnSplits[columnIndex];
+    if (!splitType || splitType === 'none') return [row[columnIndex]];
+    
+    const cell = row[columnIndex]?.toString() || '';
+    const delimiterMap: Record<string, string | RegExp> = {
+      tab: '\t',
+      comma: ',',
+      semicolon: ';',
+      space: /\s+/
+    };
+    
+    const delimiter = delimiterMap[splitType];
+    if (delimiter instanceof RegExp) {
+      return cell.split(delimiter);
+    }
+    return cell.split(delimiter);
   };
 
   const getColumnType = (columnName: string, sampleValues: any[]) => {
@@ -447,7 +468,7 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
                   Data Preview
                 </CardTitle>
                 <CardDescription>
-                  First 10 rows. Review the column separation and data format before importing.
+                  First 10 rows. You can split columns further if needed (e.g., split combined date/time).
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -459,12 +480,29 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
                           const sampleValues = csvData.preview.map(row => row[idx]);
                           const { type, color } = getColumnType(header, sampleValues);
                           return (
-                            <TableHead key={idx} className="min-w-32">
-                              <div className="flex flex-col gap-1">
-                                <span className="font-medium">{header}</span>
-                                <Badge variant="outline" className={`text-[10px] ${color} w-fit`}>
-                                  {type}
-                                </Badge>
+                            <TableHead key={idx} className="min-w-40">
+                              <div className="flex flex-col gap-2">
+                                <div className="flex flex-col gap-1">
+                                  <span className="font-medium">{header}</span>
+                                  <Badge variant="outline" className={`text-[10px] ${color} w-fit`}>
+                                    {type}
+                                  </Badge>
+                                </div>
+                                <Select 
+                                  value={columnSplits[idx] || 'none'} 
+                                  onValueChange={(val) => setColumnSplits(prev => ({...prev, [idx]: val}))}
+                                >
+                                  <SelectTrigger className="h-7 text-xs bg-background">
+                                    <SelectValue placeholder="Split by..." />
+                                  </SelectTrigger>
+                                  <SelectContent className="z-[100] bg-popover">
+                                    <SelectItem value="none">No split</SelectItem>
+                                    <SelectItem value="tab">Split by Tab</SelectItem>
+                                    <SelectItem value="comma">Split by Comma</SelectItem>
+                                    <SelectItem value="semicolon">Split by Semicolon</SelectItem>
+                                    <SelectItem value="space">Split by Space</SelectItem>
+                                  </SelectContent>
+                                </Select>
                               </div>
                             </TableHead>
                           );
@@ -474,11 +512,24 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
                     <TableBody>
                       {csvData.preview.map((row, rowIdx) => (
                         <TableRow key={rowIdx}>
-                          {row.map((cell: any, cellIdx: number) => (
-                            <TableCell key={cellIdx} className="font-mono text-xs">
-                              {cell?.toString() || "—"}
-                            </TableCell>
-                          ))}
+                          {row.map((cell: any, cellIdx: number) => {
+                            const splitParts = applySplits(row, cellIdx);
+                            return (
+                              <TableCell key={cellIdx} className="font-mono text-xs">
+                                {splitParts.length > 1 ? (
+                                  <div className="flex flex-col gap-1">
+                                    {splitParts.map((part, partIdx) => (
+                                      <div key={partIdx} className="py-0.5 px-1 bg-primary/10 rounded">
+                                        {part?.toString() || "—"}
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  cell?.toString() || "—"
+                                )}
+                              </TableCell>
+                            );
+                          })}
                         </TableRow>
                       ))}
                     </TableBody>
