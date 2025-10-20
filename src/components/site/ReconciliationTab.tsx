@@ -70,20 +70,16 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
               ).values()
             ) : [];
 
-          // Calculate consumption from cumulative readings (last - first)
+          // Sum all interval readings (each represents consumption for that period)
           let totalKwh = 0;
           if (uniqueReadings.length > 0) {
-            const firstReading = Number(uniqueReadings[0].kwh_value);
-            const lastReading = Number(uniqueReadings[uniqueReadings.length - 1].kwh_value);
-            totalKwh = lastReading - firstReading;
+            totalKwh = uniqueReadings.reduce((sum, r) => sum + Number(r.kwh_value), 0);
             
             // Debug logging
             console.log(`Meter ${meter.meter_number} (${meter.meter_type}):`, {
               originalReadings: readings?.length || 0,
               uniqueReadings: uniqueReadings.length,
               duplicatesRemoved: (readings?.length || 0) - uniqueReadings.length,
-              firstReading: firstReading.toFixed(2),
-              lastReading: lastReading.toFixed(2),
               totalKwh: totalKwh.toFixed(2),
               firstTimestamp: uniqueReadings[0].reading_timestamp,
               lastTimestamp: uniqueReadings[uniqueReadings.length - 1].reading_timestamp
