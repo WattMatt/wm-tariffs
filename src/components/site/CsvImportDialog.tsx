@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,6 +34,8 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
   const [step, setStep] = useState<"upload" | "confirm">("upload");
   const [separator, setSeparator] = useState<string>("tab");
   const [columnSplits, setColumnSplits] = useState<Record<number, string>>({});
+  const [splitColumnNames, setSplitColumnNames] = useState<Record<string, string>>({});
+  const [replaceExisting, setReplaceExisting] = useState(false);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -193,12 +196,28 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
 
     console.log('🚀 Starting import process...');
     console.log('📌 Selected columns:', { timestampColumn, valueColumn });
+    console.log('🔄 Replace existing:', replaceExisting);
     
     setIsUploading(true);
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
       console.log('👤 User ID:', user?.id);
+      
+      // If replace existing, delete all current readings for this meter
+      if (replaceExisting) {
+        console.log('🗑️ Deleting existing readings...');
+        const { error: deleteError } = await supabase
+          .from('meter_readings')
+          .delete()
+          .eq('meter_id', meterId);
+        
+        if (deleteError) {
+          console.error('Delete error:', deleteError);
+          throw new Error(`Failed to delete existing readings: ${deleteError.message}`);
+        }
+        console.log('✅ Existing readings deleted');
+      }
       
       const timestampIndex = csvData.headers.indexOf(timestampColumn);
       const valueIndex = csvData.headers.indexOf(valueColumn);
@@ -302,6 +321,8 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
     setStep("upload");
     setSeparator("tab");
     setColumnSplits({});
+    setSplitColumnNames({});
+    setReplaceExisting(false);
     onClose();
   };
 
@@ -484,37 +505,49 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
                           // Check how many columns this will create after split
                           if (splitType && splitType !== 'none') {
                             const firstRowSplit = applySplits(csvData.preview[0], idx);
-                            return firstRowSplit.map((_, partIdx) => (
-                              <TableHead key={`${idx}-${partIdx}`} className="min-w-40">
-                                <div className="flex flex-col gap-2">
-                                  <div className="flex flex-col gap-1">
-                                    <span className="font-medium">
-                                      {header} [{partIdx + 1}]
-                                    </span>
-                                    <Badge variant="outline" className={`text-[10px] ${color} w-fit`}>
-                                      {type}
-                                    </Badge>
+                            return firstRowSplit.map((_, partIdx) => {
+                              const columnKey = `${idx}-${partIdx}`;
+                              const defaultName = partIdx === 0 ? 'Date' : 'Time';
+                              const displayName = splitColumnNames[columnKey] || `${header} [${partIdx + 1}]`;
+                              
+                              return (
+                                <TableHead key={columnKey} className="min-w-40">
+                                  <div className="flex flex-col gap-2">
+                                    <div className="flex flex-col gap-1">
+                                      <Input
+                                        value={displayName}
+                                        onChange={(e) => setSplitColumnNames(prev => ({
+                                          ...prev,
+                                          [columnKey]: e.target.value
+                                        }))}
+                                        placeholder={defaultName}
+                                        className="h-7 text-xs font-medium"
+                                      />
+                                      <Badge variant="outline" className={`text-[10px] ${color} w-fit`}>
+                                        {type}
+                                      </Badge>
+                                    </div>
+                                    {partIdx === 0 && (
+                                      <Select 
+                                        value={splitType} 
+                                        onValueChange={(val) => setColumnSplits(prev => ({...prev, [idx]: val}))}
+                                      >
+                                        <SelectTrigger className="h-7 text-xs bg-background">
+                                          <SelectValue placeholder="Split by..." />
+                                        </SelectTrigger>
+                                        <SelectContent className="z-[100] bg-popover">
+                                          <SelectItem value="none">No split</SelectItem>
+                                          <SelectItem value="tab">Split by Tab</SelectItem>
+                                          <SelectItem value="comma">Split by Comma</SelectItem>
+                                          <SelectItem value="semicolon">Split by Semicolon</SelectItem>
+                                          <SelectItem value="space">Split by Space</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    )}
                                   </div>
-                                  {partIdx === 0 && (
-                                    <Select 
-                                      value={splitType} 
-                                      onValueChange={(val) => setColumnSplits(prev => ({...prev, [idx]: val}))}
-                                    >
-                                      <SelectTrigger className="h-7 text-xs bg-background">
-                                        <SelectValue placeholder="Split by..." />
-                                      </SelectTrigger>
-                                      <SelectContent className="z-[100] bg-popover">
-                                        <SelectItem value="none">No split</SelectItem>
-                                        <SelectItem value="tab">Split by Tab</SelectItem>
-                                        <SelectItem value="comma">Split by Comma</SelectItem>
-                                        <SelectItem value="semicolon">Split by Semicolon</SelectItem>
-                                        <SelectItem value="space">Split by Space</SelectItem>
-                                      </SelectContent>
-                                    </Select>
-                                  )}
-                                </div>
-                              </TableHead>
-                            ));
+                                </TableHead>
+                              );
+                            });
                           }
                           
                           return (
@@ -569,6 +602,18 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
             </Card>
 
             <div className="flex gap-3 pt-4 border-t">
+              <div className="flex items-center gap-2 flex-1">
+                <input
+                  type="checkbox"
+                  id="replaceExisting"
+                  checked={replaceExisting}
+                  onChange={(e) => setReplaceExisting(e.target.checked)}
+                  className="w-4 h-4"
+                />
+                <Label htmlFor="replaceExisting" className="text-sm cursor-pointer">
+                  Replace all existing readings for this meter
+                </Label>
+              </div>
               <Button 
                 variant="outline" 
                 onClick={() => {
@@ -577,14 +622,13 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
                   setTimestampColumn("");
                   setValueColumn("");
                 }}
-                className="flex-1"
               >
                 Cancel / Change Separator
               </Button>
               <Button
                 onClick={handleImport}
                 disabled={!timestampColumn || !valueColumn || isUploading}
-                className="flex-1 bg-primary"
+                className="bg-primary"
               >
                 {isUploading ? "Importing..." : `✓ Confirm & Import ${csvData.rows.length} Readings`}
               </Button>
