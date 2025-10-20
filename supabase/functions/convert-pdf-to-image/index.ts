@@ -45,13 +45,10 @@ serve(async (req) => {
     const arrayBuffer = await pdfData.arrayBuffer();
     const uint8Array = new Uint8Array(arrayBuffer);
 
-    // Import pdf.js dynamically
-    const pdfjsLib = await import('https://esm.sh/pdfjs-dist@4.0.379/build/pdf.mjs');
-    
-    // Configure worker
-    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://esm.sh/pdfjs-dist@4.0.379/build/pdf.worker.mjs';
+    // Import pdf.js dynamically (using legacy build that doesn't require worker)
+    const pdfjsLib = await import('https://esm.sh/pdfjs-dist@3.11.174/legacy/build/pdf.mjs');
 
-    // Load PDF
+    // Load PDF (legacy build doesn't need worker configuration)
     const loadingTask = pdfjsLib.getDocument({ data: uint8Array });
     const pdf = await loadingTask.promise;
     
