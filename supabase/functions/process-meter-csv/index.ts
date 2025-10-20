@@ -15,7 +15,7 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { meterId, filePath } = await req.json();
+    const { meterId, filePath, separator = "\t" } = await req.json();
 
     console.log(`Processing CSV for meter ${meterId} from ${filePath}`);
 
@@ -58,8 +58,10 @@ Deno.serve(async (req) => {
       const line = lines[i].trim();
       if (!line) continue;
 
-      // Split by tab or comma, handling multiple tabs/commas
-      const columns = line.split(/[\t,]+/).filter(col => col.trim());
+      // Split by the specified separator
+      const escapedSeparator = separator.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const splitRegex = new RegExp(escapedSeparator + '+');
+      const columns = line.split(splitRegex).filter(col => col.trim());
       
       // Log first data row for debugging
       if (i === 1) {

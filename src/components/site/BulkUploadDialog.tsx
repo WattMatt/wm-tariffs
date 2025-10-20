@@ -15,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Upload, Trash2, FileText } from "lucide-react";
@@ -39,6 +40,7 @@ export default function BulkUploadDialog({ siteId, onDataChange }: BulkUploadDia
   const [meters, setMeters] = useState<any[]>([]);
   const [fileMappings, setFileMappings] = useState<FileMapping[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [separator, setSeparator] = useState<string>("tab");
 
   const handleDialogOpen = async (open: boolean) => {
     setIsOpen(open);
@@ -145,6 +147,7 @@ export default function BulkUploadDialog({ siteId, onDataChange }: BulkUploadDia
               body: {
                 meterId: mapping.meterId,
                 filePath,
+                separator: separator === "tab" ? "\t" : separator === "comma" ? "," : separator === "semicolon" ? ";" : "\t",
               },
             }
           );
@@ -218,15 +221,31 @@ export default function BulkUploadDialog({ siteId, onDataChange }: BulkUploadDia
         </DialogHeader>
 
         <div className="space-y-4">
-          <div>
-            <input
-              type="file"
-              accept=".csv"
-              multiple
-              onChange={handleFileSelect}
-              disabled={isUploading}
-              className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 disabled:opacity-50"
-            />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label className="mb-2">Column Separator</Label>
+              <Select value={separator} onValueChange={setSeparator} disabled={isUploading}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="tab">Tab</SelectItem>
+                  <SelectItem value="comma">Comma (,)</SelectItem>
+                  <SelectItem value="semicolon">Semicolon (;)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="mb-2">Select CSV Files</Label>
+              <input
+                type="file"
+                accept=".csv"
+                multiple
+                onChange={handleFileSelect}
+                disabled={isUploading}
+                className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 disabled:opacity-50"
+              />
+            </div>
           </div>
 
           {fileMappings.length > 0 && (
