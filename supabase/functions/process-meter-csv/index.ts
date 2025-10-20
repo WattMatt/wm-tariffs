@@ -15,9 +15,9 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { meterId, filePath, separator = "\t" } = await req.json();
+    const { meterId, filePath, separator = "\t", dateFormat = "auto" } = await req.json();
 
-    console.log(`Processing CSV for meter ${meterId} from ${filePath}`);
+    console.log(`Processing CSV for meter ${meterId} from ${filePath} with separator "${separator}" and dateFormat "${dateFormat}"`);
 
     // Download CSV from storage
     const { data: fileData, error: downloadError } = await supabase.storage
@@ -120,13 +120,28 @@ Deno.serve(async (req) => {
 
           let year: number, month: number, day: number;
           
-          // Determine date format
-          if (parseInt(dateParts[0]) > 31) {
+          // Determine date format based on user selection
+          if (dateFormat === "YYYY-MM-DD") {
             // YYYY/MM/DD or YYYY-MM-DD
             [year, month, day] = dateParts.map(Number);
-          } else {
+          } else if (dateFormat === "DD/MM/YYYY") {
             // DD/MM/YYYY
             [day, month, year] = dateParts.map(Number);
+          } else if (dateFormat === "MM/DD/YYYY") {
+            // MM/DD/YYYY
+            [month, day, year] = dateParts.map(Number);
+          } else {
+            // Auto-detect
+            if (parseInt(dateParts[0]) > 31) {
+              // YYYY/MM/DD or YYYY-MM-DD
+              [year, month, day] = dateParts.map(Number);
+            } else if (parseInt(dateParts[1]) > 12) {
+              // DD/MM/YYYY (day in second position is > 12, so must be day)
+              [day, month, year] = dateParts.map(Number);
+            } else {
+              // Assume DD/MM/YYYY as default for ambiguous dates
+              [day, month, year] = dateParts.map(Number);
+            }
           }
 
           // Parse time - handle both HH:MM:SS and decimal formats
