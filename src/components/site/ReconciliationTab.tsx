@@ -73,11 +73,12 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
           // Sum all interval readings (each represents consumption for that period)
           let totalKwh = 0;
           const columnTotals: Record<string, number> = {};
+          const columnMaxValues: Record<string, number> = {};
           
           if (uniqueReadings.length > 0) {
             totalKwh = uniqueReadings.reduce((sum, r) => sum + Number(r.kwh_value), 0);
             
-            // Sum all numeric columns from metadata
+            // Sum all numeric columns from metadata, track max for kVA
             uniqueReadings.forEach(reading => {
               const importedFields = (reading.metadata as any)?.imported_fields || {};
               Object.entries(importedFields).forEach(([key, value]) => {
@@ -86,7 +87,13 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                 
                 const numValue = Number(value);
                 if (!isNaN(numValue) && value !== null && value !== '') {
-                  columnTotals[key] = (columnTotals[key] || 0) + numValue;
+                  // For kVA columns, track maximum value instead of sum
+                  if (key.toLowerCase().includes('kva') || key.toLowerCase().includes('s (kva)')) {
+                    columnMaxValues[key] = Math.max(columnMaxValues[key] || 0, numValue);
+                  } else {
+                    // Sum other columns
+                    columnTotals[key] = (columnTotals[key] || 0) + numValue;
+                  }
                 }
               });
             });
@@ -109,6 +116,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
             ...meter,
             totalKwh,
             columnTotals,
+            columnMaxValues,
             readingsCount: uniqueReadings.length,
           };
         })
@@ -331,12 +339,19 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                               <span className="font-mono text-sm font-semibold">{meter.meter_number}</span>
                               <span className="font-semibold">{meter.totalKwh.toFixed(2)} kWh</span>
                             </div>
-                            {meter.columnTotals && Object.keys(meter.columnTotals).length > 0 && (
+                            {((meter.columnTotals && Object.keys(meter.columnTotals).length > 0) || 
+                              (meter.columnMaxValues && Object.keys(meter.columnMaxValues).length > 0)) && (
                               <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border/50">
-                                {Object.entries(meter.columnTotals).map(([col, val]: [string, any]) => (
+                                {Object.entries(meter.columnTotals || {}).map(([col, val]: [string, any]) => (
                                   <div key={col} className="flex justify-between text-xs">
                                     <span className="text-muted-foreground">{col}:</span>
                                     <span className="font-mono">{Number(val).toFixed(2)}</span>
+                                  </div>
+                                ))}
+                                {Object.entries(meter.columnMaxValues || {}).map(([col, val]: [string, any]) => (
+                                  <div key={col} className="flex justify-between text-xs">
+                                    <span className="text-muted-foreground">{col} (Max):</span>
+                                    <span className="font-mono font-semibold">{Number(val).toFixed(2)}</span>
                                   </div>
                                 ))}
                               </div>
@@ -360,12 +375,19 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                               <span className="font-mono text-sm font-semibold">{meter.meter_number}</span>
                               <span className="font-semibold text-green-700">{meter.totalKwh.toFixed(2)} kWh</span>
                             </div>
-                            {meter.columnTotals && Object.keys(meter.columnTotals).length > 0 && (
+                            {((meter.columnTotals && Object.keys(meter.columnTotals).length > 0) || 
+                              (meter.columnMaxValues && Object.keys(meter.columnMaxValues).length > 0)) && (
                               <div className="grid grid-cols-2 gap-2 pt-2 border-t border-green-300">
-                                {Object.entries(meter.columnTotals).map(([col, val]: [string, any]) => (
+                                {Object.entries(meter.columnTotals || {}).map(([col, val]: [string, any]) => (
                                   <div key={col} className="flex justify-between text-xs">
                                     <span className="text-green-600">{col}:</span>
                                     <span className="font-mono text-green-700">{Number(val).toFixed(2)}</span>
+                                  </div>
+                                ))}
+                                {Object.entries(meter.columnMaxValues || {}).map(([col, val]: [string, any]) => (
+                                  <div key={col} className="flex justify-between text-xs">
+                                    <span className="text-green-600">{col} (Max):</span>
+                                    <span className="font-mono font-semibold text-green-700">{Number(val).toFixed(2)}</span>
                                   </div>
                                 ))}
                               </div>
@@ -389,12 +411,19 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                               <span className="font-mono text-sm font-semibold">{meter.meter_number}</span>
                               <span className="font-semibold text-blue-700">{meter.totalKwh.toFixed(2)} kWh</span>
                             </div>
-                            {meter.columnTotals && Object.keys(meter.columnTotals).length > 0 && (
+                            {((meter.columnTotals && Object.keys(meter.columnTotals).length > 0) || 
+                              (meter.columnMaxValues && Object.keys(meter.columnMaxValues).length > 0)) && (
                               <div className="grid grid-cols-2 gap-2 pt-2 border-t border-blue-300">
-                                {Object.entries(meter.columnTotals).map(([col, val]: [string, any]) => (
+                                {Object.entries(meter.columnTotals || {}).map(([col, val]: [string, any]) => (
                                   <div key={col} className="flex justify-between text-xs">
                                     <span className="text-blue-600">{col}:</span>
                                     <span className="font-mono text-blue-700">{Number(val).toFixed(2)}</span>
+                                  </div>
+                                ))}
+                                {Object.entries(meter.columnMaxValues || {}).map(([col, val]: [string, any]) => (
+                                  <div key={col} className="flex justify-between text-xs">
+                                    <span className="text-blue-600">{col} (Max):</span>
+                                    <span className="font-mono font-semibold text-blue-700">{Number(val).toFixed(2)}</span>
                                   </div>
                                 ))}
                               </div>
@@ -438,12 +467,19 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                                   </span>
                                 </div>
                               </div>
-                              {meter.columnTotals && Object.keys(meter.columnTotals).length > 0 && (
+                              {((meter.columnTotals && Object.keys(meter.columnTotals).length > 0) || 
+                                (meter.columnMaxValues && Object.keys(meter.columnMaxValues).length > 0)) && (
                                 <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border/50">
-                                  {Object.entries(meter.columnTotals).map(([col, val]: [string, any]) => (
+                                  {Object.entries(meter.columnTotals || {}).map(([col, val]: [string, any]) => (
                                     <div key={col} className="flex justify-between text-xs">
                                       <span className="text-muted-foreground">{col}:</span>
                                       <span className="font-mono">{Number(val).toFixed(2)}</span>
+                                    </div>
+                                  ))}
+                                  {Object.entries(meter.columnMaxValues || {}).map(([col, val]: [string, any]) => (
+                                    <div key={col} className="flex justify-between text-xs">
+                                      <span className="text-muted-foreground">{col} (Max):</span>
+                                      <span className="font-mono font-semibold">{Number(val).toFixed(2)}</span>
                                     </div>
                                   ))}
                                 </div>
