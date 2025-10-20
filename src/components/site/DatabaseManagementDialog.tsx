@@ -42,12 +42,15 @@ export default function DatabaseManagementDialog({ siteId, onDataChange }: Datab
       // Get all meters for this site
       const { data: meters, error: metersError } = await supabase
         .from("meters")
-        .select("id")
+        .select("id, meter_number")
         .eq("site_id", siteId);
 
       console.log("Meters found:", meters?.length, "Error:", metersError);
 
-      if (metersError) throw metersError;
+      if (metersError) {
+        console.error("Meters fetch error:", metersError);
+        throw new Error(`Failed to fetch meters: ${metersError.message}`);
+      }
 
       if (!meters || meters.length === 0) {
         toast.info("No meters found for this site");
@@ -56,28 +59,40 @@ export default function DatabaseManagementDialog({ siteId, onDataChange }: Datab
         return;
       }
 
-      const meterIds = meters.map((m) => m.id);
+      // Delete readings for each meter individually to avoid RLS issues
+      let totalDeleted = 0;
+      for (const meter of meters) {
+        const { error: deleteError, count } = await supabase
+          .from("meter_readings")
+          .delete({ count: "exact" })
+          .eq("meter_id", meter.id);
 
-      // Delete all readings for these meters
-      const { error: deleteError } = await supabase
-        .from("meter_readings")
-        .delete()
-        .in("meter_id", meterIds);
+        if (deleteError) {
+          console.error(`Error deleting readings for meter ${meter.meter_number}:`, deleteError);
+          throw new Error(`Failed to delete readings: ${deleteError.message}`);
+        }
 
-      if (deleteError) throw deleteError;
+        console.log(`Deleted ${count || 0} readings for meter ${meter.meter_number}`);
+        totalDeleted += count || 0;
+      }
 
       // Verify deletion
       const { count: remainingCount } = await supabase
         .from("meter_readings")
         .select("*", { count: "exact", head: true })
-        .in("meter_id", meterIds);
+        .in("meter_id", meters.map(m => m.id));
 
-      console.log(`Database cleared for site ${siteId}. Remaining readings: ${remainingCount}`);
+      console.log(`Total deleted: ${totalDeleted}, Remaining: ${remainingCount}`);
 
-      toast.success(`Database cleared successfully`);
+      if (remainingCount === 0) {
+        toast.success(`Database cleared successfully - ${totalDeleted} readings deleted`);
+      } else {
+        toast.warning(`Partially cleared - ${remainingCount} readings remaining`);
+      }
+      
       setShowClearConfirm(false);
       
-      // Wait a moment for database to propagate changes
+      // Wait for database propagation
       setTimeout(() => {
         onDataChange?.();
       }, 500);
