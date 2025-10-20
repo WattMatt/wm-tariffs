@@ -122,6 +122,84 @@ export type Database = {
           },
         ]
       }
+      meter_csv_files: {
+        Row: {
+          content_hash: string
+          created_at: string
+          duplicates_skipped: number | null
+          error_message: string | null
+          file_name: string
+          file_path: string
+          file_size: number | null
+          id: string
+          meter_id: string
+          parse_errors: number | null
+          parse_status: string
+          parsed_at: string | null
+          readings_inserted: number | null
+          site_id: string
+          updated_at: string
+          upload_status: string
+          uploaded_at: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          content_hash: string
+          created_at?: string
+          duplicates_skipped?: number | null
+          error_message?: string | null
+          file_name: string
+          file_path: string
+          file_size?: number | null
+          id?: string
+          meter_id: string
+          parse_errors?: number | null
+          parse_status?: string
+          parsed_at?: string | null
+          readings_inserted?: number | null
+          site_id: string
+          updated_at?: string
+          upload_status?: string
+          uploaded_at?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          content_hash?: string
+          created_at?: string
+          duplicates_skipped?: number | null
+          error_message?: string | null
+          file_name?: string
+          file_path?: string
+          file_size?: number | null
+          id?: string
+          meter_id?: string
+          parse_errors?: number | null
+          parse_status?: string
+          parsed_at?: string | null
+          readings_inserted?: number | null
+          site_id?: string
+          updated_at?: string
+          upload_status?: string
+          uploaded_at?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meter_csv_files_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meter_csv_files_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meter_positions: {
         Row: {
           created_at: string | null

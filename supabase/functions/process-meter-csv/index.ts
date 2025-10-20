@@ -284,6 +284,23 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Update the tracking table with parse results
+    const { error: updateError } = await supabase
+      .from('meter_csv_files')
+      .update({
+        parse_status: 'parsed',
+        parsed_at: new Date().toISOString(),
+        readings_inserted: readings.length,
+        duplicates_skipped: skipped,
+        parse_errors: parseErrors,
+        error_message: errors.length > 0 ? errors.join('; ') : null
+      })
+      .eq('file_path', filePath);
+
+    if (updateError) {
+      console.error('Failed to update file tracking:', updateError);
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -300,6 +317,27 @@ Deno.serve(async (req) => {
     );
   } catch (error: any) {
     console.error('Function error:', error);
+    
+    // Update tracking table with error status if we have the filePath
+    try {
+      const body = await req.clone().json();
+      if (body.filePath) {
+        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+        const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+        const errorSupabase = createClient(supabaseUrl, supabaseKey);
+        
+        await errorSupabase
+          .from('meter_csv_files')
+          .update({
+            parse_status: 'error',
+            error_message: error?.message || String(error)
+          })
+          .eq('file_path', body.filePath);
+      }
+    } catch (updateErr) {
+      console.error('Failed to update error status:', updateErr);
+    }
+
     return new Response(
       JSON.stringify({
         success: false,

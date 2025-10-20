@@ -106,58 +106,33 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
 
   const loadSavedFiles = async () => {
     try {
-      const { data, error } = await supabase.storage
-        .from('meter-csvs')
-        .list(siteId, {
-          limit: 1000,
-          sortBy: { column: 'created_at', order: 'desc' }
-        });
+      // Load all tracked CSV files from database
+      const { data: trackedFiles, error } = await supabase
+        .from('meter_csv_files')
+        .select(`
+          *,
+          meters!inner(meter_number)
+        `)
+        .eq('site_id', siteId)
+        .order('created_at', { ascending: false });
 
       if (error) throw error;
 
-      const filesList: FileItem[] = [];
-      
-    if (data) {
-      for (const folder of data) {
-        if (folder.name && !folder.name.includes('.')) {
-          const { data: meterFiles } = await supabase.storage
-            .from('meter-csvs')
-            .list(`${siteId}/${folder.name}`, {
-              limit: 1000,
-              sortBy: { column: 'created_at', order: 'desc' }
-            });
-
-          if (meterFiles) {
-            const meter = meters.find(m => m.id === folder.name);
-            for (const file of meterFiles) {
-              if (file.name.endsWith('.csv')) {
-                const filePath = `${siteId}/${folder.name}/${file.name}`;
-                
-                // Check if this file has been parsed by checking metadata->source_file
-                const { count } = await supabase
-                  .from('meter_readings')
-                  .select('id', { count: 'exact', head: true })
-                  .eq('meter_id', folder.name)
-                  .filter('metadata->source_file', 'eq', file.name);
-
-                const isParsed = (count ?? 0) > 0;
-                
-                filesList.push({
-                  name: file.name,
-                  path: filePath,
-                  meterId: folder.name,
-                  meterNumber: meter?.meter_number,
-                  size: file.metadata?.size,
-                  status: isParsed ? "success" : "uploaded",
-                  isNew: false,
-                  readingsInserted: isParsed ? count : undefined
-                });
-              }
-            }
-          }
-        }
-      }
-    }
+      const filesList: FileItem[] = (trackedFiles || []).map(file => ({
+        name: file.file_name,
+        path: file.file_path,
+        meterId: file.meter_id,
+        meterNumber: file.meters?.meter_number,
+        size: file.file_size,
+        status: file.parse_status === 'parsed' ? 'success' : 
+                file.parse_status === 'error' ? 'error' : 'uploaded',
+        isNew: false,
+        readingsInserted: file.readings_inserted,
+        duplicatesSkipped: file.duplicates_skipped,
+        parseErrors: file.parse_errors,
+        errorMessage: file.error_message,
+        contentHash: file.content_hash
+      }));
 
       setFiles(prev => [...prev.filter(f => f.isNew), ...filesList]);
     } catch (err: any) {
@@ -346,22 +321,17 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
         const fileName = `${clientCode}_${siteName}_${meterSerial}_${shortHash}.csv`;
         const filePath = `${siteId}/${fileItem.meterId}/${fileName}`;
         
-        // Check if file with same hash already exists and delete old duplicates
-        const { data: existingFiles } = await supabase.storage
-          .from('meter-csvs')
-          .list(`${siteId}/${fileItem.meterId}`);
+        // Check if file with this hash already exists in database
+        const { data: existingFile } = await supabase
+          .from('meter_csv_files')
+          .select('id, file_name')
+          .eq('site_id', siteId)
+          .eq('content_hash', fileItem.contentHash!)
+          .maybeSingle();
 
-        const duplicateFiles = existingFiles?.filter(f => 
-          f.name.includes(shortHash) || f.name.includes(fileItem.contentHash || '')
-        ) || [];
-
-        // Delete old duplicate files before uploading new one
-        if (duplicateFiles.length > 0) {
-          const pathsToDelete = duplicateFiles.map(f => `${siteId}/${fileItem.meterId}/${f.name}`);
-          await supabase.storage
-            .from('meter-csvs')
-            .remove(pathsToDelete);
-          toast.info(`${fileItem.meterNumber}: Removed ${duplicateFiles.length} old duplicate(s)`);
+        if (existingFile) {
+          toast.info(`${fileItem.meterNumber}: Duplicate detected (${existingFile.file_name}), skipped`);
+          continue;
         }
 
         const { error: uploadError } = await supabase.storage
@@ -374,6 +344,24 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
             continue;
           }
           throw uploadError;
+        }
+
+        // Track the file in database
+        const { data: user } = await supabase.auth.getUser();
+        const { error: trackError } = await supabase
+          .from('meter_csv_files')
+          .insert({
+            site_id: siteId,
+            meter_id: fileItem.meterId,
+            file_name: fileName,
+            file_path: filePath,
+            content_hash: fileItem.contentHash!,
+            file_size: fileItem.size,
+            uploaded_by: user?.user?.id
+          });
+
+        if (trackError) {
+          console.error('Failed to track file:', trackError);
         }
 
         setFiles(prev =>
@@ -475,48 +463,35 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
       setIsProcessing(true);
       toast.info("Scanning for orphaned files...");
 
-      // Get all meter IDs from storage
-      const { data: folders, error: listError } = await supabase.storage
-        .from('meter-csvs')
-        .list(siteId, { limit: 1000 });
+      // Get tracked files where meter no longer exists
+      const { data: orphanedFiles, error } = await supabase
+        .from('meter_csv_files')
+        .select('file_path, meter_id, meters!inner(id)')
+        .eq('site_id', siteId)
+        .is('meters.id', null);
 
-      if (listError) throw listError;
+      if (error) throw error;
 
-      const orphanedPaths: string[] = [];
-
-      for (const folder of folders || []) {
-        if (folder.name && !folder.name.includes('.')) {
-          const meterExists = meters.some(m => m.id === folder.name);
-          
-          if (!meterExists) {
-            // This meter doesn't exist anymore, delete all its files
-            const { data: meterFiles } = await supabase.storage
-              .from('meter-csvs')
-              .list(`${siteId}/${folder.name}`, { limit: 1000 });
-
-            if (meterFiles) {
-              meterFiles.forEach(file => {
-                if (file.name.endsWith('.csv')) {
-                  orphanedPaths.push(`${siteId}/${folder.name}/${file.name}`);
-                }
-              });
-            }
-          }
-        }
-      }
-
-      if (orphanedPaths.length === 0) {
+      if (!orphanedFiles || orphanedFiles.length === 0) {
         toast.info("No orphaned files found");
         return;
       }
 
+      const pathsToDelete = orphanedFiles.map(f => f.file_path);
+
       // Delete using edge function
-      const { data, error } = await supabase.functions.invoke('delete-meter-csvs', {
-        body: { filePaths: orphanedPaths }
+      const { data, error: deleteError } = await supabase.functions.invoke('delete-meter-csvs', {
+        body: { filePaths: pathsToDelete }
       });
 
-      if (error) throw error;
+      if (deleteError) throw deleteError;
       if (!data.success) throw new Error(data.error || 'Deletion failed');
+
+      // Remove from tracking table
+      await supabase
+        .from('meter_csv_files')
+        .delete()
+        .in('file_path', pathsToDelete);
 
       await loadSavedFiles();
       toast.success(`✓ Deleted ${data.deletedCount} orphaned file(s)`);
@@ -574,6 +549,12 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
 
       if (error) throw error;
       if (!data.success) throw new Error(data.error || 'Deletion failed');
+
+      // Remove from tracking table
+      await supabase
+        .from('meter_csv_files')
+        .delete()
+        .in('file_path', pathsToDelete);
 
       // Clear selection and reload files from storage
       setSelectedFiles(new Set());
@@ -765,6 +746,12 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
 
       if (error) throw error;
       if (!data.success) throw new Error(data.error || 'Deletion failed');
+
+      // Remove from tracking table
+      await supabase
+        .from('meter_csv_files')
+        .delete()
+        .eq('file_path', fileItem.path);
 
       // Remove from local state and reload
       setFiles(prev => prev.filter((_, i) => i !== index));
