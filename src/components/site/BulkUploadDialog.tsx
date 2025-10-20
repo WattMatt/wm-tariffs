@@ -225,10 +225,10 @@ export default function BulkUploadDialog({ siteId, onDataChange }: BulkUploadDia
             <div>
               <Label className="mb-2">Column Separator</Label>
               <Select value={separator} onValueChange={setSeparator} disabled={isUploading}>
-                <SelectTrigger>
+                <SelectTrigger className="bg-background">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="z-[100] bg-popover">
                   <SelectItem value="tab">Tab</SelectItem>
                   <SelectItem value="comma">Comma (,)</SelectItem>
                   <SelectItem value="semicolon">Semicolon (;)</SelectItem>
