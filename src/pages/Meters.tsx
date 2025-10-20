@@ -185,6 +185,7 @@ export default function Meters() {
                     <SelectContent>
                       <SelectItem value="council_bulk">Council Bulk Supply</SelectItem>
                       <SelectItem value="check_meter">Check Meter</SelectItem>
+                      <SelectItem value="solar">Solar Generation</SelectItem>
                       <SelectItem value="distribution">Distribution Meter</SelectItem>
                     </SelectContent>
                   </Select>

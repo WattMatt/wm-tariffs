@@ -367,6 +367,7 @@ export const MeterDataExtractor = ({
                   <SelectContent>
                     <SelectItem value="council_bulk">Council Bulk</SelectItem>
                     <SelectItem value="check_meter">Check Meter</SelectItem>
+                    <SelectItem value="solar">Solar Generation</SelectItem>
                     <SelectItem value="distribution">Distribution</SelectItem>
                   </SelectContent>
                 </Select>

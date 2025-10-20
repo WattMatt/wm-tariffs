@@ -852,6 +852,7 @@ export default function SchematicEditor({
                   <SelectContent className="bg-background z-50">
                     <SelectItem value="council_bulk">Council Bulk Supply</SelectItem>
                     <SelectItem value="check_meter">Check Meter</SelectItem>
+                    <SelectItem value="solar">Solar Generation</SelectItem>
                     <SelectItem value="distribution">Distribution Meter</SelectItem>
                   </SelectContent>
                 </Select>

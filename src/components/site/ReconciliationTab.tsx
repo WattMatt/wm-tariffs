@@ -63,18 +63,26 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
 
     const councilBulk = meterData.filter((m) => m.meter_type === "council_bulk");
     const checkMeters = meterData.filter((m) => m.meter_type === "check_meter");
+    const solarMeters = meterData.filter((m) => m.meter_type === "solar");
     const distribution = meterData.filter((m) => m.meter_type === "distribution");
 
     const councilTotal = councilBulk.reduce((sum, m) => sum + m.totalKwh, 0);
+    const solarTotal = solarMeters.reduce((sum, m) => sum + m.totalKwh, 0);
     const distributionTotal = distribution.reduce((sum, m) => sum + m.totalKwh, 0);
-    const recoveryRate = councilTotal > 0 ? (distributionTotal / councilTotal) * 100 : 0;
-    const discrepancy = councilTotal - distributionTotal;
+    
+    // Total supply = Council (from grid) + Solar (on-site generation)
+    const totalSupply = councilTotal + solarTotal;
+    const recoveryRate = totalSupply > 0 ? (distributionTotal / totalSupply) * 100 : 0;
+    const discrepancy = totalSupply - distributionTotal;
 
     setReconciliationData({
       councilBulk,
       checkMeters,
+      solarMeters,
       distribution,
       councilTotal,
+      solarTotal,
+      totalSupply,
       distributionTotal,
       recoveryRate,
       discrepancy,
@@ -87,8 +95,13 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold mb-2">Reconciliation</h2>
-        <p className="text-muted-foreground">Compare council supply against recovered consumption</p>
+        <h2 className="text-2xl font-bold mb-2">Energy Reconciliation</h2>
+        <p className="text-muted-foreground">
+          Balance total supply (grid + solar) against downstream distribution
+        </p>
+        <p className="text-xs text-muted-foreground mt-1">
+          Bulk Check Meter + Solar Generation = Total Supply ≈ Sum of all Distribution Meters
+        </p>
       </div>
 
       <Card className="border-border/50">
@@ -149,11 +162,11 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
 
       {reconciliationData && (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
             <Card className="border-border/50">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Council Supply
+                  Council (Grid)
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -166,12 +179,28 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
             <Card className="border-border/50">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Recovered
+                  Solar (Generated)
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">
-                  {reconciliationData.distributionTotal.toFixed(2)} kWh
+                <div className="text-2xl font-bold text-green-600">
+                  {reconciliationData.solarTotal.toFixed(2)} kWh
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-border/50 bg-primary/5">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Total Supply
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-primary">
+                  {reconciliationData.totalSupply.toFixed(2)} kWh
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  Grid + Solar
                 </div>
               </CardContent>
             </Card>
@@ -179,12 +208,15 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
             <Card className="border-border/50">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Recovery Rate
+                  Distribution
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  {reconciliationData.recoveryRate.toFixed(1)}%
+                  {reconciliationData.distributionTotal.toFixed(2)} kWh
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  Recovery: {reconciliationData.recoveryRate.toFixed(1)}%
                 </div>
               </CardContent>
             </Card>
@@ -204,6 +236,9 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                 >
                   {reconciliationData.discrepancy.toFixed(2)} kWh
                 </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  {reconciliationData.discrepancy > 0 ? "Unaccounted" : "Over-recovered"}
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -220,39 +255,85 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
               </Button>
             </CardHeader>
             <CardContent className="space-y-6">
-              {reconciliationData.councilBulk.length > 0 && (
-                <div>
-                  <h3 className="font-semibold mb-3">Council Bulk Supply</h3>
-                  <div className="space-y-2">
-                    {reconciliationData.councilBulk.map((meter: any) => (
-                      <div
-                        key={meter.id}
-                        className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
-                      >
-                        <span className="font-mono text-sm">{meter.meter_number}</span>
-                        <span className="font-semibold">{meter.totalKwh.toFixed(2)} kWh</span>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Supply Sources */}
+                <div className="space-y-6">
+                  <h3 className="font-semibold text-lg border-b pb-2">Supply Sources</h3>
+                  
+                  {reconciliationData.councilBulk.length > 0 && (
+                    <div>
+                      <h4 className="font-semibold mb-3 text-sm text-muted-foreground">Council Bulk (Grid)</h4>
+                      <div className="space-y-2">
+                        {reconciliationData.councilBulk.map((meter: any) => (
+                          <div
+                            key={meter.id}
+                            className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
+                          >
+                            <span className="font-mono text-sm">{meter.meter_number}</span>
+                            <span className="font-semibold">{meter.totalKwh.toFixed(2)} kWh</span>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+                    </div>
+                  )}
 
-              {reconciliationData.distribution.length > 0 && (
-                <div>
-                  <h3 className="font-semibold mb-3">Distribution Meters</h3>
-                  <div className="space-y-2">
-                    {reconciliationData.distribution.map((meter: any) => (
-                      <div
-                        key={meter.id}
-                        className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
-                      >
-                        <span className="font-mono text-sm">{meter.meter_number}</span>
-                        <span className="font-semibold">{meter.totalKwh.toFixed(2)} kWh</span>
+                  {reconciliationData.solarMeters?.length > 0 && (
+                    <div>
+                      <h4 className="font-semibold mb-3 text-sm text-muted-foreground">Solar Generation</h4>
+                      <div className="space-y-2">
+                        {reconciliationData.solarMeters.map((meter: any) => (
+                          <div
+                            key={meter.id}
+                            className="flex items-center justify-between p-3 rounded-lg bg-green-50 border border-green-200"
+                          >
+                            <span className="font-mono text-sm">{meter.meter_number}</span>
+                            <span className="font-semibold text-green-700">{meter.totalKwh.toFixed(2)} kWh</span>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  )}
+
+                  {reconciliationData.checkMeters?.length > 0 && (
+                    <div>
+                      <h4 className="font-semibold mb-3 text-sm text-muted-foreground">Check Meters</h4>
+                      <div className="space-y-2">
+                        {reconciliationData.checkMeters.map((meter: any) => (
+                          <div
+                            key={meter.id}
+                            className="flex items-center justify-between p-3 rounded-lg bg-blue-50 border border-blue-200"
+                          >
+                            <span className="font-mono text-sm">{meter.meter_number}</span>
+                            <span className="font-semibold text-blue-700">{meter.totalKwh.toFixed(2)} kWh</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
+
+                {/* Distribution / Consumption */}
+                <div className="space-y-6">
+                  <h3 className="font-semibold text-lg border-b pb-2">Distribution / Consumption</h3>
+                  
+              {reconciliationData.distribution.length > 0 && (
+                    <div>
+                      <h4 className="font-semibold mb-3 text-sm text-muted-foreground">Downstream Meters</h4>
+                      <div className="space-y-2">
+                        {reconciliationData.distribution.map((meter: any) => (
+                          <div
+                            key={meter.id}
+                            className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
+                          >
+                            <span className="font-mono text-sm">{meter.meter_number}</span>
+                            <span className="font-semibold">{meter.totalKwh.toFixed(2)} kWh</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
               )}
+                </div>
+              </div>
             </CardContent>
           </Card>
         </>
