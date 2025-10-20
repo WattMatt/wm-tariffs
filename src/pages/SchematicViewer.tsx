@@ -31,10 +31,18 @@ interface MeterPosition {
   x_position: number;
   y_position: number;
   label: string | null;
+  meter_id: string;
   meters: {
     meter_number: string;
     meter_type: string;
   } | null;
+}
+
+interface MeterConnection {
+  id: string;
+  child_meter_id: string;
+  parent_meter_id: string;
+  connection_type: string;
 }
 
 interface ExtractedMeterData {
@@ -69,6 +77,7 @@ export default function SchematicViewer() {
   const [schematic, setSchematic] = useState<SchematicData | null>(null);
   const [imageUrl, setImageUrl] = useState<string>("");
   const [meterPositions, setMeterPositions] = useState<MeterPosition[]>([]);
+  const [meterConnections, setMeterConnections] = useState<MeterConnection[]>([]);
   const [editMode, setEditMode] = useState(false);
   const [extractedMeters, setExtractedMeters] = useState<ExtractedMeterData[]>([]);
   const [selectedMeterIndex, setSelectedMeterIndex] = useState<number | null>(null);
@@ -95,6 +104,13 @@ export default function SchematicViewer() {
       fetchMeterPositions();
     }
   }, [id]);
+
+  // Fetch connections after schematic is loaded
+  useEffect(() => {
+    if (schematic) {
+      fetchMeterConnections();
+    }
+  }, [schematic]);
 
   // Real-time subscription for meter positions
   useEffect(() => {
@@ -263,10 +279,32 @@ export default function SchematicViewer() {
   const fetchMeterPositions = async () => {
     const { data } = await supabase
       .from("meter_positions")
-      .select("*, meters(meter_number, meter_type)")
+      .select("id, meter_id, x_position, y_position, label, meters(meter_number, meter_type)")
       .eq("schematic_id", id);
 
     setMeterPositions(data || []);
+  };
+
+  const fetchMeterConnections = async () => {
+    if (!schematic) return;
+    
+    // Get all meters for this site first
+    const { data: siteMeters } = await supabase
+      .from("meters")
+      .select("id")
+      .eq("site_id", schematic.site_id);
+    
+    if (!siteMeters || siteMeters.length === 0) return;
+    
+    const meterIds = siteMeters.map(m => m.id);
+    
+    // Get connections where either child or parent is in this site
+    const { data: connections } = await supabase
+      .from("meter_connections")
+      .select("*")
+      .or(`child_meter_id.in.(${meterIds.join(',')}),parent_meter_id.in.(${meterIds.join(',')})`);
+    
+    setMeterConnections(connections || []);
   };
 
   const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
@@ -615,6 +653,47 @@ export default function SchematicViewer() {
                               draggable={false}
                             />
                             
+                            {/* Connection Lines - rendered first so they appear behind markers */}
+                            <svg 
+                              className="absolute inset-0 pointer-events-none"
+                              style={{ 
+                                width: '100%', 
+                                height: '100%',
+                                zIndex: 20
+                              }}
+                            >
+                              {meterConnections.map((connection) => {
+                                const childPos = meterPositions.find(p => p.meter_id === connection.child_meter_id);
+                                const parentPos = meterPositions.find(p => p.meter_id === connection.parent_meter_id);
+                                
+                                if (!childPos || !parentPos || !imageRef.current) return null;
+                                
+                                // Get connection color based on type
+                                const getConnectionColor = (type: string) => {
+                                  switch (type) {
+                                    case 'direct_feed': return '#10b981'; // green
+                                    case 'sub_distribution': return '#3b82f6'; // blue
+                                    case 'backup': return '#f59e0b'; // orange
+                                    default: return '#6b7280'; // gray
+                                  }
+                                };
+                                
+                                return (
+                                  <line
+                                    key={connection.id}
+                                    x1={`${childPos.x_position}%`}
+                                    y1={`${childPos.y_position}%`}
+                                    x2={`${parentPos.x_position}%`}
+                                    y2={`${parentPos.y_position}%`}
+                                    stroke={getConnectionColor(connection.connection_type)}
+                                    strokeWidth="3"
+                                    strokeDasharray={connection.connection_type === 'backup' ? '8,4' : 'none'}
+                                    opacity="0.7"
+                                  />
+                                );
+                              })}
+                            </svg>
+
                             {/* Existing Meter Position Markers */}
                             {meterPositions.map((position) => (
                               <div
