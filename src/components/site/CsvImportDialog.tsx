@@ -29,10 +29,8 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [timestampColumn, setTimestampColumn] = useState<string>("");
   const [valueColumn, setValueColumn] = useState<string>("");
-  const [additionalColumns, setAdditionalColumns] = useState<string[]>([]);
-  const [skipRows, setSkipRows] = useState<number>(0);
   const [isUploading, setIsUploading] = useState(false);
-  const [step, setStep] = useState<"upload" | "map" | "confirm">("upload");
+  const [step, setStep] = useState<"upload" | "confirm">("upload");
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -92,8 +90,6 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
           rows: dataRows,
           preview,
         });
-
-        setSkipRows(headerRowIndex);
         
         // Auto-detect timestamp column - prioritize exact matches first
         const timeColumnIndex = headers.findIndex((h: string) => {
@@ -128,10 +124,9 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
         // Auto-select ALL columns for complete data capture
         const allAvailableColumns = headers.filter((h: string) => h && h.trim());
         console.log('📦 All available columns:', allAvailableColumns);
-        setAdditionalColumns(allAvailableColumns);
 
-        setStep("map");
-        toast.success("CSV parsed successfully");
+        setStep("confirm");
+        toast.success("CSV parsed successfully - review your data below");
       },
       error: (error) => {
         console.error('❌ CSV parse error:', error);
@@ -158,7 +153,7 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
       const timestampIndex = csvData.headers.indexOf(timestampColumn);
       const valueIndex = csvData.headers.indexOf(valueColumn);
       console.log('📍 Column indices - Timestamp:', timestampIndex, 'Value:', valueIndex);
-      console.log('📦 Additional columns to include:', additionalColumns);
+      console.log('📦 All columns will be included');
 
       // Prepare batch insert data
       let validCount = 0;
@@ -254,8 +249,6 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
     setSelectedFile(null);
     setTimestampColumn("");
     setValueColumn("");
-    setAdditionalColumns([]);
-    setSkipRows(0);
     setStep("upload");
     onClose();
   };
@@ -367,85 +360,18 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
           </div>
         )}
 
-        {step === "map" && csvData && (
+        {step === "confirm" && csvData && (
           <div className="space-y-6">
-            <Card className="border-border/50">
+            <Card className="border-border/50 bg-primary/5 border-primary/20">
               <CardHeader>
-                <CardTitle className="text-base">Column Mapping</CardTitle>
-                <CardDescription>Select which columns to import from your CSV</CardDescription>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <CheckCircle2 className="w-5 h-5 text-primary" />
+                  Ready to Import
+                </CardTitle>
+                <CardDescription>
+                  {csvData.rows.length} rows • {csvData.headers.length} columns detected (Time, P1, Q1-Q4, S, Status, etc.)
+                </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Timestamp Column *</Label>
-                    <Select value={timestampColumn} onValueChange={setTimestampColumn}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select timestamp column" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {csvData.headers.map((header, idx) => (
-                          <SelectItem key={idx} value={header}>
-                            {header}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Energy Value Column (kWh/kVA) *</Label>
-                    <Select value={valueColumn} onValueChange={setValueColumn}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select value column" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {csvData.headers.map((header, idx) => (
-                          <SelectItem key={idx} value={header}>
-                            {header}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label>Columns That Will Be Imported</Label>
-                    <Badge variant="secondary">{csvData.headers.length} total columns</Badge>
-                  </div>
-                  <p className="text-xs text-muted-foreground mb-2">
-                    All columns from your CSV will be automatically stored in the database.
-                  </p>
-                  <div className="flex flex-wrap gap-2 p-4 bg-muted/30 rounded-lg max-h-32 overflow-y-auto">
-                    {csvData.headers
-                      .filter(h => h && h.trim())
-                      .map((header, idx) => {
-                        const isTimestamp = header === timestampColumn;
-                        const isValue = header === valueColumn;
-                        const columnType = getColumnType(header, csvData.preview.map(row => row[idx]));
-                        
-                        return (
-                          <Badge
-                            key={idx}
-                            variant={isTimestamp || isValue ? "default" : "secondary"}
-                            className="pointer-events-none"
-                          >
-                            {isTimestamp && "📅 "}
-                            {isValue && "⚡ "}
-                            {!isTimestamp && !isValue && columnType.icon && `${columnType.icon} `}
-                            {header}
-                          </Badge>
-                        );
-                      })}
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <AlertCircle className="w-4 h-4" />
-                  <span>Found {csvData.rows.length} data rows</span>
-                </div>
-              </CardContent>
             </Card>
 
             <Card className="border-border/50 bg-green-500/5 border-green-500/20">
@@ -537,23 +463,10 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
                     <p className="font-medium font-mono text-sm">{valueColumn}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground mb-1">Additional Columns</p>
-                    <p className="font-medium text-sm">{additionalColumns.length} columns</p>
+                    <p className="text-sm text-muted-foreground mb-1">Total Columns</p>
+                    <p className="font-medium text-sm">{csvData.headers.length} columns captured</p>
                   </div>
                 </div>
-
-                {additionalColumns.length > 0 && (
-                  <div className="border-t pt-4">
-                    <p className="text-sm text-muted-foreground mb-2">Additional Fields:</p>
-                    <div className="flex flex-wrap gap-1">
-                      {additionalColumns.map((col, idx) => (
-                        <Badge key={idx} variant="secondary" className="text-xs">
-                          {col}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
 
                 <div className="border-t pt-4">
                   <p className="text-sm text-muted-foreground mb-2">Sample Data Preview:</p>
@@ -576,7 +489,7 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
             </Card>
 
             <div className="flex justify-between">
-              <Button variant="outline" onClick={() => setStep("map")}>
+              <Button variant="outline" onClick={() => setStep("upload")}>
                 Back
               </Button>
               <Button onClick={handleImport} disabled={isUploading}>
