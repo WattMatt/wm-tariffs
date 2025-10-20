@@ -31,6 +31,7 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
   const [valueColumn, setValueColumn] = useState<string>("");
   const [isUploading, setIsUploading] = useState(false);
   const [step, setStep] = useState<"upload" | "confirm">("upload");
+  const [separator, setSeparator] = useState<string>("tab");
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -44,11 +45,31 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
     setSelectedFile(file);
     parseCSV(file);
   };
+  
+  // Re-parse when separator changes
+  const handleSeparatorChange = (newSeparator: string) => {
+    setSeparator(newSeparator);
+    if (selectedFile) {
+      // Reset state and re-parse with new separator
+      setCsvData(null);
+      setTimestampColumn("");
+      setValueColumn("");
+      // Small delay to ensure state is updated
+      setTimeout(() => parseCSV(selectedFile), 50);
+    }
+  };
 
   const parseCSV = (file: File) => {
     console.log('📄 Starting CSV parse for file:', file.name, 'Size:', file.size);
     
+    const delimiterMap: Record<string, string> = {
+      tab: "\t",
+      comma: ",",
+      semicolon: ";"
+    };
+    
     Papa.parse(file, {
+      delimiter: delimiterMap[separator],
       complete: (results) => {
         const data = results.data as any[][];
         console.log('✅ CSV parsed. Total rows:', data.length);
@@ -252,6 +273,7 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
     setTimestampColumn("");
     setValueColumn("");
     setStep("upload");
+    setSeparator("tab");
     onClose();
   };
 
@@ -322,6 +344,20 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
 
         {step === "upload" && (
           <div className="space-y-4">
+            <div className="mb-4">
+              <Label className="mb-2">Column Separator</Label>
+              <Select value={separator} onValueChange={handleSeparatorChange}>
+                <SelectTrigger className="bg-background">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="z-[100] bg-popover">
+                  <SelectItem value="tab">Tab</SelectItem>
+                  <SelectItem value="comma">Comma (,)</SelectItem>
+                  <SelectItem value="semicolon">Semicolon (;)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
             <div className="border-2 border-dashed border-border rounded-lg p-12 text-center hover:border-primary transition-colors">
               <Upload className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
               <input
