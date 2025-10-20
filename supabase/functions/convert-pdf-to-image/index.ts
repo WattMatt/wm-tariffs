@@ -40,16 +40,15 @@ serve(async (req) => {
 
     console.log('PDF downloaded successfully');
 
-    // Convert PDF to image using canvas-based rendering
-    // Since Deno doesn't have native PDF support, we'll use pdf.js via CDN
+    // Convert PDF to image using pdfjs-serverless (designed for edge functions)
     const arrayBuffer = await pdfData.arrayBuffer();
     const uint8Array = new Uint8Array(arrayBuffer);
 
-    // Import pdf.js dynamically (using legacy build that doesn't require worker)
-    const pdfjsLib = await import('https://esm.sh/pdfjs-dist@3.11.174/legacy/build/pdf.mjs');
+    // Import pdfjs-serverless - works without workers in edge environments
+    const { getDocument } = await import('https://esm.sh/pdfjs-serverless@0.3.2');
 
-    // Load PDF (legacy build doesn't need worker configuration)
-    const loadingTask = pdfjsLib.getDocument({ data: uint8Array });
+    // Load PDF
+    const loadingTask = getDocument(uint8Array);
     const pdf = await loadingTask.promise;
     
     console.log(`PDF loaded, pages: ${pdf.numPages}`);
