@@ -96,6 +96,32 @@ export default function SchematicViewer() {
     }
   }, [id]);
 
+  // Real-time subscription for meter positions
+  useEffect(() => {
+    if (!id) return;
+
+    const channel = supabase
+      .channel('meter-positions-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'meter_positions',
+          filter: `schematic_id=eq.${id}`
+        },
+        (payload) => {
+          console.log('🔄 Meter position change detected:', payload);
+          fetchMeterPositions();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [id]);
+
   const fetchSchematic = async () => {
     const { data, error } = await supabase
       .from("schematics")
@@ -488,8 +514,13 @@ export default function SchematicViewer() {
               variant={editMode ? "default" : "outline"} 
               size="sm" 
               onClick={() => {
-                setEditMode(!editMode);
+                const newEditMode = !editMode;
+                setEditMode(newEditMode);
                 setIsPlacingMeter(false);
+                // Refetch positions when switching back to view mode
+                if (!newEditMode) {
+                  fetchMeterPositions();
+                }
               }}
             >
               <Edit className="w-4 h-4 mr-2" />
