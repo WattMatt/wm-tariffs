@@ -570,18 +570,32 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
   };
 
   const handleParseAll = async () => {
-    const uploadedFiles = files.filter(f => 
+    // Only parse files that haven't been successfully parsed yet (uploaded or error status)
+    const unparsedFiles = files.filter(f => 
       (f.status === "uploaded" || f.status === "error") && f.path
     );
     
-    if (uploadedFiles.length === 0) {
-      toast.error("No files to parse");
+    if (unparsedFiles.length === 0) {
+      const allCount = files.filter(f => f.path).length;
+      const successCount = files.filter(f => f.status === "success").length;
+      if (successCount === allCount && allCount > 0) {
+        toast.info("All files have already been parsed successfully");
+      } else {
+        toast.error("No files available to parse");
+      }
       return;
     }
 
+    const successCount = files.filter(f => f.status === "success" && f.path).length;
+    const message = successCount > 0 
+      ? `Parse ${unparsedFiles.length} pending/failed file(s)?\n\n${successCount} already-parsed file(s) will be skipped.`
+      : `Parse ${unparsedFiles.length} file(s)?`;
+    
+    if (!window.confirm(message)) return;
+
     setIsProcessing(true);
 
-    for (const fileItem of uploadedFiles) {
+    for (const fileItem of unparsedFiles) {
       setFiles(prev =>
         prev.map(f => f.path === fileItem.path ? { ...f, status: "parsing" } : f)
       );
@@ -1157,9 +1171,45 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                        Parse All Ready Files
                      </Button>
                   </div>
-                </div>
+                 </div>
 
-                {files.map((fileItem, index) => (
+                 {/* Parse Status Summary */}
+                 <Card className="bg-muted/30 border-border/50">
+                   <CardContent className="pt-4 pb-4">
+                     <div className="grid grid-cols-3 gap-4 text-center">
+                       <div>
+                         <div className="text-2xl font-bold text-primary">
+                           {files.filter(f => f.status === "uploaded" || f.status === "error").length}
+                         </div>
+                         <div className="text-xs text-muted-foreground mt-1">Ready to Parse</div>
+                       </div>
+                       <div>
+                         <div className="text-2xl font-bold text-green-600">
+                           {files.filter(f => f.status === "success").length}
+                         </div>
+                         <div className="text-xs text-muted-foreground mt-1">Already Parsed</div>
+                       </div>
+                       <div>
+                         <div className="text-2xl font-bold">
+                           {files.length}
+                         </div>
+                         <div className="text-xs text-muted-foreground mt-1">Total Files</div>
+                       </div>
+                     </div>
+                     {files.filter(f => f.status === "success").some(f => f.readingsInserted !== undefined) && (
+                       <div className="mt-4 pt-4 border-t border-border text-xs text-center">
+                         <span className="text-muted-foreground">
+                           Total readings in DB: {' '}
+                         </span>
+                         <span className="font-semibold text-primary">
+                           {files.filter(f => f.status === "success").reduce((sum, f) => sum + (f.readingsInserted || 0), 0).toLocaleString()}
+                         </span>
+                       </div>
+                     )}
+                   </CardContent>
+                 </Card>
+
+                 {files.map((fileItem, index) => (
                   <Card key={index} className="border-border/50">
                     <CardContent className="pt-4">
                       <div className="flex items-center gap-3">
@@ -1198,7 +1248,10 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                           {fileItem.status === "success" && (
                             <div className="flex items-center gap-2">
                               <Badge variant="outline" className="text-green-600 border-green-600">
-                                ✓ {fileItem.readingsInserted} new
+                                ✓ Parsed - Will Skip
+                              </Badge>
+                              <Badge variant="outline" className="text-green-600 border-green-600 text-xs">
+                                {fileItem.readingsInserted} new
                               </Badge>
                               {fileItem.duplicatesSkipped !== undefined && fileItem.duplicatesSkipped > 0 && (
                                 <>
