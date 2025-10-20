@@ -61,20 +61,16 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
             console.error(`Error fetching readings for meter ${meter.meter_number}:`, readingsError);
           }
 
-          // Calculate consumption as: Last Reading - First Reading
-          // This is for cumulative meter readings (like an odometer)
+          // Sum all interval readings (these are consumption per reading period, not cumulative)
           let totalKwh = 0;
           if (readings && readings.length > 0) {
-            const firstReading = Number(readings[0].kwh_value);
-            const lastReading = Number(readings[readings.length - 1].kwh_value);
-            totalKwh = lastReading - firstReading;
+            totalKwh = readings.reduce((sum, r) => sum + Number(r.kwh_value), 0);
             
             // Debug logging
             console.log(`Meter ${meter.meter_number} (${meter.meter_type}):`, {
               readingsCount: readings.length,
-              firstReading,
-              lastReading,
-              totalKwh,
+              totalKwh: totalKwh.toFixed(2),
+              avgPerReading: (totalKwh / readings.length).toFixed(2),
               firstTimestamp: readings[0].reading_timestamp,
               lastTimestamp: readings[readings.length - 1].reading_timestamp
             });
@@ -86,8 +82,6 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
             ...meter,
             totalKwh,
             readingsCount: readings?.length || 0,
-            firstReading: readings?.[0]?.kwh_value || 0,
-            lastReading: readings?.[readings.length - 1]?.kwh_value || 0,
           };
         })
       );
