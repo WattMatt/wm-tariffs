@@ -695,16 +695,36 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                 </div>
                               )}
                               
-                              <div className="rounded-md bg-muted/50 p-3 text-xs space-y-1">
-                                <p className="font-medium">What will be stored:</p>
-                                <ul className="list-disc list-inside space-y-0.5 text-muted-foreground">
-                                  <li>Date & Time → reading_timestamp</li>
-                                  <li>kWh Value → kwh_value</li>
-                                  <li>File name → metadata.source_file</li>
-                                  {fileItem.preview.detectedColumns.metadataColumns.length > 0 && (
-                                    <li>All other columns → metadata.imported_fields (for reconciliation)</li>
-                                  )}
-                                </ul>
+                              <div className="rounded-md bg-muted/50 p-3 text-xs space-y-2">
+                                <p className="font-medium">What will be stored in database:</p>
+                                <div className="space-y-1">
+                                  <p className="text-muted-foreground font-medium">Core Fields:</p>
+                                  <ul className="list-disc list-inside space-y-0.5 text-muted-foreground ml-2">
+                                    <li>Date & Time → <code className="text-[10px] bg-background px-1 rounded">reading_timestamp</code></li>
+                                    <li>kWh Value → <code className="text-[10px] bg-background px-1 rounded">kwh_value</code></li>
+                                  </ul>
+                                </div>
+                                <div className="space-y-1">
+                                  <p className="text-muted-foreground font-medium">Metadata (preserved for reconciliation):</p>
+                                  <ul className="list-disc list-inside space-y-0.5 text-muted-foreground ml-2">
+                                    <li>Source File → <code className="text-[10px] bg-background px-1 rounded">metadata.source_file</code></li>
+                                    {fileItem.preview.detectedColumns.metadataColumns.length > 0 && (
+                                      <>
+                                        {fileItem.preview.detectedColumns.metadataColumns.map((colIdx) => (
+                                          <li key={colIdx}>
+                                            {fileItem.preview!.headers[colIdx] || `Column ${colIdx + 1}`} → 
+                                            <code className="text-[10px] bg-background px-1 rounded ml-1">
+                                              metadata.imported_fields.{fileItem.metadataFieldNames?.[colIdx] || fileItem.preview!.headers[colIdx] || `Column_${colIdx + 1}`}
+                                            </code>
+                                          </li>
+                                        ))}
+                                      </>
+                                    )}
+                                  </ul>
+                                </div>
+                                <p className="text-[10px] text-muted-foreground pt-1 border-t">
+                                  ✓ All columns will be stored - nothing is excluded from the database
+                                </p>
                               </div>
                             </div>
                           ) : (
