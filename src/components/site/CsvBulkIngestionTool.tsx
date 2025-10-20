@@ -616,20 +616,36 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
   const handleDeleteFile = async (fileItem: FileItem, index: number) => {
     if (!fileItem.path) {
       removeFile(index);
+      toast.success("File removed from list");
       return;
     }
 
+    const confirmed = window.confirm(
+      `Delete "${fileItem.name}" from storage?\n\nNote: This will remove the CSV file but meter readings already parsed into the database will remain.`
+    );
+
+    if (!confirmed) return;
+
     try {
+      setIsProcessing(true);
+
+      // Delete from storage
       const { error } = await supabase.storage
         .from('meter-csvs')
         .remove([fileItem.path]);
 
       if (error) throw error;
 
+      // Remove from local state and reload
       setFiles(prev => prev.filter((_, i) => i !== index));
-      toast.success("File deleted");
+      await loadSavedFiles();
+      
+      toast.success(`File deleted from storage: ${fileItem.name}`);
     } catch (err: any) {
-      toast.error("Delete failed");
+      console.error("Delete error:", err);
+      toast.error("Delete failed: " + err.message);
+    } finally {
+      setIsProcessing(false);
     }
   };
 
