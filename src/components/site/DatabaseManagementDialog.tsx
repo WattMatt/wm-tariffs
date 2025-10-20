@@ -25,9 +25,10 @@ import Papa from "papaparse";
 
 interface DatabaseManagementDialogProps {
   siteId: string;
+  onDataChange?: () => void;
 }
 
-export default function DatabaseManagementDialog({ siteId }: DatabaseManagementDialogProps) {
+export default function DatabaseManagementDialog({ siteId, onDataChange }: DatabaseManagementDialogProps) {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -63,6 +64,7 @@ export default function DatabaseManagementDialog({ siteId }: DatabaseManagementD
 
       toast.success("Database cleared successfully");
       setShowClearConfirm(false);
+      onDataChange?.();
     } catch (error) {
       console.error("Error clearing database:", error);
       toast.error("Failed to clear database");
@@ -215,6 +217,7 @@ export default function DatabaseManagementDialog({ siteId }: DatabaseManagementD
 
       toast.success(`Bulk upload complete! Total readings imported: ${totalReadingsInserted}`);
       event.target.value = "";
+      onDataChange?.();
     } catch (error) {
       console.error("Bulk upload error:", error);
       toast.error("Failed to complete bulk upload");
