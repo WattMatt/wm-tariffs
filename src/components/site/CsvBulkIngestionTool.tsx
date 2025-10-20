@@ -380,25 +380,51 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
       setIsProcessing(true);
       toast.info("Scanning for duplicate files...");
 
-      const filesByHash: Record<string, FileItem[]> = {};
+      const savedFiles = files.filter(f => f.path);
+      const filesByHash: Record<string, { path: string; size: number }[]> = {};
       
-      // Group files by content hash (filename without extension)
-      files.filter(f => f.path).forEach(file => {
-        const hash = file.path!.split('/').pop()?.replace('.csv', '') || '';
-        if (!filesByHash[hash]) filesByHash[hash] = [];
-        filesByHash[hash].push(file);
-      });
+      // Download each file and generate content hash
+      for (const file of savedFiles) {
+        try {
+          const { data, error } = await supabase.storage
+            .from('meter-csvs')
+            .download(file.path!);
 
+          if (error || !data) continue;
+
+          // Generate hash from file content
+          const buffer = await data.arrayBuffer();
+          const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+          const hashArray = Array.from(new Uint8Array(hashBuffer));
+          const contentHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+          if (!filesByHash[contentHash]) filesByHash[contentHash] = [];
+          filesByHash[contentHash].push({ 
+            path: file.path!, 
+            size: file.size || 0 
+          });
+        } catch (err) {
+          console.error(`Failed to process ${file.path}:`, err);
+        }
+      }
+
+      // Delete duplicates (keep first file of each hash group)
       let deletedCount = 0;
       for (const [hash, duplicates] of Object.entries(filesByHash)) {
         if (duplicates.length > 1) {
-          // Keep only the first file, delete the rest
+          // Sort by size (smaller first to keep the first uploaded)
+          duplicates.sort((a, b) => a.size - b.size);
+          
+          // Delete all but the first
           for (let i = 1; i < duplicates.length; i++) {
             const { error } = await supabase.storage
               .from('meter-csvs')
-              .remove([duplicates[i].path!]);
+              .remove([duplicates[i].path]);
             
-            if (!error) deletedCount++;
+            if (!error) {
+              deletedCount++;
+              console.log(`Deleted duplicate: ${duplicates[i].path}`);
+            }
           }
         }
       }
@@ -406,7 +432,8 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
       await loadSavedFiles();
       toast.success(`Cleaned up ${deletedCount} duplicate file(s)`);
     } catch (err: any) {
-      toast.error("Cleanup failed");
+      console.error("Cleanup error:", err);
+      toast.error("Cleanup failed: " + err.message);
     } finally {
       setIsProcessing(false);
     }
