@@ -58,6 +58,12 @@ Deno.serve(async (req) => {
       const columns = line.split(/[,\t]/);
       if (columns.length < 3) continue;
 
+      // Skip header rows
+      const firstCol = columns[0]?.trim().toLowerCase();
+      if (firstCol === 'date' || firstCol === 'time' || firstCol === 'datetime' || i === 0 && /[a-z]/i.test(firstCol)) {
+        continue;
+      }
+
       try {
         const dateStr = columns[0]?.trim();
         const timeStr = columns[1]?.trim();
@@ -65,7 +71,7 @@ Deno.serve(async (req) => {
 
         if (!dateStr || !timeStr || !valueStr) continue;
 
-        // Parse date YYYY/MM/DD or YYYY-MM-DD
+        // Parse date YYYY/MM/DD or YYYY-MM-DD or DD/MM/YYYY
         const dateParts = dateStr.split(/[\/\-]/);
         if (dateParts.length !== 3) {
           if (errors.length < 5) errors.push(`Line ${i + 1}: Invalid date format "${dateStr}"`);
@@ -73,17 +79,39 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        const [year, month, day] = dateParts.map(Number);
-
-        // Parse time HH:MM:SS or HH:MM
-        const timeParts = timeStr.split(':');
-        if (timeParts.length < 2) {
-          if (errors.length < 5) errors.push(`Line ${i + 1}: Invalid time format "${timeStr}"`);
-          parseErrors++;
-          continue;
+        let year: number, month: number, day: number;
+        
+        // Determine date format
+        if (parseInt(dateParts[0]) > 31) {
+          // YYYY/MM/DD or YYYY-MM-DD
+          [year, month, day] = dateParts.map(Number);
+        } else {
+          // DD/MM/YYYY
+          [day, month, year] = dateParts.map(Number);
         }
 
-        const [hours, minutes, seconds = 0] = timeParts.map(Number);
+        // Parse time - handle both HH:MM:SS and decimal formats
+        let hours = 0, minutes = 0, seconds = 0;
+        
+        if (timeStr.includes(':')) {
+          // HH:MM:SS or HH:MM format
+          const timeParts = timeStr.split(':');
+          [hours, minutes, seconds = 0] = timeParts.map(Number);
+        } else {
+          // Decimal format (e.g., 0.5 = 12 hours, 0.04166667 = 1 hour)
+          const decimalTime = parseFloat(timeStr);
+          if (isNaN(decimalTime)) {
+            if (errors.length < 5) errors.push(`Line ${i + 1}: Invalid time format "${timeStr}"`);
+            parseErrors++;
+            continue;
+          }
+          
+          // Convert decimal days to hours/minutes/seconds
+          const totalSeconds = decimalTime * 24 * 60 * 60;
+          hours = Math.floor(totalSeconds / 3600);
+          minutes = Math.floor((totalSeconds % 3600) / 60);
+          seconds = Math.floor(totalSeconds % 60);
+        }
 
         // Create date
         const date = new Date(year, month - 1, day, hours, minutes, seconds);
