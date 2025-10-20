@@ -118,140 +118,59 @@ export default function BulkUploadDialog({ siteId, onDataChange }: BulkUploadDia
     setIsUploading(true);
 
     try {
+      const userId = (await supabase.auth.getUser()).data.user?.id;
+
       for (let i = 0; i < validMappings.length; i++) {
         const mapping = validMappings[i];
         const meter = meters.find((m) => m.id === mapping.meterId);
 
-        // Update status
         setFileMappings((prev) =>
           prev.map((m) => (m.file === mapping.file ? { ...m, status: "uploading" as const } : m))
         );
 
         try {
-          // Parse CSV
-          const csvText = await mapping.file.text();
-          const parsed = Papa.parse(csvText, {
-            header: false,
-            skipEmptyLines: true,
-            dynamicTyping: false,
-          });
+          // Upload CSV to storage
+          const filePath = `${siteId}/${mapping.meterId}/${Date.now()}_${mapping.file.name}`;
+          
+          const { error: uploadError } = await supabase.storage
+            .from('meter-csvs')
+            .upload(filePath, mapping.file);
 
-          const rows = parsed.data as string[][];
+          if (uploadError) throw uploadError;
 
-          // Get existing timestamps
-          const { data: existingReadings } = await supabase
-            .from("meter_readings")
-            .select("reading_timestamp")
-            .eq("meter_id", mapping.meterId);
-
-          const existingTimestamps = new Set(
-            existingReadings?.map((r) => new Date(r.reading_timestamp).toISOString()) || []
+          // Call backend to process
+          const { data, error: processError } = await supabase.functions.invoke(
+            'process-meter-csv',
+            {
+              body: {
+                meterId: mapping.meterId,
+                filePath,
+              },
+            }
           );
 
-          // Process rows
-          const readings: any[] = [];
-          let skipped = 0;
-          let parseErrors = 0;
-          let firstError = "";
+          if (processError) throw processError;
 
-          for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
-            const row = rows[rowIndex];
-            if (row.length < 3) continue;
-
-            try {
-              const dateStr = row[0]?.trim();
-              const timeStr = row[1]?.trim();
-              const valueStr = row[2]?.trim()?.replace(",", ".");
-
-              if (!dateStr || !timeStr || !valueStr) continue;
-
-              // Parse date in format YYYY/MM/DD or YYYY-MM-DD
-              const dateParts = dateStr.split(/[\/\-]/);
-              if (dateParts.length !== 3) {
-                if (!firstError) firstError = `Row ${rowIndex + 1}: Invalid date format "${dateStr}"`;
-                parseErrors++;
-                continue;
-              }
-
-              const [year, month, day] = dateParts.map(Number);
-              
-              // Parse time in format HH:MM:SS
-              const timeParts = timeStr.split(":");
-              if (timeParts.length < 2) {
-                if (!firstError) firstError = `Row ${rowIndex + 1}: Invalid time format "${timeStr}"`;
-                parseErrors++;
-                continue;
-              }
-
-              const [hours, minutes, seconds = 0] = timeParts.map(Number);
-
-              // Create date object
-              const date = new Date(year, month - 1, day, hours, minutes, seconds);
-              
-              if (isNaN(date.getTime())) {
-                if (!firstError) firstError = `Row ${rowIndex + 1}: Invalid date/time "${dateStr} ${timeStr}"`;
-                parseErrors++;
-                continue;
-              }
-
-              const value = parseFloat(valueStr);
-              if (isNaN(value)) {
-                if (!firstError) firstError = `Row ${rowIndex + 1}: Invalid value "${valueStr}"`;
-                parseErrors++;
-                continue;
-              }
-
-              const isoTimestamp = date.toISOString();
-
-              if (existingTimestamps.has(isoTimestamp)) {
-                skipped++;
-                continue;
-              }
-
-              readings.push({
-                meter_id: mapping.meterId,
-                reading_timestamp: isoTimestamp,
-                kwh_value: value,
-                uploaded_by: (await supabase.auth.getUser()).data.user?.id,
-              });
-            } catch (err) {
-              if (!firstError) firstError = `Row ${rowIndex + 1}: ${err}`;
-              console.error("Row parse error:", err);
-              parseErrors++;
-            }
+          if (!data.success) {
+            throw new Error(data.error || 'Processing failed');
           }
 
-          console.log(`${mapping.file.name}: ${rows.length} rows, ${readings.length} valid, ${skipped} duplicates, ${parseErrors} parse errors`);
-          if (firstError) console.error(`First error: ${firstError}`);
-
-          // Insert in batches
-          if (readings.length > 0) {
-            const batchSize = 1000;
-            for (let j = 0; j < readings.length; j += batchSize) {
-              const batch = readings.slice(j, j + batchSize);
-              const { error: insertError } = await supabase.from("meter_readings").insert(batch);
-
-              if (insertError) throw insertError;
-            }
-          }
-
-          // Update success
           setFileMappings((prev) =>
             prev.map((m) =>
               m.file === mapping.file
                 ? {
                     ...m,
                     status: "success" as const,
-                    readingsCount: readings.length,
+                    readingsCount: data.readingsInserted,
                   }
                 : m
             )
           );
 
           toast.success(
-            `${meter?.meter_number}: ${readings.length} readings imported${
-              skipped > 0 ? `, ${skipped} duplicates skipped` : ""
-            }${parseErrors > 0 ? `, ${parseErrors} parse errors` : ""}`
+            `${meter?.meter_number}: ${data.readingsInserted} readings imported${
+              data.duplicatesSkipped > 0 ? `, ${data.duplicatesSkipped} duplicates skipped` : ""
+            }${data.parseErrors > 0 ? `, ${data.parseErrors} parse errors` : ""}`
           );
         } catch (err: any) {
           console.error("Upload error:", err);
@@ -266,7 +185,7 @@ export default function BulkUploadDialog({ siteId, onDataChange }: BulkUploadDia
                 : m
             )
           );
-          toast.error(`${meter?.meter_number}: Upload failed - ${err.message}`);
+          toast.error(`${meter?.meter_number}: ${err.message}`);
         }
       }
 
