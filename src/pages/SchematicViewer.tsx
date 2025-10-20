@@ -161,10 +161,10 @@ export default function SchematicViewer() {
       const uint8Array = new Uint8Array(arrayBuffer);
       
       // Load PDF with PDF.js
-      const { getDocument, GlobalWorkerOptions } = await import('pdfjs-dist');
+      const { getDocument, GlobalWorkerOptions, version } = await import('pdfjs-dist');
       
-      // Use unpkg CDN for worker (more reliable)
-      GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+      // Use the matching worker version
+      GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${version}/build/pdf.worker.min.mjs`;
       
       const loadingTask = getDocument({ data: uint8Array });
       const pdf = await loadingTask.promise;
