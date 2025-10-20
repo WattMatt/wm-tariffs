@@ -91,13 +91,31 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
       // Auto-select all columns initially
       setSelectedColumns(new Set(availableColumns));
 
+      // Calculate totals
+      const totalKwh = uniqueReadings.reduce((sum, r) => sum + Number(r.kwh_value), 0);
+      const columnTotals: Record<string, number> = {};
+      
+      uniqueReadings.forEach(reading => {
+        const importedFields = (reading.metadata as any)?.imported_fields || {};
+        Object.entries(importedFields).forEach(([key, value]) => {
+          if (!key.toLowerCase().includes('time') && !key.toLowerCase().includes('date')) {
+            const numValue = Number(value);
+            if (!isNaN(numValue) && value !== null && value !== '') {
+              columnTotals[key] = (columnTotals[key] || 0) + numValue;
+            }
+          }
+        });
+      });
+
       setPreviewData({
         meterNumber: bulkMeter.meter_number,
         totalReadings: uniqueReadings.length,
         firstReading: uniqueReadings[0],
         lastReading: uniqueReadings[uniqueReadings.length - 1],
         sampleReadings: uniqueReadings.slice(0, 5),
-        availableColumns: Array.from(availableColumns)
+        availableColumns: Array.from(availableColumns),
+        totalKwh,
+        columnTotals
       });
 
       toast.success("Preview loaded successfully");
@@ -339,13 +357,29 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
               <Badge variant="outline">{previewData.totalReadings} readings</Badge>
             </CardTitle>
             <CardDescription>
-              Select columns to include in reconciliation calculations
+              Select columns to include in reconciliation calculations. Date range: {dateFrom && format(dateFrom, "PPP")} to {dateTo && format(dateTo, "PPP")}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
+            <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
+              <Label className="text-sm font-semibold mb-3 block">Total Consumption in Selected Period</Label>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <div className="text-xs text-muted-foreground">Total kWh</div>
+                  <div className="text-2xl font-bold">{previewData.totalKwh.toFixed(2)}</div>
+                </div>
+                {Object.entries(previewData.columnTotals).map(([column, total]: [string, any]) => (
+                  <div key={column} className="space-y-1">
+                    <div className="text-xs text-muted-foreground">{column}</div>
+                    <div className="text-lg font-semibold">{Number(total).toFixed(2)}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-sm font-semibold">First Reading</Label>
+                <Label className="text-sm font-semibold">First Reading in Range</Label>
                 <div className="p-3 rounded-lg bg-muted/50 space-y-1">
                   <div className="text-sm font-mono">
                     {format(new Date(previewData.firstReading.reading_timestamp), "PPpp")}
@@ -357,7 +391,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
               </div>
               
               <div className="space-y-2">
-                <Label className="text-sm font-semibold">Last Reading</Label>
+                <Label className="text-sm font-semibold">Last Reading in Range</Label>
                 <div className="p-3 rounded-lg bg-muted/50 space-y-1">
                   <div className="text-sm font-mono">
                     {format(new Date(previewData.lastReading.reading_timestamp), "PPpp")}
@@ -367,6 +401,9 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                   </div>
                 </div>
               </div>
+            </div>
+            <div className="text-xs text-muted-foreground italic">
+              Note: The first and last readings shown are the actual readings found in your data within the selected date range. If dates differ from your selection, it means no readings exist exactly on those dates.
             </div>
 
             <div className="space-y-3">
