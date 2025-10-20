@@ -239,9 +239,9 @@ export default function SchematicViewer() {
 
   const getMeterStatusColor = (status?: 'pending' | 'approved' | 'rejected') => {
     switch (status) {
-      case 'approved': return 'bg-green-500 border-green-600';
-      case 'rejected': return 'bg-red-500 border-red-600';
-      default: return 'bg-yellow-500 border-yellow-600';
+      case 'approved': return 'bg-green-500 border-green-700 shadow-green-500/50';
+      case 'rejected': return 'bg-red-500 border-red-700 shadow-red-500/50';
+      default: return 'bg-yellow-500 border-yellow-700 shadow-yellow-500/50';
     }
   };
 
@@ -333,22 +333,22 @@ export default function SchematicViewer() {
                 {/* Status Legend - Show when meters are extracted */}
                 {extractedMeters.length > 0 && (
                   <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
-                    <div className="flex items-center gap-4">
-                      <div className="text-sm font-medium">Review Extracted Meters:</div>
-                      <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-1.5">
-                          <div className="w-3 h-3 rounded-full bg-yellow-500 border-2 border-yellow-600" />
-                          <span className="text-xs">Pending</span>
+                      <div className="flex items-center gap-4">
+                        <div className="text-sm font-medium">Review Extracted Meters:</div>
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-3 h-3 rounded-full bg-yellow-500 border-2 border-yellow-700 shadow-sm" />
+                            <span className="text-xs">Pending</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-3 h-3 rounded-full bg-green-500 border-2 border-green-700 shadow-sm shadow-green-500/50" />
+                            <span className="text-xs font-medium">Approved</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-3 h-3 rounded-full bg-red-500 border-2 border-red-700 shadow-sm" />
+                            <span className="text-xs">Rejected</span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-1.5">
-                          <div className="w-3 h-3 rounded-full bg-green-500 border-2 border-green-600" />
-                          <span className="text-xs">Approved</span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <div className="w-3 h-3 rounded-full bg-red-500 border-2 border-red-600" />
-                          <span className="text-xs">Rejected</span>
-                        </div>
-                      </div>
                       <div className="text-xs text-muted-foreground border-l pl-3 ml-2">
                         💡 Drag markers to correct positions
                       </div>
@@ -458,25 +458,28 @@ export default function SchematicViewer() {
                                       </>
                                     )}
                                     
-                                    {/* Meter marker */}
+                                    {/* Meter marker with enhanced styling */}
                                     <div
-                                      className={`meter-marker absolute rounded-full border-3 transition-all flex flex-col items-center justify-center text-white font-bold shadow-2xl ${
-                                        isDraggingThis ? 'cursor-move scale-110 ring-4 ring-blue-400' :
+                                      className={`meter-marker absolute rounded-full border-4 transition-all flex flex-col items-center justify-center text-white font-bold ${
+                                        isDraggingThis ? 'cursor-move scale-125 ring-4 ring-blue-400 shadow-2xl' :
                                         selectedMeterIndex === index 
-                                          ? 'ring-4 ring-blue-400 cursor-move' 
-                                          : 'hover:scale-110 cursor-move hover:ring-2 hover:ring-blue-300'
+                                          ? 'ring-4 ring-blue-400 cursor-move shadow-2xl scale-110' 
+                                          : 'hover:scale-110 cursor-move hover:ring-2 hover:ring-blue-300 shadow-lg'
                                       } ${getMeterStatusColor(meter.status)}`}
                                       style={{
                                         left: `${meter.position?.x || 0}%`,
                                         top: `${meter.position?.y || 0}%`,
                                         width: `${markerSize}px`,
                                         height: `${markerSize}px`,
-                                        fontSize: `${markerSize / 3}px`,
+                                        fontSize: `${markerSize / 3.2}px`,
                                         transform: `translate(-50%, -50%) scale(${1 / zoom})`,
                                         transformOrigin: 'center',
                                         zIndex: isDraggingThis ? 100 : selectedMeterIndex === index ? 50 : 30,
                                         pointerEvents: 'auto',
-                                        opacity: isDraggingThis ? 0.9 : 1
+                                        opacity: isDraggingThis ? 0.9 : 1,
+                                        ...(meter.status === 'approved' && {
+                                          boxShadow: '0 0 20px rgba(34, 197, 94, 0.6), 0 0 40px rgba(34, 197, 94, 0.3)'
+                                        })
                                       }}
                                       onClick={(e) => {
                                         e.stopPropagation();
@@ -565,15 +568,33 @@ export default function SchematicViewer() {
                             </CardDescription>
                           </CardHeader>
                           <CardContent className="space-y-4">
+                            {/* Structured meter info table like reference image */}
+                            <div className="border border-border rounded-lg overflow-hidden">
+                              <div className="grid grid-cols-[120px_1fr]">
+                                <div className="bg-muted px-3 py-2 border-b border-r border-border font-semibold text-sm">NO:</div>
+                                <div className="px-3 py-2 border-b border-border font-mono text-sm">{extractedMeters[selectedMeterIndex].meter_number}</div>
+                                
+                                <div className="bg-muted px-3 py-2 border-b border-r border-border font-semibold text-sm">NAME:</div>
+                                <div className="px-3 py-2 border-b border-border text-sm font-medium">{extractedMeters[selectedMeterIndex].name}</div>
+                                
+                                <div className="bg-muted px-3 py-2 border-b border-r border-border font-semibold text-sm">AREA:</div>
+                                <div className="px-3 py-2 border-b border-border text-sm">{extractedMeters[selectedMeterIndex].area ? `${extractedMeters[selectedMeterIndex].area}m²` : 'N/A'}</div>
+                                
+                                <div className="bg-muted px-3 py-2 border-b border-r border-border font-semibold text-sm">RATING:</div>
+                                <div className="px-3 py-2 border-b border-border text-sm">{extractedMeters[selectedMeterIndex].rating || 'N/A'}</div>
+                                
+                                <div className="bg-muted px-3 py-2 border-b border-r border-border font-semibold text-sm">CABLE:</div>
+                                <div className="px-3 py-2 border-b border-border text-sm">{extractedMeters[selectedMeterIndex].cable_specification || 'N/A'}</div>
+                                
+                                <div className="bg-muted px-3 py-2 border-b border-r border-border font-semibold text-sm">SERIAL:</div>
+                                <div className="px-3 py-2 border-b border-border font-mono text-sm">{extractedMeters[selectedMeterIndex].serial_number || 'N/A'}</div>
+                                
+                                <div className="bg-muted px-3 py-2 border-r border-border font-semibold text-sm">CT:</div>
+                                <div className="px-3 py-2 text-sm">{extractedMeters[selectedMeterIndex].ct_type || 'N/A'}</div>
+                              </div>
+                            </div>
+
                             <div className="grid grid-cols-2 gap-3 text-sm">
-                              <div>
-                                <div className="text-muted-foreground text-xs mb-1">Name</div>
-                                <div className="font-medium">{extractedMeters[selectedMeterIndex].name}</div>
-                              </div>
-                              <div>
-                                <div className="text-muted-foreground text-xs mb-1">Area</div>
-                                <div className="font-medium">{extractedMeters[selectedMeterIndex].area}m²</div>
-                              </div>
                               <div>
                                 <div className="text-muted-foreground text-xs mb-1">Rating</div>
                                 <div className="font-medium">{extractedMeters[selectedMeterIndex].rating}</div>
