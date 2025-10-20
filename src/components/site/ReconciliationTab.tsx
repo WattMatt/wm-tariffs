@@ -70,32 +70,46 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
               ).values()
             ) : [];
 
-          // Sum all interval readings (each represents consumption for that period)
+          // Calculate consumption as difference between last and first reading (cumulative values)
           let totalKwh = 0;
           const columnTotals: Record<string, number> = {};
           const columnMaxValues: Record<string, number> = {};
           
           if (uniqueReadings.length > 0) {
-            totalKwh = uniqueReadings.reduce((sum, r) => sum + Number(r.kwh_value), 0);
+            // Get first and last readings (start and end of period)
+            const firstKwh = Number(uniqueReadings[0].kwh_value);
+            const lastKwh = Number(uniqueReadings[uniqueReadings.length - 1].kwh_value);
+            totalKwh = lastKwh - firstKwh;
             
-            // Sum all numeric columns from metadata, track max for kVA
-            uniqueReadings.forEach(reading => {
-              const importedFields = (reading.metadata as any)?.imported_fields || {};
-              Object.entries(importedFields).forEach(([key, value]) => {
-                // Skip timestamp columns and non-numeric values
-                if (key.toLowerCase().includes('time') || key.toLowerCase().includes('date')) return;
-                
-                const numValue = Number(value);
-                if (!isNaN(numValue) && value !== null && value !== '') {
-                  // For kVA columns, track maximum value instead of sum
-                  if (key.toLowerCase().includes('kva') || key.toLowerCase().includes('s (kva)')) {
-                    columnMaxValues[key] = Math.max(columnMaxValues[key] || 0, numValue);
-                  } else {
-                    // Sum other columns
-                    columnTotals[key] = (columnTotals[key] || 0) + numValue;
-                  }
+            // Calculate differences for other numeric columns (first to last)
+            const firstReadingData = uniqueReadings[0];
+            const lastReadingData = uniqueReadings[uniqueReadings.length - 1];
+            
+            const firstFields = (firstReadingData.metadata as any)?.imported_fields || {};
+            const lastFields = (lastReadingData.metadata as any)?.imported_fields || {};
+            
+            Object.keys({ ...firstFields, ...lastFields }).forEach(key => {
+              // Skip timestamp columns
+              if (key.toLowerCase().includes('time') || key.toLowerCase().includes('date')) return;
+              
+              const firstValue = Number(firstFields[key]);
+              const lastValue = Number(lastFields[key]);
+              
+              if (!isNaN(firstValue) && !isNaN(lastValue)) {
+                // For kVA columns, track maximum value across all readings
+                if (key.toLowerCase().includes('kva') || key.toLowerCase().includes('s (kva)')) {
+                  uniqueReadings.forEach(reading => {
+                    const fields = (reading.metadata as any)?.imported_fields || {};
+                    const val = Number(fields[key]);
+                    if (!isNaN(val)) {
+                      columnMaxValues[key] = Math.max(columnMaxValues[key] || 0, val);
+                    }
+                  });
+                } else {
+                  // Calculate difference (end - start) for cumulative columns
+                  columnTotals[key] = lastValue - firstValue;
                 }
-              });
+              }
             });
             
             // Debug logging
@@ -103,6 +117,8 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
               originalReadings: readings?.length || 0,
               uniqueReadings: uniqueReadings.length,
               duplicatesRemoved: (readings?.length || 0) - uniqueReadings.length,
+              firstReading: firstKwh.toFixed(2),
+              lastReading: lastKwh.toFixed(2),
               totalKwh: totalKwh.toFixed(2),
               columnTotals,
               firstTimestamp: uniqueReadings[0].reading_timestamp,
