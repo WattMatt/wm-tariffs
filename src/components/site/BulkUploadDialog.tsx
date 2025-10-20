@@ -151,6 +151,7 @@ export default function BulkUploadDialog({ siteId, onDataChange }: BulkUploadDia
           // Process rows
           const readings: any[] = [];
           let skipped = 0;
+          let parseErrors = 0;
 
           for (const row of rows) {
             if (row.length < 3) continue;
@@ -164,10 +165,16 @@ export default function BulkUploadDialog({ siteId, onDataChange }: BulkUploadDia
 
               const timestamp = `${dateStr} ${timeStr}`;
               const date = new Date(timestamp);
-              if (isNaN(date.getTime())) continue;
+              if (isNaN(date.getTime())) {
+                parseErrors++;
+                continue;
+              }
 
               const value = parseFloat(valueStr);
-              if (isNaN(value)) continue;
+              if (isNaN(value)) {
+                parseErrors++;
+                continue;
+              }
 
               const isoTimestamp = date.toISOString();
 
@@ -184,8 +191,11 @@ export default function BulkUploadDialog({ siteId, onDataChange }: BulkUploadDia
               });
             } catch (err) {
               console.error("Row parse error:", err);
+              parseErrors++;
             }
           }
+
+          console.log(`${mapping.file.name}: ${rows.length} rows, ${readings.length} valid, ${skipped} duplicates, ${parseErrors} parse errors`);
 
           // Insert in batches
           if (readings.length > 0) {
@@ -212,7 +222,9 @@ export default function BulkUploadDialog({ siteId, onDataChange }: BulkUploadDia
           );
 
           toast.success(
-            `${meter?.meter_number}: ${readings.length} readings imported${skipped > 0 ? `, ${skipped} duplicates skipped` : ""}`
+            `${meter?.meter_number}: ${readings.length} readings imported${
+              skipped > 0 ? `, ${skipped} duplicates skipped` : ""
+            }${parseErrors > 0 ? `, ${parseErrors} parse errors` : ""}`
           );
         } catch (err: any) {
           console.error("Upload error:", err);
