@@ -553,16 +553,30 @@ export default function SchematicEditor({
     setIsSaving(true);
     
     // Update meter positions based on canvas state
-    const objects = fabricCanvas?.getObjects() || [];
+    if (!fabricCanvas) {
+      toast.error("Canvas not ready");
+      setIsSaving(false);
+      return;
+    }
+
+    const canvasWidth = fabricCanvas.getWidth();
+    const canvasHeight = fabricCanvas.getHeight();
+    const objects = fabricCanvas.getObjects() || [];
+    
     const updates = objects
       .filter(obj => obj.type === 'circle' && obj.get('data'))
       .map(async (obj: any) => {
         const data = obj.get('data');
+        
+        // Convert pixel positions to percentages for storage
+        const xPercent = ((obj.left || 0) / canvasWidth) * 100;
+        const yPercent = ((obj.top || 0) / canvasHeight) * 100;
+        
         return supabase
           .from("meter_positions")
           .update({
-            x_position: obj.left,
-            y_position: obj.top
+            x_position: xPercent,
+            y_position: yPercent
           })
           .eq("id", data.positionId);
       });
