@@ -47,9 +47,12 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
   };
 
   const parseCSV = (file: File) => {
+    console.log('📄 Starting CSV parse for file:', file.name, 'Size:', file.size);
+    
     Papa.parse(file, {
       complete: (results) => {
         const data = results.data as any[][];
+        console.log('✅ CSV parsed. Total rows:', data.length);
         
         // Auto-detect header row by finding first row with text
         let headerRowIndex = 0;
@@ -60,12 +63,28 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
             break;
           }
         }
+        console.log('📋 Header row detected at index:', headerRowIndex);
 
         const headers = data[headerRowIndex];
+        console.log('📊 Headers found:', headers);
+        console.log('📊 Number of columns:', headers.length);
+        
         const dataRows = data.slice(headerRowIndex + 1).filter(row => row.some((cell: any) => cell !== null && cell !== ''));
+        console.log('📈 Data rows after filtering:', dataRows.length);
         
         // Create preview (first 10 rows)
         const preview = dataRows.slice(0, 10);
+        console.log('👁️ Preview rows created:', preview.length);
+
+        // Log each column with sample data
+        headers.forEach((header: string, idx: number) => {
+          const sampleValues = preview.map(row => row[idx]).filter(v => v != null);
+          console.log(`🔍 Column ${idx}: "${header}"`, {
+            samples: sampleValues.slice(0, 3),
+            totalNonNull: sampleValues.length,
+            hasNumeric: sampleValues.some(v => !isNaN(parseFloat(v)))
+          });
+        });
 
         setCsvData({
           headers,
@@ -82,7 +101,10 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
           h.toLowerCase().includes('timestamp')
         );
         if (timeColumnIndex >= 0) {
+          console.log('⏰ Auto-detected timestamp column:', headers[timeColumnIndex], 'at index', timeColumnIndex);
           setTimestampColumn(headers[timeColumnIndex]);
+        } else {
+          console.warn('⚠️ No timestamp column auto-detected');
         }
 
         // Auto-detect kWh column
@@ -91,13 +113,17 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
           h.toLowerCase().includes('p1')
         );
         if (kwhColumnIndex >= 0) {
+          console.log('⚡ Auto-detected kWh column:', headers[kwhColumnIndex], 'at index', kwhColumnIndex);
           setValueColumn(headers[kwhColumnIndex]);
+        } else {
+          console.warn('⚠️ No kWh column auto-detected');
         }
 
         setStep("map");
         toast.success("CSV parsed successfully");
       },
       error: (error) => {
+        console.error('❌ CSV parse error:', error);
         toast.error(`Failed to parse CSV: ${error.message}`);
       },
     });
@@ -109,22 +135,55 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
       return;
     }
 
+    console.log('🚀 Starting import process...');
+    console.log('📌 Selected columns:', { timestampColumn, valueColumn });
+    
     setIsUploading(true);
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
+      console.log('👤 User ID:', user?.id);
       
       const timestampIndex = csvData.headers.indexOf(timestampColumn);
       const valueIndex = csvData.headers.indexOf(valueColumn);
+      console.log('📍 Column indices - Timestamp:', timestampIndex, 'Value:', valueIndex);
 
       // Prepare batch insert data
+      let validCount = 0;
+      let invalidCount = 0;
+      
       const readings = csvData.rows
-        .map(row => {
+        .map((row, rowIdx) => {
           const timestamp = row[timestampIndex];
           const value = parseFloat(row[valueIndex]);
 
+          // Log first 5 rows for debugging
+          if (rowIdx < 5) {
+            console.log(`📝 Row ${rowIdx + 1}:`, {
+              timestamp,
+              rawValue: row[valueIndex],
+              parsedValue: value,
+              isValid: !!timestamp && !isNaN(value)
+            });
+          }
+
           // Validate data
-          if (!timestamp || isNaN(value)) return null;
+          if (!timestamp || isNaN(value)) {
+            invalidCount++;
+            if (rowIdx < 5) console.warn(`⚠️ Row ${rowIdx + 1} invalid:`, { timestamp, value });
+            return null;
+          }
+
+          validCount++;
+          
+          const allFields = Object.fromEntries(
+            csvData.headers.map((h, i) => [h, row[i]])
+          );
+          
+          // Log all fields for first row
+          if (rowIdx === 0) {
+            console.log('📋 All fields in first row:', allFields);
+          }
 
           return {
             meter_id: meterId,
@@ -133,13 +192,13 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
             uploaded_by: user?.id,
             metadata: {
               source_file: selectedFile?.name,
-              row_data: Object.fromEntries(
-                csvData.headers.map((h, i) => [h, row[i]])
-              ),
+              row_data: allFields,
             },
           };
         })
         .filter(Boolean);
+      
+      console.log(`✅ Valid readings: ${validCount}, ❌ Invalid: ${invalidCount}`);
 
       if (readings.length === 0) {
         toast.error("No valid readings found in CSV");
