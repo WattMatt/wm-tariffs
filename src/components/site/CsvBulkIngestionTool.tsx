@@ -75,6 +75,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
   const [activeTab, setActiveTab] = useState<string>("upload");
   const [previewingFile, setPreviewingFile] = useState<FileItem | null>(null);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (isOpen) {
@@ -454,6 +455,61 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
     } catch (err: any) {
       console.error("Cleanup error:", err);
       toast.error("Cleanup failed: " + err.message);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const toggleFileSelection = (filePath: string) => {
+    setSelectedFiles(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(filePath)) {
+        newSet.delete(filePath);
+      } else {
+        newSet.add(filePath);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    const selectableFiles = files.filter(f => f.path);
+    if (selectedFiles.size === selectableFiles.length) {
+      setSelectedFiles(new Set());
+    } else {
+      setSelectedFiles(new Set(selectableFiles.map(f => f.path!)));
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedFiles.size === 0) {
+      toast.error("No files selected");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Delete ${selectedFiles.size} selected file(s) from storage?\n\nNote: This will remove the CSV files but meter readings already parsed into the database will remain.`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setIsProcessing(true);
+      const pathsToDelete = Array.from(selectedFiles);
+      
+      const { error } = await supabase.storage
+        .from('meter-csvs')
+        .remove(pathsToDelete);
+
+      if (error) throw error;
+
+      setSelectedFiles(new Set());
+      await loadSavedFiles();
+      
+      toast.success(`Deleted ${pathsToDelete.length} file(s) from storage`);
+    } catch (err: any) {
+      console.error("Bulk delete error:", err);
+      toast.error("Bulk delete failed: " + err.message);
     } finally {
       setIsProcessing(false);
     }
@@ -967,19 +1023,31 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
             ) : (
               <div className="space-y-4">
                 <div className="flex items-center justify-between gap-2">
-                  <h3 className="font-semibold text-sm">
-                    All Files ({files.length} total)
-                  </h3>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedFiles.size > 0 && selectedFiles.size === files.filter(f => f.path).length}
+                      onChange={toggleSelectAll}
+                      disabled={isProcessing || files.filter(f => f.path).length === 0}
+                      className="w-4 h-4 rounded border-input"
+                    />
+                    <h3 className="font-semibold text-sm">
+                      All Files ({files.length} total)
+                      {selectedFiles.size > 0 && ` • ${selectedFiles.size} selected`}
+                    </h3>
+                  </div>
                   <div className="flex gap-2">
-                    <Button
-                      onClick={handleCleanupDuplicates}
-                      disabled={isProcessing}
-                      variant="outline"
-                      size="sm"
-                    >
-                      <Trash2 className="w-4 h-4 mr-2" />
-                      Clean Duplicates
-                    </Button>
+                    {selectedFiles.size > 0 && (
+                      <Button
+                        onClick={handleBulkDelete}
+                        disabled={isProcessing}
+                        variant="destructive"
+                        size="sm"
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Delete Selected ({selectedFiles.size})
+                      </Button>
+                    )}
                     <Button
                       onClick={handleParseAll}
                       disabled={isProcessing || files.filter(f => f.status === "uploaded" || f.status === "error").length === 0}
@@ -994,6 +1062,15 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                   <Card key={index} className="border-border/50">
                     <CardContent className="pt-4">
                       <div className="flex items-center gap-3">
+                        {fileItem.path && (
+                          <input
+                            type="checkbox"
+                            checked={selectedFiles.has(fileItem.path)}
+                            onChange={() => toggleFileSelection(fileItem.path!)}
+                            disabled={isProcessing}
+                            className="w-4 h-4 rounded border-input"
+                          />
+                        )}
                         {getStatusIcon(fileItem.status)}
                         
                         <div className="flex-1 min-w-0">
