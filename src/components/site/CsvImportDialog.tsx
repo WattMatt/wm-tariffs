@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
-import { Upload, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Upload, AlertCircle, CheckCircle2, Database } from "lucide-react";
 import { toast } from "sonner";
 import Papa from "papaparse";
 
@@ -36,6 +36,25 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
   const [columnSplits, setColumnSplits] = useState<Record<number, string>>({});
   const [splitColumnNames, setSplitColumnNames] = useState<Record<string, string>>({});
   const [replaceExisting, setReplaceExisting] = useState(false);
+  const [meterNumber, setMeterNumber] = useState<string>("");
+
+  useEffect(() => {
+    if (isOpen && meterId) {
+      fetchMeterDetails();
+    }
+  }, [isOpen, meterId]);
+
+  const fetchMeterDetails = async () => {
+    const { data } = await supabase
+      .from("meters")
+      .select("meter_number")
+      .eq("id", meterId)
+      .single();
+    
+    if (data) {
+      setMeterNumber(data.meter_number);
+    }
+  };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -485,11 +504,11 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
             <Card className="border-border/50 bg-muted/30">
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
-                  <CheckCircle2 className="w-5 h-5 text-accent" />
-                  Data Preview
+                  <Database className="w-5 h-5 text-accent" />
+                  Meter Readings - {meterNumber || "Solar Check Meter"}
                 </CardTitle>
                 <CardDescription>
-                  First 10 rows. You can split columns further if needed (e.g., split combined date/time).
+                  View and manage imported CSV data ({csvData.rows.length} total readings)
                 </CardDescription>
               </CardHeader>
               <CardContent>
