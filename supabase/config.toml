@@ -1,1 +1,10 @@
 project_id = "azzstsqwrgfapqisovtd"
+
+[functions.extract-schematic-meters]
+verify_jwt = false
+
+[functions.extract-tariff-data]
+verify_jwt = false
+
+[functions.convert-pdf-to-image]
+verify_jwt = false

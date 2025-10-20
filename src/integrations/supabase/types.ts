@@ -343,6 +343,7 @@ export type Database = {
       }
       schematics: {
         Row: {
+          converted_image_path: string | null
           created_at: string | null
           description: string | null
           file_path: string
@@ -356,6 +357,7 @@ export type Database = {
           uploaded_by: string | null
         }
         Insert: {
+          converted_image_path?: string | null
           created_at?: string | null
           description?: string | null
           file_path: string
@@ -369,6 +371,7 @@ export type Database = {
           uploaded_by?: string | null
         }
         Update: {
+          converted_image_path?: string | null
           created_at?: string | null
           description?: string | null
           file_path?: string

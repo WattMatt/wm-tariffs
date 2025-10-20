@@ -110,12 +110,57 @@ export default function SchematicViewer() {
 
     setSchematic(data);
 
-    // Get public URL for the file
-    const { data: urlData } = supabase.storage
-      .from("schematics")
-      .getPublicUrl(data.file_path);
+    // Check if this is a PDF with a converted image
+    if (data.file_type === "application/pdf" && data.converted_image_path) {
+      // Use the converted image
+      const { data: imageUrlData } = supabase.storage
+        .from("schematics")
+        .getPublicUrl(data.converted_image_path);
+      
+      setConvertedImageUrl(imageUrlData.publicUrl);
+      setImageUrl(imageUrlData.publicUrl);
+    } else if (data.file_type === "application/pdf" && !data.converted_image_path) {
+      // PDF without converted image - trigger conversion
+      const { data: pdfUrlData } = supabase.storage
+        .from("schematics")
+        .getPublicUrl(data.file_path);
+      
+      setImageUrl(pdfUrlData.publicUrl);
+      
+      // Auto-convert PDF in background
+      convertPdfToImage(data.id, data.file_path);
+    } else {
+      // Regular image file
+      const { data: urlData } = supabase.storage
+        .from("schematics")
+        .getPublicUrl(data.file_path);
 
-    setImageUrl(urlData.publicUrl);
+      setImageUrl(urlData.publicUrl);
+    }
+  };
+
+  const convertPdfToImage = async (schematicId: string, filePath: string) => {
+    try {
+      console.log('Auto-converting PDF to image...');
+      toast.info('Converting PDF to image for easier viewing...');
+      
+      const { data, error } = await supabase.functions.invoke('convert-pdf-to-image', {
+        body: { schematicId, filePath }
+      });
+
+      if (error) throw error;
+
+      if (data?.imageUrl) {
+        setConvertedImageUrl(data.imageUrl);
+        setImageUrl(data.imageUrl);
+        toast.success('PDF converted successfully');
+        // Refresh schematic data to get updated converted_image_path
+        fetchSchematic();
+      }
+    } catch (error) {
+      console.error('PDF conversion error:', error);
+      toast.error('Failed to convert PDF. You can still view the original PDF.');
+    }
   };
 
   const fetchMeterPositions = async () => {
@@ -440,34 +485,12 @@ export default function SchematicViewer() {
                       className="absolute inset-0 flex items-center justify-center"
                     >
                       <div className="relative">
-                        {schematic.file_type === "application/pdf" ? (
-                          convertedImageUrl ? (
-                            <div className="relative inline-block">
-                              <img
-                                ref={imageRef}
-                                src={convertedImageUrl}
-                                alt={schematic.name}
-                                className="max-w-none pointer-events-none select-none"
-                                style={{ maxWidth: '100%', height: 'auto', display: 'block' }}
-                                draggable={false}
-                              />
-                              
-                            </div>
-                          ) : (
-                            <div className="flex items-center justify-center p-16">
-                              <div className="text-center text-muted-foreground">
-                                <p className="text-lg font-medium mb-2">PDF Schematic</p>
-                                <p className="text-sm">
-                                  Convert PDF to image above to extract meters
-                                </p>
-                              </div>
-                            </div>
-                          )
-                        ) : (
+                        {/* Show converted image or original image */}
+                        {convertedImageUrl || schematic.file_type !== "application/pdf" ? (
                           <div className="relative inline-block">
                             <img
                               ref={imageRef}
-                              src={imageUrl}
+                              src={convertedImageUrl || imageUrl}
                               alt={schematic.name}
                               className="max-w-full h-auto"
                               draggable={false}
@@ -494,6 +517,16 @@ export default function SchematicViewer() {
                                 <span className="text-[9px] font-bold text-white leading-none">{position.meters?.meter_number?.substring(0, 3)}</span>
                               </div>
                             ))}
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-center p-16">
+                            <div className="text-center">
+                              <div className="mb-4 text-6xl">📄</div>
+                              <p className="text-lg font-medium mb-2">Converting PDF...</p>
+                              <p className="text-sm text-muted-foreground">
+                                This may take a few moments for large files
+                              </p>
+                            </div>
                           </div>
                         )}
                       </div>

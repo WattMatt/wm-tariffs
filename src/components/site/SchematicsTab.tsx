@@ -22,6 +22,7 @@ interface Schematic {
   page_number: number;
   total_pages: number;
   created_at: string;
+  converted_image_path: string | null;
 }
 
 interface SchematicsTabProps {
@@ -95,19 +96,47 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
 
       const { data: { user } } = await supabase.auth.getUser();
 
-      const { error: dbError } = await supabase.from("schematics").insert({
-        site_id: siteId,
-        name,
-        description: description || null,
-        file_path: fileName,
-        file_type: selectedFile.type,
-        total_pages: totalPages,
-        uploaded_by: user?.id,
-      });
+      const { data: schematicData, error: dbError } = await supabase
+        .from("schematics")
+        .insert({
+          site_id: siteId,
+          name,
+          description: description || null,
+          file_path: fileName,
+          file_type: selectedFile.type,
+          total_pages: totalPages,
+          uploaded_by: user?.id,
+        })
+        .select()
+        .single();
 
       if (dbError) throw dbError;
 
       toast.success("Schematic uploaded successfully");
+      
+      // Auto-convert PDF to image
+      if (selectedFile.type === "application/pdf" && schematicData) {
+        toast.info("Converting PDF to image for faster viewing...");
+        
+        // Trigger conversion in background (don't wait for it)
+        supabase.functions
+          .invoke('convert-pdf-to-image', {
+            body: { 
+              schematicId: schematicData.id, 
+              filePath: fileName 
+            }
+          })
+          .then(({ data, error }) => {
+            if (error) {
+              console.error('PDF conversion failed:', error);
+              toast.error('PDF conversion failed, but file is uploaded');
+            } else {
+              toast.success('PDF converted to image successfully');
+              fetchSchematics(); // Refresh to show converted status
+            }
+          });
+      }
+
       setIsDialogOpen(false);
       setSelectedFile(null);
       fetchSchematics();
@@ -259,10 +288,18 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
                       <span className="text-2xl">{getFileTypeIcon(schematic.file_type)}</span>
                     </TableCell>
                     <TableCell>
-                      <div className="flex flex-col">
+                      <div className="flex flex-col gap-1">
                         <span className="font-medium">{schematic.name}</span>
                         {schematic.description && (
                           <span className="text-xs text-muted-foreground">{schematic.description}</span>
+                        )}
+                        {schematic.file_type === "application/pdf" && (
+                          <Badge 
+                            variant={schematic.converted_image_path ? "default" : "secondary"}
+                            className="w-fit text-xs"
+                          >
+                            {schematic.converted_image_path ? "✓ Converted" : "⏳ Converting..."}
+                          </Badge>
                         )}
                       </div>
                     </TableCell>
