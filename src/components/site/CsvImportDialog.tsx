@@ -95,12 +95,15 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
 
         setSkipRows(headerRowIndex);
         
-        // Auto-detect timestamp column
-        const timeColumnIndex = headers.findIndex((h: string) => 
-          h.toLowerCase().includes('time') || 
-          h.toLowerCase().includes('date') ||
-          h.toLowerCase().includes('timestamp')
-        );
+        // Auto-detect timestamp column - prioritize exact matches first
+        const timeColumnIndex = headers.findIndex((h: string) => {
+          const lower = h.toLowerCase().trim();
+          return lower === 'time' || 
+                 lower === 'timestamp' || 
+                 lower === 'date' ||
+                 lower.includes('time') || 
+                 lower.includes('date');
+        });
         if (timeColumnIndex >= 0) {
           console.log('⏰ Auto-detected timestamp column:', headers[timeColumnIndex], 'at index', timeColumnIndex);
           setTimestampColumn(headers[timeColumnIndex]);
@@ -108,11 +111,13 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
           console.warn('⚠️ No timestamp column auto-detected');
         }
 
-        // Auto-detect kWh column
-        const kwhColumnIndex = headers.findIndex((h: string) => 
-          h.toLowerCase().includes('kwh') ||
-          h.toLowerCase().includes('p1')
-        );
+        // Auto-detect primary kWh column - look for P1 (kWh) first, then other kWh patterns
+        const kwhColumnIndex = headers.findIndex((h: string) => {
+          const lower = h.toLowerCase().trim();
+          return lower.includes('p1') && lower.includes('kwh') ||
+                 lower.includes('kwh') ||
+                 lower.includes('p1');
+        });
         if (kwhColumnIndex >= 0) {
           console.log('⚡ Auto-detected kWh column:', headers[kwhColumnIndex], 'at index', kwhColumnIndex);
           setValueColumn(headers[kwhColumnIndex]);
@@ -263,23 +268,56 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
   const getColumnType = (columnName: string, sampleValues: any[]) => {
     const name = columnName.toLowerCase();
     
+    // Time/Date columns
     if (name.includes('time') || name.includes('date')) {
-      return { type: 'timestamp', color: 'bg-primary/10 text-primary' };
+      return { type: 'timestamp', color: 'bg-primary/10 text-primary', icon: '📅' };
     }
-    if (name.includes('kwh') || name.includes('kva')) {
-      return { type: 'energy', color: 'bg-accent/10 text-accent' };
+    
+    // Active Power (kWh)
+    if (name.includes('p1') && name.includes('kwh')) {
+      return { type: 'active_power_p1', color: 'bg-green-500/10 text-green-700', icon: '⚡' };
+    }
+    if (name.includes('p2') && name.includes('kwh')) {
+      return { type: 'active_power_p2', color: 'bg-green-600/10 text-green-800', icon: '⚡' };
+    }
+    if (name.includes('kwh')) {
+      return { type: 'energy', color: 'bg-accent/10 text-accent', icon: '⚡' };
+    }
+    
+    // Reactive Power (kvarh)
+    if (name.includes('q1') && name.includes('kvar')) {
+      return { type: 'reactive_q1', color: 'bg-blue-500/10 text-blue-700', icon: '🔵' };
+    }
+    if (name.includes('q2') && name.includes('kvar')) {
+      return { type: 'reactive_q2', color: 'bg-blue-600/10 text-blue-800', icon: '🔵' };
+    }
+    if (name.includes('q3') && name.includes('kvar')) {
+      return { type: 'reactive_q3', color: 'bg-blue-700/10 text-blue-900', icon: '🔵' };
+    }
+    if (name.includes('q4') && name.includes('kvar')) {
+      return { type: 'reactive_q4', color: 'bg-blue-800/10 text-blue-950', icon: '🔵' };
     }
     if (name.includes('kvar')) {
-      return { type: 'reactive', color: 'bg-warning/10 text-warning' };
+      return { type: 'reactive', color: 'bg-warning/10 text-warning', icon: '🔵' };
+    }
+    
+    // Apparent Power (kVA/kVAh)
+    if (name.includes('kva')) {
+      return { type: 'apparent', color: 'bg-purple-500/10 text-purple-700', icon: '⚙️' };
+    }
+    
+    // Status
+    if (name.includes('status')) {
+      return { type: 'status', color: 'bg-orange-500/10 text-orange-700', icon: '📊' };
     }
     
     // Check if numeric
     const hasNumbers = sampleValues.some(v => !isNaN(parseFloat(v)));
     if (hasNumbers) {
-      return { type: 'numeric', color: 'bg-muted text-muted-foreground' };
+      return { type: 'numeric', color: 'bg-secondary/10 text-secondary', icon: '🔢' };
     }
     
-    return { type: 'text', color: 'bg-muted text-muted-foreground' };
+    return { type: 'text', color: 'bg-muted text-muted-foreground', icon: '📝' };
   };
 
   return (
@@ -415,6 +453,7 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
                           >
                             {isTimestamp && "📅 "}
                             {isValue && "⚡ "}
+                            {!isTimestamp && !isValue && columnType.icon && `${columnType.icon} `}
                             {header}
                             {(isTimestamp || isValue) && " (required)"}
                           </Badge>
@@ -430,10 +469,15 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
               </CardContent>
             </Card>
 
-            <Card className="border-border/50">
+            <Card className="border-border/50 bg-green-500/5 border-green-500/20">
               <CardHeader>
-                <CardTitle className="text-base">Data Preview</CardTitle>
-                <CardDescription>First 10 rows of your CSV file</CardDescription>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <CheckCircle2 className="w-5 h-5 text-green-600" />
+                  Data Preview - All Columns Will Be Imported
+                </CardTitle>
+                <CardDescription>
+                  First 10 rows showing all columns including: Time, P1 (kWh), Q1-Q4 (kvarh), S (kVA/kVAh), Status
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">
