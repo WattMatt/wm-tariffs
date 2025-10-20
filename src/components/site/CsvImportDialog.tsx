@@ -479,6 +479,44 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
                         {csvData.headers.map((header, idx) => {
                           const sampleValues = csvData.preview.map(row => row[idx]);
                           const { type, color } = getColumnType(header, sampleValues);
+                          const splitType = columnSplits[idx];
+                          
+                          // Check how many columns this will create after split
+                          if (splitType && splitType !== 'none') {
+                            const firstRowSplit = applySplits(csvData.preview[0], idx);
+                            return firstRowSplit.map((_, partIdx) => (
+                              <TableHead key={`${idx}-${partIdx}`} className="min-w-40">
+                                <div className="flex flex-col gap-2">
+                                  <div className="flex flex-col gap-1">
+                                    <span className="font-medium">
+                                      {header} [{partIdx + 1}]
+                                    </span>
+                                    <Badge variant="outline" className={`text-[10px] ${color} w-fit`}>
+                                      {type}
+                                    </Badge>
+                                  </div>
+                                  {partIdx === 0 && (
+                                    <Select 
+                                      value={splitType} 
+                                      onValueChange={(val) => setColumnSplits(prev => ({...prev, [idx]: val}))}
+                                    >
+                                      <SelectTrigger className="h-7 text-xs bg-background">
+                                        <SelectValue placeholder="Split by..." />
+                                      </SelectTrigger>
+                                      <SelectContent className="z-[100] bg-popover">
+                                        <SelectItem value="none">No split</SelectItem>
+                                        <SelectItem value="tab">Split by Tab</SelectItem>
+                                        <SelectItem value="comma">Split by Comma</SelectItem>
+                                        <SelectItem value="semicolon">Split by Semicolon</SelectItem>
+                                        <SelectItem value="space">Split by Space</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  )}
+                                </div>
+                              </TableHead>
+                            ));
+                          }
+                          
                           return (
                             <TableHead key={idx} className="min-w-40">
                               <div className="flex flex-col gap-2">
@@ -514,21 +552,13 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
                         <TableRow key={rowIdx}>
                           {row.map((cell: any, cellIdx: number) => {
                             const splitParts = applySplits(row, cellIdx);
-                            return (
-                              <TableCell key={cellIdx} className="font-mono text-xs">
-                                {splitParts.length > 1 ? (
-                                  <div className="flex flex-col gap-1">
-                                    {splitParts.map((part, partIdx) => (
-                                      <div key={partIdx} className="py-0.5 px-1 bg-primary/10 rounded">
-                                        {part?.toString() || "—"}
-                                      </div>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  cell?.toString() || "—"
-                                )}
+                            
+                            // Render each split part as a separate cell
+                            return splitParts.map((part, partIdx) => (
+                              <TableCell key={`${cellIdx}-${partIdx}`} className="font-mono text-xs">
+                                {part?.toString() || "—"}
                               </TableCell>
-                            );
+                            ));
                           })}
                         </TableRow>
                       ))}
