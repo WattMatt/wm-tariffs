@@ -160,8 +160,20 @@ export default function SchematicEditor({
     FabricImage.fromURL(schematicUrl, {
       crossOrigin: 'anonymous'
     }).then((img) => {
-      const scale = Math.min(1400 / img.width!, 900 / img.height!);
+      // Resize canvas to match image aspect ratio, maintaining max dimensions
+      const maxWidth = 1400;
+      const maxHeight = 900;
+      const imgWidth = img.width!;
+      const imgHeight = img.height!;
+      
+      const scale = Math.min(maxWidth / imgWidth, maxHeight / imgHeight);
+      const canvasWidth = imgWidth * scale;
+      const canvasHeight = imgHeight * scale;
+      
+      canvas.setDimensions({ width: canvasWidth, height: canvasHeight });
+      
       img.scale(scale);
+      img.set({ left: 0, top: 0 });
       img.selectable = false;
       img.evented = false;
       canvas.add(img);
