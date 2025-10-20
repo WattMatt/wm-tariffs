@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { Plus, Gauge, Upload, Pencil, Trash2, Database, Eye } from "lucide-react";
+import NegativeReadingsDetector from "./NegativeReadingsDetector";
 import { toast } from "sonner";
 import CsvImportDialog from "./CsvImportDialog";
 import MeterReadingsView from "./MeterReadingsView";
@@ -194,6 +195,8 @@ export default function MetersTab({ siteId }: MetersTabProps) {
 
   return (
     <div className="space-y-6">
+      <NegativeReadingsDetector siteId={siteId} />
+      
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold">Meters</h2>
