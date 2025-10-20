@@ -188,16 +188,11 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
 
           validCount++;
           
-          // Include all mapped columns in metadata
-          const mappedFields: Record<string, any> = {
-            [timestampColumn]: timestamp,
-            [valueColumn]: value,
-          };
+          // Include ALL columns in metadata
+          const mappedFields: Record<string, any> = {};
           
-          // Add all additional columns
-          additionalColumns.forEach(colName => {
-            const colIdx = csvData.headers.indexOf(colName);
-            if (colIdx >= 0) {
+          csvData.headers.forEach((colName, colIdx) => {
+            if (colName && colName.trim()) {
               mappedFields[colName] = row[colIdx];
             }
           });
@@ -416,11 +411,11 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
 
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <Label>All Columns Being Imported</Label>
-                    <Badge variant="secondary">{additionalColumns.length} columns</Badge>
+                    <Label>Columns That Will Be Imported</Label>
+                    <Badge variant="secondary">{csvData.headers.length} total columns</Badge>
                   </div>
                   <p className="text-xs text-muted-foreground mb-2">
-                    All columns from your CSV will be stored. Click any column to exclude it from import.
+                    All columns from your CSV will be automatically stored in the database.
                   </p>
                   <div className="flex flex-wrap gap-2 p-4 bg-muted/30 rounded-lg max-h-32 overflow-y-auto">
                     {csvData.headers
@@ -428,34 +423,18 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
                       .map((header, idx) => {
                         const isTimestamp = header === timestampColumn;
                         const isValue = header === valueColumn;
-                        const isSelected = additionalColumns.includes(header);
                         const columnType = getColumnType(header, csvData.preview.map(row => row[idx]));
                         
                         return (
                           <Badge
                             key={idx}
-                            variant={isTimestamp || isValue ? "default" : (isSelected ? "secondary" : "outline")}
-                            className={`cursor-pointer transition-all ${
-                              isTimestamp || isValue 
-                                ? "bg-primary" 
-                                : isSelected 
-                                  ? "hover:bg-secondary/80" 
-                                  : "hover:bg-muted opacity-50"
-                            }`}
-                            onClick={() => {
-                              if (isTimestamp || isValue) return; // Can't deselect required columns
-                              if (isSelected) {
-                                setAdditionalColumns(prev => prev.filter(col => col !== header));
-                              } else {
-                                setAdditionalColumns(prev => [...prev, header]);
-                              }
-                            }}
+                            variant={isTimestamp || isValue ? "default" : "secondary"}
+                            className="pointer-events-none"
                           >
                             {isTimestamp && "📅 "}
                             {isValue && "⚡ "}
                             {!isTimestamp && !isValue && columnType.icon && `${columnType.icon} `}
                             {header}
-                            {(isTimestamp || isValue) && " (required)"}
                           </Badge>
                         );
                       })}
