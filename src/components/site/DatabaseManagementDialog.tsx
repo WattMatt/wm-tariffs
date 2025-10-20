@@ -37,11 +37,15 @@ export default function DatabaseManagementDialog({ siteId, onDataChange }: Datab
   const handleClearDatabase = async () => {
     setIsClearing(true);
     try {
+      console.log("Clearing database for siteId:", siteId);
+      
       // Get all meters for this site
       const { data: meters, error: metersError } = await supabase
         .from("meters")
         .select("id")
         .eq("site_id", siteId);
+
+      console.log("Meters found:", meters?.length, "Error:", metersError);
 
       if (metersError) throw metersError;
 
