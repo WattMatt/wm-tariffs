@@ -284,72 +284,64 @@ export default function MetersTab({ siteId }: MetersTabProps) {
   };
 
   const fetchParsedCsvData = async (meterId: string) => {
-    const { data: files, error: filesError } = await supabase
-      .from('meter_csv_files')
-      .select('parsed_file_path, file_name')
+    // Fetch readings from the database with metadata (column interpretation)
+    const { data: readings, error } = await supabase
+      .from('meter_readings')
+      .select('*')
       .eq('meter_id', meterId)
-      .not('parsed_file_path', 'is', null)
-      .order('parsed_at', { ascending: false })
-      .limit(1);
+      .order('reading_timestamp', { ascending: false })
+      .limit(1000); // Limit to 1000 rows for performance
 
-    if (filesError || !files || files.length === 0) {
-      toast.error("No parsed CSV file found for this meter. Please parse the data first.");
+    if (error) {
+      toast.error("Failed to fetch parsed data: " + error.message);
       return;
     }
 
-    const { data: fileData, error: storageError } = await supabase.storage
-      .from('meter-csvs')
-      .download(files[0].parsed_file_path);
-
-    if (storageError || !fileData) {
-      toast.error("Failed to download parsed CSV file");
+    if (!readings || readings.length === 0) {
+      toast.error("No parsed data found for this meter. Please parse the CSV first.");
       return;
     }
 
-    const text = await fileData.text();
-    const lines = text.split('\n').filter(line => line.trim());
-    if (lines.length === 0) return;
-
-    // Parse CSV (parsed files are always comma-separated with headers on first line)
-    const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
-    const rows = lines.slice(1).map(line => {
-      // Handle CSV escaping (quoted values with commas)
-      const values: string[] = [];
-      let current = '';
-      let inQuotes = false;
-      
-      for (let i = 0; i < line.length; i++) {
-        const char = line[i];
-        if (char === '"') {
-          if (inQuotes && line[i + 1] === '"') {
-            current += '"';
-            i++;
-          } else {
-            inQuotes = !inQuotes;
-          }
-        } else if (char === ',' && !inQuotes) {
-          values.push(current.trim());
-          current = '';
-        } else {
-          current += char;
-        }
+    // Extract all unique column names from the imported_fields metadata
+    const allFieldNames = new Set<string>();
+    readings.forEach(reading => {
+      const metadata = reading.metadata as any;
+      if (metadata && typeof metadata === 'object' && metadata.imported_fields) {
+        Object.keys(metadata.imported_fields).forEach(key => allFieldNames.add(key));
       }
-      values.push(current.trim());
+    });
+
+    // Create headers: timestamp, kwh_value, kva_value, then all metadata fields
+    const headers = ['reading_timestamp', 'kwh_value'];
+    
+    // Only add kva_value if it exists in any reading
+    const hasKva = readings.some(r => r.kva_value !== null);
+    if (hasKva) {
+      headers.push('kva_value');
+    }
+    
+    // Add all metadata field names as separate columns
+    const metadataFields = Array.from(allFieldNames).sort();
+    headers.push(...metadataFields);
+
+    // Convert readings to row format
+    const rows = readings.map(reading => {
+      const metadata = reading.metadata as any;
+      const row: any = {
+        reading_timestamp: reading.reading_timestamp,
+        kwh_value: reading.kwh_value,
+      };
       
-      return headers.reduce((obj, header, idx) => {
-        let value = values[idx] || '';
-        // Parse metadata JSON if it's the metadata column
-        if (header === 'metadata' && value && value !== '{}') {
-          try {
-            obj[header] = JSON.parse(value);
-          } catch {
-            obj[header] = value;
-          }
-        } else {
-          obj[header] = value;
-        }
-        return obj;
-      }, {} as any);
+      if (hasKva) {
+        row.kva_value = reading.kva_value;
+      }
+      
+      // Add metadata fields
+      metadataFields.forEach(field => {
+        row[field] = metadata?.imported_fields?.[field] ?? '—';
+      });
+      
+      return row;
     });
 
     setParsedCsvHeaders(headers);
@@ -792,7 +784,7 @@ export default function MetersTab({ siteId }: MetersTabProps) {
           <DialogHeader>
             <DialogTitle>Parsed CSV Data</DialogTitle>
             <DialogDescription>
-              Standardized data format: reading_timestamp, kwh_value, kva_value, metadata (as processed for reconciliation)
+              Data displayed using the column interpretation from the Parsing Configuration
             </DialogDescription>
           </DialogHeader>
           <div className="flex-1 overflow-y-auto">
@@ -813,11 +805,9 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                       <TableRow>
                         {parsedCsvHeaders.map((header, idx) => (
                           <TableHead key={idx} className="font-semibold">
-                            {header === 'reading_timestamp' && 'Timestamp'}
-                            {header === 'kwh_value' && 'kWh Value'}
-                            {header === 'kva_value' && 'kVA Value'}
-                            {header === 'metadata' && 'Additional Fields'}
-                            {!['reading_timestamp', 'kwh_value', 'kva_value', 'metadata'].includes(header) && header}
+                            {header === 'reading_timestamp' ? 'Timestamp' : 
+                             header === 'kwh_value' ? 'kWh Value' :
+                             header === 'kva_value' ? 'kVA Value' : header}
                           </TableHead>
                         ))}
                       </TableRow>
@@ -826,23 +816,8 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                       {parsedCsvData.map((row, idx) => (
                         <TableRow key={idx}>
                           {parsedCsvHeaders.map((header, colIdx) => (
-                            <TableCell key={colIdx} className={
-                              header === 'metadata' ? 'max-w-md' : 'font-mono text-xs'
-                            }>
-                              {header === 'metadata' ? (
-                                typeof row[header] === 'object' ? (
-                                  <details className="cursor-pointer">
-                                    <summary className="text-xs text-muted-foreground hover:text-foreground">
-                                      View fields ({Object.keys(row[header] || {}).length})
-                                    </summary>
-                                    <pre className="mt-2 text-xs bg-muted p-2 rounded overflow-x-auto">
-                                      {JSON.stringify(row[header], null, 2)}
-                                    </pre>
-                                  </details>
-                                ) : (
-                                  <span className="text-xs text-muted-foreground">{row[header] || '—'}</span>
-                                )
-                              ) : header === 'reading_timestamp' ? (
+                            <TableCell key={colIdx} className="font-mono text-xs">
+                              {header === 'reading_timestamp' ? (
                                 <span className="text-xs">
                                   {new Date(row[header]).toLocaleString()}
                                 </span>
