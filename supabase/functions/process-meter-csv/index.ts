@@ -141,9 +141,9 @@ Deno.serve(async (req) => {
           };
           
           dateStr = getColumnValue(columnMapping.dateColumn);
-          timeStr = columnMapping.timeColumn >= 0 ? getColumnValue(columnMapping.timeColumn) : null;
+          timeStr = columnMapping.timeColumn && columnMapping.timeColumn !== "-1" ? getColumnValue(columnMapping.timeColumn) : null;
           valueStr = getColumnValue(columnMapping.valueColumn)?.replace(',', '.');
-          kvaStr = columnMapping.kvaColumn >= 0 ? getColumnValue(columnMapping.kvaColumn)?.replace(',', '.') : null;
+          kvaStr = columnMapping.kvaColumn && columnMapping.kvaColumn !== "-1" ? getColumnValue(columnMapping.kvaColumn)?.replace(',', '.') : null;
           
           // Capture extra columns (with renamed headers if provided)
           for (let colIdx = 0; colIdx < columns.length; colIdx++) {
@@ -169,10 +169,11 @@ Deno.serve(async (req) => {
               });
             } else {
               // Regular column - skip if used as a core field
-              if (colIdx === columnMapping.dateColumn || 
-                  colIdx === columnMapping.timeColumn || 
-                  colIdx === columnMapping.valueColumn || 
-                  colIdx === columnMapping.kvaColumn) {
+              const colIdStr = colIdx.toString();
+              if (colIdStr === columnMapping.dateColumn || 
+                  colIdStr === columnMapping.timeColumn || 
+                  colIdStr === columnMapping.valueColumn || 
+                  colIdStr === columnMapping.kvaColumn) {
                 continue;
               }
               
