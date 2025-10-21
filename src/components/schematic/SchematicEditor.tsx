@@ -48,6 +48,7 @@ export default function SchematicEditor({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [fabricCanvas, setFabricCanvas] = useState<FabricCanvas | null>(null);
   const [activeTool, setActiveTool] = useState<"select" | "meter" | "connection" | "move" | "draw">("select");
+  const activeToolRef = useRef<"select" | "meter" | "connection" | "move" | "draw">("select");
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [drawnRegions, setDrawnRegions] = useState<any[]>([]);
   const [meterPositions, setMeterPositions] = useState<MeterPosition[]>([]);
@@ -80,8 +81,9 @@ export default function SchematicEditor({
     fetchLines();
   }, [schematicId, siteId]);
 
-  // Sync drawing mode state when tool changes
+  // Sync drawing mode state and ref when tool changes
   useEffect(() => {
+    activeToolRef.current = activeTool;
     const newDrawingMode = activeTool === 'draw';
     setIsDrawingMode(newDrawingMode);
   }, [activeTool]);
@@ -118,9 +120,10 @@ export default function SchematicEditor({
     canvas.on('mouse:down', (opt) => {
       const evt = opt.e as MouseEvent;
       const target = opt.target;
+      const currentTool = activeToolRef.current;
       
       // DRAWING TOOL: Left click draws when draw tool is active (allow clicking on background image)
-      if (activeTool === 'draw' && evt.button === 0) {
+      if (currentTool === 'draw' && evt.button === 0) {
         // Only prevent drawing if clicking on meter cards or other interactive objects
         const isInteractiveObject = target && target.type !== 'image';
         if (!isInteractiveObject) {
@@ -152,7 +155,7 @@ export default function SchematicEditor({
       
       // PANNING: Allow panning with middle/right mouse in any tool
       // OR left-click when draw tool is NOT active and no object is clicked
-      if (activeTool !== 'draw' && !target) {
+      if (currentTool !== 'draw' && !target) {
         if (evt.button === 0 || evt.button === 1 || evt.button === 2) {
           isPanningLocal = true;
           lastX = evt.clientX;
@@ -160,7 +163,7 @@ export default function SchematicEditor({
           canvas.selection = false;
           canvas.defaultCursor = 'grabbing';
         }
-      } else if (activeTool === 'draw' && (evt.button === 1 || evt.button === 2)) {
+      } else if (currentTool === 'draw' && (evt.button === 1 || evt.button === 2)) {
         // Allow middle/right mouse panning even in draw mode
         isPanningLocal = true;
         lastX = evt.clientX;
@@ -284,9 +287,9 @@ export default function SchematicEditor({
       }
     });
 
-    // Set default cursor based on active tool
-    canvas.defaultCursor = activeTool === 'draw' ? 'crosshair' : 'grab';
-    canvas.hoverCursor = activeTool === 'draw' ? 'crosshair' : 'grab';
+    // Set default cursor based on active tool (will be updated when tool changes)
+    canvas.defaultCursor = 'grab';
+    canvas.hoverCursor = 'grab';
 
     // Prevent context menu on right click
     canvas.getElement().addEventListener('contextmenu', (e) => {
@@ -330,6 +333,7 @@ export default function SchematicEditor({
     if (fabricCanvas) {
       fabricCanvas.defaultCursor = activeTool === 'draw' ? 'crosshair' : 'grab';
       fabricCanvas.hoverCursor = activeTool === 'draw' ? 'crosshair' : 'grab';
+      fabricCanvas.renderAll();
     }
   }, [activeTool, fabricCanvas]);
 
