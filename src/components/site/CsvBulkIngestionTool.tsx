@@ -597,8 +597,38 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
   const handleClearDatabase = async () => {
     setIsClearing(true);
     try {
-      toast.info("Clearing database - this may take a few minutes...", { duration: 10000 });
+      toast.info("Clearing all data - this may take a few minutes...", { duration: 10000 });
       
+      // Step 1: Get all CSV files for this site
+      const { data: csvFiles } = await supabase
+        .from('meter_csv_files')
+        .select('file_path')
+        .eq('site_id', siteId);
+
+      const filePaths = csvFiles?.map(f => f.file_path) || [];
+      let deletedFilesCount = 0;
+
+      // Step 2: Delete CSV files from storage if any exist
+      if (filePaths.length > 0) {
+        const { data: deleteData, error: deleteError } = await supabase.functions.invoke('delete-meter-csvs', {
+          body: { filePaths }
+        });
+
+        if (deleteError) {
+          console.error("Error deleting files:", deleteError);
+          toast.warning("Some files may not have been deleted from storage");
+        } else if (deleteData?.success) {
+          deletedFilesCount = deleteData.deletedCount || 0;
+        }
+
+        // Step 3: Delete from tracking table
+        await supabase
+          .from('meter_csv_files')
+          .delete()
+          .eq('site_id', siteId);
+      }
+
+      // Step 4: Delete all meter readings
       const { data, error } = await supabase.rpc('delete_site_readings', {
         p_site_id: siteId
       });
@@ -606,16 +636,20 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
       if (error) throw error;
 
       const totalDeleted = data || 0;
+      
+      // Clear local state
+      setFiles([]);
+      
       toast.success(
-        `Database cleared: ${totalDeleted.toLocaleString()} readings deleted`,
+        `Complete clear: ${totalDeleted.toLocaleString()} readings deleted, ${deletedFilesCount} CSV file(s) removed`,
         { duration: 5000 }
       );
       
       setShowClearConfirm(false);
       setTimeout(() => onDataChange?.(), 1000);
     } catch (error: any) {
-      console.error("Error clearing database:", error);
-      toast.error(`Failed to clear database: ${error.message}`);
+      console.error("Error clearing data:", error);
+      toast.error(`Failed to clear data: ${error.message}`);
     } finally {
       setIsClearing(false);
     }
@@ -1409,36 +1443,38 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
               <CardHeader>
                 <CardTitle className="text-destructive flex items-center gap-2">
                   <Database className="w-5 h-5" />
-                  Clear All Database Readings
+                  Clear All Data & Files
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <p className="text-sm text-muted-foreground">
-                  This will permanently delete all meter readings for this site from the database.
+                  This will permanently delete all meter readings AND all CSV files for this site.
                 </p>
                 
                 <div className="bg-muted/50 p-4 rounded-lg space-y-2">
                   <p className="text-sm font-medium">What will be cleared:</p>
                   <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                    <li>• All CSV files from storage</li>
+                    <li>• All CSV file tracking records</li>
                     <li>• All meter reading records in the database</li>
-                    <li>• Historical data and timestamps</li>
-                    <li>• Calculated values and reconciliations</li>
+                    <li>• All historical data and timestamps</li>
+                    <li>• All calculated values and reconciliations</li>
                   </ul>
                 </div>
 
                 <div className="bg-muted/50 p-4 rounded-lg space-y-2">
                   <p className="text-sm font-medium">What will NOT be cleared:</p>
                   <ul className="text-sm text-muted-foreground space-y-1 ml-4">
-                    <li>• CSV files in storage (delete from Parse tab)</li>
                     <li>• Meter configurations</li>
-                    <li>• Site settings</li>
+                    <li>• Site settings and tariff structures</li>
+                    <li>• User accounts and permissions</li>
                   </ul>
                 </div>
 
                 <div className="flex items-center gap-2 p-3 bg-destructive/10 rounded-lg">
                   <AlertCircle className="w-4 h-4 text-destructive" />
                   <p className="text-sm font-medium text-destructive">
-                    This action cannot be undone!
+                    This action cannot be undone! You will start from a clean slate.
                   </p>
                 </div>
 
@@ -1451,12 +1487,12 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                   {isClearing ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                      Clearing Database...
+                      Clearing All Data...
                     </>
                   ) : (
                     <>
                       <Trash2 className="w-4 h-4 mr-2" />
-                      Clear All Readings
+                      Clear All Data & Files
                     </>
                   )}
                 </Button>
@@ -1468,10 +1504,15 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
         <AlertDialog open={showClearConfirm} onOpenChange={setShowClearConfirm}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+              <AlertDialogTitle>Clear All Data & Files?</AlertDialogTitle>
               <AlertDialogDescription>
-                This will permanently delete all meter readings for this site from the database. 
-                This action cannot be undone. CSV files will remain in storage.
+                This will permanently delete:
+                <ul className="list-disc list-inside mt-2 space-y-1">
+                  <li>All CSV files from storage</li>
+                  <li>All meter readings from the database</li>
+                  <li>All parsing history and tracking records</li>
+                </ul>
+                <p className="mt-2 font-semibold">This action cannot be undone!</p>
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -1481,7 +1522,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                 disabled={isClearing}
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               >
-                {isClearing ? "Clearing..." : "Yes, clear all readings"}
+                {isClearing ? "Clearing..." : "Yes, clear everything"}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
