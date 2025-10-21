@@ -241,10 +241,37 @@ Deno.serve(async (req) => {
         
         // Check if dateStr contains both date and time (combined format)
         if (!timeStr && (dateStr.includes(' ') || dateStr.includes('T'))) {
-          // Combined DateTime format (e.g., "2025-04-01 12:30:00" or "2025-04-01T12:30:00")
-          date = new Date(dateStr.replace(' ', 'T'));
-          if (!isNaN(date.getTime())) {
-            rowIndexForInterval++; // Increment counter even when time is present
+          // Combined DateTime format - extract date and use interval for time
+          // Parse the date part only
+          const dateOnlyStr = dateStr.split(' ')[0] || dateStr.split('T')[0];
+          const dateParts = dateOnlyStr.split(/[\/\-]/);
+          
+          if (dateParts.length >= 3) {
+            let year: number, month: number, day: number;
+            
+            // Auto-detect date format
+            if (parseInt(dateParts[0]) > 31) {
+              // YYYY/MM/DD or YYYY-MM-DD
+              [year, month, day] = dateParts.map(Number);
+            } else if (parseInt(dateParts[1]) > 12) {
+              // DD/MM/YYYY
+              [day, month, year] = dateParts.map(Number);
+            } else {
+              // Assume YYYY-MM-DD for ISO format
+              [year, month, day] = dateParts.map(Number);
+            }
+            
+            // Calculate time based on interval
+            const totalMinutes = rowIndexForInterval * timeInterval;
+            const hours = Math.floor(totalMinutes / 60);
+            const minutes = totalMinutes % 60;
+            
+            date = new Date(year, month - 1, day, hours, minutes, 0);
+            rowIndexForInterval++; // Increment for next row
+          } else {
+            // Fallback: parse as full datetime if date extraction fails
+            date = new Date(dateStr.replace(' ', 'T'));
+            rowIndexForInterval++;
           }
         } else {
           // Separate date and time columns

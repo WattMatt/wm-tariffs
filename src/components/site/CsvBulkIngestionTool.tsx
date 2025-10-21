@@ -1541,7 +1541,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                   </div>
                   <div>
                     <p className="font-medium mb-1">Row Time Interval:</p>
-                    <p>When CSVs don't have explicit time columns or timestamps, each row will be assigned a time based on the selected interval. Row 1 uses the date at 00:00, Row 2 adds the interval, etc.</p>
+                    <p>When CSVs don't have explicit time columns or when using combined date/time columns, each row will be assigned a time based on the selected interval. Row 1 uses 00:00, Row 2 adds the interval, etc. For combined date/time columns (like "2023-09-08 00:30:00"), the date is extracted and the interval is used for time calculation.</p>
                   </div>
                   <div>
                     <p className="font-medium mb-1">Column Assignment:</p>
