@@ -61,42 +61,110 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
 
       const bulkMeter = bulkMeters[0];
 
+      // Fetch parsed CSV file for this meter
+      const { data: csvFiles, error: csvError } = await supabase
+        .from("meter_csv_files")
+        .select("parsed_file_path, file_name")
+        .eq("meter_id", bulkMeter.id)
+        .not("parsed_file_path", "is", null)
+        .order("parsed_at", { ascending: false })
+        .limit(1);
+
+      if (csvError || !csvFiles || csvFiles.length === 0) {
+        toast.error("No parsed CSV file found for bulk check meter. Please parse the data first.");
+        setIsLoadingPreview(false);
+        return;
+      }
+
+      // Download parsed CSV file
+      const { data: fileData, error: downloadError } = await supabase.storage
+        .from("meter-csvs")
+        .download(csvFiles[0].parsed_file_path);
+
+      if (downloadError || !fileData) {
+        toast.error("Failed to download parsed CSV file");
+        setIsLoadingPreview(false);
+        return;
+      }
+
+      // Parse CSV content
+      const text = await fileData.text();
+      const lines = text.split('\n').filter(line => line.trim());
+      if (lines.length === 0) {
+        toast.error("Parsed CSV file is empty");
+        setIsLoadingPreview(false);
+        return;
+      }
+
+      // Parse CSV headers
+      const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+      
+      // Parse CSV rows
+      const readings: any[] = [];
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i];
+        const values: string[] = [];
+        let current = '';
+        let inQuotes = false;
+        
+        // Handle CSV escaping
+        for (let j = 0; j < line.length; j++) {
+          const char = line[j];
+          if (char === '"') {
+            if (inQuotes && line[j + 1] === '"') {
+              current += '"';
+              j++;
+            } else {
+              inQuotes = !inQuotes;
+            }
+          } else if (char === ',' && !inQuotes) {
+            values.push(current.trim());
+            current = '';
+          } else {
+            current += char;
+          }
+        }
+        values.push(current.trim());
+        
+        // Create reading object
+        const reading: any = {};
+        headers.forEach((header, idx) => {
+          let value = values[idx] || '';
+          if (header === 'metadata' && value && value !== '{}') {
+            try {
+              reading[header] = JSON.parse(value);
+            } catch {
+              reading[header] = {};
+            }
+          } else {
+            reading[header] = value;
+          }
+        });
+        
+        readings.push(reading);
+      }
+
       // Combine date and time for precise filtering
       const fullDateTimeFrom = getFullDateTime(dateFrom, timeFrom);
       const fullDateTimeTo = getFullDateTime(dateTo, timeTo);
 
-      // Fetch readings
-      const { data: readings, error: readingsError } = await supabase
-        .from("meter_readings")
-        .select("kwh_value, reading_timestamp, metadata")
-        .eq("meter_id", bulkMeter.id)
-        .gte("reading_timestamp", fullDateTimeFrom.toISOString())
-        .lte("reading_timestamp", fullDateTimeTo.toISOString())
-        .order("reading_timestamp", { ascending: true });
+      // Filter readings by date range
+      const filteredReadings = readings.filter(reading => {
+        const timestamp = new Date(reading.reading_timestamp);
+        return timestamp >= fullDateTimeFrom && timestamp <= fullDateTimeTo;
+      });
 
-      if (readingsError) {
-        throw readingsError;
-      }
-
-      // Deduplicate by timestamp
-      const uniqueReadings = readings ? 
-        Array.from(
-          new Map(
-            readings.map(r => [r.reading_timestamp, r])
-          ).values()
-        ) : [];
-
-      if (uniqueReadings.length === 0) {
-        toast.error("No readings found for bulk check meter in selected date range");
+      if (filteredReadings.length === 0) {
+        toast.error("No readings found in selected date range");
         setIsLoadingPreview(false);
         return;
       }
 
       // Extract available columns from metadata
       const availableColumns = new Set<string>();
-      uniqueReadings.forEach(reading => {
-        const importedFields = (reading.metadata as any)?.imported_fields || {};
-        Object.keys(importedFields).forEach(key => {
+      filteredReadings.forEach(reading => {
+        const metadata = reading.metadata || {};
+        Object.keys(metadata).forEach(key => {
           if (!key.toLowerCase().includes('time') && !key.toLowerCase().includes('date')) {
             availableColumns.add(key);
           }
@@ -107,12 +175,12 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
       setSelectedColumns(new Set(availableColumns));
 
       // Calculate totals
-      const totalKwh = uniqueReadings.reduce((sum, r) => sum + Number(r.kwh_value), 0);
+      const totalKwh = filteredReadings.reduce((sum, r) => sum + Number(r.kwh_value || 0), 0);
       const columnTotals: Record<string, number> = {};
       
-      uniqueReadings.forEach(reading => {
-        const importedFields = (reading.metadata as any)?.imported_fields || {};
-        Object.entries(importedFields).forEach(([key, value]) => {
+      filteredReadings.forEach(reading => {
+        const metadata = reading.metadata || {};
+        Object.entries(metadata).forEach(([key, value]) => {
           if (!key.toLowerCase().includes('time') && !key.toLowerCase().includes('date')) {
             const numValue = Number(value);
             if (!isNaN(numValue) && value !== null && value !== '') {
@@ -124,16 +192,16 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
 
       setPreviewData({
         meterNumber: bulkMeter.meter_number,
-        totalReadings: uniqueReadings.length,
-        firstReading: uniqueReadings[0],
-        lastReading: uniqueReadings[uniqueReadings.length - 1],
-        sampleReadings: uniqueReadings.slice(0, 5),
+        totalReadings: filteredReadings.length,
+        firstReading: filteredReadings[0],
+        lastReading: filteredReadings[filteredReadings.length - 1],
+        sampleReadings: filteredReadings.slice(0, 5),
         availableColumns: Array.from(availableColumns),
         totalKwh,
         columnTotals
       });
 
-      toast.success("Preview loaded successfully");
+      toast.success("Preview loaded successfully from parsed CSV");
     } catch (error) {
       console.error("Preview error:", error);
       toast.error("Failed to load preview");
