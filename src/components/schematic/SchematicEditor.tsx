@@ -457,6 +457,13 @@ export default function SchematicEditor({
       const x = (meter.position.x / 100) * canvasWidth;
       const y = (meter.position.y / 100) * canvasHeight;
       
+      console.log(`🎨 Rendering meter ${index} (${meter.meter_number}):`, {
+        percentPosition: meter.position,
+        pixelPosition: { x, y },
+        scale: { x: meter.scale_x || 1, y: meter.scale_y || 1 },
+        canvasSize: { width: canvasWidth, height: canvasHeight }
+      });
+      
       // Color based on status
       let borderColor = '#854d0e'; // yellow/brown for pending
       if (meter.status === 'approved') borderColor = '#166534'; // green

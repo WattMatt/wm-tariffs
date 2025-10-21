@@ -486,6 +486,7 @@ export default function SchematicViewer() {
         if (!data || !data.meter) throw new Error('No meter data returned');
 
         // Add the extracted meter with position from the region center
+        console.log('📍 Adding meter at drawn region:', currentDrawRect);
         const newMeter = {
           ...data.meter,
           status: 'pending' as const,
@@ -493,10 +494,18 @@ export default function SchematicViewer() {
             x: currentDrawRect.left + (currentDrawRect.width / 2),
             y: currentDrawRect.top + (currentDrawRect.height / 2)
           },
-          // Auto-scale the meter marker to match the drawn region size
-          scale_x: currentDrawRect.width / 100, // Normalize to 0-1 range based on image width
-          scale_y: currentDrawRect.height / 100  // Normalize to 0-1 range based on image height
+          // Scale the meter to match the drawn region size
+          // The region width/height are percentages of the image (0-100)
+          // We want the meter card to scale to roughly match the region
+          scale_x: Math.max(0.3, currentDrawRect.width / 15), // Assume ~15% is full size
+          scale_y: Math.max(0.3, currentDrawRect.height / 15)  // Minimum 30% scale
         };
+        
+        console.log('📏 Meter scale calculated:', { 
+          scale_x: newMeter.scale_x, 
+          scale_y: newMeter.scale_y,
+          position: newMeter.position 
+        });
         
         setExtractedMeters([...extractedMeters, newMeter]);
         toast.success(`Extracted meter: ${data.meter.meter_number || 'Unknown'}`);
@@ -603,7 +612,12 @@ export default function SchematicViewer() {
     if (extractedMeters.length > 0) {
       console.log('📍 Extracted meters updated:', extractedMeters.length, 'meters');
       console.log('🖼️ Image loaded state:', imageLoaded);
-      console.log('🎯 First meter position:', extractedMeters[0]?.position);
+      console.log('🎯 All meter positions:', extractedMeters.map((m, i) => ({ 
+        index: i, 
+        position: m.position,
+        scale: { x: m.scale_x, y: m.scale_y },
+        meter_number: m.meter_number 
+      })));
     }
   }, [extractedMeters, imageLoaded]);
 
