@@ -486,26 +486,42 @@ export default function SchematicViewer() {
         if (!data || !data.meter) throw new Error('No meter data returned');
 
         // Add the extracted meter with position from the region center
-        console.log('📍 Adding meter at drawn region:', currentDrawRect);
+        console.log('📍 Drawing region details:', {
+          left: currentDrawRect.left,
+          top: currentDrawRect.top,
+          width: currentDrawRect.width,
+          height: currentDrawRect.height
+        });
+        
+        const centerX = currentDrawRect.left + (currentDrawRect.width / 2);
+        const centerY = currentDrawRect.top + (currentDrawRect.height / 2);
+        
+        // Scale: The default meter card is 200px wide and 140px tall
+        // We want to match the drawn region size
+        // Assume the canvas is approximately matching the image size
+        // A region of 10% width should make the meter 10% of canvas width
+        const targetScale = {
+          x: currentDrawRect.width / 10, // 10% region = 1.0 scale
+          y: currentDrawRect.height / 10  // 10% region = 1.0 scale
+        };
+        
         const newMeter = {
           ...data.meter,
           status: 'pending' as const,
           position: {
-            x: currentDrawRect.left + (currentDrawRect.width / 2),
-            y: currentDrawRect.top + (currentDrawRect.height / 2)
+            x: centerX,
+            y: centerY
           },
-          // Scale the meter to match the drawn region size
-          // The region width/height are percentages of the image (0-100)
-          // We want the meter card to scale to roughly match the region
-          scale_x: Math.max(0.3, currentDrawRect.width / 15), // Assume ~15% is full size
-          scale_y: Math.max(0.3, currentDrawRect.height / 15)  // Minimum 30% scale
+          scale_x: Math.max(0.2, Math.min(3.0, targetScale.x)), // Clamp between 0.2 and 3.0
+          scale_y: Math.max(0.2, Math.min(3.0, targetScale.y))
         };
         
-        console.log('📏 Meter scale calculated:', { 
-          scale_x: newMeter.scale_x, 
-          scale_y: newMeter.scale_y,
-          position: newMeter.position 
+        console.log('📏 NEW meter created:', { 
+          meter_number: newMeter.meter_number,
+          position: newMeter.position,
+          scale: { x: newMeter.scale_x, y: newMeter.scale_y }
         });
+        console.log('📊 Total meters will be:', extractedMeters.length + 1);
         
         setExtractedMeters([...extractedMeters, newMeter]);
         toast.success(`Extracted meter: ${data.meter.meter_number || 'Unknown'}`);

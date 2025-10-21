@@ -399,6 +399,13 @@ export default function SchematicEditor({
       const canvasWidth = imgWidth * scale;
       const canvasHeight = imgHeight * scale;
       
+      console.log('📐 Image loaded and canvas resized:', {
+        imageSize: { w: imgWidth, h: imgHeight },
+        canvasSize: { w: Math.round(canvasWidth), h: Math.round(canvasHeight) },
+        scale: scale.toFixed(3),
+        aspectRatio: (canvasWidth / canvasHeight).toFixed(2)
+      });
+      
       canvas.setDimensions({ width: canvasWidth, height: canvasHeight });
       
       img.scale(scale);
@@ -448,7 +455,10 @@ export default function SchematicEditor({
 
     // Render extracted meters (from AI extraction)
     extractedMeters.forEach((meter, index) => {
-      if (!meter.position) return;
+      if (!meter.position) {
+        console.log(`⚠️ Meter ${index} has no position, skipping`);
+        return;
+      }
       
       const canvasWidth = fabricCanvas.getWidth();
       const canvasHeight = fabricCanvas.getHeight();
@@ -457,11 +467,14 @@ export default function SchematicEditor({
       const x = (meter.position.x / 100) * canvasWidth;
       const y = (meter.position.y / 100) * canvasHeight;
       
-      console.log(`🎨 Rendering meter ${index} (${meter.meter_number}):`, {
-        percentPosition: meter.position,
-        pixelPosition: { x, y },
-        scale: { x: meter.scale_x || 1, y: meter.scale_y || 1 },
-        canvasSize: { width: canvasWidth, height: canvasHeight }
+      const scaleX = meter.scale_x || 1;
+      const scaleY = meter.scale_y || 1;
+      
+      console.log(`🎨 Rendering meter ${index} "${meter.meter_number}":`, {
+        percentPos: meter.position,
+        pixelPos: { x: Math.round(x), y: Math.round(y) },
+        scale: { x: scaleX.toFixed(2), y: scaleY.toFixed(2) },
+        canvas: { w: canvasWidth, h: canvasHeight }
       });
       
       // Color based on status
