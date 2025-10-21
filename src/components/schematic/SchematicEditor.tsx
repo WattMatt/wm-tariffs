@@ -70,6 +70,8 @@ export default function SchematicEditor({
   const [selectedMeterIndex, setSelectedMeterIndex] = useState<number | null>(null);
   const [selectedMeterId, setSelectedMeterId] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
+  const [isEditMeterDialogOpen, setIsEditMeterDialogOpen] = useState(false);
+  const [editingMeter, setEditingMeter] = useState<any>(null);
 
   // Sync drawing mode state when tool changes
   useEffect(() => {
@@ -584,6 +586,10 @@ export default function SchematicEditor({
       background.on('mousedown', () => {
         if (activeTool === 'connection') {
           handleMeterClickForConnection(pos.meter_id, x, y);
+        } else if (activeTool === 'select') {
+          // Open edit dialog for this meter
+          setEditingMeter(meter);
+          setIsEditMeterDialogOpen(true);
         }
       });
 
@@ -993,6 +999,39 @@ export default function SchematicEditor({
     fabricCanvas.renderAll();
   };
 
+  const handleUpdateMeter = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingMeter) return;
+
+    const formData = new FormData(e.target as HTMLFormElement);
+    const updatedData = {
+      meter_number: formData.get('meter_number') as string,
+      name: formData.get('name') as string,
+      area: formData.get('area') ? Number(formData.get('area')) : null,
+      rating: formData.get('rating') as string,
+      cable_specification: formData.get('cable_specification') as string,
+      serial_number: formData.get('serial_number') as string,
+      ct_type: formData.get('ct_type') as string,
+      meter_type: formData.get('meter_type') as string,
+    };
+
+    const { error } = await supabase
+      .from('meters')
+      .update(updatedData)
+      .eq('id', editingMeter.id);
+
+    if (error) {
+      toast.error('Failed to update meter');
+      return;
+    }
+
+    toast.success('Meter updated successfully');
+    setIsEditMeterDialogOpen(false);
+    setEditingMeter(null);
+    fetchMeters();
+    fetchMeterPositions();
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex gap-2 items-center flex-wrap">
@@ -1086,7 +1125,7 @@ export default function SchematicEditor({
 
       <div className="text-sm text-muted-foreground space-y-1">
         <div>
-          {activeTool === "select" && "View mode - select a tool above to edit the schematic"}
+          {activeTool === "select" && "View mode - Click on meter cards to edit their details"}
           {activeTool === "draw" && "✏️ AI Extraction Mode: LEFT CLICK + DRAG to draw box around meter"}
           {activeTool === "meter" && "Click on the schematic to manually place a new meter"}
           {activeTool === "move" && "Drag meters to reposition them on the schematic"}
@@ -1262,6 +1301,151 @@ export default function SchematicEditor({
               Create Meter & Place on Schematic
             </Button>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isEditMeterDialogOpen} onOpenChange={setIsEditMeterDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Meter Details</DialogTitle>
+            <DialogDescription>
+              Update the meter information
+            </DialogDescription>
+          </DialogHeader>
+          {editingMeter && (
+            <form onSubmit={handleUpdateMeter} className="space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit_meter_number">NO (Meter Number) *</Label>
+                  <Input 
+                    id="edit_meter_number" 
+                    name="meter_number" 
+                    required 
+                    defaultValue={editingMeter.meter_number}
+                    placeholder="DB-03" 
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit_name">NAME *</Label>
+                  <Input 
+                    id="edit_name" 
+                    name="name" 
+                    required 
+                    defaultValue={editingMeter.name || ''}
+                    placeholder="ACKERMANS" 
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit_area">AREA (m²)</Label>
+                  <Input 
+                    id="edit_area" 
+                    name="area" 
+                    type="number" 
+                    step="0.01" 
+                    defaultValue={editingMeter.area || ''}
+                    placeholder="406" 
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit_rating">RATING *</Label>
+                  <Input 
+                    id="edit_rating" 
+                    name="rating" 
+                    required 
+                    defaultValue={editingMeter.rating || ''}
+                    placeholder="100A TP" 
+                  />
+                </div>
+
+                <div className="space-y-2 col-span-2">
+                  <Label htmlFor="edit_cable_specification">CABLE *</Label>
+                  <Input 
+                    id="edit_cable_specification" 
+                    name="cable_specification" 
+                    required 
+                    defaultValue={editingMeter.cable_specification || ''}
+                    placeholder="4C x 50mm² ALU ECC CABLE" 
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit_serial_number">SERIAL *</Label>
+                  <Input 
+                    id="edit_serial_number" 
+                    name="serial_number" 
+                    required 
+                    defaultValue={editingMeter.serial_number || ''}
+                    placeholder="35777285" 
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit_ct_type">CT *</Label>
+                  <Input 
+                    id="edit_ct_type" 
+                    name="ct_type" 
+                    required 
+                    defaultValue={editingMeter.ct_type || ''}
+                    placeholder="DOL" 
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit_meter_type">Meter Type *</Label>
+                  <Select name="meter_type" required defaultValue={editingMeter.meter_type}>
+                    <SelectTrigger className="bg-background">
+                      <SelectValue placeholder="Select type" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-background z-50">
+                      <SelectItem value="council_bulk">Council Bulk Supply</SelectItem>
+                      <SelectItem value="check_meter">Check Meter</SelectItem>
+                      <SelectItem value="solar">Solar Generation</SelectItem>
+                      <SelectItem value="distribution">Distribution Meter</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit_location">Location</Label>
+                  <Input 
+                    id="edit_location" 
+                    name="location" 
+                    defaultValue={editingMeter.location || ''}
+                    placeholder="Building A, Floor 2" 
+                  />
+                </div>
+
+                <div className="space-y-2 col-span-2">
+                  <Label htmlFor="edit_tariff">Tariff</Label>
+                  <Input 
+                    id="edit_tariff" 
+                    name="tariff" 
+                    defaultValue={editingMeter.tariff || ''}
+                    placeholder="Business Standard" 
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <Button type="submit" className="flex-1">
+                  Update Meter
+                </Button>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => {
+                    setIsEditMeterDialogOpen(false);
+                    setEditingMeter(null);
+                  }}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          )}
         </DialogContent>
       </Dialog>
 
