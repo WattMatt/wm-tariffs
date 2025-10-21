@@ -1518,9 +1518,23 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                             
                             return (
                               <div key={`${idx}_${partIdx}`} className="flex items-center gap-3">
-                                <Badge variant="outline" className="font-mono text-xs min-w-[120px]">
-                                  {part.name}
-                                </Badge>
+                                <Input
+                                  value={part.name}
+                                  onChange={(e) => {
+                                    const newMapping = {...columnMapping};
+                                    const newSplits = {...newMapping.splitColumns};
+                                    if (newSplits[idx]) {
+                                      newSplits[idx].parts[partIdx] = {
+                                        ...newSplits[idx].parts[partIdx],
+                                        name: e.target.value
+                                      };
+                                      newMapping.splitColumns = newSplits;
+                                      setColumnMapping(newMapping);
+                                    }
+                                  }}
+                                  className="h-8 text-xs font-mono min-w-[120px] max-w-[200px]"
+                                  placeholder="Column name"
+                                />
                                 <div className="flex-1">
                                   <Select
                                     value={currentAssignment}
@@ -1569,9 +1583,19 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                         
                         return (
                           <div key={idx} className="flex items-center gap-3">
-                            <Badge variant="outline" className="font-mono text-xs min-w-[120px]">
-                              {displayName}
-                            </Badge>
+                            <Input
+                              value={displayName}
+                              onChange={(e) => {
+                                const newMapping = {...columnMapping};
+                                newMapping.renamedHeaders = {
+                                  ...newMapping.renamedHeaders,
+                                  [idx]: e.target.value
+                                };
+                                setColumnMapping(newMapping);
+                              }}
+                              className="h-8 text-xs font-mono min-w-[120px] max-w-[200px]"
+                              placeholder="Column name"
+                            />
                             <div className="flex-1">
                               <Select
                                 value={currentAssignment}
