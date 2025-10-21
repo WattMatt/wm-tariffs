@@ -298,9 +298,25 @@ export default function SchematicViewer() {
       
       toast.success("PDF converted to ultra-high quality image successfully!", { duration: 3000 });
       
-      // Force reload to show new image
+      // Force browser to reload new image by clearing cache and adding timestamp
       setConvertedImageUrl(null);
-      setTimeout(() => fetchSchematic(), 500);
+      setImageUrl("");
+      setImageLoaded(false);
+      
+      // Wait a moment then reload with cache-busting timestamp
+      setTimeout(() => {
+        const timestamp = Date.now();
+        const { data: urlData } = supabase.storage
+          .from("schematics")
+          .getPublicUrl(imagePath);
+        
+        // Add cache-busting parameter to force browser to reload
+        const newImageUrl = `${urlData.publicUrl}?t=${timestamp}`;
+        setImageUrl(newImageUrl);
+        setConvertedImageUrl(newImageUrl);
+        
+        toast.info("Reloading high-quality image...");
+      }, 1000);
     } catch (error: any) {
       console.error("PDF conversion error:", error);
       toast.error(`Failed to convert PDF: ${error?.message || 'Unknown error'}`, { duration: 5000 });
