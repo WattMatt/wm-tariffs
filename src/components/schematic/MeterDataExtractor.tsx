@@ -168,11 +168,6 @@ export const MeterDataExtractor = ({
   };
 
   const extractMetersFromSchematic = async () => {
-    if (!convertedImageUrl && isPdf) {
-      toast.error('Please convert PDF to image first');
-      return;
-    }
-
     setIsExtracting(true);
     setExtractionProgress(0);
     

@@ -13,6 +13,9 @@ import { toast } from "sonner";
 import SchematicEditor from "@/components/schematic/SchematicEditor";
 import { MeterDataExtractor } from "@/components/schematic/MeterDataExtractor";
 import { QuickMeterDialog } from "@/components/schematic/QuickMeterDialog";
+import { Document, Page, pdfjs } from 'react-pdf';
+import 'react-pdf/dist/Page/AnnotationLayer.css';
+import 'react-pdf/dist/Page/TextLayer.css';
 
 interface SchematicData {
   id: string;
@@ -103,6 +106,14 @@ export default function SchematicViewer() {
   const [drawnRegions, setDrawnRegions] = useState<any[]>([]);
   const [drawStart, setDrawStart] = useState<{ x: number; y: number } | null>(null);
   const [currentDrawRect, setCurrentDrawRect] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
+  const [pdfNumPages, setPdfNumPages] = useState<number | null>(null);
+  const [pdfPageNumber, setPdfPageNumber] = useState(1);
+  const [pdfScale, setPdfScale] = useState(1.5);
+
+  // Set up PDF.js worker
+  useEffect(() => {
+    pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+  }, []);
 
   useEffect(() => {
     if (id) {
@@ -159,25 +170,13 @@ export default function SchematicViewer() {
 
     setSchematic(data);
 
-    // Check if this is a PDF with a converted image
-    if (data.file_type === "application/pdf" && data.converted_image_path) {
-      // Use the converted image
-      const { data: imageUrlData } = supabase.storage
-        .from("schematics")
-        .getPublicUrl(data.converted_image_path);
-      
-      setConvertedImageUrl(imageUrlData.publicUrl);
-      setImageUrl(imageUrlData.publicUrl);
-    } else if (data.file_type === "application/pdf" && !data.converted_image_path) {
-      // PDF without converted image - trigger conversion
+    // For PDFs, just use the PDF URL directly
+    if (data.file_type === "application/pdf") {
       const { data: pdfUrlData } = supabase.storage
         .from("schematics")
         .getPublicUrl(data.file_path);
       
       setImageUrl(pdfUrlData.publicUrl);
-      
-      // Auto-convert PDF in background
-      convertPdfToImage(data.id, data.file_path);
     } else {
       // Regular image file
       const { data: urlData } = supabase.storage
@@ -667,20 +666,6 @@ export default function SchematicViewer() {
           </div>
 
           <div className="flex items-center gap-2">
-            {schematic.file_type === "application/pdf" && schematic.converted_image_path && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  if (confirm('Reconvert PDF to high-quality image? This will overwrite the existing conversion.')) {
-                    convertPdfToImage(schematic.id, schematic.file_path);
-                  }
-                }}
-                disabled={isConverting}
-              >
-                {isConverting ? 'Converting...' : 'Reconvert PDF'}
-              </Button>
-            )}
             {!editMode && (
               <Button
                 variant={isPlacingMeter ? "default" : "outline"}
@@ -823,16 +808,31 @@ export default function SchematicViewer() {
                       }}
                     >
                       <div className="relative">
-                        {/* Show converted image or original image */}
-                        {convertedImageUrl || schematic.file_type !== "application/pdf" ? (
+                        {/* Display PDF directly using react-pdf */}
+                        {schematic.file_type === "application/pdf" ? (
                           <div className="relative inline-block">
-                            <img
-                              ref={imageRef}
-                              src={convertedImageUrl || imageUrl}
-                              alt={schematic.name}
-                              className="max-w-full h-auto"
-                              draggable={false}
-                            />
+                            <Document
+                              file={imageUrl}
+                              onLoadSuccess={({ numPages }) => {
+                                setPdfNumPages(numPages);
+                                setImageLoaded(true);
+                                console.log(`PDF loaded with ${numPages} pages`);
+                              }}
+                              onLoadError={(error) => {
+                                console.error('PDF load error:', error);
+                                toast.error('Failed to load PDF');
+                              }}
+                            >
+                              <Page
+                                pageNumber={pdfPageNumber}
+                                scale={pdfScale}
+                                renderTextLayer={false}
+                                renderAnnotationLayer={false}
+                                onRenderSuccess={() => {
+                                  console.log('PDF page rendered');
+                                }}
+                              />
+                            </Document>
                             
                             {/* Connection Lines - rendered first so they appear behind markers */}
                             <svg 
@@ -963,14 +963,81 @@ export default function SchematicViewer() {
                             )}
                           </div>
                         ) : (
-                          <div className="flex items-center justify-center p-16">
-                            <div className="text-center">
-                              <div className="mb-4 text-6xl">📄</div>
-                              <p className="text-lg font-medium mb-2">Converting PDF...</p>
-                              <p className="text-sm text-muted-foreground">
-                                This may take a few moments for large files
-                              </p>
-                            </div>
+                          <div className="relative inline-block">
+                            <img
+                              ref={imageRef}
+                              src={imageUrl}
+                              alt={schematic.name}
+                              className="max-w-full h-auto"
+                              draggable={false}
+                              onLoad={() => {
+                                setImageLoaded(true);
+                                console.log('Image loaded');
+                              }}
+                            />
+                            
+                            {/* Connection Lines for regular images */}
+                            <svg 
+                              className="absolute inset-0 pointer-events-none"
+                              style={{ 
+                                width: '100%', 
+                                height: '100%',
+                                zIndex: 20
+                              }}
+                            >
+                              {meterConnections.map((connection) => {
+                                const childPos = meterPositions.find(p => p.meter_id === connection.child_meter_id);
+                                const parentPos = meterPositions.find(p => p.meter_id === connection.parent_meter_id);
+                                
+                                if (!childPos || !parentPos || !imageRef.current) return null;
+                                
+                                const getConnectionColor = (type: string) => {
+                                  switch (type) {
+                                    case 'direct_feed': return '#10b981';
+                                    case 'sub_distribution': return '#3b82f6';
+                                    case 'backup': return '#f59e0b';
+                                    default: return '#6b7280';
+                                  }
+                                };
+                                
+                                return (
+                                  <line
+                                    key={connection.id}
+                                    x1={`${childPos.x_position}%`}
+                                    y1={`${childPos.y_position}%`}
+                                    x2={`${parentPos.x_position}%`}
+                                    y2={`${parentPos.y_position}%`}
+                                    stroke={getConnectionColor(connection.connection_type)}
+                                    strokeWidth="3"
+                                    strokeDasharray={connection.connection_type === 'backup' ? '8,4' : 'none'}
+                                    opacity="0.7"
+                                  />
+                                );
+                              })}
+                            </svg>
+
+                            {/* Meter markers for regular images */}
+                            {meterPositions.map((position) => (
+                              <div
+                                key={position.id}
+                                className="meter-marker absolute rounded-full border-3 border-white shadow-lg flex items-center justify-center cursor-pointer hover:scale-110 transition-all"
+                                style={{
+                                  left: `${position.x_position}%`,
+                                  top: `${position.y_position}%`,
+                                  transform: "translate(-50%, -50%)",
+                                  transformOrigin: 'center center',
+                                  width: '28px',
+                                  height: '28px',
+                                  backgroundColor: position.meters?.meter_type === 'council_bulk' ? 'hsl(var(--primary))' :
+                                                  position.meters?.meter_type === 'check_meter' ? '#f59e0b' :
+                                                  '#8b5cf6',
+                                  zIndex: 30,
+                                }}
+                                title={`${position.meters?.meter_number} - ${position.label || ""}`}
+                              >
+                                <span className="text-[9px] font-bold text-white leading-none">{position.meters?.meter_number?.substring(0, 3)}</span>
+                              </div>
+                            ))}
                           </div>
                         )}
                       </div>
