@@ -350,12 +350,6 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                   className="w-32"
                 />
               </div>
-              {dateFrom && (
-                <div className="p-2 mt-2 rounded-md bg-primary/10 border border-primary/20">
-                  <div className="text-xs font-medium text-primary">Selected Start:</div>
-                  <div className="text-sm font-mono">{format(getFullDateTime(dateFrom, timeFrom), "PPpp")}</div>
-                </div>
-              )}
             </div>
 
             <div className="space-y-2">
@@ -390,12 +384,6 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                   className="w-32"
                 />
               </div>
-              {dateTo && (
-                <div className="p-2 mt-2 rounded-md bg-primary/10 border border-primary/20">
-                  <div className="text-xs font-medium text-primary">Selected End:</div>
-                  <div className="text-sm font-mono">{format(getFullDateTime(dateTo, timeTo), "PPpp")}</div>
-                </div>
-              )}
             </div>
           </div>
 
