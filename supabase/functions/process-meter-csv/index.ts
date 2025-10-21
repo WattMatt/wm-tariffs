@@ -115,12 +115,32 @@ Deno.serve(async (req) => {
         
         // Use column mapping if provided
         if (columnMapping) {
-          dateStr = columns[columnMapping.dateColumn]?.trim();
-          timeStr = columnMapping.timeColumn >= 0 ? columns[columnMapping.timeColumn]?.trim() : null;
-          valueStr = columns[columnMapping.valueColumn]?.trim()?.replace(',', '.');
-          kvaStr = columnMapping.kvaColumn >= 0 ? columns[columnMapping.kvaColumn]?.trim()?.replace(',', '.') : null;
+          // Get the column data, applying splits if configured
+          const getColumnValue = (colIdx: number): string | null => {
+            let value = columns[colIdx]?.trim();
+            if (!value) return null;
+            
+            // Apply column split if configured
+            const splitConfig = columnMapping.splitColumns?.[colIdx];
+            if (splitConfig) {
+              const sepChar = 
+                splitConfig.separator === "space" ? " " :
+                splitConfig.separator === "comma" ? "," :
+                splitConfig.separator === "dash" ? "-" :
+                splitConfig.separator === "slash" ? "/" : ":";
+              const parts = value.split(sepChar);
+              value = parts[splitConfig.keepPart] || value;
+            }
+            
+            return value;
+          };
           
-          // Capture extra columns
+          dateStr = getColumnValue(columnMapping.dateColumn);
+          timeStr = columnMapping.timeColumn >= 0 ? getColumnValue(columnMapping.timeColumn) : null;
+          valueStr = getColumnValue(columnMapping.valueColumn)?.replace(',', '.');
+          kvaStr = columnMapping.kvaColumn >= 0 ? getColumnValue(columnMapping.kvaColumn)?.replace(',', '.') : null;
+          
+          // Capture extra columns (with renamed headers if provided)
           for (let colIdx = 0; colIdx < columns.length; colIdx++) {
             if (colIdx === columnMapping.dateColumn || 
                 colIdx === columnMapping.timeColumn || 
@@ -129,9 +149,10 @@ Deno.serve(async (req) => {
               continue;
             }
             
-            const colValue = columns[colIdx]?.trim();
+            const colValue = getColumnValue(colIdx);
             if (colValue && colValue !== '' && colValue !== '-') {
-              const colName = headerColumns[colIdx] || `Column_${colIdx + 1}`;
+              // Use renamed header if available, otherwise use original header
+              const colName = columnMapping.renamedHeaders?.[colIdx] || headerColumns[colIdx] || `Column_${colIdx + 1}`;
               const numValue = parseFloat(colValue.replace(',', '.'));
               extraFields[colName] = isNaN(numValue) ? colValue : numValue;
             }

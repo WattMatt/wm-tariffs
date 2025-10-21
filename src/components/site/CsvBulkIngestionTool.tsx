@@ -76,6 +76,8 @@ interface ColumnMapping {
   kvaColumn: number;
   dateFormat: string;
   timeFormat: string;
+  renamedHeaders?: Record<number, string>;
+  splitColumns?: Record<number, { separator: string; keepPart: number }>;
 }
 
 interface FileItem {
@@ -113,8 +115,12 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
     valueColumn: 2,
     kvaColumn: -1,
     dateFormat: "auto",
-    timeFormat: "auto"
+    timeFormat: "auto",
+    renamedHeaders: {},
+    splitColumns: {}
   });
+  const [editingHeader, setEditingHeader] = useState<{index: number, value: string} | null>(null);
+  const [splitPreview, setSplitPreview] = useState<{index: number, parts: string[]} | null>(null);
   const [activeTab, setActiveTab] = useState<string>("upload");
   const [previewingFile, setPreviewingFile] = useState<FileItem | null>(null);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
@@ -1526,114 +1532,217 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="text-xs text-muted-foreground mb-2">
-                    Click column headers to set their type. Changes update instantly in the preview below.
+                    Click column headers to set type, rename, or split columns. Changes update instantly.
                   </div>
                   
                   <div className="h-64 w-full rounded-md border overflow-auto">
                     <table className="text-xs border-collapse w-full">
                       <thead className="sticky top-0 z-10 bg-background">
                         <tr className="border-b">
-                          {previewData.headers.map((header, idx) => (
-                            <th key={idx} className="px-3 py-2 text-left font-medium whitespace-nowrap">
-                              <Popover>
-                                <PopoverTrigger asChild>
-                                  <button className="w-full text-left space-y-1 hover:bg-muted/50 p-1 rounded cursor-pointer transition-colors">
-                                    <div className="font-semibold">{header || `Col ${idx + 1}`}</div>
-                                    <Badge 
-                                      variant={
-                                        idx === columnMapping.dateColumn ? "default" :
-                                        idx === columnMapping.timeColumn ? "secondary" :
-                                        idx === columnMapping.valueColumn ? "default" :
-                                        idx === columnMapping.kvaColumn ? "secondary" :
-                                        "outline"
-                                      } 
-                                      className="text-[10px] h-4"
-                                    >
-                                      {idx === columnMapping.dateColumn ? '📅 Date' :
-                                       idx === columnMapping.timeColumn ? '⏰ Time' :
-                                       idx === columnMapping.valueColumn ? '⚡ kWh' :
-                                       idx === columnMapping.kvaColumn ? '🔌 kVA' :
-                                       '📋 Metadata'}
-                                    </Badge>
-                                  </button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-48 p-2 bg-background border shadow-lg z-50" align="start">
-                                  <div className="space-y-1">
-                                    <div className="text-xs font-medium mb-2 px-2">Set column type:</div>
-                                    <Button
-                                      size="sm"
-                                      variant={idx === columnMapping.dateColumn ? "default" : "ghost"}
-                                      className="w-full justify-start text-xs h-8"
-                                      onClick={() => {
-                                        setColumnMapping({...columnMapping, dateColumn: idx});
-                                      }}
-                                    >
-                                      📅 Date Column
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant={idx === columnMapping.timeColumn ? "secondary" : "ghost"}
-                                      className="w-full justify-start text-xs h-8"
-                                      onClick={() => {
-                                        setColumnMapping({...columnMapping, timeColumn: idx});
-                                      }}
-                                    >
-                                      ⏰ Time Column
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant={idx === columnMapping.valueColumn ? "default" : "ghost"}
-                                      className="w-full justify-start text-xs h-8"
-                                      onClick={() => {
-                                        setColumnMapping({...columnMapping, valueColumn: idx});
-                                      }}
-                                    >
-                                      ⚡ kWh Value
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant={idx === columnMapping.kvaColumn ? "secondary" : "ghost"}
-                                      className="w-full justify-start text-xs h-8"
-                                      onClick={() => {
-                                        setColumnMapping({...columnMapping, kvaColumn: idx});
-                                      }}
-                                    >
-                                      🔌 kVA Value
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant={idx !== columnMapping.dateColumn && 
-                                              idx !== columnMapping.timeColumn && 
-                                              idx !== columnMapping.valueColumn && 
-                                              idx !== columnMapping.kvaColumn ? "outline" : "ghost"}
-                                      className="w-full justify-start text-xs h-8"
-                                      onClick={() => {
-                                        // Clear this column from all mappings
-                                        const newMapping = {...columnMapping};
-                                        if (idx === newMapping.dateColumn) newMapping.dateColumn = -1;
-                                        if (idx === newMapping.timeColumn) newMapping.timeColumn = -1;
-                                        if (idx === newMapping.valueColumn) newMapping.valueColumn = -1;
-                                        if (idx === newMapping.kvaColumn) newMapping.kvaColumn = -1;
-                                        setColumnMapping(newMapping);
-                                      }}
-                                    >
-                                      📋 Metadata
-                                    </Button>
-                                  </div>
-                                </PopoverContent>
-                              </Popover>
-                            </th>
-                          ))}
+                          {previewData.headers.map((header, idx) => {
+                            const displayName = columnMapping.renamedHeaders?.[idx] || header || `Col ${idx + 1}`;
+                            const isSplit = columnMapping.splitColumns?.[idx];
+                            
+                            return (
+                              <th key={idx} className="px-3 py-2 text-left font-medium whitespace-nowrap border-r">
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <button className="w-full text-left space-y-1 hover:bg-muted/50 p-1 rounded cursor-pointer transition-colors">
+                                      <div className="font-semibold flex items-center gap-1">
+                                        {displayName}
+                                        {isSplit && <span className="text-[10px] text-muted-foreground">✂️</span>}
+                                      </div>
+                                      <Badge 
+                                        variant={
+                                          idx === columnMapping.dateColumn ? "default" :
+                                          idx === columnMapping.timeColumn ? "secondary" :
+                                          idx === columnMapping.valueColumn ? "default" :
+                                          idx === columnMapping.kvaColumn ? "secondary" :
+                                          "outline"
+                                        } 
+                                        className="text-[10px] h-4"
+                                      >
+                                        {idx === columnMapping.dateColumn ? '📅 Date' :
+                                         idx === columnMapping.timeColumn ? '⏰ Time' :
+                                         idx === columnMapping.valueColumn ? '⚡ kWh' :
+                                         idx === columnMapping.kvaColumn ? '🔌 kVA' :
+                                         '📋 Metadata'}
+                                      </Badge>
+                                    </button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-64 p-3 bg-background border shadow-lg z-50" align="start">
+                                    <div className="space-y-3">
+                                      {/* Column Type Section */}
+                                      <div>
+                                        <div className="text-xs font-medium mb-2">Column Type:</div>
+                                        <div className="space-y-1">
+                                          <Button
+                                            size="sm"
+                                            variant={idx === columnMapping.dateColumn ? "default" : "ghost"}
+                                            className="w-full justify-start text-xs h-7"
+                                            onClick={() => setColumnMapping({...columnMapping, dateColumn: idx})}
+                                          >
+                                            📅 Date
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant={idx === columnMapping.timeColumn ? "secondary" : "ghost"}
+                                            className="w-full justify-start text-xs h-7"
+                                            onClick={() => setColumnMapping({...columnMapping, timeColumn: idx})}
+                                          >
+                                            ⏰ Time
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant={idx === columnMapping.valueColumn ? "default" : "ghost"}
+                                            className="w-full justify-start text-xs h-7"
+                                            onClick={() => setColumnMapping({...columnMapping, valueColumn: idx})}
+                                          >
+                                            ⚡ kWh
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant={idx === columnMapping.kvaColumn ? "secondary" : "ghost"}
+                                            className="w-full justify-start text-xs h-7"
+                                            onClick={() => setColumnMapping({...columnMapping, kvaColumn: idx})}
+                                          >
+                                            🔌 kVA
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            className="w-full justify-start text-xs h-7"
+                                            onClick={() => {
+                                              const newMapping = {...columnMapping};
+                                              if (idx === newMapping.dateColumn) newMapping.dateColumn = -1;
+                                              if (idx === newMapping.timeColumn) newMapping.timeColumn = -1;
+                                              if (idx === newMapping.valueColumn) newMapping.valueColumn = -1;
+                                              if (idx === newMapping.kvaColumn) newMapping.kvaColumn = -1;
+                                              setColumnMapping(newMapping);
+                                            }}
+                                          >
+                                            📋 Metadata
+                                          </Button>
+                                        </div>
+                                      </div>
+
+                                      {/* Rename Section */}
+                                      <div className="border-t pt-2">
+                                        <Label className="text-xs">Rename Column:</Label>
+                                        <Input
+                                          value={editingHeader?.index === idx ? editingHeader.value : displayName}
+                                          onChange={(e) => setEditingHeader({index: idx, value: e.target.value})}
+                                          onBlur={() => {
+                                            if (editingHeader?.index === idx) {
+                                              setColumnMapping({
+                                                ...columnMapping,
+                                                renamedHeaders: {
+                                                  ...columnMapping.renamedHeaders,
+                                                  [idx]: editingHeader.value
+                                                }
+                                              });
+                                              setEditingHeader(null);
+                                            }
+                                          }}
+                                          className="h-7 text-xs mt-1"
+                                          placeholder="Enter column name"
+                                        />
+                                      </div>
+
+                                      {/* Split Column Section */}
+                                      <div className="border-t pt-2">
+                                        <Label className="text-xs">Split Column By:</Label>
+                                        <Select
+                                          value={columnMapping.splitColumns?.[idx]?.separator || "none"}
+                                          onValueChange={(sep) => {
+                                            if (sep === "none") {
+                                              const newSplits = {...columnMapping.splitColumns};
+                                              delete newSplits[idx];
+                                              setColumnMapping({...columnMapping, splitColumns: newSplits});
+                                              setSplitPreview(null);
+                                            } else {
+                                              // Preview the split
+                                              const sampleValue = previewData.rows[0]?.[idx] || "";
+                                              const parts = sampleValue.split(sep === "space" ? " " : sep === "comma" ? "," : sep === "dash" ? "-" : sep === "slash" ? "/" : ":");
+                                              setSplitPreview({index: idx, parts});
+                                            }
+                                          }}
+                                        >
+                                          <SelectTrigger className="h-7 text-xs mt-1 bg-background">
+                                            <SelectValue />
+                                          </SelectTrigger>
+                                          <SelectContent className="bg-background z-50">
+                                            <SelectItem value="none">Don't split</SelectItem>
+                                            <SelectItem value="space">Space ( )</SelectItem>
+                                            <SelectItem value="comma">Comma (,)</SelectItem>
+                                            <SelectItem value="dash">Dash (-)</SelectItem>
+                                            <SelectItem value="slash">Slash (/)</SelectItem>
+                                            <SelectItem value="colon">Colon (:)</SelectItem>
+                                          </SelectContent>
+                                        </Select>
+                                        
+                                        {splitPreview?.index === idx && splitPreview.parts.length > 1 && (
+                                          <div className="mt-2 p-2 bg-muted/50 rounded text-xs">
+                                            <div className="font-medium mb-1">Preview split:</div>
+                                            {splitPreview.parts.map((part, partIdx) => (
+                                              <Button
+                                                key={partIdx}
+                                                size="sm"
+                                                variant={columnMapping.splitColumns?.[idx]?.keepPart === partIdx ? "default" : "outline"}
+                                                className="mr-1 mb-1 h-6 text-xs"
+                                                onClick={() => {
+                                                  const sep = 
+                                                    splitPreview.parts[0].includes(" ") ? "space" :
+                                                    splitPreview.parts[0].includes(",") ? "comma" :
+                                                    splitPreview.parts[0].includes("-") ? "dash" :
+                                                    splitPreview.parts[0].includes("/") ? "slash" : "colon";
+                                                  setColumnMapping({
+                                                    ...columnMapping,
+                                                    splitColumns: {
+                                                      ...columnMapping.splitColumns,
+                                                      [idx]: { separator: sep, keepPart: partIdx }
+                                                    }
+                                                  });
+                                                }}
+                                              >
+                                                Part {partIdx + 1}: {part}
+                                              </Button>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </PopoverContent>
+                                </Popover>
+                              </th>
+                            );
+                          })}
                         </tr>
                       </thead>
                       <tbody>
                         {previewData.rows.slice(0, 10).map((row, rowIdx) => (
                           <tr key={rowIdx} className="border-b hover:bg-muted/30">
-                            {previewData.headers.map((_, colIdx) => (
-                              <td key={colIdx} className="px-3 py-2 whitespace-nowrap">
-                                {row[colIdx] || ''}
-                              </td>
-                            ))}
+                            {previewData.headers.map((_, colIdx) => {
+                              let cellValue = row[colIdx] || '';
+                              
+                              // Apply column split if configured
+                              const splitConfig = columnMapping.splitColumns?.[colIdx];
+                              if (splitConfig && cellValue) {
+                                const sepChar = 
+                                  splitConfig.separator === "space" ? " " :
+                                  splitConfig.separator === "comma" ? "," :
+                                  splitConfig.separator === "dash" ? "-" :
+                                  splitConfig.separator === "slash" ? "/" : ":";
+                                const parts = cellValue.split(sepChar);
+                                cellValue = parts[splitConfig.keepPart] || cellValue;
+                              }
+                              
+                              return (
+                                <td key={colIdx} className="px-3 py-2 whitespace-nowrap border-r">
+                                  {cellValue}
+                                </td>
+                              );
+                            })}
                           </tr>
                         ))}
                       </tbody>
