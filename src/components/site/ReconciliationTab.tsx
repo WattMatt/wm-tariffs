@@ -429,20 +429,6 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
             </div>
 
             <div className="space-y-4">
-              <div className="p-3 rounded-lg bg-accent/50 border border-accent">
-                <Label className="text-sm font-semibold block mb-2">Your Selected Range</Label>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                  <div>
-                    <span className="text-muted-foreground">From: </span>
-                    <span className="font-mono font-medium">{dateFrom && format(getFullDateTime(dateFrom, timeFrom), "PPpp")}</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">To: </span>
-                    <span className="font-mono font-medium">{dateTo && format(getFullDateTime(dateTo, timeTo), "PPpp")}</span>
-                  </div>
-                </div>
-              </div>
-
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label className="text-sm font-semibold">First Actual Reading Found</Label>
