@@ -193,7 +193,7 @@ export default function MetersTab({ siteId }: MetersTabProps) {
   const fetchRawCsvData = async (meterId: string) => {
     const { data: files, error: filesError } = await supabase
       .from('meter_csv_files')
-      .select('file_path, file_name')
+      .select('file_path, file_name, separator, header_row_number')
       .eq('meter_id', meterId)
       .order('uploaded_at', { ascending: false })
       .limit(1);
@@ -212,13 +212,29 @@ export default function MetersTab({ siteId }: MetersTabProps) {
       return;
     }
 
+    // Use the stored separator to parse the file
+    const separator = files[0].separator || 'tab';
+    const headerRowNumber = files[0].header_row_number || 1;
+    
+    const separatorChar = separator === 'tab' ? '\t' : 
+                          separator === 'comma' ? ',' : 
+                          separator === 'semicolon' ? ';' : 
+                          separator === 'space' ? ' ' : ',';
+
     const text = await fileData.text();
     const lines = text.split('\n').filter(line => line.trim());
     if (lines.length === 0) return;
 
-    const headers = lines[0].split(',').map(h => h.trim());
-    const rows = lines.slice(1).map(line => {
-      const values = line.split(',').map(v => v.trim());
+    // Use the header row number to determine which line contains headers
+    const headerLine = Math.max(0, headerRowNumber - 1);
+    if (headerLine >= lines.length) {
+      toast.error("Invalid header row number");
+      return;
+    }
+
+    const headers = lines[headerLine].split(separatorChar).map(h => h.trim());
+    const rows = lines.slice(headerLine + 1).map(line => {
+      const values = line.split(separatorChar).map(v => v.trim());
       return headers.reduce((obj, header, idx) => {
         obj[header] = values[idx] || '';
         return obj;

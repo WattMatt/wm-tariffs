@@ -131,12 +131,14 @@ export type Database = {
           file_name: string
           file_path: string
           file_size: number | null
+          header_row_number: number | null
           id: string
           meter_id: string
           parse_errors: number | null
           parse_status: string
           parsed_at: string | null
           readings_inserted: number | null
+          separator: string | null
           site_id: string
           updated_at: string
           upload_status: string
@@ -151,12 +153,14 @@ export type Database = {
           file_name: string
           file_path: string
           file_size?: number | null
+          header_row_number?: number | null
           id?: string
           meter_id: string
           parse_errors?: number | null
           parse_status?: string
           parsed_at?: string | null
           readings_inserted?: number | null
+          separator?: string | null
           site_id: string
           updated_at?: string
           upload_status?: string
@@ -171,12 +175,14 @@ export type Database = {
           file_name?: string
           file_path?: string
           file_size?: number | null
+          header_row_number?: number | null
           id?: string
           meter_id?: string
           parse_errors?: number | null
           parse_status?: string
           parsed_at?: string | null
           readings_inserted?: number | null
+          separator?: string | null
           site_id?: string
           updated_at?: string
           upload_status?: string

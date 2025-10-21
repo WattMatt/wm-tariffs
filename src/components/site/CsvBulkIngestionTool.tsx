@@ -570,7 +570,9 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
             content_hash: fileItem.contentHash!,
             file_size: fileItem.size,
             uploaded_by: user?.user?.id,
-            parse_status: 'uploaded'
+            parse_status: 'uploaded',
+            separator: separator,
+            header_row_number: parseInt(headerRowNumber) || 1
           });
 
         if (trackError) {
