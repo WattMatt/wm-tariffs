@@ -1519,17 +1519,16 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                   </div>
                   <div>
                     <Label>Header Row Number</Label>
-                    <Select value={headerRowNumber} onValueChange={setHeaderRowNumber} disabled={isProcessing}>
-                      <SelectTrigger className="bg-background mt-1">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="0">No headers - All rows are data</SelectItem>
-                        <SelectItem value="1">Row 1 is header</SelectItem>
-                        <SelectItem value="2">Row 2 is header</SelectItem>
-                        <SelectItem value="3">Row 3 is header</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={headerRowNumber}
+                      onChange={(e) => setHeaderRowNumber(e.target.value)}
+                      disabled={isProcessing}
+                      className="bg-background mt-1"
+                      placeholder="Enter header row number (0 for no headers)"
+                    />
                   </div>
                 </div>
               </CardContent>
