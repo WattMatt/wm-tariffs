@@ -83,21 +83,38 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
       const fullDateTimeFrom = getFullDateTime(dateFrom, timeFrom);
       const fullDateTimeTo = getFullDateTime(dateTo, timeTo);
 
-      // Fetch readings from database (no row limit for large date ranges)
-      const { data: readings, error: readingsError } = await supabase
-        .from("meter_readings")
-        .select("*")
-        .eq("meter_id", bulkMeter.id)
-        .gte("reading_timestamp", fullDateTimeFrom.toISOString())
-        .lte("reading_timestamp", fullDateTimeTo.toISOString())
-        .order("reading_timestamp", { ascending: true })
-        .limit(100000); // Support up to 100k readings (e.g., 2+ years of 30-min intervals)
+      // Fetch ALL readings using pagination (Supabase has 1000-row server limit)
+      let allReadings: any[] = [];
+      let from = 0;
+      const pageSize = 1000;
+      let hasMore = true;
 
-      if (readingsError) {
-        toast.error("Failed to fetch readings: " + readingsError.message);
-        setIsLoadingPreview(false);
-        return;
+      while (hasMore) {
+        const { data: pageData, error: readingsError } = await supabase
+          .from("meter_readings")
+          .select("*")
+          .eq("meter_id", bulkMeter.id)
+          .gte("reading_timestamp", fullDateTimeFrom.toISOString())
+          .lte("reading_timestamp", fullDateTimeTo.toISOString())
+          .order("reading_timestamp", { ascending: true })
+          .range(from, from + pageSize - 1);
+
+        if (readingsError) {
+          toast.error(`Failed to fetch readings: ${readingsError.message}`);
+          setIsLoadingPreview(false);
+          return;
+        }
+
+        if (pageData && pageData.length > 0) {
+          allReadings = [...allReadings, ...pageData];
+          from += pageSize;
+          hasMore = pageData.length === pageSize; // Continue if we got a full page
+        } else {
+          hasMore = false;
+        }
       }
+
+      const readings = allReadings;
 
       if (!readings || readings.length === 0) {
         toast.error("No readings found in selected date range");
@@ -213,19 +230,37 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
       // Fetch readings for each meter within date range (deduplicated by timestamp)
       const meterData = await Promise.all(
         meters.map(async (meter) => {
-          // Get all readings with metadata (no row limit)
-          const { data: readings, error: readingsError } = await supabase
-            .from("meter_readings")
-            .select("kwh_value, reading_timestamp, metadata")
-            .eq("meter_id", meter.id)
-            .gte("reading_timestamp", fullDateTimeFrom.toISOString())
-            .lte("reading_timestamp", fullDateTimeTo.toISOString())
-            .order("reading_timestamp", { ascending: true })
-            .limit(100000); // Support large date ranges
+          // Get ALL readings using pagination (Supabase has 1000-row server limit)
+          let allReadings: any[] = [];
+          let from = 0;
+          const pageSize = 1000;
+          let hasMore = true;
 
-          if (readingsError) {
-            console.error(`Error fetching readings for meter ${meter.meter_number}:`, readingsError);
+          while (hasMore) {
+            const { data: pageData, error: readingsError } = await supabase
+              .from("meter_readings")
+              .select("kwh_value, reading_timestamp, metadata")
+              .eq("meter_id", meter.id)
+              .gte("reading_timestamp", fullDateTimeFrom.toISOString())
+              .lte("reading_timestamp", fullDateTimeTo.toISOString())
+              .order("reading_timestamp", { ascending: true })
+              .range(from, from + pageSize - 1);
+
+            if (readingsError) {
+              console.error(`Error fetching readings for meter ${meter.meter_number}:`, readingsError);
+              break;
+            }
+
+            if (pageData && pageData.length > 0) {
+              allReadings = [...allReadings, ...pageData];
+              from += pageSize;
+              hasMore = pageData.length === pageSize;
+            } else {
+              hasMore = false;
+            }
           }
+
+          const readings = allReadings;
 
           // Deduplicate by timestamp (take first occurrence of each unique timestamp)
           const uniqueReadings = readings ? 
