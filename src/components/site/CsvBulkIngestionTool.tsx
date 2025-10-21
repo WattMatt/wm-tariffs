@@ -737,7 +737,8 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
 
       if (error) throw error;
 
-      const totalDeleted = data || 0;
+      // Extract the count - RPC returns array of objects with total_deleted column
+      const totalDeleted = Array.isArray(data) && data.length > 0 ? data[0].total_deleted : 0;
       
       // Clear local state completely
       setFiles([]);
