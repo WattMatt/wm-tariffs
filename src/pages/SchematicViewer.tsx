@@ -218,26 +218,35 @@ export default function SchematicViewer() {
       
       // Get first page
       const page = await pdf.getPage(1);
-      const viewport = page.getViewport({ scale: 2.0 });
+      // Use 4x scale for very high quality (can go up to 6.0 for even higher quality)
+      const viewport = page.getViewport({ scale: 4.0 });
       
-      // Create canvas
+      // Create canvas with high-quality rendering settings
       const canvas = document.createElement('canvas');
-      const context = canvas.getContext('2d', { willReadFrequently: false });
+      const context = canvas.getContext('2d', { 
+        willReadFrequently: false,
+        alpha: false, // No transparency for better quality
+      });
       
       if (!context) throw new Error('Could not get canvas context');
       
       canvas.width = viewport.width;
       canvas.height = viewport.height;
       
-      // Render PDF page to canvas
+      // Enable high-quality rendering
+      context.imageSmoothingEnabled = true;
+      context.imageSmoothingQuality = 'high';
+      
+      // Render PDF page to canvas with high quality
       await page.render({
         canvasContext: context,
         viewport: viewport,
+        intent: 'print', // Use print-quality rendering
       } as any).promise;
       
-      // Convert canvas to blob with timeout
+      // Convert canvas to blob with maximum quality
       const imageBlob = await new Promise<Blob>((resolve, reject) => {
-        const timeout = setTimeout(() => reject(new Error('Blob conversion timeout')), 10000);
+        const timeout = setTimeout(() => reject(new Error('Blob conversion timeout')), 20000); // Increased timeout for larger image
         canvas.toBlob(
           (blob) => {
             clearTimeout(timeout);
@@ -245,7 +254,7 @@ export default function SchematicViewer() {
             else reject(new Error('Failed to create blob'));
           },
           'image/png',
-          0.95
+          1.0 // Maximum quality
         );
       });
       
