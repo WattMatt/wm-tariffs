@@ -13,7 +13,6 @@ import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import Papa from "papaparse";
 
 interface ReconciliationTabProps {
@@ -828,98 +827,10 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                 <CardTitle>Detailed Breakdown</CardTitle>
                 <CardDescription>Meter-by-meter consumption analysis</CardDescription>
               </div>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="gap-2">
-                    <Download className="w-4 h-4" />
-                    Export CSV Data
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-64">
-                  <DropdownMenuLabel>Download Meter Data</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={downloadAllMetersCSV} className="gap-2">
-                    <FileDown className="w-4 h-4" />
-                    Download All Meters
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
-                    Individual Meters
-                  </DropdownMenuLabel>
-                  {reconciliationData.councilBulk.length > 0 && (
-                    <>
-                      <DropdownMenuLabel className="text-xs pl-2">Council Bulk</DropdownMenuLabel>
-                      {reconciliationData.councilBulk.map((meter: any) => (
-                        <DropdownMenuItem
-                          key={meter.id}
-                          onClick={() => downloadMeterCSV(meter)}
-                          className="pl-4 gap-2"
-                        >
-                          <FileDown className="w-3 h-3" />
-                          {meter.meter_number}
-                          <span className="ml-auto text-xs text-muted-foreground">
-                            {meter.readingsCount} rows
-                          </span>
-                        </DropdownMenuItem>
-                      ))}
-                    </>
-                  )}
-                  {reconciliationData.checkMeters?.length > 0 && (
-                    <>
-                      <DropdownMenuLabel className="text-xs pl-2">Check Meters</DropdownMenuLabel>
-                      {reconciliationData.checkMeters.map((meter: any) => (
-                        <DropdownMenuItem
-                          key={meter.id}
-                          onClick={() => downloadMeterCSV(meter)}
-                          className="pl-4 gap-2"
-                        >
-                          <FileDown className="w-3 h-3" />
-                          {meter.meter_number}
-                          <span className="ml-auto text-xs text-muted-foreground">
-                            {meter.readingsCount} rows
-                          </span>
-                        </DropdownMenuItem>
-                      ))}
-                    </>
-                  )}
-                  {reconciliationData.solarMeters?.length > 0 && (
-                    <>
-                      <DropdownMenuLabel className="text-xs pl-2">Solar</DropdownMenuLabel>
-                      {reconciliationData.solarMeters.map((meter: any) => (
-                        <DropdownMenuItem
-                          key={meter.id}
-                          onClick={() => downloadMeterCSV(meter)}
-                          className="pl-4 gap-2"
-                        >
-                          <FileDown className="w-3 h-3" />
-                          {meter.meter_number}
-                          <span className="ml-auto text-xs text-muted-foreground">
-                            {meter.readingsCount} rows
-                          </span>
-                        </DropdownMenuItem>
-                      ))}
-                    </>
-                  )}
-                  {reconciliationData.distribution?.length > 0 && (
-                    <>
-                      <DropdownMenuLabel className="text-xs pl-2">Distribution</DropdownMenuLabel>
-                      {reconciliationData.distribution.map((meter: any) => (
-                        <DropdownMenuItem
-                          key={meter.id}
-                          onClick={() => downloadMeterCSV(meter)}
-                          className="pl-4 gap-2"
-                        >
-                          <FileDown className="w-3 h-3" />
-                          {meter.meter_number}
-                          <span className="ml-auto text-xs text-muted-foreground">
-                            {meter.readingsCount} rows
-                          </span>
-                        </DropdownMenuItem>
-                      ))}
-                    </>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <Button variant="outline" className="gap-2" onClick={downloadAllMetersCSV}>
+                <Download className="w-4 h-4" />
+                Download All Meters
+              </Button>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -938,7 +849,18 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                           >
                             <div className="flex items-center justify-between">
                               <span className="font-mono text-sm font-semibold">{meter.meter_number}</span>
-                              <span className="font-semibold">{meter.totalKwh.toFixed(2)} kWh</span>
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold">{meter.totalKwh.toFixed(2)} kWh</span>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => downloadMeterCSV(meter)}
+                                  className="h-7 w-7 p-0"
+                                  title={`Download ${meter.readingsCount} readings`}
+                                >
+                                  <FileDown className="h-4 w-4" />
+                                </Button>
+                              </div>
                             </div>
                             {((meter.columnTotals && Object.keys(meter.columnTotals).length > 0) || 
                               (meter.columnMaxValues && Object.keys(meter.columnMaxValues).length > 0)) && (
@@ -974,7 +896,18 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                           >
                             <div className="flex items-center justify-between">
                               <span className="font-mono text-sm font-semibold">{meter.meter_number}</span>
-                              <span className="font-semibold text-green-700">{meter.totalKwh.toFixed(2)} kWh</span>
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-green-700">{meter.totalKwh.toFixed(2)} kWh</span>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => downloadMeterCSV(meter)}
+                                  className="h-7 w-7 p-0"
+                                  title={`Download ${meter.readingsCount} readings`}
+                                >
+                                  <FileDown className="h-4 w-4" />
+                                </Button>
+                              </div>
                             </div>
                             {((meter.columnTotals && Object.keys(meter.columnTotals).length > 0) || 
                               (meter.columnMaxValues && Object.keys(meter.columnMaxValues).length > 0)) && (
@@ -1010,7 +943,18 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                           >
                             <div className="flex items-center justify-between">
                               <span className="font-mono text-sm font-semibold">{meter.meter_number}</span>
-                              <span className="font-semibold text-blue-700">{meter.totalKwh.toFixed(2)} kWh</span>
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-blue-700">{meter.totalKwh.toFixed(2)} kWh</span>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => downloadMeterCSV(meter)}
+                                  className="h-7 w-7 p-0"
+                                  title={`Download ${meter.readingsCount} readings`}
+                                >
+                                  <FileDown className="h-4 w-4" />
+                                </Button>
+                              </div>
                             </div>
                             {((meter.columnTotals && Object.keys(meter.columnTotals).length > 0) || 
                               (meter.columnMaxValues && Object.keys(meter.columnMaxValues).length > 0)) && (
@@ -1061,11 +1005,20 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                             >
                               <div className="flex items-center justify-between">
                                 <span className="font-mono text-sm font-semibold">{meter.meter_number}</span>
-                                <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-2">
                                   <span className="font-semibold">{meter.totalKwh.toFixed(2)} kWh</span>
                                   <span className="text-xs text-muted-foreground bg-background px-2 py-1 rounded border border-border">
                                     {percentage.toFixed(1)}%
                                   </span>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => downloadMeterCSV(meter)}
+                                    className="h-7 w-7 p-0"
+                                    title={`Download ${meter.readingsCount} readings`}
+                                  >
+                                    <FileDown className="h-4 w-4" />
+                                  </Button>
                                 </div>
                               </div>
                               {((meter.columnTotals && Object.keys(meter.columnTotals).length > 0) || 
