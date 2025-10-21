@@ -139,13 +139,21 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
   }, [separator]);
 
   const loadMeters = async () => {
-    const { data } = await supabase
+    console.log('Loading meters for site:', siteId);
+    const { data, error } = await supabase
       .from("meters")
       .select("id, meter_number, serial_number, name")
       .eq("site_id", siteId)
       .order("meter_number");
     
+    if (error) {
+      console.error('Error loading meters:', error);
+      toast.error('Failed to load meters');
+      return [];
+    }
+    
     if (data) {
+      console.log(`Loaded ${data.length} meters:`, data.slice(0, 3));
       setMeters(data);
       return data;
     }
@@ -284,6 +292,14 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
     const selectedFiles = event.target.files;
     if (!selectedFiles) return;
 
+    // Ensure meters are loaded
+    if (meters.length === 0) {
+      console.warn('Meters not loaded yet, loading now...');
+      await loadMeters();
+    }
+
+    console.log(`Processing ${selectedFiles.length} files with ${meters.length} meters available`);
+
     const newFiles: FileItem[] = [];
     // Only check duplicates against valid files (exclude error status and missing files)
     const existingHashes = new Set(
@@ -296,6 +312,8 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
       const fileName = file.name.replace(/\.csv$/i, "");
       const numberMatch = fileName.match(/\d+/);
       const fileNumber = numberMatch ? numberMatch[0] : null;
+
+      console.log(`Matching file: ${file.name}, extracted number: ${fileNumber}`);
 
       const matchedMeter = meters.find((m) => {
         const serial = m.serial_number?.toLowerCase() || "";
@@ -314,6 +332,12 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
               meterNum === fileNumber))
         );
       });
+
+      if (matchedMeter) {
+        console.log(`✓ Matched ${file.name} to meter ${matchedMeter.meter_number}`);
+      } else {
+        console.warn(`✗ No match found for ${file.name}`);
+      }
 
       // Generate content hash
       const contentHash = await generateFileHash(file);
