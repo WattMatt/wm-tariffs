@@ -115,6 +115,29 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
     }
   }, [activeTab, meters.length]);
 
+  // Regenerate previews when separator changes
+  useEffect(() => {
+    const regeneratePreviews = async () => {
+      const pendingFiles = files.filter(f => f.status === "pending" && f.file);
+      
+      if (pendingFiles.length === 0) return;
+      
+      const updatedFiles = await Promise.all(
+        files.map(async (fileItem) => {
+          if (fileItem.status === "pending" && fileItem.file) {
+            const preview = await parseCsvPreview(fileItem.file, separator);
+            return { ...fileItem, preview };
+          }
+          return fileItem;
+        })
+      );
+      
+      setFiles(updatedFiles);
+    };
+    
+    regeneratePreviews();
+  }, [separator]);
+
   const loadMeters = async () => {
     const { data } = await supabase
       .from("meters")
