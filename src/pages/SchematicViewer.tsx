@@ -166,13 +166,24 @@ export default function SchematicViewer() {
 
     setSchematic(data);
 
-    // For PDFs, just use the PDF URL directly
+    // For PDFs, check if we have a converted image first
     if (data.file_type === "application/pdf") {
-      const { data: pdfUrlData } = supabase.storage
-        .from("schematics")
-        .getPublicUrl(data.file_path);
-      
-      setImageUrl(pdfUrlData.publicUrl);
+      if (data.converted_image_path) {
+        // Use the converted PNG image
+        const { data: imageUrlData } = supabase.storage
+          .from("schematics")
+          .getPublicUrl(data.converted_image_path);
+        
+        setImageUrl(imageUrlData.publicUrl);
+        setConvertedImageUrl(imageUrlData.publicUrl);
+      } else {
+        // Fall back to PDF URL for viewing
+        const { data: pdfUrlData } = supabase.storage
+          .from("schematics")
+          .getPublicUrl(data.file_path);
+        
+        setImageUrl(pdfUrlData.publicUrl);
+      }
     } else {
       // Regular image file
       const { data: urlData } = supabase.storage
@@ -463,7 +474,7 @@ export default function SchematicViewer() {
         const { data, error } = await supabase.functions.invoke('extract-schematic-meters', {
           body: { 
             imageUrl: convertedImageUrl || imageUrl,
-            filePath: null,
+            filePath: schematic?.file_path || null,
             mode: 'extract-region',
             region: currentDrawRect
           }

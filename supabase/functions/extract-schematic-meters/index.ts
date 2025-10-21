@@ -13,11 +13,11 @@ serve(async (req) => {
 
   try {
     const requestBody = await req.json();
-    const { imageUrl, filePath, mode, rectangleId, rectangleBounds, region } = requestBody;
+    const { imageUrl, mode, rectangleId, rectangleBounds, region } = requestBody;
     
-    if (!imageUrl && !filePath) {
+    if (!imageUrl) {
       return new Response(
-        JSON.stringify({ error: 'Image URL or file path is required' }),
+        JSON.stringify({ error: 'Image URL is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -27,43 +27,7 @@ serve(async (req) => {
       throw new Error('LOVABLE_API_KEY is not configured');
     }
 
-    // Check if the file is a PDF and needs to use converted image
-    let processedImageUrl = imageUrl;
-    
-    if (filePath && filePath.toLowerCase().endsWith('.pdf')) {
-      console.log('PDF detected, checking for converted image...');
-      
-      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-      const supabase = createClient(supabaseUrl, supabaseKey);
-      
-      // Check if there's a converted PNG image
-      const convertedImagePath = filePath.replace('.pdf', '_converted.png');
-      
-      // Try to check if the converted image exists
-      const { data: fileData, error: checkError } = await supabase
-        .storage
-        .from('schematics')
-        .list('', {
-          search: convertedImagePath
-        });
-      
-      if (fileData && fileData.length > 0) {
-        // Use the converted PNG image
-        const { data: urlData } = supabase
-          .storage
-          .from('schematics')
-          .getPublicUrl(convertedImagePath);
-        
-        processedImageUrl = urlData.publicUrl;
-        console.log('Using converted PNG image:', processedImageUrl);
-      } else {
-        console.error('No converted image found for PDF. Please convert the PDF first using the Convert PDF to Image button.');
-        throw new Error('PDF must be converted to PNG first. No converted image found.');
-      }
-    }
-
-    console.log(`Calling Lovable AI in ${mode || 'full'} mode...`);
+    console.log(`Calling Lovable AI in ${mode || 'full'} mode with image URL:`, imageUrl);
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 90000); // 90 second timeout
@@ -269,7 +233,7 @@ Example: [{"meter_number":"DB-01A","name":"VACANT","area":"187m²","rating":"150
               {
                 type: 'image_url',
                 image_url: {
-                  url: processedImageUrl
+                  url: imageUrl
                 }
               }
             ]
