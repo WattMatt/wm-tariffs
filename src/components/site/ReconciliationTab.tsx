@@ -105,6 +105,9 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
         return;
       }
 
+      // Debug: Log actual number of readings fetched
+      console.log(`Preview: Fetched ${readings.length} readings for bulk meter ${bulkMeter.meter_number}`);
+
       // Extract available columns from column_mapping configuration
       const availableColumns = new Set<string>();
       if (columnMapping && columnMapping.renamedHeaders) {
@@ -265,7 +268,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
             });
             
             // Debug logging
-            console.log(`Meter ${meter.meter_number} (${meter.meter_type}):`, {
+            console.log(`Reconciliation: Meter ${meter.meter_number} (${meter.meter_type}):`, {
               originalReadings: readings?.length || 0,
               uniqueReadings: uniqueReadings.length,
               duplicatesRemoved: (readings?.length || 0) - uniqueReadings.length,
@@ -275,6 +278,11 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
               firstTimestamp: uniqueReadings[0].reading_timestamp,
               lastTimestamp: uniqueReadings[uniqueReadings.length - 1].reading_timestamp
             });
+            
+            // Alert if we hit the query limit
+            if (readings && readings.length >= 100000) {
+              console.warn(`WARNING: Meter ${meter.meter_number} may have more than 100k readings - increase limit!`);
+            }
           } else {
             console.log(`Meter ${meter.meter_number}: No readings in date range`);
           }
