@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, Gauge, Upload, Pencil, Trash2, Database, Eye } from "lucide-react";
+import { Plus, Gauge, Upload, Pencil, Trash2, Database, Eye, FileCheck } from "lucide-react";
 import NegativeReadingsDetector from "./NegativeReadingsDetector";
 import { toast } from "sonner";
 import CsvImportDialog from "./CsvImportDialog";
@@ -486,18 +486,32 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                           <Upload className="w-4 h-4" />
                         </Button>
                         {meter.has_readings && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setViewReadingsMeterId(meter.id);
-                              setViewReadingsMeterNumber(meter.meter_number);
-                              setIsReadingsViewOpen(true);
-                            }}
-                            title="View uploaded data"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </Button>
+                          <>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setViewReadingsMeterId(meter.id);
+                                setViewReadingsMeterNumber(meter.meter_number);
+                                setIsReadingsViewOpen(true);
+                              }}
+                              title="View uploaded data"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setViewReadingsMeterId(meter.id);
+                                setViewReadingsMeterNumber(meter.meter_number);
+                                setIsReadingsViewOpen(true);
+                              }}
+                              title="View parsed data"
+                            >
+                              <FileCheck className="w-4 h-4" />
+                            </Button>
+                          </>
                         )}
                       </div>
                     </TableCell>
