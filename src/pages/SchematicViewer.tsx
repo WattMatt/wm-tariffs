@@ -85,7 +85,7 @@ export default function SchematicViewer() {
   const [extractedMeters, setExtractedMeters] = useState<ExtractedMeterData[]>([]);
   const [selectedMeterIndex, setSelectedMeterIndex] = useState<number | null>(null);
   const [convertedImageUrl, setConvertedImageUrl] = useState<string | null>(null);
-  const [zoom, setZoom] = useState(0.6);
+  const [zoom, setZoom] = useState(0.3);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
@@ -522,7 +522,7 @@ export default function SchematicViewer() {
   };
 
   const handleResetView = () => {
-    setZoom(0.6);
+    setZoom(0.3);
     setPan({ x: 0, y: 0 });
   };
 
