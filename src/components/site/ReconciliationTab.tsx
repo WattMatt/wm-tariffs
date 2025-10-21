@@ -443,7 +443,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                   <Label className="text-sm font-semibold">First Actual Reading Found</Label>
                   <div className="p-3 rounded-lg bg-muted/50 space-y-1">
                     <div className="text-sm font-mono">
-                      {format(new Date(previewData.firstReading.reading_timestamp), "PPpp")}
+                      {previewData.firstReading.reading_timestamp.replace('T', ' ').replace('Z', '').substring(0, 19)}
                     </div>
                     <div className="text-xs text-muted-foreground">
                       kWh: {previewData.firstReading.kwh_value}
@@ -455,7 +455,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                   <Label className="text-sm font-semibold">Last Actual Reading Found</Label>
                   <div className="p-3 rounded-lg bg-muted/50 space-y-1">
                     <div className="text-sm font-mono">
-                      {format(new Date(previewData.lastReading.reading_timestamp), "PPpp")}
+                      {previewData.lastReading.reading_timestamp.replace('T', ' ').replace('Z', '').substring(0, 19)}
                     </div>
                     <div className="text-xs text-muted-foreground">
                       kWh: {previewData.lastReading.kwh_value}
@@ -519,7 +519,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                       return (
                         <TableRow key={idx}>
                           <TableCell className="font-mono text-xs">
-                            {format(new Date(reading.reading_timestamp), "MMM dd, HH:mm")}
+                            {reading.reading_timestamp.replace('T', ' ').replace('Z', '').substring(0, 16).replace(' ', ', ').replace('-', ' ').substring(5)}
                           </TableCell>
                           <TableCell className="font-mono">{reading.kwh_value}</TableCell>
                           {Array.from(selectedColumns).map(col => (
