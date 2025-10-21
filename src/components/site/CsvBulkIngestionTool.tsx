@@ -1229,7 +1229,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
           </TabsList>
 
           <TabsContent value="upload" className="flex-1 overflow-y-auto space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-4 border-b">
+            <div className="pb-4 border-b">
               <div>
                 <Label>Select CSV Files</Label>
                 <input
@@ -1240,20 +1240,6 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                   disabled={isProcessing}
                   className="mt-1 block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 disabled:opacity-50"
                 />
-              </div>
-              <div>
-                <Label>Column Separator (for preview)</Label>
-                <Select value={separator} onValueChange={setSeparator}>
-                  <SelectTrigger className="bg-background mt-1">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="tab">Tab</SelectItem>
-                    <SelectItem value="comma">Comma (,)</SelectItem>
-                    <SelectItem value="semicolon">Semicolon (;)</SelectItem>
-                    <SelectItem value="space">Space</SelectItem>
-                  </SelectContent>
-                </Select>
               </div>
             </div>
 
