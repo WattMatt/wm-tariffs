@@ -1505,29 +1505,110 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                 {previewData && (
                   <div className="space-y-3 mt-4">
                     <div className="text-sm font-semibold text-foreground">Column Interpretation</div>
-                    <div className="p-4 border rounded-md bg-muted/20">
-                      <div className="grid grid-cols-1 gap-2">
-                        {previewData.headers.map((header, idx) => {
-                          const splitConfig = columnMapping.splitColumns?.[idx];
-                          if (splitConfig) {
-                            return splitConfig.parts.map((part, partIdx) => (
-                              <div key={`${idx}_${partIdx}`} className="flex items-center gap-2 text-sm">
-                                <Badge variant="outline" className="font-mono text-xs">
+                    <div className="p-4 border rounded-md bg-muted/20 space-y-2">
+                      {previewData.headers.map((header, idx) => {
+                        const splitConfig = columnMapping.splitColumns?.[idx];
+                        if (splitConfig) {
+                          return splitConfig.parts.map((part, partIdx) => {
+                            const currentAssignment = 
+                              part.columnId === columnMapping.dateColumn ? 'date' :
+                              part.columnId === columnMapping.timeColumn ? 'time' :
+                              part.columnId === columnMapping.valueColumn ? 'value' :
+                              part.columnId === columnMapping.kvaColumn ? 'kva' : 'none';
+                            
+                            return (
+                              <div key={`${idx}_${partIdx}`} className="flex items-center gap-3">
+                                <Badge variant="outline" className="font-mono text-xs min-w-[120px]">
                                   {part.name}
                                 </Badge>
+                                <div className="flex-1">
+                                  <Select
+                                    value={currentAssignment}
+                                    onValueChange={(value: 'date' | 'time' | 'value' | 'kva' | 'none') => {
+                                      const newMapping = {...columnMapping};
+                                      
+                                      // Clear previous assignment
+                                      if (part.columnId === newMapping.dateColumn) newMapping.dateColumn = "-1";
+                                      if (part.columnId === newMapping.timeColumn) newMapping.timeColumn = "-1";
+                                      if (part.columnId === newMapping.valueColumn) newMapping.valueColumn = "-1";
+                                      if (part.columnId === newMapping.kvaColumn) newMapping.kvaColumn = "-1";
+                                      
+                                      // Apply new assignment
+                                      if (value === 'date') newMapping.dateColumn = part.columnId;
+                                      if (value === 'time') newMapping.timeColumn = part.columnId;
+                                      if (value === 'value') newMapping.valueColumn = part.columnId;
+                                      if (value === 'kva') newMapping.kvaColumn = part.columnId;
+                                      
+                                      setColumnMapping(newMapping);
+                                      toast.success("Column assignment updated");
+                                    }}
+                                  >
+                                    <SelectTrigger className="h-8 text-xs bg-background">
+                                      <SelectValue placeholder="Assign as..." />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-background z-50">
+                                      <SelectItem value="date">DateTime Column</SelectItem>
+                                      <SelectItem value="time">Time Column</SelectItem>
+                                      <SelectItem value="value">Primary Value (kWh)</SelectItem>
+                                      <SelectItem value="kva">Secondary Value (kVA)</SelectItem>
+                                      <SelectItem value="none">Keep as Extra Data</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
                               </div>
-                            ));
-                          }
-                          const displayName = columnMapping.renamedHeaders?.[idx] || header || `Column ${idx + 1}`;
-                          return (
-                            <div key={idx} className="flex items-center gap-2 text-sm">
-                              <Badge variant="outline" className="font-mono text-xs">
-                                {displayName}
-                              </Badge>
+                            );
+                          });
+                        }
+                        
+                        const displayName = columnMapping.renamedHeaders?.[idx] || header || `Column ${idx + 1}`;
+                        const currentAssignment = 
+                          idx.toString() === columnMapping.dateColumn ? 'date' :
+                          idx.toString() === columnMapping.timeColumn ? 'time' :
+                          idx.toString() === columnMapping.valueColumn ? 'value' :
+                          idx.toString() === columnMapping.kvaColumn ? 'kva' : 'none';
+                        
+                        return (
+                          <div key={idx} className="flex items-center gap-3">
+                            <Badge variant="outline" className="font-mono text-xs min-w-[120px]">
+                              {displayName}
+                            </Badge>
+                            <div className="flex-1">
+                              <Select
+                                value={currentAssignment}
+                                onValueChange={(value: 'date' | 'time' | 'value' | 'kva' | 'none') => {
+                                  const newMapping = {...columnMapping};
+                                  
+                                  // Clear previous assignment
+                                  if (idx.toString() === newMapping.dateColumn) newMapping.dateColumn = "-1";
+                                  if (idx.toString() === newMapping.timeColumn) newMapping.timeColumn = "-1";
+                                  if (idx.toString() === newMapping.valueColumn) newMapping.valueColumn = "-1";
+                                  if (idx.toString() === newMapping.kvaColumn) newMapping.kvaColumn = "-1";
+                                  
+                                  // Apply new assignment
+                                  if (value === 'date') newMapping.dateColumn = idx.toString();
+                                  if (value === 'time') newMapping.timeColumn = idx.toString();
+                                  if (value === 'value') newMapping.valueColumn = idx.toString();
+                                  if (value === 'kva') newMapping.kvaColumn = idx.toString();
+                                  
+                                  setColumnMapping(newMapping);
+                                  toast.success("Column assignment updated");
+                                }}
+                              >
+                                <SelectTrigger className="h-8 text-xs bg-background">
+                                  <SelectValue placeholder="Assign as..." />
+                                </SelectTrigger>
+                                <SelectContent className="bg-background z-50">
+                                  <SelectItem value="date">DateTime Column</SelectItem>
+                                  <SelectItem value="time">Time Column</SelectItem>
+                                  <SelectItem value="value">Primary Value (kWh)</SelectItem>
+                                  <SelectItem value="kva">Secondary Value (kVA)</SelectItem>
+                                  <SelectItem value="none">Keep as Extra Data</SelectItem>
+                                </SelectContent>
+                              </Select>
                             </div>
-                          );
-                        })}
-                      </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
