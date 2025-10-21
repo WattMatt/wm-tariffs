@@ -83,14 +83,15 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
       const fullDateTimeFrom = getFullDateTime(dateFrom, timeFrom);
       const fullDateTimeTo = getFullDateTime(dateTo, timeTo);
 
-      // Fetch readings from database
+      // Fetch readings from database (no row limit for large date ranges)
       const { data: readings, error: readingsError } = await supabase
         .from("meter_readings")
         .select("*")
         .eq("meter_id", bulkMeter.id)
         .gte("reading_timestamp", fullDateTimeFrom.toISOString())
         .lte("reading_timestamp", fullDateTimeTo.toISOString())
-        .order("reading_timestamp", { ascending: true });
+        .order("reading_timestamp", { ascending: true })
+        .limit(100000); // Support up to 100k readings (e.g., 2+ years of 30-min intervals)
 
       if (readingsError) {
         toast.error("Failed to fetch readings: " + readingsError.message);
@@ -209,14 +210,15 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
       // Fetch readings for each meter within date range (deduplicated by timestamp)
       const meterData = await Promise.all(
         meters.map(async (meter) => {
-          // Get all readings with metadata
+          // Get all readings with metadata (no row limit)
           const { data: readings, error: readingsError } = await supabase
             .from("meter_readings")
             .select("kwh_value, reading_timestamp, metadata")
             .eq("meter_id", meter.id)
             .gte("reading_timestamp", fullDateTimeFrom.toISOString())
             .lte("reading_timestamp", fullDateTimeTo.toISOString())
-            .order("reading_timestamp", { ascending: true });
+            .order("reading_timestamp", { ascending: true })
+            .limit(100000); // Support large date ranges
 
           if (readingsError) {
             console.error(`Error fetching readings for meter ${meter.meter_number}:`, readingsError);
