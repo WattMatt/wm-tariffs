@@ -514,8 +514,6 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="sticky top-0 bg-background">Timestamp</TableHead>
-                      <TableHead className="sticky top-0 bg-background">kWh</TableHead>
                       {Array.from(selectedColumns).map(col => (
                         <TableHead key={col} className="sticky top-0 bg-background">{col}</TableHead>
                       ))}
@@ -526,10 +524,6 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                       const importedFields = reading.metadata?.imported_fields || {};
                       return (
                         <TableRow key={idx}>
-                          <TableCell className="font-mono text-xs">
-                            {reading.reading_timestamp.replace('T', ' ').replace('Z', '').substring(0, 16).replace(' ', ', ').replace('-', ' ').substring(5)}
-                          </TableCell>
-                          <TableCell className="font-mono">{reading.kwh_value}</TableCell>
                           {Array.from(selectedColumns).map(col => (
                             <TableCell key={col} className="font-mono text-xs">
                               {importedFields[col] || '-'}
