@@ -196,42 +196,51 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
 
       console.log(`Found ${trackedFiles?.length || 0} tracked files in database`);
 
-      // Get all files from storage to verify they actually exist
+      // Get all files from storage by recursively listing everything
       const storageFiles: Array<{ path: string; meterId: string; name: string; size: number }> = [];
       
-      // List all meter subdirectories
-      const { data: meterDirs } = await supabase.storage
+      // List all objects in the site directory recursively
+      const { data: allFiles, error: listError } = await supabase.storage
         .from('meter-csvs')
-        .list(`${siteId}/`);
+        .list(siteId, {
+          limit: 1000,
+          sortBy: { column: 'created_at', order: 'desc' }
+        });
 
-      console.log(`Found ${meterDirs?.length || 0} meter directories in storage`);
+      if (listError) {
+        console.error('Error listing storage:', listError);
+      }
 
-      // For each meter directory, list the files
-      if (meterDirs) {
-        for (const dir of meterDirs) {
-          // Check if it's a directory by looking for name property (folders don't have id as null)
-          const { data: csvFiles } = await supabase.storage
+      console.log(`Found ${allFiles?.length || 0} items in storage for site ${siteId}`);
+
+      // Process all items - they are meter directories
+      if (allFiles) {
+        for (const meterDir of allFiles) {
+          // List files in each meter directory
+          const { data: meterFiles } = await supabase.storage
             .from('meter-csvs')
-            .list(`${siteId}/${dir.name}`);
+            .list(`${siteId}/${meterDir.name}`, {
+              limit: 1000,
+              sortBy: { column: 'created_at', order: 'desc' }
+            });
           
-          console.log(`Checking directory ${dir.name}: found ${csvFiles?.length || 0} items`);
-          
-          csvFiles?.forEach(f => {
-            // Files have name and typically id is null
-            console.log(`Item in ${dir.name}: ${f.name}, id: ${f.id}, metadata:`, f.metadata);
-            if (f.name && f.name.toLowerCase().endsWith('.csv')) {
-              storageFiles.push({
-                path: `${siteId}/${dir.name}/${f.name}`,
-                meterId: dir.name,
-                name: f.name,
-                size: f.metadata?.size || 0
-              });
-            }
-          });
+          if (meterFiles && meterFiles.length > 0) {
+            console.log(`Meter ${meterDir.name}: ${meterFiles.length} files`);
+            meterFiles.forEach(file => {
+              if (file.name.toLowerCase().endsWith('.csv')) {
+                storageFiles.push({
+                  path: `${siteId}/${meterDir.name}/${file.name}`,
+                  meterId: meterDir.name,
+                  name: file.name,
+                  size: file.metadata?.size || 0
+                });
+              }
+            });
+          }
         }
       }
 
-      console.log(`Found ${storageFiles.length} CSV files in storage`);
+      console.log(`Total CSV files found: ${storageFiles.length}`);
 
       // Create a map of tracked files by path
       const trackedByPath = new Map(
