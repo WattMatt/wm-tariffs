@@ -8,11 +8,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Edit, Check, X, MapPin, Pencil } from "lucide-react";
+import { ArrowLeft, Edit, Check, X, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import SchematicEditor from "@/components/schematic/SchematicEditor";
 import { MeterDataExtractor } from "@/components/schematic/MeterDataExtractor";
-import { QuickMeterDialog } from "@/components/schematic/QuickMeterDialog";
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
@@ -97,9 +96,6 @@ export default function SchematicViewer() {
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isEditingMeter, setIsEditingMeter] = useState(false);
   const [editedMeterData, setEditedMeterData] = useState<EditableMeterFields | null>(null);
-  const [isPlacingMeter, setIsPlacingMeter] = useState(false);
-  const [showQuickMeterDialog, setShowQuickMeterDialog] = useState(false);
-  const [clickedPosition, setClickedPosition] = useState<{ x: number; y: number } | null>(null);
   const [isConverting, setIsConverting] = useState(false);
   const [detectedRectangles, setDetectedRectangles] = useState<any[]>([]);
   const [isDrawingMode, setIsDrawingMode] = useState(false);
@@ -577,28 +573,6 @@ export default function SchematicViewer() {
     setEditedMeterData(null);
   };
 
-  const handleSchematicClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!isPlacingMeter || !imageRef.current) return;
-    
-    // Don't trigger if clicking on existing markers
-    if ((e.target as HTMLElement).closest('.meter-marker')) return;
-    
-    const imageRect = imageRef.current.getBoundingClientRect();
-    const x = ((e.clientX - imageRect.left) / imageRect.width) * 100;
-    const y = ((e.clientY - imageRect.top) / imageRect.height) * 100;
-    
-    // Clamp to valid range
-    const clampedX = Math.max(0, Math.min(100, x));
-    const clampedY = Math.max(0, Math.min(100, y));
-    
-    setClickedPosition({ x: clampedX, y: clampedY });
-    setShowQuickMeterDialog(true);
-  };
-
-  const handleMeterPlaced = () => {
-    fetchMeterPositions();
-    setIsPlacingMeter(false);
-  };
 
   useEffect(() => {
     // Reset image loaded state when converted image changes
@@ -666,23 +640,12 @@ export default function SchematicViewer() {
           </div>
 
           <div className="flex items-center gap-2">
-            {!editMode && (
-              <Button
-                variant={isPlacingMeter ? "default" : "outline"}
-                size="sm"
-                onClick={() => setIsPlacingMeter(!isPlacingMeter)}
-              >
-                <MapPin className="w-4 h-4 mr-2" />
-                {isPlacingMeter ? "Cancel Placement" : "Place Meter"}
-              </Button>
-            )}
-            <Button 
+            <Button
               variant={editMode ? "default" : "outline"} 
               size="sm" 
               onClick={() => {
                 const newEditMode = !editMode;
                 setEditMode(newEditMode);
-                setIsPlacingMeter(false);
                 // Refetch positions when switching back to view mode
                 if (!newEditMode) {
                   fetchMeterPositions();
@@ -766,33 +729,22 @@ export default function SchematicViewer() {
                   </div>
                 )}
 
-                {/* Placement Mode Banner */}
-                {isPlacingMeter && (
-                  <div className="bg-primary/10 border-2 border-primary rounded-lg p-4 text-center">
-                    <MapPin className="w-6 h-6 mx-auto mb-2 text-primary" />
-                    <p className="font-semibold text-primary">Click anywhere on the schematic to place a meter</p>
-                    <p className="text-sm text-muted-foreground mt-1">You can then select an existing meter or create a new one</p>
-                  </div>
-                )}
 
                 {/* Main Schematic View */}
                 <div className={meterPositions.length > 0 ? "grid grid-cols-[1fr_400px] gap-4" : ""}>
                   {/* Schematic with markers */}
                   <div className="space-y-2">
                     {/* Help text */}
-                    {!isPlacingMeter && (
-                      <div className="text-xs text-muted-foreground text-center py-1 bg-muted/30 rounded">
-                        💡 Scroll to zoom • Click and drag to pan
-                      </div>
-                    )}
+                    <div className="text-xs text-muted-foreground text-center py-1 bg-muted/30 rounded">
+                      💡 Scroll to zoom • Click and drag to pan
+                    </div>
                      <div 
                       ref={containerRef}
                       className="relative overflow-hidden bg-muted/20 rounded-lg border-2 border-border/50"
                       style={{ 
                         minHeight: '700px',
-                        cursor: isDrawingMode ? 'crosshair' : isPlacingMeter ? 'crosshair' : isDragging ? 'grabbing' : 'grab'
+                        cursor: isDragging ? 'grabbing' : 'grab'
                       }}
-                      onClick={handleSchematicClick}
                       onWheel={handleWheel}
                       onMouseDown={handleMouseDown}
                       onMouseMove={handleMouseMove}
@@ -1316,20 +1268,6 @@ export default function SchematicViewer() {
           </Card>
         )}
 
-        {/* Quick Meter Placement Dialog */}
-        {clickedPosition && (
-          <QuickMeterDialog
-            open={showQuickMeterDialog}
-            onClose={() => {
-              setShowQuickMeterDialog(false);
-              setClickedPosition(null);
-            }}
-            siteId={schematic.site_id}
-            schematicId={id!}
-            position={clickedPosition}
-            onMeterPlaced={handleMeterPlaced}
-          />
-        )}
       </div>
     </DashboardLayout>
   );
