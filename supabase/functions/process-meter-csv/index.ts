@@ -115,24 +115,36 @@ Deno.serve(async (req) => {
         
         // Use column mapping if provided
         if (columnMapping) {
-          // Get the column data, applying splits if configured
-          const getColumnValue = (colIdx: number): string | null => {
-            let value = columns[colIdx]?.trim();
-            if (!value) return null;
-            
-            // Apply column split if configured
-            const splitConfig = columnMapping.splitColumns?.[colIdx];
-            if (splitConfig) {
-              const sepChar = 
-                splitConfig.separator === "space" ? " " :
-                splitConfig.separator === "comma" ? "," :
-                splitConfig.separator === "dash" ? "-" :
-                splitConfig.separator === "slash" ? "/" : ":";
-              const parts = value.split(sepChar);
-              value = parts[splitConfig.keepPart] || value;
+          // Helper function to get column value, handling splits
+          const getColumnValue = (columnId: string | number): string | null => {
+            if (typeof columnId === 'number') {
+              // Regular column
+              return columns[columnId]?.trim() || null;
             }
             
-            return value;
+            // Split column - format: "colIdx_split_partIdx"
+            const parts = columnId.toString().split('_');
+            if (parts[0] && parts[1] === 'split' && parts[2]) {
+              const colIdx = parseInt(parts[0]);
+              const partIdx = parseInt(parts[2]);
+              const value = columns[colIdx]?.trim();
+              
+              if (!value) return null;
+              
+              // Find the split config for this column
+              const splitConfig = columnMapping.splitColumns?.[colIdx];
+              if (splitConfig) {
+                const sepChar = 
+                  splitConfig.separator === "space" ? " " :
+                  splitConfig.separator === "comma" ? "," :
+                  splitConfig.separator === "dash" ? "-" :
+                  splitConfig.separator === "slash" ? "/" : ":";
+                const splitParts = value.split(sepChar);
+                return splitParts[partIdx] || null;
+              }
+            }
+            
+            return null;
           };
           
           dateStr = getColumnValue(columnMapping.dateColumn);
@@ -142,19 +154,42 @@ Deno.serve(async (req) => {
           
           // Capture extra columns (with renamed headers if provided)
           for (let colIdx = 0; colIdx < columns.length; colIdx++) {
-            if (colIdx === columnMapping.dateColumn || 
-                colIdx === columnMapping.timeColumn || 
-                colIdx === columnMapping.valueColumn || 
-                colIdx === columnMapping.kvaColumn) {
-              continue;
-            }
+            const splitConfig = columnMapping.splitColumns?.[colIdx];
             
-            const colValue = getColumnValue(colIdx);
-            if (colValue && colValue !== '' && colValue !== '-') {
-              // Use renamed header if available, otherwise use original header
-              const colName = columnMapping.renamedHeaders?.[colIdx] || headerColumns[colIdx] || `Column_${colIdx + 1}`;
-              const numValue = parseFloat(colValue.replace(',', '.'));
-              extraFields[colName] = isNaN(numValue) ? colValue : numValue;
+            if (splitConfig) {
+              // Handle split columns - each part might be used elsewhere or be metadata
+              splitConfig.parts.forEach((part: any, partIdx: number) => {
+                const isUsedAsCore = 
+                  part.columnId === columnMapping.dateColumn ||
+                  part.columnId === columnMapping.timeColumn ||
+                  part.columnId === columnMapping.valueColumn ||
+                  part.columnId === columnMapping.kvaColumn;
+                
+                if (!isUsedAsCore) {
+                  const colValue = getColumnValue(part.columnId);
+                  if (colValue && colValue !== '' && colValue !== '-') {
+                    const colName = part.name || `Column_${colIdx}_Part_${partIdx}`;
+                    const numValue = parseFloat(colValue.replace(',', '.'));
+                    extraFields[colName] = isNaN(numValue) ? colValue : numValue;
+                  }
+                }
+              });
+            } else {
+              // Regular column - skip if used as a core field
+              if (colIdx === columnMapping.dateColumn || 
+                  colIdx === columnMapping.timeColumn || 
+                  colIdx === columnMapping.valueColumn || 
+                  colIdx === columnMapping.kvaColumn) {
+                continue;
+              }
+              
+              const colValue = columns[colIdx]?.trim();
+              if (colValue && colValue !== '' && colValue !== '-') {
+                // Use renamed header if available, otherwise use original header
+                const colName = columnMapping.renamedHeaders?.[colIdx] || headerColumns[colIdx] || `Column_${colIdx + 1}`;
+                const numValue = parseFloat(colValue.replace(',', '.'));
+                extraFields[colName] = isNaN(numValue) ? colValue : numValue;
+              }
             }
           }
         } else if (columns.length === 2) {

@@ -70,14 +70,17 @@ interface CsvPreview {
 }
 
 interface ColumnMapping {
-  dateColumn: number;
-  timeColumn: number;
-  valueColumn: number;
-  kvaColumn: number;
+  dateColumn: number | string; // string for split columns like "0_split_1"
+  timeColumn: number | string;
+  valueColumn: number | string;
+  kvaColumn: number | string;
   dateFormat: string;
   timeFormat: string;
-  renamedHeaders?: Record<number, string>;
-  splitColumns?: Record<number, { separator: string; keepPart: number }>;
+  renamedHeaders?: Record<string, string>; // key can be "0_split_1" for split columns
+  splitColumns?: Record<number, { 
+    separator: string; 
+    parts: Array<{ name: string; columnId: string }> 
+  }>;
 }
 
 interface FileItem {
@@ -110,17 +113,49 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
   const [previewFile, setPreviewFile] = useState<FileItem | null>(null);
   const [previewData, setPreviewData] = useState<{ rows: string[][], headers: string[] } | null>(null);
   const [columnMapping, setColumnMapping] = useState<ColumnMapping>({
-    dateColumn: 0,
-    timeColumn: 1,
-    valueColumn: 2,
-    kvaColumn: -1,
+    dateColumn: "0",
+    timeColumn: "1",
+    valueColumn: "2",
+    kvaColumn: "-1",
     dateFormat: "auto",
     timeFormat: "auto",
     renamedHeaders: {},
     splitColumns: {}
   });
-  const [editingHeader, setEditingHeader] = useState<{index: number, value: string} | null>(null);
+  const [editingHeader, setEditingHeader] = useState<{id: string, value: string} | null>(null);
   const [splitPreview, setSplitPreview] = useState<{index: number, parts: string[]} | null>(null);
+  
+  // Get all available columns including split parts
+  const getAvailableColumns = () => {
+    if (!previewData) return [];
+    
+    const columns: Array<{ id: string; name: string; isSplit: boolean }> = [];
+    
+    previewData.headers.forEach((header, idx) => {
+      const splitConfig = columnMapping.splitColumns?.[idx];
+      
+      if (splitConfig) {
+        // Add each split part as a separate column
+        splitConfig.parts.forEach((part) => {
+          columns.push({
+            id: part.columnId,
+            name: part.name || `${header} (Part ${part.columnId.split('_')[2]})`,
+            isSplit: true
+          });
+        });
+      } else {
+        // Regular column
+        const displayName = columnMapping.renamedHeaders?.[idx] || header || `Col ${idx + 1}`;
+        columns.push({
+          id: idx.toString(),
+          name: displayName,
+          isSplit: false
+        });
+      }
+    });
+    
+    return columns;
+  };
   const [activeTab, setActiveTab] = useState<string>("upload");
   const [previewingFile, setPreviewingFile] = useState<FileItem | null>(null);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
@@ -791,12 +826,14 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
         );
         
         setColumnMapping({
-          dateColumn: dateColIdx >= 0 ? dateColIdx : 0,
-          timeColumn: timeColIdx >= 0 ? timeColIdx : (dateColIdx >= 0 ? -1 : 1),
-          valueColumn: valueColIdx >= 0 ? valueColIdx : 2,
-          kvaColumn: kvaColIdx >= 0 ? kvaColIdx : -1,
+          dateColumn: dateColIdx >= 0 ? dateColIdx.toString() : "0",
+          timeColumn: timeColIdx >= 0 ? timeColIdx.toString() : (dateColIdx >= 0 ? "-1" : "1"),
+          valueColumn: valueColIdx >= 0 ? valueColIdx.toString() : "2",
+          kvaColumn: kvaColIdx >= 0 ? kvaColIdx.toString() : "-1",
           dateFormat: columnMapping.dateFormat,
-          timeFormat: columnMapping.timeFormat
+          timeFormat: columnMapping.timeFormat,
+          renamedHeaders: {},
+          splitColumns: {}
         });
       }
     } catch (err: any) {
@@ -1543,6 +1580,79 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                             const displayName = columnMapping.renamedHeaders?.[idx] || header || `Col ${idx + 1}`;
                             const isSplit = columnMapping.splitColumns?.[idx];
                             
+                            if (isSplit) {
+                              // Render each split part as a separate header
+                              return isSplit.parts.map((part, partIdx) => (
+                                <th key={`${idx}_${partIdx}`} className="px-3 py-2 text-left font-medium whitespace-nowrap border-r bg-muted/20">
+                                  <Popover>
+                                    <PopoverTrigger asChild>
+                                      <button className="w-full text-left space-y-1 hover:bg-muted/50 p-1 rounded cursor-pointer transition-colors">
+                                        <div className="font-semibold flex items-center gap-1">
+                                          {part.name}
+                                          <span className="text-[10px] text-muted-foreground">✂️</span>
+                                        </div>
+                                        <Badge 
+                                          variant={
+                                            part.columnId === columnMapping.dateColumn ? "default" :
+                                            part.columnId === columnMapping.timeColumn ? "secondary" :
+                                            part.columnId === columnMapping.valueColumn ? "default" :
+                                            part.columnId === columnMapping.kvaColumn ? "secondary" :
+                                            "outline"
+                                          } 
+                                          className="text-[10px] h-4"
+                                        >
+                                          {part.columnId === columnMapping.dateColumn ? '📅 Date' :
+                                           part.columnId === columnMapping.timeColumn ? '⏰ Time' :
+                                           part.columnId === columnMapping.valueColumn ? '⚡ kWh' :
+                                           part.columnId === columnMapping.kvaColumn ? '🔌 kVA' :
+                                           '📋 Metadata'}
+                                        </Badge>
+                                      </button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-64 p-3 bg-background border shadow-lg z-50" align="start">
+                                      <div className="space-y-3">
+                                        <div className="text-xs font-medium mb-2">Assign split part:</div>
+                                        <div className="space-y-1">
+                                          <Button
+                                            size="sm"
+                                            variant={part.columnId === columnMapping.dateColumn ? "default" : "ghost"}
+                                            className="w-full justify-start text-xs h-7"
+                                            onClick={() => setColumnMapping({...columnMapping, dateColumn: part.columnId})}
+                                          >
+                                            📅 Date
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant={part.columnId === columnMapping.timeColumn ? "secondary" : "ghost"}
+                                            className="w-full justify-start text-xs h-7"
+                                            onClick={() => setColumnMapping({...columnMapping, timeColumn: part.columnId})}
+                                          >
+                                            ⏰ Time
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant={part.columnId === columnMapping.valueColumn ? "default" : "ghost"}
+                                            className="w-full justify-start text-xs h-7"
+                                            onClick={() => setColumnMapping({...columnMapping, valueColumn: part.columnId})}
+                                          >
+                                            ⚡ kWh
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant={part.columnId === columnMapping.kvaColumn ? "secondary" : "ghost"}
+                                            className="w-full justify-start text-xs h-7"
+                                            onClick={() => setColumnMapping({...columnMapping, kvaColumn: part.columnId})}
+                                          >
+                                            🔌 kVA
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    </PopoverContent>
+                                  </Popover>
+                                </th>
+                              ));
+                            }
+                            
                             return (
                               <th key={idx} className="px-3 py-2 text-left font-medium whitespace-nowrap border-r">
                                 <Popover>
@@ -1552,20 +1662,20 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                         {displayName}
                                         {isSplit && <span className="text-[10px] text-muted-foreground">✂️</span>}
                                       </div>
-                                      <Badge 
+                                       <Badge 
                                         variant={
-                                          idx === columnMapping.dateColumn ? "default" :
-                                          idx === columnMapping.timeColumn ? "secondary" :
-                                          idx === columnMapping.valueColumn ? "default" :
-                                          idx === columnMapping.kvaColumn ? "secondary" :
+                                          idx.toString() === columnMapping.dateColumn ? "default" :
+                                          idx.toString() === columnMapping.timeColumn ? "secondary" :
+                                          idx.toString() === columnMapping.valueColumn ? "default" :
+                                          idx.toString() === columnMapping.kvaColumn ? "secondary" :
                                           "outline"
                                         } 
                                         className="text-[10px] h-4"
                                       >
-                                        {idx === columnMapping.dateColumn ? '📅 Date' :
-                                         idx === columnMapping.timeColumn ? '⏰ Time' :
-                                         idx === columnMapping.valueColumn ? '⚡ kWh' :
-                                         idx === columnMapping.kvaColumn ? '🔌 kVA' :
+                                        {idx.toString() === columnMapping.dateColumn ? '📅 Date' :
+                                         idx.toString() === columnMapping.timeColumn ? '⏰ Time' :
+                                         idx.toString() === columnMapping.valueColumn ? '⚡ kWh' :
+                                         idx.toString() === columnMapping.kvaColumn ? '🔌 kVA' :
                                          '📋 Metadata'}
                                       </Badge>
                                     </button>
@@ -1578,33 +1688,33 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                         <div className="space-y-1">
                                           <Button
                                             size="sm"
-                                            variant={idx === columnMapping.dateColumn ? "default" : "ghost"}
+                                            variant={idx.toString() === columnMapping.dateColumn ? "default" : "ghost"}
                                             className="w-full justify-start text-xs h-7"
-                                            onClick={() => setColumnMapping({...columnMapping, dateColumn: idx})}
+                                            onClick={() => setColumnMapping({...columnMapping, dateColumn: idx.toString()})}
                                           >
                                             📅 Date
                                           </Button>
                                           <Button
                                             size="sm"
-                                            variant={idx === columnMapping.timeColumn ? "secondary" : "ghost"}
+                                            variant={idx.toString() === columnMapping.timeColumn ? "secondary" : "ghost"}
                                             className="w-full justify-start text-xs h-7"
-                                            onClick={() => setColumnMapping({...columnMapping, timeColumn: idx})}
+                                            onClick={() => setColumnMapping({...columnMapping, timeColumn: idx.toString()})}
                                           >
                                             ⏰ Time
                                           </Button>
                                           <Button
                                             size="sm"
-                                            variant={idx === columnMapping.valueColumn ? "default" : "ghost"}
+                                            variant={idx.toString() === columnMapping.valueColumn ? "default" : "ghost"}
                                             className="w-full justify-start text-xs h-7"
-                                            onClick={() => setColumnMapping({...columnMapping, valueColumn: idx})}
+                                            onClick={() => setColumnMapping({...columnMapping, valueColumn: idx.toString()})}
                                           >
                                             ⚡ kWh
                                           </Button>
                                           <Button
                                             size="sm"
-                                            variant={idx === columnMapping.kvaColumn ? "secondary" : "ghost"}
+                                            variant={idx.toString() === columnMapping.kvaColumn ? "secondary" : "ghost"}
                                             className="w-full justify-start text-xs h-7"
-                                            onClick={() => setColumnMapping({...columnMapping, kvaColumn: idx})}
+                                            onClick={() => setColumnMapping({...columnMapping, kvaColumn: idx.toString()})}
                                           >
                                             🔌 kVA
                                           </Button>
@@ -1614,10 +1724,10 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                             className="w-full justify-start text-xs h-7"
                                             onClick={() => {
                                               const newMapping = {...columnMapping};
-                                              if (idx === newMapping.dateColumn) newMapping.dateColumn = -1;
-                                              if (idx === newMapping.timeColumn) newMapping.timeColumn = -1;
-                                              if (idx === newMapping.valueColumn) newMapping.valueColumn = -1;
-                                              if (idx === newMapping.kvaColumn) newMapping.kvaColumn = -1;
+                                              if (idx.toString() === newMapping.dateColumn) newMapping.dateColumn = "-1";
+                                              if (idx.toString() === newMapping.timeColumn) newMapping.timeColumn = "-1";
+                                              if (idx.toString() === newMapping.valueColumn) newMapping.valueColumn = "-1";
+                                              if (idx.toString() === newMapping.kvaColumn) newMapping.kvaColumn = "-1";
                                               setColumnMapping(newMapping);
                                             }}
                                           >
@@ -1630,10 +1740,10 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                       <div className="border-t pt-2">
                                         <Label className="text-xs">Rename Column:</Label>
                                         <Input
-                                          value={editingHeader?.index === idx ? editingHeader.value : displayName}
-                                          onChange={(e) => setEditingHeader({index: idx, value: e.target.value})}
+                                          value={editingHeader?.id === idx.toString() ? editingHeader.value : displayName}
+                                          onChange={(e) => setEditingHeader({id: idx.toString(), value: e.target.value})}
                                           onBlur={() => {
-                                            if (editingHeader?.index === idx) {
+                                            if (editingHeader?.id === idx.toString()) {
                                               setColumnMapping({
                                                 ...columnMapping,
                                                 renamedHeaders: {
@@ -1653,7 +1763,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                       <div className="border-t pt-2">
                                         <Label className="text-xs">Split Column By:</Label>
                                         <Select
-                                          value={columnMapping.splitColumns?.[idx]?.separator || "none"}
+                                          value={columnMapping.splitColumns?.[idx] ? "split" : "none"}
                                           onValueChange={(sep) => {
                                             if (sep === "none") {
                                               const newSplits = {...columnMapping.splitColumns};
@@ -1661,10 +1771,30 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                               setColumnMapping({...columnMapping, splitColumns: newSplits});
                                               setSplitPreview(null);
                                             } else {
-                                              // Preview the split
+                                              // Preview the split with actual separator
                                               const sampleValue = previewData.rows[0]?.[idx] || "";
-                                              const parts = sampleValue.split(sep === "space" ? " " : sep === "comma" ? "," : sep === "dash" ? "-" : sep === "slash" ? "/" : ":");
+                                              const sepChar = 
+                                                sep === "space" ? " " :
+                                                sep === "comma" ? "," :
+                                                sep === "dash" ? "-" :
+                                                sep === "slash" ? "/" : ":";
+                                              const parts = sampleValue.split(sepChar);
                                               setSplitPreview({index: idx, parts});
+                                              
+                                              // Initialize split config with all parts
+                                              setColumnMapping({
+                                                ...columnMapping,
+                                                splitColumns: {
+                                                  ...columnMapping.splitColumns,
+                                                  [idx]: {
+                                                    separator: sep,
+                                                    parts: parts.map((_, partIdx) => ({
+                                                      name: `${header} Part ${partIdx + 1}`,
+                                                      columnId: `${idx}_split_${partIdx}`
+                                                    }))
+                                                  }
+                                                }
+                                              });
                                             }
                                           }}
                                         >
@@ -1681,32 +1811,32 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                           </SelectContent>
                                         </Select>
                                         
-                                        {splitPreview?.index === idx && splitPreview.parts.length > 1 && (
-                                          <div className="mt-2 p-2 bg-muted/50 rounded text-xs">
-                                            <div className="font-medium mb-1">Preview split:</div>
-                                            {splitPreview.parts.map((part, partIdx) => (
-                                              <Button
-                                                key={partIdx}
-                                                size="sm"
-                                                variant={columnMapping.splitColumns?.[idx]?.keepPart === partIdx ? "default" : "outline"}
-                                                className="mr-1 mb-1 h-6 text-xs"
-                                                onClick={() => {
-                                                  const sep = 
-                                                    splitPreview.parts[0].includes(" ") ? "space" :
-                                                    splitPreview.parts[0].includes(",") ? "comma" :
-                                                    splitPreview.parts[0].includes("-") ? "dash" :
-                                                    splitPreview.parts[0].includes("/") ? "slash" : "colon";
-                                                  setColumnMapping({
-                                                    ...columnMapping,
-                                                    splitColumns: {
-                                                      ...columnMapping.splitColumns,
-                                                      [idx]: { separator: sep, keepPart: partIdx }
+                                        {isSplit && columnMapping.splitColumns[idx] && (
+                                          <div className="mt-2 space-y-2">
+                                            <div className="text-xs font-medium">Rename split parts:</div>
+                                            {columnMapping.splitColumns[idx].parts.map((part, partIdx) => (
+                                              <div key={part.columnId} className="flex gap-1">
+                                                <Input
+                                                  value={editingHeader?.id === part.columnId ? editingHeader.value : part.name}
+                                                  onChange={(e) => setEditingHeader({id: part.columnId, value: e.target.value})}
+                                                  onBlur={() => {
+                                                    if (editingHeader?.id === part.columnId) {
+                                                      const newSplits = {...columnMapping.splitColumns};
+                                                      newSplits[idx].parts[partIdx].name = editingHeader.value;
+                                                      setColumnMapping({
+                                                        ...columnMapping,
+                                                        splitColumns: newSplits
+                                                      });
+                                                      setEditingHeader(null);
                                                     }
-                                                  });
-                                                }}
-                                              >
-                                                Part {partIdx + 1}: {part}
-                                              </Button>
+                                                  }}
+                                                  className="h-6 text-xs"
+                                                  placeholder={`Part ${partIdx + 1}`}
+                                                />
+                                                <Badge variant="outline" className="text-[10px] whitespace-nowrap">
+                                                  {splitPreview?.index === idx ? splitPreview.parts[partIdx] : `P${partIdx + 1}`}
+                                                </Badge>
+                                              </div>
                                             ))}
                                           </div>
                                         )}
@@ -1723,25 +1853,31 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                         {previewData.rows.slice(0, 10).map((row, rowIdx) => (
                           <tr key={rowIdx} className="border-b hover:bg-muted/30">
                             {previewData.headers.map((_, colIdx) => {
-                              let cellValue = row[colIdx] || '';
-                              
-                              // Apply column split if configured
                               const splitConfig = columnMapping.splitColumns?.[colIdx];
-                              if (splitConfig && cellValue) {
+                              
+                              if (splitConfig) {
+                                // Render each split part as a separate cell
+                                const cellValue = row[colIdx] || '';
                                 const sepChar = 
                                   splitConfig.separator === "space" ? " " :
                                   splitConfig.separator === "comma" ? "," :
                                   splitConfig.separator === "dash" ? "-" :
                                   splitConfig.separator === "slash" ? "/" : ":";
                                 const parts = cellValue.split(sepChar);
-                                cellValue = parts[splitConfig.keepPart] || cellValue;
+                                
+                                return splitConfig.parts.map((part, partIdx) => (
+                                  <td key={`${colIdx}_${partIdx}`} className="px-3 py-2 whitespace-nowrap border-r bg-muted/20">
+                                    {parts[partIdx] || ''}
+                                  </td>
+                                ));
+                              } else {
+                                // Regular cell
+                                return (
+                                  <td key={colIdx} className="px-3 py-2 whitespace-nowrap border-r">
+                                    {row[colIdx] || ''}
+                                  </td>
+                                );
                               }
-                              
-                              return (
-                                <td key={colIdx} className="px-3 py-2 whitespace-nowrap border-r">
-                                  {cellValue}
-                                </td>
-                              );
                             })}
                           </tr>
                         ))}
