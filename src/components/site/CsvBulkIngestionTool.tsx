@@ -103,23 +103,13 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
 
   useEffect(() => {
     if (isOpen) {
-      // Only clear files if we're opening fresh
-      if (files.length === 0) {
-        loadMeters().then(() => {
-          if (activeTab === "parse") {
-            loadSavedFiles();
-          }
-        });
-      }
-    } else {
-      // Clear files when dialog closes
       setFiles([]);
+      loadMeters();
     }
   }, [isOpen]);
 
   useEffect(() => {
     if (activeTab === "parse") {
-      console.log('Parse tab opened, loading files...');
       loadSavedFiles();
     }
   }, [activeTab]);
@@ -171,10 +161,9 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
 
   const loadSavedFiles = async () => {
     try {
-      console.log('Loading saved files for site:', siteId);
+      console.log('Loading saved files from database for site:', siteId);
       
-      // Load all tracked CSV files from database - this is the source of truth
-      const { data: trackedFiles, error } = await supabase
+      const { data: files, error } = await supabase
         .from('meter_csv_files')
         .select(`
           *,
@@ -183,36 +172,31 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
         .eq('site_id', siteId)
         .order('created_at', { ascending: false });
 
-      if (error) {
-        console.error('Error loading tracked files:', error);
-        throw error;
-      }
+      if (error) throw error;
 
-      console.log(`Found ${trackedFiles?.length || 0} tracked files in database`);
+      console.log(`Found ${files?.length || 0} files in database`);
 
-      // Map tracked files to display
-      const filesList: FileItem[] = (trackedFiles || []).map(file => ({
+      const filesList: FileItem[] = (files || []).map(file => ({
         name: file.file_name,
         path: file.file_path,
         meterId: file.meter_id,
-        meterNumber: file.meters?.meter_number,
+        meterNumber: file.meters?.meter_number || 'Unknown',
         size: file.file_size,
         status: file.parse_status === 'success' ? 'success' : 
                 file.parse_status === 'error' ? 'error' : 
                 file.parse_status === 'parsing' ? 'parsing' : 'uploaded',
         isNew: false,
-        readingsInserted: file.readings_inserted,
-        duplicatesSkipped: file.duplicates_skipped,
-        parseErrors: file.parse_errors,
+        readingsInserted: file.readings_inserted || 0,
+        duplicatesSkipped: file.duplicates_skipped || 0,
+        parseErrors: file.parse_errors || 0,
         errorMessage: file.error_message,
         contentHash: file.content_hash
       }));
 
       setFiles(filesList);
-      console.log(`✓ Loaded ${filesList.length} file(s) to display in parse tab`);
     } catch (err: any) {
       console.error("Failed to load files:", err);
-      toast.error("Failed to load files: " + err.message);
+      toast.error("Failed to load files");
     }
   };
 
