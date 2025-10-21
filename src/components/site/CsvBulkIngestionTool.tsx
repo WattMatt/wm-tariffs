@@ -1197,15 +1197,30 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                   <table className="w-full text-xs">
                                     <thead>
                                       <tr className="border-b">
-                                        {fileItem.preview.headers.map((header, idx) => (
-                                          <th key={idx} className="px-2 py-1 text-left font-medium bg-muted/50">
+                                        <th className="px-2 py-1 text-left font-medium bg-muted/50">
+                                          <div className="space-y-1">
+                                            <div className="truncate max-w-[150px]">Timestamp</div>
+                                            <Badge variant="outline" className="text-[10px] h-4">
+                                              Date + Time
+                                            </Badge>
+                                          </div>
+                                        </th>
+                                        <th className="px-2 py-1 text-left font-medium bg-muted/50">
+                                          <div className="space-y-1">
+                                            <div className="truncate max-w-[120px]">
+                                              {fileItem.preview.headers[fileItem.preview.detectedColumns.valueColumn]}
+                                            </div>
+                                            <Badge variant="outline" className="text-[10px] h-4">
+                                              kWh Value
+                                            </Badge>
+                                          </div>
+                                        </th>
+                                        {fileItem.preview.detectedColumns.metadataColumns.map((colIdx) => (
+                                          <th key={colIdx} className="px-2 py-1 text-left font-medium bg-muted/50">
                                             <div className="space-y-1">
-                                              <div className="truncate max-w-[120px]">{header}</div>
+                                              <div className="truncate max-w-[120px]">{fileItem.preview.headers[colIdx]}</div>
                                               <Badge variant="outline" className="text-[10px] h-4">
-                                                {idx === fileItem.preview!.detectedColumns.dateColumn ? "Date" :
-                                                 idx === fileItem.preview!.detectedColumns.timeColumn ? "Time" :
-                                                 idx === fileItem.preview!.detectedColumns.valueColumn ? "kWh" :
-                                                 "Metadata"}
+                                                Metadata
                                               </Badge>
                                             </div>
                                           </th>
@@ -1213,15 +1228,32 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                       </tr>
                                     </thead>
                                     <tbody>
-                                      {fileItem.preview.rows.slice(0, 5).map((row, rowIdx) => (
-                                        <tr key={rowIdx} className="border-b">
-                                          {row.map((cell, cellIdx) => (
-                                            <td key={cellIdx} className="px-2 py-1 truncate max-w-[120px]">
-                                              {cell}
+                                      {fileItem.preview.rows.slice(0, 5).map((row, rowIdx) => {
+                                        const dateCol = fileItem.preview!.detectedColumns.dateColumn;
+                                        const timeCol = fileItem.preview!.detectedColumns.timeColumn;
+                                        const valueCol = fileItem.preview!.detectedColumns.valueColumn;
+                                        const metaCols = fileItem.preview!.detectedColumns.metadataColumns;
+                                        
+                                        const timestamp = timeCol !== undefined 
+                                          ? `${row[dateCol]} ${row[timeCol]}`
+                                          : row[dateCol];
+                                        
+                                        return (
+                                          <tr key={rowIdx} className="border-b">
+                                            <td className="px-2 py-1 truncate max-w-[150px]">
+                                              {timestamp}
                                             </td>
-                                          ))}
-                                        </tr>
-                                      ))}
+                                            <td className="px-2 py-1 truncate max-w-[120px]">
+                                              {row[valueCol]}
+                                            </td>
+                                            {metaCols.map((colIdx) => (
+                                              <td key={colIdx} className="px-2 py-1 truncate max-w-[120px]">
+                                                {row[colIdx]}
+                                              </td>
+                                            ))}
+                                          </tr>
+                                        );
+                                      })}
                                     </tbody>
                                   </table>
                                 </div>
