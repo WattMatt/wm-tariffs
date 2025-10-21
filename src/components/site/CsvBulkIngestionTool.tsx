@@ -164,6 +164,8 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
 
   const loadSavedFiles = async () => {
     try {
+      console.log('Loading saved files for site:', siteId);
+      
       // Load all tracked CSV files from database
       const { data: trackedFiles, error } = await supabase
         .from('meter_csv_files')
@@ -174,7 +176,12 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
         .eq('site_id', siteId)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error loading tracked files:', error);
+        throw error;
+      }
+
+      console.log(`Found ${trackedFiles?.length || 0} tracked files in database`);
 
       // Get all files from storage to verify they actually exist
       const storageFileSet = new Set<string>();
@@ -183,6 +190,8 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
       const { data: meterDirs } = await supabase.storage
         .from('meter-csvs')
         .list(`${siteId}/`);
+
+      console.log(`Found ${meterDirs?.length || 0} meter directories in storage`);
 
       // For each meter directory, list the files
       if (meterDirs) {
@@ -200,6 +209,8 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
           }
         }
       }
+
+      console.log(`Found ${storageFileSet.size} CSV files in storage`);
 
       // Filter and map files, cleaning up orphaned records
       const filesList: FileItem[] = [];
@@ -241,9 +252,10 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
       }
 
       setFiles(filesList);
-      console.log(`Loaded ${filesList.length} file(s) from storage`);
+      console.log(`✓ Loaded ${filesList.length} file(s) to display in parse tab`);
     } catch (err: any) {
       console.error("Failed to load files:", err);
+      toast.error("Failed to load files: " + err.message);
     }
   };
 
