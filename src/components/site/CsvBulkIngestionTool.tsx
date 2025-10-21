@@ -29,6 +29,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -138,6 +139,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
     dataType: 'datetime' | 'float' | 'int' | 'string';
   } | null>(null);
   const [openPopover, setOpenPopover] = useState<string | null>(null);
+  const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({});
   
   // Get all available columns including split parts
   const getAvailableColumns = () => {
@@ -1510,6 +1512,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                         const splitConfig = columnMapping.splitColumns?.[idx];
                         if (splitConfig) {
                           return splitConfig.parts.map((part, partIdx) => {
+                            const columnId = part.columnId;
                             const currentAssignment = 
                               part.columnId === columnMapping.dateColumn ? 'date' :
                               part.columnId === columnMapping.timeColumn ? 'time' :
@@ -1518,6 +1521,16 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                             
                             return (
                               <div key={`${idx}_${partIdx}`} className="flex items-center gap-3">
+                                <Checkbox
+                                  checked={visibleColumns[columnId] !== false}
+                                  onCheckedChange={(checked) => {
+                                    setVisibleColumns(prev => ({
+                                      ...prev,
+                                      [columnId]: checked === true
+                                    }));
+                                  }}
+                                  className="shrink-0"
+                                />
                                 <Input
                                   value={part.name}
                                   onChange={(e) => {
@@ -1575,6 +1588,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                         }
                         
                         const displayName = columnMapping.renamedHeaders?.[idx] || header || `Column ${idx + 1}`;
+                        const columnId = idx.toString();
                         const currentAssignment = 
                           idx.toString() === columnMapping.dateColumn ? 'date' :
                           idx.toString() === columnMapping.timeColumn ? 'time' :
@@ -1583,6 +1597,16 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                         
                         return (
                           <div key={idx} className="flex items-center gap-3">
+                            <Checkbox
+                              checked={visibleColumns[columnId] !== false}
+                              onCheckedChange={(checked) => {
+                                setVisibleColumns(prev => ({
+                                  ...prev,
+                                  [columnId]: checked === true
+                                }));
+                              }}
+                              className="shrink-0"
+                            />
                             <Input
                               value={displayName}
                               onChange={(e) => {
@@ -1667,10 +1691,14 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                             const isSplit = columnMapping.splitColumns?.[idx];
                             
                             if (isSplit) {
-                              // Render each split part as a separate header
-                              return isSplit.parts.map((part, partIdx) => (
-                                <th key={`${idx}_${partIdx}`} className="px-3 py-2 text-left font-medium whitespace-nowrap border-r bg-muted/20">
-                                  <Popover open={openPopover === `col_${idx}_split_${partIdx}`} onOpenChange={(open) => {
+                              // Render each split part as a separate header if visible
+                              return isSplit.parts.map((part, partIdx) => {
+                                const columnId = part.columnId;
+                                if (visibleColumns[columnId] === false) return null;
+                                
+                                 return (
+                                 <th key={`${idx}_${partIdx}`} className="px-3 py-2 text-left font-medium whitespace-nowrap border-r bg-muted/20">
+                                   <Popover open={openPopover === `col_${idx}_split_${partIdx}`} onOpenChange={(open) => {
                                     if (open) {
                                       setOpenPopover(`col_${idx}_split_${partIdx}`);
                                       // Initialize temp state for split part
@@ -1824,13 +1852,18 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                           </Button>
                                         </div>
                                       </div>
-                                    </PopoverContent>
-                                  </Popover>
-                                </th>
-                              ));
-                            }
-                            
-                            return (
+                                     </PopoverContent>
+                                   </Popover>
+                                 </th>
+                                 );
+                               });
+                             }
+                             
+                             // Check visibility for regular column
+                             const columnId = idx.toString();
+                             if (visibleColumns[columnId] === false) return null;
+                             
+                             return (
                               <th key={idx} className="px-3 py-2 text-left font-medium whitespace-nowrap border-r">
                                 <Popover open={openPopover === `col_${idx}`} onOpenChange={(open) => {
                                   if (open) {
@@ -2126,7 +2159,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                               const splitConfig = columnMapping.splitColumns?.[colIdx];
                               
                               if (splitConfig) {
-                                // Render each split part as a separate cell
+                                // Render each split part as a separate cell if visible
                                 const cellValue = row[colIdx] || '';
                                 const sepChar = 
                                   splitConfig.separator === "space" ? " " :
@@ -2135,13 +2168,21 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                   splitConfig.separator === "slash" ? "/" : ":";
                                 const parts = cellValue.split(sepChar);
                                 
-                                return splitConfig.parts.map((part, partIdx) => (
-                                  <td key={`${colIdx}_${partIdx}`} className="px-3 py-2 whitespace-nowrap border-r bg-muted/20">
-                                    {parts[partIdx] || ''}
-                                  </td>
-                                ));
+                                return splitConfig.parts.map((part, partIdx) => {
+                                  const columnId = part.columnId;
+                                  if (visibleColumns[columnId] === false) return null;
+                                  
+                                  return (
+                                    <td key={`${colIdx}_${partIdx}`} className="px-3 py-2 whitespace-nowrap border-r bg-muted/20">
+                                      {parts[partIdx] || ''}
+                                    </td>
+                                  );
+                                });
                               } else {
-                                // Regular cell
+                                // Regular cell - check visibility
+                                const columnId = colIdx.toString();
+                                if (visibleColumns[columnId] === false) return null;
+                                
                                 return (
                                   <td key={colIdx} className="px-3 py-2 whitespace-nowrap border-r">
                                     {row[colIdx] || ''}
