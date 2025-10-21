@@ -123,6 +123,11 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
         }
       }
 
+      // Debug logging
+      console.log('Column Mapping:', columnMapping);
+      console.log('Available Columns:', Array.from(availableColumns));
+      console.log('Sample Reading Metadata:', readings[0]?.metadata);
+
       // Auto-select all columns initially
       setSelectedColumns(new Set(availableColumns));
 
