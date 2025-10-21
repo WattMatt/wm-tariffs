@@ -529,13 +529,34 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                   <TableBody>
                     {previewData.sampleReadings.map((reading: any, idx: number) => {
                       const importedFields = reading.metadata?.imported_fields || {};
+                      
                       return (
                         <TableRow key={idx}>
-                          {Array.from(selectedColumns).map(col => (
-                            <TableCell key={col} className="font-mono text-xs">
-                              {importedFields[col] || '-'}
-                            </TableCell>
-                          ))}
+                          {Array.from(selectedColumns).map(col => {
+                            let value = '-';
+                            
+                            // Map special columns to their dedicated fields
+                            if (col === 'Time') {
+                              // Time is stored in reading_timestamp
+                              value = reading.reading_timestamp?.split('T')[0] + ' ' + 
+                                      (reading.reading_timestamp?.split('T')[1]?.substring(0, 8) || '00:00:00');
+                            } else if (col === 'P1 (kWh)') {
+                              // P1 (kWh) is the kwh_value column
+                              value = reading.kwh_value?.toString() || '-';
+                            } else if (col === 'Q1 (kvarh)') {
+                              // Q1 (kvarh) is the kva_value column (kvaColumn: "2" maps to Q1)
+                              value = reading.kva_value?.toString() || '-';
+                            } else {
+                              // All other columns come from imported_fields
+                              value = importedFields[col]?.toString() || '-';
+                            }
+                            
+                            return (
+                              <TableCell key={col} className="font-mono text-xs">
+                                {value}
+                              </TableCell>
+                            );
+                          })}
                         </TableRow>
                       );
                     })}
