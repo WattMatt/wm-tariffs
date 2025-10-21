@@ -29,12 +29,14 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
   const [selectedColumns, setSelectedColumns] = useState<Set<string>>(new Set());
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
 
-  // Helper to combine date and time
+  // Helper to combine date and time as UTC (no timezone conversion)
   const getFullDateTime = (date: Date, time: string): Date => {
     const [hours, minutes] = time.split(':').map(Number);
-    const combined = new Date(date);
-    combined.setHours(hours, minutes, 0, 0);
-    return combined;
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const day = date.getDate();
+    // Create UTC date directly to avoid timezone shifts
+    return new Date(Date.UTC(year, month, day, hours, minutes, 0, 0));
   };
 
   const handlePreview = async () => {
