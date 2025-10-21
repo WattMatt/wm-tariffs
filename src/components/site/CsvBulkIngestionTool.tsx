@@ -266,11 +266,11 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
       
       const rows = lines.map(line => {
         if (separatorChar === " ") {
-          return line.split(/\s+/).filter(col => col.trim());
+          // For space separator, collapse multiple spaces but keep structure
+          return line.split(/\s+/);
         }
-        const escapedSep = separatorChar.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const splitRegex = new RegExp(escapedSep + '+');
-        return line.split(splitRegex).filter(col => col.trim());
+        // Split by single separator to preserve empty columns
+        return line.split(separatorChar);
       });
       
       const headers = rows[0] || [];
