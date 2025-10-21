@@ -85,7 +85,7 @@ export default function SchematicViewer() {
   const [extractedMeters, setExtractedMeters] = useState<ExtractedMeterData[]>([]);
   const [selectedMeterIndex, setSelectedMeterIndex] = useState<number | null>(null);
   const [convertedImageUrl, setConvertedImageUrl] = useState<string | null>(null);
-  const [zoom, setZoom] = useState(0.3);
+  const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
@@ -104,7 +104,7 @@ export default function SchematicViewer() {
   const [currentDrawRect, setCurrentDrawRect] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
   const [pdfNumPages, setPdfNumPages] = useState<number | null>(null);
   const [pdfPageNumber, setPdfPageNumber] = useState(1);
-  const [pdfScale, setPdfScale] = useState(1.5);
+  const [pdfScale, setPdfScale] = useState(0.5);
 
   // Set up PDF.js worker
   useEffect(() => {
@@ -522,7 +522,7 @@ export default function SchematicViewer() {
   };
 
   const handleResetView = () => {
-    setZoom(0.3);
+    setZoom(1);
     setPan({ x: 0, y: 0 });
   };
 
@@ -920,7 +920,7 @@ export default function SchematicViewer() {
                               ref={imageRef}
                               src={imageUrl}
                               alt={schematic.name}
-                              className="max-w-full h-auto"
+                              className="max-w-full max-h-[700px] w-auto h-auto object-contain"
                               draggable={false}
                               onLoad={() => {
                                 setImageLoaded(true);
