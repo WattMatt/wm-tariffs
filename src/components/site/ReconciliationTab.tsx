@@ -50,13 +50,17 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
 
       const bulkMeter = bulkMeters[0];
 
+      // Set end of day for dateTo to include all readings on the last day
+      const dateToEndOfDay = new Date(dateTo);
+      dateToEndOfDay.setHours(23, 59, 59, 999);
+
       // Fetch readings
       const { data: readings, error: readingsError } = await supabase
         .from("meter_readings")
         .select("kwh_value, reading_timestamp, metadata")
         .eq("meter_id", bulkMeter.id)
         .gte("reading_timestamp", dateFrom.toISOString())
-        .lte("reading_timestamp", dateTo.toISOString())
+        .lte("reading_timestamp", dateToEndOfDay.toISOString())
         .order("reading_timestamp", { ascending: true });
 
       if (readingsError) {
@@ -163,6 +167,10 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
         return;
       }
 
+      // Set end of day for dateTo to include all readings on the last day
+      const dateToEndOfDay = new Date(dateTo);
+      dateToEndOfDay.setHours(23, 59, 59, 999);
+
       // Fetch readings for each meter within date range (deduplicated by timestamp)
       const meterData = await Promise.all(
         meters.map(async (meter) => {
@@ -172,7 +180,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
             .select("kwh_value, reading_timestamp, metadata")
             .eq("meter_id", meter.id)
             .gte("reading_timestamp", dateFrom.toISOString())
-            .lte("reading_timestamp", dateTo.toISOString())
+            .lte("reading_timestamp", dateToEndOfDay.toISOString())
             .order("reading_timestamp", { ascending: true });
 
           if (readingsError) {
