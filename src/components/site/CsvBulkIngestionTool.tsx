@@ -950,33 +950,26 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
     }
   };
 
-  const handleParseAll = async () => {
-    // Only parse files that haven't been successfully parsed yet (uploaded or error status)
-    const unparsedFiles = files.filter(f => 
-      (f.status === "uploaded" || f.status === "error") && f.path
-    );
+  const handleParseAll = async (forceParse: boolean = false) => {
+    // Parse files that haven't been successfully parsed, OR force re-parse all
+    const filesToParse = forceParse 
+      ? files.filter(f => f.path) // Force: parse ALL files
+      : files.filter(f => (f.status === "uploaded" || f.status === "error") && f.path); // Normal: only unparsed
     
-    if (unparsedFiles.length === 0) {
-      const allCount = files.filter(f => f.path).length;
-      const successCount = files.filter(f => f.status === "success").length;
-      if (successCount === allCount && allCount > 0) {
-        toast.info("All files have already been parsed successfully");
-      } else {
-        toast.error("No files available to parse");
-      }
+    if (filesToParse.length === 0) {
+      toast.error("No files available to parse");
       return;
     }
 
-    const successCount = files.filter(f => f.status === "success" && f.path).length;
-    const message = successCount > 0 
-      ? `Parse ${unparsedFiles.length} pending/failed file(s)?\n\n${successCount} already-parsed file(s) will be skipped.`
-      : `Parse ${unparsedFiles.length} file(s)?`;
+    const message = forceParse
+      ? `⚠️ FORCE RE-PARSE ${filesToParse.length} file(s)?\n\nThis will re-process ALL files, including previously parsed ones.\nExisting readings may be duplicated.`
+      : `Parse ${filesToParse.length} pending/failed file(s)?`;
     
     if (!window.confirm(message)) return;
 
     setIsProcessing(true);
 
-    for (const fileItem of unparsedFiles) {
+    for (const fileItem of filesToParse) {
       setFiles(prev =>
         prev.map(f => f.path === fileItem.path ? { ...f, status: "parsing" } : f)
       );
@@ -1000,12 +993,17 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
         if (error) throw error;
         if (!data.success) throw new Error(data.error);
 
+        // Validation: Don't mark as success if ZERO readings were inserted
+        const totalProcessed = data.readingsInserted + data.duplicatesSkipped;
+        const hasValidData = totalProcessed > 0;
+
         setFiles(prev =>
           prev.map(f =>
             f.path === fileItem.path
               ? {
                   ...f,
-                  status: "success",
+                  status: hasValidData ? "success" : "error",
+                  errorMessage: hasValidData ? undefined : "No valid data found - check column mapping and date/time formats",
                   readingsInserted: data.readingsInserted,
                   duplicatesSkipped: data.duplicatesSkipped,
                   parseErrors: data.parseErrors
@@ -1014,14 +1012,20 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
           )
         );
 
-        const totalProcessed = data.readingsInserted + data.duplicatesSkipped;
-        const newPercent = totalProcessed > 0 ? ((data.readingsInserted / totalProcessed) * 100).toFixed(1) : "0";
-        const existingPercent = totalProcessed > 0 ? ((data.duplicatesSkipped / totalProcessed) * 100).toFixed(1) : "0";
-
-        toast.success(
-          `${fileItem.meterNumber}: ✓ ${data.readingsInserted} new (${newPercent}%) | ${data.duplicatesSkipped} already in DB (${existingPercent}%)`,
-          { duration: 6000 }
-        );
+        if (!hasValidData) {
+          toast.error(
+            `${fileItem.meterNumber}: ⚠️ Parse completed but NO DATA was extracted. Check your column mappings and formats.`,
+            { duration: 10000 }
+          );
+        } else {
+          const newPercent = ((data.readingsInserted / totalProcessed) * 100).toFixed(1);
+          const existingPercent = ((data.duplicatesSkipped / totalProcessed) * 100).toFixed(1);
+          
+          toast.success(
+            `${fileItem.meterNumber}: ✓ ${data.readingsInserted} new (${newPercent}%) | ${data.duplicatesSkipped} already in DB (${existingPercent}%)`,
+            { duration: 6000 }
+          );
+        }
       } catch (err: any) {
         setFiles(prev =>
           prev.map(f =>
@@ -1066,12 +1070,17 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
       if (error) throw error;
       if (!data.success) throw new Error(data.error);
 
+      // Validation: Don't mark as success if ZERO readings were inserted
+      const totalProcessed = data.readingsInserted + data.duplicatesSkipped;
+      const hasValidData = totalProcessed > 0;
+
       setFiles(prev =>
         prev.map(f =>
           f.path === fileItem.path
             ? {
                 ...f,
-                status: "success",
+                status: hasValidData ? "success" : "error",
+                errorMessage: hasValidData ? undefined : "No valid data found - check column mapping and date/time formats",
                 readingsInserted: data.readingsInserted,
                 duplicatesSkipped: data.duplicatesSkipped,
                 parseErrors: data.parseErrors
@@ -1080,14 +1089,20 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
         )
       );
 
-      const totalProcessed = data.readingsInserted + data.duplicatesSkipped;
-      const newPercent = totalProcessed > 0 ? ((data.readingsInserted / totalProcessed) * 100).toFixed(1) : "0";
-      const existingPercent = totalProcessed > 0 ? ((data.duplicatesSkipped / totalProcessed) * 100).toFixed(1) : "0";
-
-      toast.success(
-        `${fileItem.meterNumber}: ✓ ${data.readingsInserted} new (${newPercent}%) | ${data.duplicatesSkipped} already in DB (${existingPercent}%)`,
-        { duration: 6000 }
-      );
+      if (!hasValidData) {
+        toast.error(
+          `${fileItem.meterNumber}: ⚠️ Parse completed but NO DATA was extracted. Check your column mappings and formats.`,
+          { duration: 10000 }
+        );
+      } else {
+        const newPercent = ((data.readingsInserted / totalProcessed) * 100).toFixed(1);
+        const existingPercent = ((data.duplicatesSkipped / totalProcessed) * 100).toFixed(1);
+        
+        toast.success(
+          `${fileItem.meterNumber}: ✓ ${data.readingsInserted} new (${newPercent}%) | ${data.duplicatesSkipped} already in DB (${existingPercent}%)`,
+          { duration: 6000 }
+        );
+      }
     } catch (err: any) {
       setFiles(prev =>
         prev.map(f =>
@@ -2049,11 +2064,20 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                        Cleanup Orphans
                      </Button>
                      <Button
-                       onClick={handleParseAll}
+                       onClick={() => handleParseAll(false)}
                        disabled={isProcessing || files.filter(f => f.status === "uploaded" || f.status === "error").length === 0}
                      >
                        <Play className="w-4 h-4 mr-2" />
-                       Parse All Ready Files
+                       Parse Ready Files
+                     </Button>
+                     <Button
+                       onClick={() => handleParseAll(true)}
+                       disabled={isProcessing || files.filter(f => f.path).length === 0}
+                       variant="destructive"
+                       size="sm"
+                     >
+                       <Play className="w-4 h-4 mr-2" />
+                       Force Re-parse ALL
                      </Button>
                   </div>
                  </div>
@@ -2132,20 +2156,28 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                           
                           {fileItem.status === "success" && (
                             <div className="flex items-center gap-2">
-                              <Badge variant="outline" className="text-green-600 border-green-600">
-                                ✓ Parsed - Will Skip
-                              </Badge>
-                              <Badge variant="outline" className="text-green-600 border-green-600 text-xs">
-                                {fileItem.readingsInserted} new
-                              </Badge>
-                              {fileItem.duplicatesSkipped !== undefined && fileItem.duplicatesSkipped > 0 && (
+                              {fileItem.readingsInserted === 0 && fileItem.duplicatesSkipped === 0 ? (
+                                <Badge variant="destructive" className="text-xs">
+                                  ⚠️ 0 readings - Check config
+                                </Badge>
+                              ) : (
                                 <>
-                                  <Badge variant="outline" className="text-muted-foreground border-muted-foreground text-xs">
-                                    {fileItem.duplicatesSkipped} existing
+                                  <Badge variant="outline" className="text-green-600 border-green-600">
+                                    ✓ Parsed Successfully
                                   </Badge>
-                                  <span className="text-[10px] text-muted-foreground">
-                                    ({((fileItem.readingsInserted / (fileItem.readingsInserted + fileItem.duplicatesSkipped)) * 100).toFixed(0)}% new)
-                                  </span>
+                                  <Badge variant="outline" className="text-green-600 border-green-600 text-xs">
+                                    {fileItem.readingsInserted} new
+                                  </Badge>
+                                  {fileItem.duplicatesSkipped !== undefined && fileItem.duplicatesSkipped > 0 && (
+                                    <>
+                                      <Badge variant="outline" className="text-muted-foreground border-muted-foreground text-xs">
+                                        {fileItem.duplicatesSkipped} existing
+                                      </Badge>
+                                      <span className="text-[10px] text-muted-foreground">
+                                        ({((fileItem.readingsInserted / (fileItem.readingsInserted + fileItem.duplicatesSkipped)) * 100).toFixed(0)}% new)
+                                      </span>
+                                    </>
+                                  )}
                                 </>
                               )}
                             </div>
