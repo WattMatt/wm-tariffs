@@ -751,42 +751,74 @@ export default function MetersTab({ siteId }: MetersTabProps) {
       />
 
       <Dialog open={isParsedCsvViewOpen} onOpenChange={setIsParsedCsvViewOpen}>
-        <DialogContent className="max-w-6xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-7xl max-h-[85vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle>Parsed CSV Data</DialogTitle>
             <DialogDescription>
-              View the standardized parsed data ready for reconciliation
+              Standardized data format: reading_timestamp, kwh_value, kva_value, metadata (as processed for reconciliation)
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-2">
+          <div className="flex-1 overflow-y-auto">
             {parsedCsvData.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 No parsed CSV data available. Please parse the file first.
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      {parsedCsvHeaders.map((header, idx) => (
-                        <TableHead key={idx}>{header}</TableHead>
-                      ))}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {parsedCsvData.map((row, idx) => (
-                      <TableRow key={idx}>
-                        {parsedCsvHeaders.map((header, colIdx) => (
-                          <TableCell key={colIdx} className="font-mono text-xs">
-                            {header === 'metadata' && typeof row[header] === 'object' 
-                              ? JSON.stringify(row[header], null, 2)
-                              : row[header]}
-                          </TableCell>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between px-1">
+                  <p className="text-sm text-muted-foreground">
+                    {parsedCsvData.length} readings processed
+                  </p>
+                </div>
+                <div className="border rounded-lg overflow-hidden">
+                  <Table>
+                    <TableHeader className="sticky top-0 bg-background z-10">
+                      <TableRow>
+                        {parsedCsvHeaders.map((header, idx) => (
+                          <TableHead key={idx} className="font-semibold">
+                            {header === 'reading_timestamp' && 'Timestamp'}
+                            {header === 'kwh_value' && 'kWh Value'}
+                            {header === 'kva_value' && 'kVA Value'}
+                            {header === 'metadata' && 'Additional Fields'}
+                            {!['reading_timestamp', 'kwh_value', 'kva_value', 'metadata'].includes(header) && header}
+                          </TableHead>
                         ))}
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {parsedCsvData.map((row, idx) => (
+                        <TableRow key={idx}>
+                          {parsedCsvHeaders.map((header, colIdx) => (
+                            <TableCell key={colIdx} className={
+                              header === 'metadata' ? 'max-w-md' : 'font-mono text-xs'
+                            }>
+                              {header === 'metadata' ? (
+                                typeof row[header] === 'object' ? (
+                                  <details className="cursor-pointer">
+                                    <summary className="text-xs text-muted-foreground hover:text-foreground">
+                                      View fields ({Object.keys(row[header] || {}).length})
+                                    </summary>
+                                    <pre className="mt-2 text-xs bg-muted p-2 rounded overflow-x-auto">
+                                      {JSON.stringify(row[header], null, 2)}
+                                    </pre>
+                                  </details>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">{row[header] || '—'}</span>
+                                )
+                              ) : header === 'reading_timestamp' ? (
+                                <span className="text-xs">
+                                  {new Date(row[header]).toLocaleString()}
+                                </span>
+                              ) : (
+                                row[header]
+                              )}
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               </div>
             )}
           </div>
