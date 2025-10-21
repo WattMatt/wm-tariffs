@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Canvas as FabricCanvas, Circle, Line, Text, FabricImage } from "fabric";
+import { Canvas as FabricCanvas, Circle, Line, Text, FabricImage, Rect } from "fabric";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -51,6 +51,9 @@ export default function SchematicEditor({
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [drawnRegions, setDrawnRegions] = useState<any[]>([]);
   const [meterPositions, setMeterPositions] = useState<MeterPosition[]>([]);
+  const [drawingRect, setDrawingRect] = useState<any>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [drawStartPoint, setDrawStartPoint] = useState<{ x: number; y: number } | null>(null);
   const [lines, setLines] = useState<SchematicLine[]>([]);
   const [meters, setMeters] = useState<any[]>([]);
   const [selectedMeterForConnection, setSelectedMeterForConnection] = useState<string | null>(null);
@@ -108,8 +111,31 @@ export default function SchematicEditor({
       const evt = opt.e as MouseEvent;
       const target = opt.target;
       
+      // Handle drawing mode for regions
+      if (isDrawingMode && evt.button === 0 && !target) {
+        const pointer = canvas.getPointer(opt.e);
+        setIsDrawing(true);
+        setDrawStartPoint({ x: pointer.x, y: pointer.y });
+        
+        const rect = new Rect({
+          left: pointer.x,
+          top: pointer.y,
+          width: 0,
+          height: 0,
+          fill: 'rgba(59, 130, 246, 0.2)',
+          stroke: '#3b82f6',
+          strokeWidth: 2,
+          selectable: false,
+          evented: false,
+        });
+        
+        canvas.add(rect);
+        setDrawingRect(rect);
+        return;
+      }
+      
       // Pan if: left click on empty space, or middle/right mouse button
-      if (evt.button === 0 && !target) {
+      if (evt.button === 0 && !target && !isDrawingMode) {
         // Left click on empty space
         isPanningLocal = true;
         lastX = evt.clientX;
@@ -127,6 +153,28 @@ export default function SchematicEditor({
     });
 
     canvas.on('mouse:move', (opt) => {
+      // Handle drawing mode
+      if (isDrawing && drawingRect && drawStartPoint) {
+        const pointer = canvas.getPointer(opt.e);
+        const width = pointer.x - drawStartPoint.x;
+        const height = pointer.y - drawStartPoint.y;
+        
+        if (width < 0) {
+          drawingRect.set({ left: pointer.x });
+        }
+        if (height < 0) {
+          drawingRect.set({ top: pointer.y });
+        }
+        
+        drawingRect.set({
+          width: Math.abs(width),
+          height: Math.abs(height)
+        });
+        
+        canvas.renderAll();
+        return;
+      }
+      
       if (isPanningLocal) {
         const evt = opt.e as MouseEvent;
         const vpt = canvas.viewportTransform;
@@ -140,7 +188,76 @@ export default function SchematicEditor({
       }
     });
 
-    canvas.on('mouse:up', () => {
+    canvas.on('mouse:up', async () => {
+      // Handle drawing mode completion
+      if (isDrawing && drawingRect && drawStartPoint) {
+        const canvasWidth = canvas.getWidth();
+        const canvasHeight = canvas.getHeight();
+        
+        const left = drawingRect.left || 0;
+        const top = drawingRect.top || 0;
+        const width = drawingRect.width || 0;
+        const height = drawingRect.height || 0;
+        
+        // Only extract if region is large enough (at least 20x20 pixels)
+        if (width > 20 && height > 20) {
+          const region = {
+            x: (left / canvasWidth) * 100,
+            y: (top / canvasHeight) * 100,
+            width: (width / canvasWidth) * 100,
+            height: (height / canvasHeight) * 100
+          };
+          
+          // Extract meter data from this region
+          try {
+            toast.info('Extracting meter data from selected region...');
+            
+            const { data, error } = await supabase.functions.invoke('extract-schematic-meters', {
+              body: { 
+                imageUrl: schematicUrl,
+                filePath: null,
+                mode: 'extract-region',
+                region
+              }
+            });
+            
+            if (error) throw error;
+            
+            if (data && data.meter) {
+              // Add extracted meter to the list with position at center of drawn region
+              const newMeter = {
+                ...data.meter,
+                status: 'pending' as const,
+                position: {
+                  x: region.x + (region.width / 2),
+                  y: region.y + (region.height / 2)
+                }
+              };
+              
+              const updatedMeters = [...extractedMeters, newMeter];
+              setExtractedMeters(updatedMeters);
+              if (onExtractedMetersUpdate) {
+                onExtractedMetersUpdate(updatedMeters);
+              }
+              toast.success(`Extracted meter: ${data.meter.meter_number}`);
+            }
+          } catch (error) {
+            console.error('Error extracting from region:', error);
+            toast.error('Failed to extract meter data from region');
+          }
+        } else {
+          toast.error('Region too small - draw a larger area around the meter');
+        }
+        
+        // Clean up drawing
+        canvas.remove(drawingRect);
+        setDrawingRect(null);
+        setIsDrawing(false);
+        setDrawStartPoint(null);
+        canvas.renderAll();
+        return;
+      }
+      
       if (isPanningLocal) {
         isPanningLocal = false;
         canvas.selection = true;
@@ -148,9 +265,9 @@ export default function SchematicEditor({
       }
     });
 
-    // Set default cursor to grab
-    canvas.defaultCursor = 'grab';
-    canvas.hoverCursor = 'grab';
+    // Set default cursor to grab (or crosshair in drawing mode)
+    canvas.defaultCursor = isDrawingMode ? 'crosshair' : 'grab';
+    canvas.hoverCursor = isDrawingMode ? 'crosshair' : 'grab';
 
     // Prevent context menu on right click
     canvas.getElement().addEventListener('contextmenu', (e) => {
@@ -188,6 +305,14 @@ export default function SchematicEditor({
       canvas.dispose();
     };
   }, [schematicUrl]);
+
+  // Update cursor when drawing mode changes
+  useEffect(() => {
+    if (fabricCanvas) {
+      fabricCanvas.defaultCursor = isDrawingMode ? 'crosshair' : 'grab';
+      fabricCanvas.hoverCursor = isDrawingMode ? 'crosshair' : 'grab';
+    }
+  }, [isDrawingMode, fabricCanvas]);
 
   useEffect(() => {
     if (!fabricCanvas) return;
@@ -712,7 +837,8 @@ export default function SchematicEditor({
           {activeTool === "meter" && "Click on the schematic to place a new meter"}
           {activeTool === "move" && "Drag meters to reposition them on the schematic"}
           {activeTool === "connection" && "Click on two meters to connect them"}
-          {activeTool === "select" && "View mode - select a tool to edit"}
+          {activeTool === "select" && !isDrawingMode && "View mode - select a tool to edit"}
+          {isDrawingMode && "Draw mode: Click and drag to draw a region around a meter to extract its data"}
         </div>
         <div className="text-xs">
           💡 Scroll wheel to zoom (up to 1000%) • Click + drag on empty space to pan
