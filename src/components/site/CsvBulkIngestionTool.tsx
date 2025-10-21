@@ -1485,50 +1485,18 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                     </Select>
                   </div>
                   <div>
-                    <Label>DateTime Format (for combined date+time columns)</Label>
-                    <Select value={dateTimeFormat} onValueChange={setDateTimeFormat} disabled={isProcessing}>
-                      <SelectTrigger className="bg-background mt-1">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="YYYY-MM-DD HH:mm:ss">YYYY-MM-DD HH:mm:ss</SelectItem>
-                        <SelectItem value="YYYY-MM-DD HH:mm">YYYY-MM-DD HH:mm</SelectItem>
-                        <SelectItem value="DD/MM/YYYY HH:mm:ss">DD/MM/YYYY HH:mm:ss</SelectItem>
-                        <SelectItem value="DD/MM/YYYY HH:mm">DD/MM/YYYY HH:mm</SelectItem>
-                        <SelectItem value="MM/DD/YYYY HH:mm:ss">MM/DD/YYYY HH:mm:ss</SelectItem>
-                        <SelectItem value="MM/DD/YYYY HH:mm">MM/DD/YYYY HH:mm</SelectItem>
-                        <SelectItem value="YYYY/MM/DD HH:mm:ss">YYYY/MM/DD HH:mm:ss</SelectItem>
-                        <SelectItem value="DD-MM-YYYY HH:mm:ss">DD-MM-YYYY HH:mm:ss</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Row Time Interval</Label>
-                    <Select value={timeInterval} onValueChange={setTimeInterval} disabled={isProcessing}>
-                      <SelectTrigger className="bg-background mt-1">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="5">5 minutes</SelectItem>
-                        <SelectItem value="10">10 minutes</SelectItem>
-                        <SelectItem value="15">15 minutes</SelectItem>
-                        <SelectItem value="30">30 minutes</SelectItem>
-                        <SelectItem value="60">60 minutes</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
                     <Label>Header Row Number</Label>
-                    <Input
-                      type="number"
-                      min="0"
-                      step="1"
-                      value={headerRowNumber}
-                      onChange={(e) => setHeaderRowNumber(e.target.value)}
-                      disabled={isProcessing}
-                      className="bg-background mt-1"
-                      placeholder="Enter header row number (0 for no headers)"
-                    />
+                    <Select value={headerRowNumber} onValueChange={setHeaderRowNumber} disabled={isProcessing}>
+                      <SelectTrigger className="bg-background mt-1">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="0">No headers - All rows are data</SelectItem>
+                        <SelectItem value="1">Row 1 is header</SelectItem>
+                        <SelectItem value="2">Row 2 is header</SelectItem>
+                        <SelectItem value="3">Row 3 is header</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
               </CardContent>
