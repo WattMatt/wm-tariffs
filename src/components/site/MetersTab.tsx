@@ -620,7 +620,7 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                         {meter.has_raw_csv && (
                           <Badge variant="outline" className="gap-1 bg-blue-500/10 border-blue-500/50 text-blue-600 dark:text-blue-400">
                             <Database className="w-3 h-3" />
-                            Raw CSV
+                            Raw
                           </Badge>
                         )}
                         {meter.has_parsed && (
