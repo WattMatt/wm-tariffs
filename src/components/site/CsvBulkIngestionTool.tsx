@@ -93,6 +93,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
   const [meters, setMeters] = useState<any[]>([]);
   const [separator, setSeparator] = useState<string>("tab");
   const [dateFormat, setDateFormat] = useState<string>("auto");
+  const [timeInterval, setTimeInterval] = useState<string>("30");
   const [isProcessing, setIsProcessing] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("upload");
   const [previewingFile, setPreviewingFile] = useState<FileItem | null>(null);
@@ -824,7 +825,8 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                       separator === "comma" ? "," : 
                       separator === "semicolon" ? ";" : 
                       separator === "space" ? " " : "\t",
-            dateFormat: dateFormat
+            dateFormat: dateFormat,
+            timeInterval: parseInt(timeInterval)
           }
         });
 
@@ -887,7 +889,8 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                     separator === "comma" ? "," : 
                     separator === "semicolon" ? ";" : 
                     separator === "space" ? " " : "\t",
-          dateFormat: dateFormat
+          dateFormat: dateFormat,
+          timeInterval: parseInt(timeInterval)
         }
       });
 
@@ -1332,7 +1335,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <Label>Column Separator</Label>
                     <Select value={separator} onValueChange={setSeparator} disabled={isProcessing}>
@@ -1361,10 +1364,31 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                       </SelectContent>
                     </Select>
                   </div>
+                  <div>
+                    <Label>Row Time Interval</Label>
+                    <Select value={timeInterval} onValueChange={setTimeInterval} disabled={isProcessing}>
+                      <SelectTrigger className="bg-background mt-1">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="5">5 minutes</SelectItem>
+                        <SelectItem value="10">10 minutes</SelectItem>
+                        <SelectItem value="15">15 minutes</SelectItem>
+                        <SelectItem value="30">30 minutes</SelectItem>
+                        <SelectItem value="60">60 minutes</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-                <div className="rounded-md bg-background p-3 text-xs text-muted-foreground">
-                  <p className="font-medium mb-1">Metadata Preservation:</p>
-                  <p>All columns beyond Date, Time, and kWh will be automatically captured as metadata fields and preserved for reconciliation analysis.</p>
+                <div className="rounded-md bg-background p-3 text-xs text-muted-foreground space-y-2">
+                  <div>
+                    <p className="font-medium mb-1">Row Time Interval:</p>
+                    <p>When CSVs don't have explicit time columns or timestamps, each row will be assigned a time based on the selected interval. Row 1 uses the date at 00:00, Row 2 adds the interval, etc.</p>
+                  </div>
+                  <div>
+                    <p className="font-medium mb-1">Metadata Preservation:</p>
+                    <p>All columns beyond Date, Time, and kWh will be automatically captured as metadata fields and preserved for reconciliation analysis.</p>
+                  </div>
                 </div>
               </CardContent>
             </Card>

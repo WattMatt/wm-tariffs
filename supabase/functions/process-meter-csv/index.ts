@@ -15,9 +15,9 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { meterId, filePath, separator = "\t", dateFormat = "auto" } = await req.json();
+    const { meterId, filePath, separator = "\t", dateFormat = "auto", timeInterval = 30 } = await req.json();
 
-    console.log(`Processing CSV for meter ${meterId} from ${filePath} with separator "${separator}" and dateFormat "${dateFormat}"`);
+    console.log(`Processing CSV for meter ${meterId} from ${filePath} with separator "${separator}", dateFormat "${dateFormat}", and timeInterval ${timeInterval} minutes`);
 
     // Extract filename from path
     const fileName = filePath.split('/').pop() || 'unknown.csv';
@@ -70,6 +70,7 @@ Deno.serve(async (req) => {
     let skipped = 0;
     let parseErrors = 0;
     const errors: string[] = [];
+    let rowIndexForInterval = 0; // Track row index for interval-based timestamps
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
@@ -146,6 +147,9 @@ Deno.serve(async (req) => {
         if (!timeStr && (dateStr.includes(' ') || dateStr.includes('T'))) {
           // Combined DateTime format (e.g., "2025-04-01 12:30:00" or "2025-04-01T12:30:00")
           date = new Date(dateStr.replace(' ', 'T'));
+          if (!isNaN(date.getTime())) {
+            rowIndexForInterval++; // Increment counter even when time is present
+          }
         } else {
           // Separate date and time columns
           const dateParts = dateStr.split(/[\/\- ]/);
@@ -181,7 +185,7 @@ Deno.serve(async (req) => {
             }
           }
 
-          // Parse time - handle both HH:MM:SS and decimal formats
+          // Parse time - handle both HH:MM:SS and decimal formats, or use interval-based calculation
           let hours = 0, minutes = 0, seconds = 0;
           
           if (timeStr) {
@@ -204,6 +208,12 @@ Deno.serve(async (req) => {
               minutes = Math.floor((totalSeconds % 3600) / 60);
               seconds = Math.floor(totalSeconds % 60);
             }
+          } else {
+            // No time column - use interval-based calculation
+            const totalMinutes = rowIndexForInterval * timeInterval;
+            hours = Math.floor(totalMinutes / 60);
+            minutes = totalMinutes % 60;
+            rowIndexForInterval++; // Increment for next row
           }
 
           // Create date
