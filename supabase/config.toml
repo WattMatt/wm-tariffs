@@ -1,5 +1,8 @@
 project_id = "azzstsqwrgfapqisovtd"
 
+[api]
+max_rows = 100000
+
 [functions.extract-schematic-meters]
 verify_jwt = false
 
