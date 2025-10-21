@@ -26,6 +26,7 @@ Deno.serve(async (req) => {
     } = await req.json();
 
     console.log(`Processing CSV for meter ${meterId} from ${filePath} with separator "${separator}", dateFormat "${dateFormat}", timeInterval ${timeInterval} minutes, headerRowNumber: ${headerRowNumber}`);
+    console.log('Column Mapping:', JSON.stringify(columnMapping, null, 2));
 
     // Extract filename from path
     const fileName = filePath.split('/').pop() || 'unknown.csv';
@@ -145,6 +146,15 @@ Deno.serve(async (req) => {
           valueStr = getColumnValue(columnMapping.valueColumn)?.replace(',', '.');
           kvaStr = columnMapping.kvaColumn && columnMapping.kvaColumn !== "-1" ? getColumnValue(columnMapping.kvaColumn)?.replace(',', '.') : null;
           
+          // Log extracted values for first row only
+          if (i === startLineIndex) {
+            console.log('DIAGNOSTIC - First row extraction:');
+            console.log(`  dateColumn: ${columnMapping.dateColumn} -> dateStr: "${dateStr}"`);
+            console.log(`  timeColumn: ${columnMapping.timeColumn} -> timeStr: "${timeStr}"`);
+            console.log(`  valueColumn: ${columnMapping.valueColumn} -> valueStr: "${valueStr}"`);
+            console.log(`  kvaColumn: ${columnMapping.kvaColumn} -> kvaStr: "${kvaStr}"`);
+          }
+          
           // Capture extra columns (with renamed headers if provided)
           for (let colIdx = 0; colIdx < columns.length; colIdx++) {
             const splitConfig = columnMapping.splitColumns?.[colIdx];
@@ -217,7 +227,12 @@ Deno.serve(async (req) => {
           }
         }
 
-        if (!dateStr || !valueStr) continue;
+        if (!dateStr || !valueStr) {
+          if (i === startLineIndex) {
+            console.log(`⚠️ SKIPPING FIRST ROW - Missing required fields: dateStr="${dateStr}", valueStr="${valueStr}"`);
+          }
+          continue;
+        }
 
         let date: Date;
         
