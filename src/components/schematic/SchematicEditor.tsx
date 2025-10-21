@@ -353,65 +353,155 @@ export default function SchematicEditor({
       const y = (meter.position.y / 100) * canvasHeight;
       
       // Color based on status
-      let color = '#eab308'; // yellow for pending
-      if (meter.status === 'approved') color = '#22c55e'; // green
-      else if (meter.status === 'rejected') color = '#ef4444'; // red
+      let borderColor = '#854d0e'; // yellow/brown for pending
+      if (meter.status === 'approved') borderColor = '#166534'; // green
+      else if (meter.status === 'rejected') borderColor = '#991b1b'; // red
       
-      const circle = new Circle({
+      // Create table-like card
+      const cardWidth = 200;
+      const cardHeight = 140;
+      const rowHeight = 20;
+      
+      // Background rectangle
+      const background = new Rect({
         left: x,
         top: y,
-        fill: color,
-        radius: 20,
-        stroke: color === '#22c55e' ? '#166534' : color === '#ef4444' ? '#991b1b' : '#854d0e',
-        strokeWidth: 3,
-        originX: 'center',
-        originY: 'center',
+        width: cardWidth,
+        height: cardHeight,
+        fill: '#ffffff',
+        stroke: borderColor,
+        strokeWidth: 2,
         hasControls: false,
         selectable: activeTool === 'move',
         hoverCursor: activeTool === 'move' ? 'move' : 'pointer',
-        opacity: 0.9,
-      });
-
-      const text = new Text(`${index + 1}`, {
-        left: x,
-        top: y - 5,
-        fontSize: 14,
-        fill: '#fff',
-        fontWeight: 'bold',
         originX: 'center',
         originY: 'center',
-        selectable: false,
       });
 
-      const label = new Text(meter.meter_number.substring(0, 10), {
-        left: x,
-        top: y + 30,
-        fontSize: 10,
-        fill: '#000',
-        originX: 'center',
-        selectable: false,
-        backgroundColor: 'rgba(255, 255, 255, 0.8)',
+      background.set('data', { type: 'extracted', index });
+
+      // Create table rows with labels and values
+      const fields = [
+        { label: 'NO:', value: meter.meter_number || 'N/A' },
+        { label: 'NAME:', value: meter.name || 'VACANT' },
+        { label: 'AREA:', value: meter.area || 'N/A' },
+        { label: 'RATING:', value: meter.rating || 'N/A' },
+        { label: 'CABLE:', value: meter.cable_specification || 'N/A' },
+        { label: 'SERIAL:', value: meter.serial_number || 'N/A' },
+        { label: 'CT:', value: meter.ct_type || 'N/A' }
+      ];
+
+      const textElements: Text[] = [];
+      
+      fields.forEach((field, i) => {
+        // Label text (left column)
+        const labelText = new Text(field.label, {
+          left: x - cardWidth / 2 + 5,
+          top: y - cardHeight / 2 + i * rowHeight + 3,
+          fontSize: 9,
+          fill: '#000',
+          fontWeight: 'bold',
+          fontFamily: 'Arial',
+          selectable: false,
+          evented: false,
+        });
+        textElements.push(labelText);
+
+        // Value text (right column) - truncate if too long
+        const valueDisplay = field.value.length > 20 ? field.value.substring(0, 20) + '...' : field.value;
+        const valueText = new Text(valueDisplay, {
+          left: x - cardWidth / 2 + 55,
+          top: y - cardHeight / 2 + i * rowHeight + 3,
+          fontSize: 9,
+          fill: '#000',
+          fontFamily: 'Arial',
+          selectable: false,
+          evented: false,
+        });
+        textElements.push(valueText);
+
+        // Horizontal separator line
+        if (i < fields.length - 1) {
+          const separator = new Line(
+            [x - cardWidth / 2, y - cardHeight / 2 + (i + 1) * rowHeight, 
+             x + cardWidth / 2, y - cardHeight / 2 + (i + 1) * rowHeight],
+            {
+              stroke: borderColor,
+              strokeWidth: 1,
+              selectable: false,
+              evented: false,
+            }
+          );
+          textElements.push(separator as any);
+        }
       });
 
-      circle.set('data', { type: 'extracted', index });
+      // Vertical separator between label and value columns
+      const verticalSeparator = new Line(
+        [x - cardWidth / 2 + 50, y - cardHeight / 2, 
+         x - cardWidth / 2 + 50, y + cardHeight / 2],
+        {
+          stroke: borderColor,
+          strokeWidth: 1,
+          selectable: false,
+          evented: false,
+        }
+      );
       
       // Handle dragging for extracted meters
       if (activeTool === 'move') {
-        circle.on('moving', () => {
-          text.set({
-            left: circle.left,
-            top: (circle.top || 0) - 5,
+        background.on('moving', () => {
+          const newLeft = background.left || x;
+          const newTop = background.top || y;
+          
+          // Move all text elements with the background
+          textElements.forEach((text, i) => {
+            const fieldIndex = Math.floor(i / 2);
+            const isLabel = i % 2 === 0;
+            const isSeparator = text instanceof Line;
+            
+            if (!isSeparator) {
+              text.set({
+                left: newLeft - cardWidth / 2 + (isLabel ? 5 : 55),
+                top: newTop - cardHeight / 2 + fieldIndex * rowHeight + 3,
+              });
+            } else {
+              // Update line positions
+              if (i === textElements.length - 1) {
+                // Vertical separator
+                text.set({
+                  x1: newLeft - cardWidth / 2 + 50,
+                  y1: newTop - cardHeight / 2,
+                  x2: newLeft - cardWidth / 2 + 50,
+                  y2: newTop + cardHeight / 2,
+                });
+              } else {
+                // Horizontal separators
+                const separatorFieldIndex = Math.floor((i - 1) / 3);
+                text.set({
+                  x1: newLeft - cardWidth / 2,
+                  y1: newTop - cardHeight / 2 + (separatorFieldIndex + 1) * rowHeight,
+                  x2: newLeft + cardWidth / 2,
+                  y2: newTop - cardHeight / 2 + (separatorFieldIndex + 1) * rowHeight,
+                });
+              }
+            }
           });
-          label.set({
-            left: circle.left,
-            top: (circle.top || 0) + 30,
+          
+          verticalSeparator.set({
+            x1: newLeft - cardWidth / 2 + 50,
+            y1: newTop - cardHeight / 2,
+            x2: newLeft - cardWidth / 2 + 50,
+            y2: newTop + cardHeight / 2,
           });
+          
+          fabricCanvas.renderAll();
         });
 
-        circle.on('modified', () => {
+        background.on('modified', () => {
           // Update position in extracted meters state
-          const newX = ((circle.left || 0) / canvasWidth) * 100;
-          const newY = ((circle.top || 0) / canvasHeight) * 100;
+          const newX = ((background.left || 0) / canvasWidth) * 100;
+          const newY = ((background.top || 0) / canvasHeight) * 100;
           
           const updatedMeters = [...extractedMeters];
           updatedMeters[index] = {
@@ -426,9 +516,9 @@ export default function SchematicEditor({
         });
       }
 
-      fabricCanvas.add(circle);
-      fabricCanvas.add(text);
-      fabricCanvas.add(label);
+      fabricCanvas.add(background);
+      textElements.forEach(el => fabricCanvas.add(el));
+      fabricCanvas.add(verticalSeparator);
     });
 
     // Render saved meter positions
@@ -436,10 +526,10 @@ export default function SchematicEditor({
       const meter = meters.find(m => m.id === pos.meter_id);
       const meterType = meter?.meter_type || 'unknown';
       
-      let color = '#3b82f6'; // default blue
-      if (meterType.includes('bulk')) color = '#ef4444'; // red
-      else if (meterType.includes('check')) color = '#f59e0b'; // orange
-      else if (meterType.includes('sub')) color = '#10b981'; // green
+      let borderColor = '#3b82f6'; // default blue
+      if (meterType.includes('bulk')) borderColor = '#ef4444'; // red
+      else if (meterType.includes('check')) borderColor = '#f59e0b'; // orange
+      else if (meterType.includes('sub')) borderColor = '#10b981'; // green
 
       // Convert percentage positions to pixel positions for canvas
       const canvasWidth = fabricCanvas.getWidth();
@@ -447,50 +537,159 @@ export default function SchematicEditor({
       const x = (pos.x_position / 100) * canvasWidth;
       const y = (pos.y_position / 100) * canvasHeight;
 
-      const circle = new Circle({
+      // Create table-like card
+      const cardWidth = 200;
+      const cardHeight = 140;
+      const rowHeight = 20;
+      
+      // Background rectangle
+      const background = new Rect({
         left: x,
         top: y,
-        fill: color,
-        radius: 15,
-        originX: 'center',
-        originY: 'center',
+        width: cardWidth,
+        height: cardHeight,
+        fill: '#ffffff',
+        stroke: borderColor,
+        strokeWidth: 2,
         hasControls: false,
         selectable: activeTool === 'move',
         hoverCursor: activeTool === 'move' ? 'move' : (activeTool === 'connection' ? 'pointer' : 'default'),
-      });
-
-      const text = new Text(pos.label || meter?.meter_number || 'M', {
-        left: x,
-        top: y + 25,
-        fontSize: 12,
-        fill: '#000',
         originX: 'center',
-        selectable: false,
+        originY: 'center',
       });
 
-      circle.set('data', { meterId: pos.meter_id, positionId: pos.id });
+      background.set('data', { meterId: pos.meter_id, positionId: pos.id });
       
-      circle.on('mousedown', () => {
+      background.on('mousedown', () => {
         if (activeTool === 'connection') {
           handleMeterClickForConnection(pos.meter_id, x, y);
         }
       });
 
+      // Create table rows with labels and values
+      const fields = [
+        { label: 'NO:', value: meter?.meter_number || 'N/A' },
+        { label: 'NAME:', value: meter?.name || 'VACANT' },
+        { label: 'AREA:', value: meter?.area?.toString() || 'N/A' },
+        { label: 'RATING:', value: meter?.rating || 'N/A' },
+        { label: 'CABLE:', value: meter?.cable_specification || 'N/A' },
+        { label: 'SERIAL:', value: meter?.serial_number || 'N/A' },
+        { label: 'CT:', value: meter?.ct_type || 'N/A' }
+      ];
+
+      const textElements: Text[] = [];
+      
+      fields.forEach((field, i) => {
+        // Label text (left column)
+        const labelText = new Text(field.label, {
+          left: x - cardWidth / 2 + 5,
+          top: y - cardHeight / 2 + i * rowHeight + 3,
+          fontSize: 9,
+          fill: '#000',
+          fontWeight: 'bold',
+          fontFamily: 'Arial',
+          selectable: false,
+          evented: false,
+        });
+        textElements.push(labelText);
+
+        // Value text (right column) - truncate if too long
+        const valueDisplay = field.value.length > 20 ? field.value.substring(0, 20) + '...' : field.value;
+        const valueText = new Text(valueDisplay, {
+          left: x - cardWidth / 2 + 55,
+          top: y - cardHeight / 2 + i * rowHeight + 3,
+          fontSize: 9,
+          fill: '#000',
+          fontFamily: 'Arial',
+          selectable: false,
+          evented: false,
+        });
+        textElements.push(valueText);
+
+        // Horizontal separator line
+        if (i < fields.length - 1) {
+          const separator = new Line(
+            [x - cardWidth / 2, y - cardHeight / 2 + (i + 1) * rowHeight, 
+             x + cardWidth / 2, y - cardHeight / 2 + (i + 1) * rowHeight],
+            {
+              stroke: borderColor,
+              strokeWidth: 1,
+              selectable: false,
+              evented: false,
+            }
+          );
+          textElements.push(separator as any);
+        }
+      });
+
+      // Vertical separator between label and value columns
+      const verticalSeparator = new Line(
+        [x - cardWidth / 2 + 50, y - cardHeight / 2, 
+         x - cardWidth / 2 + 50, y + cardHeight / 2],
+        {
+          stroke: borderColor,
+          strokeWidth: 1,
+          selectable: false,
+          evented: false,
+        }
+      );
+
       // Handle dragging for move tool
       if (activeTool === 'move') {
-        circle.on('moving', () => {
-          text.set({
-            left: circle.left,
-            top: (circle.top || 0) + 25,
+        background.on('moving', () => {
+          const newLeft = background.left || x;
+          const newTop = background.top || y;
+          
+          // Move all text elements with the background
+          textElements.forEach((text, i) => {
+            const fieldIndex = Math.floor(i / 2);
+            const isLabel = i % 2 === 0;
+            const isSeparator = text instanceof Line;
+            
+            if (!isSeparator) {
+              text.set({
+                left: newLeft - cardWidth / 2 + (isLabel ? 5 : 55),
+                top: newTop - cardHeight / 2 + fieldIndex * rowHeight + 3,
+              });
+            } else {
+              // Update line positions
+              if (i === textElements.length - 1) {
+                // Vertical separator
+                text.set({
+                  x1: newLeft - cardWidth / 2 + 50,
+                  y1: newTop - cardHeight / 2,
+                  x2: newLeft - cardWidth / 2 + 50,
+                  y2: newTop + cardHeight / 2,
+                });
+              } else {
+                // Horizontal separators
+                const separatorFieldIndex = Math.floor((i - 1) / 3);
+                text.set({
+                  x1: newLeft - cardWidth / 2,
+                  y1: newTop - cardHeight / 2 + (separatorFieldIndex + 1) * rowHeight,
+                  x2: newLeft + cardWidth / 2,
+                  y2: newTop - cardHeight / 2 + (separatorFieldIndex + 1) * rowHeight,
+                });
+              }
+            }
           });
+          
+          verticalSeparator.set({
+            x1: newLeft - cardWidth / 2 + 50,
+            y1: newTop - cardHeight / 2,
+            x2: newLeft - cardWidth / 2 + 50,
+            y2: newTop + cardHeight / 2,
+          });
+          
+          fabricCanvas.renderAll();
         });
 
-        circle.on('modified', async () => {
+        background.on('modified', async () => {
           // Convert pixel positions back to percentages for storage
           const canvasWidth = fabricCanvas.getWidth();
           const canvasHeight = fabricCanvas.getHeight();
-          const xPercent = ((circle.left || 0) / canvasWidth) * 100;
-          const yPercent = ((circle.top || 0) / canvasHeight) * 100;
+          const xPercent = ((background.left || 0) / canvasWidth) * 100;
+          const yPercent = ((background.top || 0) / canvasHeight) * 100;
 
           // Update position in database after drag
           const { error } = await supabase
@@ -510,8 +709,9 @@ export default function SchematicEditor({
         });
       }
 
-      fabricCanvas.add(circle);
-      fabricCanvas.add(text);
+      fabricCanvas.add(background);
+      textElements.forEach(el => fabricCanvas.add(el));
+      fabricCanvas.add(verticalSeparator);
     });
 
     fabricCanvas.renderAll();
