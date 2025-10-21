@@ -822,47 +822,45 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
       
       setPreviewData({ rows: dataRows, headers });
       
-      // Auto-detect columns - map all headers to their names
-      if (columnMapping.dateColumn === "0" && columnMapping.timeColumn === "1") {
-        const dateColIdx = headers.findIndex(h => 
-          h.toLowerCase().includes('date') || 
-          h.toLowerCase().includes('datum') ||
-          h.toLowerCase().includes('time')
-        );
-        const valueColIdx = headers.findIndex(h => {
-          const lower = h.toLowerCase();
-          return lower.includes('kwh') || 
-                 lower.includes('p1') || 
-                 lower.includes('energy') || 
-                 lower.includes('active') ||
-                 lower.includes('wh') ||
-                 (lower.includes('p') && lower.includes('(kwh)'));
-        });
-        const kvaColIdx = headers.findIndex(h => {
-          const lower = h.toLowerCase();
-          return lower.includes('kva') || 
-                 lower.includes('s (kva)') || 
-                 lower.includes('apparent') ||
-                 (lower.includes('s') && lower.includes('(kva)'));
-        });
-        
-        // Initialize with detected values, but all columns are available
-        const initialHeaders: Record<string, string> = {};
-        headers.forEach((header, idx) => {
-          initialHeaders[idx] = header;
-        });
-        
-        setColumnMapping({
-          dateColumn: dateColIdx >= 0 ? dateColIdx.toString() : "-1",
-          timeColumn: "-1", // No separate time column by default if date contains timestamp
-          valueColumn: valueColIdx >= 0 ? valueColIdx.toString() : "-1",
-          kvaColumn: kvaColIdx >= 0 ? kvaColIdx.toString() : "-1",
-          dateFormat: columnMapping.dateFormat,
-          timeFormat: columnMapping.timeFormat,
-          renamedHeaders: initialHeaders,
-          splitColumns: {}
-        });
-      }
+      // Auto-detect columns - always run on preview load to refresh mapping
+      const dateColIdx = headers.findIndex(h => 
+        h.toLowerCase().includes('date') || 
+        h.toLowerCase().includes('datum') ||
+        h.toLowerCase().includes('time')
+      );
+      const valueColIdx = headers.findIndex(h => {
+        const lower = h.toLowerCase();
+        return lower.includes('kwh') || 
+               lower.includes('p1') || 
+               lower.includes('energy') || 
+               lower.includes('active') ||
+               lower.includes('wh') ||
+               (lower.includes('p') && lower.includes('(kwh)'));
+      });
+      const kvaColIdx = headers.findIndex(h => {
+        const lower = h.toLowerCase();
+        return lower.includes('kva') || 
+               lower.includes('s (kva)') || 
+               lower.includes('apparent') ||
+               (lower.includes('s') && lower.includes('(kva)'));
+      });
+      
+      // Initialize with detected values, but all columns are available
+      const initialHeaders: Record<string, string> = {};
+      headers.forEach((header, idx) => {
+        initialHeaders[idx] = header;
+      });
+      
+      setColumnMapping({
+        dateColumn: dateColIdx >= 0 ? dateColIdx.toString() : "-1",
+        timeColumn: "-1", // No separate time column by default if date contains timestamp
+        valueColumn: valueColIdx >= 0 ? valueColIdx.toString() : "-1",
+        kvaColumn: kvaColIdx >= 0 ? kvaColIdx.toString() : "-1",
+        dateFormat: columnMapping.dateFormat,
+        timeFormat: columnMapping.timeFormat,
+        renamedHeaders: initialHeaders,
+        splitColumns: {}
+      });
     } catch (err: any) {
       console.error("Preview error:", err);
       toast.error("Failed to load preview");
