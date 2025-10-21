@@ -719,10 +719,10 @@ export default function SchematicViewer() {
                         transition: isDragging ? 'none' : 'transform 0.1s ease-out'
                       }}
                     >
-                      <div className="relative">
+                       <div className="relative max-h-full">
                         {/* Display PDF directly using react-pdf */}
                         {schematic.file_type === "application/pdf" ? (
-                          <div className="relative inline-block">
+                          <div className="relative inline-block max-h-full">
                             <Document
                               file={imageUrl}
                               onLoadSuccess={({ numPages }) => {
@@ -875,12 +875,12 @@ export default function SchematicViewer() {
                             )}
                           </div>
                         ) : (
-                          <div className="relative inline-block">
+                          <div className="relative inline-block max-h-full">
                             <img
                               ref={imageRef}
                               src={imageUrl}
                               alt={schematic.name}
-                              className="max-w-full max-h-[700px] w-auto h-auto object-contain"
+                              className="max-w-full max-h-full w-auto h-auto object-contain"
                               draggable={false}
                               onLoad={() => {
                                 setImageLoaded(true);
