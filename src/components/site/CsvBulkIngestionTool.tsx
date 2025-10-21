@@ -1195,22 +1195,22 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                 Data Structure Preview
                               </div>
                               
-                              <ScrollArea className="h-48 rounded-md border">
-                                <div className="p-2">
-                                  <table className="w-full text-xs">
+                              <ScrollArea className="h-48 w-full rounded-md border">
+                                <div className="p-2 min-w-max">
+                                  <table className="text-xs border-collapse">
                                     <thead>
                                       <tr className="border-b">
-                                        <th className="px-2 py-1 text-left font-medium bg-muted/50">
+                                        <th className="px-2 py-1 text-left font-medium bg-muted/50 whitespace-nowrap">
                                           <div className="space-y-1">
-                                            <div className="truncate max-w-[150px]">Timestamp</div>
+                                            <div>Timestamp</div>
                                             <Badge variant="outline" className="text-[10px] h-4">
                                               Date + Time
                                             </Badge>
                                           </div>
                                         </th>
-                                        <th className="px-2 py-1 text-left font-medium bg-muted/50">
+                                        <th className="px-2 py-1 text-left font-medium bg-muted/50 whitespace-nowrap">
                                           <div className="space-y-1">
-                                            <div className="truncate max-w-[120px]">
+                                            <div>
                                               {fileItem.preview.headers[fileItem.preview.detectedColumns.valueColumn]}
                                             </div>
                                             <Badge variant="outline" className="text-[10px] h-4">
@@ -1219,9 +1219,9 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                           </div>
                                         </th>
                                         {fileItem.preview.detectedColumns.metadataColumns.map((colIdx) => (
-                                          <th key={colIdx} className="px-2 py-1 text-left font-medium bg-muted/50">
+                                          <th key={colIdx} className="px-2 py-1 text-left font-medium bg-muted/50 whitespace-nowrap">
                                             <div className="space-y-1">
-                                              <div className="truncate max-w-[120px]">{fileItem.preview.headers[colIdx]}</div>
+                                              <div>{fileItem.preview.headers[colIdx]}</div>
                                               <Badge variant="outline" className="text-[10px] h-4">
                                                 Metadata
                                               </Badge>
@@ -1242,15 +1242,15 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                           : row[dateCol];
                                         
                                         return (
-                                          <tr key={rowIdx} className="border-b">
-                                            <td className="px-2 py-1 truncate max-w-[150px]">
+                                          <tr key={rowIdx} className="border-b hover:bg-muted/50">
+                                            <td className="px-2 py-1 whitespace-nowrap">
                                               {timestamp}
                                             </td>
-                                            <td className="px-2 py-1 truncate max-w-[120px]">
+                                            <td className="px-2 py-1 whitespace-nowrap">
                                               {row[valueCol]}
                                             </td>
                                             {metaCols.map((colIdx) => (
-                                              <td key={colIdx} className="px-2 py-1 truncate max-w-[120px]">
+                                              <td key={colIdx} className="px-2 py-1 whitespace-nowrap">
                                                 {row[colIdx]}
                                               </td>
                                             ))}
