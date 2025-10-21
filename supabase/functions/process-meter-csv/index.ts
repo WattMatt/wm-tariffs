@@ -79,6 +79,28 @@ Deno.serve(async (req) => {
     const errors: string[] = [];
     let rowIndexForInterval = 0; // Track row index for interval-based timestamps
 
+    // Helper function to parse value based on data type
+    const parseByDataType = (value: string, dataType: string): any => {
+      if (!value || value.trim() === '' || value === '-') return null;
+      
+      const cleaned = value.trim().replace(',', '.');
+      
+      switch (dataType) {
+        case 'int':
+          const intVal = parseInt(cleaned);
+          return isNaN(intVal) ? null : intVal;
+        case 'float':
+          const floatVal = parseFloat(cleaned);
+          return isNaN(floatVal) ? null : floatVal;
+        case 'datetime':
+          const dateVal = new Date(cleaned);
+          return isNaN(dateVal.getTime()) ? null : dateVal.toISOString();
+        case 'string':
+        default:
+          return value.trim();
+      }
+    };
+
     for (let i = startLineIndex; i < lines.length; i++) {
       const line = lines[i].trim();
       if (!line) continue;
@@ -175,8 +197,12 @@ Deno.serve(async (req) => {
                   const colValue = getColumnValue(part.columnId);
                   if (colValue && colValue !== '' && colValue !== '-') {
                     const colName = part.name || `Column_${colIdx}_Part_${partIdx}`;
-                    const numValue = parseFloat(colValue.replace(',', '.'));
-                    extraFields[colName] = isNaN(numValue) ? colValue : numValue;
+                    // Get data type for this column, default to auto-detect
+                    const dataType = columnMapping.columnDataTypes?.[part.columnId] || 'string';
+                    const parsedValue = parseByDataType(colValue, dataType);
+                    if (parsedValue !== null) {
+                      extraFields[colName] = parsedValue;
+                    }
                   }
                 }
               });
@@ -194,8 +220,12 @@ Deno.serve(async (req) => {
               if (colValue && colValue !== '' && colValue !== '-') {
                 // Use renamed header if available, otherwise use original header
                 const colName = columnMapping.renamedHeaders?.[colIdx] || headerColumns[colIdx] || `Column_${colIdx + 1}`;
-                const numValue = parseFloat(colValue.replace(',', '.'));
-                extraFields[colName] = isNaN(numValue) ? colValue : numValue;
+                // Get data type for this column, default to auto-detect
+                const dataType = columnMapping.columnDataTypes?.[colIdx.toString()] || 'string';
+                const parsedValue = parseByDataType(colValue, dataType);
+                if (parsedValue !== null) {
+                  extraFields[colName] = parsedValue;
+                }
               }
             }
           }

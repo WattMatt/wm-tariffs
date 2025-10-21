@@ -81,6 +81,7 @@ interface ColumnMapping {
     separator: string; 
     parts: Array<{ name: string; columnId: string }> 
   }>;
+  columnDataTypes?: Record<string, 'datetime' | 'float' | 'int' | 'string'>; // data type for each column
 }
 
 interface FileItem {
@@ -120,7 +121,8 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
     dateFormat: "auto",
     timeFormat: "auto",
     renamedHeaders: {},
-    splitColumns: {}
+    splitColumns: {},
+    columnDataTypes: {}
   });
   const [editingHeader, setEditingHeader] = useState<{id: string, value: string} | null>(null);
   const [splitPreview, setSplitPreview] = useState<{index: number, parts: string[]} | null>(null);
@@ -130,6 +132,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
     splitSeparator: string;
     splitParts: Array<{ name: string; columnId: string }>;
     assignedType: 'date' | 'time' | 'value' | 'kva' | 'none';
+    dataType: 'datetime' | 'float' | 'int' | 'string';
   } | null>(null);
   const [openPopover, setOpenPopover] = useState<string | null>(null);
   
@@ -859,7 +862,8 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
         dateFormat: columnMapping.dateFormat,
         timeFormat: columnMapping.timeFormat,
         renamedHeaders: initialHeaders,
-        splitColumns: {}
+        splitColumns: {},
+        columnDataTypes: {}
       });
     } catch (err: any) {
       console.error("Preview error:", err);
@@ -1592,12 +1596,15 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                         part.columnId === columnMapping.valueColumn ? 'value' :
                                         part.columnId === columnMapping.kvaColumn ? 'kva' : 'none';
                                       
+                                      const currentDataType = columnMapping.columnDataTypes?.[part.columnId] || 'string';
+                                      
                                       setTempColumnState({
                                         columnIdx: idx,
                                         newName: part.name,
                                         splitSeparator: 'split',
                                         splitParts: isSplit.parts,
-                                        assignedType: currentAssignment
+                                        assignedType: currentAssignment,
+                                        dataType: currentDataType
                                       });
                                     } else {
                                       setOpenPopover(null);
@@ -1717,6 +1724,12 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                                 newMapping.splitColumns = newSplits;
                                               }
                                               
+                                              // Apply data type
+                                              newMapping.columnDataTypes = {
+                                                ...newMapping.columnDataTypes,
+                                                [part.columnId]: tempColumnState.dataType
+                                              };
+                                              
                                               setColumnMapping(newMapping);
                                               setOpenPopover(null);
                                               setTempColumnState(null);
@@ -1745,12 +1758,15 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                       idx.toString() === columnMapping.valueColumn ? 'value' :
                                       idx.toString() === columnMapping.kvaColumn ? 'kva' : 'none';
                                     
+                                    const currentDataType = columnMapping.columnDataTypes?.[idx.toString()] || 'string';
+                                    
                                     setTempColumnState({
                                       columnIdx: idx,
                                       newName: displayName,
                                       splitSeparator: columnMapping.splitColumns?.[idx] ? 'split' : 'none',
                                       splitParts: columnMapping.splitColumns?.[idx]?.parts || [],
-                                      assignedType: currentAssignment
+                                      assignedType: currentAssignment,
+                                      dataType: currentDataType
                                     });
                                   } else {
                                     setOpenPopover(null);
@@ -1837,6 +1853,48 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                           className="h-7 text-xs mt-1"
                                           placeholder="Enter column name"
                                         />
+                                      </div>
+
+                                      {/* Data Type Section */}
+                                      <div className="border-t pt-2">
+                                        <Label className="text-xs">Data Type:</Label>
+                                        <Select
+                                          value={tempColumnState?.dataType || "string"}
+                                          onValueChange={(type: 'datetime' | 'float' | 'int' | 'string') => {
+                                            setTempColumnState(prev => prev ? {...prev, dataType: type} : null);
+                                          }}
+                                        >
+                                          <SelectTrigger className="h-7 text-xs mt-1 bg-background">
+                                            <SelectValue />
+                                          </SelectTrigger>
+                                          <SelectContent className="bg-background z-50">
+                                            <SelectItem value="string">String (Text)</SelectItem>
+                                            <SelectItem value="int">Integer (Whole Number)</SelectItem>
+                                            <SelectItem value="float">Float (Decimal)</SelectItem>
+                                            <SelectItem value="datetime">DateTime</SelectItem>
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
+
+                                      {/* Data Type Section */}
+                                      <div className="border-t pt-2">
+                                        <Label className="text-xs">Data Type:</Label>
+                                        <Select
+                                          value={tempColumnState?.dataType || "string"}
+                                          onValueChange={(type: 'datetime' | 'float' | 'int' | 'string') => {
+                                            setTempColumnState(prev => prev ? {...prev, dataType: type} : null);
+                                          }}
+                                        >
+                                          <SelectTrigger className="h-7 text-xs mt-1 bg-background">
+                                            <SelectValue />
+                                          </SelectTrigger>
+                                          <SelectContent className="bg-background z-50">
+                                            <SelectItem value="string">String (Text)</SelectItem>
+                                            <SelectItem value="int">Integer (Whole Number)</SelectItem>
+                                            <SelectItem value="float">Float (Decimal)</SelectItem>
+                                            <SelectItem value="datetime">DateTime</SelectItem>
+                                          </SelectContent>
+                                        </Select>
                                       </div>
 
                                       {/* Split Column Section */}
@@ -1953,6 +2011,12 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                               delete newSplits[idx];
                                               newMapping.splitColumns = newSplits;
                                             }
+                                            
+                                            // Apply data type
+                                            newMapping.columnDataTypes = {
+                                              ...newMapping.columnDataTypes,
+                                              [idx.toString()]: tempColumnState.dataType
+                                            };
                                             
                                             setColumnMapping(newMapping);
                                             setOpenPopover(null);
