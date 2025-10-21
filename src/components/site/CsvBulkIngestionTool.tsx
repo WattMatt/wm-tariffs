@@ -76,6 +76,7 @@ interface ColumnMapping {
   kvaColumn: number | string;
   dateFormat: string;
   timeFormat: string;
+  dateTimeFormat?: string; // Format for combined datetime columns
   renamedHeaders?: Record<string, string>; // key can be "0_split_1" for split columns
   splitColumns?: Record<number, { 
     separator: string; 
@@ -108,6 +109,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
   const [meters, setMeters] = useState<any[]>([]);
   const [separator, setSeparator] = useState<string>("tab");
   const [dateFormat, setDateFormat] = useState<string>("auto");
+  const [dateTimeFormat, setDateTimeFormat] = useState<string>("YYYY-MM-DD HH:mm:ss");
   const [timeInterval, setTimeInterval] = useState<string>("30");
   const [headerRowNumber, setHeaderRowNumber] = useState<string>("1");
   const [isProcessing, setIsProcessing] = useState(false);
@@ -120,6 +122,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
     kvaColumn: "-1",
     dateFormat: "auto",
     timeFormat: "auto",
+    dateTimeFormat: "YYYY-MM-DD HH:mm:ss",
     renamedHeaders: {},
     splitColumns: {},
     columnDataTypes: {}
@@ -861,6 +864,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
         kvaColumn: kvaColIdx >= 0 ? kvaColIdx.toString() : "-1",
         dateFormat: columnMapping.dateFormat,
         timeFormat: columnMapping.timeFormat,
+        dateTimeFormat: dateTimeFormat,
         renamedHeaders: initialHeaders,
         splitColumns: {},
         columnDataTypes: {}
@@ -1509,6 +1513,24 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                     </Select>
                   </div>
                   <div>
+                    <Label>DateTime Format (for combined date+time columns)</Label>
+                    <Select value={dateTimeFormat} onValueChange={setDateTimeFormat} disabled={isProcessing}>
+                      <SelectTrigger className="bg-background mt-1">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="YYYY-MM-DD HH:mm:ss">YYYY-MM-DD HH:mm:ss</SelectItem>
+                        <SelectItem value="YYYY-MM-DD HH:mm">YYYY-MM-DD HH:mm</SelectItem>
+                        <SelectItem value="DD/MM/YYYY HH:mm:ss">DD/MM/YYYY HH:mm:ss</SelectItem>
+                        <SelectItem value="DD/MM/YYYY HH:mm">DD/MM/YYYY HH:mm</SelectItem>
+                        <SelectItem value="MM/DD/YYYY HH:mm:ss">MM/DD/YYYY HH:mm:ss</SelectItem>
+                        <SelectItem value="MM/DD/YYYY HH:mm">MM/DD/YYYY HH:mm</SelectItem>
+                        <SelectItem value="YYYY/MM/DD HH:mm:ss">YYYY/MM/DD HH:mm:ss</SelectItem>
+                        <SelectItem value="DD-MM-YYYY HH:mm:ss">DD-MM-YYYY HH:mm:ss</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
                     <Label>Row Time Interval</Label>
                     <Select value={timeInterval} onValueChange={setTimeInterval} disabled={isProcessing}>
                       <SelectTrigger className="bg-background mt-1">
@@ -1544,12 +1566,16 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                     <p>If your CSV has a header row with column names, select "Yes" to skip it and use the names for metadata fields. If all rows contain data, select "No".</p>
                   </div>
                   <div>
+                    <p className="font-medium mb-1">DateTime Format:</p>
+                    <p>For columns containing combined date and time (e.g., "2023-09-08 14:30:00"), select the format that matches your data. The parser will use this to correctly extract dates and times. Common formats: YYYY-MM-DD HH:mm:ss for ISO format, DD/MM/YYYY HH:mm for European format.</p>
+                  </div>
+                  <div>
                     <p className="font-medium mb-1">Row Time Interval:</p>
-                    <p>When CSVs don't have explicit time columns or when using combined date/time columns, each row will be assigned a time based on the selected interval. Row 1 uses 00:00, Row 2 adds the interval, etc. For combined date/time columns (like "2023-09-08 00:30:00"), the date is extracted and the interval is used for time calculation.</p>
+                    <p>Only used when no time information is present in your data. Each row will be assigned a sequential time based on the selected interval starting from 00:00.</p>
                   </div>
                   <div>
                     <p className="font-medium mb-1">Column Assignment:</p>
-                    <p>Click any column header to assign it as Date, Time, kWh, kVA, or other data types. All assigned columns will be available for analysis.</p>
+                    <p>Click any column header to assign it as Date, Time, kWh, kVA, or other data types. You can also set the data type (string, int, float, datetime) for proper storage.</p>
                   </div>
                 </div>
               </CardContent>

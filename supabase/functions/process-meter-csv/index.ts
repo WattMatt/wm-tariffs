@@ -101,6 +101,54 @@ Deno.serve(async (req) => {
       }
     };
 
+    // Helper function to parse datetime according to format
+    const parseDateTimeByFormat = (dateTimeStr: string, format: string): Date | null => {
+      try {
+        // Parse datetime based on format pattern
+        const formatPatterns: Record<string, RegExp> = {
+          'YYYY-MM-DD HH:mm:ss': /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/,
+          'YYYY-MM-DD HH:mm': /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/,
+          'DD/MM/YYYY HH:mm:ss': /^(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2}):(\d{2})$/,
+          'DD/MM/YYYY HH:mm': /^(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2})$/,
+          'MM/DD/YYYY HH:mm:ss': /^(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2}):(\d{2})$/,
+          'MM/DD/YYYY HH:mm': /^(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2})$/,
+          'YYYY/MM/DD HH:mm:ss': /^(\d{4})\/(\d{2})\/(\d{2}) (\d{2}):(\d{2}):(\d{2})$/,
+          'DD-MM-YYYY HH:mm:ss': /^(\d{2})-(\d{2})-(\d{4}) (\d{2}):(\d{2}):(\d{2})$/,
+        };
+
+        const pattern = formatPatterns[format];
+        if (!pattern) {
+          console.log(`Unknown format: ${format}, falling back to auto-detect`);
+          return null;
+        }
+
+        const match = dateTimeStr.match(pattern);
+        if (!match) {
+          console.log(`DateTime string "${dateTimeStr}" doesn't match format "${format}"`);
+          return null;
+        }
+
+        let year: number, month: number, day: number, hours: number, minutes: number, seconds: number = 0;
+
+        // Extract values based on format
+        if (format.startsWith('YYYY-MM-DD') || format.startsWith('YYYY/MM/DD')) {
+          [, year, month, day, hours, minutes, seconds = 0] = match.map(Number);
+        } else if (format.startsWith('DD/MM/YYYY') || format.startsWith('DD-MM-YYYY')) {
+          [, day, month, year, hours, minutes, seconds = 0] = match.map(Number);
+        } else if (format.startsWith('MM/DD/YYYY')) {
+          [, month, day, year, hours, minutes, seconds = 0] = match.map(Number);
+        } else {
+          return null;
+        }
+
+        // Create UTC date
+        return new Date(Date.UTC(year, month - 1, day, hours, minutes, seconds));
+      } catch (err) {
+        console.error(`Error parsing datetime: ${(err as Error).message}`);
+        return null;
+      }
+    };
+
     for (let i = startLineIndex; i < lines.length; i++) {
       const line = lines[i].trim();
       if (!line) continue;
@@ -271,10 +319,19 @@ Deno.serve(async (req) => {
         
         // Check if dateStr contains both date and time (combined format)
         if (!timeStr && (dateStr.includes(' ') || dateStr.includes('T'))) {
-          // Combined DateTime format - parse the full datetime string directly
-          // This preserves the original time from the data
-          const isoDateStr = dateStr.includes('T') ? dateStr : dateStr.replace(' ', 'T');
-          date = new Date(isoDateStr);
+          // Combined DateTime format - use user-specified format if available
+          const dateTimeFormat = columnMapping?.dateTimeFormat || 'YYYY-MM-DD HH:mm:ss';
+          
+          // Try parsing with user-specified format first
+          const parsedDate = parseDateTimeByFormat(dateStr, dateTimeFormat);
+          
+          if (parsedDate && !isNaN(parsedDate.getTime())) {
+            date = parsedDate;
+          } else {
+            // Fallback: try ISO format
+            const isoDateStr = dateStr.includes('T') ? dateStr : dateStr.replace(' ', 'T');
+            date = new Date(isoDateStr);
+          }
           
           if (isNaN(date.getTime())) {
             // Fallback: try manual parsing if ISO parse fails
