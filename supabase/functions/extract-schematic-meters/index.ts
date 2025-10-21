@@ -99,6 +99,8 @@ FOCUS AREA: Extract data ONLY from the highlighted region at position:
 - Left: ${region.x}%, Top: ${region.y}%
 - Width: ${region.width}%, Height: ${region.height}%
 
+IMPORTANT: Look ONLY within this rectangular region. Ignore all text and labels outside this area.
+
 CRITICAL RULES:
 1. Preserve ALL units exactly as shown (m², A, TP, mm², ALU ECC CABLE, etc.)
 2. Do NOT abbreviate or reformat values
@@ -109,27 +111,38 @@ EXTRACT these fields with EXACT formatting:
 
 - meter_number (NO): 
   - Extract exactly as labeled (e.g., "DB-01A", "MB-03", "INCOMING-01")
+  - Common label: "NO:", "NO.", or just visible meter number
+  - Look for pattern: DB-XX, MB-XX, INCOMING-XX
   
 - name (NAME): 
   - Extract exactly as shown (e.g., "VACANT", "ACKERMANS", "MAIN BOARD 1")
+  - Common label: "NAME:", "TENANT:"
+  - This is usually the tenant/occupant name
   
 - area (AREA): 
   - MUST include "m²" unit (e.g., "187m²", "406m²")
+  - Common label: "AREA:", "SIZE:"
   - If value appears as just a number, add "m²"
   
 - rating (RATING): 
   - MUST include full units (e.g., "150A TP", "100A TP", "250A TP")
-  - Preserve spaces and formatting exactly
+  - Common label: "RATING:", "SIZE:"
+  - Preserve spaces and formatting exactly - TP means Three Phase
   
 - cable_specification (CABLE): 
-  - Full specification with ALL units (e.g., "4C x 95mm² ALU ECC CABLE", "4C x 50mm² ALU ECC CABLE")
+  - Full specification with ALL units (e.g., "4C x 95mm² ALU ECC CABLE")
+  - Common label: "CABLE:", "CABLE SPEC:", "CABLE SIZE:"
   - Do NOT abbreviate "ALU ECC CABLE"
+  - Format: "XC x XXmm² ALU ECC CABLE"
   
 - serial_number (SERIAL): 
   - Extract number exactly (e.g., "35779383", "35777285")
+  - Common label: "SERIAL:", "S/N:", "METER NO:"
+  - Usually an 8-digit number
   
 - ct_type (CT): 
   - Extract with format/ratio (e.g., "150/5A", "DOL", "300/5A")
+  - Common label: "CT:", "CT RATIO:", "CT TYPE:"
 
 - meter_type:
   - Determine from context: "council_bulk", "check_meter", "solar", or "distribution"

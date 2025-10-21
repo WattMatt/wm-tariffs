@@ -61,6 +61,8 @@ interface ExtractedMeterData {
   tariff?: string;
   status?: 'pending' | 'approved' | 'rejected';
   position?: { x: number; y: number };
+  scale_x?: number;
+  scale_y?: number;
   isDragging?: boolean;
 }
 
@@ -490,7 +492,10 @@ export default function SchematicViewer() {
           position: {
             x: currentDrawRect.left + (currentDrawRect.width / 2),
             y: currentDrawRect.top + (currentDrawRect.height / 2)
-          }
+          },
+          // Auto-scale the meter marker to match the drawn region size
+          scale_x: currentDrawRect.width / 100, // Normalize to 0-1 range based on image width
+          scale_y: currentDrawRect.height / 100  // Normalize to 0-1 range based on image height
         };
         
         setExtractedMeters([...extractedMeters, newMeter]);

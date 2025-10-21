@@ -482,8 +482,8 @@ export default function SchematicEditor({
         originX: 'center',
         originY: 'center',
         lockRotation: true,
-        scaleX: (meter.position as any).scaleX || 1,
-        scaleY: (meter.position as any).scaleY || 1,
+        scaleX: meter.scale_x || 1,
+        scaleY: meter.scale_y || 1,
       });
 
       background.set('data', { type: 'extracted', index });
@@ -500,8 +500,8 @@ export default function SchematicEditor({
       ];
 
       const textElements: Text[] = [];
-      const savedScaleX = (meter.position as any).scaleX || 1;
-      const savedScaleY = (meter.position as any).scaleY || 1;
+      const savedScaleX = meter.scale_x || 1;
+      const savedScaleY = meter.scale_y || 1;
       
       fields.forEach((field, i) => {
         // Label text (left column)
