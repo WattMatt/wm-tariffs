@@ -65,6 +65,7 @@ export default function SchematicEditor({
   const [selectedMeterIndex, setSelectedMeterIndex] = useState<number | null>(null);
   const [selectedMeterId, setSelectedMeterId] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
+  const [detectedRectangles, setDetectedRectangles] = useState<any[]>([]);
 
   useEffect(() => {
     fetchMeters();
@@ -668,12 +669,12 @@ export default function SchematicEditor({
           extractedMeters={extractedMeters}
           onMetersUpdate={(meters) => {
             setExtractedMeters(meters);
-            if (onExtractedMetersUpdate) {
-              onExtractedMetersUpdate(meters);
-            }
+            onExtractedMetersUpdate?.(meters);
           }}
           selectedMeterIndex={selectedMeterIndex}
           onMeterSelect={setSelectedMeterIndex}
+          detectedRectangles={detectedRectangles}
+          onRectanglesUpdate={setDetectedRectangles}
         />
         <div className="flex-1" />
         <div className="flex gap-2 items-center">

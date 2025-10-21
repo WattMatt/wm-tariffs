@@ -12,7 +12,7 @@ serve(async (req) => {
   }
 
   try {
-    const { imageUrl, filePath } = await req.json();
+    const { imageUrl, filePath, mode } = await req.json();
     
     if (!imageUrl && !filePath) {
       return new Response(
@@ -60,27 +60,51 @@ serve(async (req) => {
       console.log('PDF converted to base64 data URL');
     }
 
-    console.log('Calling Lovable AI to extract meter data from schematic...');
+    console.log(`Calling Lovable AI in ${mode || 'full'} mode...`);
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 90000); // 90 second timeout
 
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      signal: controller.signal,
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'text',
-                text: `You are an expert electrical engineer analyzing an electrical schematic diagram to extract meter information with PIXEL-PERFECT position accuracy.
+    // Different prompts based on mode
+    let promptText = '';
+    
+    if (mode === 'detect-rectangles') {
+      promptText = `You are an expert electrical engineer analyzing an electrical schematic diagram to identify all meter boxes and distribution board rectangles.
+
+TASK: Identify ONLY the rectangular boxes/blocks that represent meters or distribution boards on this schematic.
+
+For each rectangle found, return:
+- id: A unique identifier (e.g., "rect_1", "rect_2", etc.)
+- position: The center position of the rectangle
+  - x: Distance from LEFT edge as percentage (0.0-100.0 with 1 decimal)
+  - y: Distance from TOP edge as percentage (0.0-100.0 with 1 decimal)
+- bounds: The approximate boundaries of the rectangle
+  - width: Width as percentage of image (with 1 decimal)
+  - height: Height as percentage of image (with 1 decimal)
+- hasData: true (we'll update this after extraction)
+
+Return ONLY a valid JSON array of rectangles. NO markdown, NO explanations.
+Example: [{"id":"rect_1","position":{"x":25.5,"y":30.2},"bounds":{"width":8.5,"height":6.0},"hasData":true}]`;
+    } else if (mode === 'extract-single') {
+      const { rectangleId, rectangleBounds } = await req.json();
+      promptText = `You are an expert electrical engineer extracting detailed meter information from a specific rectangle on an electrical schematic.
+
+FOCUS AREA: Extract data from the meter box at position x:${rectangleBounds.x}%, y:${rectangleBounds.y}%
+
+Extract the following from this SPECIFIC meter box:
+- meter_number (NO): e.g., DB-03, MB-1, INCOMING-01
+- name (NAME/description): e.g., ACKERMANS, MAIN BOARD 1
+- area (AREA in m²): numeric value only, e.g., 406
+- rating (RATING): Include units, e.g., 100A TP, 150A TP
+- cable_specification (CABLE): Full spec, e.g., 4C x 50mm² ALU ECC CABLE
+- serial_number (SERIAL): e.g., 35777285
+- ct_type (CT): e.g., DOL, 150/5A, 300/5A
+
+Return ONLY a valid JSON object with these exact keys. If a field is not visible, use null.
+NO markdown, NO explanations.`;
+    } else {
+      // Full extraction mode (original)
+      promptText = `You are an expert electrical engineer analyzing an electrical schematic diagram to extract meter information with PIXEL-PERFECT position accuracy.
 
 CRITICAL: Your position measurements will directly control marker placement on the visual schematic. Inaccurate positions render the system unusable.
 
@@ -126,7 +150,25 @@ VALIDATION:
 
 Return ONLY valid JSON array with exact keys: meter_number, name, area (number or null), rating, cable_specification, serial_number, ct_type, meter_type, position (object with x and y as numbers 0-100).
 
-NO markdown, NO explanations, ONLY the JSON array starting with [ and ending with ]`
+NO markdown, NO explanations, ONLY the JSON array starting with [ and ending with ]`;
+    }
+
+    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      signal: controller.signal,
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: promptText
               },
               {
                 type: 'image_url',
@@ -180,39 +222,52 @@ NO markdown, NO explanations, ONLY the JSON array starting with [ and ending wit
 
     console.log('AI Response preview:', content.substring(0, 500));
 
-    // Extract JSON from response (handle markdown code blocks)
-    let jsonMatch = content.match(/\[[\s\S]*\]/);
+    // Extract JSON from response (handle markdown code blocks and objects)
+    let jsonMatch = content.match(/\[[\s\S]*\]/) || content.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       // Try to find JSON after removing markdown
       const cleaned = content.replace(/```json\n?/g, '').replace(/```\n?/g, '');
-      jsonMatch = cleaned.match(/\[[\s\S]*\]/);
+      jsonMatch = cleaned.match(/\[[\s\S]*\]/) || cleaned.match(/\{[\s\S]*\}/);
     }
 
     if (!jsonMatch) {
       console.error('Could not find JSON in response:', content.substring(0, 200));
       return new Response(
-        JSON.stringify({ error: 'Could not parse meter data from AI response. Response did not contain valid JSON array.' }),
+        JSON.stringify({ error: 'Could not parse data from AI response. Response did not contain valid JSON.' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    let meters;
+    let result;
     try {
-      meters = JSON.parse(jsonMatch[0]);
+      result = JSON.parse(jsonMatch[0]);
     } catch (parseError) {
       console.error('Failed to parse JSON:', parseError, 'Content:', jsonMatch[0].substring(0, 200));
       return new Response(
-        JSON.stringify({ error: 'Failed to parse meter data JSON from AI response' }),
+        JSON.stringify({ error: 'Failed to parse JSON from AI response' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
     
-    console.log(`Successfully extracted ${meters.length} meters`);
-
-    return new Response(
-      JSON.stringify({ meters }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    if (mode === 'detect-rectangles') {
+      console.log(`Successfully detected ${result.length} rectangles`);
+      return new Response(
+        JSON.stringify({ rectangles: result }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    } else if (mode === 'extract-single') {
+      console.log(`Successfully extracted data for single meter`);
+      return new Response(
+        JSON.stringify({ meter: result }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    } else {
+      console.log(`Successfully extracted ${result.length} meters`);
+      return new Response(
+        JSON.stringify({ meters: result }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
       console.error('Request timeout after 90 seconds');

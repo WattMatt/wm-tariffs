@@ -9,6 +9,15 @@ import { toast } from "sonner";
 import { Loader2, Check, X, Edit } from "lucide-react";
 import { PdfToImageConverter } from "./PdfToImageConverter";
 
+interface DetectedRectangle {
+  id: string;
+  position: { x: number; y: number };
+  bounds: { width: number; height: number };
+  hasData: boolean;
+  extractedData?: Partial<ExtractedMeterData>;
+  isExtracting?: boolean;
+}
+
 interface ExtractedMeterData {
   meter_number: string;
   name: string;
@@ -34,6 +43,8 @@ interface MeterDataExtractorProps {
   onMetersUpdate: (meters: ExtractedMeterData[]) => void;
   selectedMeterIndex: number | null;
   onMeterSelect: (index: number | null) => void;
+  detectedRectangles: DetectedRectangle[];
+  onRectanglesUpdate: (rectangles: DetectedRectangle[]) => void;
 }
 
 export const MeterDataExtractor = ({ 
@@ -45,17 +56,104 @@ export const MeterDataExtractor = ({
   extractedMeters,
   onMetersUpdate,
   selectedMeterIndex,
-  onMeterSelect
+  onMeterSelect,
+  detectedRectangles,
+  onRectanglesUpdate
 }: MeterDataExtractorProps) => {
+  const [isDetecting, setIsDetecting] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
   const [extractionProgress, setExtractionProgress] = useState(0);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editedMeter, setEditedMeter] = useState<ExtractedMeterData | null>(null);
   const [convertedImageUrl, setConvertedImageUrl] = useState<string | null>(null);
+  const [extractionPhase, setExtractionPhase] = useState<'idle' | 'detecting' | 'extracting'>('idle');
 
   const isPdf = imageUrl.toLowerCase().includes('.pdf');
   const approvedCount = extractedMeters.filter(m => m.status === 'approved').length;
   const totalCount = extractedMeters.length;
+
+  const detectRectangles = async () => {
+    if (!convertedImageUrl && isPdf) {
+      toast.error('Please convert PDF to image first');
+      return;
+    }
+
+    setIsDetecting(true);
+    setExtractionPhase('detecting');
+    
+    try {
+      const urlToProcess = convertedImageUrl || imageUrl;
+      
+      const { data, error } = await supabase.functions.invoke('extract-schematic-meters', {
+        body: { 
+          imageUrl: urlToProcess,
+          filePath: null,
+          mode: 'detect-rectangles'
+        }
+      });
+
+      if (error) throw new Error(error.message || 'Failed to detect rectangles');
+      if (!data || !data.rectangles) throw new Error('No rectangles returned');
+
+      console.log('Detected rectangles:', data.rectangles);
+      onRectanglesUpdate(data.rectangles);
+      toast.success(`Detected ${data.rectangles.length} meter boxes - click each to extract data`);
+    } catch (error) {
+      console.error('Error detecting rectangles:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to detect meter boxes');
+    } finally {
+      setIsDetecting(false);
+    }
+  };
+
+  const extractSingleMeter = async (rectangleId: string) => {
+    const rectangle = detectedRectangles.find(r => r.id === rectangleId);
+    if (!rectangle) return;
+
+    // Mark this rectangle as extracting
+    const updated = detectedRectangles.map(r => 
+      r.id === rectangleId ? { ...r, isExtracting: true } : r
+    );
+    onRectanglesUpdate(updated);
+
+    try {
+      const urlToProcess = convertedImageUrl || imageUrl;
+      
+      const { data, error } = await supabase.functions.invoke('extract-schematic-meters', {
+        body: { 
+          imageUrl: urlToProcess,
+          filePath: null,
+          mode: 'extract-single',
+          rectangleId,
+          rectangleBounds: rectangle.position
+        }
+      });
+
+      if (error) throw new Error(error.message || 'Failed to extract meter data');
+      if (!data || !data.meter) throw new Error('No meter data returned');
+
+      // Update rectangle with extracted data
+      const updatedRects = detectedRectangles.map(r => 
+        r.id === rectangleId 
+          ? { ...r, hasData: true, extractedData: data.meter, isExtracting: false }
+          : r
+      );
+      onRectanglesUpdate(updatedRects);
+      
+      toast.success(`Extracted data for meter box ${rectangleId}`);
+    } catch (error) {
+      console.error('Error extracting meter:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to extract meter data');
+      
+      // Mark as failed
+      const updatedRects = detectedRectangles.map(r => 
+        r.id === rectangleId 
+          ? { ...r, hasData: false, isExtracting: false }
+          : r
+      );
+      onRectanglesUpdate(updatedRects);
+    }
+  };
 
   const extractMetersFromSchematic = async () => {
     if (!convertedImageUrl && isPdf) {
@@ -415,21 +513,39 @@ export const MeterDataExtractor = ({
       )}
       
       <div className="flex items-center justify-between">
-        <div className="flex-1">
+        <div className="flex-1 flex gap-2">
           <Button
-            onClick={extractMetersFromSchematic}
-            disabled={isExtracting || (isPdf && !convertedImageUrl)}
+            onClick={detectRectangles}
+            disabled={isDetecting || isExtracting || (isPdf && !convertedImageUrl) || detectedRectangles.length > 0}
             className="gap-2"
           >
-            {isExtracting ? (
+            {isDetecting ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Analyzing Schematic... {extractionProgress}%
+                Detecting Meter Boxes...
               </>
             ) : (
-              "Extract Meters from Schematic"
+              "1. Detect Meter Boxes"
             )}
           </Button>
+          
+          {detectedRectangles.length > 0 && (
+            <Button
+              onClick={extractMetersFromSchematic}
+              disabled={isExtracting || (isPdf && !convertedImageUrl)}
+              variant="secondary"
+              className="gap-2"
+            >
+              {isExtracting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Extracting All... {extractionProgress}%
+                </>
+              ) : (
+                "Extract All (Legacy)"
+              )}
+            </Button>
+          )}
           {isExtracting && (
             <p className="text-xs text-muted-foreground mt-2">
               AI is analyzing the schematic diagram. This may take up to 90 seconds for complex schematics.

@@ -97,6 +97,7 @@ export default function SchematicViewer() {
   const [showQuickMeterDialog, setShowQuickMeterDialog] = useState(false);
   const [clickedPosition, setClickedPosition] = useState<{ x: number; y: number } | null>(null);
   const [isConverting, setIsConverting] = useState(false);
+  const [detectedRectangles, setDetectedRectangles] = useState<any[]>([]);
 
   useEffect(() => {
     if (id) {
@@ -600,6 +601,23 @@ export default function SchematicViewer() {
               />
             ) : (
               <div className="space-y-4">
+                {/* Meter Data Extractor */}
+                <MeterDataExtractor
+                  siteId={schematic.site_id}
+                  schematicId={id!}
+                  imageUrl={convertedImageUrl || imageUrl}
+                  onMetersExtracted={() => {
+                    fetchMeterPositions();
+                  }}
+                  onConvertedImageReady={setConvertedImageUrl}
+                  extractedMeters={extractedMeters}
+                  onMetersUpdate={setExtractedMeters}
+                  selectedMeterIndex={selectedMeterIndex}
+                  onMeterSelect={setSelectedMeterIndex}
+                  detectedRectangles={detectedRectangles}
+                  onRectanglesUpdate={setDetectedRectangles}
+                />
+
                 {/* Placement Mode Banner */}
                 {isPlacingMeter && (
                   <div className="bg-primary/10 border-2 border-primary rounded-lg p-4 text-center">
@@ -714,6 +732,49 @@ export default function SchematicViewer() {
                                 title={`${position.meters?.meter_number} - ${position.label || ""}`}
                               >
                                 <span className="text-[9px] font-bold text-white leading-none">{position.meters?.meter_number?.substring(0, 3)}</span>
+                              </div>
+                            ))}
+                            
+                            {/* Detected Rectangle Overlays - Color coded for data availability */}
+                            {detectedRectangles.map((rect) => (
+                              <div
+                                key={rect.id}
+                                className="absolute border-3 rounded-md cursor-pointer transition-all hover:scale-105"
+                                style={{
+                                  left: `${rect.position.x}%`,
+                                  top: `${rect.position.y}%`,
+                                  width: `${rect.bounds.width}%`,
+                                  height: `${rect.bounds.height}%`,
+                                  transform: "translate(-50%, -50%)",
+                                  borderColor: rect.hasData ? '#10b981' : '#ef4444',
+                                  backgroundColor: rect.hasData ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                                  zIndex: rect.isExtracting ? 35 : 25,
+                                }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (!rect.hasData && !rect.isExtracting) {
+                                    // Extract data for this rectangle
+                                    const extractor = document.querySelector('[data-extract-single]') as any;
+                                    if (extractor) extractor.click();
+                                  }
+                                }}
+                                title={rect.hasData ? 'Data extracted ✓' : 'Click to extract data'}
+                              >
+                                {rect.isExtracting && (
+                                  <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-md">
+                                    <div className="text-white text-xs font-semibold">Extracting...</div>
+                                  </div>
+                                )}
+                                {rect.hasData && rect.extractedData && (
+                                  <div className="absolute top-1 left-1 bg-green-500 text-white text-[8px] px-1 py-0.5 rounded font-semibold">
+                                    ✓ {rect.extractedData.meter_number || 'Data'}
+                                  </div>
+                                )}
+                                {!rect.hasData && !rect.isExtracting && (
+                                  <div className="absolute top-1 left-1 bg-red-500 text-white text-[8px] px-1 py-0.5 rounded font-semibold">
+                                    No Data
+                                  </div>
+                                )}
                               </div>
                             ))}
                           </div>
