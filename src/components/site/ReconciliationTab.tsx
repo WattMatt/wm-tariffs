@@ -425,7 +425,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
               <Badge variant="outline">{previewData.totalReadings} readings</Badge>
             </CardTitle>
             <CardDescription>
-              Select columns to include in reconciliation calculations. Range: {dateFrom && format(getFullDateTime(dateFrom, timeFrom), "PPpp")} to {dateTo && format(getFullDateTime(dateTo, timeTo), "PPpp")}
+              Select columns to include in reconciliation calculations. Range: {dateFrom && `${format(dateFrom, "yyyy-MM-dd")} ${timeFrom}`} to {dateTo && `${format(dateTo, "yyyy-MM-dd")} ${timeTo}`}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
