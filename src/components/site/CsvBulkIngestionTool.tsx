@@ -166,21 +166,69 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
 
       if (error) throw error;
 
-      const filesList: FileItem[] = (trackedFiles || []).map(file => ({
-        name: file.file_name,
-        path: file.file_path,
-        meterId: file.meter_id,
-        meterNumber: file.meters?.meter_number,
-        size: file.file_size,
-        status: file.parse_status === 'parsed' ? 'success' : 
-                file.parse_status === 'error' ? 'error' : 'uploaded',
-        isNew: false,
-        readingsInserted: file.readings_inserted,
-        duplicatesSkipped: file.duplicates_skipped,
-        parseErrors: file.parse_errors,
-        errorMessage: file.error_message,
-        contentHash: file.content_hash
-      }));
+      // Get all files from storage to verify they actually exist
+      const storageFileSet = new Set<string>();
+      
+      // List all meter subdirectories
+      const { data: meterDirs } = await supabase.storage
+        .from('meter-csvs')
+        .list(`${siteId}/`);
+
+      // For each meter directory, list the files
+      if (meterDirs) {
+        for (const dir of meterDirs) {
+          if (dir.id) { // It's a directory
+            const { data: csvFiles } = await supabase.storage
+              .from('meter-csvs')
+              .list(`${siteId}/${dir.name}`);
+            
+            csvFiles?.forEach(f => {
+              if (f.name) {
+                storageFileSet.add(`${siteId}/${dir.name}/${f.name}`);
+              }
+            });
+          }
+        }
+      }
+
+      // Filter and map files, cleaning up orphaned records
+      const filesList: FileItem[] = [];
+      const orphanedIds: string[] = [];
+
+      (trackedFiles || []).forEach(file => {
+        const existsInStorage = storageFileSet.has(file.file_path);
+        
+        if (!existsInStorage) {
+          console.warn(`Orphaned DB record (file not in storage): ${file.file_name}`);
+          orphanedIds.push(file.id);
+        } else {
+          filesList.push({
+            name: file.file_name,
+            path: file.file_path,
+            meterId: file.meter_id,
+            meterNumber: file.meters?.meter_number,
+            size: file.file_size,
+            status: file.parse_status === 'success' ? 'success' : 
+                    file.parse_status === 'error' ? 'error' : 'uploaded',
+            isNew: false,
+            readingsInserted: file.readings_inserted,
+            duplicatesSkipped: file.duplicates_skipped,
+            parseErrors: file.parse_errors,
+            errorMessage: file.error_message,
+            contentHash: file.content_hash
+          });
+        }
+      });
+
+      // Clean up orphaned records
+      if (orphanedIds.length > 0) {
+        await supabase
+          .from('meter_csv_files')
+          .delete()
+          .in('id', orphanedIds);
+        
+        console.log(`Cleaned up ${orphanedIds.length} orphaned DB record(s)`);
+      }
 
       setFiles(prev => [...prev.filter(f => f.isNew), ...filesList]);
     } catch (err: any) {
@@ -237,7 +285,12 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
     if (!selectedFiles) return;
 
     const newFiles: FileItem[] = [];
-    const existingHashes = new Set(files.map(f => f.contentHash).filter(Boolean));
+    // Only check duplicates against valid files (exclude error status and missing files)
+    const existingHashes = new Set(
+      files
+        .filter(f => f.status !== 'error' && f.contentHash)
+        .map(f => f.contentHash!)
+    );
 
     for (const file of Array.from(selectedFiles)) {
       const fileName = file.name.replace(/\.csv$/i, "");
@@ -289,10 +342,14 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
 
     const duplicateCount = Array.from(selectedFiles).length - newFiles.length;
     if (duplicateCount > 0) {
-      toast.warning(`${duplicateCount} duplicate file(s) detected and automatically removed`);
+      toast.warning(`${duplicateCount} duplicate file(s) detected and skipped`);
     }
 
-    setFiles(prev => [...prev, ...newFiles]);
+    if (newFiles.length > 0) {
+      setFiles(prev => [...prev, ...newFiles]);
+      toast.success(`Added ${newFiles.length} new file(s) for upload`);
+    }
+    
     event.target.value = "";
   };
 
