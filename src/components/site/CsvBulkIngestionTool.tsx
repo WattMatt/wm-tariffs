@@ -69,6 +69,15 @@ interface CsvPreview {
   };
 }
 
+interface ColumnMapping {
+  dateColumn: number;
+  timeColumn: number;
+  valueColumn: number;
+  kvaColumn: number;
+  dateFormat: string;
+  timeFormat: string;
+}
+
 interface FileItem {
   file?: File;
   name: string;
@@ -94,8 +103,18 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
   const [separator, setSeparator] = useState<string>("tab");
   const [dateFormat, setDateFormat] = useState<string>("auto");
   const [timeInterval, setTimeInterval] = useState<string>("30");
-  const [hasHeaders, setHasHeaders] = useState<string>("yes");
+  const [headerRowNumber, setHeaderRowNumber] = useState<string>("1");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [previewFile, setPreviewFile] = useState<FileItem | null>(null);
+  const [previewData, setPreviewData] = useState<{ rows: string[][], headers: string[] } | null>(null);
+  const [columnMapping, setColumnMapping] = useState<ColumnMapping>({
+    dateColumn: 0,
+    timeColumn: 1,
+    valueColumn: 2,
+    kvaColumn: -1,
+    dateFormat: "auto",
+    timeFormat: "auto"
+  });
   const [activeTab, setActiveTab] = useState<string>("upload");
   const [previewingFile, setPreviewingFile] = useState<FileItem | null>(null);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
@@ -712,6 +731,81 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
     }
   };
 
+  const loadFilePreview = async (fileItem: FileItem) => {
+    if (!fileItem.path) return;
+    
+    try {
+      setPreviewFile(fileItem);
+      
+      // Download file from storage
+      const { data: fileData, error } = await supabase.storage
+        .from('meter-csvs')
+        .download(fileItem.path);
+      
+      if (error || !fileData) {
+        toast.error("Failed to load file preview");
+        return;
+      }
+      
+      const text = await fileData.text();
+      const lines = text.split('\n').filter(l => l.trim()).slice(0, 20); // First 20 lines
+      
+      const separatorChar = separator === "tab" ? "\t" : 
+                           separator === "comma" ? "," : 
+                           separator === "semicolon" ? ";" : 
+                           separator === "space" ? " " : "\t";
+      
+      const rows = lines.map(line => {
+        if (separatorChar === " ") {
+          return line.split(/\s+/);
+        }
+        return line.split(separatorChar);
+      });
+      
+      // Extract headers based on header row number
+      const headerRow = parseInt(headerRowNumber);
+      const headers = headerRow > 0 && headerRow <= rows.length 
+        ? rows[headerRow - 1] 
+        : rows[0].map((_, idx) => `Column ${idx + 1}`);
+      
+      // Data rows start after header
+      const dataRows = headerRow > 0 ? rows.slice(headerRow) : rows;
+      
+      setPreviewData({ rows: dataRows, headers });
+      
+      // Auto-detect columns if not set
+      if (columnMapping.dateColumn === 0 && columnMapping.timeColumn === 1) {
+        const dateColIdx = headers.findIndex(h => h.toLowerCase().includes('date'));
+        const timeColIdx = headers.findIndex(h => h.toLowerCase().includes('time'));
+        const valueColIdx = headers.findIndex(h => 
+          h.toLowerCase().includes('kwh') || h.toLowerCase().includes('p1')
+        );
+        const kvaColIdx = headers.findIndex(h => 
+          h.toLowerCase().includes('kva') || h.toLowerCase() === 's (kva)'
+        );
+        
+        setColumnMapping({
+          dateColumn: dateColIdx >= 0 ? dateColIdx : 0,
+          timeColumn: timeColIdx >= 0 ? timeColIdx : (dateColIdx >= 0 ? -1 : 1),
+          valueColumn: valueColIdx >= 0 ? valueColIdx : 2,
+          kvaColumn: kvaColIdx >= 0 ? kvaColIdx : -1,
+          dateFormat: columnMapping.dateFormat,
+          timeFormat: columnMapping.timeFormat
+        });
+      }
+    } catch (err: any) {
+      console.error("Preview error:", err);
+      toast.error("Failed to load preview");
+    }
+  };
+
+  // Refresh preview when settings change
+  useEffect(() => {
+    if (previewFile) {
+      loadFilePreview(previewFile);
+    }
+  }, [separator, headerRowNumber]);
+
   const handleClearDatabase = async () => {
     setIsClearing(true);
     try {
@@ -818,18 +912,19 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
       );
 
       try {
-        const { data, error } = await supabase.functions.invoke('process-meter-csv', {
-          body: {
-            meterId: fileItem.meterId,
-            filePath: fileItem.path,
-            separator: separator === "tab" ? "\t" : 
-                      separator === "comma" ? "," : 
-                      separator === "semicolon" ? ";" : 
-                      separator === "space" ? " " : "\t",
-            dateFormat: dateFormat,
-            timeInterval: parseInt(timeInterval),
-            hasHeaders: hasHeaders === "yes"
-          }
+      const { data, error } = await supabase.functions.invoke('process-meter-csv', {
+        body: {
+          meterId: fileItem.meterId,
+          filePath: fileItem.path,
+          separator: separator === "tab" ? "\t" : 
+                    separator === "comma" ? "," : 
+                    separator === "semicolon" ? ";" : 
+                    separator === "space" ? " " : "\t",
+          dateFormat: columnMapping.dateFormat,
+          timeInterval: parseInt(timeInterval),
+          headerRowNumber: parseInt(headerRowNumber),
+          columnMapping: columnMapping
+        }
         });
 
         if (error) throw error;
@@ -883,18 +978,19 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
     );
 
     try {
-      const { data, error } = await supabase.functions.invoke('process-meter-csv', {
-        body: {
-          meterId: fileItem.meterId,
-          filePath: fileItem.path,
-          separator: separator === "tab" ? "\t" : 
-                    separator === "comma" ? "," : 
-                    separator === "semicolon" ? ";" : 
-                    separator === "space" ? " " : "\t",
-          dateFormat: dateFormat,
-          timeInterval: parseInt(timeInterval),
-          hasHeaders: hasHeaders === "yes"
-        }
+        const { data, error } = await supabase.functions.invoke('process-meter-csv', {
+          body: {
+            meterId: fileItem.meterId,
+            filePath: fileItem.path,
+            separator: separator === "tab" ? "\t" : 
+                      separator === "comma" ? "," : 
+                      separator === "semicolon" ? ";" : 
+                      separator === "space" ? " " : "\t",
+            dateFormat: columnMapping.dateFormat,
+            timeInterval: parseInt(timeInterval),
+            headerRowNumber: parseInt(headerRowNumber),
+            columnMapping: columnMapping
+          }
       });
 
       if (error) throw error;
@@ -1383,14 +1479,16 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                     </Select>
                   </div>
                   <div>
-                    <Label>CSV Has Header Row</Label>
-                    <Select value={hasHeaders} onValueChange={setHasHeaders} disabled={isProcessing}>
+                    <Label>Header Row Number</Label>
+                    <Select value={headerRowNumber} onValueChange={setHeaderRowNumber} disabled={isProcessing}>
                       <SelectTrigger className="bg-background mt-1">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="yes">Yes - Skip first row</SelectItem>
-                        <SelectItem value="no">No - All rows are data</SelectItem>
+                        <SelectItem value="0">No headers - All rows are data</SelectItem>
+                        <SelectItem value="1">Row 1 is header</SelectItem>
+                        <SelectItem value="2">Row 2 is header</SelectItem>
+                        <SelectItem value="3">Row 3 is header</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -1411,6 +1509,144 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                 </div>
               </CardContent>
             </Card>
+
+            {/* File Preview & Column Mapping */}
+            {previewFile && previewData && (
+              <Card className="bg-muted/30">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <Eye className="w-4 h-4" />
+                      Preview: {previewFile.name}
+                    </CardTitle>
+                    <Button size="sm" variant="ghost" onClick={() => setPreviewFile(null)}>
+                      ×
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div>
+                      <Label className="text-xs">Date Column</Label>
+                      <Select 
+                        value={columnMapping.dateColumn.toString()} 
+                        onValueChange={(v) => setColumnMapping({...columnMapping, dateColumn: parseInt(v)})}
+                      >
+                        <SelectTrigger className="h-8 text-xs mt-1">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {previewData.headers.map((h, idx) => (
+                            <SelectItem key={idx} value={idx.toString()}>
+                              Col {idx + 1}: {h}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs">Time Column</Label>
+                      <Select 
+                        value={columnMapping.timeColumn.toString()} 
+                        onValueChange={(v) => setColumnMapping({...columnMapping, timeColumn: parseInt(v)})}
+                      >
+                        <SelectTrigger className="h-8 text-xs mt-1">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="-1">None - Use intervals</SelectItem>
+                          {previewData.headers.map((h, idx) => (
+                            <SelectItem key={idx} value={idx.toString()}>
+                              Col {idx + 1}: {h}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs">kWh Value Column</Label>
+                      <Select 
+                        value={columnMapping.valueColumn.toString()} 
+                        onValueChange={(v) => setColumnMapping({...columnMapping, valueColumn: parseInt(v)})}
+                      >
+                        <SelectTrigger className="h-8 text-xs mt-1">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {previewData.headers.map((h, idx) => (
+                            <SelectItem key={idx} value={idx.toString()}>
+                              Col {idx + 1}: {h}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs">kVA Column (optional)</Label>
+                      <Select 
+                        value={columnMapping.kvaColumn.toString()} 
+                        onValueChange={(v) => setColumnMapping({...columnMapping, kvaColumn: parseInt(v)})}
+                      >
+                        <SelectTrigger className="h-8 text-xs mt-1">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="-1">None</SelectItem>
+                          {previewData.headers.map((h, idx) => (
+                            <SelectItem key={idx} value={idx.toString()}>
+                              Col {idx + 1}: {h}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  
+                  <div className="h-64 w-full rounded-md border overflow-auto">
+                    <table className="text-xs border-collapse w-full">
+                      <thead className="sticky top-0 z-10 bg-background">
+                        <tr className="border-b">
+                          {previewData.headers.map((header, idx) => (
+                            <th key={idx} className="px-3 py-2 text-left font-medium whitespace-nowrap">
+                              <div className="space-y-1">
+                                <div className="font-semibold">{header || `Col ${idx + 1}`}</div>
+                                <Badge 
+                                  variant={
+                                    idx === columnMapping.dateColumn ? "default" :
+                                    idx === columnMapping.timeColumn ? "secondary" :
+                                    idx === columnMapping.valueColumn ? "default" :
+                                    idx === columnMapping.kvaColumn ? "secondary" :
+                                    "outline"
+                                  } 
+                                  className="text-[10px] h-4"
+                                >
+                                  {idx === columnMapping.dateColumn ? 'Date' :
+                                   idx === columnMapping.timeColumn ? 'Time' :
+                                   idx === columnMapping.valueColumn ? 'kWh' :
+                                   idx === columnMapping.kvaColumn ? 'kVA' :
+                                   'Metadata'}
+                                </Badge>
+                              </div>
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {previewData.rows.slice(0, 10).map((row, rowIdx) => (
+                          <tr key={rowIdx} className="border-b hover:bg-muted/30">
+                            {previewData.headers.map((_, colIdx) => (
+                              <td key={colIdx} className="px-3 py-2 whitespace-nowrap">
+                                {row[colIdx] || ''}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {files.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
@@ -1589,14 +1825,25 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                           )}
 
                           {fileItem.path && (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleDownload(fileItem)}
-                              title="Download file"
-                            >
-                              <Download className="w-4 h-4" />
-                            </Button>
+                            <>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => loadFilePreview(fileItem)}
+                                disabled={isProcessing}
+                                title="Preview & configure"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleDownload(fileItem)}
+                                title="Download file"
+                              >
+                                <Download className="w-4 h-4" />
+                              </Button>
+                            </>
                           )}
 
                           <Button

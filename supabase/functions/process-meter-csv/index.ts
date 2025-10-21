@@ -15,9 +15,17 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { meterId, filePath, separator = "\t", dateFormat = "auto", timeInterval = 30, hasHeaders = true } = await req.json();
+    const { 
+      meterId, 
+      filePath, 
+      separator = "\t", 
+      dateFormat = "auto", 
+      timeInterval = 30, 
+      headerRowNumber = 1,
+      columnMapping = null 
+    } = await req.json();
 
-    console.log(`Processing CSV for meter ${meterId} from ${filePath} with separator "${separator}", dateFormat "${dateFormat}", timeInterval ${timeInterval} minutes, hasHeaders: ${hasHeaders}`);
+    console.log(`Processing CSV for meter ${meterId} from ${filePath} with separator "${separator}", dateFormat "${dateFormat}", timeInterval ${timeInterval} minutes, headerRowNumber: ${headerRowNumber}`);
 
     // Extract filename from path
     const fileName = filePath.split('/').pop() || 'unknown.csv';
@@ -45,8 +53,8 @@ Deno.serve(async (req) => {
     let headerColumns: string[] = [];
     let startLineIndex = 0; // Track where data rows start
     
-    if (lines.length > 0 && hasHeaders) {
-      const headerLine = lines[0].trim();
+    if (lines.length > 0 && headerRowNumber > 0) {
+      const headerLine = lines[headerRowNumber - 1].trim();
       if (separator === ' ') {
         headerColumns = headerLine.split(/\s+/).filter(col => col.trim());
       } else {
@@ -55,7 +63,7 @@ Deno.serve(async (req) => {
         headerColumns = headerLine.split(splitRegex).filter(col => col.trim());
       }
       console.log(`Header columns (${headerColumns.length}):`, headerColumns);
-      startLineIndex = 1; // Skip first row when processing data
+      startLineIndex = headerRowNumber; // Skip header row(s) when processing data
     } else {
       console.log('No header row - all rows will be treated as data');
     }
@@ -105,7 +113,30 @@ Deno.serve(async (req) => {
         let dateStr, timeStr, valueStr, kvaStr = null;
         const extraFields: Record<string, any> = {};
         
-        if (columns.length === 2) {
+        // Use column mapping if provided
+        if (columnMapping) {
+          dateStr = columns[columnMapping.dateColumn]?.trim();
+          timeStr = columnMapping.timeColumn >= 0 ? columns[columnMapping.timeColumn]?.trim() : null;
+          valueStr = columns[columnMapping.valueColumn]?.trim()?.replace(',', '.');
+          kvaStr = columnMapping.kvaColumn >= 0 ? columns[columnMapping.kvaColumn]?.trim()?.replace(',', '.') : null;
+          
+          // Capture extra columns
+          for (let colIdx = 0; colIdx < columns.length; colIdx++) {
+            if (colIdx === columnMapping.dateColumn || 
+                colIdx === columnMapping.timeColumn || 
+                colIdx === columnMapping.valueColumn || 
+                colIdx === columnMapping.kvaColumn) {
+              continue;
+            }
+            
+            const colValue = columns[colIdx]?.trim();
+            if (colValue && colValue !== '' && colValue !== '-') {
+              const colName = headerColumns[colIdx] || `Column_${colIdx + 1}`;
+              const numValue = parseFloat(colValue.replace(',', '.'));
+              extraFields[colName] = isNaN(numValue) ? colValue : numValue;
+            }
+          }
+        } else if (columns.length === 2) {
           // Format: DateTime Value
           dateStr = columns[0]?.trim();
           valueStr = columns[1]?.trim()?.replace(',', '.');
