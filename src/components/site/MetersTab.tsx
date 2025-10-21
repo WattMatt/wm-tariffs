@@ -57,6 +57,9 @@ export default function MetersTab({ siteId }: MetersTabProps) {
   const [viewReadingsMeterId, setViewReadingsMeterId] = useState<string | null>(null);
   const [viewReadingsMeterNumber, setViewReadingsMeterNumber] = useState<string>("");
   const [isReadingsViewOpen, setIsReadingsViewOpen] = useState(false);
+  const [viewUploadedFilesMeterId, setViewUploadedFilesMeterId] = useState<string | null>(null);
+  const [isUploadedFilesViewOpen, setIsUploadedFilesViewOpen] = useState(false);
+  const [uploadedFiles, setUploadedFiles] = useState<any[]>([]);
   const [editingMeter, setEditingMeter] = useState<Meter | null>(null);
   const [deletingMeterId, setDeletingMeterId] = useState<string | null>(null);
 
@@ -185,6 +188,21 @@ export default function MetersTab({ siteId }: MetersTabProps) {
       fetchMeters();
     }
     setDeletingMeterId(null);
+  };
+
+  const fetchUploadedFiles = async (meterId: string) => {
+    const { data, error } = await supabase
+      .from('meter_csv_files')
+      .select('*')
+      .eq('meter_id', meterId)
+      .order('uploaded_at', { ascending: false });
+
+    if (error) {
+      toast.error("Failed to fetch uploaded files");
+      return;
+    }
+
+    setUploadedFiles(data || []);
   };
 
   const handleCloseDialog = () => {
@@ -490,12 +508,12 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => {
-                                setViewReadingsMeterId(meter.id);
-                                setViewReadingsMeterNumber(meter.meter_number);
-                                setIsReadingsViewOpen(true);
+                              onClick={async () => {
+                                setViewUploadedFilesMeterId(meter.id);
+                                await fetchUploadedFiles(meter.id);
+                                setIsUploadedFilesViewOpen(true);
                               }}
-                              title="View uploaded data"
+                              title="View uploaded CSV files"
                             >
                               <Eye className="w-4 h-4" />
                             </Button>
@@ -545,6 +563,53 @@ export default function MetersTab({ siteId }: MetersTabProps) {
         meterId={viewReadingsMeterId || ""}
         meterNumber={viewReadingsMeterNumber}
       />
+
+      <Dialog open={isUploadedFilesViewOpen} onOpenChange={setIsUploadedFilesViewOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Uploaded CSV Files</DialogTitle>
+            <DialogDescription>
+              View all CSV files uploaded for this meter
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            {uploadedFiles.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                No files uploaded yet
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>File Name</TableHead>
+                    <TableHead>Upload Date</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Readings Inserted</TableHead>
+                    <TableHead>Duplicates Skipped</TableHead>
+                    <TableHead>Parse Errors</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {uploadedFiles.map((file) => (
+                    <TableRow key={file.id}>
+                      <TableCell className="font-mono text-xs">{file.file_name}</TableCell>
+                      <TableCell>{new Date(file.uploaded_at).toLocaleString()}</TableCell>
+                      <TableCell>
+                        <Badge variant={file.parse_status === 'success' ? 'default' : file.parse_status === 'error' ? 'destructive' : 'secondary'}>
+                          {file.parse_status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{file.readings_inserted || 0}</TableCell>
+                      <TableCell>{file.duplicates_skipped || 0}</TableCell>
+                      <TableCell>{file.parse_errors || 0}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog open={!!deletingMeterId} onOpenChange={() => setDeletingMeterId(null)}>
         <AlertDialogContent>
