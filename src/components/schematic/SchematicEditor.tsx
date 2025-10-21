@@ -1571,6 +1571,50 @@ export default function SchematicEditor({
                 >
                   Cancel
                 </Button>
+                <Button 
+                  type="button" 
+                  variant="destructive" 
+                  onClick={async () => {
+                    if (!editingMeter || !confirm(`Are you sure you want to delete meter ${editingMeter.meter_number}? This will also delete all associated readings and positions.`)) return;
+                    
+                    // Delete meter position first
+                    const { error: posError } = await supabase
+                      .from('meter_positions')
+                      .delete()
+                      .eq('meter_id', editingMeter.id);
+                    
+                    if (posError) {
+                      console.error('Error deleting meter position:', posError);
+                    }
+                    
+                    // Delete meter connections
+                    await supabase
+                      .from('meter_connections')
+                      .delete()
+                      .or(`child_meter_id.eq.${editingMeter.id},parent_meter_id.eq.${editingMeter.id}`);
+                    
+                    // Delete the meter (readings will be cascade deleted by database)
+                    const { error } = await supabase
+                      .from('meters')
+                      .delete()
+                      .eq('id', editingMeter.id);
+                    
+                    if (error) {
+                      toast.error('Failed to delete meter');
+                      console.error('Delete error:', error);
+                      return;
+                    }
+                    
+                    toast.success('Meter deleted successfully');
+                    setIsEditMeterDialogOpen(false);
+                    setEditingMeter(null);
+                    fetchMeters();
+                    fetchMeterPositions();
+                  }}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete
+                </Button>
               </div>
             </form>
           )}

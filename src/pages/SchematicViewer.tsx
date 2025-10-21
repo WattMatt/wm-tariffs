@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Edit, Check, X, Pencil } from "lucide-react";
+import { ArrowLeft, Edit, Check, X, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import SchematicEditor from "@/components/schematic/SchematicEditor";
 import { MeterDataExtractor } from "@/components/schematic/MeterDataExtractor";
@@ -1116,18 +1116,19 @@ export default function SchematicViewer() {
                               )}
                               <Button
                                 onClick={() => {
-                                  const updated = [...extractedMeters];
-                                  updated[selectedMeterIndex].status = 'rejected';
+                                  if (selectedMeterIndex === null) return;
+                                  const meterToDelete = extractedMeters[selectedMeterIndex];
+                                  const updated = extractedMeters.filter((_, i) => i !== selectedMeterIndex);
                                   setExtractedMeters(updated);
                                   setSelectedMeterIndex(null);
-                                  toast.error(`Rejected: ${updated[selectedMeterIndex].meter_number}`);
+                                  toast.success(`Deleted meter: ${meterToDelete.meter_number}`);
                                 }}
                                 variant="destructive"
                                 size="sm"
                                 className="w-full"
                               >
-                                <X className="h-4 w-4 mr-2" />
-                                Reject Meter
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Delete Meter
                               </Button>
                             </div>
                               </>
