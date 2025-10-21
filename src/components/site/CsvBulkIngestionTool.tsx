@@ -1468,34 +1468,37 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                   Parsing Configuration
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div>
-                    <Label>Column Separator</Label>
-                    <Select value={separator} onValueChange={setSeparator} disabled={isProcessing}>
-                      <SelectTrigger className="bg-background mt-1">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="tab">Tab</SelectItem>
-                        <SelectItem value="comma">Comma (,)</SelectItem>
-                        <SelectItem value="semicolon">Semicolon (;)</SelectItem>
-                        <SelectItem value="space">Space</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Header Row Number</Label>
-                    <Input
-                      type="number"
-                      min="0"
-                      step="1"
-                      value={headerRowNumber}
-                      onChange={(e) => setHeaderRowNumber(e.target.value)}
-                      disabled={isProcessing}
-                      className="bg-background mt-1"
-                      placeholder="Enter header row number (0 for no headers)"
-                    />
+              <CardContent className="space-y-4">
+                <div className="space-y-3">
+                  <div className="text-sm font-semibold text-foreground">File Interpretation</div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 border rounded-md bg-muted/20">
+                    <div>
+                      <Label>Column Separator</Label>
+                      <Select value={separator} onValueChange={setSeparator} disabled={isProcessing}>
+                        <SelectTrigger className="bg-background mt-1">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="tab">Tab</SelectItem>
+                          <SelectItem value="comma">Comma (,)</SelectItem>
+                          <SelectItem value="semicolon">Semicolon (;)</SelectItem>
+                          <SelectItem value="space">Space</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>Header Row Number</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={headerRowNumber}
+                        onChange={(e) => setHeaderRowNumber(e.target.value)}
+                        disabled={isProcessing}
+                        className="bg-background mt-1"
+                        placeholder="Enter header row number (0 for no headers)"
+                      />
+                    </div>
                   </div>
                 </div>
               </CardContent>
