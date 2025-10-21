@@ -141,7 +141,7 @@ Deno.serve(async (req) => {
           return null;
         }
 
-        // Create UTC date
+        // Create date treating input as UTC (no timezone conversion)
         return new Date(Date.UTC(year, month - 1, day, hours, minutes, seconds));
       } catch (err) {
         console.error(`Error parsing datetime: ${(err as Error).message}`);
@@ -357,7 +357,7 @@ Deno.serve(async (req) => {
               
               const [hours = 0, minutes = 0, seconds = 0] = timeParts.map(Number);
               
-              // Create UTC date to avoid timezone issues
+              // Create date treating input as UTC (no timezone conversion)
               date = new Date(Date.UTC(year, month - 1, day, hours, minutes, seconds));
             }
           }
@@ -429,8 +429,8 @@ Deno.serve(async (req) => {
             rowIndexForInterval++; // Increment for next row
           }
 
-          // Create date
-          date = new Date(year, month - 1, day, hours, minutes, seconds);
+          // Create date treating input as UTC (no timezone conversion)
+          date = new Date(Date.UTC(year, month - 1, day, hours, minutes, seconds));
         }
 
         if (isNaN(date.getTime())) {
