@@ -53,8 +53,8 @@ export default function SchematicEditor({
   const [drawnRegions, setDrawnRegions] = useState<any[]>([]);
   const [meterPositions, setMeterPositions] = useState<MeterPosition[]>([]);
   const drawingRectRef = useRef<any>(null);
-  const isDrawingRef = useRef(false);
   const drawStartPointRef = useRef<{ x: number; y: number } | null>(null);
+  const startMarkerRef = useRef<any>(null);
   const [lines, setLines] = useState<SchematicLine[]>([]);
   const [meters, setMeters] = useState<any[]>([]);
   const [selectedMeterForConnection, setSelectedMeterForConnection] = useState<string | null>(null);
@@ -122,23 +122,55 @@ export default function SchematicEditor({
       const target = opt.target;
       const currentTool = activeToolRef.current;
       
-      console.log('Mouse down - current tool:', currentTool, 'button:', evt.button);
-      
-      // DRAWING TOOL: Left click draws when draw tool is active
+      // DRAWING TOOL: Double-click approach (first click = start, second click = end)
       if (currentTool === 'draw' && evt.button === 0) {
-        // Only prevent drawing if clicking on meter cards (not background image)
         const isInteractiveObject = target && target.type !== 'image';
         if (!isInteractiveObject) {
-          console.log('Starting draw');
           const pointer = canvas.getPointer(opt.e);
-          isDrawingRef.current = true;
-          drawStartPointRef.current = { x: pointer.x, y: pointer.y };
+          
+          // First click - set start point
+          if (!drawStartPointRef.current) {
+            console.log('Setting start point:', pointer);
+            drawStartPointRef.current = { x: pointer.x, y: pointer.y };
+            
+            // Show a marker at start point
+            const marker = new Circle({
+              left: pointer.x,
+              top: pointer.y,
+              radius: 5,
+              fill: '#3b82f6',
+              stroke: '#ffffff',
+              strokeWidth: 2,
+              selectable: false,
+              evented: false,
+              originX: 'center',
+              originY: 'center',
+            });
+            
+            canvas.add(marker);
+            startMarkerRef.current = marker;
+            canvas.renderAll();
+            toast.info('Click again to set the end point');
+            evt.preventDefault();
+            evt.stopPropagation();
+            return;
+          }
+          
+          // Second click - set end point and create region
+          console.log('Setting end point:', pointer);
+          const startPoint = drawStartPointRef.current;
+          
+          // Create rectangle for the region
+          const left = Math.min(startPoint.x, pointer.x);
+          const top = Math.min(startPoint.y, pointer.y);
+          const width = Math.abs(pointer.x - startPoint.x);
+          const height = Math.abs(pointer.y - startPoint.y);
           
           const rect = new Rect({
-            left: pointer.x,
-            top: pointer.y,
-            width: 0,
-            height: 0,
+            left,
+            top,
+            width,
+            height,
             fill: 'rgba(59, 130, 246, 0.2)',
             stroke: '#3b82f6',
             strokeWidth: 2,
@@ -148,7 +180,11 @@ export default function SchematicEditor({
           
           canvas.add(rect);
           drawingRectRef.current = rect;
-          canvas.selection = false;
+          canvas.renderAll();
+          
+          // Trigger extraction
+          handleExtractFromRegion(canvas, rect);
+          
           evt.preventDefault();
           evt.stopPropagation();
           return;
@@ -169,24 +205,39 @@ export default function SchematicEditor({
     canvas.on('mouse:move', (opt) => {
       const currentTool = activeToolRef.current;
       
-      // DRAWING MODE: Handle drawing
-      if (currentTool === 'draw' && isDrawingRef.current && drawingRectRef.current && drawStartPointRef.current) {
+      // DRAWING MODE: Show preview rectangle from start point to current mouse position
+      if (currentTool === 'draw' && drawStartPointRef.current && !drawingRectRef.current) {
         const pointer = canvas.getPointer(opt.e);
-        const width = pointer.x - drawStartPointRef.current.x;
-        const height = pointer.y - drawStartPointRef.current.y;
+        const startPoint = drawStartPointRef.current;
         
-        if (width < 0) {
-          drawingRectRef.current.set({ left: pointer.x });
-        }
-        if (height < 0) {
-          drawingRectRef.current.set({ top: pointer.y });
+        // Remove old preview if exists
+        const objects = canvas.getObjects();
+        const oldPreview = objects.find(obj => (obj as any).isPreview);
+        if (oldPreview) {
+          canvas.remove(oldPreview);
         }
         
-        drawingRectRef.current.set({
-          width: Math.abs(width),
-          height: Math.abs(height)
+        // Create preview rectangle
+        const left = Math.min(startPoint.x, pointer.x);
+        const top = Math.min(startPoint.y, pointer.y);
+        const width = Math.abs(pointer.x - startPoint.x);
+        const height = Math.abs(pointer.y - startPoint.y);
+        
+        const preview = new Rect({
+          left,
+          top,
+          width,
+          height,
+          fill: 'rgba(59, 130, 246, 0.1)',
+          stroke: '#3b82f6',
+          strokeWidth: 1,
+          strokeDashArray: [5, 5],
+          selectable: false,
+          evented: false,
         });
         
+        (preview as any).isPreview = true;
+        canvas.add(preview);
         canvas.renderAll();
         return;
       }
@@ -206,82 +257,104 @@ export default function SchematicEditor({
     });
 
     canvas.on('mouse:up', async () => {
-      // Handle drawing mode completion
-      if (isDrawingRef.current && drawingRectRef.current && drawStartPointRef.current) {
-        const canvasWidth = canvas.getWidth();
-        const canvasHeight = canvas.getHeight();
-        
-        const left = drawingRectRef.current.left || 0;
-        const top = drawingRectRef.current.top || 0;
-        const width = drawingRectRef.current.width || 0;
-        const height = drawingRectRef.current.height || 0;
-        
-        console.log('Draw complete:', { width, height });
-        
-        // Only extract if region is large enough (at least 20x20 pixels)
-        if (width > 20 && height > 20) {
-          const region = {
-            x: (left / canvasWidth) * 100,
-            y: (top / canvasHeight) * 100,
-            width: (width / canvasWidth) * 100,
-            height: (height / canvasHeight) * 100
-          };
-          
-          // Extract meter data from this region
-          try {
-            toast.info('Extracting meter data from selected region...');
-            
-            const { data, error } = await supabase.functions.invoke('extract-schematic-meters', {
-              body: { 
-                imageUrl: schematicUrl,
-                filePath: null,
-                mode: 'extract-region',
-                region
-              }
-            });
-            
-            if (error) throw error;
-            
-            if (data && data.meter) {
-              // Add extracted meter to the list with position at center of drawn region
-              const newMeter = {
-                ...data.meter,
-                status: 'pending' as const,
-                position: {
-                  x: region.x + (region.width / 2),
-                  y: region.y + (region.height / 2)
-                }
-              };
-              
-              const updatedMeters = [...extractedMeters, newMeter];
-              setExtractedMeters(updatedMeters);
-              if (onExtractedMetersUpdate) {
-                onExtractedMetersUpdate(updatedMeters);
-              }
-              toast.success(`Extracted meter: ${data.meter.meter_number}`);
-            }
-          } catch (error) {
-            console.error('Error extracting from region:', error);
-            toast.error('Failed to extract meter data from region');
-          }
-        } else {
-          toast.error('Region too small - draw a larger area around the meter');
-        }
-        
-        // Clean up drawing
-        canvas.remove(drawingRectRef.current);
-        drawingRectRef.current = null;
-        isDrawingRef.current = false;
-        drawStartPointRef.current = null;
-        canvas.renderAll();
-        return;
-      }
-      
+      // Clean up panning state
       if (isPanningLocal) {
         isPanningLocal = false;
         canvas.selection = true;
       }
     });
+    
+    // Function to handle extraction from a drawn region
+    const handleExtractFromRegion = async (canvas: FabricCanvas, rect: any) => {
+      const canvasWidth = canvas.getWidth();
+      const canvasHeight = canvas.getHeight();
+      
+      const left = rect.left || 0;
+      const top = rect.top || 0;
+      const width = rect.width || 0;
+      const height = rect.height || 0;
+      
+      console.log('Extracting from region:', { left, top, width, height });
+      
+      // Only extract if region is large enough (at least 20x20 pixels)
+      if (width > 20 && height > 20) {
+        const region = {
+          x: (left / canvasWidth) * 100,
+          y: (top / canvasHeight) * 100,
+          width: (width / canvasWidth) * 100,
+          height: (height / canvasHeight) * 100
+        };
+        
+        console.log('Region percentages:', region);
+        
+        // Extract meter data from this region
+        try {
+          toast.info('Extracting meter data from selected region...');
+          
+          const { data, error } = await supabase.functions.invoke('extract-schematic-meters', {
+            body: { 
+              imageUrl: schematicUrl,
+              filePath: null,
+              mode: 'extract-region',
+              region
+            }
+          });
+          
+          if (error) {
+            console.error('Edge function error:', error);
+            throw error;
+          }
+          
+          console.log('Extraction response:', data);
+          
+          if (data && data.meter) {
+            // Add extracted meter to the list with position at center of drawn region
+            const newMeter = {
+              ...data.meter,
+              status: 'pending' as const,
+              position: {
+                x: region.x + (region.width / 2),
+                y: region.y + (region.height / 2)
+              }
+            };
+            
+            const updatedMeters = [...extractedMeters, newMeter];
+            setExtractedMeters(updatedMeters);
+            if (onExtractedMetersUpdate) {
+              onExtractedMetersUpdate(updatedMeters);
+            }
+            toast.success(`Extracted meter: ${data.meter.meter_number}`);
+          } else {
+            toast.error('No meter data found in selected region');
+          }
+        } catch (error) {
+          console.error('Error extracting from region:', error);
+          toast.error('Failed to extract meter data from region');
+        }
+      } else {
+        toast.error('Region too small - draw a larger area around the meter');
+      }
+      
+      // Clean up drawing markers
+      if (startMarkerRef.current) {
+        canvas.remove(startMarkerRef.current);
+        startMarkerRef.current = null;
+      }
+      if (drawingRectRef.current) {
+        canvas.remove(drawingRectRef.current);
+        drawingRectRef.current = null;
+      }
+      // Remove preview rectangles
+      const objects = canvas.getObjects();
+      objects.forEach(obj => {
+        if ((obj as any).isPreview) {
+          canvas.remove(obj);
+        }
+      });
+      
+      drawStartPointRef.current = null;
+      canvas.renderAll();
+    };
 
     // Set default cursor based on active tool (will be updated when tool changes)
     canvas.defaultCursor = 'grab';
@@ -1163,7 +1236,7 @@ export default function SchematicEditor({
         </div>
         <div className="text-xs">
           {activeTool === 'draw' ? (
-            <>🎯 Draw tight boxes around meter labels • Middle/Right mouse or Scroll to navigate</>
+            <>🎯 Click once to start, click again to finish • Right mouse to pan</>
           ) : (
             <>💡 Scroll wheel to zoom • Left click + drag to pan</>
           )}
