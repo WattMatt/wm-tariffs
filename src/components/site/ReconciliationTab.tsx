@@ -6,13 +6,15 @@ import { Input } from "@/components/ui/input";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { supabase } from "@/integrations/supabase/client";
-import { CalendarIcon, Download, Eye } from "lucide-react";
+import { CalendarIcon, Download, Eye, FileDown } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import Papa from "papaparse";
 
 interface ReconciliationTabProps {
   siteId: string;
@@ -368,6 +370,115 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
     }
   };
 
+  const downloadMeterCSV = async (meter: any) => {
+    try {
+      if (!dateFrom || !dateTo) {
+        toast.error("Date range not available");
+        return;
+      }
+
+      toast.loading(`Fetching readings for ${meter.meter_number}...`);
+
+      const fullDateTimeFrom = getFullDateTime(dateFrom, timeFrom);
+      const fullDateTimeTo = getFullDateTime(dateTo, timeTo);
+
+      // Fetch ALL readings for this meter using pagination
+      let allReadings: any[] = [];
+      let from = 0;
+      const pageSize = 1000;
+      let hasMore = true;
+
+      while (hasMore) {
+        const { data: pageData, error } = await supabase
+          .from("meter_readings")
+          .select("reading_timestamp, kwh_value, kva_value, metadata")
+          .eq("meter_id", meter.id)
+          .gte("reading_timestamp", fullDateTimeFrom.toISOString())
+          .lte("reading_timestamp", fullDateTimeTo.toISOString())
+          .order("reading_timestamp", { ascending: true })
+          .range(from, from + pageSize - 1);
+
+        if (error) {
+          toast.dismiss();
+          toast.error(`Failed to fetch readings: ${error.message}`);
+          return;
+        }
+
+        if (pageData && pageData.length > 0) {
+          allReadings = [...allReadings, ...pageData];
+          from += pageSize;
+          hasMore = pageData.length === pageSize;
+        } else {
+          hasMore = false;
+        }
+      }
+
+      if (allReadings.length === 0) {
+        toast.dismiss();
+        toast.error("No readings found for this meter");
+        return;
+      }
+
+      // Transform readings to CSV format
+      const csvData = allReadings.map(reading => {
+        const row: any = {
+          timestamp: format(new Date(reading.reading_timestamp), "yyyy-MM-dd HH:mm:ss"),
+          kwh: reading.kwh_value,
+        };
+
+        if (reading.kva_value) {
+          row.kva = reading.kva_value;
+        }
+
+        // Add metadata fields if available
+        if (reading.metadata && (reading.metadata as any).imported_fields) {
+          const importedFields = (reading.metadata as any).imported_fields;
+          Object.entries(importedFields).forEach(([key, value]) => {
+            row[key] = value;
+          });
+        }
+
+        return row;
+      });
+
+      // Generate CSV
+      const csv = Papa.unparse(csvData);
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${meter.meter_number}_${format(dateFrom, "yyyy-MM-dd")}_to_${format(dateTo, "yyyy-MM-dd")}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast.dismiss();
+      toast.success(`Downloaded ${allReadings.length} readings for ${meter.meter_number}`);
+    } catch (error) {
+      console.error("CSV download error:", error);
+      toast.dismiss();
+      toast.error("Failed to download CSV");
+    }
+  };
+
+  const downloadAllMetersCSV = async () => {
+    if (!reconciliationData) return;
+
+    const allMeters = [
+      ...reconciliationData.councilBulk,
+      ...reconciliationData.checkMeters,
+      ...reconciliationData.solarMeters,
+      ...reconciliationData.distribution,
+    ];
+
+    for (const meter of allMeters) {
+      await downloadMeterCSV(meter);
+      // Small delay between downloads to avoid overwhelming the browser
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -717,10 +828,98 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                 <CardTitle>Detailed Breakdown</CardTitle>
                 <CardDescription>Meter-by-meter consumption analysis</CardDescription>
               </div>
-              <Button variant="outline" className="gap-2">
-                <Download className="w-4 h-4" />
-                Export Report
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="gap-2">
+                    <Download className="w-4 h-4" />
+                    Export CSV Data
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64">
+                  <DropdownMenuLabel>Download Meter Data</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={downloadAllMetersCSV} className="gap-2">
+                    <FileDown className="w-4 h-4" />
+                    Download All Meters
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+                    Individual Meters
+                  </DropdownMenuLabel>
+                  {reconciliationData.councilBulk.length > 0 && (
+                    <>
+                      <DropdownMenuLabel className="text-xs pl-2">Council Bulk</DropdownMenuLabel>
+                      {reconciliationData.councilBulk.map((meter: any) => (
+                        <DropdownMenuItem
+                          key={meter.id}
+                          onClick={() => downloadMeterCSV(meter)}
+                          className="pl-4 gap-2"
+                        >
+                          <FileDown className="w-3 h-3" />
+                          {meter.meter_number}
+                          <span className="ml-auto text-xs text-muted-foreground">
+                            {meter.readingsCount} rows
+                          </span>
+                        </DropdownMenuItem>
+                      ))}
+                    </>
+                  )}
+                  {reconciliationData.checkMeters?.length > 0 && (
+                    <>
+                      <DropdownMenuLabel className="text-xs pl-2">Check Meters</DropdownMenuLabel>
+                      {reconciliationData.checkMeters.map((meter: any) => (
+                        <DropdownMenuItem
+                          key={meter.id}
+                          onClick={() => downloadMeterCSV(meter)}
+                          className="pl-4 gap-2"
+                        >
+                          <FileDown className="w-3 h-3" />
+                          {meter.meter_number}
+                          <span className="ml-auto text-xs text-muted-foreground">
+                            {meter.readingsCount} rows
+                          </span>
+                        </DropdownMenuItem>
+                      ))}
+                    </>
+                  )}
+                  {reconciliationData.solarMeters?.length > 0 && (
+                    <>
+                      <DropdownMenuLabel className="text-xs pl-2">Solar</DropdownMenuLabel>
+                      {reconciliationData.solarMeters.map((meter: any) => (
+                        <DropdownMenuItem
+                          key={meter.id}
+                          onClick={() => downloadMeterCSV(meter)}
+                          className="pl-4 gap-2"
+                        >
+                          <FileDown className="w-3 h-3" />
+                          {meter.meter_number}
+                          <span className="ml-auto text-xs text-muted-foreground">
+                            {meter.readingsCount} rows
+                          </span>
+                        </DropdownMenuItem>
+                      ))}
+                    </>
+                  )}
+                  {reconciliationData.distribution?.length > 0 && (
+                    <>
+                      <DropdownMenuLabel className="text-xs pl-2">Distribution</DropdownMenuLabel>
+                      {reconciliationData.distribution.map((meter: any) => (
+                        <DropdownMenuItem
+                          key={meter.id}
+                          onClick={() => downloadMeterCSV(meter)}
+                          className="pl-4 gap-2"
+                        >
+                          <FileDown className="w-3 h-3" />
+                          {meter.meter_number}
+                          <span className="ml-auto text-xs text-muted-foreground">
+                            {meter.readingsCount} rows
+                          </span>
+                        </DropdownMenuItem>
+                      ))}
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
