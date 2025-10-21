@@ -151,79 +151,70 @@ Return ONLY a valid JSON object with these exact keys.
 NO markdown, NO explanations.
 Example: {"meter_number":"DB-01A","name":"VACANT","area":"187m²","rating":"150A TP","cable_specification":"4C x 95mm² ALU ECC CABLE","serial_number":"35779383","ct_type":"150/5A","meter_type":"distribution"}`;
     } else {
-      // Full extraction mode (original)
-      promptText = `You are an expert electrical engineer analyzing an electrical schematic diagram to extract meter information with PIXEL-PERFECT position accuracy AND exact formatting preservation.
+      // Full extraction mode - SCAN ENTIRE PDF AND MAP ALL METERS
+      promptText = `You are an expert electrical engineer performing a COMPLETE SCAN of an electrical schematic distribution diagram. 
 
-CRITICAL RULES:
-1. Position measurements must be pixel-perfect for visual marker placement
-2. Preserve ALL units exactly as shown (m², A, TP, mm², ALU ECC CABLE, etc.)
-3. Do NOT abbreviate or reformat any values
-4. Extract exactly what you see, character-for-character
+MISSION: Identify and extract EVERY SINGLE meter box on this schematic with 100% accuracy in positioning, scaling, and data extraction.
 
-STEP 1: ANALYZE THE SCHEMATIC LAYOUT
-- Carefully examine the entire schematic image
-- Identify every meter box, distribution board symbol, and meter connection point
-- Note the visual structure and how meters are arranged
+SCANNING PROTOCOL:
+1. Systematically scan the ENTIRE image from top to bottom, left to right
+2. DO NOT SKIP ANY meters - even if partially visible or small
+3. Identify ALL rectangular meter boxes/labels regardless of size
+4. For EACH meter found, extract complete data AND precise positioning
 
-STEP 2: EXTRACT DATA FOR EACH METER WITH EXACT FORMATTING
+FOR EACH METER EXTRACT:
 
-For each meter/distribution board visible, extract:
+DATA FIELDS (100% fidelity to original text):
+- meter_number: Exact NO label (e.g., "DB-01W", "DB-02", "INCOMING-01")
+- name: Exact NAME label (e.g., "CAR WASH", "VACANT", "ACKERMANS")
+- area: Number with "m²" unit (e.g., "187m²", "406m²") 
+- rating: Full rating with units (e.g., "80A TP", "150A TP")
+- cable_specification: Complete spec (e.g., "4C x 16mm² ALU ECC CABLE")
+- serial_number: Exact serial (e.g., "34020113A", "35777285")
+- ct_type: CT specification (e.g., "DOL", "150/5A", "300/5A")
+- meter_type: "distribution" (default for most meters)
 
-- meter_number (NO): 
-  - Extract exactly as labeled (e.g., "DB-01A", "DB-03", "INCOMING-01")
-  
-- name (NAME): 
-  - Extract exactly as shown (e.g., "VACANT", "ACKERMANS", "MAIN BOARD 1")
-  
-- area (AREA): 
-  - MUST include "m²" unit in the string (e.g., "187m²", "406m²")
-  - If shown as just number, add "m²" to it
-  
-- rating (RATING): 
-  - MUST include full units (e.g., "150A TP", "100A TP", "250A TP")
-  - Preserve exact spacing and formatting
-  
-- cable_specification (CABLE): 
-  - Full specification with ALL units (e.g., "4C x 95mm² ALU ECC CABLE")
-  - Never abbreviate "ALU ECC CABLE"
-  
-- serial_number (SERIAL): 
-  - Extract number exactly as shown (e.g., "35779383", "35777285")
-  
-- ct_type (CT): 
-  - Extract with format/ratio (e.g., "150/5A", "DOL", "300/5A")
+POSITIONING (CRITICAL - This determines visual overlay accuracy):
+- position.x: Percentage from LEFT edge to meter box CENTER (0.0 = left edge, 100.0 = right edge)
+- position.y: Percentage from TOP edge to meter box CENTER (0.0 = top edge, 100.0 = bottom edge)
+- Use 1 decimal precision (e.g., 33.7, not 33 or 34)
+- Measure to the CENTER of each meter's rectangular box
 
-STEP 3: MEASURE EXACT POSITIONS (MOST CRITICAL)
-For EVERY meter, measure its position with extreme precision:
+SCALING (Match actual meter size on PDF):
+- scale_x: Width factor (measure meter box width relative to standard ~200px width)
+- scale_y: Height factor (measure meter box height relative to standard ~140px height)
+- If all meters same size: use 1.0 for all
+- If meters vary: adjust proportionally (0.8 = 80% size, 1.2 = 120% size)
+- Typical range: 0.5 to 2.0
 
-1. Locate the VISUAL CENTER of the meter's box/symbol on the schematic
-2. Measure from the image edges:
-   - x = Distance from LEFT edge as percentage (0.0 = far left, 100.0 = far right)  
-   - y = Distance from TOP edge as percentage (0.0 = top, 100.0 = bottom)
-3. Use ONE decimal place precision (e.g., 23.5, 47.2, 88.1)
-4. Verify each position visually before finalizing
+VALIDATION CHECKLIST:
+✓ Found ALL meters (count carefully)
+✓ Each meter has complete data (no missing fields)
+✓ Positions reflect actual visual layout
+✓ Scales match relative sizes on schematic
+✓ All units preserved (m², A TP, mm², ALU ECC CABLE)
 
-POSITION EXAMPLES:
-- Top-left corner meter: {"x": 12.5, "y": 15.3}
-- Center meter: {"x": 50.0, "y": 50.0}
-- Bottom-right meter: {"x": 87.3, "y": 91.2}
+OUTPUT FORMAT:
+{
+  "meters": [
+    {
+      "meter_number": "DB-01W",
+      "name": "CAR WASH",
+      "area": "187m²",
+      "rating": "80A TP",
+      "cable_specification": "4C x 16mm² ALU ECC CABLE",
+      "serial_number": "34020113A",
+      "ct_type": "DOL",
+      "meter_type": "distribution",
+      "position": {"x": 33.7, "y": 49.0},
+      "scale_x": 1.0,
+      "scale_y": 1.0
+    }
+  ]
+}
 
-METER TYPE CLASSIFICATION:
-- "council_bulk": Main incoming council supply (highest rating, labeled "INCOMING" or "COUNCIL")
-- "check_meter": Check/verification meters (labeled "CHECK METER")  
-- "distribution": Distribution boards (typically labeled DB-XX or similar)
+Return ONLY valid JSON. NO markdown, NO explanations.`;
 
-VALIDATION:
-- Every meter MUST have all fields present
-- Every meter MUST have a position with valid x and y numbers
-- Positions should match the visual layout of the schematic
-- Adjacent meters should have adjacent position values
-- Area must include "m²", rating must include "A TP" or similar
-
-Return ONLY valid JSON array with exact keys: meter_number, name, area (string with m²), rating, cable_specification, serial_number, ct_type, meter_type, position (object with x and y as numbers 0-100).
-
-NO markdown, NO explanations, ONLY the JSON array starting with [ and ending with ]
-Example: [{"meter_number":"DB-01A","name":"VACANT","area":"187m²","rating":"150A TP","cable_specification":"4C x 95mm² ALU ECC CABLE","serial_number":"35779383","ct_type":"150/5A","meter_type":"distribution","position":{"x":25.5,"y":30.2}}]`;
     }
 
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
@@ -355,10 +346,25 @@ Example: [{"meter_number":"DB-01A","name":"VACANT","area":"187m²","rating":"150
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
-    } else {
+      // Full extraction mode - handle both array and object with meters array
+      let metersArray;
+      if (Array.isArray(result)) {
+        // Old format: direct array
+        metersArray = result;
+      } else if (result.meters && Array.isArray(result.meters)) {
+        // New format: object with meters property
+        metersArray = result.meters;
+      } else {
+        console.error('Unexpected result format:', result);
+        return new Response(
+          JSON.stringify({ error: 'Unexpected response format from AI' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       // Validate all meters have required fields
       let totalMissing = 0;
-      result.forEach((meter: any, idx: number) => {
+      metersArray.forEach((meter: any, idx: number) => {
         const requiredFields = ['meter_number', 'name', 'rating', 'cable_specification', 'serial_number', 'ct_type'];
         const missingFields = requiredFields.filter(field => !meter[field]);
         if (missingFields.length > 0) {
@@ -372,16 +378,22 @@ Example: [{"meter_number":"DB-01A","name":"VACANT","area":"187m²","rating":"150
         }
       });
       
-      console.log(`✓ Successfully extracted ${result.length} meters`);
+      console.log(`✓ Successfully extracted ${metersArray.length} meters`);
       if (totalMissing > 0) {
         console.warn(`⚠️ ${totalMissing} meters have missing fields`);
       }
       
       return new Response(
-        JSON.stringify({ meters: result }),
+        JSON.stringify({ meters: metersArray }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+    
+    // Fallback return (should never reach here)
+    return new Response(
+      JSON.stringify({ error: 'Invalid mode or unexpected condition' }),
+      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
       console.error('Request timeout after 90 seconds');

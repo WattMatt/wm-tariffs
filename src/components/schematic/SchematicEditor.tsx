@@ -74,6 +74,7 @@ export default function SchematicEditor({
   const [selectedMeterId, setSelectedMeterId] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
   const [isEditMeterDialogOpen, setIsEditMeterDialogOpen] = useState(false);
+  const [isConfirmMeterDialogOpen, setIsConfirmMeterDialogOpen] = useState(false);
   const [editingMeter, setEditingMeter] = useState<any>(null);
 
   // Load initial data on mount
@@ -477,10 +478,13 @@ export default function SchematicEditor({
         canvas: { w: canvasWidth, h: canvasHeight }
       });
       
-      // Color based on status
-      let borderColor = '#854d0e'; // yellow/brown for pending
-      if (meter.status === 'approved') borderColor = '#166534'; // green
-      else if (meter.status === 'rejected') borderColor = '#991b1b'; // red
+      // Color based on status: RED = pending, GREEN = approved
+      let borderColor = '#dc2626'; // RED for pending (unconfirmed)
+      let fillColor = '#ffffff';
+      if (meter.status === 'approved') {
+        borderColor = '#16a34a'; // GREEN for approved (confirmed)
+        fillColor = '#f0fdf4'; // light green background
+      }
       
       // Create table-like card
       const cardWidth = 200;
@@ -493,20 +497,28 @@ export default function SchematicEditor({
         top: y,
         width: cardWidth,
         height: cardHeight,
-        fill: '#ffffff',
+        fill: fillColor,
         stroke: borderColor,
-        strokeWidth: 2,
+        strokeWidth: 3, // Thicker border for visibility
         hasControls: activeTool === 'move',
         selectable: activeTool === 'move',
-        hoverCursor: activeTool === 'move' ? 'move' : 'pointer',
+        hoverCursor: 'pointer',
         originX: 'center',
         originY: 'center',
         lockRotation: true,
-        scaleX: meter.scale_x || 1,
-        scaleY: meter.scale_y || 1,
+        scaleX: scaleX,
+        scaleY: scaleY,
       });
 
       background.set('data', { type: 'extracted', index });
+      
+      // Add click handler to open confirmation dialog
+      background.on('mousedown', () => {
+        if (activeTool === 'select') {
+          setSelectedMeterIndex(index);
+          console.log(`🎯 Selected meter ${index} for confirmation:`, meter.meter_number);
+        }
+      });
 
       // Create table rows with labels and values
       const fields = [
@@ -520,45 +532,44 @@ export default function SchematicEditor({
       ];
 
       const textElements: Text[] = [];
-      const savedScaleX = meter.scale_x || 1;
-      const savedScaleY = meter.scale_y || 1;
+      // Use the scaleX/scaleY already defined above
       
       fields.forEach((field, i) => {
         // Label text (left column)
         const labelText = new Text(field.label, {
-          left: x - (cardWidth * savedScaleX) / 2 + 5 * savedScaleX,
-          top: y - (cardHeight * savedScaleY) / 2 + i * rowHeight * savedScaleY + 3 * savedScaleY,
+          left: x - (cardWidth * scaleX) / 2 + 5 * scaleX,
+          top: y - (cardHeight * scaleY) / 2 + i * rowHeight * scaleY + 3 * scaleY,
           fontSize: 9,
           fill: '#000',
           fontWeight: 'bold',
           fontFamily: 'Arial',
           selectable: false,
           evented: false,
-          scaleX: savedScaleX,
-          scaleY: savedScaleY,
+          scaleX: scaleX,
+          scaleY: scaleY,
         });
         textElements.push(labelText);
 
         // Value text (right column) - truncate if too long
         const valueDisplay = field.value.length > 20 ? field.value.substring(0, 20) + '...' : field.value;
         const valueText = new Text(valueDisplay, {
-          left: x - (cardWidth * savedScaleX) / 2 + 55 * savedScaleX,
-          top: y - (cardHeight * savedScaleY) / 2 + i * rowHeight * savedScaleY + 3 * savedScaleY,
+          left: x - (cardWidth * scaleX) / 2 + 55 * scaleX,
+          top: y - (cardHeight * scaleY) / 2 + i * rowHeight * scaleY + 3 * scaleY,
           fontSize: 9,
           fill: '#000',
           fontFamily: 'Arial',
           selectable: false,
           evented: false,
-          scaleX: savedScaleX,
-          scaleY: savedScaleY,
+          scaleX: scaleX,
+          scaleY: scaleY,
         });
         textElements.push(valueText);
 
         // Horizontal separator line
         if (i < fields.length - 1) {
           const separator = new Line(
-            [x - (cardWidth * savedScaleX) / 2, y - (cardHeight * savedScaleY) / 2 + (i + 1) * rowHeight * savedScaleY, 
-             x + (cardWidth * savedScaleX) / 2, y - (cardHeight * savedScaleY) / 2 + (i + 1) * rowHeight * savedScaleY],
+            [x - (cardWidth * scaleX) / 2, y - (cardHeight * scaleY) / 2 + (i + 1) * rowHeight * scaleY, 
+             x + (cardWidth * scaleX) / 2, y - (cardHeight * scaleY) / 2 + (i + 1) * rowHeight * scaleY],
             {
               stroke: borderColor,
               strokeWidth: 1,
@@ -572,8 +583,8 @@ export default function SchematicEditor({
 
       // Vertical separator between label and value columns
       const verticalSeparator = new Line(
-        [x - (cardWidth * savedScaleX) / 2 + 50 * savedScaleX, y - (cardHeight * savedScaleY) / 2, 
-         x - (cardWidth * savedScaleX) / 2 + 50 * savedScaleX, y + (cardHeight * savedScaleY) / 2],
+        [x - (cardWidth * scaleX) / 2 + 50 * scaleX, y - (cardHeight * scaleY) / 2, 
+         x - (cardWidth * scaleX) / 2 + 50 * scaleX, y + (cardHeight * scaleY) / 2],
         {
           stroke: borderColor,
           strokeWidth: 1,
