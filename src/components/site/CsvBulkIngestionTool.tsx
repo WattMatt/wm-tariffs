@@ -814,15 +814,12 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
       
       setPreviewData({ rows: dataRows, headers });
       
-      // Auto-detect columns if not set
-      if (columnMapping.dateColumn === 0 && columnMapping.timeColumn === 1) {
+      // Auto-detect columns - map all headers to their names
+      if (columnMapping.dateColumn === "0" && columnMapping.timeColumn === "1") {
         const dateColIdx = headers.findIndex(h => 
           h.toLowerCase().includes('date') || 
-          h.toLowerCase().includes('datum')
-        );
-        const timeColIdx = headers.findIndex(h => 
-          h.toLowerCase().includes('time') || 
-          h.toLowerCase().includes('tijd')
+          h.toLowerCase().includes('datum') ||
+          h.toLowerCase().includes('time')
         );
         const valueColIdx = headers.findIndex(h => {
           const lower = h.toLowerCase();
@@ -841,14 +838,20 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                  (lower.includes('s') && lower.includes('(kva)'));
         });
         
+        // Initialize with detected values, but all columns are available
+        const initialHeaders: Record<string, string> = {};
+        headers.forEach((header, idx) => {
+          initialHeaders[idx] = header;
+        });
+        
         setColumnMapping({
-          dateColumn: dateColIdx >= 0 ? dateColIdx.toString() : "0",
-          timeColumn: timeColIdx >= 0 ? timeColIdx.toString() : (dateColIdx >= 0 ? "-1" : "1"),
-          valueColumn: valueColIdx >= 0 ? valueColIdx.toString() : "2",
+          dateColumn: dateColIdx >= 0 ? dateColIdx.toString() : "-1",
+          timeColumn: "-1", // No separate time column by default if date contains timestamp
+          valueColumn: valueColIdx >= 0 ? valueColIdx.toString() : "-1",
           kvaColumn: kvaColIdx >= 0 ? kvaColIdx.toString() : "-1",
           dateFormat: columnMapping.dateFormat,
           timeFormat: columnMapping.timeFormat,
-          renamedHeaders: {},
+          renamedHeaders: initialHeaders,
           splitColumns: {}
         });
       }
@@ -1561,31 +1564,28 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                   <Popover>
                                     <PopoverTrigger asChild>
                                       <button className="w-full text-left space-y-1 hover:bg-muted/50 p-1 rounded cursor-pointer transition-colors">
-                                        <div className="font-semibold flex items-center gap-1">
+                                        <div className="font-semibold text-xs">
                                           {part.name}
-                                          <span className="text-[10px] text-muted-foreground">✂️</span>
                                         </div>
-                                        <Badge 
-                                          variant={
-                                            part.columnId === columnMapping.dateColumn ? "default" :
-                                            part.columnId === columnMapping.timeColumn ? "secondary" :
-                                            part.columnId === columnMapping.valueColumn ? "default" :
-                                            part.columnId === columnMapping.kvaColumn ? "secondary" :
-                                            "outline"
-                                          } 
-                                          className="text-[10px] h-4"
-                                        >
-                                          {part.columnId === columnMapping.dateColumn ? '📅 Date' :
-                                           part.columnId === columnMapping.timeColumn ? '⏰ Time' :
-                                           part.columnId === columnMapping.valueColumn ? '⚡ kWh' :
-                                           part.columnId === columnMapping.kvaColumn ? '🔌 kVA' :
-                                           '—'}
-                                        </Badge>
+                                        <div className="flex gap-1 flex-wrap">
+                                          {part.columnId === columnMapping.dateColumn && (
+                                            <Badge variant="default" className="text-[10px] h-4">DateTime</Badge>
+                                          )}
+                                          {part.columnId === columnMapping.timeColumn && (
+                                            <Badge variant="secondary" className="text-[10px] h-4">Time</Badge>
+                                          )}
+                                          {part.columnId === columnMapping.valueColumn && (
+                                            <Badge variant="default" className="text-[10px] h-4">Primary Value</Badge>
+                                          )}
+                                          {part.columnId === columnMapping.kvaColumn && (
+                                            <Badge variant="secondary" className="text-[10px] h-4">kVA</Badge>
+                                          )}
+                                        </div>
                                       </button>
                                     </PopoverTrigger>
                                     <PopoverContent className="w-64 p-3 bg-background border shadow-lg z-50" align="start">
                                       <div className="space-y-3">
-                                        <div className="text-xs font-medium mb-2">Assign split part:</div>
+                                        <div className="text-xs font-medium mb-2">Assign as:</div>
                                         <div className="space-y-1">
                                           <Button
                                             size="sm"
@@ -1593,7 +1593,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                             className="w-full justify-start text-xs h-7"
                                             onClick={() => setColumnMapping({...columnMapping, dateColumn: part.columnId})}
                                           >
-                                            📅 Date
+                                            DateTime Column
                                           </Button>
                                           <Button
                                             size="sm"
@@ -1601,7 +1601,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                             className="w-full justify-start text-xs h-7"
                                             onClick={() => setColumnMapping({...columnMapping, timeColumn: part.columnId})}
                                           >
-                                            ⏰ Time
+                                            Time Column
                                           </Button>
                                           <Button
                                             size="sm"
@@ -1609,7 +1609,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                             className="w-full justify-start text-xs h-7"
                                             onClick={() => setColumnMapping({...columnMapping, valueColumn: part.columnId})}
                                           >
-                                            ⚡ kWh
+                                            Primary Value (kWh)
                                           </Button>
                                           <Button
                                             size="sm"
@@ -1617,7 +1617,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                             className="w-full justify-start text-xs h-7"
                                             onClick={() => setColumnMapping({...columnMapping, kvaColumn: part.columnId})}
                                           >
-                                            🔌 kVA
+                                            Secondary Value (kVA)
                                           </Button>
                                         </div>
                                       </div>
@@ -1632,33 +1632,31 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                 <Popover>
                                   <PopoverTrigger asChild>
                                     <button className="w-full text-left space-y-1 hover:bg-muted/50 p-1 rounded cursor-pointer transition-colors">
-                                      <div className="font-semibold flex items-center gap-1">
+                                      <div className="font-semibold text-xs">
                                         {displayName}
-                                        {isSplit && <span className="text-[10px] text-muted-foreground">✂️</span>}
+                                        {isSplit && <span className="text-[10px] text-muted-foreground ml-1">✂️</span>}
                                       </div>
-                                       <Badge 
-                                        variant={
-                                          idx.toString() === columnMapping.dateColumn ? "default" :
-                                          idx.toString() === columnMapping.timeColumn ? "secondary" :
-                                          idx.toString() === columnMapping.valueColumn ? "default" :
-                                          idx.toString() === columnMapping.kvaColumn ? "secondary" :
-                                          "outline"
-                                        } 
-                                        className="text-[10px] h-4"
-                                      >
-                                        {idx.toString() === columnMapping.dateColumn ? '📅 Date' :
-                                         idx.toString() === columnMapping.timeColumn ? '⏰ Time' :
-                                         idx.toString() === columnMapping.valueColumn ? '⚡ kWh' :
-                                         idx.toString() === columnMapping.kvaColumn ? '🔌 kVA' :
-                                         '—'}
-                                      </Badge>
+                                      <div className="flex gap-1 flex-wrap">
+                                        {idx.toString() === columnMapping.dateColumn && (
+                                          <Badge variant="default" className="text-[10px] h-4">DateTime</Badge>
+                                        )}
+                                        {idx.toString() === columnMapping.timeColumn && (
+                                          <Badge variant="secondary" className="text-[10px] h-4">Time</Badge>
+                                        )}
+                                        {idx.toString() === columnMapping.valueColumn && (
+                                          <Badge variant="default" className="text-[10px] h-4">Primary Value</Badge>
+                                        )}
+                                        {idx.toString() === columnMapping.kvaColumn && (
+                                          <Badge variant="secondary" className="text-[10px] h-4">kVA</Badge>
+                                        )}
+                                      </div>
                                     </button>
                                   </PopoverTrigger>
                                   <PopoverContent className="w-64 p-3 bg-background border shadow-lg z-50" align="start">
                                     <div className="space-y-3">
-                                      {/* Column Type Section */}
+                                      {/* Column Assignment Section */}
                                       <div>
-                                        <div className="text-xs font-medium mb-2">Column Type:</div>
+                                        <div className="text-xs font-medium mb-2">Assign as:</div>
                                         <div className="space-y-1">
                                           <Button
                                             size="sm"
@@ -1666,7 +1664,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                             className="w-full justify-start text-xs h-7"
                                             onClick={() => setColumnMapping({...columnMapping, dateColumn: idx.toString()})}
                                           >
-                                            📅 Date
+                                            DateTime Column
                                           </Button>
                                           <Button
                                             size="sm"
@@ -1674,7 +1672,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                             className="w-full justify-start text-xs h-7"
                                             onClick={() => setColumnMapping({...columnMapping, timeColumn: idx.toString()})}
                                           >
-                                            ⏰ Time
+                                            Time Column
                                           </Button>
                                           <Button
                                             size="sm"
@@ -1682,7 +1680,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                             className="w-full justify-start text-xs h-7"
                                             onClick={() => setColumnMapping({...columnMapping, valueColumn: idx.toString()})}
                                           >
-                                            ⚡ kWh
+                                            Primary Value (kWh)
                                           </Button>
                                           <Button
                                             size="sm"
@@ -1690,7 +1688,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                             className="w-full justify-start text-xs h-7"
                                             onClick={() => setColumnMapping({...columnMapping, kvaColumn: idx.toString()})}
                                           >
-                                            🔌 kVA
+                                            Secondary Value (kVA)
                                           </Button>
                                           <Button
                                             size="sm"
@@ -1705,7 +1703,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                               setColumnMapping(newMapping);
                                             }}
                                           >
-                                            — Unassign
+                                            Keep as Extra Data
                                           </Button>
                                         </div>
                                       </div>
