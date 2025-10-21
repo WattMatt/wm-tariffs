@@ -112,10 +112,11 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
   }, [isOpen]);
 
   useEffect(() => {
-    if (activeTab === "parse" && meters.length > 0) {
+    if (activeTab === "parse") {
+      console.log('Parse tab opened, loading files...');
       loadSavedFiles();
     }
-  }, [activeTab, meters.length]);
+  }, [activeTab]);
 
   // Regenerate previews when separator changes
   useEffect(() => {
