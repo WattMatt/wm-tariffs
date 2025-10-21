@@ -843,7 +843,16 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                             <TableCell key={colIdx} className="font-mono text-xs">
                               {colIdx === 0 ? (
                                 <span className="text-xs">
-                                  {new Date(row[header]).toLocaleString()}
+                                  {row[header] ? new Date(row[header] + 'Z').toLocaleString('en-ZA', {
+                                    year: 'numeric',
+                                    month: '2-digit',
+                                    day: '2-digit',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                    second: '2-digit',
+                                    hour12: false,
+                                    timeZone: 'UTC'
+                                  }).replace(',', '') : '—'}
                                 </span>
                               ) : (
                                 row[header]
