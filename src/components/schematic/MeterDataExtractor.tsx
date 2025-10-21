@@ -6,8 +6,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Loader2, Check, X, Edit } from "lucide-react";
+import { Loader2, Check, X, Edit, Pencil } from "lucide-react";
 import { PdfToImageConverter } from "./PdfToImageConverter";
+import { DrawingCanvas } from "./DrawingCanvas";
 
 interface DetectedRectangle {
   id: string;
@@ -45,6 +46,10 @@ interface MeterDataExtractorProps {
   onMeterSelect: (index: number | null) => void;
   detectedRectangles: DetectedRectangle[];
   onRectanglesUpdate: (rectangles: DetectedRectangle[]) => void;
+  isDrawingMode: boolean;
+  onDrawingModeChange: (mode: boolean) => void;
+  drawnRegions: any[];
+  onDrawnRegionsUpdate: (regions: any[]) => void;
 }
 
 export const MeterDataExtractor = ({ 
@@ -58,7 +63,11 @@ export const MeterDataExtractor = ({
   selectedMeterIndex,
   onMeterSelect,
   detectedRectangles,
-  onRectanglesUpdate
+  onRectanglesUpdate,
+  isDrawingMode,
+  onDrawingModeChange,
+  drawnRegions,
+  onDrawnRegionsUpdate
 }: MeterDataExtractorProps) => {
   const [isDetecting, setIsDetecting] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
@@ -71,6 +80,51 @@ export const MeterDataExtractor = ({
   const isPdf = imageUrl.toLowerCase().includes('.pdf');
   const approvedCount = extractedMeters.filter(m => m.status === 'approved').length;
   const totalCount = extractedMeters.length;
+
+  const extractFromDrawnRegion = async (region: any) => {
+    if (!convertedImageUrl && isPdf) {
+      toast.error('Please convert PDF to image first');
+      return;
+    }
+
+    setIsExtracting(true);
+    
+    try {
+      const urlToProcess = convertedImageUrl || imageUrl;
+      
+      const { data, error } = await supabase.functions.invoke('extract-schematic-meters', {
+        body: { 
+          imageUrl: urlToProcess,
+          filePath: null,
+          mode: 'extract-region',
+          region: region.bounds
+        }
+      });
+
+      if (error) throw new Error(error.message || 'Failed to extract meter data');
+      if (!data || !data.meter) throw new Error('No meter data returned');
+
+      console.log('Extracted meter from region:', data.meter);
+      
+      // Add the extracted meter with position from the region center
+      const newMeter = {
+        ...data.meter,
+        status: 'pending' as const,
+        position: {
+          x: region.bounds.left + (region.bounds.width / 2),
+          y: region.bounds.top + (region.bounds.height / 2)
+        }
+      };
+      
+      onMetersUpdate([...extractedMeters, newMeter]);
+      toast.success(`Extracted meter: ${data.meter.meter_number}`);
+    } catch (error) {
+      console.error('Error extracting from region:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to extract meter data');
+    } finally {
+      setIsExtracting(false);
+    }
+  };
 
   const detectRectangles = async () => {
     if (!convertedImageUrl && isPdf) {
@@ -515,17 +569,27 @@ export const MeterDataExtractor = ({
       <div className="flex items-center justify-between">
         <div className="flex-1 flex gap-2">
           <Button
+            onClick={() => onDrawingModeChange(!isDrawingMode)}
+            variant={isDrawingMode ? "default" : "outline"}
+            disabled={isPdf && !convertedImageUrl}
+            className="gap-2"
+          >
+            {isDrawingMode ? 'Exit Drawing Mode' : 'Draw Region to Extract'}
+          </Button>
+          
+          <Button
             onClick={detectRectangles}
             disabled={isDetecting || isExtracting || (isPdf && !convertedImageUrl) || detectedRectangles.length > 0}
+            variant="outline"
             className="gap-2"
           >
             {isDetecting ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Detecting Meter Boxes...
+                Detecting...
               </>
             ) : (
-              "1. Detect Meter Boxes"
+              "Auto-Detect All"
             )}
           </Button>
           
@@ -569,6 +633,15 @@ export const MeterDataExtractor = ({
       </div>
 
       {renderMeterDetailsPanel()}
+      
+      <DrawingCanvas
+        imageUrl={convertedImageUrl || imageUrl}
+        isDrawingMode={isDrawingMode}
+        onRegionDrawn={(region) => {
+          extractFromDrawnRegion(region);
+        }}
+        onExitDrawing={() => onDrawingModeChange(false)}
+      />
     </div>
   );
 };

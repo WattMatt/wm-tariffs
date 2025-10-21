@@ -48,6 +48,8 @@ export default function SchematicEditor({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [fabricCanvas, setFabricCanvas] = useState<FabricCanvas | null>(null);
   const [activeTool, setActiveTool] = useState<"select" | "meter" | "connection" | "move">("select");
+  const [isDrawingMode, setIsDrawingMode] = useState(false);
+  const [drawnRegions, setDrawnRegions] = useState<any[]>([]);
   const [meterPositions, setMeterPositions] = useState<MeterPosition[]>([]);
   const [lines, setLines] = useState<SchematicLine[]>([]);
   const [meters, setMeters] = useState<any[]>([]);
@@ -675,6 +677,10 @@ export default function SchematicEditor({
           onMeterSelect={setSelectedMeterIndex}
           detectedRectangles={detectedRectangles}
           onRectanglesUpdate={setDetectedRectangles}
+          isDrawingMode={isDrawingMode}
+          onDrawingModeChange={setIsDrawingMode}
+          drawnRegions={drawnRegions}
+          onDrawnRegionsUpdate={setDrawnRegions}
         />
         <div className="flex-1" />
         <div className="flex gap-2 items-center">

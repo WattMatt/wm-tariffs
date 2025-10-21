@@ -102,6 +102,26 @@ Extract the following from this SPECIFIC meter box:
 
 Return ONLY a valid JSON object with these exact keys. If a field is not visible, use null.
 NO markdown, NO explanations.`;
+    } else if (mode === 'extract-region') {
+      const { region } = await req.json();
+      promptText = `You are an expert electrical engineer extracting detailed meter information from a specific drawn region on an electrical schematic.
+
+FOCUS AREA: Extract data ONLY from the highlighted region at position:
+- Left: ${region.left}%, Top: ${region.top}%
+- Width: ${region.width}%, Height: ${region.height}%
+
+Analyze ONLY the content within this specific region and extract:
+- meter_number (NO): e.g., DB-03, MB-1, INCOMING-01
+- name (NAME/description): e.g., ACKERMANS, MAIN BOARD 1
+- area (AREA in m²): numeric value only, e.g., 406
+- rating (RATING): Include units, e.g., 100A TP, 150A TP
+- cable_specification (CABLE): Full spec, e.g., 4C x 50mm² ALU ECC CABLE
+- serial_number (SERIAL): e.g., 35777285
+- ct_type (CT): e.g., DOL, 150/5A, 300/5A
+- meter_type: one of: council_bulk, check_meter, solar, distribution
+
+Return ONLY a valid JSON object with these exact keys. If a field is not visible, use null.
+NO markdown, NO explanations.`;
     } else {
       // Full extraction mode (original)
       promptText = `You are an expert electrical engineer analyzing an electrical schematic diagram to extract meter information with PIXEL-PERFECT position accuracy.
@@ -255,7 +275,7 @@ NO markdown, NO explanations, ONLY the JSON array starting with [ and ending wit
         JSON.stringify({ rectangles: result }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
-    } else if (mode === 'extract-single') {
+    } else if (mode === 'extract-single' || mode === 'extract-region') {
       console.log(`Successfully extracted data for single meter`);
       return new Response(
         JSON.stringify({ meter: result }),

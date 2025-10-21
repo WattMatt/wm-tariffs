@@ -98,6 +98,8 @@ export default function SchematicViewer() {
   const [clickedPosition, setClickedPosition] = useState<{ x: number; y: number } | null>(null);
   const [isConverting, setIsConverting] = useState(false);
   const [detectedRectangles, setDetectedRectangles] = useState<any[]>([]);
+  const [isDrawingMode, setIsDrawingMode] = useState(false);
+  const [drawnRegions, setDrawnRegions] = useState<any[]>([]);
 
   useEffect(() => {
     if (id) {
@@ -616,6 +618,10 @@ export default function SchematicViewer() {
                   onMeterSelect={setSelectedMeterIndex}
                   detectedRectangles={detectedRectangles}
                   onRectanglesUpdate={setDetectedRectangles}
+                  isDrawingMode={isDrawingMode}
+                  onDrawingModeChange={setIsDrawingMode}
+                  drawnRegions={drawnRegions}
+                  onDrawnRegionsUpdate={setDrawnRegions}
                 />
 
                 {/* Placement Mode Banner */}
