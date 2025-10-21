@@ -120,13 +120,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
   useEffect(() => {
     if (activeTab === "parse") {
       console.log('Parse tab opened, loading files...');
-      // Preserve pending files from upload tab
-      const pendingFiles = files.filter(f => f.isNew && f.status === 'pending');
-      loadSavedFiles().then(() => {
-        if (pendingFiles.length > 0) {
-          setFiles(prev => [...pendingFiles, ...prev]);
-        }
-      });
+      loadSavedFiles();
     }
   }, [activeTab]);
 
