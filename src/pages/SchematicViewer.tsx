@@ -624,8 +624,8 @@ export default function SchematicViewer() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
+      <div className="flex flex-col h-[calc(100vh-4rem)] overflow-hidden">
+        <div className="flex items-center justify-between py-4 px-6 border-b shrink-0">
           <div className="flex items-center gap-4">
             <Button variant="outline" onClick={() => navigate("/schematics")}>
               <ArrowLeft className="w-4 h-4 mr-2" />
@@ -669,7 +669,7 @@ export default function SchematicViewer() {
         </div>
 
         {schematic.description && (
-          <Card className="border-border/50">
+          <Card className="border-border/50 mx-6 mt-4 shrink-0">
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Description</CardTitle>
             </CardHeader>
@@ -679,8 +679,8 @@ export default function SchematicViewer() {
           </Card>
         )}
 
-        <Card className="border-border/50">
-          <CardContent className="p-6">
+        <Card className="border-border/50 mx-6 my-4 flex-1 overflow-hidden flex flex-col">
+          <CardContent className="p-6 flex-1 overflow-hidden flex flex-col">
             {editMode ? (
               <SchematicEditor
                 schematicId={id!}
@@ -690,20 +690,19 @@ export default function SchematicViewer() {
                 onExtractedMetersUpdate={setExtractedMeters}
               />
             ) : (
-              <div className="space-y-4">
+              <div className="flex-1 overflow-hidden flex flex-col">
                 {/* Main Schematic View */}
-                <div className={meterPositions.length > 0 ? "grid grid-cols-[1fr_400px] gap-4" : ""}>
+                <div className={meterPositions.length > 0 ? "grid grid-cols-[1fr_400px] gap-4 flex-1 overflow-hidden" : "flex-1 overflow-hidden"}>
                   {/* Schematic with markers */}
-                  <div className="space-y-2">
+                  <div className="flex flex-col overflow-hidden">
                     {/* Help text */}
-                    <div className="text-xs text-muted-foreground text-center py-1 bg-muted/30 rounded">
+                    <div className="text-xs text-muted-foreground text-center py-1 bg-muted/30 rounded shrink-0">
                       💡 Scroll to zoom • Click and drag to pan
                     </div>
                      <div 
                       ref={containerRef}
-                      className="relative overflow-hidden bg-muted/20 rounded-lg border-2 border-border/50"
+                      className="relative bg-muted/20 rounded-lg border-2 border-border/50 flex-1 overflow-hidden"
                       style={{ 
-                        minHeight: '700px',
                         cursor: isDragging ? 'grabbing' : 'grab'
                       }}
                       onWheel={handleWheel}
@@ -958,8 +957,9 @@ export default function SchematicViewer() {
                   </div>
 
                   {/* Meter Details Side Panel - Only show when meters extracted */}
-                  {extractedMeters.length > 0 && (
-                    <div className="space-y-4">
+                  {meterPositions.length > 0 && (
+                    <div className="flex flex-col overflow-hidden">
+                      <div className="overflow-y-auto space-y-4 pr-2">
                       {selectedMeterIndex !== null ? (
                         <Card className="border-border/50 sticky top-4">
                           <CardHeader className="pb-3">
@@ -1185,6 +1185,7 @@ export default function SchematicViewer() {
                         </CardContent>
                       </Card>
                     </div>
+                  </div>
                   )}
                   </div>
                 </div>
@@ -1192,42 +1193,6 @@ export default function SchematicViewer() {
             )}
           </CardContent>
         </Card>
-
-        {meterPositions.length > 0 && (
-          <Card className="border-border/50">
-            <CardHeader>
-              <CardTitle>Mapped Meters</CardTitle>
-              <CardDescription>
-                {meterPositions.length} meter{meterPositions.length !== 1 ? "s" : ""} linked to
-                this schematic
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {meterPositions.map((position) => (
-                  <div
-                    key={position.id}
-                    className="flex items-center gap-3 p-3 rounded-lg bg-muted/50"
-                  >
-                    <div
-                      className={`w-3 h-3 rounded-full ${getMeterColor(
-                        position.meters?.meter_type || ""
-                      )}`}
-                    />
-                    <div>
-                      <p className="font-mono text-sm font-medium">
-                        {position.meters?.meter_number}
-                      </p>
-                      {position.label && (
-                        <p className="text-xs text-muted-foreground">{position.label}</p>
-                      )}
-                     </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
 
       </div>
     </DashboardLayout>
