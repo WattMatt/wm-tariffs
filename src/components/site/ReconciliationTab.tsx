@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { supabase } from "@/integrations/supabase/client";
@@ -20,11 +21,21 @@ interface ReconciliationTabProps {
 export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
   const [dateFrom, setDateFrom] = useState<Date>();
   const [dateTo, setDateTo] = useState<Date>();
+  const [timeFrom, setTimeFrom] = useState<string>("00:00");
+  const [timeTo, setTimeTo] = useState<string>("23:59");
   const [reconciliationData, setReconciliationData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [previewData, setPreviewData] = useState<any>(null);
   const [selectedColumns, setSelectedColumns] = useState<Set<string>>(new Set());
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+
+  // Helper to combine date and time
+  const getFullDateTime = (date: Date, time: string): Date => {
+    const [hours, minutes] = time.split(':').map(Number);
+    const combined = new Date(date);
+    combined.setHours(hours, minutes, 0, 0);
+    return combined;
+  };
 
   const handlePreview = async () => {
     if (!dateFrom || !dateTo) {
@@ -50,17 +61,17 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
 
       const bulkMeter = bulkMeters[0];
 
-      // Set end of day for dateTo to include all readings on the last day
-      const dateToEndOfDay = new Date(dateTo);
-      dateToEndOfDay.setHours(23, 59, 59, 999);
+      // Combine date and time for precise filtering
+      const fullDateTimeFrom = getFullDateTime(dateFrom, timeFrom);
+      const fullDateTimeTo = getFullDateTime(dateTo, timeTo);
 
       // Fetch readings
       const { data: readings, error: readingsError } = await supabase
         .from("meter_readings")
         .select("kwh_value, reading_timestamp, metadata")
         .eq("meter_id", bulkMeter.id)
-        .gte("reading_timestamp", dateFrom.toISOString())
-        .lte("reading_timestamp", dateToEndOfDay.toISOString())
+        .gte("reading_timestamp", fullDateTimeFrom.toISOString())
+        .lte("reading_timestamp", fullDateTimeTo.toISOString())
         .order("reading_timestamp", { ascending: true });
 
       if (readingsError) {
@@ -167,9 +178,9 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
         return;
       }
 
-      // Set end of day for dateTo to include all readings on the last day
-      const dateToEndOfDay = new Date(dateTo);
-      dateToEndOfDay.setHours(23, 59, 59, 999);
+      // Combine date and time for precise filtering
+      const fullDateTimeFrom = getFullDateTime(dateFrom, timeFrom);
+      const fullDateTimeTo = getFullDateTime(dateTo, timeTo);
 
       // Fetch readings for each meter within date range (deduplicated by timestamp)
       const meterData = await Promise.all(
@@ -179,8 +190,8 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
             .from("meter_readings")
             .select("kwh_value, reading_timestamp, metadata")
             .eq("meter_id", meter.id)
-            .gte("reading_timestamp", dateFrom.toISOString())
-            .lte("reading_timestamp", dateToEndOfDay.toISOString())
+            .gte("reading_timestamp", fullDateTimeFrom.toISOString())
+            .lte("reading_timestamp", fullDateTimeTo.toISOString())
             .order("reading_timestamp", { ascending: true });
 
           if (readingsError) {
@@ -308,45 +319,81 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>From Date</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !dateFrom && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {dateFrom ? format(dateFrom, "PPP") : "Pick a date"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar mode="single" selected={dateFrom} onSelect={setDateFrom} />
-                </PopoverContent>
-              </Popover>
+              <Label>From Date & Time</Label>
+              <div className="flex gap-2">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "flex-1 justify-start text-left font-normal",
+                        !dateFrom && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {dateFrom ? format(dateFrom, "PP") : "Pick a date"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar 
+                      mode="single" 
+                      selected={dateFrom} 
+                      onSelect={setDateFrom}
+                      className={cn("p-3 pointer-events-auto")}
+                    />
+                  </PopoverContent>
+                </Popover>
+                <Input
+                  type="time"
+                  value={timeFrom}
+                  onChange={(e) => setTimeFrom(e.target.value)}
+                  className="w-32"
+                />
+              </div>
+              {dateFrom && (
+                <div className="text-xs text-muted-foreground">
+                  {format(getFullDateTime(dateFrom, timeFrom), "PPpp")}
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">
-              <Label>To Date</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !dateTo && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {dateTo ? format(dateTo, "PPP") : "Pick a date"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar mode="single" selected={dateTo} onSelect={setDateTo} />
-                </PopoverContent>
-              </Popover>
+              <Label>To Date & Time</Label>
+              <div className="flex gap-2">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "flex-1 justify-start text-left font-normal",
+                        !dateTo && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {dateTo ? format(dateTo, "PP") : "Pick a date"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar 
+                      mode="single" 
+                      selected={dateTo} 
+                      onSelect={setDateTo}
+                      className={cn("p-3 pointer-events-auto")}
+                    />
+                  </PopoverContent>
+                </Popover>
+                <Input
+                  type="time"
+                  value={timeTo}
+                  onChange={(e) => setTimeTo(e.target.value)}
+                  className="w-32"
+                />
+              </div>
+              {dateTo && (
+                <div className="text-xs text-muted-foreground">
+                  {format(getFullDateTime(dateTo, timeTo), "PPpp")}
+                </div>
+              )}
             </div>
           </div>
 
@@ -365,7 +412,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
               <Badge variant="outline">{previewData.totalReadings} readings</Badge>
             </CardTitle>
             <CardDescription>
-              Select columns to include in reconciliation calculations. Date range: {dateFrom && format(dateFrom, "PPP")} to {dateTo && format(dateTo, "PPP")}
+              Select columns to include in reconciliation calculations. Range: {dateFrom && format(getFullDateTime(dateFrom, timeFrom), "PPpp")} to {dateTo && format(getFullDateTime(dateTo, timeTo), "PPpp")}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
