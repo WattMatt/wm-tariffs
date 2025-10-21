@@ -320,70 +320,76 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>From Date & Time</Label>
-              <div className="flex gap-2">
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "flex-1 justify-start text-left font-normal",
-                        !dateFrom && "text-muted-foreground"
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {dateFrom ? format(dateFrom, "PP") : "Pick a date"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !dateFrom && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {dateFrom ? `${format(dateFrom, "PP")} at ${timeFrom}` : "Pick date & time"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0 bg-popover z-50" align="start">
+                  <div className="space-y-3">
                     <Calendar 
                       mode="single" 
                       selected={dateFrom} 
                       onSelect={setDateFrom}
                       className={cn("p-3 pointer-events-auto")}
                     />
-                  </PopoverContent>
-                </Popover>
-                <Input
-                  type="time"
-                  value={timeFrom}
-                  onChange={(e) => setTimeFrom(e.target.value)}
-                  className="w-32"
-                />
-              </div>
+                    <div className="px-3 pb-3 border-t pt-3">
+                      <Label className="text-xs mb-2 block">Time</Label>
+                      <Input
+                        type="time"
+                        value={timeFrom}
+                        onChange={(e) => setTimeFrom(e.target.value)}
+                        className="w-full"
+                      />
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
             </div>
 
             <div className="space-y-2">
               <Label>To Date & Time</Label>
-              <div className="flex gap-2">
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "flex-1 justify-start text-left font-normal",
-                        !dateTo && "text-muted-foreground"
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {dateTo ? format(dateTo, "PP") : "Pick a date"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !dateTo && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {dateTo ? `${format(dateTo, "PP")} at ${timeTo}` : "Pick date & time"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0 bg-popover z-50" align="start">
+                  <div className="space-y-3">
                     <Calendar 
                       mode="single" 
                       selected={dateTo} 
                       onSelect={setDateTo}
                       className={cn("p-3 pointer-events-auto")}
                     />
-                  </PopoverContent>
-                </Popover>
-                <Input
-                  type="time"
-                  value={timeTo}
-                  onChange={(e) => setTimeTo(e.target.value)}
-                  className="w-32"
-                />
-              </div>
+                    <div className="px-3 pb-3 border-t pt-3">
+                      <Label className="text-xs mb-2 block">Time</Label>
+                      <Input
+                        type="time"
+                        value={timeTo}
+                        onChange={(e) => setTimeTo(e.target.value)}
+                        className="w-full"
+                      />
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
             </div>
           </div>
 
