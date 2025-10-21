@@ -1825,20 +1825,6 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                     <div className="font-semibold text-xs">
                                       {part.name}
                                     </div>
-                                    <div className="flex gap-1 flex-wrap mt-1">
-                                      {part.columnId === columnMapping.dateColumn && (
-                                        <Badge variant="default" className="text-[10px] h-4">DateTime</Badge>
-                                      )}
-                                      {part.columnId === columnMapping.timeColumn && (
-                                        <Badge variant="secondary" className="text-[10px] h-4">Time</Badge>
-                                      )}
-                                      {part.columnId === columnMapping.valueColumn && (
-                                        <Badge variant="default" className="text-[10px] h-4">Primary Value</Badge>
-                                      )}
-                                      {part.columnId === columnMapping.kvaColumn && (
-                                        <Badge variant="secondary" className="text-[10px] h-4">kVA</Badge>
-                                      )}
-                                    </div>
                                   </th>
                                 );
                               });
@@ -1852,20 +1838,6 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                               <th key={idx} className="px-3 py-2 text-left font-medium whitespace-nowrap border-r">
                                 <div className="font-semibold text-xs">
                                   {displayName}
-                                </div>
-                                <div className="flex gap-1 flex-wrap mt-1">
-                                  {idx.toString() === columnMapping.dateColumn && (
-                                    <Badge variant="default" className="text-[10px] h-4">DateTime</Badge>
-                                  )}
-                                  {idx.toString() === columnMapping.timeColumn && (
-                                    <Badge variant="secondary" className="text-[10px] h-4">Time</Badge>
-                                  )}
-                                  {idx.toString() === columnMapping.valueColumn && (
-                                    <Badge variant="default" className="text-[10px] h-4">Primary Value</Badge>
-                                  )}
-                                  {idx.toString() === columnMapping.kvaColumn && (
-                                    <Badge variant="secondary" className="text-[10px] h-4">kVA</Badge>
-                                  )}
                                 </div>
                               </th>
                             );
