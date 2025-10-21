@@ -97,19 +97,35 @@ export default function SchematicEditor({
       backgroundColor: "#f8f9fa",
     });
 
-    // Enable mouse wheel zoom
+    // Mouse wheel: Zoom in non-draw modes, Pan in draw mode
     canvas.on('mouse:wheel', (opt) => {
+      const currentTool = activeToolRef.current;
       const delta = opt.e.deltaY;
-      let newZoom = canvas.getZoom();
-      newZoom *= 0.999 ** delta;
-      if (newZoom > 10) newZoom = 10;
-      if (newZoom < 0.5) newZoom = 0.5;
       
-      const pointer = canvas.getPointer(opt.e);
-      canvas.zoomToPoint(pointer, newZoom);
-      setZoom(newZoom);
-      opt.e.preventDefault();
-      opt.e.stopPropagation();
+      if (currentTool === 'draw') {
+        // In draw mode: use wheel to pan vertically
+        opt.e.preventDefault();
+        opt.e.stopPropagation();
+        
+        const vpt = canvas.viewportTransform;
+        if (vpt) {
+          // Pan vertically with wheel
+          vpt[5] -= delta;
+          canvas.requestRenderAll();
+        }
+      } else {
+        // In other modes: use wheel to zoom
+        let newZoom = canvas.getZoom();
+        newZoom *= 0.999 ** delta;
+        if (newZoom > 10) newZoom = 10;
+        if (newZoom < 0.5) newZoom = 0.5;
+        
+        const pointer = canvas.getPointer(opt.e);
+        canvas.zoomToPoint(pointer, newZoom);
+        setZoom(newZoom);
+        opt.e.preventDefault();
+        opt.e.stopPropagation();
+      }
     });
 
     // Enable panning with click + drag (when not clicking on objects or in select mode)
@@ -1236,7 +1252,7 @@ export default function SchematicEditor({
         </div>
         <div className="text-xs">
           {activeTool === 'draw' ? (
-            <>🎯 Click once to start, click again to finish • Right mouse to pan</>
+            <>🎯 Click once to start, click again to finish • Scroll wheel to pan • Right-click drag to pan</>
           ) : (
             <>💡 Scroll wheel to zoom • Left click + drag to pan</>
           )}
