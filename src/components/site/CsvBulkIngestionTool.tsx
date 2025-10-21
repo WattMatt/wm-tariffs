@@ -18,7 +18,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Upload, Play, Download, Trash2, FileText, CheckCircle2, AlertCircle, Eye, Settings2 } from "lucide-react";
+import { Upload, Play, Download, Trash2, FileText, CheckCircle2, AlertCircle, Eye, Settings2, Database, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -29,6 +29,16 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface CsvBulkIngestionToolProps {
   siteId: string;
@@ -75,6 +85,8 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
   const [previewingFile, setPreviewingFile] = useState<FileItem | null>(null);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -569,6 +581,33 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
     }
   };
 
+  const handleClearDatabase = async () => {
+    setIsClearing(true);
+    try {
+      toast.info("Clearing database - this may take a few minutes...", { duration: 10000 });
+      
+      const { data, error } = await supabase.rpc('delete_site_readings', {
+        p_site_id: siteId
+      });
+
+      if (error) throw error;
+
+      const totalDeleted = data || 0;
+      toast.success(
+        `Database cleared: ${totalDeleted.toLocaleString()} readings deleted`,
+        { duration: 5000 }
+      );
+      
+      setShowClearConfirm(false);
+      setTimeout(() => onDataChange?.(), 1000);
+    } catch (error: any) {
+      console.error("Error clearing database:", error);
+      toast.error(`Failed to clear database: ${error.message}`);
+    } finally {
+      setIsClearing(false);
+    }
+  };
+
   const handleParseAll = async () => {
     // Only parse files that haven't been successfully parsed yet (uploaded or error status)
     const unparsedFiles = files.filter(f => 
@@ -814,9 +853,10 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 overflow-hidden flex flex-col">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="upload">1. Upload Files</TabsTrigger>
             <TabsTrigger value="parse">2. Parse & Ingest</TabsTrigger>
+            <TabsTrigger value="clear">3. Clear Database</TabsTrigger>
           </TabsList>
 
           <TabsContent value="upload" className="flex-1 overflow-y-auto space-y-4">
@@ -1316,7 +1356,89 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
               </div>
             )}
           </TabsContent>
+
+          <TabsContent value="clear" className="flex-1 overflow-auto">
+            <Card className="border-destructive/50">
+              <CardHeader>
+                <CardTitle className="text-destructive flex items-center gap-2">
+                  <Database className="w-5 h-5" />
+                  Clear All Database Readings
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  This will permanently delete all meter readings for this site from the database.
+                </p>
+                
+                <div className="bg-muted/50 p-4 rounded-lg space-y-2">
+                  <p className="text-sm font-medium">What will be cleared:</p>
+                  <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                    <li>• All meter reading records in the database</li>
+                    <li>• Historical data and timestamps</li>
+                    <li>• Calculated values and reconciliations</li>
+                  </ul>
+                </div>
+
+                <div className="bg-muted/50 p-4 rounded-lg space-y-2">
+                  <p className="text-sm font-medium">What will NOT be cleared:</p>
+                  <ul className="text-sm text-muted-foreground space-y-1 ml-4">
+                    <li>• CSV files in storage (delete from Parse tab)</li>
+                    <li>• Meter configurations</li>
+                    <li>• Site settings</li>
+                  </ul>
+                </div>
+
+                <div className="flex items-center gap-2 p-3 bg-destructive/10 rounded-lg">
+                  <AlertCircle className="w-4 h-4 text-destructive" />
+                  <p className="text-sm font-medium text-destructive">
+                    This action cannot be undone!
+                  </p>
+                </div>
+
+                <Button
+                  variant="destructive"
+                  onClick={() => setShowClearConfirm(true)}
+                  disabled={isClearing}
+                  className="w-full"
+                >
+                  {isClearing ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                      Clearing Database...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Clear All Readings
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+          </TabsContent>
         </Tabs>
+
+        <AlertDialog open={showClearConfirm} onOpenChange={setShowClearConfirm}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will permanently delete all meter readings for this site from the database. 
+                This action cannot be undone. CSV files will remain in storage.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isClearing}>Cancel</AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={handleClearDatabase} 
+                disabled={isClearing}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {isClearing ? "Clearing..." : "Yes, clear all readings"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </DialogContent>
     </Dialog>
   );
