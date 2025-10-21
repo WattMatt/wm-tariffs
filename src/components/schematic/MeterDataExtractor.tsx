@@ -9,15 +9,6 @@ import { toast } from "sonner";
 import { Loader2, Check, X, Edit, Pencil } from "lucide-react";
 import { PdfToImageConverter } from "./PdfToImageConverter";
 
-interface DetectedRectangle {
-  id: string;
-  position: { x: number; y: number };
-  bounds: { width: number; height: number };
-  hasData: boolean;
-  extractedData?: Partial<ExtractedMeterData>;
-  isExtracting?: boolean;
-}
-
 interface ExtractedMeterData {
   meter_number: string;
   name: string;
@@ -43,8 +34,8 @@ interface MeterDataExtractorProps {
   onMetersUpdate: (meters: ExtractedMeterData[]) => void;
   selectedMeterIndex: number | null;
   onMeterSelect: (index: number | null) => void;
-  detectedRectangles: DetectedRectangle[];
-  onRectanglesUpdate: (rectangles: DetectedRectangle[]) => void;
+  detectedRectangles: any[]; // Kept for compatibility but unused
+  onRectanglesUpdate: (rectangles: any[]) => void; // Kept for compatibility but unused
   isDrawingMode: boolean;
   onDrawingModeChange: (mode: boolean) => void;
   drawnRegions: any[];
@@ -61,12 +52,10 @@ export const MeterDataExtractor = ({
   onMetersUpdate,
   selectedMeterIndex,
   onMeterSelect,
-  detectedRectangles,
-  onRectanglesUpdate,
+  // detectedRectangles and onRectanglesUpdate kept for compatibility but unused
   isDrawingMode,
   onDrawingModeChange,
-  drawnRegions,
-  onDrawnRegionsUpdate
+  // drawnRegions and onDrawnRegionsUpdate kept for compatibility but unused
 }: MeterDataExtractorProps) => {
   const [isDetecting, setIsDetecting] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
@@ -74,191 +63,16 @@ export const MeterDataExtractor = ({
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editedMeter, setEditedMeter] = useState<ExtractedMeterData | null>(null);
   const [convertedImageUrl, setConvertedImageUrl] = useState<string | null>(null);
-  const [extractionPhase, setExtractionPhase] = useState<'idle' | 'detecting' | 'extracting'>('idle');
 
   const isPdf = imageUrl.toLowerCase().includes('.pdf');
   const approvedCount = extractedMeters.filter(m => m.status === 'approved').length;
   const totalCount = extractedMeters.length;
 
-  const extractFromDrawnRegion = async (region: any) => {
-    // This is now handled in handleMouseUp
-  };
-
-  const detectRectangles = async () => {
-    if (!convertedImageUrl && isPdf) {
-      toast.error('Please convert PDF to image first');
-      return;
-    }
-
-    setIsDetecting(true);
-    setExtractionPhase('detecting');
-    
-    try {
-      const urlToProcess = convertedImageUrl || imageUrl;
-      
-      const { data, error } = await supabase.functions.invoke('extract-schematic-meters', {
-        body: { 
-          imageUrl: urlToProcess,
-          filePath: null,
-          mode: 'detect-rectangles'
-        }
-      });
-
-      if (error) throw new Error(error.message || 'Failed to detect rectangles');
-      if (!data || !data.rectangles) throw new Error('No rectangles returned');
-
-      console.log('Detected rectangles:', data.rectangles);
-      onRectanglesUpdate(data.rectangles);
-      toast.success(`Detected ${data.rectangles.length} meter boxes - click each to extract data`);
-    } catch (error) {
-      console.error('Error detecting rectangles:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to detect meter boxes');
-    } finally {
-      setIsDetecting(false);
-    }
-  };
-
-  const extractSingleMeter = async (rectangleId: string) => {
-    const rectangle = detectedRectangles.find(r => r.id === rectangleId);
-    if (!rectangle) return;
-
-    // Mark this rectangle as extracting
-    const updated = detectedRectangles.map(r => 
-      r.id === rectangleId ? { ...r, isExtracting: true } : r
-    );
-    onRectanglesUpdate(updated);
-
-    try {
-      const urlToProcess = convertedImageUrl || imageUrl;
-      
-      const { data, error } = await supabase.functions.invoke('extract-schematic-meters', {
-        body: { 
-          imageUrl: urlToProcess,
-          filePath: null,
-          mode: 'extract-single',
-          rectangleId,
-          rectangleBounds: rectangle.position
-        }
-      });
-
-      if (error) throw new Error(error.message || 'Failed to extract meter data');
-      if (!data || !data.meter) throw new Error('No meter data returned');
-
-      // Update rectangle with extracted data
-      const updatedRects = detectedRectangles.map(r => 
-        r.id === rectangleId 
-          ? { ...r, hasData: true, extractedData: data.meter, isExtracting: false }
-          : r
-      );
-      onRectanglesUpdate(updatedRects);
-      
-      toast.success(`Extracted data for meter box ${rectangleId}`);
-    } catch (error) {
-      console.error('Error extracting meter:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to extract meter data');
-      
-      // Mark as failed
-      const updatedRects = detectedRectangles.map(r => 
-        r.id === rectangleId 
-          ? { ...r, hasData: false, isExtracting: false }
-          : r
-      );
-      onRectanglesUpdate(updatedRects);
-    }
-  };
-
-  const extractMetersFromSchematic = async () => {
-    setIsExtracting(true);
-    setExtractionProgress(0);
-    
-    // Progress simulator
-    const progressInterval = setInterval(() => {
-      setExtractionProgress(prev => Math.min(prev + 1, 95));
-    }, 1000);
-
-    try {
-      console.log('Extracting meters from schematic');
-      
-      // Use converted image if available, otherwise use original
-      const urlToProcess = convertedImageUrl || imageUrl;
-      
-      // Create abort controller with 100 second timeout (slightly longer than edge function's 90s)
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => {
-        controller.abort();
-        console.error('Request timeout after 100 seconds');
-      }, 100000);
-
-      const { data, error } = await supabase.functions.invoke('extract-schematic-meters', {
-        body: { 
-          imageUrl: urlToProcess,
-          filePath: null // We're using data URL now
-        }
-      });
-
-      clearTimeout(timeoutId);
-      clearInterval(progressInterval);
-      setExtractionProgress(100);
-
-      if (error) {
-        console.error('Edge function error:', error);
-        if (error.message?.includes('Failed to send a request')) {
-          throw new Error('Connection failed. The extraction service may be busy. Please try again.');
-        }
-        if (error.message?.includes('aborted')) {
-          throw new Error('Extraction timed out after 100 seconds. The schematic may be too complex. Try with a simpler schematic or smaller file.');
-        }
-        throw new Error(error.message || 'Failed to extract meters');
-      }
-
-      if (!data || !data.meters) {
-        throw new Error('No meter data returned from extraction service');
-      }
-
-      console.log('Extracted meters:', data.meters);
-      
-      // Validate positions from AI extraction - positions should be 0-100 percentages
-      const metersWithPosition = data.meters.map((meter: any, index: number) => {
-        let position = meter.position;
-        
-        // Validate position exists and has proper format
-        if (!position || typeof position.x !== 'number' || typeof position.y !== 'number') {
-          console.warn(`⚠️ Meter ${index + 1} (${meter.meter_number}) missing valid position from AI`);
-          // Center position as fallback with warning
-          position = {
-            x: 50,
-            y: 50
-          };
-        }
-        
-        // Ensure positions are within 0-100 range
-        position.x = Math.max(0, Math.min(100, position.x));
-        position.y = Math.max(0, Math.min(100, position.y));
-        
-        return {
-          ...meter,
-          status: 'pending' as const,
-          position
-        };
-      });
-      
-      onMetersUpdate(metersWithPosition);
-      toast.success(`Extracted ${data.meters.length} meters - review and approve each one`);
-    } catch (error) {
-      console.error('Error extracting meters:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to extract meter data from schematic';
-      toast.error(errorMessage, { duration: 5000 });
-    } finally {
-      setIsExtracting(false);
-      setExtractionProgress(0);
-    }
-  };
-
   const handleImageGenerated = (imageDataUrl: string) => {
     console.log('PDF converted to image, ready for extraction');
     setConvertedImageUrl(imageDataUrl);
     onConvertedImageReady?.(imageDataUrl);
-    toast.success('PDF converted! Now click "Extract Meters" to analyze.');
+    toast.success('PDF converted! Now click "Start Drawing" to begin extracting meters.');
   };
 
   const handleEditMeter = (index: number) => {
@@ -510,8 +324,19 @@ export const MeterDataExtractor = ({
   return (
     <div className="space-y-4">
       {isPdf && !convertedImageUrl && (
-        <Card className="border-border/50">
+        <Card className="border-border/50 bg-blue-50/50 dark:bg-blue-950/20">
           <CardContent className="pt-6">
+            <div className="flex items-start gap-3 mb-4">
+              <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/40">
+                <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="font-semibold text-sm mb-1">Step 1: Convert PDF to Image</h3>
+                <p className="text-xs text-muted-foreground">Your schematic is a PDF. Convert it to an image first for meter extraction.</p>
+              </div>
+            </div>
             <PdfToImageConverter
               pdfUrl={imageUrl}
               onImageGenerated={handleImageGenerated}
@@ -520,54 +345,54 @@ export const MeterDataExtractor = ({
         </Card>
       )}
       
+      {!isDrawingMode && extractedMeters.length === 0 && (!isPdf || convertedImageUrl) && (
+        <Card className="border-border/50 bg-green-50/50 dark:bg-green-950/20">
+          <CardContent className="pt-6">
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-lg bg-green-100 dark:bg-green-900/40">
+                <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-sm mb-1">Ready to Extract Meters</h3>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Click "Start Drawing" below, then draw a rectangle around each meter box on the schematic. 
+                  The AI will automatically extract all meter details.
+                </p>
+                <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
+                  <li>Left click + drag to draw rectangles around meters</li>
+                  <li>Middle/right mouse to pan • Scroll wheel to zoom</li>
+                  <li>Review and approve each extracted meter</li>
+                </ul>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      
       <div className="flex items-center justify-between">
-        <div className="flex-1 flex gap-2">
+        <div className="flex-1 flex gap-2 items-center">
           <Button
             onClick={() => onDrawingModeChange(!isDrawingMode)}
             variant={isDrawingMode ? "default" : "outline"}
             disabled={isPdf && !convertedImageUrl}
             className="gap-2"
+            size="lg"
           >
-            {isDrawingMode ? 'Exit Drawing Mode' : 'Draw Region to Extract'}
+            <Pencil className="h-4 w-4" />
+            {isDrawingMode ? 'Exit Drawing Mode' : 'Start Drawing'}
           </Button>
           
-          <Button
-            onClick={detectRectangles}
-            disabled={isDetecting || isExtracting || (isPdf && !convertedImageUrl) || detectedRectangles.length > 0}
-            variant="outline"
-            className="gap-2"
-          >
-            {isDetecting ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Detecting...
-              </>
-            ) : (
-              "Auto-Detect All"
-            )}
-          </Button>
-          
-          {detectedRectangles.length > 0 && (
-            <Button
-              onClick={extractMetersFromSchematic}
-              disabled={isExtracting || (isPdf && !convertedImageUrl)}
-              variant="secondary"
-              className="gap-2"
-            >
-              {isExtracting ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Extracting All... {extractionProgress}%
-                </>
-              ) : (
-                "Extract All (Legacy)"
-              )}
-            </Button>
-          )}
-          {isExtracting && (
-            <p className="text-xs text-muted-foreground mt-2">
-              AI is analyzing the schematic diagram. This may take up to 90 seconds for complex schematics.
-            </p>
+          {isDrawingMode && (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                <span className="text-xs font-medium text-blue-700 dark:text-blue-300">
+                  Drawing Mode Active - Draw rectangles around meters
+                </span>
+              </div>
+            </div>
           )}
         </div>
 
@@ -579,7 +404,9 @@ export const MeterDataExtractor = ({
             <Button 
               onClick={handleApproveAndSave} 
               disabled={approvedCount === 0}
+              className="gap-2"
             >
+              <Check className="h-4 w-4" />
               Save {approvedCount > 0 ? `${approvedCount} Approved` : 'Approved'} Meter{approvedCount !== 1 ? 's' : ''}
             </Button>
           </div>

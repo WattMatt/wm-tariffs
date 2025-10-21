@@ -70,7 +70,6 @@ export default function SchematicEditor({
   const [selectedMeterIndex, setSelectedMeterIndex] = useState<number | null>(null);
   const [selectedMeterId, setSelectedMeterId] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
-  const [detectedRectangles, setDetectedRectangles] = useState<any[]>([]);
 
   useEffect(() => {
     fetchMeters();
@@ -809,8 +808,8 @@ export default function SchematicEditor({
           }}
           selectedMeterIndex={selectedMeterIndex}
           onMeterSelect={setSelectedMeterIndex}
-          detectedRectangles={detectedRectangles}
-          onRectanglesUpdate={setDetectedRectangles}
+          detectedRectangles={[]}
+          onRectanglesUpdate={() => {}}
           isDrawingMode={isDrawingMode}
           onDrawingModeChange={setIsDrawingMode}
           drawnRegions={drawnRegions}
@@ -843,14 +842,18 @@ export default function SchematicEditor({
 
       <div className="text-sm text-muted-foreground space-y-1">
         <div>
-          {activeTool === "meter" && "Click on the schematic to place a new meter"}
+          {activeTool === "meter" && "Click on the schematic to manually place a new meter"}
           {activeTool === "move" && "Drag meters to reposition them on the schematic"}
-          {activeTool === "connection" && "Click on two meters to connect them"}
-          {activeTool === "select" && !isDrawingMode && "View mode - select a tool to edit"}
-          {isDrawingMode && "✏️ Draw mode: LEFT CLICK + DRAG to draw rectangle around meter • Middle/Right mouse to pan"}
+          {activeTool === "connection" && "Click on two meters to draw a connection line"}
+          {activeTool === "select" && !isDrawingMode && "View mode - use tools above to edit"}
+          {isDrawingMode && "✏️ AI Extraction Mode: LEFT CLICK + DRAG to draw box around meter • Middle/Right mouse to pan • Scroll to zoom"}
         </div>
         <div className="text-xs">
-          💡 Scroll wheel to zoom • {isDrawingMode ? "Middle/right mouse to pan" : "Left click + drag to pan"}
+          {!isDrawingMode ? (
+            <>💡 Scroll wheel to zoom • Left click + drag to pan</>
+          ) : (
+            <>🎯 Draw tight boxes around meter labels for best extraction results</>
+          )}
         </div>
       </div>
 
