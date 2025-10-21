@@ -57,9 +57,9 @@ export default function MetersTab({ siteId }: MetersTabProps) {
   const [viewReadingsMeterId, setViewReadingsMeterId] = useState<string | null>(null);
   const [viewReadingsMeterNumber, setViewReadingsMeterNumber] = useState<string>("");
   const [isReadingsViewOpen, setIsReadingsViewOpen] = useState(false);
-  const [viewUploadedFilesMeterId, setViewUploadedFilesMeterId] = useState<string | null>(null);
-  const [isUploadedFilesViewOpen, setIsUploadedFilesViewOpen] = useState(false);
-  const [uploadedFiles, setUploadedFiles] = useState<any[]>([]);
+  const [isRawCsvViewOpen, setIsRawCsvViewOpen] = useState(false);
+  const [rawCsvData, setRawCsvData] = useState<any[]>([]);
+  const [rawCsvHeaders, setRawCsvHeaders] = useState<string[]>([]);
   const [editingMeter, setEditingMeter] = useState<Meter | null>(null);
   const [deletingMeterId, setDeletingMeterId] = useState<string | null>(null);
 
@@ -190,19 +190,43 @@ export default function MetersTab({ siteId }: MetersTabProps) {
     setDeletingMeterId(null);
   };
 
-  const fetchUploadedFiles = async (meterId: string) => {
-    const { data, error } = await supabase
+  const fetchRawCsvData = async (meterId: string) => {
+    const { data: files, error: filesError } = await supabase
       .from('meter_csv_files')
-      .select('*')
+      .select('file_path, file_name')
       .eq('meter_id', meterId)
-      .order('uploaded_at', { ascending: false });
+      .order('uploaded_at', { ascending: false })
+      .limit(1);
 
-    if (error) {
-      toast.error("Failed to fetch uploaded files");
+    if (filesError || !files || files.length === 0) {
+      toast.error("No CSV file found for this meter");
       return;
     }
 
-    setUploadedFiles(data || []);
+    const { data: fileData, error: storageError } = await supabase.storage
+      .from('meter_csvs')
+      .download(files[0].file_path);
+
+    if (storageError || !fileData) {
+      toast.error("Failed to download CSV file");
+      return;
+    }
+
+    const text = await fileData.text();
+    const lines = text.split('\n').filter(line => line.trim());
+    if (lines.length === 0) return;
+
+    const headers = lines[0].split(',').map(h => h.trim());
+    const rows = lines.slice(1).map(line => {
+      const values = line.split(',').map(v => v.trim());
+      return headers.reduce((obj, header, idx) => {
+        obj[header] = values[idx] || '';
+        return obj;
+      }, {} as any);
+    });
+
+    setRawCsvHeaders(headers);
+    setRawCsvData(rows);
   };
 
   const handleCloseDialog = () => {
@@ -509,11 +533,10 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                               variant="outline"
                               size="sm"
                               onClick={async () => {
-                                setViewUploadedFilesMeterId(meter.id);
-                                await fetchUploadedFiles(meter.id);
-                                setIsUploadedFilesViewOpen(true);
+                                await fetchRawCsvData(meter.id);
+                                setIsRawCsvViewOpen(true);
                               }}
-                              title="View uploaded CSV files"
+                              title="View raw CSV data"
                             >
                               <Eye className="w-4 h-4" />
                             </Button>
@@ -525,7 +548,7 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                                 setViewReadingsMeterNumber(meter.meter_number);
                                 setIsReadingsViewOpen(true);
                               }}
-                              title="View parsed data"
+                              title="View parsed readings"
                             >
                               <FileCheck className="w-4 h-4" />
                             </Button>
@@ -564,48 +587,42 @@ export default function MetersTab({ siteId }: MetersTabProps) {
         meterNumber={viewReadingsMeterNumber}
       />
 
-      <Dialog open={isUploadedFilesViewOpen} onOpenChange={setIsUploadedFilesViewOpen}>
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+      <Dialog open={isRawCsvViewOpen} onOpenChange={setIsRawCsvViewOpen}>
+        <DialogContent className="max-w-6xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Uploaded CSV Files</DialogTitle>
+            <DialogTitle>Raw CSV Data</DialogTitle>
             <DialogDescription>
-              View all CSV files uploaded for this meter
+              View the data as it appears in the uploaded CSV file
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
-            {uploadedFiles.length === 0 ? (
+            {rawCsvData.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
-                No files uploaded yet
+                No CSV data available
               </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>File Name</TableHead>
-                    <TableHead>Upload Date</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Readings Inserted</TableHead>
-                    <TableHead>Duplicates Skipped</TableHead>
-                    <TableHead>Parse Errors</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {uploadedFiles.map((file) => (
-                    <TableRow key={file.id}>
-                      <TableCell className="font-mono text-xs">{file.file_name}</TableCell>
-                      <TableCell>{new Date(file.uploaded_at).toLocaleString()}</TableCell>
-                      <TableCell>
-                        <Badge variant={file.parse_status === 'success' ? 'default' : file.parse_status === 'error' ? 'destructive' : 'secondary'}>
-                          {file.parse_status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{file.readings_inserted || 0}</TableCell>
-                      <TableCell>{file.duplicates_skipped || 0}</TableCell>
-                      <TableCell>{file.parse_errors || 0}</TableCell>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      {rawCsvHeaders.map((header, idx) => (
+                        <TableHead key={idx}>{header}</TableHead>
+                      ))}
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {rawCsvData.map((row, idx) => (
+                      <TableRow key={idx}>
+                        {rawCsvHeaders.map((header, colIdx) => (
+                          <TableCell key={colIdx} className="font-mono text-xs">
+                            {row[header]}
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             )}
           </div>
         </DialogContent>
