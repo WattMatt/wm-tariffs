@@ -119,31 +119,35 @@ export default function SchematicEditor({
       const evt = opt.e as MouseEvent;
       const target = opt.target;
       
-      // DRAWING TOOL: Left click ONLY draws when draw tool is active
-      if (activeTool === 'draw' && evt.button === 0 && !target) {
-        const pointer = canvas.getPointer(opt.e);
-        setIsDrawing(true);
-        setDrawStartPoint({ x: pointer.x, y: pointer.y });
-        
-        const rect = new Rect({
-          left: pointer.x,
-          top: pointer.y,
-          width: 0,
-          height: 0,
-          fill: 'rgba(59, 130, 246, 0.2)',
-          stroke: '#3b82f6',
-          strokeWidth: 2,
-          selectable: false,
-          evented: false,
-        });
-        
-        canvas.add(rect);
-        setDrawingRect(rect);
-        canvas.selection = false;
-        canvas.defaultCursor = 'crosshair';
-        evt.preventDefault();
-        evt.stopPropagation();
-        return;
+      // DRAWING TOOL: Left click draws when draw tool is active (allow clicking on background image)
+      if (activeTool === 'draw' && evt.button === 0) {
+        // Only prevent drawing if clicking on meter cards or other interactive objects
+        const isInteractiveObject = target && target.type !== 'image';
+        if (!isInteractiveObject) {
+          const pointer = canvas.getPointer(opt.e);
+          setIsDrawing(true);
+          setDrawStartPoint({ x: pointer.x, y: pointer.y });
+          
+          const rect = new Rect({
+            left: pointer.x,
+            top: pointer.y,
+            width: 0,
+            height: 0,
+            fill: 'rgba(59, 130, 246, 0.2)',
+            stroke: '#3b82f6',
+            strokeWidth: 2,
+            selectable: false,
+            evented: false,
+          });
+          
+          canvas.add(rect);
+          setDrawingRect(rect);
+          canvas.selection = false;
+          canvas.defaultCursor = 'crosshair';
+          evt.preventDefault();
+          evt.stopPropagation();
+          return;
+        }
       }
       
       // PANNING: Allow panning with middle/right mouse in any tool
