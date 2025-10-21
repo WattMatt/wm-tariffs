@@ -111,34 +111,46 @@ export default function SchematicEditor({
       const evt = opt.e as MouseEvent;
       const target = opt.target;
       
-      // Handle drawing mode for regions - ONLY in drawing mode
-      if (isDrawingMode && evt.button === 0) {
-        const pointer = canvas.getPointer(opt.e);
-        setIsDrawing(true);
-        setDrawStartPoint({ x: pointer.x, y: pointer.y });
-        
-        const rect = new Rect({
-          left: pointer.x,
-          top: pointer.y,
-          width: 0,
-          height: 0,
-          fill: 'rgba(59, 130, 246, 0.2)',
-          stroke: '#3b82f6',
-          strokeWidth: 2,
-          selectable: false,
-          evented: false,
-        });
-        
-        canvas.add(rect);
-        setDrawingRect(rect);
-        canvas.selection = false;
-        return;
+      // DRAWING MODE: Left click ONLY draws, no panning allowed
+      if (isDrawingMode) {
+        if (evt.button === 0) {
+          // Left click draws rectangle
+          const pointer = canvas.getPointer(opt.e);
+          setIsDrawing(true);
+          setDrawStartPoint({ x: pointer.x, y: pointer.y });
+          
+          const rect = new Rect({
+            left: pointer.x,
+            top: pointer.y,
+            width: 0,
+            height: 0,
+            fill: 'rgba(59, 130, 246, 0.2)',
+            stroke: '#3b82f6',
+            strokeWidth: 2,
+            selectable: false,
+            evented: false,
+          });
+          
+          canvas.add(rect);
+          setDrawingRect(rect);
+          canvas.selection = false;
+          evt.preventDefault();
+          evt.stopPropagation();
+          return;
+        } else if (evt.button === 1 || evt.button === 2) {
+          // Middle/right mouse button still allows panning in draw mode
+          isPanningLocal = true;
+          lastX = evt.clientX;
+          lastY = evt.clientY;
+          canvas.selection = false;
+          canvas.defaultCursor = 'grabbing';
+        }
+        return; // CRITICAL: Exit early to prevent any other mouse handling in draw mode
       }
       
-      // Only allow panning when NOT in drawing mode
-      if (!isDrawingMode) {
-        // Pan with middle/right mouse button, or left click on empty space
-        if ((evt.button === 0 && !target) || evt.button === 1 || evt.button === 2) {
+      // NORMAL MODE: Allow left-click panning
+      if (!target) {
+        if (evt.button === 0 || evt.button === 1 || evt.button === 2) {
           isPanningLocal = true;
           lastX = evt.clientX;
           lastY = evt.clientY;
@@ -149,8 +161,8 @@ export default function SchematicEditor({
     });
 
     canvas.on('mouse:move', (opt) => {
-      // Handle drawing mode - takes priority
-      if (isDrawing && drawingRect && drawStartPoint) {
+      // DRAWING MODE: Only handle drawing, no panning
+      if (isDrawing && drawingRect && drawStartPoint && isDrawingMode) {
         const pointer = canvas.getPointer(opt.e);
         const width = pointer.x - drawStartPoint.x;
         const height = pointer.y - drawStartPoint.y;
@@ -171,8 +183,8 @@ export default function SchematicEditor({
         return;
       }
       
-      // Only allow panning when not in drawing mode
-      if (isPanningLocal && !isDrawingMode) {
+      // PANNING: Only when not in drawing mode and not actively drawing
+      if (isPanningLocal && !isDrawing && !isDrawingMode) {
         const evt = opt.e as MouseEvent;
         const vpt = canvas.viewportTransform;
         if (vpt) {
@@ -835,10 +847,10 @@ export default function SchematicEditor({
           {activeTool === "move" && "Drag meters to reposition them on the schematic"}
           {activeTool === "connection" && "Click on two meters to connect them"}
           {activeTool === "select" && !isDrawingMode && "View mode - select a tool to edit"}
-          {isDrawingMode && "✏️ Draw mode: Click and drag to draw a box around a meter to extract its data"}
+          {isDrawingMode && "✏️ Draw mode: LEFT CLICK + DRAG to draw rectangle around meter • Middle/Right mouse to pan"}
         </div>
         <div className="text-xs">
-          💡 Scroll wheel to zoom • {isDrawingMode ? "Exit draw mode to pan" : "Click + drag to pan"}
+          💡 Scroll wheel to zoom • {isDrawingMode ? "Middle/right mouse to pan" : "Left click + drag to pan"}
         </div>
       </div>
 
