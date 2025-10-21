@@ -103,18 +103,30 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
 
   useEffect(() => {
     if (isOpen) {
-      // Clear files state when dialog opens
+      // Only clear files if we're opening fresh
+      if (files.length === 0) {
+        loadMeters().then(() => {
+          if (activeTab === "parse") {
+            loadSavedFiles();
+          }
+        });
+      }
+    } else {
+      // Clear files when dialog closes
       setFiles([]);
-      loadMeters().then(() => {
-        loadSavedFiles();
-      });
     }
   }, [isOpen]);
 
   useEffect(() => {
     if (activeTab === "parse") {
       console.log('Parse tab opened, loading files...');
-      loadSavedFiles();
+      // Preserve pending files from upload tab
+      const pendingFiles = files.filter(f => f.isNew && f.status === 'pending');
+      loadSavedFiles().then(() => {
+        if (pendingFiles.length > 0) {
+          setFiles(prev => [...pendingFiles, ...prev]);
+        }
+      });
     }
   }, [activeTab]);
 
