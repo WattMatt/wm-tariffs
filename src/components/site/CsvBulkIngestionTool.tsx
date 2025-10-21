@@ -124,6 +124,14 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
   });
   const [editingHeader, setEditingHeader] = useState<{id: string, value: string} | null>(null);
   const [splitPreview, setSplitPreview] = useState<{index: number, parts: string[]} | null>(null);
+  const [tempColumnState, setTempColumnState] = useState<{
+    columnIdx: number;
+    newName: string;
+    splitSeparator: string;
+    splitParts: Array<{ name: string; columnId: string }>;
+    assignedType: 'date' | 'time' | 'value' | 'kva' | 'none';
+  } | null>(null);
+  const [openPopover, setOpenPopover] = useState<string | null>(null);
   
   // Get all available columns including split parts
   const getAvailableColumns = () => {
@@ -1561,7 +1569,28 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                               // Render each split part as a separate header
                               return isSplit.parts.map((part, partIdx) => (
                                 <th key={`${idx}_${partIdx}`} className="px-3 py-2 text-left font-medium whitespace-nowrap border-r bg-muted/20">
-                                  <Popover>
+                                  <Popover open={openPopover === `col_${idx}_split_${partIdx}`} onOpenChange={(open) => {
+                                    if (open) {
+                                      setOpenPopover(`col_${idx}_split_${partIdx}`);
+                                      // Initialize temp state for split part
+                                      const currentAssignment = 
+                                        part.columnId === columnMapping.dateColumn ? 'date' :
+                                        part.columnId === columnMapping.timeColumn ? 'time' :
+                                        part.columnId === columnMapping.valueColumn ? 'value' :
+                                        part.columnId === columnMapping.kvaColumn ? 'kva' : 'none';
+                                      
+                                      setTempColumnState({
+                                        columnIdx: idx,
+                                        newName: part.name,
+                                        splitSeparator: 'split',
+                                        splitParts: isSplit.parts,
+                                        assignedType: currentAssignment
+                                      });
+                                    } else {
+                                      setOpenPopover(null);
+                                      setTempColumnState(null);
+                                    }
+                                  }}>
                                     <PopoverTrigger asChild>
                                       <button className="w-full text-left space-y-1 hover:bg-muted/50 p-1 rounded cursor-pointer transition-colors">
                                         <div className="font-semibold text-xs">
@@ -1585,39 +1614,103 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                     </PopoverTrigger>
                                     <PopoverContent className="w-64 p-3 bg-background border shadow-lg z-50" align="start">
                                       <div className="space-y-3">
-                                        <div className="text-xs font-medium mb-2">Assign as:</div>
-                                        <div className="space-y-1">
+                                        {/* Column Assignment for split part */}
+                                        <div>
+                                          <div className="text-xs font-medium mb-2">Assign as:</div>
+                                          <div className="space-y-1">
+                                            <Button
+                                              size="sm"
+                                              variant={tempColumnState?.assignedType === 'date' ? "default" : "ghost"}
+                                              className="w-full justify-start text-xs h-7"
+                                              onClick={() => setTempColumnState(prev => prev ? {...prev, assignedType: 'date'} : null)}
+                                            >
+                                              DateTime Column
+                                            </Button>
+                                            <Button
+                                              size="sm"
+                                              variant={tempColumnState?.assignedType === 'time' ? "secondary" : "ghost"}
+                                              className="w-full justify-start text-xs h-7"
+                                              onClick={() => setTempColumnState(prev => prev ? {...prev, assignedType: 'time'} : null)}
+                                            >
+                                              Time Column
+                                            </Button>
+                                            <Button
+                                              size="sm"
+                                              variant={tempColumnState?.assignedType === 'value' ? "default" : "ghost"}
+                                              className="w-full justify-start text-xs h-7"
+                                              onClick={() => setTempColumnState(prev => prev ? {...prev, assignedType: 'value'} : null)}
+                                            >
+                                              Primary Value (kWh)
+                                            </Button>
+                                            <Button
+                                              size="sm"
+                                              variant={tempColumnState?.assignedType === 'kva' ? "secondary" : "ghost"}
+                                              className="w-full justify-start text-xs h-7"
+                                              onClick={() => setTempColumnState(prev => prev ? {...prev, assignedType: 'kva'} : null)}
+                                            >
+                                              Secondary Value (kVA)
+                                            </Button>
+                                            <Button
+                                              size="sm"
+                                              variant={tempColumnState?.assignedType === 'none' ? "outline" : "ghost"}
+                                              className="w-full justify-start text-xs h-7"
+                                              onClick={() => setTempColumnState(prev => prev ? {...prev, assignedType: 'none'} : null)}
+                                            >
+                                              Keep as Extra Data
+                                            </Button>
+                                          </div>
+                                        </div>
+
+                                        {/* Rename split part */}
+                                        <div className="border-t pt-2">
+                                          <Label className="text-xs">Rename Part:</Label>
+                                          <Input
+                                            value={tempColumnState?.newName || part.name}
+                                            onChange={(e) => setTempColumnState(prev => prev ? {...prev, newName: e.target.value} : null)}
+                                            className="h-7 text-xs mt-1"
+                                            placeholder="Enter part name"
+                                          />
+                                        </div>
+
+                                        {/* Apply Button */}
+                                        <div className="border-t pt-2">
                                           <Button
                                             size="sm"
-                                            variant={part.columnId === columnMapping.dateColumn ? "default" : "ghost"}
-                                            className="w-full justify-start text-xs h-7"
-                                            onClick={() => setColumnMapping({...columnMapping, dateColumn: part.columnId})}
+                                            className="w-full text-xs h-8"
+                                            onClick={() => {
+                                              if (!tempColumnState) return;
+                                              
+                                              const newMapping = {...columnMapping};
+                                              
+                                              // Clear previous assignment of this split part
+                                              if (part.columnId === newMapping.dateColumn) newMapping.dateColumn = "-1";
+                                              if (part.columnId === newMapping.timeColumn) newMapping.timeColumn = "-1";
+                                              if (part.columnId === newMapping.valueColumn) newMapping.valueColumn = "-1";
+                                              if (part.columnId === newMapping.kvaColumn) newMapping.kvaColumn = "-1";
+                                              
+                                              // Apply new assignment
+                                              if (tempColumnState.assignedType === 'date') newMapping.dateColumn = part.columnId;
+                                              if (tempColumnState.assignedType === 'time') newMapping.timeColumn = part.columnId;
+                                              if (tempColumnState.assignedType === 'value') newMapping.valueColumn = part.columnId;
+                                              if (tempColumnState.assignedType === 'kva') newMapping.kvaColumn = part.columnId;
+                                              
+                                              // Apply rename to split part
+                                              const newSplits = {...newMapping.splitColumns};
+                                              if (newSplits[idx]) {
+                                                newSplits[idx].parts[partIdx] = {
+                                                  ...newSplits[idx].parts[partIdx],
+                                                  name: tempColumnState.newName
+                                                };
+                                                newMapping.splitColumns = newSplits;
+                                              }
+                                              
+                                              setColumnMapping(newMapping);
+                                              setOpenPopover(null);
+                                              setTempColumnState(null);
+                                              toast.success("Split part settings applied");
+                                            }}
                                           >
-                                            DateTime Column
-                                          </Button>
-                                          <Button
-                                            size="sm"
-                                            variant={part.columnId === columnMapping.timeColumn ? "secondary" : "ghost"}
-                                            className="w-full justify-start text-xs h-7"
-                                            onClick={() => setColumnMapping({...columnMapping, timeColumn: part.columnId})}
-                                          >
-                                            Time Column
-                                          </Button>
-                                          <Button
-                                            size="sm"
-                                            variant={part.columnId === columnMapping.valueColumn ? "default" : "ghost"}
-                                            className="w-full justify-start text-xs h-7"
-                                            onClick={() => setColumnMapping({...columnMapping, valueColumn: part.columnId})}
-                                          >
-                                            Primary Value (kWh)
-                                          </Button>
-                                          <Button
-                                            size="sm"
-                                            variant={part.columnId === columnMapping.kvaColumn ? "secondary" : "ghost"}
-                                            className="w-full justify-start text-xs h-7"
-                                            onClick={() => setColumnMapping({...columnMapping, kvaColumn: part.columnId})}
-                                          >
-                                            Secondary Value (kVA)
+                                            Apply Changes
                                           </Button>
                                         </div>
                                       </div>
@@ -1629,7 +1722,28 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                             
                             return (
                               <th key={idx} className="px-3 py-2 text-left font-medium whitespace-nowrap border-r">
-                                <Popover>
+                                <Popover open={openPopover === `col_${idx}`} onOpenChange={(open) => {
+                                  if (open) {
+                                    setOpenPopover(`col_${idx}`);
+                                    // Initialize temp state when opening
+                                    const currentAssignment = 
+                                      idx.toString() === columnMapping.dateColumn ? 'date' :
+                                      idx.toString() === columnMapping.timeColumn ? 'time' :
+                                      idx.toString() === columnMapping.valueColumn ? 'value' :
+                                      idx.toString() === columnMapping.kvaColumn ? 'kva' : 'none';
+                                    
+                                    setTempColumnState({
+                                      columnIdx: idx,
+                                      newName: displayName,
+                                      splitSeparator: columnMapping.splitColumns?.[idx] ? 'split' : 'none',
+                                      splitParts: columnMapping.splitColumns?.[idx]?.parts || [],
+                                      assignedType: currentAssignment
+                                    });
+                                  } else {
+                                    setOpenPopover(null);
+                                    setTempColumnState(null);
+                                  }
+                                }}>
                                   <PopoverTrigger asChild>
                                     <button className="w-full text-left space-y-1 hover:bg-muted/50 p-1 rounded cursor-pointer transition-colors">
                                       <div className="font-semibold text-xs">
@@ -1660,48 +1774,41 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                         <div className="space-y-1">
                                           <Button
                                             size="sm"
-                                            variant={idx.toString() === columnMapping.dateColumn ? "default" : "ghost"}
+                                            variant={tempColumnState?.assignedType === 'date' ? "default" : "ghost"}
                                             className="w-full justify-start text-xs h-7"
-                                            onClick={() => setColumnMapping({...columnMapping, dateColumn: idx.toString()})}
+                                            onClick={() => setTempColumnState(prev => prev ? {...prev, assignedType: 'date'} : null)}
                                           >
                                             DateTime Column
                                           </Button>
                                           <Button
                                             size="sm"
-                                            variant={idx.toString() === columnMapping.timeColumn ? "secondary" : "ghost"}
+                                            variant={tempColumnState?.assignedType === 'time' ? "secondary" : "ghost"}
                                             className="w-full justify-start text-xs h-7"
-                                            onClick={() => setColumnMapping({...columnMapping, timeColumn: idx.toString()})}
+                                            onClick={() => setTempColumnState(prev => prev ? {...prev, assignedType: 'time'} : null)}
                                           >
                                             Time Column
                                           </Button>
                                           <Button
                                             size="sm"
-                                            variant={idx.toString() === columnMapping.valueColumn ? "default" : "ghost"}
+                                            variant={tempColumnState?.assignedType === 'value' ? "default" : "ghost"}
                                             className="w-full justify-start text-xs h-7"
-                                            onClick={() => setColumnMapping({...columnMapping, valueColumn: idx.toString()})}
+                                            onClick={() => setTempColumnState(prev => prev ? {...prev, assignedType: 'value'} : null)}
                                           >
                                             Primary Value (kWh)
                                           </Button>
                                           <Button
                                             size="sm"
-                                            variant={idx.toString() === columnMapping.kvaColumn ? "secondary" : "ghost"}
+                                            variant={tempColumnState?.assignedType === 'kva' ? "secondary" : "ghost"}
                                             className="w-full justify-start text-xs h-7"
-                                            onClick={() => setColumnMapping({...columnMapping, kvaColumn: idx.toString()})}
+                                            onClick={() => setTempColumnState(prev => prev ? {...prev, assignedType: 'kva'} : null)}
                                           >
                                             Secondary Value (kVA)
                                           </Button>
                                           <Button
                                             size="sm"
-                                            variant="ghost"
+                                            variant={tempColumnState?.assignedType === 'none' ? "outline" : "ghost"}
                                             className="w-full justify-start text-xs h-7"
-                                            onClick={() => {
-                                              const newMapping = {...columnMapping};
-                                              if (idx.toString() === newMapping.dateColumn) newMapping.dateColumn = "-1";
-                                              if (idx.toString() === newMapping.timeColumn) newMapping.timeColumn = "-1";
-                                              if (idx.toString() === newMapping.valueColumn) newMapping.valueColumn = "-1";
-                                              if (idx.toString() === newMapping.kvaColumn) newMapping.kvaColumn = "-1";
-                                              setColumnMapping(newMapping);
-                                            }}
+                                            onClick={() => setTempColumnState(prev => prev ? {...prev, assignedType: 'none'} : null)}
                                           >
                                             Keep as Extra Data
                                           </Button>
@@ -1712,20 +1819,8 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                       <div className="border-t pt-2">
                                         <Label className="text-xs">Rename Column:</Label>
                                         <Input
-                                          value={editingHeader?.id === idx.toString() ? editingHeader.value : displayName}
-                                          onChange={(e) => setEditingHeader({id: idx.toString(), value: e.target.value})}
-                                          onBlur={() => {
-                                            if (editingHeader?.id === idx.toString()) {
-                                              setColumnMapping({
-                                                ...columnMapping,
-                                                renamedHeaders: {
-                                                  ...columnMapping.renamedHeaders,
-                                                  [idx]: editingHeader.value
-                                                }
-                                              });
-                                              setEditingHeader(null);
-                                            }
-                                          }}
+                                          value={tempColumnState?.newName || displayName}
+                                          onChange={(e) => setTempColumnState(prev => prev ? {...prev, newName: e.target.value} : null)}
                                           className="h-7 text-xs mt-1"
                                           placeholder="Enter column name"
                                         />
@@ -1735,12 +1830,10 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                       <div className="border-t pt-2">
                                         <Label className="text-xs">Split Column By:</Label>
                                         <Select
-                                          value={columnMapping.splitColumns?.[idx] ? "split" : "none"}
+                                          value={tempColumnState?.splitSeparator || "none"}
                                           onValueChange={(sep) => {
                                             if (sep === "none") {
-                                              const newSplits = {...columnMapping.splitColumns};
-                                              delete newSplits[idx];
-                                              setColumnMapping({...columnMapping, splitColumns: newSplits});
+                                              setTempColumnState(prev => prev ? {...prev, splitSeparator: 'none', splitParts: []} : null);
                                               setSplitPreview(null);
                                             } else {
                                               // Preview the split with actual separator
@@ -1753,20 +1846,15 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                               const parts = sampleValue.split(sepChar);
                                               setSplitPreview({index: idx, parts});
                                               
-                                              // Initialize split config with all parts
-                                              setColumnMapping({
-                                                ...columnMapping,
-                                                splitColumns: {
-                                                  ...columnMapping.splitColumns,
-                                                  [idx]: {
-                                                    separator: sep,
-                                                    parts: parts.map((_, partIdx) => ({
-                                                      name: `${header} Part ${partIdx + 1}`,
-                                                      columnId: `${idx}_split_${partIdx}`
-                                                    }))
-                                                  }
-                                                }
-                                              });
+                                              // Initialize split parts
+                                              setTempColumnState(prev => prev ? {
+                                                ...prev,
+                                                splitSeparator: sep,
+                                                splitParts: parts.map((_, partIdx) => ({
+                                                  name: `${header} Part ${partIdx + 1}`,
+                                                  columnId: `${idx}_split_${partIdx}`
+                                                }))
+                                              } : null);
                                             }
                                           }}
                                         >
@@ -1783,24 +1871,20 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                           </SelectContent>
                                         </Select>
                                         
-                                        {isSplit && columnMapping.splitColumns[idx] && (
+                                        {tempColumnState?.splitSeparator !== 'none' && tempColumnState?.splitParts.length > 0 && (
                                           <div className="mt-2 space-y-2">
                                             <div className="text-xs font-medium">Rename split parts:</div>
-                                            {columnMapping.splitColumns[idx].parts.map((part, partIdx) => (
+                                            {tempColumnState.splitParts.map((part, partIdx) => (
                                               <div key={part.columnId} className="flex gap-1">
                                                 <Input
-                                                  value={editingHeader?.id === part.columnId ? editingHeader.value : part.name}
-                                                  onChange={(e) => setEditingHeader({id: part.columnId, value: e.target.value})}
-                                                  onBlur={() => {
-                                                    if (editingHeader?.id === part.columnId) {
-                                                      const newSplits = {...columnMapping.splitColumns};
-                                                      newSplits[idx].parts[partIdx].name = editingHeader.value;
-                                                      setColumnMapping({
-                                                        ...columnMapping,
-                                                        splitColumns: newSplits
-                                                      });
-                                                      setEditingHeader(null);
-                                                    }
+                                                  value={part.name}
+                                                  onChange={(e) => {
+                                                    setTempColumnState(prev => {
+                                                      if (!prev) return null;
+                                                      const newParts = [...prev.splitParts];
+                                                      newParts[partIdx] = {...newParts[partIdx], name: e.target.value};
+                                                      return {...prev, splitParts: newParts};
+                                                    });
                                                   }}
                                                   className="h-6 text-xs"
                                                   placeholder={`Part ${partIdx + 1}`}
@@ -1812,6 +1896,59 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                             ))}
                                           </div>
                                         )}
+                                      </div>
+
+                                      {/* Apply Button */}
+                                      <div className="border-t pt-2">
+                                        <Button
+                                          size="sm"
+                                          className="w-full text-xs h-8"
+                                          onClick={() => {
+                                            if (!tempColumnState) return;
+                                            
+                                            const newMapping = {...columnMapping};
+                                            
+                                            // Clear previous assignment of this column
+                                            if (idx.toString() === newMapping.dateColumn) newMapping.dateColumn = "-1";
+                                            if (idx.toString() === newMapping.timeColumn) newMapping.timeColumn = "-1";
+                                            if (idx.toString() === newMapping.valueColumn) newMapping.valueColumn = "-1";
+                                            if (idx.toString() === newMapping.kvaColumn) newMapping.kvaColumn = "-1";
+                                            
+                                            // Apply new assignment
+                                            if (tempColumnState.assignedType === 'date') newMapping.dateColumn = idx.toString();
+                                            if (tempColumnState.assignedType === 'time') newMapping.timeColumn = idx.toString();
+                                            if (tempColumnState.assignedType === 'value') newMapping.valueColumn = idx.toString();
+                                            if (tempColumnState.assignedType === 'kva') newMapping.kvaColumn = idx.toString();
+                                            
+                                            // Apply rename
+                                            newMapping.renamedHeaders = {
+                                              ...newMapping.renamedHeaders,
+                                              [idx]: tempColumnState.newName
+                                            };
+                                            
+                                            // Apply split
+                                            if (tempColumnState.splitSeparator !== 'none' && tempColumnState.splitParts.length > 0) {
+                                              newMapping.splitColumns = {
+                                                ...newMapping.splitColumns,
+                                                [idx]: {
+                                                  separator: tempColumnState.splitSeparator,
+                                                  parts: tempColumnState.splitParts
+                                                }
+                                              };
+                                            } else {
+                                              const newSplits = {...newMapping.splitColumns};
+                                              delete newSplits[idx];
+                                              newMapping.splitColumns = newSplits;
+                                            }
+                                            
+                                            setColumnMapping(newMapping);
+                                            setOpenPopover(null);
+                                            setTempColumnState(null);
+                                            toast.success("Column settings applied");
+                                          }}
+                                        >
+                                          Apply Changes
+                                        </Button>
                                       </div>
                                     </div>
                                   </PopoverContent>
