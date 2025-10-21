@@ -218,6 +218,8 @@ export type Database = {
           id: string
           label: string | null
           meter_id: string
+          scale_x: number | null
+          scale_y: number | null
           schematic_id: string
           updated_at: string | null
           x_position: number
@@ -228,6 +230,8 @@ export type Database = {
           id?: string
           label?: string | null
           meter_id: string
+          scale_x?: number | null
+          scale_y?: number | null
           schematic_id: string
           updated_at?: string | null
           x_position: number
@@ -238,6 +242,8 @@ export type Database = {
           id?: string
           label?: string | null
           meter_id?: string
+          scale_x?: number | null
+          scale_y?: number | null
           schematic_id?: string
           updated_at?: string | null
           x_position?: number

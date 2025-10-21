@@ -362,7 +362,7 @@ export default function SchematicEditor({
       const cardHeight = 140;
       const rowHeight = 20;
       
-      // Background rectangle
+      // Background rectangle with scaling enabled
       const background = new Rect({
         left: x,
         top: y,
@@ -371,11 +371,14 @@ export default function SchematicEditor({
         fill: '#ffffff',
         stroke: borderColor,
         strokeWidth: 2,
-        hasControls: false,
+        hasControls: activeTool === 'move',
         selectable: activeTool === 'move',
         hoverCursor: activeTool === 'move' ? 'move' : 'pointer',
         originX: 'center',
         originY: 'center',
+        lockRotation: true,
+        scaleX: (meter.position as any).scaleX || 1,
+        scaleY: (meter.position as any).scaleY || 1,
       });
 
       background.set('data', { type: 'extracted', index });
@@ -392,39 +395,45 @@ export default function SchematicEditor({
       ];
 
       const textElements: Text[] = [];
+      const savedScaleX = (meter.position as any).scaleX || 1;
+      const savedScaleY = (meter.position as any).scaleY || 1;
       
       fields.forEach((field, i) => {
         // Label text (left column)
         const labelText = new Text(field.label, {
-          left: x - cardWidth / 2 + 5,
-          top: y - cardHeight / 2 + i * rowHeight + 3,
+          left: x - (cardWidth * savedScaleX) / 2 + 5 * savedScaleX,
+          top: y - (cardHeight * savedScaleY) / 2 + i * rowHeight * savedScaleY + 3 * savedScaleY,
           fontSize: 9,
           fill: '#000',
           fontWeight: 'bold',
           fontFamily: 'Arial',
           selectable: false,
           evented: false,
+          scaleX: savedScaleX,
+          scaleY: savedScaleY,
         });
         textElements.push(labelText);
 
         // Value text (right column) - truncate if too long
         const valueDisplay = field.value.length > 20 ? field.value.substring(0, 20) + '...' : field.value;
         const valueText = new Text(valueDisplay, {
-          left: x - cardWidth / 2 + 55,
-          top: y - cardHeight / 2 + i * rowHeight + 3,
+          left: x - (cardWidth * savedScaleX) / 2 + 55 * savedScaleX,
+          top: y - (cardHeight * savedScaleY) / 2 + i * rowHeight * savedScaleY + 3 * savedScaleY,
           fontSize: 9,
           fill: '#000',
           fontFamily: 'Arial',
           selectable: false,
           evented: false,
+          scaleX: savedScaleX,
+          scaleY: savedScaleY,
         });
         textElements.push(valueText);
 
         // Horizontal separator line
         if (i < fields.length - 1) {
           const separator = new Line(
-            [x - cardWidth / 2, y - cardHeight / 2 + (i + 1) * rowHeight, 
-             x + cardWidth / 2, y - cardHeight / 2 + (i + 1) * rowHeight],
+            [x - (cardWidth * savedScaleX) / 2, y - (cardHeight * savedScaleY) / 2 + (i + 1) * rowHeight * savedScaleY, 
+             x + (cardWidth * savedScaleX) / 2, y - (cardHeight * savedScaleY) / 2 + (i + 1) * rowHeight * savedScaleY],
             {
               stroke: borderColor,
               strokeWidth: 1,
@@ -438,8 +447,8 @@ export default function SchematicEditor({
 
       // Vertical separator between label and value columns
       const verticalSeparator = new Line(
-        [x - cardWidth / 2 + 50, y - cardHeight / 2, 
-         x - cardWidth / 2 + 50, y + cardHeight / 2],
+        [x - (cardWidth * savedScaleX) / 2 + 50 * savedScaleX, y - (cardHeight * savedScaleY) / 2, 
+         x - (cardWidth * savedScaleX) / 2 + 50 * savedScaleX, y + (cardHeight * savedScaleY) / 2],
         {
           stroke: borderColor,
           strokeWidth: 1,
@@ -450,11 +459,13 @@ export default function SchematicEditor({
       
       // Handle dragging for extracted meters
       if (activeTool === 'move') {
-        background.on('moving', () => {
+        const updateTextPositions = () => {
           const newLeft = background.left || x;
           const newTop = background.top || y;
+          const scaleX = background.scaleX || 1;
+          const scaleY = background.scaleY || 1;
           
-          // Move all text elements with the background
+          // Move and scale all text elements with the background
           textElements.forEach((text, i) => {
             const fieldIndex = Math.floor(i / 2);
             const isLabel = i % 2 === 0;
@@ -462,57 +473,64 @@ export default function SchematicEditor({
             
             if (!isSeparator) {
               text.set({
-                left: newLeft - cardWidth / 2 + (isLabel ? 5 : 55),
-                top: newTop - cardHeight / 2 + fieldIndex * rowHeight + 3,
+                left: newLeft - (cardWidth * scaleX) / 2 + (isLabel ? 5 : 55) * scaleX,
+                top: newTop - (cardHeight * scaleY) / 2 + fieldIndex * rowHeight * scaleY + 3 * scaleY,
+                scaleX: scaleX,
+                scaleY: scaleY,
               });
             } else {
-              // Update line positions
+              // Update line positions with scale
               if (i === textElements.length - 1) {
                 // Vertical separator
                 text.set({
-                  x1: newLeft - cardWidth / 2 + 50,
-                  y1: newTop - cardHeight / 2,
-                  x2: newLeft - cardWidth / 2 + 50,
-                  y2: newTop + cardHeight / 2,
+                  x1: newLeft - (cardWidth * scaleX) / 2 + 50 * scaleX,
+                  y1: newTop - (cardHeight * scaleY) / 2,
+                  x2: newLeft - (cardWidth * scaleX) / 2 + 50 * scaleX,
+                  y2: newTop + (cardHeight * scaleY) / 2,
                 });
               } else {
                 // Horizontal separators
                 const separatorFieldIndex = Math.floor((i - 1) / 3);
                 text.set({
-                  x1: newLeft - cardWidth / 2,
-                  y1: newTop - cardHeight / 2 + (separatorFieldIndex + 1) * rowHeight,
-                  x2: newLeft + cardWidth / 2,
-                  y2: newTop - cardHeight / 2 + (separatorFieldIndex + 1) * rowHeight,
+                  x1: newLeft - (cardWidth * scaleX) / 2,
+                  y1: newTop - (cardHeight * scaleY) / 2 + (separatorFieldIndex + 1) * rowHeight * scaleY,
+                  x2: newLeft + (cardWidth * scaleX) / 2,
+                  y2: newTop - (cardHeight * scaleY) / 2 + (separatorFieldIndex + 1) * rowHeight * scaleY,
                 });
               }
             }
           });
           
           verticalSeparator.set({
-            x1: newLeft - cardWidth / 2 + 50,
-            y1: newTop - cardHeight / 2,
-            x2: newLeft - cardWidth / 2 + 50,
-            y2: newTop + cardHeight / 2,
+            x1: newLeft - (cardWidth * scaleX) / 2 + 50 * scaleX,
+            y1: newTop - (cardHeight * scaleY) / 2,
+            x2: newLeft - (cardWidth * scaleX) / 2 + 50 * scaleX,
+            y2: newTop + (cardHeight * scaleY) / 2,
           });
           
           fabricCanvas.renderAll();
-        });
+        };
+
+        background.on('moving', updateTextPositions);
+        background.on('scaling', updateTextPositions);
 
         background.on('modified', () => {
-          // Update position in extracted meters state
+          // Update position and scale in extracted meters state
           const newX = ((background.left || 0) / canvasWidth) * 100;
           const newY = ((background.top || 0) / canvasHeight) * 100;
+          const scaleX = background.scaleX || 1;
+          const scaleY = background.scaleY || 1;
           
           const updatedMeters = [...extractedMeters];
           updatedMeters[index] = {
             ...updatedMeters[index],
-            position: { x: newX, y: newY }
+            position: { x: newX, y: newY, scaleX, scaleY }
           };
           setExtractedMeters(updatedMeters);
           if (onExtractedMetersUpdate) {
             onExtractedMetersUpdate(updatedMeters);
           }
-          toast.success('Meter position updated');
+          toast.success('Meter card updated');
         });
       }
 
@@ -542,7 +560,7 @@ export default function SchematicEditor({
       const cardHeight = 140;
       const rowHeight = 20;
       
-      // Background rectangle
+      // Background rectangle with scaling enabled
       const background = new Rect({
         left: x,
         top: y,
@@ -551,11 +569,14 @@ export default function SchematicEditor({
         fill: '#ffffff',
         stroke: borderColor,
         strokeWidth: 2,
-        hasControls: false,
+        hasControls: activeTool === 'move',
         selectable: activeTool === 'move',
         hoverCursor: activeTool === 'move' ? 'move' : (activeTool === 'connection' ? 'pointer' : 'default'),
         originX: 'center',
         originY: 'center',
+        lockRotation: true,
+        scaleX: (pos as any).scale_x ? Number((pos as any).scale_x) : 1,
+        scaleY: (pos as any).scale_y ? Number((pos as any).scale_y) : 1,
       });
 
       background.set('data', { meterId: pos.meter_id, positionId: pos.id });
@@ -578,39 +599,45 @@ export default function SchematicEditor({
       ];
 
       const textElements: Text[] = [];
+      const savedScaleX = (pos as any).scale_x ? Number((pos as any).scale_x) : 1;
+      const savedScaleY = (pos as any).scale_y ? Number((pos as any).scale_y) : 1;
       
       fields.forEach((field, i) => {
         // Label text (left column)
         const labelText = new Text(field.label, {
-          left: x - cardWidth / 2 + 5,
-          top: y - cardHeight / 2 + i * rowHeight + 3,
+          left: x - (cardWidth * savedScaleX) / 2 + 5 * savedScaleX,
+          top: y - (cardHeight * savedScaleY) / 2 + i * rowHeight * savedScaleY + 3 * savedScaleY,
           fontSize: 9,
           fill: '#000',
           fontWeight: 'bold',
           fontFamily: 'Arial',
           selectable: false,
           evented: false,
+          scaleX: savedScaleX,
+          scaleY: savedScaleY,
         });
         textElements.push(labelText);
 
         // Value text (right column) - truncate if too long
         const valueDisplay = field.value.length > 20 ? field.value.substring(0, 20) + '...' : field.value;
         const valueText = new Text(valueDisplay, {
-          left: x - cardWidth / 2 + 55,
-          top: y - cardHeight / 2 + i * rowHeight + 3,
+          left: x - (cardWidth * savedScaleX) / 2 + 55 * savedScaleX,
+          top: y - (cardHeight * savedScaleY) / 2 + i * rowHeight * savedScaleY + 3 * savedScaleY,
           fontSize: 9,
           fill: '#000',
           fontFamily: 'Arial',
           selectable: false,
           evented: false,
+          scaleX: savedScaleX,
+          scaleY: savedScaleY,
         });
         textElements.push(valueText);
 
         // Horizontal separator line
         if (i < fields.length - 1) {
           const separator = new Line(
-            [x - cardWidth / 2, y - cardHeight / 2 + (i + 1) * rowHeight, 
-             x + cardWidth / 2, y - cardHeight / 2 + (i + 1) * rowHeight],
+            [x - (cardWidth * savedScaleX) / 2, y - (cardHeight * savedScaleY) / 2 + (i + 1) * rowHeight * savedScaleY, 
+             x + (cardWidth * savedScaleX) / 2, y - (cardHeight * savedScaleY) / 2 + (i + 1) * rowHeight * savedScaleY],
             {
               stroke: borderColor,
               strokeWidth: 1,
@@ -624,8 +651,8 @@ export default function SchematicEditor({
 
       // Vertical separator between label and value columns
       const verticalSeparator = new Line(
-        [x - cardWidth / 2 + 50, y - cardHeight / 2, 
-         x - cardWidth / 2 + 50, y + cardHeight / 2],
+        [x - (cardWidth * savedScaleX) / 2 + 50 * savedScaleX, y - (cardHeight * savedScaleY) / 2, 
+         x - (cardWidth * savedScaleX) / 2 + 50 * savedScaleX, y + (cardHeight * savedScaleY) / 2],
         {
           stroke: borderColor,
           strokeWidth: 1,
@@ -634,13 +661,15 @@ export default function SchematicEditor({
         }
       );
 
-      // Handle dragging for move tool
+      // Handle dragging and scaling for move tool
       if (activeTool === 'move') {
-        background.on('moving', () => {
+        const updateTextPositions = () => {
           const newLeft = background.left || x;
           const newTop = background.top || y;
+          const scaleX = background.scaleX || 1;
+          const scaleY = background.scaleY || 1;
           
-          // Move all text elements with the background
+          // Move and scale all text elements with the background
           textElements.forEach((text, i) => {
             const fieldIndex = Math.floor(i / 2);
             const isLabel = i % 2 === 0;
@@ -648,41 +677,46 @@ export default function SchematicEditor({
             
             if (!isSeparator) {
               text.set({
-                left: newLeft - cardWidth / 2 + (isLabel ? 5 : 55),
-                top: newTop - cardHeight / 2 + fieldIndex * rowHeight + 3,
+                left: newLeft - (cardWidth * scaleX) / 2 + (isLabel ? 5 : 55) * scaleX,
+                top: newTop - (cardHeight * scaleY) / 2 + fieldIndex * rowHeight * scaleY + 3 * scaleY,
+                scaleX: scaleX,
+                scaleY: scaleY,
               });
             } else {
-              // Update line positions
+              // Update line positions with scale
               if (i === textElements.length - 1) {
                 // Vertical separator
                 text.set({
-                  x1: newLeft - cardWidth / 2 + 50,
-                  y1: newTop - cardHeight / 2,
-                  x2: newLeft - cardWidth / 2 + 50,
-                  y2: newTop + cardHeight / 2,
+                  x1: newLeft - (cardWidth * scaleX) / 2 + 50 * scaleX,
+                  y1: newTop - (cardHeight * scaleY) / 2,
+                  x2: newLeft - (cardWidth * scaleX) / 2 + 50 * scaleX,
+                  y2: newTop + (cardHeight * scaleY) / 2,
                 });
               } else {
                 // Horizontal separators
                 const separatorFieldIndex = Math.floor((i - 1) / 3);
                 text.set({
-                  x1: newLeft - cardWidth / 2,
-                  y1: newTop - cardHeight / 2 + (separatorFieldIndex + 1) * rowHeight,
-                  x2: newLeft + cardWidth / 2,
-                  y2: newTop - cardHeight / 2 + (separatorFieldIndex + 1) * rowHeight,
+                  x1: newLeft - (cardWidth * scaleX) / 2,
+                  y1: newTop - (cardHeight * scaleY) / 2 + (separatorFieldIndex + 1) * rowHeight * scaleY,
+                  x2: newLeft + (cardWidth * scaleX) / 2,
+                  y2: newTop - (cardHeight * scaleY) / 2 + (separatorFieldIndex + 1) * rowHeight * scaleY,
                 });
               }
             }
           });
           
           verticalSeparator.set({
-            x1: newLeft - cardWidth / 2 + 50,
-            y1: newTop - cardHeight / 2,
-            x2: newLeft - cardWidth / 2 + 50,
-            y2: newTop + cardHeight / 2,
+            x1: newLeft - (cardWidth * scaleX) / 2 + 50 * scaleX,
+            y1: newTop - (cardHeight * scaleY) / 2,
+            x2: newLeft - (cardWidth * scaleX) / 2 + 50 * scaleX,
+            y2: newTop + (cardHeight * scaleY) / 2,
           });
           
           fabricCanvas.renderAll();
-        });
+        };
+
+        background.on('moving', updateTextPositions);
+        background.on('scaling', updateTextPositions);
 
         background.on('modified', async () => {
           // Convert pixel positions back to percentages for storage
@@ -690,21 +724,25 @@ export default function SchematicEditor({
           const canvasHeight = fabricCanvas.getHeight();
           const xPercent = ((background.left || 0) / canvasWidth) * 100;
           const yPercent = ((background.top || 0) / canvasHeight) * 100;
+          const scaleX = background.scaleX || 1;
+          const scaleY = background.scaleY || 1;
 
-          // Update position in database after drag
+          // Update position and scale in database after drag/resize
           const { error } = await supabase
             .from('meter_positions')
             .update({
               x_position: xPercent,
               y_position: yPercent,
+              scale_x: scaleX,
+              scale_y: scaleY,
             })
             .eq('id', pos.id);
 
           if (!error) {
-            toast.success('Meter position updated');
+            toast.success('Meter card updated');
             fetchMeterPositions();
           } else {
-            toast.error('Failed to update position');
+            toast.error('Failed to update meter card');
           }
         });
       }
