@@ -73,8 +73,8 @@ export default function MetersTab({ siteId }: MetersTabProps) {
   useEffect(() => {
     fetchMeters();
     
-    // Set up realtime subscription for live meter updates
-    const channel = supabase
+    // Set up realtime subscription for live meter and CSV file updates
+    const metersChannel = supabase
       .channel('meters-changes')
       .on(
         'postgres_changes',
@@ -91,8 +91,26 @@ export default function MetersTab({ siteId }: MetersTabProps) {
       )
       .subscribe();
     
+    const csvFilesChannel = supabase
+      .channel('meter-csv-files-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'meter_csv_files',
+          filter: `site_id=eq.${siteId}`
+        },
+        () => {
+          console.log('CSV files changed, reloading meters...');
+          fetchMeters();
+        }
+      )
+      .subscribe();
+    
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(metersChannel);
+      supabase.removeChannel(csvFilesChannel);
     };
   }, [siteId]);
 
@@ -107,19 +125,27 @@ export default function MetersTab({ siteId }: MetersTabProps) {
     if (error) {
       toast.error("Failed to fetch meters");
     } else {
-      // Check which meters have readings
+      // Check which meters have uploaded CSV files or parsed readings
       const metersWithReadingStatus = await Promise.all(
         (data || []).map(async (meter) => {
-          const { count } = await supabase
+          // Check for parsed readings
+          const { count: readingsCount } = await supabase
             .from("meter_readings")
             .select("*", { count: "exact", head: true })
             .eq("meter_id", meter.id);
           
-          console.log(`Meter ${meter.meter_number}: ${count} readings`);
+          // Check for uploaded CSV files
+          const { count: csvFilesCount } = await supabase
+            .from("meter_csv_files")
+            .select("*", { count: "exact", head: true })
+            .eq("meter_id", meter.id);
+          
+          const hasData = (readingsCount ?? 0) > 0 || (csvFilesCount ?? 0) > 0;
+          console.log(`Meter ${meter.meter_number}: ${readingsCount} readings, ${csvFilesCount} CSV files`);
           
           return {
             ...meter,
-            has_readings: (count ?? 0) > 0
+            has_readings: hasData
           };
         })
       );
