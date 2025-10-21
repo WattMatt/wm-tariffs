@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Edit, Check, X, Pencil, Trash2 } from "lucide-react";
+import { ArrowLeft, Edit, Check, X, Pencil, Trash2, Scan } from "lucide-react";
 import { toast } from "sonner";
 import SchematicEditor from "@/components/schematic/SchematicEditor";
 import { MeterDataExtractor } from "@/components/schematic/MeterDataExtractor";
@@ -99,6 +99,7 @@ export default function SchematicViewer() {
   const [isEditingMeter, setIsEditingMeter] = useState(false);
   const [editedMeterData, setEditedMeterData] = useState<EditableMeterFields | null>(null);
   const [isConverting, setIsConverting] = useState(false);
+  const [isExtracting, setIsExtracting] = useState(false);
   const [detectedRectangles, setDetectedRectangles] = useState<any[]>([]);
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [drawnRegions, setDrawnRegions] = useState<any[]>([]);
@@ -559,6 +560,49 @@ export default function SchematicViewer() {
       if (containerRef.current) {
         containerRef.current.style.cursor = 'grab';
       }
+    }
+  };
+
+  const handleScanAllMeters = async () => {
+    if (!convertedImageUrl && !imageUrl) {
+      toast.error("No image available to scan");
+      return;
+    }
+
+    setIsExtracting(true);
+    try {
+      console.log('🔍 Starting global scan of schematic...');
+      
+      const { data, error } = await supabase.functions.invoke('extract-schematic-meters', {
+        body: {
+          imageUrl: convertedImageUrl || imageUrl,
+          mode: 'full-extraction'
+        }
+      });
+
+      if (error) throw error;
+      if (!data || !data.meters || !Array.isArray(data.meters)) {
+        throw new Error('No meters returned from scan');
+      }
+
+      console.log(`✅ Found ${data.meters.length} meters in scan`);
+      
+      // Add all scanned meters to extractedMeters
+      const scannedMeters = data.meters.map((meter: any) => ({
+        ...meter,
+        status: 'pending' as const,
+        position: meter.position || { x: 50, y: 50 },
+        scale_x: meter.scale_x || 1,
+        scale_y: meter.scale_y || 1
+      }));
+      
+      setExtractedMeters([...extractedMeters, ...scannedMeters]);
+      toast.success(`Scanned and extracted ${scannedMeters.length} meters`);
+    } catch (error) {
+      console.error('❌ Scan error:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to scan meters');
+    } finally {
+      setIsExtracting(false);
     }
   };
 

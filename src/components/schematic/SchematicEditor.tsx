@@ -3,7 +3,7 @@ import { Canvas as FabricCanvas, Circle, Line, Text, FabricImage, Rect } from "f
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Save, Zap, Link2, Trash2, Move, Upload, Plus, ZoomIn, ZoomOut, Maximize2, Pencil } from "lucide-react";
+import { Save, Zap, Link2, Trash2, Move, Upload, Plus, ZoomIn, ZoomOut, Maximize2, Pencil, Scan } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -1173,9 +1173,39 @@ export default function SchematicEditor({
     fetchMeterPositions();
   };
 
+  const handleScanAll = async () => {
+    if (!schematicUrl) return;
+    setIsSaving(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('extract-schematic-meters', {
+        body: { imageUrl: schematicUrl, mode: 'full-extraction' }
+      });
+      if (error) throw error;
+      if (data?.meters) {
+        const scanned = data.meters.map((m: any) => ({
+          ...m,
+          status: 'pending',
+          position: m.position || { x: 50, y: 50 },
+          scale_x: m.scale_x || 1,
+          scale_y: m.scale_y || 1
+        }));
+        onExtractedMetersUpdate?.([...extractedMeters, ...scanned]);
+        toast.success(`Scanned ${scanned.length} meters`);
+      }
+    } catch (e) {
+      toast.error('Scan failed');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex gap-2 items-center flex-wrap">
+        <Button onClick={handleScanAll} disabled={isSaving} variant="default">
+          <Scan className="w-4 h-4 mr-2" />
+          {isSaving ? 'Scanning...' : 'Scan All Meters'}
+        </Button>
         <Button
           variant={activeTool === "select" ? "default" : "outline"}
           onClick={() => setActiveTool("select")}
