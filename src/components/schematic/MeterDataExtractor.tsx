@@ -345,50 +345,6 @@ export const MeterDataExtractor = ({
         </Card>
       )}
       
-      {!isDrawingMode && extractedMeters.length === 0 && (!isPdf || convertedImageUrl) && (
-        <Card className="border-border/50 bg-green-50/50 dark:bg-green-950/20">
-          <CardContent className="pt-6">
-            <div className="flex items-start gap-3">
-              <div className="p-2 rounded-lg bg-green-100 dark:bg-green-900/40">
-                <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <div className="flex-1">
-                <h3 className="font-semibold text-sm mb-1">Ready to Extract Meters</h3>
-                <p className="text-xs text-muted-foreground mb-3">
-                  Click the <span className="font-semibold text-primary">"Draw to Extract"</span> tool button above, 
-                  then draw rectangles around each meter box. The AI will automatically extract all meter details.
-                </p>
-                <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
-                  <li>Select "Draw to Extract" tool from the toolbar</li>
-                  <li>Left click + drag to draw rectangles around meters</li>
-                  <li>Review and approve each extracted meter</li>
-                </ul>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-      
-      {isDrawingMode && extractedMeters.length === 0 && (
-        <Card className="border-border/50 bg-blue-50/50 dark:bg-blue-950/20">
-          <CardContent className="pt-6">
-            <div className="flex items-start gap-3">
-              <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/40 animate-pulse">
-                <Pencil className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-              </div>
-              <div className="flex-1">
-                <h3 className="font-semibold text-sm mb-1">Draw Mode Active</h3>
-                <p className="text-xs text-muted-foreground">
-                  Draw tight rectangles around meter label boxes. Each drawn region will be analyzed by AI to extract:
-                  NO, NAME, AREA, RATING, CABLE, SERIAL, and CT information.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
       
       <div className="flex items-center justify-between">
         {extractedMeters.length > 0 && (
