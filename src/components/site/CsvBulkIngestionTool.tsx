@@ -273,18 +273,45 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
         return line.split(separatorChar);
       });
       
-      const headers = rows[0] || [];
-      const dataRows = rows.slice(1);
+      // Detect if first row is metadata by checking column count consistency
+      // If first row has significantly fewer columns than second row, skip it
+      let headers = rows[0] || [];
+      let dataRows = rows.slice(1);
+      
+      if (rows.length > 1 && rows[0].length < rows[1].length * 0.5) {
+        console.log('Detected metadata row, skipping first row');
+        console.log('Row 1 columns:', rows[0].length, rows[0]);
+        console.log('Row 2 columns:', rows[1].length, rows[1]);
+        headers = rows[1];
+        dataRows = rows.slice(2);
+      }
       
       console.log(`CSV Preview - Headers (${headers.length} columns):`, headers);
       console.log(`CSV Preview - First data row (${dataRows[0]?.length || 0} columns):`, dataRows[0]);
       
-      // Auto-detect columns
+      // Auto-detect columns - look for Date/Time columns
+      let dateColumn = headers.findIndex(h => h.toLowerCase().includes('date'));
+      if (dateColumn === -1) dateColumn = 0;
+      
+      let timeColumn = headers.findIndex(h => h.toLowerCase().includes('time'));
+      if (timeColumn === dateColumn) timeColumn = -1;
+      
+      // Look for kWh value column
+      let valueColumn = headers.findIndex(h => 
+        h.toLowerCase().includes('kwh') || h.toLowerCase().includes('p1')
+      );
+      if (valueColumn === -1) valueColumn = timeColumn !== -1 ? 2 : 1;
+      
+      // All other columns are metadata
+      const metadataColumns = headers
+        .map((_, idx) => idx)
+        .filter(idx => idx !== dateColumn && idx !== timeColumn && idx !== valueColumn);
+      
       const detectedColumns = {
-        dateColumn: 0,
-        timeColumn: headers.length > 2 ? 1 : undefined,
-        valueColumn: headers.length > 2 ? 2 : 1,
-        metadataColumns: Array.from({ length: Math.max(0, headers.length - 3) }, (_, i) => i + 3)
+        dateColumn,
+        timeColumn: timeColumn !== -1 ? timeColumn : undefined,
+        valueColumn,
+        metadataColumns
       };
       
       console.log('Detected columns:', detectedColumns);
