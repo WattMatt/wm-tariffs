@@ -691,45 +691,6 @@ export default function SchematicViewer() {
               />
             ) : (
               <div className="space-y-4">
-                {/* Meter Data Extractor */}
-                <MeterDataExtractor
-                  siteId={schematic.site_id}
-                  schematicId={id!}
-                  imageUrl={convertedImageUrl || imageUrl}
-                  onMetersExtracted={() => {
-                    fetchMeterPositions();
-                  }}
-                  onConvertedImageReady={setConvertedImageUrl}
-                  extractedMeters={extractedMeters}
-                  onMetersUpdate={setExtractedMeters}
-                  selectedMeterIndex={selectedMeterIndex}
-                  onMeterSelect={setSelectedMeterIndex}
-                  detectedRectangles={detectedRectangles}
-                  onRectanglesUpdate={setDetectedRectangles}
-                  isDrawingMode={isDrawingMode}
-                  onDrawingModeChange={setIsDrawingMode}
-                  drawnRegions={drawnRegions}
-                  onDrawnRegionsUpdate={setDrawnRegions}
-                />
-
-                {/* Drawing Mode Banner */}
-                {isDrawingMode && (
-                  <div className="bg-primary/10 border-2 border-primary rounded-lg p-4 text-center">
-                    <Pencil className="w-6 h-6 mx-auto mb-2 text-primary" />
-                    <p className="font-semibold text-primary">Click and drag to draw a rectangle around a meter</p>
-                    <p className="text-sm text-muted-foreground mt-1">Release to extract the meter data from that region</p>
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
-                      onClick={() => setIsDrawingMode(false)}
-                      className="mt-2"
-                    >
-                      Cancel Drawing Mode
-                    </Button>
-                  </div>
-                )}
-
-
                 {/* Main Schematic View */}
                 <div className={meterPositions.length > 0 ? "grid grid-cols-[1fr_400px] gap-4" : ""}>
                   {/* Schematic with markers */}
