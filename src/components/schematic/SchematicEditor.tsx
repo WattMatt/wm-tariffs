@@ -3,7 +3,7 @@ import { Canvas as FabricCanvas, Circle, Line, Text, FabricImage, Rect } from "f
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Save, Zap, Link2, Trash2, Move, Upload, Plus, ZoomIn, ZoomOut, Maximize2 } from "lucide-react";
+import { Save, Zap, Link2, Trash2, Move, Upload, Plus, ZoomIn, ZoomOut, Maximize2, Pencil } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -47,7 +47,7 @@ export default function SchematicEditor({
 }: SchematicEditorProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [fabricCanvas, setFabricCanvas] = useState<FabricCanvas | null>(null);
-  const [activeTool, setActiveTool] = useState<"select" | "meter" | "connection" | "move">("select");
+  const [activeTool, setActiveTool] = useState<"select" | "meter" | "connection" | "move" | "draw">("select");
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [drawnRegions, setDrawnRegions] = useState<any[]>([]);
   const [meterPositions, setMeterPositions] = useState<MeterPosition[]>([]);
@@ -71,11 +71,11 @@ export default function SchematicEditor({
   const [selectedMeterId, setSelectedMeterId] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
 
+  // Sync drawing mode state when tool changes
   useEffect(() => {
-    fetchMeters();
-    fetchMeterPositions();
-    fetchLines();
-  }, [schematicId]);
+    const newDrawingMode = activeTool === 'draw';
+    setIsDrawingMode(newDrawingMode);
+  }, [activeTool]);
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -110,45 +110,35 @@ export default function SchematicEditor({
       const evt = opt.e as MouseEvent;
       const target = opt.target;
       
-      // DRAWING MODE: Left click ONLY draws, no panning allowed
-      if (isDrawingMode) {
-        if (evt.button === 0) {
-          // Left click draws rectangle
-          const pointer = canvas.getPointer(opt.e);
-          setIsDrawing(true);
-          setDrawStartPoint({ x: pointer.x, y: pointer.y });
-          
-          const rect = new Rect({
-            left: pointer.x,
-            top: pointer.y,
-            width: 0,
-            height: 0,
-            fill: 'rgba(59, 130, 246, 0.2)',
-            stroke: '#3b82f6',
-            strokeWidth: 2,
-            selectable: false,
-            evented: false,
-          });
-          
-          canvas.add(rect);
-          setDrawingRect(rect);
-          canvas.selection = false;
-          evt.preventDefault();
-          evt.stopPropagation();
-          return;
-        } else if (evt.button === 1 || evt.button === 2) {
-          // Middle/right mouse button still allows panning in draw mode
-          isPanningLocal = true;
-          lastX = evt.clientX;
-          lastY = evt.clientY;
-          canvas.selection = false;
-          canvas.defaultCursor = 'grabbing';
-        }
-        return; // CRITICAL: Exit early to prevent any other mouse handling in draw mode
+      // DRAWING TOOL: Left click ONLY draws when draw tool is active
+      if (activeTool === 'draw' && evt.button === 0) {
+        const pointer = canvas.getPointer(opt.e);
+        setIsDrawing(true);
+        setDrawStartPoint({ x: pointer.x, y: pointer.y });
+        
+        const rect = new Rect({
+          left: pointer.x,
+          top: pointer.y,
+          width: 0,
+          height: 0,
+          fill: 'rgba(59, 130, 246, 0.2)',
+          stroke: '#3b82f6',
+          strokeWidth: 2,
+          selectable: false,
+          evented: false,
+        });
+        
+        canvas.add(rect);
+        setDrawingRect(rect);
+        canvas.selection = false;
+        evt.preventDefault();
+        evt.stopPropagation();
+        return;
       }
       
-      // NORMAL MODE: Allow left-click panning
-      if (!target) {
+      // PANNING: Allow panning with middle/right mouse in any tool
+      // OR left-click when draw tool is NOT active and no object is clicked
+      if (activeTool !== 'draw' && !target) {
         if (evt.button === 0 || evt.button === 1 || evt.button === 2) {
           isPanningLocal = true;
           lastX = evt.clientX;
@@ -156,6 +146,13 @@ export default function SchematicEditor({
           canvas.selection = false;
           canvas.defaultCursor = 'grabbing';
         }
+      } else if (activeTool === 'draw' && (evt.button === 1 || evt.button === 2)) {
+        // Allow middle/right mouse panning even in draw mode
+        isPanningLocal = true;
+        lastX = evt.clientX;
+        lastY = evt.clientY;
+        canvas.selection = false;
+        canvas.defaultCursor = 'grabbing';
       }
     });
 
@@ -273,9 +270,9 @@ export default function SchematicEditor({
       }
     });
 
-    // Set default cursor to grab (or crosshair in drawing mode)
-    canvas.defaultCursor = isDrawingMode ? 'crosshair' : 'grab';
-    canvas.hoverCursor = isDrawingMode ? 'crosshair' : 'grab';
+    // Set default cursor based on active tool
+    canvas.defaultCursor = activeTool === 'draw' ? 'crosshair' : 'grab';
+    canvas.hoverCursor = activeTool === 'draw' ? 'crosshair' : 'grab';
 
     // Prevent context menu on right click
     canvas.getElement().addEventListener('contextmenu', (e) => {
@@ -314,13 +311,13 @@ export default function SchematicEditor({
     };
   }, [schematicUrl]);
 
-  // Update cursor when drawing mode changes
+  // Update cursor when tool changes
   useEffect(() => {
     if (fabricCanvas) {
-      fabricCanvas.defaultCursor = isDrawingMode ? 'crosshair' : 'grab';
-      fabricCanvas.hoverCursor = isDrawingMode ? 'crosshair' : 'grab';
+      fabricCanvas.defaultCursor = activeTool === 'draw' ? 'crosshair' : 'grab';
+      fabricCanvas.hoverCursor = activeTool === 'draw' ? 'crosshair' : 'grab';
     }
-  }, [isDrawingMode, fabricCanvas]);
+  }, [activeTool, fabricCanvas]);
 
   useEffect(() => {
     if (!fabricCanvas) return;
@@ -770,6 +767,15 @@ export default function SchematicEditor({
           Select
         </Button>
         <Button
+          variant={activeTool === "draw" ? "default" : "outline"}
+          onClick={() => setActiveTool("draw")}
+          size="sm"
+          className="gap-2"
+        >
+          <Pencil className="w-4 h-4" />
+          Draw to Extract
+        </Button>
+        <Button
           variant={activeTool === "meter" ? "default" : "outline"}
           onClick={() => setActiveTool("meter")}
           size="sm"
@@ -842,17 +848,17 @@ export default function SchematicEditor({
 
       <div className="text-sm text-muted-foreground space-y-1">
         <div>
+          {activeTool === "select" && "View mode - select a tool above to edit the schematic"}
+          {activeTool === "draw" && "✏️ AI Extraction Mode: LEFT CLICK + DRAG to draw box around meter"}
           {activeTool === "meter" && "Click on the schematic to manually place a new meter"}
           {activeTool === "move" && "Drag meters to reposition them on the schematic"}
           {activeTool === "connection" && "Click on two meters to draw a connection line"}
-          {activeTool === "select" && !isDrawingMode && "View mode - use tools above to edit"}
-          {isDrawingMode && "✏️ AI Extraction Mode: LEFT CLICK + DRAG to draw box around meter • Middle/Right mouse to pan • Scroll to zoom"}
         </div>
         <div className="text-xs">
-          {!isDrawingMode ? (
-            <>💡 Scroll wheel to zoom • Left click + drag to pan</>
+          {activeTool === 'draw' ? (
+            <>🎯 Draw tight boxes around meter labels • Middle/Right mouse or Scroll to navigate</>
           ) : (
-            <>🎯 Draw tight boxes around meter labels for best extraction results</>
+            <>💡 Scroll wheel to zoom • Left click + drag to pan</>
           )}
         </div>
       </div>
