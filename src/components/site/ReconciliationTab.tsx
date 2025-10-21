@@ -451,7 +451,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                   <Label className="text-sm font-semibold">First Actual Reading Found</Label>
                   <div className="p-3 rounded-lg bg-muted/50 space-y-1">
                     <div className="text-sm font-mono">
-                      {previewData.firstReading.reading_timestamp.replace('T', ' ').replace('Z', '').substring(0, 19)}
+                      {previewData.firstReading.reading_timestamp.split('T')[0]} {previewData.firstReading.reading_timestamp.split('T')[1]?.substring(0, 8) || '00:00:00'}
                     </div>
                     <div className="text-xs text-muted-foreground">
                       kWh: {previewData.firstReading.kwh_value}
@@ -463,7 +463,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                   <Label className="text-sm font-semibold">Last Actual Reading Found</Label>
                   <div className="p-3 rounded-lg bg-muted/50 space-y-1">
                     <div className="text-sm font-mono">
-                      {previewData.lastReading.reading_timestamp.replace('T', ' ').replace('Z', '').substring(0, 19)}
+                      {previewData.lastReading.reading_timestamp.split('T')[0]} {previewData.lastReading.reading_timestamp.split('T')[1]?.substring(0, 8) || '00:00:00'}
                     </div>
                     <div className="text-xs text-muted-foreground">
                       kWh: {previewData.lastReading.kwh_value}
