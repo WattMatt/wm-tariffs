@@ -455,11 +455,14 @@ export default function SchematicEditor({
     });
 
     // Render extracted meters (from AI extraction)
-    extractedMeters.forEach((meter, index) => {
+    extractedMeters.forEach((meter, meterIndex) => {
       if (!meter.position) {
-        console.log(`⚠️ Meter ${index} has no position, skipping`);
+        console.log(`⚠️ Meter ${meterIndex} has no position, skipping`);
         return;
       }
+      
+      // Capture the index in a constant to avoid closure issues
+      const capturedIndex = meterIndex;
       
       const canvasWidth = fabricCanvas.getWidth();
       const canvasHeight = fabricCanvas.getHeight();
@@ -471,7 +474,7 @@ export default function SchematicEditor({
       const scaleX = meter.scale_x || 1;
       const scaleY = meter.scale_y || 1;
       
-      console.log(`🎨 Rendering meter ${index} "${meter.meter_number}":`, {
+      console.log(`🎨 Rendering meter ${capturedIndex} "${meter.meter_number}":`, {
         percentPos: meter.position,
         pixelPos: { x: Math.round(x), y: Math.round(y) },
         scale: { x: scaleX.toFixed(2), y: scaleY.toFixed(2) },
@@ -519,14 +522,25 @@ export default function SchematicEditor({
         scaleY: scaleY,
       });
 
-      background.set('data', { type: 'extracted', index });
+      // Store the actual meter data and index directly in the fabric object
+      background.set('data', { 
+        type: 'extracted', 
+        index: capturedIndex,
+        meterNumber: meter.meter_number,
+        meterData: meter 
+      });
       
       // Add click handler to open confirmation dialog
       background.on('mousedown', () => {
         if (activeTool === 'select') {
-          setSelectedMeterIndex(index);
+          const objectData = background.get('data') as any;
+          console.log(`🎯 Clicked meter:`, {
+            index: objectData.index,
+            meterNumber: objectData.meterNumber,
+            capturedIndex
+          });
+          setSelectedMeterIndex(objectData.index);
           setIsConfirmMeterDialogOpen(true);
-          console.log(`🎯 Opening confirmation for meter ${index}:`, meter.meter_number);
         }
       });
 
@@ -668,8 +682,8 @@ export default function SchematicEditor({
           const scaleY = background.scaleY || 1;
           
           const updatedMeters = [...extractedMeters];
-          updatedMeters[index] = {
-            ...updatedMeters[index],
+          updatedMeters[capturedIndex] = {
+            ...updatedMeters[capturedIndex],
             position: { x: newX, y: newY, scaleX, scaleY }
           };
           setExtractedMeters(updatedMeters);
