@@ -364,6 +364,10 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                       selected={dateFrom} 
                       onSelect={setDateFrom}
                       className={cn("p-3 pointer-events-auto")}
+                      disabled={false}
+                      fromYear={2000}
+                      toYear={2050}
+                      captionLayout="dropdown-buttons"
                     />
                     <div className="px-3 pb-3 border-t pt-3">
                       <Label className="text-xs mb-2 block">Time</Label>
@@ -401,6 +405,10 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                       selected={dateTo} 
                       onSelect={setDateTo}
                       className={cn("p-3 pointer-events-auto")}
+                      disabled={false}
+                      fromYear={2000}
+                      toYear={2050}
+                      captionLayout="dropdown-buttons"
                     />
                     <div className="px-3 pb-3 border-t pt-3">
                       <Label className="text-xs mb-2 block">Time</Label>
