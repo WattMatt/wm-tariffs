@@ -611,7 +611,7 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                       {meter.serial_number || "—"}
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-col items-start gap-1">
                         {meter.is_revenue_critical && (
                           <Badge variant="outline" className="text-destructive border-destructive">
                             Critical
