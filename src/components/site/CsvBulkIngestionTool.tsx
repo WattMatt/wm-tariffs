@@ -1557,41 +1557,6 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                       />
                                     </div>
                                     <div>
-                                      <Label className="text-xs mb-1">Assign As</Label>
-                                      <Select
-                                        value={currentAssignment}
-                                        onValueChange={(value: 'date' | 'time' | 'value' | 'kva' | 'none') => {
-                                          const newMapping = {...columnMapping};
-                                          
-                                          // Clear previous assignment
-                                          if (part.columnId === newMapping.dateColumn) newMapping.dateColumn = "-1";
-                                          if (part.columnId === newMapping.timeColumn) newMapping.timeColumn = "-1";
-                                          if (part.columnId === newMapping.valueColumn) newMapping.valueColumn = "-1";
-                                          if (part.columnId === newMapping.kvaColumn) newMapping.kvaColumn = "-1";
-                                          
-                                          // Apply new assignment
-                                          if (value === 'date') newMapping.dateColumn = part.columnId;
-                                          if (value === 'time') newMapping.timeColumn = part.columnId;
-                                          if (value === 'value') newMapping.valueColumn = part.columnId;
-                                          if (value === 'kva') newMapping.kvaColumn = part.columnId;
-                                          
-                                          setColumnMapping(newMapping);
-                                          toast.success("Column assignment updated");
-                                        }}
-                                      >
-                                        <SelectTrigger className="h-8 text-xs bg-background">
-                                          <SelectValue placeholder="Assign as..." />
-                                        </SelectTrigger>
-                                        <SelectContent className="bg-background z-50">
-                                          <SelectItem value="date">DateTime Column</SelectItem>
-                                          <SelectItem value="time">Time Column</SelectItem>
-                                          <SelectItem value="value">Primary Value (kWh)</SelectItem>
-                                          <SelectItem value="kva">Secondary Value (kVA)</SelectItem>
-                                          <SelectItem value="none">Keep as Extra Data</SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                    </div>
-                                    <div>
                                       <Label className="text-xs mb-1">Data Type</Label>
                                       <Select
                                         value={currentDataType}
@@ -1662,41 +1627,6 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                       className="h-8 text-xs"
                                       placeholder="Column name"
                                     />
-                                  </div>
-                                  <div>
-                                    <Label className="text-xs mb-1">Assign As</Label>
-                                    <Select
-                                      value={currentAssignment}
-                                      onValueChange={(value: 'date' | 'time' | 'value' | 'kva' | 'none') => {
-                                        const newMapping = {...columnMapping};
-                                        
-                                        // Clear previous assignment
-                                        if (idx.toString() === newMapping.dateColumn) newMapping.dateColumn = "-1";
-                                        if (idx.toString() === newMapping.timeColumn) newMapping.timeColumn = "-1";
-                                        if (idx.toString() === newMapping.valueColumn) newMapping.valueColumn = "-1";
-                                        if (idx.toString() === newMapping.kvaColumn) newMapping.kvaColumn = "-1";
-                                        
-                                        // Apply new assignment
-                                        if (value === 'date') newMapping.dateColumn = idx.toString();
-                                        if (value === 'time') newMapping.timeColumn = idx.toString();
-                                        if (value === 'value') newMapping.valueColumn = idx.toString();
-                                        if (value === 'kva') newMapping.kvaColumn = idx.toString();
-                                        
-                                        setColumnMapping(newMapping);
-                                        toast.success("Column assignment updated");
-                                      }}
-                                    >
-                                      <SelectTrigger className="h-8 text-xs bg-background">
-                                        <SelectValue placeholder="Assign as..." />
-                                      </SelectTrigger>
-                                      <SelectContent className="bg-background z-50">
-                                        <SelectItem value="date">DateTime Column</SelectItem>
-                                        <SelectItem value="time">Time Column</SelectItem>
-                                        <SelectItem value="value">Primary Value (kWh)</SelectItem>
-                                        <SelectItem value="kva">Secondary Value (kVA)</SelectItem>
-                                        <SelectItem value="none">Keep as Extra Data</SelectItem>
-                                      </SelectContent>
-                                    </Select>
                                   </div>
                                   <div>
                                     <Label className="text-xs mb-1">Data Type</Label>
