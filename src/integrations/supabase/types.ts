@@ -137,6 +137,7 @@ export type Database = {
           parse_errors: number | null
           parse_status: string
           parsed_at: string | null
+          parsed_file_path: string | null
           readings_inserted: number | null
           separator: string | null
           site_id: string
@@ -159,6 +160,7 @@ export type Database = {
           parse_errors?: number | null
           parse_status?: string
           parsed_at?: string | null
+          parsed_file_path?: string | null
           readings_inserted?: number | null
           separator?: string | null
           site_id: string
@@ -181,6 +183,7 @@ export type Database = {
           parse_errors?: number | null
           parse_status?: string
           parsed_at?: string | null
+          parsed_file_path?: string | null
           readings_inserted?: number | null
           separator?: string | null
           site_id?: string

@@ -507,6 +507,54 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Generate and store parsed CSV
+    let parsedFilePath: string | null = null;
+    try {
+      // Create standardized CSV from parsed readings
+      const csvHeaders = ['reading_timestamp', 'kwh_value', 'kva_value', 'metadata'];
+      const csvRows = readings.map(reading => [
+        reading.reading_timestamp,
+        reading.kwh_value,
+        reading.kva_value || '',
+        JSON.stringify(reading.metadata || {})
+      ]);
+      
+      // Generate CSV content
+      const csvContent = [
+        csvHeaders.join(','),
+        ...csvRows.map(row => row.map(val => {
+          // Escape values containing commas or quotes
+          const str = String(val);
+          if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+            return `"${str.replace(/"/g, '""')}"`;
+          }
+          return str;
+        }).join(','))
+      ].join('\n');
+      
+      // Generate parsed file path
+      const originalFileName = filePath.split('/').pop()?.replace('.csv', '') || 'parsed';
+      const parsedFileName = `${originalFileName}_parsed.csv`;
+      const tempParsedPath = filePath.replace(fileName, `parsed/${parsedFileName}`);
+      
+      // Upload parsed CSV to storage
+      const { error: uploadError } = await supabase.storage
+        .from('meter-csvs')
+        .upload(tempParsedPath, new Blob([csvContent], { type: 'text/csv' }), { 
+          upsert: true,
+          contentType: 'text/csv'
+        });
+      
+      if (uploadError) {
+        console.error('Failed to upload parsed CSV:', uploadError);
+      } else {
+        parsedFilePath = tempParsedPath;
+        console.log(`Parsed CSV stored at: ${parsedFilePath}`);
+      }
+    } catch (parseStoreError) {
+      console.error('Error storing parsed CSV:', parseStoreError);
+    }
+
     // Update the tracking table with parse results
     const { error: updateError } = await supabase
       .from('meter_csv_files')
@@ -516,7 +564,8 @@ Deno.serve(async (req) => {
         readings_inserted: readings.length,
         duplicates_skipped: skipped,
         parse_errors: parseErrors,
-        error_message: errors.length > 0 ? errors.join('; ') : null
+        error_message: errors.length > 0 ? errors.join('; ') : null,
+        parsed_file_path: parsedFilePath
       })
       .eq('file_path', filePath);
 

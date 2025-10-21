@@ -61,6 +61,9 @@ export default function MetersTab({ siteId }: MetersTabProps) {
   const [isRawCsvViewOpen, setIsRawCsvViewOpen] = useState(false);
   const [rawCsvData, setRawCsvData] = useState<any[]>([]);
   const [rawCsvHeaders, setRawCsvHeaders] = useState<string[]>([]);
+  const [parsedCsvData, setParsedCsvData] = useState<any[]>([]);
+  const [parsedCsvHeaders, setParsedCsvHeaders] = useState<string[]>([]);
+  const [isParsedCsvViewOpen, setIsParsedCsvViewOpen] = useState(false);
   const [editingMeter, setEditingMeter] = useState<Meter | null>(null);
   const [deletingMeterId, setDeletingMeterId] = useState<string | null>(null);
   const [singleUploadMeterId, setSingleUploadMeterId] = useState<string | null>(null);
@@ -247,6 +250,79 @@ export default function MetersTab({ siteId }: MetersTabProps) {
 
     setRawCsvHeaders(headers);
     setRawCsvData(rows);
+  };
+
+  const fetchParsedCsvData = async (meterId: string) => {
+    const { data: files, error: filesError } = await supabase
+      .from('meter_csv_files')
+      .select('parsed_file_path, file_name')
+      .eq('meter_id', meterId)
+      .not('parsed_file_path', 'is', null)
+      .order('parsed_at', { ascending: false })
+      .limit(1);
+
+    if (filesError || !files || files.length === 0) {
+      toast.error("No parsed CSV file found for this meter. Please parse the data first.");
+      return;
+    }
+
+    const { data: fileData, error: storageError } = await supabase.storage
+      .from('meter_csvs')
+      .download(files[0].parsed_file_path);
+
+    if (storageError || !fileData) {
+      toast.error("Failed to download parsed CSV file");
+      return;
+    }
+
+    const text = await fileData.text();
+    const lines = text.split('\n').filter(line => line.trim());
+    if (lines.length === 0) return;
+
+    // Parse CSV (parsed files are always comma-separated with headers on first line)
+    const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+    const rows = lines.slice(1).map(line => {
+      // Handle CSV escaping (quoted values with commas)
+      const values: string[] = [];
+      let current = '';
+      let inQuotes = false;
+      
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        if (char === '"') {
+          if (inQuotes && line[i + 1] === '"') {
+            current += '"';
+            i++;
+          } else {
+            inQuotes = !inQuotes;
+          }
+        } else if (char === ',' && !inQuotes) {
+          values.push(current.trim());
+          current = '';
+        } else {
+          current += char;
+        }
+      }
+      values.push(current.trim());
+      
+      return headers.reduce((obj, header, idx) => {
+        let value = values[idx] || '';
+        // Parse metadata JSON if it's the metadata column
+        if (header === 'metadata' && value && value !== '{}') {
+          try {
+            obj[header] = JSON.parse(value);
+          } catch {
+            obj[header] = value;
+          }
+        } else {
+          obj[header] = value;
+        }
+        return obj;
+      }, {} as any);
+    });
+
+    setParsedCsvHeaders(headers);
+    setParsedCsvData(rows);
   };
 
   const handleCloseDialog = () => {
@@ -564,12 +640,11 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => {
-                                setViewReadingsMeterId(meter.id);
-                                setViewReadingsMeterNumber(meter.meter_number);
-                                setIsReadingsViewOpen(true);
+                              onClick={async () => {
+                                await fetchParsedCsvData(meter.id);
+                                setIsParsedCsvViewOpen(true);
                               }}
-                              title="View parsed readings"
+                              title="View parsed CSV data"
                             >
                               <FileCheck className="w-4 h-4" />
                             </Button>
@@ -674,6 +749,49 @@ export default function MetersTab({ siteId }: MetersTabProps) {
         siteId={siteId}
         onUploadComplete={fetchMeters}
       />
+
+      <Dialog open={isParsedCsvViewOpen} onOpenChange={setIsParsedCsvViewOpen}>
+        <DialogContent className="max-w-6xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Parsed CSV Data</DialogTitle>
+            <DialogDescription>
+              View the standardized parsed data ready for reconciliation
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            {parsedCsvData.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                No parsed CSV data available. Please parse the file first.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      {parsedCsvHeaders.map((header, idx) => (
+                        <TableHead key={idx}>{header}</TableHead>
+                      ))}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {parsedCsvData.map((row, idx) => (
+                      <TableRow key={idx}>
+                        {parsedCsvHeaders.map((header, colIdx) => (
+                          <TableCell key={colIdx} className="font-mono text-xs">
+                            {header === 'metadata' && typeof row[header] === 'object' 
+                              ? JSON.stringify(row[header], null, 2)
+                              : row[header]}
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
