@@ -94,6 +94,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
   const [separator, setSeparator] = useState<string>("tab");
   const [dateFormat, setDateFormat] = useState<string>("auto");
   const [timeInterval, setTimeInterval] = useState<string>("30");
+  const [hasHeaders, setHasHeaders] = useState<string>("yes");
   const [isProcessing, setIsProcessing] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("upload");
   const [previewingFile, setPreviewingFile] = useState<FileItem | null>(null);
@@ -826,7 +827,8 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                       separator === "semicolon" ? ";" : 
                       separator === "space" ? " " : "\t",
             dateFormat: dateFormat,
-            timeInterval: parseInt(timeInterval)
+            timeInterval: parseInt(timeInterval),
+            hasHeaders: hasHeaders === "yes"
           }
         });
 
@@ -890,7 +892,8 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                     separator === "semicolon" ? ";" : 
                     separator === "space" ? " " : "\t",
           dateFormat: dateFormat,
-          timeInterval: parseInt(timeInterval)
+          timeInterval: parseInt(timeInterval),
+          hasHeaders: hasHeaders === "yes"
         }
       });
 
@@ -1335,7 +1338,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   <div>
                     <Label>Column Separator</Label>
                     <Select value={separator} onValueChange={setSeparator} disabled={isProcessing}>
@@ -1379,8 +1382,24 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                       </SelectContent>
                     </Select>
                   </div>
+                  <div>
+                    <Label>CSV Has Header Row</Label>
+                    <Select value={hasHeaders} onValueChange={setHasHeaders} disabled={isProcessing}>
+                      <SelectTrigger className="bg-background mt-1">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="yes">Yes - Skip first row</SelectItem>
+                        <SelectItem value="no">No - All rows are data</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
                 <div className="rounded-md bg-background p-3 text-xs text-muted-foreground space-y-2">
+                  <div>
+                    <p className="font-medium mb-1">Header Row:</p>
+                    <p>If your CSV has a header row with column names, select "Yes" to skip it and use the names for metadata fields. If all rows contain data, select "No".</p>
+                  </div>
                   <div>
                     <p className="font-medium mb-1">Row Time Interval:</p>
                     <p>When CSVs don't have explicit time columns or timestamps, each row will be assigned a time based on the selected interval. Row 1 uses the date at 00:00, Row 2 adds the interval, etc.</p>

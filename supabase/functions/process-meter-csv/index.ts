@@ -15,9 +15,9 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { meterId, filePath, separator = "\t", dateFormat = "auto", timeInterval = 30 } = await req.json();
+    const { meterId, filePath, separator = "\t", dateFormat = "auto", timeInterval = 30, hasHeaders = true } = await req.json();
 
-    console.log(`Processing CSV for meter ${meterId} from ${filePath} with separator "${separator}", dateFormat "${dateFormat}", and timeInterval ${timeInterval} minutes`);
+    console.log(`Processing CSV for meter ${meterId} from ${filePath} with separator "${separator}", dateFormat "${dateFormat}", timeInterval ${timeInterval} minutes, hasHeaders: ${hasHeaders}`);
 
     // Extract filename from path
     const fileName = filePath.split('/').pop() || 'unknown.csv';
@@ -43,7 +43,9 @@ Deno.serve(async (req) => {
 
     // Parse header to identify all columns
     let headerColumns: string[] = [];
-    if (lines.length > 0) {
+    let startLineIndex = 0; // Track where data rows start
+    
+    if (lines.length > 0 && hasHeaders) {
       const headerLine = lines[0].trim();
       if (separator === ' ') {
         headerColumns = headerLine.split(/\s+/).filter(col => col.trim());
@@ -53,6 +55,9 @@ Deno.serve(async (req) => {
         headerColumns = headerLine.split(splitRegex).filter(col => col.trim());
       }
       console.log(`Header columns (${headerColumns.length}):`, headerColumns);
+      startLineIndex = 1; // Skip first row when processing data
+    } else {
+      console.log('No header row - all rows will be treated as data');
     }
 
     // Get existing timestamps to avoid duplicates
@@ -72,7 +77,7 @@ Deno.serve(async (req) => {
     const errors: string[] = [];
     let rowIndexForInterval = 0; // Track row index for interval-based timestamps
 
-    for (let i = 0; i < lines.length; i++) {
+    for (let i = startLineIndex; i < lines.length; i++) {
       const line = lines[i].trim();
       if (!line) continue;
 
@@ -89,19 +94,11 @@ Deno.serve(async (req) => {
       }
       
       // Log first data row for debugging
-      if (i === 1) {
+      if (i === startLineIndex) {
         console.log(`First data row columns (${columns.length}):`, columns);
       }
       
       if (columns.length < 2) continue;
-
-      // Skip header rows (check for common header keywords)
-      const firstCol = columns[0]?.trim().toLowerCase();
-      if (firstCol === 'date' || firstCol === 'time' || firstCol === 'datetime' || 
-          firstCol.includes('timestamp') || (i === 0 && /[a-z]/i.test(firstCol))) {
-        console.log(`Skipping header at line ${i + 1}: ${line}`);
-        continue;
-      }
 
       try {
         // Handle different column layouts
