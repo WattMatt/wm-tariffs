@@ -1501,6 +1501,36 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                     </div>
                   </div>
                 </div>
+
+                {previewData && (
+                  <div className="space-y-3 mt-4">
+                    <div className="text-sm font-semibold text-foreground">Column Interpretation</div>
+                    <div className="p-4 border rounded-md bg-muted/20">
+                      <div className="grid grid-cols-1 gap-2">
+                        {previewData.headers.map((header, idx) => {
+                          const splitConfig = columnMapping.splitColumns?.[idx];
+                          if (splitConfig) {
+                            return splitConfig.parts.map((part, partIdx) => (
+                              <div key={`${idx}_${partIdx}`} className="flex items-center gap-2 text-sm">
+                                <Badge variant="outline" className="font-mono text-xs">
+                                  {part.name}
+                                </Badge>
+                              </div>
+                            ));
+                          }
+                          const displayName = columnMapping.renamedHeaders?.[idx] || header || `Column ${idx + 1}`;
+                          return (
+                            <div key={idx} className="flex items-center gap-2 text-sm">
+                              <Badge variant="outline" className="font-mono text-xs">
+                                {displayName}
+                              </Badge>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
