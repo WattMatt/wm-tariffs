@@ -526,7 +526,10 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
 
         if (trackError) {
           console.error('Failed to track file:', trackError);
+          throw new Error(`Failed to track file in database: ${trackError.message}`);
         }
+
+        console.log(`✓ Successfully uploaded and tracked: ${fileName}`);
 
         setFiles(prev =>
           prev.map(f =>
@@ -550,6 +553,9 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
     }
 
     setIsProcessing(false);
+    
+    // Reload files to show in parse tab
+    await loadSavedFiles();
     setActiveTab("parse");
   };
 
