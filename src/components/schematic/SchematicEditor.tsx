@@ -111,8 +111,8 @@ export default function SchematicEditor({
       const evt = opt.e as MouseEvent;
       const target = opt.target;
       
-      // Handle drawing mode for regions
-      if (isDrawingMode && evt.button === 0 && !target) {
+      // Handle drawing mode for regions - ONLY in drawing mode
+      if (isDrawingMode && evt.button === 0) {
         const pointer = canvas.getPointer(opt.e);
         setIsDrawing(true);
         setDrawStartPoint({ x: pointer.x, y: pointer.y });
@@ -131,29 +131,25 @@ export default function SchematicEditor({
         
         canvas.add(rect);
         setDrawingRect(rect);
+        canvas.selection = false;
         return;
       }
       
-      // Pan if: left click on empty space, or middle/right mouse button
-      if (evt.button === 0 && !target && !isDrawingMode) {
-        // Left click on empty space
-        isPanningLocal = true;
-        lastX = evt.clientX;
-        lastY = evt.clientY;
-        canvas.selection = false;
-        canvas.defaultCursor = 'grabbing';
-      } else if (evt.button === 1 || evt.button === 2) {
-        // Middle or right mouse button
-        isPanningLocal = true;
-        lastX = evt.clientX;
-        lastY = evt.clientY;
-        canvas.selection = false;
-        canvas.defaultCursor = 'grabbing';
+      // Only allow panning when NOT in drawing mode
+      if (!isDrawingMode) {
+        // Pan with middle/right mouse button, or left click on empty space
+        if ((evt.button === 0 && !target) || evt.button === 1 || evt.button === 2) {
+          isPanningLocal = true;
+          lastX = evt.clientX;
+          lastY = evt.clientY;
+          canvas.selection = false;
+          canvas.defaultCursor = 'grabbing';
+        }
       }
     });
 
     canvas.on('mouse:move', (opt) => {
-      // Handle drawing mode
+      // Handle drawing mode - takes priority
       if (isDrawing && drawingRect && drawStartPoint) {
         const pointer = canvas.getPointer(opt.e);
         const width = pointer.x - drawStartPoint.x;
@@ -175,7 +171,8 @@ export default function SchematicEditor({
         return;
       }
       
-      if (isPanningLocal) {
+      // Only allow panning when not in drawing mode
+      if (isPanningLocal && !isDrawingMode) {
         const evt = opt.e as MouseEvent;
         const vpt = canvas.viewportTransform;
         if (vpt) {
@@ -838,10 +835,10 @@ export default function SchematicEditor({
           {activeTool === "move" && "Drag meters to reposition them on the schematic"}
           {activeTool === "connection" && "Click on two meters to connect them"}
           {activeTool === "select" && !isDrawingMode && "View mode - select a tool to edit"}
-          {isDrawingMode && "Draw mode: Click and drag to draw a region around a meter to extract its data"}
+          {isDrawingMode && "✏️ Draw mode: Click and drag to draw a box around a meter to extract its data"}
         </div>
         <div className="text-xs">
-          💡 Scroll wheel to zoom (up to 1000%) • Click + drag on empty space to pan
+          💡 Scroll wheel to zoom • {isDrawingMode ? "Exit draw mode to pan" : "Click + drag to pan"}
         </div>
       </div>
 
