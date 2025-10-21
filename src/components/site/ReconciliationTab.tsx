@@ -351,8 +351,9 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                 />
               </div>
               {dateFrom && (
-                <div className="text-xs text-muted-foreground">
-                  {format(getFullDateTime(dateFrom, timeFrom), "PPpp")}
+                <div className="p-2 mt-2 rounded-md bg-primary/10 border border-primary/20">
+                  <div className="text-xs font-medium text-primary">Selected Start:</div>
+                  <div className="text-sm font-mono">{format(getFullDateTime(dateFrom, timeFrom), "PPpp")}</div>
                 </div>
               )}
             </div>
@@ -390,8 +391,9 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                 />
               </div>
               {dateTo && (
-                <div className="text-xs text-muted-foreground">
-                  {format(getFullDateTime(dateTo, timeTo), "PPpp")}
+                <div className="p-2 mt-2 rounded-md bg-primary/10 border border-primary/20">
+                  <div className="text-xs font-medium text-primary">Selected End:</div>
+                  <div className="text-sm font-mono">{format(getFullDateTime(dateTo, timeTo), "PPpp")}</div>
                 </div>
               )}
             </div>
@@ -432,33 +434,49 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold">First Reading in Range</Label>
-                <div className="p-3 rounded-lg bg-muted/50 space-y-1">
-                  <div className="text-sm font-mono">
-                    {format(new Date(previewData.firstReading.reading_timestamp), "PPpp")}
+            <div className="space-y-4">
+              <div className="p-3 rounded-lg bg-accent/50 border border-accent">
+                <Label className="text-sm font-semibold block mb-2">Your Selected Range</Label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">From: </span>
+                    <span className="font-mono font-medium">{dateFrom && format(getFullDateTime(dateFrom, timeFrom), "PPpp")}</span>
                   </div>
-                  <div className="text-xs text-muted-foreground">
-                    kWh: {previewData.firstReading.kwh_value}
-                  </div>
-                </div>
-              </div>
-              
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold">Last Reading in Range</Label>
-                <div className="p-3 rounded-lg bg-muted/50 space-y-1">
-                  <div className="text-sm font-mono">
-                    {format(new Date(previewData.lastReading.reading_timestamp), "PPpp")}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    kWh: {previewData.lastReading.kwh_value}
+                  <div>
+                    <span className="text-muted-foreground">To: </span>
+                    <span className="font-mono font-medium">{dateTo && format(getFullDateTime(dateTo, timeTo), "PPpp")}</span>
                   </div>
                 </div>
               </div>
-            </div>
-            <div className="text-xs text-muted-foreground italic">
-              Note: The first and last readings shown are the actual readings found in your data within the selected date range. If dates differ from your selection, it means no readings exist exactly on those dates.
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-sm font-semibold">First Actual Reading Found</Label>
+                  <div className="p-3 rounded-lg bg-muted/50 space-y-1">
+                    <div className="text-sm font-mono">
+                      {format(new Date(previewData.firstReading.reading_timestamp), "PPpp")}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      kWh: {previewData.firstReading.kwh_value}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-sm font-semibold">Last Actual Reading Found</Label>
+                  <div className="p-3 rounded-lg bg-muted/50 space-y-1">
+                    <div className="text-sm font-mono">
+                      {format(new Date(previewData.lastReading.reading_timestamp), "PPpp")}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      kWh: {previewData.lastReading.kwh_value}
+                    </div>
+                  </div>
+                  <div className="text-xs text-muted-foreground italic">
+                    Note: This shows the last data point found in your database within the selected range. If it doesn't match your end date, there's no data beyond this point.
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div className="space-y-3">
