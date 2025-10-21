@@ -25,6 +25,13 @@ interface CsvData {
   preview: any[];
 }
 
+interface ColumnMapping {
+  timestampColumn: string;
+  valueColumn: string;
+  columnDataTypes: Record<string, string>;
+  dateTimeFormat: string;
+}
+
 export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComplete }: CsvImportDialogProps) {
   const [csvData, setCsvData] = useState<CsvData | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -37,6 +44,8 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
   const [splitColumnNames, setSplitColumnNames] = useState<Record<string, string>>({});
   const [replaceExisting, setReplaceExisting] = useState(false);
   const [meterNumber, setMeterNumber] = useState<string>("");
+  const [columnDataTypes, setColumnDataTypes] = useState<Record<string, string>>({});
+  const [dateTimeFormat, setDateTimeFormat] = useState<string>("YYYY-MM-DD HH:mm:ss");
 
   useEffect(() => {
     if (isOpen && meterId) {
@@ -213,15 +222,16 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
       return;
     }
 
-    console.log('🚀 Starting import process...');
+    console.log('🚀 Starting import process with edge function...');
     console.log('📌 Selected columns:', { timestampColumn, valueColumn });
     console.log('🔄 Replace existing:', replaceExisting);
+    console.log('📅 DateTime format:', dateTimeFormat);
+    console.log('🔢 Column data types:', columnDataTypes);
     
     setIsUploading(true);
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      console.log('👤 User ID:', user?.id);
       
       // If replace existing, delete all current readings for this meter
       if (replaceExisting) {
@@ -232,100 +242,74 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
           .eq('meter_id', meterId);
         
         if (deleteError) {
-          console.error('Delete error:', deleteError);
           throw new Error(`Failed to delete existing readings: ${deleteError.message}`);
         }
         console.log('✅ Existing readings deleted');
       }
-      
-      const timestampIndex = csvData.headers.indexOf(timestampColumn);
-      const valueIndex = csvData.headers.indexOf(valueColumn);
-      console.log('📍 Column indices - Timestamp:', timestampIndex, 'Value:', valueIndex);
-      console.log('📦 All columns will be included');
 
-      // Prepare batch insert data
-      let validCount = 0;
-      let invalidCount = 0;
-      
-      const readings = csvData.rows
-        .map((row, rowIdx) => {
-          const timestamp = row[timestampIndex];
-          const value = parseFloat(row[valueIndex]);
+      // Upload CSV file to storage
+      const filePath = `${meterId}/${selectedFile!.name}`;
+      const { error: uploadError } = await supabase.storage
+        .from('meter-csvs')
+        .upload(filePath, selectedFile!, { upsert: true });
 
-          // Log first 5 rows for debugging
-          if (rowIdx < 5) {
-            console.log(`📝 Row ${rowIdx + 1}:`, {
-              timestamp,
-              rawValue: row[valueIndex],
-              parsedValue: value,
-              isValid: !!timestamp && !isNaN(value)
-            });
-          }
+      if (uploadError) throw uploadError;
 
-          // Validate data
-          if (!timestamp || isNaN(value)) {
-            invalidCount++;
-            if (rowIdx < 5) console.warn(`⚠️ Row ${rowIdx + 1} invalid:`, { timestamp, value });
-            return null;
-          }
+      // Compute content hash
+      const arrayBuffer = await selectedFile!.arrayBuffer();
+      const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      const contentHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 
-          validCount++;
-          
-          // Include ALL columns in metadata
-          const mappedFields: Record<string, any> = {};
-          
-          csvData.headers.forEach((colName, colIdx) => {
-            if (colName && colName.trim()) {
-              mappedFields[colName] = row[colIdx];
-            }
-          });
-          
-          // Log all mapped fields for first row
-          if (rowIdx === 0) {
-            console.log('📋 All mapped fields in first row:', mappedFields);
-          }
-
-          return {
-            meter_id: meterId,
-            reading_timestamp: new Date(timestamp).toISOString(),
-            kwh_value: value,
-            uploaded_by: user?.id,
-            metadata: {
-              source_file: selectedFile?.name,
-              imported_fields: mappedFields,
-            },
-          };
+      // Create CSV file record
+      const { data: csvRecord, error: recordError } = await supabase
+        .from('meter_csv_files')
+        .insert({
+          meter_id: meterId,
+          site_id: (await supabase.from('meters').select('site_id').eq('id', meterId).single()).data?.site_id,
+          file_name: selectedFile!.name,
+          file_path: filePath,
+          file_size: selectedFile!.size,
+          content_hash: contentHash,
+          uploaded_by: user?.id,
+          upload_status: 'uploaded',
+          parse_status: 'pending'
         })
-        .filter(Boolean);
-      
-      console.log(`✅ Valid readings: ${validCount}, ❌ Invalid: ${invalidCount}`);
+        .select()
+        .single();
 
-      if (readings.length === 0) {
-        toast.error("No valid readings found in CSV");
-        setIsUploading(false);
-        return;
-      }
+      if (recordError) throw recordError;
 
-      // Insert in batches of 1000
-      const batchSize = 1000;
-      let imported = 0;
+      // Prepare column mapping for edge function
+      const columnMapping: ColumnMapping = {
+        timestampColumn,
+        valueColumn,
+        columnDataTypes,
+        dateTimeFormat
+      };
 
-      for (let i = 0; i < readings.length; i += batchSize) {
-        const batch = readings.slice(i, i + batchSize);
-        const { error } = await supabase.from("meter_readings").insert(batch);
-
-        if (error) {
-          throw error;
+      // Call edge function to process CSV
+      const { data, error: functionError } = await supabase.functions.invoke('process-meter-csv', {
+        body: {
+          csvFileId: csvRecord.id,
+          filePath,
+          meterId,
+          columnMapping,
+          replaceExisting
         }
+      });
 
-        imported += batch.length;
-        toast.info(`Imported ${imported} of ${readings.length} readings...`);
+      if (functionError) throw functionError;
+
+      if (data?.error) {
+        throw new Error(data.error);
       }
 
-      toast.success(`Successfully imported ${imported} readings`);
+      toast.success(`Successfully imported ${data.readingsInserted || 0} readings`);
       onImportComplete();
       handleClose();
     } catch (error: any) {
+      console.error('Import error:', error);
       toast.error(`Import failed: ${error.message}`);
     } finally {
       setIsUploading(false);
@@ -342,6 +326,8 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
     setColumnSplits({});
     setSplitColumnNames({});
     setReplaceExisting(false);
+    setColumnDataTypes({});
+    setDateTimeFormat("YYYY-MM-DD HH:mm:ss");
     onClose();
   };
 
@@ -488,6 +474,24 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
 
         {step === "confirm" && csvData && (
           <div className="space-y-6">
+            <div className="space-y-4 mb-6">
+              <div>
+                <Label className="mb-2">DateTime Format</Label>
+                <Select value={dateTimeFormat} onValueChange={setDateTimeFormat}>
+                  <SelectTrigger className="bg-background">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="z-[100] bg-popover">
+                    <SelectItem value="YYYY-MM-DD HH:mm:ss">YYYY-MM-DD HH:mm:ss (2023-09-08 00:30:00)</SelectItem>
+                    <SelectItem value="DD/MM/YYYY HH:mm">DD/MM/YYYY HH:mm (08/09/2023 00:30)</SelectItem>
+                    <SelectItem value="MM/DD/YYYY HH:mm">MM/DD/YYYY HH:mm (09/08/2023 00:30)</SelectItem>
+                    <SelectItem value="DD-MM-YYYY HH:mm:ss">DD-MM-YYYY HH:mm:ss (08-09-2023 00:30:00)</SelectItem>
+                    <SelectItem value="YYYY/MM/DD HH:mm">YYYY/MM/DD HH:mm (2023/09/08 00:30)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            
             <Card className="border-border/50 bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800">
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
@@ -531,7 +535,7 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
                               
                               return (
                                 <TableHead key={columnKey} className="min-w-40">
-                                  <div className="flex flex-col gap-2">
+                                   <div className="flex flex-col gap-2">
                                     <div className="flex flex-col gap-1">
                                       <Input
                                         value={displayName}
@@ -546,6 +550,23 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
                                         {type}
                                       </Badge>
                                     </div>
+                                    <Select
+                                      value={columnDataTypes[displayName] || "string"}
+                                      onValueChange={(val) => setColumnDataTypes(prev => ({
+                                        ...prev,
+                                        [displayName]: val
+                                      }))}
+                                    >
+                                      <SelectTrigger className="h-7 text-xs bg-background">
+                                        <SelectValue placeholder="Data Type" />
+                                      </SelectTrigger>
+                                      <SelectContent className="z-[100] bg-popover">
+                                        <SelectItem value="datetime">datetime</SelectItem>
+                                        <SelectItem value="float">float</SelectItem>
+                                        <SelectItem value="int">int</SelectItem>
+                                        <SelectItem value="string">string</SelectItem>
+                                      </SelectContent>
+                                    </Select>
                                     {partIdx === 0 && (
                                       <Select 
                                         value={splitType} 
@@ -578,6 +599,23 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
                                     {type}
                                   </Badge>
                                 </div>
+                                <Select
+                                  value={columnDataTypes[header] || "string"}
+                                  onValueChange={(val) => setColumnDataTypes(prev => ({
+                                    ...prev,
+                                    [header]: val
+                                  }))}
+                                >
+                                  <SelectTrigger className="h-7 text-xs bg-background">
+                                    <SelectValue placeholder="Data Type" />
+                                  </SelectTrigger>
+                                  <SelectContent className="z-[100] bg-popover">
+                                    <SelectItem value="datetime">datetime</SelectItem>
+                                    <SelectItem value="float">float</SelectItem>
+                                    <SelectItem value="int">int</SelectItem>
+                                    <SelectItem value="string">string</SelectItem>
+                                  </SelectContent>
+                                </Select>
                                 <Select 
                                   value={columnSplits[idx] || 'none'} 
                                   onValueChange={(val) => setColumnSplits(prev => ({...prev, [idx]: val}))}
