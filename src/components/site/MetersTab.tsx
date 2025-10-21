@@ -14,7 +14,6 @@ import NegativeReadingsDetector from "./NegativeReadingsDetector";
 import { toast } from "sonner";
 import CsvImportDialog from "./CsvImportDialog";
 import MeterReadingsView from "./MeterReadingsView";
-import DatabaseManagementDialog from "./DatabaseManagementDialog";
 import CsvBulkIngestionTool from "./CsvBulkIngestionTool";
 import {
   AlertDialog,
@@ -208,7 +207,6 @@ export default function MetersTab({ siteId }: MetersTabProps) {
           <p className="text-muted-foreground">Manage meters for this site</p>
         </div>
         <div className="flex gap-2">
-          <DatabaseManagementDialog siteId={siteId} onDataChange={fetchMeters} />
           <CsvBulkIngestionTool siteId={siteId} onDataChange={fetchMeters} />
           <Dialog open={isDialogOpen} onOpenChange={handleCloseDialog}>
             <DialogTrigger asChild>
