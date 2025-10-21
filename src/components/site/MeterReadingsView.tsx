@@ -39,6 +39,32 @@ export default function MeterReadingsView({ isOpen, onClose, meterId, meterNumbe
     }
   }, [isOpen, meterId, page]);
 
+  // Set up realtime subscription for live reading updates
+  useEffect(() => {
+    if (!isOpen || !meterId) return;
+    
+    const channel = supabase
+      .channel('meter-readings-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'meter_readings',
+          filter: `meter_id=eq.${meterId}`
+        },
+        () => {
+          console.log('Readings changed, reloading...');
+          fetchReadings();
+        }
+      )
+      .subscribe();
+    
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [isOpen, meterId]);
+
   const fetchReadings = async () => {
     setIsLoading(true);
     

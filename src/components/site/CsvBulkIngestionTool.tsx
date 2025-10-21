@@ -101,21 +101,35 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
 
+  // Load fresh data from database whenever dialog opens or tab changes
   useEffect(() => {
     if (isOpen) {
-      setFiles([]);
       loadMeters();
-      if (activeTab === "parse") {
-        loadSavedFiles();
-      }
+      loadSavedFiles(); // Always load from database to reflect current state
+      
+      // Set up realtime subscription for live updates
+      const channel = supabase
+        .channel('meter-csv-files-changes')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'meter_csv_files',
+            filter: `site_id=eq.${siteId}`
+          },
+          (payload) => {
+            console.log('CSV file changed:', payload);
+            loadSavedFiles(); // Reload when files change
+          }
+        )
+        .subscribe();
+      
+      return () => {
+        supabase.removeChannel(channel);
+      };
     }
-  }, [isOpen]);
-
-  useEffect(() => {
-    if (isOpen && activeTab === "parse") {
-      loadSavedFiles();
-    }
-  }, [activeTab]);
+  }, [isOpen, activeTab, siteId]); // Refresh when dialog opens or tab changes
 
   // Regenerate previews when separator changes
   useEffect(() => {

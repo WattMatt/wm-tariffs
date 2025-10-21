@@ -62,6 +62,28 @@ export default function MetersTab({ siteId }: MetersTabProps) {
 
   useEffect(() => {
     fetchMeters();
+    
+    // Set up realtime subscription for live meter updates
+    const channel = supabase
+      .channel('meters-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'meters',
+          filter: `site_id=eq.${siteId}`
+        },
+        () => {
+          console.log('Meters changed, reloading...');
+          fetchMeters();
+        }
+      )
+      .subscribe();
+    
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [siteId]);
 
   const fetchMeters = async () => {
