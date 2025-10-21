@@ -68,15 +68,8 @@ Deno.serve(async (req) => {
       console.log('No header row - all rows will be treated as data');
     }
 
-    // Get existing timestamps to avoid duplicates
-    const { data: existingReadings } = await supabase
-      .from('meter_readings')
-      .select('reading_timestamp')
-      .eq('meter_id', meterId);
-
-    const existingTimestamps = new Set(
-      existingReadings?.map((r) => new Date(r.reading_timestamp).toISOString()) || []
-    );
+    // Skip duplicate check - users manage their own data cleanup
+    const existingTimestamps = new Set();
 
     // Process rows
     const readings: any[] = [];
