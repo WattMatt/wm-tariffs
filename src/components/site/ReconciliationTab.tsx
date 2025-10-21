@@ -102,16 +102,24 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
         return;
       }
 
-      // Extract available columns from imported_fields metadata
+      // Extract available columns from column_mapping configuration
       const availableColumns = new Set<string>();
-      readings.forEach(reading => {
-        const metadata = reading.metadata as any;
+      if (columnMapping && columnMapping.renamedHeaders) {
+        // Use the renamed headers from the parsing configuration
+        Object.values(columnMapping.renamedHeaders).forEach((headerName: any) => {
+          if (headerName && typeof headerName === 'string') {
+            availableColumns.add(headerName);
+          }
+        });
+      } else if (readings.length > 0) {
+        // Fallback: extract from first reading's metadata if no column mapping
+        const metadata = readings[0].metadata as any;
         if (metadata && metadata.imported_fields) {
           Object.keys(metadata.imported_fields).forEach(key => {
             availableColumns.add(key);
           });
         }
-      });
+      }
 
       // Auto-select all columns initially
       setSelectedColumns(new Set(availableColumns));
