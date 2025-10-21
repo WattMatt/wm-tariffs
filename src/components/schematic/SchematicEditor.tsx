@@ -73,6 +73,13 @@ export default function SchematicEditor({
   const [isEditMeterDialogOpen, setIsEditMeterDialogOpen] = useState(false);
   const [editingMeter, setEditingMeter] = useState<any>(null);
 
+  // Load initial data on mount
+  useEffect(() => {
+    fetchMeters();
+    fetchMeterPositions();
+    fetchLines();
+  }, [schematicId, siteId]);
+
   // Sync drawing mode state when tool changes
   useEffect(() => {
     const newDrawingMode = activeTool === 'draw';
@@ -113,7 +120,7 @@ export default function SchematicEditor({
       const target = opt.target;
       
       // DRAWING TOOL: Left click ONLY draws when draw tool is active
-      if (activeTool === 'draw' && evt.button === 0) {
+      if (activeTool === 'draw' && evt.button === 0 && !target) {
         const pointer = canvas.getPointer(opt.e);
         setIsDrawing(true);
         setDrawStartPoint({ x: pointer.x, y: pointer.y });
@@ -133,6 +140,7 @@ export default function SchematicEditor({
         canvas.add(rect);
         setDrawingRect(rect);
         canvas.selection = false;
+        canvas.defaultCursor = 'crosshair';
         evt.preventDefault();
         evt.stopPropagation();
         return;
@@ -773,7 +781,25 @@ export default function SchematicEditor({
   const fetchMeterPositions = async () => {
     const { data } = await supabase
       .from("meter_positions")
-      .select("*")
+      .select(`
+        id,
+        meter_id,
+        x_position,
+        y_position,
+        label,
+        scale_x,
+        scale_y,
+        meters(
+          meter_number,
+          meter_type,
+          name,
+          area,
+          rating,
+          cable_specification,
+          serial_number,
+          ct_type
+        )
+      `)
       .eq("schematic_id", schematicId);
     
     setMeterPositions(data || []);
