@@ -105,11 +105,14 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
     if (isOpen) {
       setFiles([]);
       loadMeters();
+      if (activeTab === "parse") {
+        loadSavedFiles();
+      }
     }
   }, [isOpen]);
 
   useEffect(() => {
-    if (activeTab === "parse") {
+    if (isOpen && activeTab === "parse") {
       loadSavedFiles();
     }
   }, [activeTab]);
