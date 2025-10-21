@@ -31,43 +31,21 @@ serve(async (req) => {
     let processedImageUrl = imageUrl;
     
     if (filePath && filePath.toLowerCase().endsWith('.pdf')) {
-      console.log('PDF detected, converting to image...');
+      console.log('PDF detected, need to convert to image first...');
       
-      // For PDFs, we'll fetch the file and convert the first page to an image
+      // Use the public URL for the PDF
       const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
       const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
       const supabase = createClient(supabaseUrl, supabaseKey);
       
-      // Download the PDF from storage
-      const { data: pdfData, error: downloadError } = await supabase
+      // Get the public URL for the PDF
+      const { data: urlData } = supabase
         .storage
         .from('schematics')
-        .download(filePath);
-        
-      if (downloadError || !pdfData) {
-        console.error('Error downloading PDF:', downloadError);
-        throw new Error('Failed to download PDF file');
-      }
-
-      console.log('PDF downloaded, converting to base64 image...');
+        .getPublicUrl(filePath);
       
-      // Convert PDF blob to array buffer, then to base64 in chunks to avoid stack overflow
-      const arrayBuffer = await pdfData.arrayBuffer();
-      const uint8Array = new Uint8Array(arrayBuffer);
-      
-      // Convert to base64 in chunks to avoid "Maximum call stack size exceeded"
-      let binaryString = '';
-      const chunkSize = 8192; // Process 8KB at a time
-      for (let i = 0; i < uint8Array.length; i += chunkSize) {
-        const chunk = uint8Array.slice(i, i + chunkSize);
-        binaryString += String.fromCharCode(...chunk);
-      }
-      const base64Pdf = btoa(binaryString);
-      
-      // Use PDF as base64 data URL - the AI can handle PDFs as images
-      processedImageUrl = `data:application/pdf;base64,${base64Pdf}`;
-      
-      console.log('PDF converted to base64 data URL');
+      processedImageUrl = urlData.publicUrl;
+      console.log('Using PDF public URL:', processedImageUrl);
     }
 
     console.log(`Calling Lovable AI in ${mode || 'full'} mode...`);
