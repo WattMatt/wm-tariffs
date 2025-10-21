@@ -660,6 +660,7 @@ export default function SchematicViewer() {
                 schematicId={id!}
                 schematicUrl={imageUrl}
                 siteId={schematic.site_id}
+                filePath={schematic.file_path}
                 extractedMeters={extractedMeters}
                 onExtractedMetersUpdate={setExtractedMeters}
               />

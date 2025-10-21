@@ -16,6 +16,7 @@ interface SchematicEditorProps {
   schematicId: string;
   schematicUrl: string;
   siteId: string;
+  filePath?: string;
   extractedMeters?: any[];
   onExtractedMetersUpdate?: (meters: any[]) => void;
 }
@@ -41,7 +42,8 @@ interface SchematicLine {
 export default function SchematicEditor({ 
   schematicId, 
   schematicUrl, 
-  siteId, 
+  siteId,
+  filePath,
   extractedMeters: propExtractedMeters = [],
   onExtractedMetersUpdate 
 }: SchematicEditorProps) {
@@ -310,7 +312,7 @@ export default function SchematicEditor({
           const { data, error } = await supabase.functions.invoke('extract-schematic-meters', {
             body: { 
               imageUrl: schematicUrl,
-              filePath: null,
+              filePath: filePath || null,
               mode: 'extract-region',
               region
             }
