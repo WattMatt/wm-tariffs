@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import CsvImportDialog from "./CsvImportDialog";
 import MeterReadingsView from "./MeterReadingsView";
 import CsvBulkIngestionTool from "./CsvBulkIngestionTool";
+import SingleCsvUploadDialog from "./SingleCsvUploadDialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -62,6 +63,9 @@ export default function MetersTab({ siteId }: MetersTabProps) {
   const [rawCsvHeaders, setRawCsvHeaders] = useState<string[]>([]);
   const [editingMeter, setEditingMeter] = useState<Meter | null>(null);
   const [deletingMeterId, setDeletingMeterId] = useState<string | null>(null);
+  const [singleUploadMeterId, setSingleUploadMeterId] = useState<string | null>(null);
+  const [singleUploadMeterNumber, setSingleUploadMeterNumber] = useState<string>("");
+  const [isSingleUploadOpen, setIsSingleUploadOpen] = useState(false);
 
   useEffect(() => {
     fetchMeters();
@@ -536,8 +540,9 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                           variant="outline"
                           size="sm"
                           onClick={() => {
-                            setCsvImportMeterId(meter.id);
-                            setIsCsvDialogOpen(true);
+                            setSingleUploadMeterId(meter.id);
+                            setSingleUploadMeterNumber(meter.meter_number);
+                            setIsSingleUploadOpen(true);
                           }}
                           title="Upload CSV data"
                         >
@@ -660,6 +665,15 @@ export default function MetersTab({ siteId }: MetersTabProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <SingleCsvUploadDialog
+        isOpen={isSingleUploadOpen}
+        onOpenChange={setIsSingleUploadOpen}
+        meterId={singleUploadMeterId || ""}
+        meterNumber={singleUploadMeterNumber}
+        siteId={siteId}
+        onUploadComplete={fetchMeters}
+      />
     </div>
   );
 }
