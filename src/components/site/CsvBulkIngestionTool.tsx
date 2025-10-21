@@ -1532,24 +1532,6 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                     </Select>
                   </div>
                 </div>
-                <div className="rounded-md bg-background p-3 text-xs text-muted-foreground space-y-2">
-                  <div>
-                    <p className="font-medium mb-1">Header Row:</p>
-                    <p>If your CSV has a header row with column names, select "Yes" to skip it and use the names for metadata fields. If all rows contain data, select "No".</p>
-                  </div>
-                  <div>
-                    <p className="font-medium mb-1">DateTime Format:</p>
-                    <p>For columns containing combined date and time (e.g., "2023-09-08 14:30:00"), select the format that matches your data. The parser will use this to correctly extract dates and times. Common formats: YYYY-MM-DD HH:mm:ss for ISO format, DD/MM/YYYY HH:mm for European format.</p>
-                  </div>
-                  <div>
-                    <p className="font-medium mb-1">Row Time Interval:</p>
-                    <p>Only used when no time information is present in your data. Each row will be assigned a sequential time based on the selected interval starting from 00:00.</p>
-                  </div>
-                  <div>
-                    <p className="font-medium mb-1">Column Assignment:</p>
-                    <p>Click any column header to assign it as Date, Time, kWh, kVA, or other data types. You can also set the data type (string, int, float, datetime) for proper storage.</p>
-                  </div>
-                </div>
               </CardContent>
             </Card>
 
