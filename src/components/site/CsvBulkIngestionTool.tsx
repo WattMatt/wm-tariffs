@@ -276,6 +276,9 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
       const headers = rows[0] || [];
       const dataRows = rows.slice(1);
       
+      console.log(`CSV Preview - Headers (${headers.length} columns):`, headers);
+      console.log(`CSV Preview - First data row (${dataRows[0]?.length || 0} columns):`, dataRows[0]);
+      
       // Auto-detect columns
       const detectedColumns = {
         dateColumn: 0,
@@ -283,6 +286,8 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
         valueColumn: headers.length > 2 ? 2 : 1,
         metadataColumns: Array.from({ length: Math.max(0, headers.length - 3) }, (_, i) => i + 3)
       };
+      
+      console.log('Detected columns:', detectedColumns);
       
       return { headers, rows: dataRows, detectedColumns };
     } catch (err) {
@@ -1195,72 +1200,38 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                 Data Structure Preview
                               </div>
                               
-                              <ScrollArea className="h-48 w-full rounded-md border">
-                                <div className="p-2 min-w-max">
-                                  <table className="text-xs border-collapse">
-                                    <thead>
-                                      <tr className="border-b">
-                                        <th className="px-2 py-1 text-left font-medium bg-muted/50 whitespace-nowrap">
+                              <div className="h-48 w-full rounded-md border overflow-auto">
+                                <table className="text-xs border-collapse">
+                                  <thead className="sticky top-0 z-10">
+                                    <tr className="border-b">
+                                      {fileItem.preview.headers.map((header, idx) => (
+                                        <th key={idx} className="px-3 py-2 text-left font-medium bg-muted whitespace-nowrap">
                                           <div className="space-y-1">
-                                            <div>Timestamp</div>
+                                            <div className="font-semibold">{header || `Column ${idx + 1}`}</div>
                                             <Badge variant="outline" className="text-[10px] h-4">
-                                              Date + Time
+                                              {idx === fileItem.preview.detectedColumns.dateColumn ? 'Date' :
+                                               idx === fileItem.preview.detectedColumns.timeColumn ? 'Time' :
+                                               idx === fileItem.preview.detectedColumns.valueColumn ? 'kWh Value' :
+                                               'Metadata'}
                                             </Badge>
                                           </div>
                                         </th>
-                                        <th className="px-2 py-1 text-left font-medium bg-muted/50 whitespace-nowrap">
-                                          <div className="space-y-1">
-                                            <div>
-                                              {fileItem.preview.headers[fileItem.preview.detectedColumns.valueColumn]}
-                                            </div>
-                                            <Badge variant="outline" className="text-[10px] h-4">
-                                              kWh Value
-                                            </Badge>
-                                          </div>
-                                        </th>
-                                        {fileItem.preview.detectedColumns.metadataColumns.map((colIdx) => (
-                                          <th key={colIdx} className="px-2 py-1 text-left font-medium bg-muted/50 whitespace-nowrap">
-                                            <div className="space-y-1">
-                                              <div>{fileItem.preview.headers[colIdx]}</div>
-                                              <Badge variant="outline" className="text-[10px] h-4">
-                                                Metadata
-                                              </Badge>
-                                            </div>
-                                          </th>
+                                      ))}
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {fileItem.preview.rows.slice(0, 5).map((row, rowIdx) => (
+                                      <tr key={rowIdx} className="border-b hover:bg-muted/30">
+                                        {fileItem.preview.headers.map((_, colIdx) => (
+                                          <td key={colIdx} className="px-3 py-2 whitespace-nowrap">
+                                            {row[colIdx] || ''}
+                                          </td>
                                         ))}
                                       </tr>
-                                    </thead>
-                                    <tbody>
-                                      {fileItem.preview.rows.slice(0, 5).map((row, rowIdx) => {
-                                        const dateCol = fileItem.preview!.detectedColumns.dateColumn;
-                                        const timeCol = fileItem.preview!.detectedColumns.timeColumn;
-                                        const valueCol = fileItem.preview!.detectedColumns.valueColumn;
-                                        const metaCols = fileItem.preview!.detectedColumns.metadataColumns;
-                                        
-                                        const timestamp = timeCol !== undefined 
-                                          ? `${row[dateCol]} ${row[timeCol]}`
-                                          : row[dateCol];
-                                        
-                                        return (
-                                          <tr key={rowIdx} className="border-b hover:bg-muted/50">
-                                            <td className="px-2 py-1 whitespace-nowrap">
-                                              {timestamp}
-                                            </td>
-                                            <td className="px-2 py-1 whitespace-nowrap">
-                                              {row[valueCol]}
-                                            </td>
-                                            {metaCols.map((colIdx) => (
-                                              <td key={colIdx} className="px-2 py-1 whitespace-nowrap">
-                                                {row[colIdx]}
-                                              </td>
-                                            ))}
-                                          </tr>
-                                        );
-                                      })}
-                                    </tbody>
-                                  </table>
-                                </div>
-                              </ScrollArea>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
                               
                               {fileItem.preview.detectedColumns.metadataColumns.length > 0 && (
                                 <div className="space-y-2">
