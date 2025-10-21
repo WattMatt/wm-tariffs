@@ -27,25 +27,40 @@ serve(async (req) => {
       throw new Error('LOVABLE_API_KEY is not configured');
     }
 
-    // Check if the file is a PDF and needs conversion
+    // Check if the file is a PDF and needs to use converted image
     let processedImageUrl = imageUrl;
     
     if (filePath && filePath.toLowerCase().endsWith('.pdf')) {
-      console.log('PDF detected, need to convert to image first...');
+      console.log('PDF detected, checking for converted image...');
       
-      // Use the public URL for the PDF
       const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
       const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
       const supabase = createClient(supabaseUrl, supabaseKey);
       
-      // Get the public URL for the PDF
-      const { data: urlData } = supabase
+      // Check if there's a converted PNG image
+      const convertedImagePath = filePath.replace('.pdf', '_converted.png');
+      
+      // Try to check if the converted image exists
+      const { data: fileData, error: checkError } = await supabase
         .storage
         .from('schematics')
-        .getPublicUrl(filePath);
+        .list('', {
+          search: convertedImagePath
+        });
       
-      processedImageUrl = urlData.publicUrl;
-      console.log('Using PDF public URL:', processedImageUrl);
+      if (fileData && fileData.length > 0) {
+        // Use the converted PNG image
+        const { data: urlData } = supabase
+          .storage
+          .from('schematics')
+          .getPublicUrl(convertedImagePath);
+        
+        processedImageUrl = urlData.publicUrl;
+        console.log('Using converted PNG image:', processedImageUrl);
+      } else {
+        console.error('No converted image found for PDF. Please convert the PDF first using the Convert PDF to Image button.');
+        throw new Error('PDF must be converted to PNG first. No converted image found.');
+      }
     }
 
     console.log(`Calling Lovable AI in ${mode || 'full'} mode...`);
