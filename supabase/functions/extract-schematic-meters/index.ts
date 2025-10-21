@@ -51,9 +51,18 @@ serve(async (req) => {
 
       console.log('PDF downloaded, converting to base64 image...');
       
-      // Convert PDF blob to array buffer
+      // Convert PDF blob to array buffer, then to base64 in chunks to avoid stack overflow
       const arrayBuffer = await pdfData.arrayBuffer();
-      const base64Pdf = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+      const uint8Array = new Uint8Array(arrayBuffer);
+      
+      // Convert to base64 in chunks to avoid "Maximum call stack size exceeded"
+      let binaryString = '';
+      const chunkSize = 8192; // Process 8KB at a time
+      for (let i = 0; i < uint8Array.length; i += chunkSize) {
+        const chunk = uint8Array.slice(i, i + chunkSize);
+        binaryString += String.fromCharCode(...chunk);
+      }
+      const base64Pdf = btoa(binaryString);
       
       // Use PDF as base64 data URL - the AI can handle PDFs as images
       processedImageUrl = `data:application/pdf;base64,${base64Pdf}`;
