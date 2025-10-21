@@ -211,7 +211,7 @@ export default function MetersTab({ siteId }: MetersTabProps) {
     }
 
     const { data: fileData, error: storageError } = await supabase.storage
-      .from('meter_csvs')
+      .from('meter-csvs')
       .download(files[0].file_path);
 
     if (storageError || !fileData) {
@@ -267,7 +267,7 @@ export default function MetersTab({ siteId }: MetersTabProps) {
     }
 
     const { data: fileData, error: storageError } = await supabase.storage
-      .from('meter_csvs')
+      .from('meter-csvs')
       .download(files[0].parsed_file_path);
 
     if (storageError || !fileData) {
