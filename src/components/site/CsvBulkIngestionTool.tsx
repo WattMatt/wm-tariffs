@@ -1375,6 +1375,15 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                       </Button>
                     )}
                      <Button
+                       onClick={handleCleanupDuplicates}
+                       disabled={isProcessing}
+                       variant="outline"
+                       size="sm"
+                     >
+                       <Trash2 className="w-4 h-4 mr-2" />
+                       Remove Duplicates
+                     </Button>
+                     <Button
                        onClick={handleCleanupOrphans}
                        disabled={isProcessing}
                        variant="outline"
