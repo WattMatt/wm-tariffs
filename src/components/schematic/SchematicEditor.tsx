@@ -1498,7 +1498,7 @@ export default function SchematicEditor({
 
       {/* Meter Confirmation Dialog for Extracted Meters */}
       <Dialog open={isConfirmMeterDialogOpen} onOpenChange={setIsConfirmMeterDialogOpen}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <span className="text-red-600">⚠️ Verify Meter Data</span>
@@ -1514,168 +1514,201 @@ export default function SchematicEditor({
           </DialogHeader>
           
           {selectedMeterIndex !== null && extractedMeters[selectedMeterIndex] && (
-            <form onSubmit={async (e) => {
-              e.preventDefault();
-              const formData = new FormData(e.currentTarget);
-              
-              // Update the extracted meter with verified data
-              const updated = [...extractedMeters];
-              updated[selectedMeterIndex] = {
-                ...updated[selectedMeterIndex],
-                meter_number: formData.get('meter_number') as string,
-                name: formData.get('name') as string,
-                area: formData.get('area') as string,
-                rating: formData.get('rating') as string,
-                cable_specification: formData.get('cable_specification') as string,
-                serial_number: formData.get('serial_number') as string,
-                ct_type: formData.get('ct_type') as string,
-                meter_type: formData.get('meter_type') as string,
-                status: 'approved'
-              };
-              
-              onExtractedMetersUpdate?.(updated);
-              setIsConfirmMeterDialogOpen(false);
-              setSelectedMeterIndex(null);
-              toast.success('Meter data verified and confirmed');
-            }} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="confirm_meter_number" className="flex items-center gap-2">
-                    NO (Meter Number) *
-                    {extractedMeters[selectedMeterIndex].meter_number?.includes('VERIFY:') && (
-                      <Badge variant="destructive" className="text-xs">NEEDS VERIFICATION</Badge>
-                    )}
-                  </Label>
-                  <Input 
-                    id="confirm_meter_number" 
-                    name="meter_number" 
-                    required 
-                    defaultValue={extractedMeters[selectedMeterIndex].meter_number?.replace('VERIFY:', '') || ''}
-                    placeholder="DB-01W"
-                    className={extractedMeters[selectedMeterIndex].meter_number?.includes('VERIFY:') ? 'border-red-500' : ''}
-                  />
+            <div className="grid grid-cols-2 gap-6">
+              {/* Left side: Meter preview from PDF */}
+              <div className="space-y-2">
+                <Label className="text-base font-semibold">Actual Meter from PDF</Label>
+                <div className="border-2 border-primary rounded-lg overflow-hidden bg-muted">
+                  <div 
+                    className="relative w-full" 
+                    style={{
+                      height: '600px',
+                      backgroundImage: `url(${schematicUrl})`,
+                      backgroundSize: `${100 / (extractedMeters[selectedMeterIndex].scale_x || 1)}% ${100 / (extractedMeters[selectedMeterIndex].scale_y || 1)}%`,
+                      backgroundPosition: `${extractedMeters[selectedMeterIndex].x_position || 50}% ${extractedMeters[selectedMeterIndex].y_position || 50}%`,
+                      backgroundRepeat: 'no-repeat',
+                    }}
+                  >
+                    {/* Crosshair to show center */}
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <div className="w-full h-[2px] bg-red-500 opacity-50"></div>
+                    </div>
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <div className="h-full w-[2px] bg-red-500 opacity-50"></div>
+                    </div>
+                  </div>
                 </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="confirm_name">NAME *</Label>
-                  <Input 
-                    id="confirm_name" 
-                    name="name" 
-                    required 
-                    defaultValue={extractedMeters[selectedMeterIndex].name?.replace('VERIFY:', '') || ''}
-                    placeholder="CAR WASH"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="confirm_area">AREA (with m²) *</Label>
-                  <Input 
-                    id="confirm_area" 
-                    name="area" 
-                    required 
-                    defaultValue={extractedMeters[selectedMeterIndex].area?.replace('VERIFY:', '').replace('NOT_VISIBLE', '') || ''}
-                    placeholder="187m²"
-                    className={extractedMeters[selectedMeterIndex].area?.includes('NOT_VISIBLE') ? 'border-orange-500' : ''}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="confirm_rating">RATING *</Label>
-                  <Input 
-                    id="confirm_rating" 
-                    name="rating" 
-                    required 
-                    defaultValue={extractedMeters[selectedMeterIndex].rating?.replace('VERIFY:', '') || ''}
-                    placeholder="80A TP"
-                  />
-                </div>
-
-                <div className="space-y-2 col-span-2">
-                  <Label htmlFor="confirm_cable_specification">CABLE SPECIFICATION *</Label>
-                  <Input 
-                    id="confirm_cable_specification" 
-                    name="cable_specification" 
-                    required 
-                    defaultValue={extractedMeters[selectedMeterIndex].cable_specification?.replace('VERIFY:', '') || ''}
-                    placeholder="4C x 16mm² ALU ECC CABLE"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="confirm_serial_number" className="flex items-center gap-2">
-                    SERIAL NUMBER * 
-                    <Badge variant="destructive" className="text-xs">VERIFY TWICE</Badge>
-                  </Label>
-                  <Input 
-                    id="confirm_serial_number" 
-                    name="serial_number" 
-                    required 
-                    defaultValue={extractedMeters[selectedMeterIndex].serial_number?.replace('VERIFY:', '').replace('NOT_VISIBLE', '') || ''}
-                    placeholder="34020113A"
-                    className="font-mono text-lg border-red-300 focus:border-red-500"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="confirm_ct_type">CT TYPE *</Label>
-                  <Input 
-                    id="confirm_ct_type" 
-                    name="ct_type" 
-                    required 
-                    defaultValue={extractedMeters[selectedMeterIndex].ct_type?.replace('VERIFY:', '') || ''}
-                    placeholder="DOL or 150/5A"
-                  />
-                </div>
-
-                <div className="space-y-2 col-span-2">
-                  <Label htmlFor="confirm_meter_type">METER TYPE *</Label>
-                  <Select name="meter_type" required defaultValue={extractedMeters[selectedMeterIndex].meter_type || 'distribution'}>
-                    <SelectTrigger className="bg-background">
-                      <SelectValue placeholder="Select meter type" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-background z-50">
-                      <SelectItem value="council_bulk">Council Bulk Supply (Main Incoming)</SelectItem>
-                      <SelectItem value="check_meter">Check Meter (Verification)</SelectItem>
-                      <SelectItem value="distribution">Distribution Meter</SelectItem>
-                      <SelectItem value="solar">Solar Generation</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                <p className="text-xs text-muted-foreground text-center">
+                  Visual reference: Compare the data fields with this actual meter image
+                </p>
               </div>
 
-              <div className="flex gap-2 pt-4 border-t">
-                <Button type="submit" className="flex-1 bg-green-600 hover:bg-green-700">
-                  <Check className="h-4 w-4 mr-2" />
-                  Confirm & Approve
-                </Button>
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  onClick={() => {
-                    setIsConfirmMeterDialogOpen(false);
-                    setSelectedMeterIndex(null);
-                  }}
-                >
-                  Cancel
-                </Button>
-                <Button 
-                  type="button" 
-                  variant="destructive" 
-                  onClick={() => {
-                    if (selectedMeterIndex !== null) {
-                      const updated = extractedMeters.filter((_, i) => i !== selectedMeterIndex);
-                      onExtractedMetersUpdate?.(updated);
+              {/* Right side: Form fields */}
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                const formData = new FormData(e.currentTarget);
+                
+                // Update the extracted meter with verified data
+                const updated = [...extractedMeters];
+                updated[selectedMeterIndex] = {
+                  ...updated[selectedMeterIndex],
+                  meter_number: formData.get('meter_number') as string,
+                  name: formData.get('name') as string,
+                  area: formData.get('area') as string,
+                  rating: formData.get('rating') as string,
+                  cable_specification: formData.get('cable_specification') as string,
+                  serial_number: formData.get('serial_number') as string,
+                  ct_type: formData.get('ct_type') as string,
+                  meter_type: formData.get('meter_type') as string,
+                  status: 'approved'
+                };
+                
+                onExtractedMetersUpdate?.(updated);
+                setIsConfirmMeterDialogOpen(false);
+                setSelectedMeterIndex(null);
+                toast.success('Meter data verified and confirmed');
+              }} className="space-y-4">
+                <Label className="text-base font-semibold">Extracted Data - Verify Each Field</Label>
+                
+                <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="confirm_meter_number" className="flex items-center gap-2">
+                      NO (Meter Number) *
+                      {extractedMeters[selectedMeterIndex].meter_number?.includes('VERIFY:') && (
+                        <Badge variant="destructive" className="text-xs">NEEDS VERIFICATION</Badge>
+                      )}
+                    </Label>
+                    <Input 
+                      id="confirm_meter_number" 
+                      name="meter_number" 
+                      required 
+                      defaultValue={extractedMeters[selectedMeterIndex].meter_number?.replace('VERIFY:', '') || ''}
+                      placeholder="DB-01W"
+                      className={extractedMeters[selectedMeterIndex].meter_number?.includes('VERIFY:') ? 'border-red-500' : ''}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="confirm_name">NAME *</Label>
+                    <Input 
+                      id="confirm_name" 
+                      name="name" 
+                      required 
+                      defaultValue={extractedMeters[selectedMeterIndex].name?.replace('VERIFY:', '') || ''}
+                      placeholder="CAR WASH"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="confirm_area">AREA (with m²) *</Label>
+                    <Input 
+                      id="confirm_area" 
+                      name="area" 
+                      required 
+                      defaultValue={extractedMeters[selectedMeterIndex].area?.replace('VERIFY:', '').replace('NOT_VISIBLE', '') || ''}
+                      placeholder="187m²"
+                      className={extractedMeters[selectedMeterIndex].area?.includes('NOT_VISIBLE') ? 'border-orange-500' : ''}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="confirm_rating">RATING *</Label>
+                    <Input 
+                      id="confirm_rating" 
+                      name="rating" 
+                      required 
+                      defaultValue={extractedMeters[selectedMeterIndex].rating?.replace('VERIFY:', '') || ''}
+                      placeholder="80A TP"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="confirm_cable_specification">CABLE SPECIFICATION *</Label>
+                    <Input 
+                      id="confirm_cable_specification" 
+                      name="cable_specification" 
+                      required 
+                      defaultValue={extractedMeters[selectedMeterIndex].cable_specification?.replace('VERIFY:', '') || ''}
+                      placeholder="4C x 16mm² ALU ECC CABLE"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="confirm_serial_number" className="flex items-center gap-2">
+                      SERIAL NUMBER * 
+                      <Badge variant="destructive" className="text-xs">VERIFY TWICE</Badge>
+                    </Label>
+                    <Input 
+                      id="confirm_serial_number" 
+                      name="serial_number" 
+                      required 
+                      defaultValue={extractedMeters[selectedMeterIndex].serial_number?.replace('VERIFY:', '').replace('NOT_VISIBLE', '') || ''}
+                      placeholder="34020113A"
+                      className="font-mono text-lg border-red-300 focus:border-red-500"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="confirm_ct_type">CT TYPE *</Label>
+                    <Input 
+                      id="confirm_ct_type" 
+                      name="ct_type" 
+                      required 
+                      defaultValue={extractedMeters[selectedMeterIndex].ct_type?.replace('VERIFY:', '') || ''}
+                      placeholder="DOL or 150/5A"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="confirm_meter_type">METER TYPE *</Label>
+                    <Select name="meter_type" required defaultValue={extractedMeters[selectedMeterIndex].meter_type || 'distribution'}>
+                      <SelectTrigger className="bg-background">
+                        <SelectValue placeholder="Select meter type" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-background z-50">
+                        <SelectItem value="council_bulk">Council Bulk Supply (Main Incoming)</SelectItem>
+                        <SelectItem value="check_meter">Check Meter (Verification)</SelectItem>
+                        <SelectItem value="distribution">Distribution Meter</SelectItem>
+                        <SelectItem value="solar">Solar Generation</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="flex gap-2 pt-4 border-t">
+                  <Button type="submit" className="flex-1 bg-green-600 hover:bg-green-700">
+                    <Check className="h-4 w-4 mr-2" />
+                    Confirm & Approve
+                  </Button>
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    onClick={() => {
                       setIsConfirmMeterDialogOpen(false);
                       setSelectedMeterIndex(null);
-                      toast.success('Meter rejected and removed');
-                    }
-                  }}
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Reject
-                </Button>
-              </div>
-            </form>
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    type="button" 
+                    variant="destructive" 
+                    onClick={() => {
+                      if (selectedMeterIndex !== null) {
+                        const updated = extractedMeters.filter((_, i) => i !== selectedMeterIndex);
+                        onExtractedMetersUpdate?.(updated);
+                        setIsConfirmMeterDialogOpen(false);
+                        setSelectedMeterIndex(null);
+                        toast.success('Meter rejected and removed');
+                      }
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Reject
+                  </Button>
+                </div>
+              </form>
+            </div>
           )}
         </DialogContent>
       </Dialog>
