@@ -8,7 +8,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Loader2, Check, X, Edit, Pencil } from "lucide-react";
 import { PdfToImageConverter } from "./PdfToImageConverter";
-import { DrawingCanvas } from "./DrawingCanvas";
 
 interface DetectedRectangle {
   id: string;
@@ -82,48 +81,7 @@ export const MeterDataExtractor = ({
   const totalCount = extractedMeters.length;
 
   const extractFromDrawnRegion = async (region: any) => {
-    if (!convertedImageUrl && isPdf) {
-      toast.error('Please convert PDF to image first');
-      return;
-    }
-
-    setIsExtracting(true);
-    
-    try {
-      const urlToProcess = convertedImageUrl || imageUrl;
-      
-      const { data, error } = await supabase.functions.invoke('extract-schematic-meters', {
-        body: { 
-          imageUrl: urlToProcess,
-          filePath: null,
-          mode: 'extract-region',
-          region: region.bounds
-        }
-      });
-
-      if (error) throw new Error(error.message || 'Failed to extract meter data');
-      if (!data || !data.meter) throw new Error('No meter data returned');
-
-      console.log('Extracted meter from region:', data.meter);
-      
-      // Add the extracted meter with position from the region center
-      const newMeter = {
-        ...data.meter,
-        status: 'pending' as const,
-        position: {
-          x: region.bounds.left + (region.bounds.width / 2),
-          y: region.bounds.top + (region.bounds.height / 2)
-        }
-      };
-      
-      onMetersUpdate([...extractedMeters, newMeter]);
-      toast.success(`Extracted meter: ${data.meter.meter_number}`);
-    } catch (error) {
-      console.error('Error extracting from region:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to extract meter data');
-    } finally {
-      setIsExtracting(false);
-    }
+    // This is now handled in handleMouseUp
   };
 
   const detectRectangles = async () => {
@@ -633,15 +591,6 @@ export const MeterDataExtractor = ({
       </div>
 
       {renderMeterDetailsPanel()}
-      
-      <DrawingCanvas
-        imageUrl={convertedImageUrl || imageUrl}
-        isDrawingMode={isDrawingMode}
-        onRegionDrawn={(region) => {
-          extractFromDrawnRegion(region);
-        }}
-        onExitDrawing={() => onDrawingModeChange(false)}
-      />
     </div>
   );
 };

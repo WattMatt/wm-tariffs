@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Edit, Check, X, MapPin } from "lucide-react";
+import { ArrowLeft, Edit, Check, X, MapPin, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import SchematicEditor from "@/components/schematic/SchematicEditor";
 import { MeterDataExtractor } from "@/components/schematic/MeterDataExtractor";
@@ -100,6 +100,8 @@ export default function SchematicViewer() {
   const [detectedRectangles, setDetectedRectangles] = useState<any[]>([]);
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [drawnRegions, setDrawnRegions] = useState<any[]>([]);
+  const [drawStart, setDrawStart] = useState<{ x: number; y: number } | null>(null);
+  const [currentDrawRect, setCurrentDrawRect] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
 
   useEffect(() => {
     if (id) {
@@ -318,6 +320,20 @@ export default function SchematicViewer() {
   };
 
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    // Drawing mode - start drawing rectangle
+    if (isDrawingMode && imageRef.current && e.button === 0) {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const imageRect = imageRef.current.getBoundingClientRect();
+      const x = ((e.clientX - imageRect.left) / imageRect.width) * 100;
+      const y = ((e.clientY - imageRect.top) / imageRect.height) * 100;
+      
+      setDrawStart({ x, y });
+      setCurrentDrawRect({ left: x, top: y, width: 0, height: 0 });
+      return;
+    }
+    
     // Only pan if not clicking on a meter marker
     if ((e.button === 0 || e.button === 1) && !(e.target as HTMLElement).closest('.meter-marker')) {
       e.preventDefault();
@@ -352,6 +368,24 @@ export default function SchematicViewer() {
   };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    // Drawing mode - update rectangle size
+    if (isDrawingMode && drawStart && imageRef.current) {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const imageRect = imageRef.current.getBoundingClientRect();
+      const currentX = ((e.clientX - imageRect.left) / imageRect.width) * 100;
+      const currentY = ((e.clientY - imageRect.top) / imageRect.height) * 100;
+      
+      const left = Math.min(drawStart.x, currentX);
+      const top = Math.min(drawStart.y, currentY);
+      const width = Math.abs(currentX - drawStart.x);
+      const height = Math.abs(currentY - drawStart.y);
+      
+      setCurrentDrawRect({ left, top, width, height });
+      return;
+    }
+    
     if (draggedMeterIndex !== null && imageRef.current) {
       // Dragging a meter marker
       e.stopPropagation();
@@ -380,14 +414,62 @@ export default function SchematicViewer() {
     }
   };
 
-  const handleMouseUp = () => {
+  const handleMouseUp = async () => {
+    // Drawing mode - complete the region and extract
+    if (isDrawingMode && drawStart && currentDrawRect && currentDrawRect.width > 1 && currentDrawRect.height > 1) {
+      toast.info('Extracting meter data from drawn region...');
+      
+      // Call extraction with the drawn region
+      try {
+        const { data, error } = await supabase.functions.invoke('extract-schematic-meters', {
+          body: { 
+            imageUrl: convertedImageUrl || imageUrl,
+            filePath: null,
+            mode: 'extract-region',
+            region: currentDrawRect
+          }
+        });
+
+        if (error) throw new Error(error.message || 'Failed to extract meter data');
+        if (!data || !data.meter) throw new Error('No meter data returned');
+
+        // Add the extracted meter with position from the region center
+        const newMeter = {
+          ...data.meter,
+          status: 'pending' as const,
+          position: {
+            x: currentDrawRect.left + (currentDrawRect.width / 2),
+            y: currentDrawRect.top + (currentDrawRect.height / 2)
+          }
+        };
+        
+        setExtractedMeters([...extractedMeters, newMeter]);
+        toast.success(`Extracted meter: ${data.meter.meter_number || 'Unknown'}`);
+      } catch (error) {
+        console.error('Error extracting from region:', error);
+        toast.error(error instanceof Error ? error.message : 'Failed to extract meter data');
+      }
+      
+      // Reset drawing state
+      setDrawStart(null);
+      setCurrentDrawRect(null);
+      setIsDrawingMode(false);
+      return;
+    }
+    
+    // Reset drawing if it was too small
+    if (isDrawingMode) {
+      setDrawStart(null);
+      setCurrentDrawRect(null);
+    }
+    
     if (draggedMeterIndex !== null) {
       setDraggedMeterIndex(null);
       toast.success('Marker position updated');
     }
     setIsDragging(false);
     if (containerRef.current) {
-      containerRef.current.style.cursor = 'grab';
+      containerRef.current.style.cursor = isDrawingMode ? 'crosshair' : 'grab';
     }
   };
 
@@ -624,6 +706,23 @@ export default function SchematicViewer() {
                   onDrawnRegionsUpdate={setDrawnRegions}
                 />
 
+                {/* Drawing Mode Banner */}
+                {isDrawingMode && (
+                  <div className="bg-primary/10 border-2 border-primary rounded-lg p-4 text-center">
+                    <Pencil className="w-6 h-6 mx-auto mb-2 text-primary" />
+                    <p className="font-semibold text-primary">Click and drag to draw a rectangle around a meter</p>
+                    <p className="text-sm text-muted-foreground mt-1">Release to extract the meter data from that region</p>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      onClick={() => setIsDrawingMode(false)}
+                      className="mt-2"
+                    >
+                      Cancel Drawing Mode
+                    </Button>
+                  </div>
+                )}
+
                 {/* Placement Mode Banner */}
                 {isPlacingMeter && (
                   <div className="bg-primary/10 border-2 border-primary rounded-lg p-4 text-center">
@@ -643,12 +742,12 @@ export default function SchematicViewer() {
                         💡 Scroll to zoom • Click and drag to pan
                       </div>
                     )}
-                    <div 
+                     <div 
                       ref={containerRef}
                       className="relative overflow-hidden bg-muted/20 rounded-lg border-2 border-border/50"
                       style={{ 
                         minHeight: '700px',
-                        cursor: isPlacingMeter ? 'crosshair' : isDragging ? 'grabbing' : 'grab'
+                        cursor: isDrawingMode ? 'crosshair' : isPlacingMeter ? 'crosshair' : isDragging ? 'grabbing' : 'grab'
                       }}
                       onClick={handleSchematicClick}
                       onWheel={handleWheel}
@@ -767,8 +866,10 @@ export default function SchematicViewer() {
                                 title={rect.hasData ? 'Data extracted ✓' : 'Click to extract data'}
                               >
                                 {rect.isExtracting && (
-                                  <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-md">
-                                    <div className="text-white text-xs font-semibold">Extracting...</div>
+                                  <div className="absolute inset-0 flex items-center justify-center">
+                                    <div className="bg-white rounded-full p-2 shadow-lg">
+                                      <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full" />
+                                    </div>
                                   </div>
                                 )}
                                 {rect.hasData && rect.extractedData && (
@@ -783,6 +884,25 @@ export default function SchematicViewer() {
                                 )}
                               </div>
                             ))}
+                            
+                            {/* Current Drawing Rectangle */}
+                            {isDrawingMode && currentDrawRect && currentDrawRect.width > 0 && currentDrawRect.height > 0 && (
+                              <div
+                                className="absolute border-3 border-primary rounded-md pointer-events-none"
+                                style={{
+                                  left: `${currentDrawRect.left}%`,
+                                  top: `${currentDrawRect.top}%`,
+                                  width: `${currentDrawRect.width}%`,
+                                  height: `${currentDrawRect.height}%`,
+                                  backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                                  zIndex: 40,
+                                }}
+                              >
+                                <div className="absolute -top-8 left-0 bg-primary text-primary-foreground px-2 py-1 rounded text-xs font-medium">
+                                  Drawing region...
+                                </div>
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <div className="flex items-center justify-center p-16">
