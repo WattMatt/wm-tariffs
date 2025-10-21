@@ -12,7 +12,8 @@ serve(async (req) => {
   }
 
   try {
-    const { imageUrl, filePath, mode } = await req.json();
+    const requestBody = await req.json();
+    const { imageUrl, filePath, mode, rectangleId, rectangleBounds, region } = requestBody;
     
     if (!imageUrl && !filePath) {
       return new Response(
@@ -86,7 +87,6 @@ For each rectangle found, return:
 Return ONLY a valid JSON array of rectangles. NO markdown, NO explanations.
 Example: [{"id":"rect_1","position":{"x":25.5,"y":30.2},"bounds":{"width":8.5,"height":6.0},"hasData":true}]`;
     } else if (mode === 'extract-single') {
-      const { rectangleId, rectangleBounds } = await req.json();
       promptText = `You are an expert electrical engineer extracting detailed meter information from a specific rectangle on an electrical schematic.
 
 FOCUS AREA: Extract data from the meter box at position x:${rectangleBounds.x}%, y:${rectangleBounds.y}%
@@ -103,7 +103,6 @@ Extract the following from this SPECIFIC meter box:
 Return ONLY a valid JSON object with these exact keys. If a field is not visible, use null.
 NO markdown, NO explanations.`;
     } else if (mode === 'extract-region') {
-      const { region } = await req.json();
       promptText = `You are an expert electrical engineer extracting detailed meter information from a specific drawn region on an electrical schematic.
 
 FOCUS AREA: Extract data ONLY from the highlighted region at position:
