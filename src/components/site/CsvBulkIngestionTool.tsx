@@ -1525,81 +1525,8 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <div>
-                      <Label className="text-xs">Date Column</Label>
-                      <Select 
-                        value={columnMapping.dateColumn.toString()} 
-                        onValueChange={(v) => setColumnMapping({...columnMapping, dateColumn: parseInt(v)})}
-                      >
-                        <SelectTrigger className="h-8 text-xs mt-1">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {previewData.headers.map((h, idx) => (
-                            <SelectItem key={idx} value={idx.toString()}>
-                              Col {idx + 1}: {h}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label className="text-xs">Time Column</Label>
-                      <Select 
-                        value={columnMapping.timeColumn.toString()} 
-                        onValueChange={(v) => setColumnMapping({...columnMapping, timeColumn: parseInt(v)})}
-                      >
-                        <SelectTrigger className="h-8 text-xs mt-1">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="-1">None - Use intervals</SelectItem>
-                          {previewData.headers.map((h, idx) => (
-                            <SelectItem key={idx} value={idx.toString()}>
-                              Col {idx + 1}: {h}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label className="text-xs">kWh Value Column</Label>
-                      <Select 
-                        value={columnMapping.valueColumn.toString()} 
-                        onValueChange={(v) => setColumnMapping({...columnMapping, valueColumn: parseInt(v)})}
-                      >
-                        <SelectTrigger className="h-8 text-xs mt-1">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {previewData.headers.map((h, idx) => (
-                            <SelectItem key={idx} value={idx.toString()}>
-                              Col {idx + 1}: {h}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label className="text-xs">kVA Column (optional)</Label>
-                      <Select 
-                        value={columnMapping.kvaColumn.toString()} 
-                        onValueChange={(v) => setColumnMapping({...columnMapping, kvaColumn: parseInt(v)})}
-                      >
-                        <SelectTrigger className="h-8 text-xs mt-1">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="-1">None</SelectItem>
-                          {previewData.headers.map((h, idx) => (
-                            <SelectItem key={idx} value={idx.toString()}>
-                              Col {idx + 1}: {h}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                  <div className="text-xs text-muted-foreground mb-2">
+                    Click column headers to set their type. Changes update instantly in the preview below.
                   </div>
                   
                   <div className="h-64 w-full rounded-md border overflow-auto">
@@ -1608,25 +1535,93 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                         <tr className="border-b">
                           {previewData.headers.map((header, idx) => (
                             <th key={idx} className="px-3 py-2 text-left font-medium whitespace-nowrap">
-                              <div className="space-y-1">
-                                <div className="font-semibold">{header || `Col ${idx + 1}`}</div>
-                                <Badge 
-                                  variant={
-                                    idx === columnMapping.dateColumn ? "default" :
-                                    idx === columnMapping.timeColumn ? "secondary" :
-                                    idx === columnMapping.valueColumn ? "default" :
-                                    idx === columnMapping.kvaColumn ? "secondary" :
-                                    "outline"
-                                  } 
-                                  className="text-[10px] h-4"
-                                >
-                                  {idx === columnMapping.dateColumn ? 'Date' :
-                                   idx === columnMapping.timeColumn ? 'Time' :
-                                   idx === columnMapping.valueColumn ? 'kWh' :
-                                   idx === columnMapping.kvaColumn ? 'kVA' :
-                                   'Metadata'}
-                                </Badge>
-                              </div>
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <button className="w-full text-left space-y-1 hover:bg-muted/50 p-1 rounded cursor-pointer transition-colors">
+                                    <div className="font-semibold">{header || `Col ${idx + 1}`}</div>
+                                    <Badge 
+                                      variant={
+                                        idx === columnMapping.dateColumn ? "default" :
+                                        idx === columnMapping.timeColumn ? "secondary" :
+                                        idx === columnMapping.valueColumn ? "default" :
+                                        idx === columnMapping.kvaColumn ? "secondary" :
+                                        "outline"
+                                      } 
+                                      className="text-[10px] h-4"
+                                    >
+                                      {idx === columnMapping.dateColumn ? '📅 Date' :
+                                       idx === columnMapping.timeColumn ? '⏰ Time' :
+                                       idx === columnMapping.valueColumn ? '⚡ kWh' :
+                                       idx === columnMapping.kvaColumn ? '🔌 kVA' :
+                                       '📋 Metadata'}
+                                    </Badge>
+                                  </button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-48 p-2 bg-background border shadow-lg z-50" align="start">
+                                  <div className="space-y-1">
+                                    <div className="text-xs font-medium mb-2 px-2">Set column type:</div>
+                                    <Button
+                                      size="sm"
+                                      variant={idx === columnMapping.dateColumn ? "default" : "ghost"}
+                                      className="w-full justify-start text-xs h-8"
+                                      onClick={() => {
+                                        setColumnMapping({...columnMapping, dateColumn: idx});
+                                      }}
+                                    >
+                                      📅 Date Column
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant={idx === columnMapping.timeColumn ? "secondary" : "ghost"}
+                                      className="w-full justify-start text-xs h-8"
+                                      onClick={() => {
+                                        setColumnMapping({...columnMapping, timeColumn: idx});
+                                      }}
+                                    >
+                                      ⏰ Time Column
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant={idx === columnMapping.valueColumn ? "default" : "ghost"}
+                                      className="w-full justify-start text-xs h-8"
+                                      onClick={() => {
+                                        setColumnMapping({...columnMapping, valueColumn: idx});
+                                      }}
+                                    >
+                                      ⚡ kWh Value
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant={idx === columnMapping.kvaColumn ? "secondary" : "ghost"}
+                                      className="w-full justify-start text-xs h-8"
+                                      onClick={() => {
+                                        setColumnMapping({...columnMapping, kvaColumn: idx});
+                                      }}
+                                    >
+                                      🔌 kVA Value
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant={idx !== columnMapping.dateColumn && 
+                                              idx !== columnMapping.timeColumn && 
+                                              idx !== columnMapping.valueColumn && 
+                                              idx !== columnMapping.kvaColumn ? "outline" : "ghost"}
+                                      className="w-full justify-start text-xs h-8"
+                                      onClick={() => {
+                                        // Clear this column from all mappings
+                                        const newMapping = {...columnMapping};
+                                        if (idx === newMapping.dateColumn) newMapping.dateColumn = -1;
+                                        if (idx === newMapping.timeColumn) newMapping.timeColumn = -1;
+                                        if (idx === newMapping.valueColumn) newMapping.valueColumn = -1;
+                                        if (idx === newMapping.kvaColumn) newMapping.kvaColumn = -1;
+                                        setColumnMapping(newMapping);
+                                      }}
+                                    >
+                                      📋 Metadata
+                                    </Button>
+                                  </div>
+                                </PopoverContent>
+                              </Popover>
                             </th>
                           ))}
                         </tr>
