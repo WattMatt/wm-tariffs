@@ -701,19 +701,31 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
     try {
       toast.info("Clearing all data - this may take a few minutes...", { duration: 10000 });
       
-      // Step 1: Get all CSV files for this site
-      const { data: csvFiles } = await supabase
-        .from('meter_csv_files')
-        .select('file_path')
-        .eq('site_id', siteId);
+      // Step 1: List ALL files in storage for this site (recursively through meter folders)
+      const { data: meterFolders, error: listError } = await supabase.storage
+        .from('meter-csvs')
+        .list(siteId);
 
-      const filePaths = csvFiles?.map(f => f.file_path) || [];
       let deletedFilesCount = 0;
+      const allFilePaths: string[] = [];
 
-      // Step 2: Delete CSV files from storage if any exist
-      if (filePaths.length > 0) {
+      // Step 2: For each meter folder, list all CSV files
+      if (meterFolders && meterFolders.length > 0) {
+        for (const folder of meterFolders) {
+          const { data: files } = await supabase.storage
+            .from('meter-csvs')
+            .list(`${siteId}/${folder.name}`);
+          
+          if (files) {
+            allFilePaths.push(...files.map(f => `${siteId}/${folder.name}/${f.name}`));
+          }
+        }
+      }
+
+      // Step 3: Delete files from storage if any exist
+      if (allFilePaths.length > 0) {
         const { data: deleteData, error: deleteError } = await supabase.functions.invoke('delete-meter-csvs', {
-          body: { filePaths }
+          body: { filePaths: allFilePaths }
         });
 
         if (deleteError) {
@@ -722,13 +734,13 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
         } else if (deleteData?.success) {
           deletedFilesCount = deleteData.deletedCount || 0;
         }
-
-        // Step 3: Delete from tracking table
-        await supabase
-          .from('meter_csv_files')
-          .delete()
-          .eq('site_id', siteId);
       }
+
+      // Step 4: Delete from tracking table
+      await supabase
+        .from('meter_csv_files')
+        .delete()
+        .eq('site_id', siteId);
 
       // Step 4: Delete all meter readings
       const { data, error } = await supabase.rpc('delete_site_readings', {
