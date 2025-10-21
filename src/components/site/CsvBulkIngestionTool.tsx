@@ -103,6 +103,8 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
 
   useEffect(() => {
     if (isOpen) {
+      // Clear files state when dialog opens
+      setFiles([]);
       loadMeters().then(() => {
         loadSavedFiles();
       });
@@ -238,7 +240,8 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
         console.log(`Cleaned up ${orphanedIds.length} orphaned DB record(s)`);
       }
 
-      setFiles(prev => [...prev.filter(f => f.isNew), ...filesList]);
+      setFiles(filesList);
+      console.log(`Loaded ${filesList.length} file(s) from storage`);
     } catch (err: any) {
       console.error("Failed to load files:", err);
     }
@@ -741,7 +744,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
 
       const totalDeleted = data || 0;
       
-      // Clear local state
+      // Clear local state completely
       setFiles([]);
       
       toast.success(
