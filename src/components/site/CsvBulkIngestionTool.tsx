@@ -466,7 +466,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
           throw uploadError;
         }
 
-        // Track the file in database
+        // Track the file in database immediately
         const { data: user } = await supabase.auth.getUser();
         const { error: trackError } = await supabase
           .from('meter_csv_files')
@@ -477,7 +477,8 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
             file_path: filePath,
             content_hash: fileItem.contentHash!,
             file_size: fileItem.size,
-            uploaded_by: user?.user?.id
+            uploaded_by: user?.user?.id,
+            parse_status: 'uploaded'
           });
 
         if (trackError) {
