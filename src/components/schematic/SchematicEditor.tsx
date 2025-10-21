@@ -52,9 +52,9 @@ export default function SchematicEditor({
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [drawnRegions, setDrawnRegions] = useState<any[]>([]);
   const [meterPositions, setMeterPositions] = useState<MeterPosition[]>([]);
-  const [drawingRect, setDrawingRect] = useState<any>(null);
-  const [isDrawing, setIsDrawing] = useState(false);
-  const [drawStartPoint, setDrawStartPoint] = useState<{ x: number; y: number } | null>(null);
+  const drawingRectRef = useRef<any>(null);
+  const isDrawingRef = useRef(false);
+  const drawStartPointRef = useRef<{ x: number; y: number } | null>(null);
   const [lines, setLines] = useState<SchematicLine[]>([]);
   const [meters, setMeters] = useState<any[]>([]);
   const [selectedMeterForConnection, setSelectedMeterForConnection] = useState<string | null>(null);
@@ -122,14 +122,17 @@ export default function SchematicEditor({
       const target = opt.target;
       const currentTool = activeToolRef.current;
       
-      // DRAWING TOOL: Left click draws when draw tool is active (allow clicking on background image)
+      console.log('Mouse down - current tool:', currentTool, 'button:', evt.button);
+      
+      // DRAWING TOOL: Left click draws when draw tool is active
       if (currentTool === 'draw' && evt.button === 0) {
-        // Only prevent drawing if clicking on meter cards or other interactive objects
+        // Only prevent drawing if clicking on meter cards (not background image)
         const isInteractiveObject = target && target.type !== 'image';
         if (!isInteractiveObject) {
+          console.log('Starting draw');
           const pointer = canvas.getPointer(opt.e);
-          setIsDrawing(true);
-          setDrawStartPoint({ x: pointer.x, y: pointer.y });
+          isDrawingRef.current = true;
+          drawStartPointRef.current = { x: pointer.x, y: pointer.y };
           
           const rect = new Rect({
             left: pointer.x,
@@ -144,50 +147,42 @@ export default function SchematicEditor({
           });
           
           canvas.add(rect);
-          setDrawingRect(rect);
+          drawingRectRef.current = rect;
           canvas.selection = false;
-          canvas.defaultCursor = 'crosshair';
           evt.preventDefault();
           evt.stopPropagation();
           return;
         }
       }
       
-      // PANNING: Allow panning with middle/right mouse in any tool
-      // OR left-click when draw tool is NOT active and no object is clicked
+      // PANNING: Only allow in non-draw modes
       if (currentTool !== 'draw' && !target) {
         if (evt.button === 0 || evt.button === 1 || evt.button === 2) {
           isPanningLocal = true;
           lastX = evt.clientX;
           lastY = evt.clientY;
           canvas.selection = false;
-          canvas.defaultCursor = 'grabbing';
         }
-      } else if (currentTool === 'draw' && (evt.button === 1 || evt.button === 2)) {
-        // Allow middle/right mouse panning even in draw mode
-        isPanningLocal = true;
-        lastX = evt.clientX;
-        lastY = evt.clientY;
-        canvas.selection = false;
-        canvas.defaultCursor = 'grabbing';
       }
     });
 
     canvas.on('mouse:move', (opt) => {
-      // DRAWING MODE: Only handle drawing, no panning
-      if (isDrawing && drawingRect && drawStartPoint && isDrawingMode) {
+      const currentTool = activeToolRef.current;
+      
+      // DRAWING MODE: Handle drawing
+      if (currentTool === 'draw' && isDrawingRef.current && drawingRectRef.current && drawStartPointRef.current) {
         const pointer = canvas.getPointer(opt.e);
-        const width = pointer.x - drawStartPoint.x;
-        const height = pointer.y - drawStartPoint.y;
+        const width = pointer.x - drawStartPointRef.current.x;
+        const height = pointer.y - drawStartPointRef.current.y;
         
         if (width < 0) {
-          drawingRect.set({ left: pointer.x });
+          drawingRectRef.current.set({ left: pointer.x });
         }
         if (height < 0) {
-          drawingRect.set({ top: pointer.y });
+          drawingRectRef.current.set({ top: pointer.y });
         }
         
-        drawingRect.set({
+        drawingRectRef.current.set({
           width: Math.abs(width),
           height: Math.abs(height)
         });
@@ -196,8 +191,8 @@ export default function SchematicEditor({
         return;
       }
       
-      // PANNING: Only when not in drawing mode and not actively drawing
-      if (isPanningLocal && !isDrawing && !isDrawingMode) {
+      // PANNING: Only when not in draw mode
+      if (isPanningLocal && currentTool !== 'draw') {
         const evt = opt.e as MouseEvent;
         const vpt = canvas.viewportTransform;
         if (vpt) {
@@ -212,14 +207,16 @@ export default function SchematicEditor({
 
     canvas.on('mouse:up', async () => {
       // Handle drawing mode completion
-      if (isDrawing && drawingRect && drawStartPoint) {
+      if (isDrawingRef.current && drawingRectRef.current && drawStartPointRef.current) {
         const canvasWidth = canvas.getWidth();
         const canvasHeight = canvas.getHeight();
         
-        const left = drawingRect.left || 0;
-        const top = drawingRect.top || 0;
-        const width = drawingRect.width || 0;
-        const height = drawingRect.height || 0;
+        const left = drawingRectRef.current.left || 0;
+        const top = drawingRectRef.current.top || 0;
+        const width = drawingRectRef.current.width || 0;
+        const height = drawingRectRef.current.height || 0;
+        
+        console.log('Draw complete:', { width, height });
         
         // Only extract if region is large enough (at least 20x20 pixels)
         if (width > 20 && height > 20) {
@@ -272,10 +269,10 @@ export default function SchematicEditor({
         }
         
         // Clean up drawing
-        canvas.remove(drawingRect);
-        setDrawingRect(null);
-        setIsDrawing(false);
-        setDrawStartPoint(null);
+        canvas.remove(drawingRectRef.current);
+        drawingRectRef.current = null;
+        isDrawingRef.current = false;
+        drawStartPointRef.current = null;
         canvas.renderAll();
         return;
       }
@@ -283,7 +280,6 @@ export default function SchematicEditor({
       if (isPanningLocal) {
         isPanningLocal = false;
         canvas.selection = true;
-        canvas.defaultCursor = 'grab';
       }
     });
 
