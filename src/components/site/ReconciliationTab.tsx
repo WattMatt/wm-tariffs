@@ -824,16 +824,6 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
           </Card>
         </>
       )}
-
-      {!reconciliationData && (
-        <Card className="border-border/50">
-          <CardContent className="flex flex-col items-center justify-center py-16">
-            <p className="text-muted-foreground">
-              Select date range and run reconciliation to see results
-            </p>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }
