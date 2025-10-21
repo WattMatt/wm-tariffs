@@ -692,7 +692,7 @@ export default function SchematicViewer() {
             ) : (
               <div className="flex-1 overflow-hidden flex flex-col">
                 {/* Main Schematic View */}
-                <div className={meterPositions.length > 0 ? "grid grid-cols-[1fr_400px] gap-4 flex-1 overflow-hidden" : "flex-1 overflow-hidden"}>
+                <div className={meterPositions.length > 0 ? "grid grid-cols-[1fr_320px] gap-4 flex-1 overflow-hidden" : "flex-1 overflow-hidden"}>
                   {/* Schematic with markers */}
                   <div className="flex flex-col overflow-hidden">
                     {/* Help text */}

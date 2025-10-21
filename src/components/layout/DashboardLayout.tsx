@@ -12,7 +12,9 @@ import {
   LogOut,
   Zap,
   Users,
-  FileText
+  FileText,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -25,6 +27,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const location = useLocation();
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<{ full_name: string } | null>(null);
+  const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -75,16 +78,31 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   return (
     <div className="min-h-screen bg-background">
       {/* Sidebar */}
-      <aside className="fixed left-0 top-0 h-full w-64 bg-secondary border-r border-border flex flex-col">
+      <aside className={cn(
+        "fixed left-0 top-0 h-full bg-secondary border-r border-border flex flex-col transition-all duration-300",
+        collapsed ? "w-16" : "w-64"
+      )}>
+        {/* Collapse Toggle */}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setCollapsed(!collapsed)}
+          className="absolute -right-3 top-6 z-50 h-6 w-6 rounded-full border bg-background shadow-md"
+        >
+          {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+        </Button>
+
         <div className="p-6 border-b border-border/50">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
+            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center shrink-0">
               <Zap className="w-6 h-6 text-white" />
             </div>
-            <div>
-              <h1 className="text-lg font-bold text-secondary-foreground">Energy Recovery</h1>
-              <p className="text-xs text-muted-foreground">Utility Platform</p>
-            </div>
+            {!collapsed && (
+              <div>
+                <h1 className="text-lg font-bold text-secondary-foreground">Energy Recovery</h1>
+                <p className="text-xs text-muted-foreground">Utility Platform</p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -97,12 +115,13 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
                 <Button
                   variant="ghost"
                   className={cn(
-                    "w-full justify-start text-secondary-foreground/70 hover:text-secondary-foreground hover:bg-secondary-foreground/10",
+                    "w-full text-secondary-foreground/70 hover:text-secondary-foreground hover:bg-secondary-foreground/10",
+                    collapsed ? "justify-center px-2" : "justify-start",
                     isActive && "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground"
                   )}
                 >
-                  <Icon className="w-4 h-4 mr-3" />
-                  {item.label}
+                  <Icon className={cn("w-4 h-4", !collapsed && "mr-3")} />
+                  {!collapsed && item.label}
                 </Button>
               </Link>
             );
@@ -110,23 +129,31 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
         </nav>
 
         <div className="p-4 border-t border-border/50">
-          <div className="mb-3 px-3">
-            <p className="text-sm font-medium text-secondary-foreground">{profile?.full_name || "User"}</p>
-            <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
-          </div>
+          {!collapsed && (
+            <div className="mb-3 px-3">
+              <p className="text-sm font-medium text-secondary-foreground">{profile?.full_name || "User"}</p>
+              <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+            </div>
+          )}
           <Button
             variant="ghost"
-            className="w-full justify-start text-secondary-foreground/70 hover:text-destructive"
+            className={cn(
+              "w-full text-secondary-foreground/70 hover:text-destructive",
+              collapsed ? "justify-center px-2" : "justify-start"
+            )}
             onClick={handleSignOut}
           >
-            <LogOut className="w-4 h-4 mr-3" />
-            Sign Out
+            <LogOut className={cn("w-4 h-4", !collapsed && "mr-3")} />
+            {!collapsed && "Sign Out"}
           </Button>
         </div>
       </aside>
 
       {/* Main Content */}
-      <main className="ml-64 p-8">
+      <main className={cn(
+        "p-8 transition-all duration-300",
+        collapsed ? "ml-16" : "ml-64"
+      )}>
         {children}
       </main>
     </div>
