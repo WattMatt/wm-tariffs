@@ -24,6 +24,7 @@ interface SchematicData {
   total_pages: number;
   site_id: string;
   sites: { name: string; clients: { name: string } | null } | null;
+  converted_image_path: string | null;
 }
 
 interface MeterPosition {
@@ -188,9 +189,9 @@ export default function SchematicViewer() {
   };
 
   const convertPdfToImage = async (schematicId: string, filePath: string) => {
-    console.log("Converting PDF to image in browser...");
+    console.log("Converting PDF to high-quality image...");
     setIsConverting(true);
-    toast.info("Converting PDF to image...");
+    toast.info("Converting PDF to ultra-high quality image (4x scale)...", { duration: 5000 });
     
     try {
       // Download the PDF from storage
@@ -202,6 +203,8 @@ export default function SchematicViewer() {
       if (downloadError || !pdfBlob) {
         throw new Error('Failed to download PDF');
       }
+
+      console.log('PDF downloaded, starting conversion...');
 
       // Convert blob to array buffer
       const arrayBuffer = await pdfBlob.arrayBuffer();
@@ -216,10 +219,14 @@ export default function SchematicViewer() {
       const loadingTask = getDocument({ data: uint8Array });
       const pdf = await loadingTask.promise;
       
+      console.log('PDF loaded, rendering at 4x quality...');
+      
       // Get first page
       const page = await pdf.getPage(1);
       // Use 4x scale for very high quality (can go up to 6.0 for even higher quality)
       const viewport = page.getViewport({ scale: 4.0 });
+      
+      console.log(`Rendering at dimensions: ${viewport.width}x${viewport.height}`);
       
       // Create canvas with high-quality rendering settings
       const canvas = document.createElement('canvas');
@@ -244,6 +251,8 @@ export default function SchematicViewer() {
         intent: 'print', // Use print-quality rendering
       } as any).promise;
       
+      console.log('PDF rendered, converting to PNG...');
+      
       // Convert canvas to blob with maximum quality
       const imageBlob = await new Promise<Blob>((resolve, reject) => {
         const timeout = setTimeout(() => reject(new Error('Blob conversion timeout')), 20000); // Increased timeout for larger image
@@ -258,33 +267,43 @@ export default function SchematicViewer() {
         );
       });
       
+      console.log(`PNG created (${(imageBlob.size / 1024 / 1024).toFixed(2)}MB), uploading...`);
+      
       // Generate unique filename for converted image
       const imagePath = `${filePath.replace('.pdf', '')}_converted.png`;
       
-      // Upload converted image to storage
+      // Upload converted image to storage (with upsert to overwrite existing)
       const { error: uploadError } = await supabase
         .storage
         .from('schematics')
         .upload(imagePath, imageBlob, {
           contentType: 'image/png',
-          upsert: true,
+          upsert: true, // Overwrite existing file
         });
       
       if (uploadError) throw uploadError;
       
+      console.log('Image uploaded, updating database...');
+      
       // Update schematic record with converted image path
       const { error: updateError } = await supabase
         .from('schematics')
-        .update({ converted_image_path: imagePath })
+        .update({ 
+          converted_image_path: imagePath,
+          updated_at: new Date().toISOString()
+        })
         .eq('id', schematicId);
       
       if (updateError) throw updateError;
       
-      toast.success("PDF converted to image successfully!");
-      fetchSchematic();
+      toast.success("PDF converted to ultra-high quality image successfully!", { duration: 3000 });
+      
+      // Force reload to show new image
+      setConvertedImageUrl(null);
+      setTimeout(() => fetchSchematic(), 500);
     } catch (error: any) {
       console.error("PDF conversion error:", error);
-      toast.error(`Failed to convert PDF: ${error?.message || 'Unknown error'}`);
+      toast.error(`Failed to convert PDF: ${error?.message || 'Unknown error'}`, { duration: 5000 });
     } finally {
       setIsConverting(false);
     }
@@ -632,6 +651,20 @@ export default function SchematicViewer() {
           </div>
 
           <div className="flex items-center gap-2">
+            {schematic.file_type === "application/pdf" && schematic.converted_image_path && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (confirm('Reconvert PDF to high-quality image? This will overwrite the existing conversion.')) {
+                    convertPdfToImage(schematic.id, schematic.file_path);
+                  }
+                }}
+                disabled={isConverting}
+              >
+                {isConverting ? 'Converting...' : 'Reconvert PDF'}
+              </Button>
+            )}
             {!editMode && (
               <Button
                 variant={isPlacingMeter ? "default" : "outline"}
