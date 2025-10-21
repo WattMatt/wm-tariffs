@@ -111,14 +111,12 @@ Deno.serve(async (req) => {
         if (columnMapping) {
           // Helper function to get column value, handling splits
           const getColumnValue = (columnId: string | number): string | null => {
-            if (typeof columnId === 'number') {
-              // Regular column
-              return columns[columnId]?.trim() || null;
-            }
+            // Handle split columns - format: "colIdx_split_partIdx"
+            const colIdStr = columnId.toString();
+            const parts = colIdStr.split('_');
             
-            // Split column - format: "colIdx_split_partIdx"
-            const parts = columnId.toString().split('_');
             if (parts[0] && parts[1] === 'split' && parts[2]) {
+              // Split column
               const colIdx = parseInt(parts[0]);
               const partIdx = parseInt(parts[2]);
               const value = columns[colIdx]?.trim();
@@ -136,6 +134,11 @@ Deno.serve(async (req) => {
                 const splitParts = value.split(sepChar);
                 return splitParts[partIdx] || null;
               }
+            } else {
+              // Regular column - parse as integer
+              const colIdx = typeof columnId === 'number' ? columnId : parseInt(colIdStr);
+              if (isNaN(colIdx)) return null;
+              return columns[colIdx]?.trim() || null;
             }
             
             return null;
