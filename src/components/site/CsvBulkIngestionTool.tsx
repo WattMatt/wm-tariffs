@@ -1507,10 +1507,12 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                 {previewData && (
                   <div className="space-y-3 mt-4">
                     <div className="text-sm font-semibold text-foreground">Column Interpretation</div>
-                    <div className="p-4 border rounded-md bg-muted/20 space-y-2">
+                    <div className="p-4 border rounded-md bg-muted/20 space-y-4">
                       {previewData.headers.map((header, idx) => {
                         const splitConfig = columnMapping.splitColumns?.[idx];
+                        
                         if (splitConfig) {
+                          // Render split column parts
                           return splitConfig.parts.map((part, partIdx) => {
                             const columnId = part.columnId;
                             const currentAssignment = 
@@ -1518,75 +1520,109 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                               part.columnId === columnMapping.timeColumn ? 'time' :
                               part.columnId === columnMapping.valueColumn ? 'value' :
                               part.columnId === columnMapping.kvaColumn ? 'kva' : 'none';
+                            const currentDataType = columnMapping.columnDataTypes?.[columnId] || 'string';
                             
                             return (
-                              <div key={`${idx}_${partIdx}`} className="flex items-center gap-3">
-                                <Checkbox
-                                  checked={visibleColumns[columnId] !== false}
-                                  onCheckedChange={(checked) => {
-                                    setVisibleColumns(prev => ({
-                                      ...prev,
-                                      [columnId]: checked === true
-                                    }));
-                                  }}
-                                  className="shrink-0"
-                                />
-                                <Input
-                                  value={part.name}
-                                  onChange={(e) => {
-                                    const newMapping = {...columnMapping};
-                                    const newSplits = {...newMapping.splitColumns};
-                                    if (newSplits[idx]) {
-                                      newSplits[idx].parts[partIdx] = {
-                                        ...newSplits[idx].parts[partIdx],
-                                        name: e.target.value
-                                      };
-                                      newMapping.splitColumns = newSplits;
-                                      setColumnMapping(newMapping);
-                                    }
-                                  }}
-                                  className="h-8 text-xs font-mono min-w-[120px] max-w-[200px]"
-                                  placeholder="Column name"
-                                />
-                                <div className="flex-1">
-                                  <Select
-                                    value={currentAssignment}
-                                    onValueChange={(value: 'date' | 'time' | 'value' | 'kva' | 'none') => {
-                                      const newMapping = {...columnMapping};
-                                      
-                                      // Clear previous assignment
-                                      if (part.columnId === newMapping.dateColumn) newMapping.dateColumn = "-1";
-                                      if (part.columnId === newMapping.timeColumn) newMapping.timeColumn = "-1";
-                                      if (part.columnId === newMapping.valueColumn) newMapping.valueColumn = "-1";
-                                      if (part.columnId === newMapping.kvaColumn) newMapping.kvaColumn = "-1";
-                                      
-                                      // Apply new assignment
-                                      if (value === 'date') newMapping.dateColumn = part.columnId;
-                                      if (value === 'time') newMapping.timeColumn = part.columnId;
-                                      if (value === 'value') newMapping.valueColumn = part.columnId;
-                                      if (value === 'kva') newMapping.kvaColumn = part.columnId;
-                                      
-                                      setColumnMapping(newMapping);
-                                      toast.success("Column assignment updated");
+                              <div key={`${idx}_${partIdx}`} className="p-3 border rounded-md bg-background space-y-3">
+                                <div className="flex items-center gap-3">
+                                  <Checkbox
+                                    checked={visibleColumns[columnId] !== false}
+                                    onCheckedChange={(checked) => {
+                                      setVisibleColumns(prev => ({
+                                        ...prev,
+                                        [columnId]: checked === true
+                                      }));
                                     }}
-                                  >
-                                    <SelectTrigger className="h-8 text-xs bg-background">
-                                      <SelectValue placeholder="Assign as..." />
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-background z-50">
-                                      <SelectItem value="date">DateTime Column</SelectItem>
-                                      <SelectItem value="time">Time Column</SelectItem>
-                                      <SelectItem value="value">Primary Value (kWh)</SelectItem>
-                                      <SelectItem value="kva">Secondary Value (kVA)</SelectItem>
-                                      <SelectItem value="none">Keep as Extra Data</SelectItem>
-                                    </SelectContent>
-                                  </Select>
+                                    className="shrink-0"
+                                  />
+                                  <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-3">
+                                    <div>
+                                      <Label className="text-xs mb-1">Column Name</Label>
+                                      <Input
+                                        value={part.name}
+                                        onChange={(e) => {
+                                          const newMapping = {...columnMapping};
+                                          const newSplits = {...newMapping.splitColumns};
+                                          if (newSplits[idx]) {
+                                            newSplits[idx].parts[partIdx] = {
+                                              ...newSplits[idx].parts[partIdx],
+                                              name: e.target.value
+                                            };
+                                            newMapping.splitColumns = newSplits;
+                                            setColumnMapping(newMapping);
+                                          }
+                                        }}
+                                        className="h-8 text-xs"
+                                        placeholder="Column name"
+                                      />
+                                    </div>
+                                    <div>
+                                      <Label className="text-xs mb-1">Assign As</Label>
+                                      <Select
+                                        value={currentAssignment}
+                                        onValueChange={(value: 'date' | 'time' | 'value' | 'kva' | 'none') => {
+                                          const newMapping = {...columnMapping};
+                                          
+                                          // Clear previous assignment
+                                          if (part.columnId === newMapping.dateColumn) newMapping.dateColumn = "-1";
+                                          if (part.columnId === newMapping.timeColumn) newMapping.timeColumn = "-1";
+                                          if (part.columnId === newMapping.valueColumn) newMapping.valueColumn = "-1";
+                                          if (part.columnId === newMapping.kvaColumn) newMapping.kvaColumn = "-1";
+                                          
+                                          // Apply new assignment
+                                          if (value === 'date') newMapping.dateColumn = part.columnId;
+                                          if (value === 'time') newMapping.timeColumn = part.columnId;
+                                          if (value === 'value') newMapping.valueColumn = part.columnId;
+                                          if (value === 'kva') newMapping.kvaColumn = part.columnId;
+                                          
+                                          setColumnMapping(newMapping);
+                                          toast.success("Column assignment updated");
+                                        }}
+                                      >
+                                        <SelectTrigger className="h-8 text-xs bg-background">
+                                          <SelectValue placeholder="Assign as..." />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-background z-50">
+                                          <SelectItem value="date">DateTime Column</SelectItem>
+                                          <SelectItem value="time">Time Column</SelectItem>
+                                          <SelectItem value="value">Primary Value (kWh)</SelectItem>
+                                          <SelectItem value="kva">Secondary Value (kVA)</SelectItem>
+                                          <SelectItem value="none">Keep as Extra Data</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                    <div>
+                                      <Label className="text-xs mb-1">Data Type</Label>
+                                      <Select
+                                        value={currentDataType}
+                                        onValueChange={(type: 'datetime' | 'float' | 'int' | 'string') => {
+                                          const newMapping = {...columnMapping};
+                                          newMapping.columnDataTypes = {
+                                            ...newMapping.columnDataTypes,
+                                            [columnId]: type
+                                          };
+                                          setColumnMapping(newMapping);
+                                        }}
+                                      >
+                                        <SelectTrigger className="h-8 text-xs bg-background">
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-background z-50">
+                                          <SelectItem value="string">String (Text)</SelectItem>
+                                          <SelectItem value="int">Integer</SelectItem>
+                                          <SelectItem value="float">Float (Decimal)</SelectItem>
+                                          <SelectItem value="datetime">DateTime</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                  </div>
                                 </div>
                               </div>
                             );
                           });
                         }
                         
+                        // Regular column (not split)
                         const displayName = columnMapping.renamedHeaders?.[idx] || header || `Column ${idx + 1}`;
                         const columnId = idx.toString();
                         const currentAssignment = 
@@ -1594,65 +1630,157 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                           idx.toString() === columnMapping.timeColumn ? 'time' :
                           idx.toString() === columnMapping.valueColumn ? 'value' :
                           idx.toString() === columnMapping.kvaColumn ? 'kva' : 'none';
+                        const currentDataType = columnMapping.columnDataTypes?.[columnId] || 'string';
                         
                         return (
-                          <div key={idx} className="flex items-center gap-3">
-                            <Checkbox
-                              checked={visibleColumns[columnId] !== false}
-                              onCheckedChange={(checked) => {
-                                setVisibleColumns(prev => ({
-                                  ...prev,
-                                  [columnId]: checked === true
-                                }));
-                              }}
-                              className="shrink-0"
-                            />
-                            <Input
-                              value={displayName}
-                              onChange={(e) => {
-                                const newMapping = {...columnMapping};
-                                newMapping.renamedHeaders = {
-                                  ...newMapping.renamedHeaders,
-                                  [idx]: e.target.value
-                                };
-                                setColumnMapping(newMapping);
-                              }}
-                              className="h-8 text-xs font-mono min-w-[120px] max-w-[200px]"
-                              placeholder="Column name"
-                            />
-                            <div className="flex-1">
-                              <Select
-                                value={currentAssignment}
-                                onValueChange={(value: 'date' | 'time' | 'value' | 'kva' | 'none') => {
-                                  const newMapping = {...columnMapping};
-                                  
-                                  // Clear previous assignment
-                                  if (idx.toString() === newMapping.dateColumn) newMapping.dateColumn = "-1";
-                                  if (idx.toString() === newMapping.timeColumn) newMapping.timeColumn = "-1";
-                                  if (idx.toString() === newMapping.valueColumn) newMapping.valueColumn = "-1";
-                                  if (idx.toString() === newMapping.kvaColumn) newMapping.kvaColumn = "-1";
-                                  
-                                  // Apply new assignment
-                                  if (value === 'date') newMapping.dateColumn = idx.toString();
-                                  if (value === 'time') newMapping.timeColumn = idx.toString();
-                                  if (value === 'value') newMapping.valueColumn = idx.toString();
-                                  if (value === 'kva') newMapping.kvaColumn = idx.toString();
-                                  
-                                  setColumnMapping(newMapping);
-                                  toast.success("Column assignment updated");
+                          <div key={idx} className="p-3 border rounded-md bg-background space-y-3">
+                            <div className="flex items-start gap-3">
+                              <Checkbox
+                                checked={visibleColumns[columnId] !== false}
+                                onCheckedChange={(checked) => {
+                                  setVisibleColumns(prev => ({
+                                    ...prev,
+                                    [columnId]: checked === true
+                                  }));
                                 }}
-                              >
-                                <SelectTrigger className="h-8 text-xs bg-background">
-                                  <SelectValue placeholder="Assign as..." />
-                                </SelectTrigger>
-                                <SelectContent className="bg-background z-50">
-                                  <SelectItem value="date">DateTime Column</SelectItem>
-                                  <SelectItem value="time">Time Column</SelectItem>
-                                  <SelectItem value="value">Primary Value (kWh)</SelectItem>
-                                  <SelectItem value="kva">Secondary Value (kVA)</SelectItem>
-                                  <SelectItem value="none">Keep as Extra Data</SelectItem>
-                                </SelectContent>
-                              </Select>
+                                className="shrink-0 mt-6"
+                              />
+                              <div className="flex-1 space-y-3">
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                  <div>
+                                    <Label className="text-xs mb-1">Column Name</Label>
+                                    <Input
+                                      value={displayName}
+                                      onChange={(e) => {
+                                        const newMapping = {...columnMapping};
+                                        newMapping.renamedHeaders = {
+                                          ...newMapping.renamedHeaders,
+                                          [idx]: e.target.value
+                                        };
+                                        setColumnMapping(newMapping);
+                                      }}
+                                      className="h-8 text-xs"
+                                      placeholder="Column name"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label className="text-xs mb-1">Assign As</Label>
+                                    <Select
+                                      value={currentAssignment}
+                                      onValueChange={(value: 'date' | 'time' | 'value' | 'kva' | 'none') => {
+                                        const newMapping = {...columnMapping};
+                                        
+                                        // Clear previous assignment
+                                        if (idx.toString() === newMapping.dateColumn) newMapping.dateColumn = "-1";
+                                        if (idx.toString() === newMapping.timeColumn) newMapping.timeColumn = "-1";
+                                        if (idx.toString() === newMapping.valueColumn) newMapping.valueColumn = "-1";
+                                        if (idx.toString() === newMapping.kvaColumn) newMapping.kvaColumn = "-1";
+                                        
+                                        // Apply new assignment
+                                        if (value === 'date') newMapping.dateColumn = idx.toString();
+                                        if (value === 'time') newMapping.timeColumn = idx.toString();
+                                        if (value === 'value') newMapping.valueColumn = idx.toString();
+                                        if (value === 'kva') newMapping.kvaColumn = idx.toString();
+                                        
+                                        setColumnMapping(newMapping);
+                                        toast.success("Column assignment updated");
+                                      }}
+                                    >
+                                      <SelectTrigger className="h-8 text-xs bg-background">
+                                        <SelectValue placeholder="Assign as..." />
+                                      </SelectTrigger>
+                                      <SelectContent className="bg-background z-50">
+                                        <SelectItem value="date">DateTime Column</SelectItem>
+                                        <SelectItem value="time">Time Column</SelectItem>
+                                        <SelectItem value="value">Primary Value (kWh)</SelectItem>
+                                        <SelectItem value="kva">Secondary Value (kVA)</SelectItem>
+                                        <SelectItem value="none">Keep as Extra Data</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                  <div>
+                                    <Label className="text-xs mb-1">Data Type</Label>
+                                    <Select
+                                      value={currentDataType}
+                                      onValueChange={(type: 'datetime' | 'float' | 'int' | 'string') => {
+                                        const newMapping = {...columnMapping};
+                                        newMapping.columnDataTypes = {
+                                          ...newMapping.columnDataTypes,
+                                          [columnId]: type
+                                        };
+                                        setColumnMapping(newMapping);
+                                      }}
+                                    >
+                                      <SelectTrigger className="h-8 text-xs bg-background">
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent className="bg-background z-50">
+                                        <SelectItem value="string">String (Text)</SelectItem>
+                                        <SelectItem value="int">Integer</SelectItem>
+                                        <SelectItem value="float">Float (Decimal)</SelectItem>
+                                        <SelectItem value="datetime">DateTime</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                </div>
+                                
+                                <div>
+                                  <Label className="text-xs mb-1">Split Column By</Label>
+                                  <div className="flex gap-2">
+                                    <Select
+                                      value={splitConfig ? 'split' : 'none'}
+                                      onValueChange={(sep) => {
+                                        if (sep === "none") {
+                                          // Remove split
+                                          const newMapping = {...columnMapping};
+                                          const newSplits = {...newMapping.splitColumns};
+                                          delete newSplits[idx];
+                                          newMapping.splitColumns = newSplits;
+                                          setColumnMapping(newMapping);
+                                          setSplitPreview(null);
+                                        } else {
+                                          // Show split preview
+                                          const sampleValue = previewData.rows[0]?.[idx] || "";
+                                          const sepChar = 
+                                            sep === "space" ? " " :
+                                            sep === "comma" ? "," :
+                                            sep === "dash" ? "-" :
+                                            sep === "slash" ? "/" : ":";
+                                          const parts = sampleValue.split(sepChar);
+                                          setSplitPreview({index: idx, parts});
+                                          
+                                          // Create split config
+                                          const newMapping = {...columnMapping};
+                                          newMapping.splitColumns = {
+                                            ...newMapping.splitColumns,
+                                            [idx]: {
+                                              separator: sep,
+                                              parts: parts.map((_, i) => ({
+                                                name: `${displayName} Part ${i + 1}`,
+                                                columnId: `${idx}_split_${i}`
+                                              }))
+                                            }
+                                          };
+                                          setColumnMapping(newMapping);
+                                          toast.success("Column split applied");
+                                        }
+                                      }}
+                                    >
+                                      <SelectTrigger className="h-8 text-xs bg-background">
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent className="bg-background z-50">
+                                        <SelectItem value="none">No Split</SelectItem>
+                                        <SelectItem value="space">Space ( )</SelectItem>
+                                        <SelectItem value="comma">Comma (,)</SelectItem>
+                                        <SelectItem value="dash">Dash (-)</SelectItem>
+                                        <SelectItem value="colon">Colon (:)</SelectItem>
+                                        <SelectItem value="slash">Slash (/)</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                </div>
+                              </div>
                             </div>
                           </div>
                         );
@@ -1678,10 +1806,6 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <div className="text-xs text-muted-foreground mb-2">
-                    Click column headers to set type, rename, or split columns. Changes update instantly.
-                  </div>
-                  
                   <div className="h-64 w-full rounded-md border overflow-auto">
                     <table className="text-xs border-collapse w-full">
                       <thead className="sticky top-0 z-10 bg-background">
@@ -1696,457 +1820,53 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                 const columnId = part.columnId;
                                 if (visibleColumns[columnId] === false) return null;
                                 
-                                 return (
-                                 <th key={`${idx}_${partIdx}`} className="px-3 py-2 text-left font-medium whitespace-nowrap border-r bg-muted/20">
-                                   <Popover open={openPopover === `col_${idx}_split_${partIdx}`} onOpenChange={(open) => {
-                                    if (open) {
-                                      setOpenPopover(`col_${idx}_split_${partIdx}`);
-                                      // Initialize temp state for split part
-                                      const currentAssignment = 
-                                        part.columnId === columnMapping.dateColumn ? 'date' :
-                                        part.columnId === columnMapping.timeColumn ? 'time' :
-                                        part.columnId === columnMapping.valueColumn ? 'value' :
-                                        part.columnId === columnMapping.kvaColumn ? 'kva' : 'none';
-                                      
-                                      const currentDataType = columnMapping.columnDataTypes?.[part.columnId] || 'string';
-                                      
-                                      setTempColumnState({
-                                        columnIdx: idx,
-                                        newName: part.name,
-                                        splitSeparator: 'split',
-                                        splitParts: isSplit.parts,
-                                        assignedType: currentAssignment,
-                                        dataType: currentDataType
-                                      });
-                                    } else {
-                                      setOpenPopover(null);
-                                      setTempColumnState(null);
-                                    }
-                                  }}>
-                                    <PopoverTrigger asChild>
-                                      <button className="w-full text-left space-y-1 hover:bg-muted/50 p-1 rounded cursor-pointer transition-colors">
-                                        <div className="font-semibold text-xs">
-                                          {part.name}
-                                        </div>
-                                        <div className="flex gap-1 flex-wrap">
-                                          {part.columnId === columnMapping.dateColumn && (
-                                            <Badge variant="default" className="text-[10px] h-4">DateTime</Badge>
-                                          )}
-                                          {part.columnId === columnMapping.timeColumn && (
-                                            <Badge variant="secondary" className="text-[10px] h-4">Time</Badge>
-                                          )}
-                                          {part.columnId === columnMapping.valueColumn && (
-                                            <Badge variant="default" className="text-[10px] h-4">Primary Value</Badge>
-                                          )}
-                                          {part.columnId === columnMapping.kvaColumn && (
-                                            <Badge variant="secondary" className="text-[10px] h-4">kVA</Badge>
-                                          )}
-                                        </div>
-                                      </button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-64 p-3 bg-background border shadow-lg z-50" align="start">
-                                      <div className="space-y-3">
-                                        {/* Column Assignment for split part */}
-                                        <div>
-                                          <div className="text-xs font-medium mb-2">Assign as:</div>
-                                          <div className="space-y-1">
-                                            <Button
-                                              size="sm"
-                                              variant={tempColumnState?.assignedType === 'date' ? "default" : "ghost"}
-                                              className="w-full justify-start text-xs h-7"
-                                              onClick={() => setTempColumnState(prev => prev ? {...prev, assignedType: 'date'} : null)}
-                                            >
-                                              DateTime Column
-                                            </Button>
-                                            <Button
-                                              size="sm"
-                                              variant={tempColumnState?.assignedType === 'time' ? "secondary" : "ghost"}
-                                              className="w-full justify-start text-xs h-7"
-                                              onClick={() => setTempColumnState(prev => prev ? {...prev, assignedType: 'time'} : null)}
-                                            >
-                                              Time Column
-                                            </Button>
-                                            <Button
-                                              size="sm"
-                                              variant={tempColumnState?.assignedType === 'value' ? "default" : "ghost"}
-                                              className="w-full justify-start text-xs h-7"
-                                              onClick={() => setTempColumnState(prev => prev ? {...prev, assignedType: 'value'} : null)}
-                                            >
-                                              Primary Value (kWh)
-                                            </Button>
-                                            <Button
-                                              size="sm"
-                                              variant={tempColumnState?.assignedType === 'kva' ? "secondary" : "ghost"}
-                                              className="w-full justify-start text-xs h-7"
-                                              onClick={() => setTempColumnState(prev => prev ? {...prev, assignedType: 'kva'} : null)}
-                                            >
-                                              Secondary Value (kVA)
-                                            </Button>
-                                            <Button
-                                              size="sm"
-                                              variant={tempColumnState?.assignedType === 'none' ? "outline" : "ghost"}
-                                              className="w-full justify-start text-xs h-7"
-                                              onClick={() => setTempColumnState(prev => prev ? {...prev, assignedType: 'none'} : null)}
-                                            >
-                                              Keep as Extra Data
-                                            </Button>
-                                          </div>
-                                        </div>
-
-                                        {/* Rename split part */}
-                                        <div className="border-t pt-2">
-                                          <Label className="text-xs">Rename Part:</Label>
-                                          <Input
-                                            value={tempColumnState?.newName || part.name}
-                                            onChange={(e) => setTempColumnState(prev => prev ? {...prev, newName: e.target.value} : null)}
-                                            className="h-7 text-xs mt-1"
-                                            placeholder="Enter part name"
-                                          />
-                                        </div>
-
-                                        {/* Apply Button */}
-                                        <div className="border-t pt-2">
-                                          <Button
-                                            size="sm"
-                                            className="w-full text-xs h-8"
-                                            onClick={() => {
-                                              if (!tempColumnState) return;
-                                              
-                                              const newMapping = {...columnMapping};
-                                              
-                                              // Clear previous assignment of this split part
-                                              if (part.columnId === newMapping.dateColumn) newMapping.dateColumn = "-1";
-                                              if (part.columnId === newMapping.timeColumn) newMapping.timeColumn = "-1";
-                                              if (part.columnId === newMapping.valueColumn) newMapping.valueColumn = "-1";
-                                              if (part.columnId === newMapping.kvaColumn) newMapping.kvaColumn = "-1";
-                                              
-                                              // Apply new assignment
-                                              if (tempColumnState.assignedType === 'date') newMapping.dateColumn = part.columnId;
-                                              if (tempColumnState.assignedType === 'time') newMapping.timeColumn = part.columnId;
-                                              if (tempColumnState.assignedType === 'value') newMapping.valueColumn = part.columnId;
-                                              if (tempColumnState.assignedType === 'kva') newMapping.kvaColumn = part.columnId;
-                                              
-                                              // Apply rename to split part
-                                              const newSplits = {...newMapping.splitColumns};
-                                              if (newSplits[idx]) {
-                                                newSplits[idx].parts[partIdx] = {
-                                                  ...newSplits[idx].parts[partIdx],
-                                                  name: tempColumnState.newName
-                                                };
-                                                newMapping.splitColumns = newSplits;
-                                              }
-                                              
-                                              // Apply data type
-                                              newMapping.columnDataTypes = {
-                                                ...newMapping.columnDataTypes,
-                                                [part.columnId]: tempColumnState.dataType
-                                              };
-                                              
-                                              setColumnMapping(newMapping);
-                                              setOpenPopover(null);
-                                              setTempColumnState(null);
-                                              toast.success("Split part settings applied");
-                                            }}
-                                          >
-                                            Apply Changes
-                                          </Button>
-                                        </div>
-                                      </div>
-                                     </PopoverContent>
-                                   </Popover>
-                                 </th>
-                                 );
-                               });
-                             }
-                             
-                             // Check visibility for regular column
-                             const columnId = idx.toString();
-                             if (visibleColumns[columnId] === false) return null;
-                             
-                             return (
-                              <th key={idx} className="px-3 py-2 text-left font-medium whitespace-nowrap border-r">
-                                <Popover open={openPopover === `col_${idx}`} onOpenChange={(open) => {
-                                  if (open) {
-                                    setOpenPopover(`col_${idx}`);
-                                    // Initialize temp state when opening
-                                    const currentAssignment = 
-                                      idx.toString() === columnMapping.dateColumn ? 'date' :
-                                      idx.toString() === columnMapping.timeColumn ? 'time' :
-                                      idx.toString() === columnMapping.valueColumn ? 'value' :
-                                      idx.toString() === columnMapping.kvaColumn ? 'kva' : 'none';
-                                    
-                                    const currentDataType = columnMapping.columnDataTypes?.[idx.toString()] || 'string';
-                                    
-                                    setTempColumnState({
-                                      columnIdx: idx,
-                                      newName: displayName,
-                                      splitSeparator: columnMapping.splitColumns?.[idx] ? 'split' : 'none',
-                                      splitParts: columnMapping.splitColumns?.[idx]?.parts || [],
-                                      assignedType: currentAssignment,
-                                      dataType: currentDataType
-                                    });
-                                  } else {
-                                    setOpenPopover(null);
-                                    setTempColumnState(null);
-                                  }
-                                }}>
-                                  <PopoverTrigger asChild>
-                                    <button className="w-full text-left space-y-1 hover:bg-muted/50 p-1 rounded cursor-pointer transition-colors">
-                                      <div className="font-semibold text-xs">
-                                        {displayName}
-                                        {isSplit && <span className="text-[10px] text-muted-foreground ml-1">✂️</span>}
-                                      </div>
-                                      <div className="flex gap-1 flex-wrap">
-                                        {idx.toString() === columnMapping.dateColumn && (
-                                          <Badge variant="default" className="text-[10px] h-4">DateTime</Badge>
-                                        )}
-                                        {idx.toString() === columnMapping.timeColumn && (
-                                          <Badge variant="secondary" className="text-[10px] h-4">Time</Badge>
-                                        )}
-                                        {idx.toString() === columnMapping.valueColumn && (
-                                          <Badge variant="default" className="text-[10px] h-4">Primary Value</Badge>
-                                        )}
-                                        {idx.toString() === columnMapping.kvaColumn && (
-                                          <Badge variant="secondary" className="text-[10px] h-4">kVA</Badge>
-                                        )}
-                                      </div>
-                                    </button>
-                                  </PopoverTrigger>
-                                  <PopoverContent className="w-64 p-3 bg-background border shadow-lg z-50" align="start">
-                                    <div className="space-y-3">
-                                      {/* Column Assignment Section */}
-                                      <div>
-                                        <div className="text-xs font-medium mb-2">Assign as:</div>
-                                        <div className="space-y-1">
-                                          <Button
-                                            size="sm"
-                                            variant={tempColumnState?.assignedType === 'date' ? "default" : "ghost"}
-                                            className="w-full justify-start text-xs h-7"
-                                            onClick={() => setTempColumnState(prev => prev ? {...prev, assignedType: 'date'} : null)}
-                                          >
-                                            DateTime Column
-                                          </Button>
-                                          <Button
-                                            size="sm"
-                                            variant={tempColumnState?.assignedType === 'time' ? "secondary" : "ghost"}
-                                            className="w-full justify-start text-xs h-7"
-                                            onClick={() => setTempColumnState(prev => prev ? {...prev, assignedType: 'time'} : null)}
-                                          >
-                                            Time Column
-                                          </Button>
-                                          <Button
-                                            size="sm"
-                                            variant={tempColumnState?.assignedType === 'value' ? "default" : "ghost"}
-                                            className="w-full justify-start text-xs h-7"
-                                            onClick={() => setTempColumnState(prev => prev ? {...prev, assignedType: 'value'} : null)}
-                                          >
-                                            Primary Value (kWh)
-                                          </Button>
-                                          <Button
-                                            size="sm"
-                                            variant={tempColumnState?.assignedType === 'kva' ? "secondary" : "ghost"}
-                                            className="w-full justify-start text-xs h-7"
-                                            onClick={() => setTempColumnState(prev => prev ? {...prev, assignedType: 'kva'} : null)}
-                                          >
-                                            Secondary Value (kVA)
-                                          </Button>
-                                          <Button
-                                            size="sm"
-                                            variant={tempColumnState?.assignedType === 'none' ? "outline" : "ghost"}
-                                            className="w-full justify-start text-xs h-7"
-                                            onClick={() => setTempColumnState(prev => prev ? {...prev, assignedType: 'none'} : null)}
-                                          >
-                                            Keep as Extra Data
-                                          </Button>
-                                        </div>
-                                      </div>
-
-                                      {/* Rename Section */}
-                                      <div className="border-t pt-2">
-                                        <Label className="text-xs">Rename Column:</Label>
-                                        <Input
-                                          value={tempColumnState?.newName || displayName}
-                                          onChange={(e) => setTempColumnState(prev => prev ? {...prev, newName: e.target.value} : null)}
-                                          className="h-7 text-xs mt-1"
-                                          placeholder="Enter column name"
-                                        />
-                                      </div>
-
-                                      {/* Data Type Section */}
-                                      <div className="border-t pt-2">
-                                        <Label className="text-xs">Data Type:</Label>
-                                        <Select
-                                          value={tempColumnState?.dataType || "string"}
-                                          onValueChange={(type: 'datetime' | 'float' | 'int' | 'string') => {
-                                            setTempColumnState(prev => prev ? {...prev, dataType: type} : null);
-                                          }}
-                                        >
-                                          <SelectTrigger className="h-7 text-xs mt-1 bg-background">
-                                            <SelectValue />
-                                          </SelectTrigger>
-                                          <SelectContent className="bg-background z-50">
-                                            <SelectItem value="string">String (Text)</SelectItem>
-                                            <SelectItem value="int">Integer (Whole Number)</SelectItem>
-                                            <SelectItem value="float">Float (Decimal)</SelectItem>
-                                            <SelectItem value="datetime">DateTime</SelectItem>
-                                          </SelectContent>
-                                        </Select>
-                                      </div>
-
-                                      {/* Data Type Section */}
-                                      <div className="border-t pt-2">
-                                        <Label className="text-xs">Data Type:</Label>
-                                        <Select
-                                          value={tempColumnState?.dataType || "string"}
-                                          onValueChange={(type: 'datetime' | 'float' | 'int' | 'string') => {
-                                            setTempColumnState(prev => prev ? {...prev, dataType: type} : null);
-                                          }}
-                                        >
-                                          <SelectTrigger className="h-7 text-xs mt-1 bg-background">
-                                            <SelectValue />
-                                          </SelectTrigger>
-                                          <SelectContent className="bg-background z-50">
-                                            <SelectItem value="string">String (Text)</SelectItem>
-                                            <SelectItem value="int">Integer (Whole Number)</SelectItem>
-                                            <SelectItem value="float">Float (Decimal)</SelectItem>
-                                            <SelectItem value="datetime">DateTime</SelectItem>
-                                          </SelectContent>
-                                        </Select>
-                                      </div>
-
-                                      {/* Split Column Section */}
-                                      <div className="border-t pt-2">
-                                        <Label className="text-xs">Split Column By:</Label>
-                                        <Select
-                                          value={tempColumnState?.splitSeparator || "none"}
-                                          onValueChange={(sep) => {
-                                            if (sep === "none") {
-                                              setTempColumnState(prev => prev ? {...prev, splitSeparator: 'none', splitParts: []} : null);
-                                              setSplitPreview(null);
-                                            } else {
-                                              // Preview the split with actual separator
-                                              const sampleValue = previewData.rows[0]?.[idx] || "";
-                                              const sepChar = 
-                                                sep === "space" ? " " :
-                                                sep === "comma" ? "," :
-                                                sep === "dash" ? "-" :
-                                                sep === "slash" ? "/" : ":";
-                                              const parts = sampleValue.split(sepChar);
-                                              setSplitPreview({index: idx, parts});
-                                              
-                                              // Initialize split parts
-                                              setTempColumnState(prev => prev ? {
-                                                ...prev,
-                                                splitSeparator: sep,
-                                                splitParts: parts.map((_, partIdx) => ({
-                                                  name: `${header} Part ${partIdx + 1}`,
-                                                  columnId: `${idx}_split_${partIdx}`
-                                                }))
-                                              } : null);
-                                            }
-                                          }}
-                                        >
-                                          <SelectTrigger className="h-7 text-xs mt-1 bg-background">
-                                            <SelectValue />
-                                          </SelectTrigger>
-                                          <SelectContent className="bg-background z-50">
-                                            <SelectItem value="none">Don't split</SelectItem>
-                                            <SelectItem value="space">Space ( )</SelectItem>
-                                            <SelectItem value="comma">Comma (,)</SelectItem>
-                                            <SelectItem value="dash">Dash (-)</SelectItem>
-                                            <SelectItem value="slash">Slash (/)</SelectItem>
-                                            <SelectItem value="colon">Colon (:)</SelectItem>
-                                          </SelectContent>
-                                        </Select>
-                                        
-                                        {tempColumnState?.splitSeparator !== 'none' && tempColumnState?.splitParts.length > 0 && (
-                                          <div className="mt-2 space-y-2">
-                                            <div className="text-xs font-medium">Rename split parts:</div>
-                                            {tempColumnState.splitParts.map((part, partIdx) => (
-                                              <div key={part.columnId} className="flex gap-1">
-                                                <Input
-                                                  value={part.name}
-                                                  onChange={(e) => {
-                                                    setTempColumnState(prev => {
-                                                      if (!prev) return null;
-                                                      const newParts = [...prev.splitParts];
-                                                      newParts[partIdx] = {...newParts[partIdx], name: e.target.value};
-                                                      return {...prev, splitParts: newParts};
-                                                    });
-                                                  }}
-                                                  className="h-6 text-xs"
-                                                  placeholder={`Part ${partIdx + 1}`}
-                                                />
-                                                <Badge variant="outline" className="text-[10px] whitespace-nowrap">
-                                                  {splitPreview?.index === idx ? splitPreview.parts[partIdx] : `P${partIdx + 1}`}
-                                                </Badge>
-                                              </div>
-                                            ))}
-                                          </div>
-                                        )}
-                                      </div>
-
-                                      {/* Apply Button */}
-                                      <div className="border-t pt-2">
-                                        <Button
-                                          size="sm"
-                                          className="w-full text-xs h-8"
-                                          onClick={() => {
-                                            if (!tempColumnState) return;
-                                            
-                                            const newMapping = {...columnMapping};
-                                            
-                                            // Clear previous assignment of this column
-                                            if (idx.toString() === newMapping.dateColumn) newMapping.dateColumn = "-1";
-                                            if (idx.toString() === newMapping.timeColumn) newMapping.timeColumn = "-1";
-                                            if (idx.toString() === newMapping.valueColumn) newMapping.valueColumn = "-1";
-                                            if (idx.toString() === newMapping.kvaColumn) newMapping.kvaColumn = "-1";
-                                            
-                                            // Apply new assignment
-                                            if (tempColumnState.assignedType === 'date') newMapping.dateColumn = idx.toString();
-                                            if (tempColumnState.assignedType === 'time') newMapping.timeColumn = idx.toString();
-                                            if (tempColumnState.assignedType === 'value') newMapping.valueColumn = idx.toString();
-                                            if (tempColumnState.assignedType === 'kva') newMapping.kvaColumn = idx.toString();
-                                            
-                                            // Apply rename
-                                            newMapping.renamedHeaders = {
-                                              ...newMapping.renamedHeaders,
-                                              [idx]: tempColumnState.newName
-                                            };
-                                            
-                                            // Apply split
-                                            if (tempColumnState.splitSeparator !== 'none' && tempColumnState.splitParts.length > 0) {
-                                              newMapping.splitColumns = {
-                                                ...newMapping.splitColumns,
-                                                [idx]: {
-                                                  separator: tempColumnState.splitSeparator,
-                                                  parts: tempColumnState.splitParts
-                                                }
-                                              };
-                                            } else {
-                                              const newSplits = {...newMapping.splitColumns};
-                                              delete newSplits[idx];
-                                              newMapping.splitColumns = newSplits;
-                                            }
-                                            
-                                            // Apply data type
-                                            newMapping.columnDataTypes = {
-                                              ...newMapping.columnDataTypes,
-                                              [idx.toString()]: tempColumnState.dataType
-                                            };
-                                            
-                                            setColumnMapping(newMapping);
-                                            setOpenPopover(null);
-                                            setTempColumnState(null);
-                                            toast.success("Column settings applied");
-                                          }}
-                                        >
-                                          Apply Changes
-                                        </Button>
-                                      </div>
+                                return (
+                                  <th key={`${idx}_${partIdx}`} className="px-3 py-2 text-left font-medium whitespace-nowrap border-r bg-muted/20">
+                                    <div className="font-semibold text-xs">
+                                      {part.name}
                                     </div>
-                                  </PopoverContent>
-                                </Popover>
+                                    <div className="flex gap-1 flex-wrap mt-1">
+                                      {part.columnId === columnMapping.dateColumn && (
+                                        <Badge variant="default" className="text-[10px] h-4">DateTime</Badge>
+                                      )}
+                                      {part.columnId === columnMapping.timeColumn && (
+                                        <Badge variant="secondary" className="text-[10px] h-4">Time</Badge>
+                                      )}
+                                      {part.columnId === columnMapping.valueColumn && (
+                                        <Badge variant="default" className="text-[10px] h-4">Primary Value</Badge>
+                                      )}
+                                      {part.columnId === columnMapping.kvaColumn && (
+                                        <Badge variant="secondary" className="text-[10px] h-4">kVA</Badge>
+                                      )}
+                                    </div>
+                                  </th>
+                                );
+                              });
+                            }
+                            
+                            // Check visibility for regular column
+                            const columnId = idx.toString();
+                            if (visibleColumns[columnId] === false) return null;
+                            
+                            return (
+                              <th key={idx} className="px-3 py-2 text-left font-medium whitespace-nowrap border-r">
+                                <div className="font-semibold text-xs">
+                                  {displayName}
+                                </div>
+                                <div className="flex gap-1 flex-wrap mt-1">
+                                  {idx.toString() === columnMapping.dateColumn && (
+                                    <Badge variant="default" className="text-[10px] h-4">DateTime</Badge>
+                                  )}
+                                  {idx.toString() === columnMapping.timeColumn && (
+                                    <Badge variant="secondary" className="text-[10px] h-4">Time</Badge>
+                                  )}
+                                  {idx.toString() === columnMapping.valueColumn && (
+                                    <Badge variant="default" className="text-[10px] h-4">Primary Value</Badge>
+                                  )}
+                                  {idx.toString() === columnMapping.kvaColumn && (
+                                    <Badge variant="secondary" className="text-[10px] h-4">kVA</Badge>
+                                  )}
+                                </div>
                               </th>
                             );
                           })}
