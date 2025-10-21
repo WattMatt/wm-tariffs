@@ -209,22 +209,25 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
       // For each meter directory, list the files
       if (meterDirs) {
         for (const dir of meterDirs) {
-          if (dir.id) { // It's a directory (meter_id)
-            const { data: csvFiles } = await supabase.storage
-              .from('meter-csvs')
-              .list(`${siteId}/${dir.name}`);
-            
-            csvFiles?.forEach(f => {
-              if (f.name && !f.id) { // It's a file, not a directory
-                storageFiles.push({
-                  path: `${siteId}/${dir.name}/${f.name}`,
-                  meterId: dir.name,
-                  name: f.name,
-                  size: f.metadata?.size || 0
-                });
-              }
-            });
-          }
+          // Check if it's a directory by looking for name property (folders don't have id as null)
+          const { data: csvFiles } = await supabase.storage
+            .from('meter-csvs')
+            .list(`${siteId}/${dir.name}`);
+          
+          console.log(`Checking directory ${dir.name}: found ${csvFiles?.length || 0} items`);
+          
+          csvFiles?.forEach(f => {
+            // Files have name and typically id is null
+            console.log(`Item in ${dir.name}: ${f.name}, id: ${f.id}, metadata:`, f.metadata);
+            if (f.name && f.name.toLowerCase().endsWith('.csv')) {
+              storageFiles.push({
+                path: `${siteId}/${dir.name}/${f.name}`,
+                meterId: dir.name,
+                name: f.name,
+                size: f.metadata?.size || 0
+              });
+            }
+          });
         }
       }
 
