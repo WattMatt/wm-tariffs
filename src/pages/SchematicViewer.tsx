@@ -81,7 +81,7 @@ export default function SchematicViewer() {
   const [imageUrl, setImageUrl] = useState<string>("");
   const [meterPositions, setMeterPositions] = useState<MeterPosition[]>([]);
   const [meterConnections, setMeterConnections] = useState<MeterConnection[]>([]);
-  const [editMode, setEditMode] = useState(false);
+  const [editMode, setEditMode] = useState(true);
   const [extractedMeters, setExtractedMeters] = useState<ExtractedMeterData[]>([]);
   const [selectedMeterIndex, setSelectedMeterIndex] = useState<number | null>(null);
   const [convertedImageUrl, setConvertedImageUrl] = useState<string | null>(null);
@@ -639,33 +639,7 @@ export default function SchematicViewer() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <Button
-              variant={editMode ? "default" : "outline"} 
-              size="sm" 
-              onClick={() => {
-                const newEditMode = !editMode;
-                setEditMode(newEditMode);
-                // Refetch positions when switching back to view mode
-                if (!newEditMode) {
-                  fetchMeterPositions();
-                }
-              }}
-            >
-              <Edit className="w-4 h-4 mr-2" />
-              {editMode ? "View Mode" : "Edit Mode"}
-            </Button>
-            {!editMode && (
-              <>
-                <div className="text-xs text-muted-foreground">
-                  Zoom: {Math.round(zoom * 100)}%
-                </div>
-                <Button variant="outline" size="sm" onClick={handleResetView}>
-                  Reset View
-                </Button>
-              </>
-            )}
-          </div>
+          {/* Edit mode is now always on */}
         </div>
 
         {schematic.description && (
