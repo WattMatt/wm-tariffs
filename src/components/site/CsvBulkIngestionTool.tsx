@@ -179,12 +179,12 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
     try {
       console.log('Loading saved files for site:', siteId);
       
-      // Load all tracked CSV files from database
+      // Load all tracked CSV files from database - this is the source of truth
       const { data: trackedFiles, error } = await supabase
         .from('meter_csv_files')
         .select(`
           *,
-          meters!inner(meter_number)
+          meters(meter_number)
         `)
         .eq('site_id', siteId)
         .order('created_at', { ascending: false });
@@ -196,118 +196,6 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
 
       console.log(`Found ${trackedFiles?.length || 0} tracked files in database`);
 
-      // Get all files from storage by recursively listing everything
-      const storageFiles: Array<{ path: string; meterId: string; name: string; size: number }> = [];
-      
-      // List all objects in the site directory recursively
-      const { data: allFiles, error: listError } = await supabase.storage
-        .from('meter-csvs')
-        .list(siteId, {
-          limit: 1000,
-          sortBy: { column: 'created_at', order: 'desc' }
-        });
-
-      if (listError) {
-        console.error('Error listing storage:', listError);
-      }
-
-      console.log(`Found ${allFiles?.length || 0} items in storage for site ${siteId}`);
-
-      // Process all items - they are meter directories
-      if (allFiles) {
-        for (const meterDir of allFiles) {
-          // List files in each meter directory
-          const { data: meterFiles } = await supabase.storage
-            .from('meter-csvs')
-            .list(`${siteId}/${meterDir.name}`, {
-              limit: 1000,
-              sortBy: { column: 'created_at', order: 'desc' }
-            });
-          
-          if (meterFiles && meterFiles.length > 0) {
-            console.log(`Meter ${meterDir.name}: ${meterFiles.length} files`);
-            meterFiles.forEach(file => {
-              if (file.name.toLowerCase().endsWith('.csv')) {
-                storageFiles.push({
-                  path: `${siteId}/${meterDir.name}/${file.name}`,
-                  meterId: meterDir.name,
-                  name: file.name,
-                  size: file.metadata?.size || 0
-                });
-              }
-            });
-          }
-        }
-      }
-
-      console.log(`Total CSV files found: ${storageFiles.length}`);
-
-      // Create a map of tracked files by path
-      const trackedByPath = new Map(
-        (trackedFiles || []).map(f => [f.file_path, f])
-      );
-
-      // Find untracked files (in storage but not in database)
-      const untrackedFiles = storageFiles.filter(f => !trackedByPath.has(f.path));
-      
-      if (untrackedFiles.length > 0) {
-        console.log(`Found ${untrackedFiles.length} untracked files, adding to database...`);
-        
-        // Get user for tracking
-        const { data: userData } = await supabase.auth.getUser();
-        
-        // Insert records for untracked files
-        const recordsToInsert = untrackedFiles.map(f => ({
-          site_id: siteId,
-          meter_id: f.meterId,
-          file_name: f.name,
-          file_path: f.path,
-          content_hash: null, // Will be null for backfilled files
-          file_size: f.size,
-          uploaded_by: userData?.user?.id,
-          parse_status: 'uploaded'
-        }));
-
-        const { error: insertError } = await supabase
-          .from('meter_csv_files')
-          .insert(recordsToInsert);
-
-        if (insertError) {
-          console.error('Failed to track untracked files:', insertError);
-        } else {
-          console.log(`✓ Successfully tracked ${untrackedFiles.length} previously untracked files`);
-          // Reload to get the newly inserted records with meter info
-          const { data: refreshedFiles } = await supabase
-            .from('meter_csv_files')
-            .select(`
-              *,
-              meters!inner(meter_number)
-            `)
-            .eq('site_id', siteId)
-            .order('created_at', { ascending: false });
-          
-          const filesList: FileItem[] = (refreshedFiles || []).map(file => ({
-            name: file.file_name,
-            path: file.file_path,
-            meterId: file.meter_id,
-            meterNumber: file.meters?.meter_number,
-            size: file.file_size,
-            status: file.parse_status === 'success' ? 'success' : 
-                    file.parse_status === 'error' ? 'error' : 'uploaded',
-            isNew: false,
-            readingsInserted: file.readings_inserted,
-            duplicatesSkipped: file.duplicates_skipped,
-            parseErrors: file.parse_errors,
-            errorMessage: file.error_message,
-            contentHash: file.content_hash
-          }));
-
-          setFiles(filesList);
-          console.log(`✓ Loaded ${filesList.length} file(s) to display in parse tab`);
-          return;
-        }
-      }
-
       // Map tracked files to display
       const filesList: FileItem[] = (trackedFiles || []).map(file => ({
         name: file.file_name,
@@ -316,7 +204,8 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
         meterNumber: file.meters?.meter_number,
         size: file.file_size,
         status: file.parse_status === 'success' ? 'success' : 
-                file.parse_status === 'error' ? 'error' : 'uploaded',
+                file.parse_status === 'error' ? 'error' : 
+                file.parse_status === 'parsing' ? 'parsing' : 'uploaded',
         isNew: false,
         readingsInserted: file.readings_inserted,
         duplicatesSkipped: file.duplicates_skipped,
