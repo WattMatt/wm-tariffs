@@ -52,7 +52,7 @@ interface MeterConnection {
 interface ExtractedMeterData {
   meter_number: string;
   name: string;
-  area: number | null;
+  area: string | null; // Changed to string to preserve "m²" unit
   rating: string;
   cable_specification: string;
   serial_number: string;
@@ -559,7 +559,7 @@ export default function SchematicViewer() {
         ...updated[selectedMeterIndex],
         meter_number: editedMeterData.meter_number,
         name: editedMeterData.name,
-        area: editedMeterData.area ? parseFloat(editedMeterData.area) : null,
+        area: editedMeterData.area, // Keep as string with units (e.g., "187m²")
         rating: editedMeterData.rating,
         cable_specification: editedMeterData.cable_specification,
         serial_number: editedMeterData.serial_number,

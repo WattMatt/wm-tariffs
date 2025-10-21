@@ -87,60 +87,132 @@ For each rectangle found, return:
 Return ONLY a valid JSON array of rectangles. NO markdown, NO explanations.
 Example: [{"id":"rect_1","position":{"x":25.5,"y":30.2},"bounds":{"width":8.5,"height":6.0},"hasData":true}]`;
     } else if (mode === 'extract-single') {
-      promptText = `You are an expert electrical engineer extracting detailed meter information from a specific rectangle on an electrical schematic.
+      promptText = `You are an expert electrical engineer extracting meter label information from a distribution board schematic with 100% fidelity to the original formatting.
 
 FOCUS AREA: Extract data from the meter box at position x:${rectangleBounds.x}%, y:${rectangleBounds.y}%
 
-Extract the following from this SPECIFIC meter box:
-- meter_number (NO): e.g., DB-03, MB-1, INCOMING-01
-- name (NAME/description): e.g., ACKERMANS, MAIN BOARD 1
-- area (AREA in m²): numeric value only, e.g., 406
-- rating (RATING): Include units, e.g., 100A TP, 150A TP
-- cable_specification (CABLE): Full spec, e.g., 4C x 50mm² ALU ECC CABLE
-- serial_number (SERIAL): e.g., 35777285
-- ct_type (CT): e.g., DOL, 150/5A, 300/5A
+CRITICAL RULES:
+1. Preserve ALL units exactly as shown (m², A, TP, mm², ALU ECC CABLE, etc.)
+2. Do NOT abbreviate or reformat values
+3. All fields must be present - use null only if genuinely not visible
+4. Extract exactly what you see, character-for-character
 
-Return ONLY a valid JSON object with these exact keys. If a field is not visible, use null.
-NO markdown, NO explanations.`;
+EXTRACT these fields with EXACT formatting:
+
+- meter_number (NO): 
+  - Extract exactly as labeled (e.g., "DB-01A", "MB-03", "INCOMING-01")
+  
+- name (NAME): 
+  - Extract exactly as shown (e.g., "VACANT", "ACKERMANS", "MAIN BOARD 1")
+  
+- area (AREA): 
+  - MUST include "m²" unit (e.g., "187m²", "406m²")
+  - If no unit shown, add "m²" to the numeric value
+  
+- rating (RATING): 
+  - MUST include full units (e.g., "150A TP", "100A TP", "250A TP")
+  - Preserve spaces and formatting exactly
+  
+- cable_specification (CABLE): 
+  - Full specification with ALL units (e.g., "4C x 95mm² ALU ECC CABLE", "4C x 50mm² ALU ECC CABLE")
+  - Do NOT abbreviate "ALU ECC CABLE"
+  
+- serial_number (SERIAL): 
+  - Extract number exactly (e.g., "35779383", "35777285")
+  
+- ct_type (CT): 
+  - Extract with format/ratio (e.g., "150/5A", "DOL", "300/5A")
+
+Return ONLY a valid JSON object with these exact keys.
+NO markdown, NO explanations.
+Example: {"meter_number":"DB-01A","name":"VACANT","area":"187m²","rating":"150A TP","cable_specification":"4C x 95mm² ALU ECC CABLE","serial_number":"35779383","ct_type":"150/5A"}`;
     } else if (mode === 'extract-region') {
-      promptText = `You are an expert electrical engineer extracting detailed meter information from a specific drawn region on an electrical schematic.
+      promptText = `You are an expert electrical engineer extracting meter label information from a distribution board schematic with 100% fidelity to the original formatting.
 
 FOCUS AREA: Extract data ONLY from the highlighted region at position:
-- Left: ${region.left}%, Top: ${region.top}%
+- Left: ${region.x}%, Top: ${region.y}%
 - Width: ${region.width}%, Height: ${region.height}%
 
-Analyze ONLY the content within this specific region and extract:
-- meter_number (NO): e.g., DB-03, MB-1, INCOMING-01
-- name (NAME/description): e.g., ACKERMANS, MAIN BOARD 1
-- area (AREA in m²): numeric value only, e.g., 406
-- rating (RATING): Include units, e.g., 100A TP, 150A TP
-- cable_specification (CABLE): Full spec, e.g., 4C x 50mm² ALU ECC CABLE
-- serial_number (SERIAL): e.g., 35777285
-- ct_type (CT): e.g., DOL, 150/5A, 300/5A
-- meter_type: one of: council_bulk, check_meter, solar, distribution
+CRITICAL RULES:
+1. Preserve ALL units exactly as shown (m², A, TP, mm², ALU ECC CABLE, etc.)
+2. Do NOT abbreviate or reformat values
+3. All fields must be present - use null only if genuinely not visible
+4. Extract exactly what you see, character-for-character
 
-Return ONLY a valid JSON object with these exact keys. If a field is not visible, use null.
-NO markdown, NO explanations.`;
+EXTRACT these fields with EXACT formatting:
+
+- meter_number (NO): 
+  - Extract exactly as labeled (e.g., "DB-01A", "MB-03", "INCOMING-01")
+  
+- name (NAME): 
+  - Extract exactly as shown (e.g., "VACANT", "ACKERMANS", "MAIN BOARD 1")
+  
+- area (AREA): 
+  - MUST include "m²" unit (e.g., "187m²", "406m²")
+  - If value appears as just a number, add "m²"
+  
+- rating (RATING): 
+  - MUST include full units (e.g., "150A TP", "100A TP", "250A TP")
+  - Preserve spaces and formatting exactly
+  
+- cable_specification (CABLE): 
+  - Full specification with ALL units (e.g., "4C x 95mm² ALU ECC CABLE", "4C x 50mm² ALU ECC CABLE")
+  - Do NOT abbreviate "ALU ECC CABLE"
+  
+- serial_number (SERIAL): 
+  - Extract number exactly (e.g., "35779383", "35777285")
+  
+- ct_type (CT): 
+  - Extract with format/ratio (e.g., "150/5A", "DOL", "300/5A")
+
+- meter_type:
+  - Determine from context: "council_bulk", "check_meter", "solar", or "distribution"
+
+Return ONLY a valid JSON object with these exact keys.
+NO markdown, NO explanations.
+Example: {"meter_number":"DB-01A","name":"VACANT","area":"187m²","rating":"150A TP","cable_specification":"4C x 95mm² ALU ECC CABLE","serial_number":"35779383","ct_type":"150/5A","meter_type":"distribution"}`;
     } else {
       // Full extraction mode (original)
-      promptText = `You are an expert electrical engineer analyzing an electrical schematic diagram to extract meter information with PIXEL-PERFECT position accuracy.
+      promptText = `You are an expert electrical engineer analyzing an electrical schematic diagram to extract meter information with PIXEL-PERFECT position accuracy AND exact formatting preservation.
 
-CRITICAL: Your position measurements will directly control marker placement on the visual schematic. Inaccurate positions render the system unusable.
+CRITICAL RULES:
+1. Position measurements must be pixel-perfect for visual marker placement
+2. Preserve ALL units exactly as shown (m², A, TP, mm², ALU ECC CABLE, etc.)
+3. Do NOT abbreviate or reformat any values
+4. Extract exactly what you see, character-for-character
 
 STEP 1: ANALYZE THE SCHEMATIC LAYOUT
 - Carefully examine the entire schematic image
 - Identify every meter box, distribution board symbol, and meter connection point
 - Note the visual structure and how meters are arranged
 
-STEP 2: EXTRACT DATA FOR EACH METER
+STEP 2: EXTRACT DATA FOR EACH METER WITH EXACT FORMATTING
+
 For each meter/distribution board visible, extract:
-- NO (meter number): e.g., DB-03, MB-1, INCOMING-01
-- NAME (location/description): e.g., ACKERMANS, MAIN BOARD 1, INCOMING COUNCIL
-- AREA (m²): Extract numeric value only, e.g., 406
-- RATING: Include units, e.g., 100A TP, 150A TP, 250A TP
-- CABLE: Full cable specification, e.g., 4C x 50mm² ALU ECC CABLE
-- SERIAL: Serial number, e.g., 35777285
-- CT: CT type/rating, e.g., DOL, 150/5A, 300/5A
+
+- meter_number (NO): 
+  - Extract exactly as labeled (e.g., "DB-01A", "DB-03", "INCOMING-01")
+  
+- name (NAME): 
+  - Extract exactly as shown (e.g., "VACANT", "ACKERMANS", "MAIN BOARD 1")
+  
+- area (AREA): 
+  - MUST include "m²" unit in the string (e.g., "187m²", "406m²")
+  - If shown as just number, add "m²" to it
+  
+- rating (RATING): 
+  - MUST include full units (e.g., "150A TP", "100A TP", "250A TP")
+  - Preserve exact spacing and formatting
+  
+- cable_specification (CABLE): 
+  - Full specification with ALL units (e.g., "4C x 95mm² ALU ECC CABLE")
+  - Never abbreviate "ALU ECC CABLE"
+  
+- serial_number (SERIAL): 
+  - Extract number exactly as shown (e.g., "35779383", "35777285")
+  
+- ct_type (CT): 
+  - Extract with format/ratio (e.g., "150/5A", "DOL", "300/5A")
 
 STEP 3: MEASURE EXACT POSITIONS (MOST CRITICAL)
 For EVERY meter, measure its position with extreme precision:
@@ -163,13 +235,16 @@ METER TYPE CLASSIFICATION:
 - "distribution": Distribution boards (typically labeled DB-XX or similar)
 
 VALIDATION:
+- Every meter MUST have all fields present
 - Every meter MUST have a position with valid x and y numbers
 - Positions should match the visual layout of the schematic
 - Adjacent meters should have adjacent position values
+- Area must include "m²", rating must include "A TP" or similar
 
-Return ONLY valid JSON array with exact keys: meter_number, name, area (number or null), rating, cable_specification, serial_number, ct_type, meter_type, position (object with x and y as numbers 0-100).
+Return ONLY valid JSON array with exact keys: meter_number, name, area (string with m²), rating, cable_specification, serial_number, ct_type, meter_type, position (object with x and y as numbers 0-100).
 
-NO markdown, NO explanations, ONLY the JSON array starting with [ and ending with ]`;
+NO markdown, NO explanations, ONLY the JSON array starting with [ and ending with ]
+Example: [{"meter_number":"DB-01A","name":"VACANT","area":"187m²","rating":"150A TP","cable_specification":"4C x 95mm² ALU ECC CABLE","serial_number":"35779383","ct_type":"150/5A","meter_type":"distribution","position":{"x":25.5,"y":30.2}}]`;
     }
 
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
@@ -275,13 +350,54 @@ NO markdown, NO explanations, ONLY the JSON array starting with [ and ending wit
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     } else if (mode === 'extract-single' || mode === 'extract-region') {
-      console.log(`Successfully extracted data for single meter`);
+      // Validate all required fields are present
+      const requiredFields = ['meter_number', 'name', 'rating', 'cable_specification', 'serial_number', 'ct_type'];
+      const missingFields = requiredFields.filter(field => !result[field]);
+      
+      if (missingFields.length > 0) {
+        console.warn(`⚠️ Missing fields in extracted data: ${missingFields.join(', ')}`);
+      }
+      
+      // Validate area has m² unit
+      if (result.area && !result.area.includes('m²')) {
+        console.warn(`⚠️ Area field missing m² unit: ${result.area}`);
+      }
+      
+      console.log(`✓ Meter label extracted successfully: ${result.meter_number} - ${result.name}`);
+      console.log(`  Fields extracted: ${Object.keys(result).join(', ')}`);
+      
       return new Response(
-        JSON.stringify({ meter: result }),
+        JSON.stringify({ 
+          meter: result,
+          validation: {
+            success: missingFields.length === 0,
+            missingFields: missingFields.length > 0 ? missingFields : undefined
+          }
+        }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     } else {
-      console.log(`Successfully extracted ${result.length} meters`);
+      // Validate all meters have required fields
+      let totalMissing = 0;
+      result.forEach((meter: any, idx: number) => {
+        const requiredFields = ['meter_number', 'name', 'rating', 'cable_specification', 'serial_number', 'ct_type'];
+        const missingFields = requiredFields.filter(field => !meter[field]);
+        if (missingFields.length > 0) {
+          console.warn(`⚠️ Meter ${idx + 1} (${meter.meter_number || 'unknown'}) missing: ${missingFields.join(', ')}`);
+          totalMissing++;
+        }
+        
+        // Validate area format
+        if (meter.area && !meter.area.includes('m²')) {
+          console.warn(`⚠️ Meter ${idx + 1} area missing m² unit: ${meter.area}`);
+        }
+      });
+      
+      console.log(`✓ Successfully extracted ${result.length} meters`);
+      if (totalMissing > 0) {
+        console.warn(`⚠️ ${totalMissing} meters have missing fields`);
+      }
+      
       return new Response(
         JSON.stringify({ meters: result }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

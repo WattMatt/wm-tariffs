@@ -21,7 +21,7 @@ interface DetectedRectangle {
 interface ExtractedMeterData {
   meter_number: string;
   name: string;
-  area: number | null;
+  area: string | null; // Changed to string to preserve "m²" unit
   rating: string;
   cable_specification: string;
   serial_number: string;
@@ -306,7 +306,7 @@ export const MeterDataExtractor = ({
         site_id: siteId,
         meter_number: meter.meter_number,
         name: meter.name,
-        area: meter.area,
+        area: meter.area ? parseFloat(meter.area.replace(/[^\d.]/g, '')) : null, // Extract number from "187m²"
         rating: meter.rating,
         cable_specification: meter.cable_specification,
         serial_number: meter.serial_number,
@@ -427,9 +427,10 @@ export const MeterDataExtractor = ({
               <div>
                 <Label>Area (m²)</Label>
                 <Input
-                  type="number"
+                  type="text"
                   value={editedMeter?.area || ""}
-                  onChange={(e) => setEditedMeter(prev => prev ? { ...prev, area: parseFloat(e.target.value) || null } : null)}
+                  onChange={(e) => setEditedMeter(prev => prev ? { ...prev, area: e.target.value } : null)}
+                  placeholder="187m²"
                 />
               </div>
               <div>
@@ -493,7 +494,7 @@ export const MeterDataExtractor = ({
           ) : (
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div><span className="font-medium">Name:</span> {extractedMeters[selectedMeterIndex].name}</div>
-              <div><span className="font-medium">Area:</span> {extractedMeters[selectedMeterIndex].area}m²</div>
+              <div><span className="font-medium">Area:</span> {extractedMeters[selectedMeterIndex].area}</div>
               <div><span className="font-medium">Rating:</span> {extractedMeters[selectedMeterIndex].rating}</div>
               <div><span className="font-medium">Type:</span> {extractedMeters[selectedMeterIndex].meter_type}</div>
               <div className="col-span-2"><span className="font-medium">Cable:</span> {extractedMeters[selectedMeterIndex].cable_specification}</div>
