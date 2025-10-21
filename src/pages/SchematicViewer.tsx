@@ -1059,51 +1059,28 @@ export default function SchematicViewer() {
                               // View Mode
                               <>
                             {/* Structured meter info table like reference image */}
-                            <div className="border border-border rounded-lg overflow-hidden">
-                              <div className="grid grid-cols-[120px_1fr]">
-                                <div className="bg-muted px-3 py-2 border-b border-r border-border font-semibold text-sm">NO:</div>
-                                <div className="px-3 py-2 border-b border-border font-mono text-sm">{extractedMeters[selectedMeterIndex].meter_number}</div>
+                            <div className="border-2 border-foreground/80 rounded overflow-hidden bg-background">
+                              <div className="grid grid-cols-[100px_1fr]">
+                                <div className="px-3 py-2.5 border-b-2 border-r-2 border-foreground/80 font-bold text-sm">NO:</div>
+                                <div className="px-3 py-2.5 border-b-2 border-foreground/80 font-medium text-sm">{extractedMeters[selectedMeterIndex].meter_number}</div>
                                 
-                                <div className="bg-muted px-3 py-2 border-b border-r border-border font-semibold text-sm">NAME:</div>
-                                <div className="px-3 py-2 border-b border-border text-sm font-medium">{extractedMeters[selectedMeterIndex].name}</div>
+                                <div className="px-3 py-2.5 border-b-2 border-r-2 border-foreground/80 font-bold text-sm">NAME:</div>
+                                <div className="px-3 py-2.5 border-b-2 border-foreground/80 text-sm font-medium">{extractedMeters[selectedMeterIndex].name || 'N/A'}</div>
                                 
-                                <div className="bg-muted px-3 py-2 border-b border-r border-border font-semibold text-sm">AREA:</div>
-                                <div className="px-3 py-2 border-b border-border text-sm">{extractedMeters[selectedMeterIndex].area ? `${extractedMeters[selectedMeterIndex].area}m²` : 'N/A'}</div>
+                                <div className="px-3 py-2.5 border-b-2 border-r-2 border-foreground/80 font-bold text-sm">AREA:</div>
+                                <div className="px-3 py-2.5 border-b-2 border-foreground/80 text-sm">{extractedMeters[selectedMeterIndex].area || 'N/A'}</div>
                                 
-                                <div className="bg-muted px-3 py-2 border-b border-r border-border font-semibold text-sm">RATING:</div>
-                                <div className="px-3 py-2 border-b border-border text-sm">{extractedMeters[selectedMeterIndex].rating || 'N/A'}</div>
+                                <div className="px-3 py-2.5 border-b-2 border-r-2 border-foreground/80 font-bold text-sm">RATING:</div>
+                                <div className="px-3 py-2.5 border-b-2 border-foreground/80 text-sm">{extractedMeters[selectedMeterIndex].rating || 'N/A'}</div>
                                 
-                                <div className="bg-muted px-3 py-2 border-b border-r border-border font-semibold text-sm">CABLE:</div>
-                                <div className="px-3 py-2 border-b border-border text-sm">{extractedMeters[selectedMeterIndex].cable_specification || 'N/A'}</div>
+                                <div className="px-3 py-2.5 border-b-2 border-r-2 border-foreground/80 font-bold text-sm">CABLE:</div>
+                                <div className="px-3 py-2.5 border-b-2 border-foreground/80 text-sm">{extractedMeters[selectedMeterIndex].cable_specification || 'N/A'}</div>
                                 
-                                <div className="bg-muted px-3 py-2 border-b border-r border-border font-semibold text-sm">SERIAL:</div>
-                                <div className="px-3 py-2 border-b border-border font-mono text-sm">{extractedMeters[selectedMeterIndex].serial_number || 'N/A'}</div>
+                                <div className="px-3 py-2.5 border-b-2 border-r-2 border-foreground/80 font-bold text-sm">SERIAL:</div>
+                                <div className="px-3 py-2.5 border-b-2 border-foreground/80 text-sm">{extractedMeters[selectedMeterIndex].serial_number || 'N/A'}</div>
                                 
-                                <div className="bg-muted px-3 py-2 border-r border-border font-semibold text-sm">CT:</div>
-                                <div className="px-3 py-2 text-sm">{extractedMeters[selectedMeterIndex].ct_type || 'N/A'}</div>
-                              </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-3 text-sm">
-                              <div>
-                                <div className="text-muted-foreground text-xs mb-1">Rating</div>
-                                <div className="font-medium">{extractedMeters[selectedMeterIndex].rating}</div>
-                              </div>
-                              <div>
-                                <div className="text-muted-foreground text-xs mb-1">Type</div>
-                                <div className="font-medium">{extractedMeters[selectedMeterIndex].meter_type}</div>
-                              </div>
-                              <div className="col-span-2">
-                                <div className="text-muted-foreground text-xs mb-1">Cable</div>
-                                <div className="font-medium text-xs">{extractedMeters[selectedMeterIndex].cable_specification}</div>
-                              </div>
-                              <div>
-                                <div className="text-muted-foreground text-xs mb-1">Serial</div>
-                                <div className="font-medium">{extractedMeters[selectedMeterIndex].serial_number}</div>
-                              </div>
-                              <div>
-                                <div className="text-muted-foreground text-xs mb-1">CT Type</div>
-                                <div className="font-medium">{extractedMeters[selectedMeterIndex].ct_type}</div>
+                                <div className="px-3 py-2.5 border-r-2 border-foreground/80 font-bold text-sm">CT:</div>
+                                <div className="px-3 py-2.5 text-sm">{extractedMeters[selectedMeterIndex].ct_type || 'N/A'}</div>
                               </div>
                             </div>
 
