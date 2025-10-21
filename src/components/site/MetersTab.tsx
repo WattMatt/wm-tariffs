@@ -41,7 +41,8 @@ interface Meter {
   tariff: string | null;
   is_revenue_critical: boolean;
   created_at: string;
-  has_readings?: boolean;
+  has_raw_csv?: boolean;
+  has_parsed?: boolean;
 }
 
 interface MetersTabProps {
@@ -125,32 +126,36 @@ export default function MetersTab({ siteId }: MetersTabProps) {
     if (error) {
       toast.error("Failed to fetch meters");
     } else {
-      // Check which meters have uploaded CSV files or parsed readings
-      const metersWithReadingStatus = await Promise.all(
+      // Check which meters have raw CSV files and parsed data
+      const metersWithStatus = await Promise.all(
         (data || []).map(async (meter) => {
-          // Check for parsed readings
-          const { count: readingsCount } = await supabase
-            .from("meter_readings")
-            .select("*", { count: "exact", head: true })
-            .eq("meter_id", meter.id);
-          
-          // Check for uploaded CSV files
+          // Check for raw CSV files (uploaded)
           const { count: csvFilesCount } = await supabase
             .from("meter_csv_files")
             .select("*", { count: "exact", head: true })
             .eq("meter_id", meter.id);
           
-          const hasData = (readingsCount ?? 0) > 0 || (csvFilesCount ?? 0) > 0;
-          console.log(`Meter ${meter.meter_number}: ${readingsCount} readings, ${csvFilesCount} CSV files`);
+          // Check for parsed CSV files (those with parsed_file_path)
+          const { count: parsedFilesCount } = await supabase
+            .from("meter_csv_files")
+            .select("*", { count: "exact", head: true })
+            .eq("meter_id", meter.id)
+            .not("parsed_file_path", "is", null);
+          
+          const hasRawCsv = (csvFilesCount ?? 0) > 0;
+          const hasParsed = (parsedFilesCount ?? 0) > 0;
+          
+          console.log(`Meter ${meter.meter_number}: Raw CSV: ${hasRawCsv}, Parsed: ${hasParsed}`);
           
           return {
             ...meter,
-            has_readings: hasData
+            has_raw_csv: hasRawCsv,
+            has_parsed: hasParsed
           };
         })
       );
       
-      setMeters(metersWithReadingStatus);
+      setMeters(metersWithStatus);
     }
   };
 
@@ -612,10 +617,16 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                             Critical
                           </Badge>
                         )}
-                        {meter.has_readings && (
-                          <Badge variant="outline" className="gap-1">
+                        {meter.has_raw_csv && (
+                          <Badge variant="outline" className="gap-1 bg-blue-500/10 border-blue-500/50 text-blue-600 dark:text-blue-400">
                             <Database className="w-3 h-3" />
-                            Data
+                            Raw CSV
+                          </Badge>
+                        )}
+                        {meter.has_parsed && (
+                          <Badge variant="outline" className="gap-1 bg-green-500/10 border-green-500/50 text-green-600 dark:text-green-400">
+                            <Database className="w-3 h-3" />
+                            Parsed
                           </Badge>
                         )}
                       </div>
@@ -650,7 +661,7 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                         >
                           <Upload className="w-4 h-4" />
                         </Button>
-                        {meter.has_readings && (
+                        {meter.has_raw_csv && (
                           <>
                             <Button
                               variant="outline"
