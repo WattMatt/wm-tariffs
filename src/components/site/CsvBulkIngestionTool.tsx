@@ -816,14 +816,30 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
       
       // Auto-detect columns if not set
       if (columnMapping.dateColumn === 0 && columnMapping.timeColumn === 1) {
-        const dateColIdx = headers.findIndex(h => h.toLowerCase().includes('date'));
-        const timeColIdx = headers.findIndex(h => h.toLowerCase().includes('time'));
-        const valueColIdx = headers.findIndex(h => 
-          h.toLowerCase().includes('kwh') || h.toLowerCase().includes('p1')
+        const dateColIdx = headers.findIndex(h => 
+          h.toLowerCase().includes('date') || 
+          h.toLowerCase().includes('datum')
         );
-        const kvaColIdx = headers.findIndex(h => 
-          h.toLowerCase().includes('kva') || h.toLowerCase() === 's (kva)'
+        const timeColIdx = headers.findIndex(h => 
+          h.toLowerCase().includes('time') || 
+          h.toLowerCase().includes('tijd')
         );
+        const valueColIdx = headers.findIndex(h => {
+          const lower = h.toLowerCase();
+          return lower.includes('kwh') || 
+                 lower.includes('p1') || 
+                 lower.includes('energy') || 
+                 lower.includes('active') ||
+                 lower.includes('wh') ||
+                 (lower.includes('p') && lower.includes('(kwh)'));
+        });
+        const kvaColIdx = headers.findIndex(h => {
+          const lower = h.toLowerCase();
+          return lower.includes('kva') || 
+                 lower.includes('s (kva)') || 
+                 lower.includes('apparent') ||
+                 (lower.includes('s') && lower.includes('(kva)'));
+        });
         
         setColumnMapping({
           dateColumn: dateColIdx >= 0 ? dateColIdx.toString() : "0",
@@ -1374,7 +1390,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                               {idx === fileItem.preview.detectedColumns.dateColumn ? 'Date' :
                                                idx === fileItem.preview.detectedColumns.timeColumn ? 'Time' :
                                                idx === fileItem.preview.detectedColumns.valueColumn ? 'kWh Value' :
-                                               'Metadata'}
+                                               'Other'}
                                             </Badge>
                                           </div>
                                         </th>
@@ -1395,30 +1411,6 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                 </table>
                               </div>
                               
-                              {fileItem.preview.detectedColumns.metadataColumns.length > 0 && (
-                                <div className="space-y-2">
-                                  <Label className="text-xs">Metadata Field Names (optional - for reconciliation)</Label>
-                                  <div className="grid grid-cols-2 gap-2">
-                                    {fileItem.preview.detectedColumns.metadataColumns.map((colIdx) => (
-                                      <div key={colIdx} className="space-y-1">
-                                        <Label className="text-[10px] text-muted-foreground">
-                                          Column {colIdx + 1}: {fileItem.preview!.headers[colIdx]}
-                                        </Label>
-                                        <Input
-                                          placeholder="e.g., Active_Energy, Reactive_Power"
-                                          value={fileItem.metadataFieldNames?.[colIdx] || ""}
-                                          onChange={(e) => updateMetadataFieldName(actualIndex, colIdx, e.target.value)}
-                                          className="h-7 text-xs"
-                                        />
-                                      </div>
-                                    ))}
-                                  </div>
-                                  <p className="text-[10px] text-muted-foreground">
-                                    These names will be used to identify fields during reconciliation
-                                  </p>
-                                </div>
-                              )}
-                              
                               <div className="rounded-md bg-muted/50 p-3 text-xs space-y-2">
                                 <p className="font-medium">What will be stored in database:</p>
                                 <div className="space-y-1">
@@ -1427,24 +1419,6 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                     <li>Date & Time → <code className="text-[10px] bg-background px-1 rounded">reading_timestamp</code></li>
                                     <li>kWh Value → <code className="text-[10px] bg-background px-1 rounded">kwh_value</code></li>
                                     <li>kVA Value → <code className="text-[10px] bg-background px-1 rounded">kva_value</code> (if present)</li>
-                                  </ul>
-                                </div>
-                                <div className="space-y-1">
-                                  <p className="text-muted-foreground font-medium">Metadata (preserved for reconciliation):</p>
-                                  <ul className="list-disc list-inside space-y-0.5 text-muted-foreground ml-2">
-                                    <li>Source File → <code className="text-[10px] bg-background px-1 rounded">metadata.source_file</code></li>
-                                    {fileItem.preview.detectedColumns.metadataColumns.length > 0 && (
-                                      <>
-                                        {fileItem.preview.detectedColumns.metadataColumns.map((colIdx) => (
-                                          <li key={colIdx}>
-                                            {fileItem.preview!.headers[colIdx] || `Column ${colIdx + 1}`} → 
-                                            <code className="text-[10px] bg-background px-1 rounded ml-1">
-                                              metadata.imported_fields.{fileItem.metadataFieldNames?.[colIdx] || fileItem.preview!.headers[colIdx] || `Column_${colIdx + 1}`}
-                                            </code>
-                                          </li>
-                                        ))}
-                                      </>
-                                    )}
                                   </ul>
                                 </div>
                                 <p className="text-[10px] text-muted-foreground pt-1 border-t">
@@ -1546,8 +1520,8 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                     <p>When CSVs don't have explicit time columns or timestamps, each row will be assigned a time based on the selected interval. Row 1 uses the date at 00:00, Row 2 adds the interval, etc.</p>
                   </div>
                   <div>
-                    <p className="font-medium mb-1">Metadata Preservation:</p>
-                    <p>All columns beyond Date, Time, and kWh will be automatically captured as metadata fields and preserved for reconciliation analysis.</p>
+                    <p className="font-medium mb-1">Column Assignment:</p>
+                    <p>Click any column header to assign it as Date, Time, kWh, kVA, or other data types. All assigned columns will be available for analysis.</p>
                   </div>
                 </div>
               </CardContent>
@@ -1605,7 +1579,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                            part.columnId === columnMapping.timeColumn ? '⏰ Time' :
                                            part.columnId === columnMapping.valueColumn ? '⚡ kWh' :
                                            part.columnId === columnMapping.kvaColumn ? '🔌 kVA' :
-                                           '📋 Metadata'}
+                                           '—'}
                                         </Badge>
                                       </button>
                                     </PopoverTrigger>
@@ -1676,7 +1650,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                          idx.toString() === columnMapping.timeColumn ? '⏰ Time' :
                                          idx.toString() === columnMapping.valueColumn ? '⚡ kWh' :
                                          idx.toString() === columnMapping.kvaColumn ? '🔌 kVA' :
-                                         '📋 Metadata'}
+                                         '—'}
                                       </Badge>
                                     </button>
                                   </PopoverTrigger>
@@ -1731,7 +1705,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                               setColumnMapping(newMapping);
                                             }}
                                           >
-                                            📋 Metadata
+                                            — Unassign
                                           </Button>
                                         </div>
                                       </div>
