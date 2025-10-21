@@ -151,28 +151,62 @@ Return ONLY a valid JSON object with these exact keys.
 NO markdown, NO explanations.
 Example: {"meter_number":"DB-01A","name":"VACANT","area":"187m²","rating":"150A TP","cable_specification":"4C x 95mm² ALU ECC CABLE","serial_number":"35779383","ct_type":"150/5A","meter_type":"distribution"}`;
     } else {
-      // Full extraction mode - SCAN ENTIRE PDF AND MAP ALL METERS
-      promptText = `You are an expert electrical engineer performing a COMPLETE SCAN of an electrical schematic distribution diagram. 
+      // Full extraction mode - MAXIMUM ACCURACY REQUIRED
+      promptText = `You are an expert electrical engineer performing CRITICAL DATA EXTRACTION from an electrical schematic. This data will be used for financial calculations and legal compliance - 100% accuracy is MANDATORY.
 
-MISSION: Identify and extract EVERY SINGLE meter box on this schematic with 100% accuracy in positioning, scaling, and data extraction.
+⚠️ CRITICAL IMPORTANCE: Meter serial numbers and specifications are legally binding and financially significant. Any errors could result in serious consequences.
+
+ACCURACY REQUIREMENTS:
+- Extract data with ZERO tolerance for errors
+- If ANY field is unclear or ambiguous, mark it with "VERIFY:" prefix
+- If a field is genuinely not visible, use "NOT_VISIBLE" not "*" or null
+- Double-check every serial number character-by-character
+- Preserve exact spacing, capitalization, and punctuation
 
 SCANNING PROTOCOL:
-1. Systematically scan the ENTIRE image from top to bottom, left to right
-2. DO NOT SKIP ANY meters - even if partially visible or small
-3. Identify ALL rectangular meter boxes/labels regardless of size
-4. For EACH meter found, extract complete data AND precise positioning
+1. Systematically scan ENTIRE schematic from top-left to bottom-right
+2. Identify EVERY meter box - count them first, then extract
+3. For partially visible or unclear text: mark field with "VERIFY:" prefix
+4. For completely missing fields: use "NOT_VISIBLE"
+5. Re-read serial numbers twice to ensure accuracy
 
-FOR EACH METER EXTRACT:
+CRITICAL DATA FIELDS (Zero error tolerance):
 
-DATA FIELDS (100% fidelity to original text):
-- meter_number: Exact NO label (e.g., "DB-01W", "DB-02", "INCOMING-01")
-- name: Exact NAME label (e.g., "CAR WASH", "VACANT", "ACKERMANS")
-- area: Number with "m²" unit (e.g., "187m²", "406m²") 
-- rating: Full rating with units (e.g., "80A TP", "150A TP")
-- cable_specification: Complete spec (e.g., "4C x 16mm² ALU ECC CABLE")
-- serial_number: Exact serial (e.g., "34020113A", "35777285")
-- ct_type: CT specification (e.g., "DOL", "150/5A", "300/5A")
-- meter_type: "distribution" (default for most meters)
+1. meter_number (NO): 
+   - Extract EXACTLY as shown (e.g., "DB-01W", "MB-1 INCOMING COUNCIL")
+   - Include all letters, numbers, hyphens, spaces
+   - If unclear: prefix with "VERIFY:"
+
+2. serial_number (SERIAL): ⚠️ MOST CRITICAL FIELD
+   - Read character-by-character, verify twice
+   - Common formats: 8-digit (35777285), alphanumeric (34020113A)
+   - If ANY digit is unclear: prefix with "VERIFY:"
+   - If not visible: use "NOT_VISIBLE"
+
+3. name (NAME):
+   - Exact text including capitalization (e.g., "CAR WASH", "VACANT")
+   - Preserve spaces and special characters
+
+4. area (AREA):
+   - Include unit "m²" (e.g., "187m²", "1214m²")
+   - If not shown: "NOT_VISIBLE"
+
+5. rating (RATING):
+   - Include units (e.g., "80A TP", "150A TP", "300A TP")
+   - TP = Three Phase (never abbreviate)
+
+6. cable_specification (CABLE):
+   - Complete spec: "4C x 16mm² ALU ECC CABLE"
+   - Never abbreviate, preserve exact format
+   - If truncated or unclear: extract what's visible + "VERIFY:"
+
+7. ct_type (CT):
+   - Exact format (e.g., "DOL", "150/5A", "300/5A")
+
+8. meter_type:
+   - "council_bulk": Main incoming (labeled INCOMING/COUNCIL)
+   - "check_meter": Check meters (labeled CHECK METER/BULK CHECK)
+   - "distribution": All other meters (DB-XX)
 
 POSITIONING (CRITICAL - This determines visual overlay accuracy):
 - position.x: Percentage from LEFT edge to meter box CENTER (0.0 = left edge, 100.0 = right edge)
@@ -225,7 +259,7 @@ Return ONLY valid JSON. NO markdown, NO explanations.`;
       },
       signal: controller.signal,
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
+        model: 'google/gemini-2.5-pro', // Using most powerful model for maximum accuracy
         messages: [
           {
             role: 'user',

@@ -3,7 +3,7 @@ import { Canvas as FabricCanvas, Circle, Line, Text, FabricImage, Rect } from "f
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Save, Zap, Link2, Trash2, Move, Upload, Plus, ZoomIn, ZoomOut, Maximize2, Pencil, Scan } from "lucide-react";
+import { Save, Zap, Link2, Trash2, Move, Upload, Plus, ZoomIn, ZoomOut, Maximize2, Pencil, Scan, Check } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -478,12 +478,21 @@ export default function SchematicEditor({
         canvas: { w: canvasWidth, h: canvasHeight }
       });
       
-      // Color based on status: RED = pending, GREEN = approved
-      let borderColor = '#dc2626'; // RED for pending (unconfirmed)
+      // Color based on status and data quality
+      let borderColor = '#dc2626'; // RED for pending/unconfirmed
       let fillColor = '#ffffff';
+      
+      // Check for fields that need verification
+      const needsVerification = Object.values(meter).some((val: any) => 
+        typeof val === 'string' && (val.includes('VERIFY:') || val === 'NOT_VISIBLE' || val === '*')
+      );
+      
       if (meter.status === 'approved') {
-        borderColor = '#16a34a'; // GREEN for approved (confirmed)
-        fillColor = '#f0fdf4'; // light green background
+        borderColor = '#16a34a'; // GREEN for confirmed
+        fillColor = '#f0fdf4';
+      } else if (needsVerification) {
+        borderColor = '#f59e0b'; // ORANGE for needs verification
+        fillColor = '#fff7ed';
       }
       
       // Create table-like card
@@ -516,7 +525,8 @@ export default function SchematicEditor({
       background.on('mousedown', () => {
         if (activeTool === 'select') {
           setSelectedMeterIndex(index);
-          console.log(`🎯 Selected meter ${index} for confirmation:`, meter.meter_number);
+          setIsConfirmMeterDialogOpen(true);
+          console.log(`🎯 Opening confirmation for meter ${index}:`, meter.meter_number);
         }
       });
 
@@ -1307,7 +1317,7 @@ export default function SchematicEditor({
 
       <div className="text-sm text-muted-foreground space-y-1">
         <div>
-          {activeTool === "select" && "View mode - Click on meter cards to edit their details"}
+          {activeTool === "select" && "Click on RED meters to verify data • Click GREEN meters to edit • Click database meters to manage"}
           {activeTool === "draw" && "✏️ AI Extraction Mode: LEFT CLICK + DRAG to draw box around meter"}
           {activeTool === "meter" && "Click on the schematic to manually place a new meter"}
           {activeTool === "move" && "Drag meters to reposition them on the schematic"}
@@ -1344,18 +1354,18 @@ export default function SchematicEditor({
         {extractedMeters.length > 0 && (
           <>
             <div className="w-px h-6 bg-border mx-2" />
-            <div className="text-xs font-medium text-muted-foreground mr-2 flex items-center">Extracted Meters:</div>
+            <div className="text-xs font-medium text-muted-foreground mr-2 flex items-center">AI Extracted:</div>
             <Badge variant="outline">
-              <div className="w-3 h-3 rounded-full bg-[#eab308] border-2 border-[#854d0e] mr-2" />
-              Pending
+              <div className="w-3 h-3 rounded-full bg-[#dc2626] border-2 border-[#dc2626] mr-2" />
+              Unconfirmed (Click to Verify)
             </Badge>
             <Badge variant="outline">
-              <div className="w-3 h-3 rounded-full bg-[#22c55e] border-2 border-[#166534] mr-2 shadow-sm shadow-green-500/50" />
-              Approved
+              <div className="w-3 h-3 rounded-full bg-[#f59e0b] border-2 border-[#f59e0b] mr-2" />
+              Needs Review
             </Badge>
             <Badge variant="outline">
-              <div className="w-3 h-3 rounded-full bg-[#ef4444] border-2 border-[#991b1b] mr-2" />
-              Rejected
+              <div className="w-3 h-3 rounded-full bg-[#16a34a] border-2 border-[#16a34a] mr-2" />
+              Confirmed
             </Badge>
           </>
         )}
@@ -1486,6 +1496,191 @@ export default function SchematicEditor({
         </DialogContent>
       </Dialog>
 
+      {/* Meter Confirmation Dialog for Extracted Meters */}
+      <Dialog open={isConfirmMeterDialogOpen} onOpenChange={setIsConfirmMeterDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <span className="text-red-600">⚠️ Verify Meter Data</span>
+              {selectedMeterIndex !== null && extractedMeters[selectedMeterIndex] && (
+                <Badge variant="outline" className="ml-2">
+                  {extractedMeters[selectedMeterIndex].meter_number}
+                </Badge>
+              )}
+            </DialogTitle>
+            <DialogDescription>
+              <strong className="text-red-600">CRITICAL:</strong> Verify every field carefully. This data will be used for billing and legal compliance. Check serial numbers twice.
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedMeterIndex !== null && extractedMeters[selectedMeterIndex] && (
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              const formData = new FormData(e.currentTarget);
+              
+              // Update the extracted meter with verified data
+              const updated = [...extractedMeters];
+              updated[selectedMeterIndex] = {
+                ...updated[selectedMeterIndex],
+                meter_number: formData.get('meter_number') as string,
+                name: formData.get('name') as string,
+                area: formData.get('area') as string,
+                rating: formData.get('rating') as string,
+                cable_specification: formData.get('cable_specification') as string,
+                serial_number: formData.get('serial_number') as string,
+                ct_type: formData.get('ct_type') as string,
+                meter_type: formData.get('meter_type') as string,
+                status: 'approved'
+              };
+              
+              onExtractedMetersUpdate?.(updated);
+              setIsConfirmMeterDialogOpen(false);
+              setSelectedMeterIndex(null);
+              toast.success('Meter data verified and confirmed');
+            }} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="confirm_meter_number" className="flex items-center gap-2">
+                    NO (Meter Number) *
+                    {extractedMeters[selectedMeterIndex].meter_number?.includes('VERIFY:') && (
+                      <Badge variant="destructive" className="text-xs">NEEDS VERIFICATION</Badge>
+                    )}
+                  </Label>
+                  <Input 
+                    id="confirm_meter_number" 
+                    name="meter_number" 
+                    required 
+                    defaultValue={extractedMeters[selectedMeterIndex].meter_number?.replace('VERIFY:', '') || ''}
+                    placeholder="DB-01W"
+                    className={extractedMeters[selectedMeterIndex].meter_number?.includes('VERIFY:') ? 'border-red-500' : ''}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="confirm_name">NAME *</Label>
+                  <Input 
+                    id="confirm_name" 
+                    name="name" 
+                    required 
+                    defaultValue={extractedMeters[selectedMeterIndex].name?.replace('VERIFY:', '') || ''}
+                    placeholder="CAR WASH"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="confirm_area">AREA (with m²) *</Label>
+                  <Input 
+                    id="confirm_area" 
+                    name="area" 
+                    required 
+                    defaultValue={extractedMeters[selectedMeterIndex].area?.replace('VERIFY:', '').replace('NOT_VISIBLE', '') || ''}
+                    placeholder="187m²"
+                    className={extractedMeters[selectedMeterIndex].area?.includes('NOT_VISIBLE') ? 'border-orange-500' : ''}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="confirm_rating">RATING *</Label>
+                  <Input 
+                    id="confirm_rating" 
+                    name="rating" 
+                    required 
+                    defaultValue={extractedMeters[selectedMeterIndex].rating?.replace('VERIFY:', '') || ''}
+                    placeholder="80A TP"
+                  />
+                </div>
+
+                <div className="space-y-2 col-span-2">
+                  <Label htmlFor="confirm_cable_specification">CABLE SPECIFICATION *</Label>
+                  <Input 
+                    id="confirm_cable_specification" 
+                    name="cable_specification" 
+                    required 
+                    defaultValue={extractedMeters[selectedMeterIndex].cable_specification?.replace('VERIFY:', '') || ''}
+                    placeholder="4C x 16mm² ALU ECC CABLE"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="confirm_serial_number" className="flex items-center gap-2">
+                    SERIAL NUMBER * 
+                    <Badge variant="destructive" className="text-xs">VERIFY TWICE</Badge>
+                  </Label>
+                  <Input 
+                    id="confirm_serial_number" 
+                    name="serial_number" 
+                    required 
+                    defaultValue={extractedMeters[selectedMeterIndex].serial_number?.replace('VERIFY:', '').replace('NOT_VISIBLE', '') || ''}
+                    placeholder="34020113A"
+                    className="font-mono text-lg border-red-300 focus:border-red-500"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="confirm_ct_type">CT TYPE *</Label>
+                  <Input 
+                    id="confirm_ct_type" 
+                    name="ct_type" 
+                    required 
+                    defaultValue={extractedMeters[selectedMeterIndex].ct_type?.replace('VERIFY:', '') || ''}
+                    placeholder="DOL or 150/5A"
+                  />
+                </div>
+
+                <div className="space-y-2 col-span-2">
+                  <Label htmlFor="confirm_meter_type">METER TYPE *</Label>
+                  <Select name="meter_type" required defaultValue={extractedMeters[selectedMeterIndex].meter_type || 'distribution'}>
+                    <SelectTrigger className="bg-background">
+                      <SelectValue placeholder="Select meter type" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-background z-50">
+                      <SelectItem value="council_bulk">Council Bulk Supply (Main Incoming)</SelectItem>
+                      <SelectItem value="check_meter">Check Meter (Verification)</SelectItem>
+                      <SelectItem value="distribution">Distribution Meter</SelectItem>
+                      <SelectItem value="solar">Solar Generation</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-4 border-t">
+                <Button type="submit" className="flex-1 bg-green-600 hover:bg-green-700">
+                  <Check className="h-4 w-4 mr-2" />
+                  Confirm & Approve
+                </Button>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => {
+                    setIsConfirmMeterDialogOpen(false);
+                    setSelectedMeterIndex(null);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="button" 
+                  variant="destructive" 
+                  onClick={() => {
+                    if (selectedMeterIndex !== null) {
+                      const updated = extractedMeters.filter((_, i) => i !== selectedMeterIndex);
+                      onExtractedMetersUpdate?.(updated);
+                      setIsConfirmMeterDialogOpen(false);
+                      setSelectedMeterIndex(null);
+                      toast.success('Meter rejected and removed');
+                    }
+                  }}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Reject
+                </Button>
+              </div>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Meter Dialog for Database Meters */}
       <Dialog open={isEditMeterDialogOpen} onOpenChange={setIsEditMeterDialogOpen}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
