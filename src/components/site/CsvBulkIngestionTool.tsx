@@ -18,7 +18,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Upload, Play, Download, Trash2, FileText, CheckCircle2, AlertCircle, Eye, Settings2, Database, Loader2 } from "lucide-react";
+import { Upload, Play, Download, Trash2, FileText, CheckCircle2, AlertCircle, Eye, Settings2, Database, Loader2, Search, Check, ChevronsUpDown } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -39,6 +39,19 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 
 interface CsvBulkIngestionToolProps {
   siteId: string;
@@ -956,22 +969,56 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                               </p>
                             </div>
 
-                            <Select
-                              value={fileItem.meterId || ""}
-                              onValueChange={(value) => updateFileMapping(actualIndex, value)}
-                              disabled={isProcessing}
-                            >
-                              <SelectTrigger className="w-[250px]">
-                                <SelectValue placeholder="Select meter..." />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {meters.map((meter) => (
-                                  <SelectItem key={meter.id} value={meter.id}>
-                                    {getMeterLabel(meter)}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  role="combobox"
+                                  className={cn(
+                                    "w-[250px] justify-between",
+                                    !fileItem.meterId && "text-muted-foreground"
+                                  )}
+                                  disabled={isProcessing}
+                                >
+                                  {fileItem.meterId
+                                    ? getMeterLabel(meters.find((m) => m.id === fileItem.meterId)!)
+                                    : "Select meter..."}
+                                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-[300px] p-0">
+                                <Command>
+                                  <CommandInput placeholder="Search by meter number..." />
+                                  <CommandEmpty>No meter found.</CommandEmpty>
+                                  <CommandGroup className="max-h-[300px] overflow-auto">
+                                    {meters.map((meter) => (
+                                      <CommandItem
+                                        key={meter.id}
+                                        value={`${meter.meter_number} ${meter.serial_number || ''} ${meter.name || ''}`}
+                                        onSelect={() => {
+                                          updateFileMapping(actualIndex, meter.id);
+                                        }}
+                                      >
+                                        <Check
+                                          className={cn(
+                                            "mr-2 h-4 w-4",
+                                            fileItem.meterId === meter.id
+                                              ? "opacity-100"
+                                              : "opacity-0"
+                                          )}
+                                        />
+                                        <div className="flex flex-col">
+                                          <span className="font-medium">{meter.meter_number}</span>
+                                          <span className="text-xs text-muted-foreground">
+                                            {meter.name || 'Unnamed'}{meter.serial_number && ` • S/N: ${meter.serial_number}`}
+                                          </span>
+                                        </div>
+                                      </CommandItem>
+                                    ))}
+                                  </CommandGroup>
+                                </Command>
+                              </PopoverContent>
+                            </Popover>
 
                             <CollapsibleTrigger asChild>
                               <Button
