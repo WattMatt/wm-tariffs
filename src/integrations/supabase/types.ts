@@ -124,6 +124,7 @@ export type Database = {
       }
       meter_csv_files: {
         Row: {
+          column_mapping: Json | null
           content_hash: string
           created_at: string
           duplicates_skipped: number | null
@@ -147,6 +148,7 @@ export type Database = {
           uploaded_by: string | null
         }
         Insert: {
+          column_mapping?: Json | null
           content_hash: string
           created_at?: string
           duplicates_skipped?: number | null
@@ -170,6 +172,7 @@ export type Database = {
           uploaded_by?: string | null
         }
         Update: {
+          column_mapping?: Json | null
           content_hash?: string
           created_at?: string
           duplicates_skipped?: number | null

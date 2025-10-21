@@ -565,7 +565,8 @@ Deno.serve(async (req) => {
         duplicates_skipped: skipped,
         parse_errors: parseErrors,
         error_message: errors.length > 0 ? errors.join('; ') : null,
-        parsed_file_path: parsedFilePath
+        parsed_file_path: parsedFilePath,
+        column_mapping: columnMapping
       })
       .eq('file_path', filePath);
 

@@ -284,6 +284,22 @@ export default function MetersTab({ siteId }: MetersTabProps) {
   };
 
   const fetchParsedCsvData = async (meterId: string) => {
+    // First, fetch the column mapping from the most recent parsed CSV file
+    const { data: csvFile, error: csvError } = await supabase
+      .from('meter_csv_files')
+      .select('column_mapping')
+      .eq('meter_id', meterId)
+      .not('column_mapping', 'is', null)
+      .order('parsed_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (csvError) {
+      console.error("Error fetching column mapping:", csvError);
+    }
+
+    const columnMapping = csvFile?.column_mapping as any;
+
     // Fetch readings from the database with metadata (column interpretation)
     const { data: readings, error } = await supabase
       .from('meter_readings')
@@ -311,16 +327,25 @@ export default function MetersTab({ siteId }: MetersTabProps) {
       }
     });
 
-    // Create headers: timestamp, kwh_value, kva_value, then all metadata fields
-    const headers = ['reading_timestamp', 'kwh_value'];
+    // Create headers using the original renamed headers from column mapping
+    const headers: string[] = [];
+    
+    // Add timestamp header
+    const timestampHeader = columnMapping?.renamedHeaders?.[columnMapping.dateColumn] || 'Timestamp';
+    headers.push(timestampHeader);
+    
+    // Add kWh value header (from the valueColumn)
+    const kwhHeader = columnMapping?.renamedHeaders?.[columnMapping.valueColumn] || 'kWh Value';
+    headers.push(kwhHeader);
     
     // Only add kva_value if it exists in any reading
     const hasKva = readings.some(r => r.kva_value !== null);
-    if (hasKva) {
-      headers.push('kva_value');
+    if (hasKva && columnMapping?.kvaColumn && columnMapping.kvaColumn !== '-1') {
+      const kvaHeader = columnMapping.renamedHeaders?.[columnMapping.kvaColumn] || 'kVA Value';
+      headers.push(kvaHeader);
     }
     
-    // Add all metadata field names as separate columns
+    // Add all metadata field names as separate columns (these already use renamed headers)
     const metadataFields = Array.from(allFieldNames).sort();
     headers.push(...metadataFields);
 
@@ -328,12 +353,13 @@ export default function MetersTab({ siteId }: MetersTabProps) {
     const rows = readings.map(reading => {
       const metadata = reading.metadata as any;
       const row: any = {
-        reading_timestamp: reading.reading_timestamp,
-        kwh_value: reading.kwh_value,
+        [timestampHeader]: reading.reading_timestamp,
+        [kwhHeader]: reading.kwh_value,
       };
       
-      if (hasKva) {
-        row.kva_value = reading.kva_value;
+      if (hasKva && columnMapping?.kvaColumn && columnMapping.kvaColumn !== '-1') {
+        const kvaHeader = columnMapping.renamedHeaders?.[columnMapping.kvaColumn] || 'kVA Value';
+        row[kvaHeader] = reading.kva_value;
       }
       
       // Add metadata fields
@@ -805,9 +831,7 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                       <TableRow>
                         {parsedCsvHeaders.map((header, idx) => (
                           <TableHead key={idx} className="font-semibold">
-                            {header === 'reading_timestamp' ? 'Timestamp' : 
-                             header === 'kwh_value' ? 'kWh Value' :
-                             header === 'kva_value' ? 'kVA Value' : header}
+                            {header}
                           </TableHead>
                         ))}
                       </TableRow>
@@ -817,7 +841,7 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                         <TableRow key={idx}>
                           {parsedCsvHeaders.map((header, colIdx) => (
                             <TableCell key={colIdx} className="font-mono text-xs">
-                              {header === 'reading_timestamp' ? (
+                              {colIdx === 0 ? (
                                 <span className="text-xs">
                                   {new Date(row[header]).toLocaleString()}
                                 </span>
