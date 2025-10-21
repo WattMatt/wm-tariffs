@@ -185,7 +185,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
       console.log(`Found ${trackedFiles?.length || 0} tracked files in database`);
 
       // Get all files from storage to verify they actually exist
-      const storageFileSet = new Set<string>();
+      const storageFiles: Array<{ path: string; meterId: string; name: string; size: number }> = [];
       
       // List all meter subdirectories
       const { data: meterDirs } = await supabase.storage
@@ -197,34 +197,72 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
       // For each meter directory, list the files
       if (meterDirs) {
         for (const dir of meterDirs) {
-          if (dir.id) { // It's a directory
+          if (dir.id) { // It's a directory (meter_id)
             const { data: csvFiles } = await supabase.storage
               .from('meter-csvs')
               .list(`${siteId}/${dir.name}`);
             
             csvFiles?.forEach(f => {
-              if (f.name) {
-                storageFileSet.add(`${siteId}/${dir.name}/${f.name}`);
+              if (f.name && !f.id) { // It's a file, not a directory
+                storageFiles.push({
+                  path: `${siteId}/${dir.name}/${f.name}`,
+                  meterId: dir.name,
+                  name: f.name,
+                  size: f.metadata?.size || 0
+                });
               }
             });
           }
         }
       }
 
-      console.log(`Found ${storageFileSet.size} CSV files in storage`);
+      console.log(`Found ${storageFiles.length} CSV files in storage`);
 
-      // Filter and map files, cleaning up orphaned records
-      const filesList: FileItem[] = [];
-      const orphanedIds: string[] = [];
+      // Create a map of tracked files by path
+      const trackedByPath = new Map(
+        (trackedFiles || []).map(f => [f.file_path, f])
+      );
 
-      (trackedFiles || []).forEach(file => {
-        const existsInStorage = storageFileSet.has(file.file_path);
+      // Find untracked files (in storage but not in database)
+      const untrackedFiles = storageFiles.filter(f => !trackedByPath.has(f.path));
+      
+      if (untrackedFiles.length > 0) {
+        console.log(`Found ${untrackedFiles.length} untracked files, adding to database...`);
         
-        if (!existsInStorage) {
-          console.warn(`Orphaned DB record (file not in storage): ${file.file_name}`);
-          orphanedIds.push(file.id);
+        // Get user for tracking
+        const { data: userData } = await supabase.auth.getUser();
+        
+        // Insert records for untracked files
+        const recordsToInsert = untrackedFiles.map(f => ({
+          site_id: siteId,
+          meter_id: f.meterId,
+          file_name: f.name,
+          file_path: f.path,
+          content_hash: null, // Will be null for backfilled files
+          file_size: f.size,
+          uploaded_by: userData?.user?.id,
+          parse_status: 'uploaded'
+        }));
+
+        const { error: insertError } = await supabase
+          .from('meter_csv_files')
+          .insert(recordsToInsert);
+
+        if (insertError) {
+          console.error('Failed to track untracked files:', insertError);
         } else {
-          filesList.push({
+          console.log(`✓ Successfully tracked ${untrackedFiles.length} previously untracked files`);
+          // Reload to get the newly inserted records with meter info
+          const { data: refreshedFiles } = await supabase
+            .from('meter_csv_files')
+            .select(`
+              *,
+              meters!inner(meter_number)
+            `)
+            .eq('site_id', siteId)
+            .order('created_at', { ascending: false });
+          
+          const filesList: FileItem[] = (refreshedFiles || []).map(file => ({
             name: file.file_name,
             path: file.file_path,
             meterId: file.meter_id,
@@ -238,19 +276,30 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
             parseErrors: file.parse_errors,
             errorMessage: file.error_message,
             contentHash: file.content_hash
-          });
-        }
-      });
+          }));
 
-      // Clean up orphaned records
-      if (orphanedIds.length > 0) {
-        await supabase
-          .from('meter_csv_files')
-          .delete()
-          .in('id', orphanedIds);
-        
-        console.log(`Cleaned up ${orphanedIds.length} orphaned DB record(s)`);
+          setFiles(filesList);
+          console.log(`✓ Loaded ${filesList.length} file(s) to display in parse tab`);
+          return;
+        }
       }
+
+      // Map tracked files to display
+      const filesList: FileItem[] = (trackedFiles || []).map(file => ({
+        name: file.file_name,
+        path: file.file_path,
+        meterId: file.meter_id,
+        meterNumber: file.meters?.meter_number,
+        size: file.file_size,
+        status: file.parse_status === 'success' ? 'success' : 
+                file.parse_status === 'error' ? 'error' : 'uploaded',
+        isNew: false,
+        readingsInserted: file.readings_inserted,
+        duplicatesSkipped: file.duplicates_skipped,
+        parseErrors: file.parse_errors,
+        errorMessage: file.error_message,
+        contentHash: file.content_hash
+      }));
 
       setFiles(filesList);
       console.log(`✓ Loaded ${filesList.length} file(s) to display in parse tab`);
