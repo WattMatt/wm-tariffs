@@ -1499,20 +1499,6 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                     </Select>
                   </div>
                   <div>
-                    <Label>Date Format</Label>
-                    <Select value={dateFormat} onValueChange={setDateFormat} disabled={isProcessing}>
-                      <SelectTrigger className="bg-background mt-1">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="auto">Auto-detect</SelectItem>
-                        <SelectItem value="YYYY-MM-DD">YYYY-MM-DD</SelectItem>
-                        <SelectItem value="DD/MM/YYYY">DD/MM/YYYY</SelectItem>
-                        <SelectItem value="MM/DD/YYYY">MM/DD/YYYY</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
                     <Label>DateTime Format (for combined date+time columns)</Label>
                     <Select value={dateTimeFormat} onValueChange={setDateTimeFormat} disabled={isProcessing}>
                       <SelectTrigger className="bg-background mt-1">
