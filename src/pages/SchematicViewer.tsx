@@ -323,7 +323,7 @@ export default function SchematicViewer() {
   const fetchMeterPositions = async () => {
     const { data } = await supabase
       .from("meter_positions")
-      .select("id, meter_id, x_position, y_position, label, meters(meter_number, meter_type)")
+      .select("id, meter_id, x_position, y_position, label, scale_x, scale_y, meters(meter_number, meter_type, name, area, rating, cable_specification, serial_number, ct_type)")
       .eq("schematic_id", id);
 
     setMeterPositions(data || []);
