@@ -107,16 +107,34 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
         console.error("Error fetching column mapping:", csvError);
       }
       
-      const { data, error } = await supabase
-        .from("meter_readings")
-        .select("reading_timestamp, metadata")
-        .eq("meter_id", selectedMeterId)
-        .gte("reading_timestamp", fullDateTimeFrom)
-        .lte("reading_timestamp", fullDateTimeTo)
-        .order("reading_timestamp")
-        .limit(100000);
+      // Fetch all data using pagination
+      let allData: any[] = [];
+      let start = 0;
+      const batchSize = 1000;
+      let hasMore = true;
 
-      if (error) throw error;
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from("meter_readings")
+          .select("reading_timestamp, metadata")
+          .eq("meter_id", selectedMeterId)
+          .gte("reading_timestamp", fullDateTimeFrom)
+          .lte("reading_timestamp", fullDateTimeTo)
+          .order("reading_timestamp")
+          .range(start, start + batchSize - 1);
+
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          allData = [...allData, ...data];
+          start += batchSize;
+          hasMore = data.length === batchSize;
+        } else {
+          hasMore = false;
+        }
+      }
+
+      const data = allData;
 
       if (data && data.length > 0) {
         // Extract available columns from CSV mapping or first reading
