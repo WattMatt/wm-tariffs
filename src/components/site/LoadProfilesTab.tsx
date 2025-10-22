@@ -268,46 +268,40 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
     }
 
     try {
-      // Calculate the subset interval duration
+      // Calculate the subset interval duration using UTC to avoid timezone shifts
       const subsetStart = getFullDateTime(manipulationDateFrom, manipulationTimeFrom);
       const subsetEnd = getFullDateTime(manipulationDateTo, manipulationTimeTo);
       const subsetDurationMs = subsetEnd.getTime() - subsetStart.getTime();
-
-      // Create a template of time points within the subset interval
-      const subsetTemplate: string[] = [];
-      loadProfileData.forEach((dataPoint) => {
-        const dataTimestamp = parseISO(dataPoint.timestamp);
-        const dataTime = dataTimestamp.getTime();
-        
-        // Calculate where this data point falls relative to the subset pattern
-        // by finding its position within a repeating interval
-        const timeSinceSubsetStart = (dataTime - subsetStart.getTime()) % subsetDurationMs;
-        
-        // Only include data points that fall within the subset interval pattern
-        if (timeSinceSubsetStart >= 0 && timeSinceSubsetStart < subsetDurationMs) {
-          const relativeTime = new Date(subsetStart.getTime() + timeSinceSubsetStart);
-          const timeKey = format(relativeTime, "MMM d, HH:mm");
-          
-          if (!subsetTemplate.includes(timeKey)) {
-            subsetTemplate.push(timeKey);
-          }
-        }
-      });
 
       // Group data points by their position within the subset pattern
       const groups = new Map<string, any[]>();
 
       loadProfileData.forEach((dataPoint) => {
-        const dataTimestamp = parseISO(dataPoint.timestamp);
-        const dataTime = dataTimestamp.getTime();
+        // Parse timestamp directly without timezone conversion
+        const timestamp = dataPoint.timestamp; // "2025-10-01T00:00:00+00:00"
+        const datePart = timestamp.split('T')[0]; // "2025-10-01"
+        const timePart = timestamp.split('T')[1]?.substring(0, 5) || "00:00"; // "00:00"
+        
+        // Reconstruct as UTC date
+        const [year, month, day] = datePart.split('-').map(Number);
+        const [hour, minute] = timePart.split(':').map(Number);
+        const dataTime = Date.UTC(year, month - 1, day, hour, minute, 0, 0);
         
         // Calculate position within the repeating subset pattern
         const timeSinceSubsetStart = (dataTime - subsetStart.getTime()) % subsetDurationMs;
         
         // Only process data points that fall within the subset interval pattern
         if (timeSinceSubsetStart >= 0 && timeSinceSubsetStart < subsetDurationMs) {
-          const relativeTime = new Date(subsetStart.getTime() + timeSinceSubsetStart);
-          const timeKey = format(relativeTime, "MMM d, HH:mm");
+          // Create a time key using UTC offset from subset start
+          const relativeMs = timeSinceSubsetStart;
+          const relativeDate = new Date(subsetStart.getTime() + relativeMs);
+          
+          // Format without timezone conversion
+          const relDay = relativeDate.getUTCDate();
+          const relMonth = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][relativeDate.getUTCMonth()];
+          const relHour = String(relativeDate.getUTCHours()).padStart(2, '0');
+          const relMin = String(relativeDate.getUTCMinutes()).padStart(2, '0');
+          const timeKey = `${relMonth} ${relDay}, ${relHour}:${relMin}`;
           
           if (!groups.has(timeKey)) {
             groups.set(timeKey, []);
@@ -359,11 +353,17 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
         manipulated.push(result);
       });
 
-      // Sort by time
+      // Sort by time key chronologically
       manipulated.sort((a, b) => {
-        const timeA = new Date(a.time).getTime();
-        const timeB = new Date(b.time).getTime();
-        return timeA - timeB;
+        // Parse the time keys for proper sorting
+        const parseTimeKey = (key: string) => {
+          const [datePart, timePart] = key.split(', ');
+          const [monthStr, dayStr] = datePart.split(' ');
+          const [hourStr, minStr] = timePart.split(':');
+          const monthIndex = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].indexOf(monthStr);
+          return monthIndex * 100000 + parseInt(dayStr) * 1000 + parseInt(hourStr) * 60 + parseInt(minStr);
+        };
+        return parseTimeKey(a.time) - parseTimeKey(b.time);
       });
 
       setManipulatedData(manipulated);
