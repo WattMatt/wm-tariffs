@@ -447,22 +447,22 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                     />
                     {Array.from(selectedQuantities).map((quantity, index) => {
                       const colors = [
-                        "hsl(var(--primary))",
-                        "hsl(160, 90%, 56%)",
-                        "hsl(30, 90%, 56%)",
-                        "hsl(280, 90%, 56%)",
-                        "hsl(220, 90%, 56%)",
-                        "hsl(0, 90%, 56%)",
-                        "hsl(120, 90%, 56%)",
+                        "#3b82f6", // blue
+                        "#10b981", // green
+                        "#f59e0b", // orange
+                        "#8b5cf6", // purple
+                        "#ef4444", // red
+                        "#06b6d4", // cyan
+                        "#84cc16", // lime
                       ];
-                      return (
+                       return (
                         <Line
                           key={quantity}
                           type="monotone"
                           dataKey={quantity}
                           stroke={colors[index % colors.length]}
-                          strokeWidth={2}
-                          dot={false}
+                          strokeWidth={4}
+                          dot={{ r: 3, fill: colors[index % colors.length] }}
                           name={quantity}
                           hide={hiddenLines.has(quantity)}
                         />
