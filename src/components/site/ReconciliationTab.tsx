@@ -768,9 +768,10 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="sum">Sum</SelectItem>
-                            <SelectItem value="max">Max</SelectItem>
                             <SelectItem value="min">Min</SelectItem>
-                            <SelectItem value="count">Count</SelectItem>
+                            <SelectItem value="max">Max</SelectItem>
+                            <SelectItem value="average">Avg</SelectItem>
+                            <SelectItem value="count">Cnt</SelectItem>
                           </SelectContent>
                         </Select>
                         <Input
@@ -839,6 +840,8 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                     total = values.length > 0 ? Math.max(...values) : 0;
                   } else if (operation === "min") {
                     total = values.length > 0 ? Math.min(...values) : 0;
+                  } else if (operation === "average") {
+                    total = values.length > 0 ? values.reduce((sum, val) => sum + val, 0) / values.length : 0;
                   } else if (operation === "count") {
                     total = values.length;
                   }
