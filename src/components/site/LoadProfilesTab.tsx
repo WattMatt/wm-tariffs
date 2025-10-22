@@ -4,7 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Brush } from "recharts";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { format, parseISO } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -44,9 +44,6 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
   const [yAxisMin, setYAxisMin] = useState<string>("");
   const [yAxisMax, setYAxisMax] = useState<string>("");
   const [hiddenLines, setHiddenLines] = useState<Set<string>>(new Set());
-  const [useBrush, setUseBrush] = useState<boolean>(false);
-  const [brushStartIndex, setBrushStartIndex] = useState<number>(0);
-  const [brushEndIndex, setBrushEndIndex] = useState<number>(0);
   const [manipulationOperation, setManipulationOperation] = useState<string>("sum");
   const [manipulationPeriod, setManipulationPeriod] = useState<number>(1);
   const [manipulatedData, setManipulatedData] = useState<any[]>([]);
@@ -220,10 +217,6 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
     console.log("Load Profile - Chart data to display:", chartData);
     console.log("Deduplication: Original readings:", readings.length, "Unique readings:", uniqueReadings.length);
     setLoadProfileData(chartData);
-    // Always enable brush with full data range
-    setUseBrush(true);
-    setBrushStartIndex(0);
-    setBrushEndIndex(Math.max(0, chartData.length - 1));
   };
 
   const handleQuantityToggle = (quantity: string, checked: boolean) => {
@@ -258,39 +251,10 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
 
   const handleResetView = () => {
     const currentData = isManipulationApplied ? manipulatedData : loadProfileData;
-    setUseBrush(true);
-    setBrushStartIndex(0);
-    setBrushEndIndex(Math.max(0, currentData.length - 1));
     setYAxisMin("");
     setYAxisMax("");
   };
 
-  const handleSetDayRange = (days: number) => {
-    const currentData = isManipulationApplied ? manipulatedData : loadProfileData;
-    if (currentData.length === 0) return;
-    
-    const msPerDay = 24 * 60 * 60 * 1000;
-    const targetMs = days * msPerDay;
-    
-    // Calculate viewport window (N days from the start)
-    const firstTimestamp = new Date(currentData[0].timestamp).getTime();
-    const viewportEndMs = firstTimestamp + targetMs;
-    
-    // Find the end index for the initial viewport
-    let viewportEndIndex = currentData.length - 1;
-    for (let i = 0; i < currentData.length; i++) {
-      const pointMs = new Date(currentData[i].timestamp).getTime();
-      if (pointMs >= viewportEndMs) {
-        viewportEndIndex = i;
-        break;
-      }
-    }
-    
-    // Set initial viewport, but brush extends across full dataset to allow panning anywhere
-    setBrushStartIndex(0);
-    setBrushEndIndex(viewportEndIndex);
-    setUseBrush(true);
-  };
 
   const handleDownloadData = () => {
     const currentData = isManipulationApplied ? manipulatedData : loadProfileData;
@@ -431,10 +395,6 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
 
       setManipulatedData(manipulated);
       setIsManipulationApplied(true);
-      // Always enable brush with full range
-      setUseBrush(true);
-      setBrushStartIndex(0);
-      setBrushEndIndex(Math.max(0, manipulated.length - 1));
       
       const periodLabel = manipulationPeriod === 1 ? 'daily' : manipulationPeriod === 7 ? 'weekly' : 'monthly';
       toast.success(`Applied ${manipulationOperation} operation over ${periodLabel} period`);
@@ -447,10 +407,6 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
   const handleResetManipulation = () => {
     setManipulatedData([]);
     setIsManipulationApplied(false);
-    // Always enable brush with full range
-    setUseBrush(true);
-    setBrushStartIndex(0);
-    setBrushEndIndex(Math.max(0, loadProfileData.length - 1));
     toast.info("Reset to original load profile");
   };
 
@@ -639,21 +595,6 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                     />
                   </div>
 
-                  <div className="space-y-2">
-                    <Label className="font-semibold">X-Axis Range (Days)</Label>
-                    <div className="flex flex-wrap gap-2">
-                      {[1, 7, 14, 21, 28, 30, 31].map((days) => (
-                        <Button
-                          key={days}
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleSetDayRange(days)}
-                        >
-                          {days}d
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
 
                   <Button
                     variant="secondary"
@@ -888,22 +829,6 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                       <Legend 
                         onClick={(e: any) => e.dataKey && handleLegendClick(String(e.dataKey))}
                         wrapperStyle={{ cursor: "pointer" }}
-                      />
-                      <Brush
-                        dataKey="timestamp"
-                        height={30}
-                        stroke="hsl(var(--primary))"
-                        fill="hsl(var(--muted))"
-                        startIndex={0}
-                        endIndex={(isManipulationApplied ? manipulatedData : loadProfileData).length - 1}
-                        alwaysShowText={false}
-                        tickFormatter={(value) => {
-                          if (!value) return '';
-                          const date = new Date(value);
-                          const month = String(date.getMonth() + 1).padStart(2, '0');
-                          const day = String(date.getDate()).padStart(2, '0');
-                          return `${month}-${day}`;
-                        }}
                       />
                       {Array.from(selectedQuantities).map((quantity, index) => {
                         const colors = [
