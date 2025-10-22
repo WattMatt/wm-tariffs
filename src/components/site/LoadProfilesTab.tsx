@@ -83,6 +83,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
       if (error) throw error;
 
       if (data && data.length > 0) {
+        console.log("Load Profile - Raw data from database:", data);
         const endDate = dateRange.to || dateRange.from;
         processLoadProfile(data, endDate);
       } else {
@@ -111,6 +112,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
       };
     });
 
+    console.log("Load Profile - Chart data to display:", chartData);
     setLoadProfileData(chartData);
 
     // Calculate normalized data (only for normalized chart)
