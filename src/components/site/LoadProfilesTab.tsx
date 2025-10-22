@@ -113,7 +113,8 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
         .eq("meter_id", selectedMeterId)
         .gte("reading_timestamp", fullDateTimeFrom)
         .lte("reading_timestamp", fullDateTimeTo)
-        .order("reading_timestamp");
+        .order("reading_timestamp")
+        .limit(100000);
 
       if (error) throw error;
 
