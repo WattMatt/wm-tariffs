@@ -195,11 +195,48 @@ Return your findings in JSON format.`;
     
     // Validate and normalize tariff types
     const validTariffTypes = ['domestic', 'commercial', 'industrial', 'agricultural'];
+    
+    // Allowed charge types from database constraint
+    const validChargeTypes = [
+      'basic_monthly',
+      'demand_kva',
+      'access_charge',
+      'capacity_charge',
+      'amp_charge',
+      'service_charge',
+      'network_charge',
+      'fixed_charge'
+    ];
+    
+    // Function to normalize charge type
+    const normalizeChargeType = (chargeType: string): string => {
+      const normalized = chargeType.toLowerCase().replace(/[^a-z_]/g, '_');
+      
+      // If it's already valid, return it
+      if (validChargeTypes.includes(normalized)) return normalized;
+      
+      // Map common variations
+      if (normalized.includes('demand')) return 'demand_kva';
+      if (normalized.includes('service')) return 'service_charge';
+      if (normalized.includes('network')) return 'network_charge';
+      if (normalized.includes('capacity')) return 'capacity_charge';
+      if (normalized.includes('access')) return 'access_charge';
+      if (normalized.includes('amp')) return 'amp_charge';
+      if (normalized.includes('basic') || normalized.includes('monthly')) return 'basic_monthly';
+      
+      // Default fallback
+      return 'service_charge';
+    };
+    
     extractedData.tariffStructures = extractedData.tariffStructures?.map((ts: any) => ({
       ...ts,
       tariffType: validTariffTypes.includes(ts.tariffType?.toLowerCase()) 
         ? ts.tariffType.toLowerCase() 
-        : 'commercial' // default fallback
+        : 'commercial', // default fallback
+      charges: ts.charges?.map((charge: any) => ({
+        ...charge,
+        chargeType: normalizeChargeType(charge.chargeType)
+      })) || []
     }));
     
     console.log(`✓ Extracted data for ${municipalityName}:`, {
