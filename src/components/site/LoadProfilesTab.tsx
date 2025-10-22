@@ -753,54 +753,69 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                       <CartesianGrid strokeDasharray="3 3" />
                        <XAxis 
                         dataKey="timestampStr"
-                        tickFormatter={(value) => {
-                          if (!value) return '';
+                        tick={(props) => {
+                          const { x, y, payload } = props;
+                          if (!payload?.value) return null;
+                          
                           try {
-                            const date = new Date(value);
+                            const date = new Date(payload.value);
                             const data = isManipulationApplied ? manipulatedData : loadProfileData;
+                            const currentIndex = data.findIndex(d => d.timestampStr === payload.value);
                             
-                            // Find the current data point index
-                            const currentIndex = data.findIndex(d => d.timestampStr === value);
+                            let label = '';
                             
                             if (currentIndex === 0) {
-                              return format(date, 'MMM dd HH:mm');
-                            }
-                            
-                            if (currentIndex > 0) {
-                              const prevValue = data[currentIndex - 1]?.timestampStr;
-                              if (prevValue) {
-                                const prevDate = new Date(prevValue);
+                              // First tick - show full date
+                              label = format(date, 'MMM dd HH:mm');
+                            } else if (currentIndex > 0) {
+                              const prevData = data[currentIndex - 1];
+                              if (prevData?.timestampStr) {
+                                const prevDate = new Date(prevData.timestampStr);
                                 
-                                // Year changed - show full date with year
+                                // Check if year changed
                                 if (date.getFullYear() !== prevDate.getFullYear()) {
-                                  return format(date, 'yyyy MMM dd HH:mm');
+                                  label = format(date, 'yyyy MMM dd HH:mm');
                                 }
-                                
-                                // Month changed - show month and day
-                                if (date.getMonth() !== prevDate.getMonth()) {
-                                  return format(date, 'MMM dd HH:mm');
+                                // Check if month changed
+                                else if (date.getMonth() !== prevDate.getMonth()) {
+                                  label = format(date, 'MMM dd HH:mm');
                                 }
-                                
-                                // Day changed - show day and time
-                                if (date.getDate() !== prevDate.getDate()) {
-                                  return format(date, 'MMM dd HH:mm');
+                                // Check if day changed
+                                else if (date.getDate() !== prevDate.getDate()) {
+                                  label = format(date, 'MMM dd HH:mm');
                                 }
-                                
-                                // Same day - show only time
-                                return format(date, 'HH:mm');
+                                // Same day - only show time
+                                else {
+                                  label = format(date, 'HH:mm');
+                                }
+                              } else {
+                                label = format(date, 'MMM dd HH:mm');
                               }
+                            } else {
+                              label = format(date, 'HH:mm');
                             }
                             
-                            return format(date, 'MMM dd HH:mm');
+                            return (
+                              <g transform={`translate(${x},${y})`}>
+                                <text 
+                                  x={0} 
+                                  y={0} 
+                                  dy={16} 
+                                  textAnchor="end" 
+                                  fill="#666" 
+                                  transform="rotate(-45)"
+                                  fontSize={12}
+                                >
+                                  {label}
+                                </text>
+                              </g>
+                            );
                           } catch {
-                            return value;
+                            return null;
                           }
                         }}
-                        angle={-45}
-                        textAnchor="end"
                         height={100}
                         interval="preserveStartEnd"
-                        tick={{ fontSize: 12 }}
                       />
                       <YAxis domain={getYAxisDomain()} />
                       <Tooltip 
