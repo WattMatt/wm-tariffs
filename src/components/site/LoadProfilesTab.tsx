@@ -43,6 +43,8 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
   const [availableColumns, setAvailableColumns] = useState<string[]>([]);
   const [yAxisMin, setYAxisMin] = useState<string>("");
   const [yAxisMax, setYAxisMax] = useState<string>("");
+  const [xAxisMin, setXAxisMin] = useState<string>("");
+  const [xAxisMax, setXAxisMax] = useState<string>("");
   const [hiddenLines, setHiddenLines] = useState<Set<string>>(new Set());
   const [manipulationOperation, setManipulationOperation] = useState<string>("sum");
   const [manipulationDateFrom, setManipulationDateFrom] = useState<Date>();
@@ -253,6 +255,12 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
   const getYAxisDomain = (): [number | "auto", number | "auto"] => {
     const min = yAxisMin && !isNaN(parseFloat(yAxisMin)) ? parseFloat(yAxisMin) : "auto";
     const max = yAxisMax && !isNaN(parseFloat(yAxisMax)) ? parseFloat(yAxisMax) : "auto";
+    return [min, max];
+  };
+
+  const getXAxisDomain = (): [number | "auto", number | "auto"] => {
+    const min = xAxisMin && !isNaN(parseFloat(xAxisMin)) ? parseFloat(xAxisMin) : "auto";
+    const max = xAxisMax && !isNaN(parseFloat(xAxisMax)) ? parseFloat(xAxisMax) : "auto";
     return [min, max];
   };
 
@@ -533,7 +541,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                   </div>
                 </div>
                 
-                {/* Y-Axis Controls - Stacked Vertically */}
+                {/* Y-Axis and X-Axis Controls - Stacked Vertically */}
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="y-min" className="font-semibold">Y-Axis Min</Label>
@@ -555,6 +563,30 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                       placeholder="Auto"
                       value={yAxisMax}
                       onChange={(e) => setYAxisMax(e.target.value)}
+                      className="h-10"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="x-min" className="font-semibold">X-Axis Min</Label>
+                    <Input
+                      id="x-min"
+                      type="text"
+                      placeholder="Auto"
+                      value={xAxisMin}
+                      onChange={(e) => setXAxisMin(e.target.value)}
+                      className="h-10"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="x-max" className="font-semibold">X-Axis Max</Label>
+                    <Input
+                      id="x-max"
+                      type="text"
+                      placeholder="Auto"
+                      value={xAxisMax}
+                      onChange={(e) => setXAxisMax(e.target.value)}
                       className="h-10"
                     />
                   </div>
@@ -705,6 +737,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                       stroke="hsl(var(--muted-foreground))"
                       tick={{ fill: "hsl(var(--foreground))", fontSize: 11 }}
                       interval="preserveStartEnd"
+                      domain={getXAxisDomain()}
                     />
                     <YAxis
                       stroke="hsl(var(--muted-foreground))"
