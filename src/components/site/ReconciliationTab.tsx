@@ -30,6 +30,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
   const [previewData, setPreviewData] = useState<any>(null);
   const [selectedColumns, setSelectedColumns] = useState<Set<string>>(new Set());
   const [columnOperations, setColumnOperations] = useState<Map<string, string>>(new Map());
+  const [columnFactors, setColumnFactors] = useState<Map<string, number>>(new Map());
   const [recalculatedTotal, setRecalculatedTotal] = useState<number | null>(null);
   const [isRecalculating, setIsRecalculating] = useState(false);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
@@ -47,17 +48,20 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
       const selectedOps = Array.from(selectedColumns).map(column => ({
         column,
         operation: columnOperations.get(column) || "sum",
-        total: Number(previewData.columnTotals[column] || 0)
+        total: Number(previewData.columnTotals[column] || 0),
+        factor: columnFactors.get(column) || 1
       }));
 
-      // Calculate based on operations
-      selectedOps.forEach(({ operation, total }) => {
+      // Calculate based on operations and factors
+      selectedOps.forEach(({ operation, total, factor }) => {
+        const adjustedTotal = total * factor;
+        
         if (operation === "sum") {
-          newTotal += total;
+          newTotal += adjustedTotal;
         } else if (operation === "max") {
-          newTotal = Math.max(newTotal, total);
+          newTotal = Math.max(newTotal, adjustedTotal);
         } else if (operation === "min") {
-          newTotal = newTotal === 0 ? total : Math.min(newTotal, total);
+          newTotal = newTotal === 0 ? adjustedTotal : Math.min(newTotal, adjustedTotal);
         } else if (operation === "count") {
           newTotal += 1;
         }
@@ -692,6 +696,11 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                             newOps.set(column, "sum");
                             setColumnOperations(newOps);
                           }
+                          if (!columnFactors.has(column)) {
+                            const newFactors = new Map(columnFactors);
+                            newFactors.set(column, 1);
+                            setColumnFactors(newFactors);
+                          }
                         } else {
                           newSelected.delete(column);
                         }
@@ -705,24 +714,38 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                       {column}
                     </Label>
                     {selectedColumns.has(column) && (
-                      <Select
-                        value={columnOperations.get(column) || "sum"}
-                        onValueChange={(value) => {
-                          const newOps = new Map(columnOperations);
-                          newOps.set(column, value);
-                          setColumnOperations(newOps);
-                        }}
-                      >
-                        <SelectTrigger className="w-24 h-7 text-xs">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="sum">Sum</SelectItem>
-                          <SelectItem value="max">Max</SelectItem>
-                          <SelectItem value="min">Min</SelectItem>
-                          <SelectItem value="count">Count</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <>
+                        <Select
+                          value={columnOperations.get(column) || "sum"}
+                          onValueChange={(value) => {
+                            const newOps = new Map(columnOperations);
+                            newOps.set(column, value);
+                            setColumnOperations(newOps);
+                          }}
+                        >
+                          <SelectTrigger className="w-24 h-7 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="sum">Sum</SelectItem>
+                            <SelectItem value="max">Max</SelectItem>
+                            <SelectItem value="min">Min</SelectItem>
+                            <SelectItem value="count">Count</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          placeholder="Factor"
+                          value={columnFactors.get(column) || 1}
+                          onChange={(e) => {
+                            const newFactors = new Map(columnFactors);
+                            newFactors.set(column, parseFloat(e.target.value) || 1);
+                            setColumnFactors(newFactors);
+                          }}
+                          className="w-20 h-7 text-xs"
+                        />
+                      </>
                     )}
                   </div>
                 ))}
@@ -753,12 +776,20 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                     {recalculatedTotal !== null ? recalculatedTotal.toFixed(2) : previewData.totalKwh.toFixed(2)}
                   </div>
                 </div>
-                {Object.entries(previewData.columnTotals).map(([column, total]: [string, any]) => (
-                  <div key={column} className="space-y-1">
-                    <div className="text-xs text-muted-foreground">{column}</div>
-                    <div className="text-lg font-semibold">{Number(total).toFixed(2)}</div>
-                  </div>
-                ))}
+                {Array.from(selectedColumns).map((column) => {
+                  const total = Number(previewData.columnTotals[column] || 0);
+                  const factor = columnFactors.get(column) || 1;
+                  const adjustedTotal = total * factor;
+                  
+                  return (
+                    <div key={column} className="space-y-1">
+                      <div className="text-xs text-muted-foreground">
+                        {column} {factor !== 1 && `(×${factor})`}
+                      </div>
+                      <div className="text-lg font-semibold">{adjustedTotal.toFixed(2)}</div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
