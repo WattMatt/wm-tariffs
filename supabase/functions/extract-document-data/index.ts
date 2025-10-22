@@ -25,22 +25,6 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Check if file is PDF - use a cloud conversion service
-    let imageUrl = fileUrl;
-    if (fileUrl.toLowerCase().includes('.pdf')) {
-      console.log("PDF detected, using cloud conversion service...");
-      
-      try {
-        // Use a PDF to image conversion API (pdf.co or similar)
-        // For now, we'll use the PDF directly and rely on the AI to extract text
-        // This works with some AI models that support PDF input
-        
-        console.log("Processing PDF directly - AI will extract text from PDF");
-      } catch (conversionError) {
-        console.error('PDF processing note:', conversionError);
-      }
-    }
-
     // Define the extraction prompt based on document type
     const systemPrompt = documentType === 'municipal_account'
       ? `You are an expert at extracting data from South African municipal electricity accounts. Extract the following information:
@@ -66,7 +50,16 @@ Return the data in a structured format.`;
     
     const fileBuffer = await fileResponse.arrayBuffer();
     const base64File = btoa(String.fromCharCode(...new Uint8Array(fileBuffer)));
-    const mimeType = fileUrl.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg';
+    
+    // Detect MIME type from URL
+    let mimeType = 'image/jpeg';
+    if (fileUrl.toLowerCase().includes('.png')) {
+      mimeType = 'image/png';
+    } else if (fileUrl.toLowerCase().includes('.pdf')) {
+      mimeType = 'application/pdf';
+    } else if (fileUrl.toLowerCase().includes('.webp')) {
+      mimeType = 'image/webp';
+    }
     
     console.log(`File downloaded, size: ${fileBuffer.byteLength} bytes, type: ${mimeType}`);
 

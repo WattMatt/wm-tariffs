@@ -115,6 +115,44 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
     }
   };
 
+  const convertPdfToImage = async (pdfFile: File): Promise<Blob> => {
+    const pdfjsLib = await import('pdfjs-dist');
+    
+    // Set worker from CDN
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+    
+    // Load PDF
+    const arrayBuffer = await pdfFile.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    
+    // Get first page
+    const page = await pdf.getPage(1);
+    const viewport = page.getViewport({ scale: 2.0 }); // 2x scale for quality
+    
+    // Create canvas
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('Could not get canvas context');
+    
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    
+    // Render PDF page to canvas
+    await page.render({
+      canvasContext: context,
+      viewport: viewport,
+      canvas: canvas,
+    }).promise;
+    
+    // Convert canvas to blob
+    return new Promise((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (blob) resolve(blob);
+        else reject(new Error('Failed to convert canvas to blob'));
+      }, 'image/png');
+    });
+  };
+
   const handleUpload = async () => {
     if (!selectedFile) {
       toast.error("Please select a file");
@@ -123,15 +161,44 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
 
     setIsUploading(true);
     try {
-      // Upload file to storage
-      const fileName = `${siteId}/${Date.now()}-${selectedFile.name}`;
+      const timestamp = Date.now();
+      const isPdf = selectedFile.name.toLowerCase().endsWith('.pdf');
+      
+      // Upload original file to storage
+      const fileName = `${siteId}/${timestamp}-${selectedFile.name}`;
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from("site-documents")
         .upload(fileName, selectedFile);
 
       if (uploadError) throw uploadError;
 
-      // Create document record
+      let imagePath = uploadData.path;
+      
+      // If PDF, convert to image and upload
+      if (isPdf) {
+        toast.info("Converting PDF to image...");
+        try {
+          const imageBlob = await convertPdfToImage(selectedFile);
+          const imageName = `${siteId}/${timestamp}-${selectedFile.name.replace('.pdf', '.png')}`;
+          
+          const { data: imageUploadData, error: imageUploadError } = await supabase.storage
+            .from("site-documents")
+            .upload(imageName, imageBlob);
+
+          if (imageUploadError) {
+            console.error("Image upload error:", imageUploadError);
+            toast.warning("PDF uploaded but image conversion failed");
+          } else {
+            imagePath = imageUploadData.path;
+            toast.success("PDF converted to image successfully");
+          }
+        } catch (conversionError) {
+          console.error("PDF conversion error:", conversionError);
+          toast.warning("PDF uploaded but conversion failed - extraction may not work");
+        }
+      }
+
+      // Create document record with both paths
       const { data: user } = await supabase.auth.getUser();
       const { error: docError } = await supabase
         .from("site_documents")
@@ -139,6 +206,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
           site_id: siteId,
           file_name: selectedFile.name,
           file_path: uploadData.path,
+          converted_image_path: isPdf ? imagePath : null,
           file_size: selectedFile.size,
           document_type: documentType as any,
           uploaded_by: user.user?.id || null,
@@ -175,10 +243,13 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
 
       for (const doc of pendingDocs) {
         try {
+          // Use converted image path if available, otherwise use original file path
+          const filePathToUse = (doc as any).converted_image_path || doc.file_path;
+          
           // Get signed URL for AI processing
           const { data: urlData } = await supabase.storage
             .from("site-documents")
-            .createSignedUrl(doc.file_path, 3600);
+            .createSignedUrl(filePathToUse, 3600);
 
           if (urlData?.signedUrl) {
             const { error: extractError } = await supabase.functions.invoke("extract-document-data", {
