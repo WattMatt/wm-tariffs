@@ -637,47 +637,44 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                     ))}
                   </div>
                   
-                  <div className="space-y-2">
-                    <div className="flex gap-2">
-                      <Button
-                        variant="default"
-                        onClick={() => {
-                          if (selectedQuantities.size === 0) {
-                            toast.error("Please select at least one quantity to plot");
-                            return;
-                          }
-                          setShowGraph(true);
-                        }}
-                        className="flex-1 rounded-full bg-primary text-primary-foreground hover:bg-primary/90"
-                      >
-                        Graph
-                      </Button>
-                      
-                      <Button
-                        variant="secondary"
-                        onClick={handleResetView}
-                        className="flex-1 rounded-full bg-slate-900 text-white hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700"
-                      >
-                        Reset View
-                      </Button>
-                    </div>
+                  <div className="flex flex-wrap gap-2 items-start">
+                    <Button
+                      variant="default"
+                      onClick={() => {
+                        if (selectedQuantities.size === 0) {
+                          toast.error("Please select at least one quantity to plot");
+                          return;
+                        }
+                        setShowGraph(true);
+                      }}
+                      className="rounded-full"
+                    >
+                      Graph
+                    </Button>
+                    
+                    <Button
+                      variant="secondary"
+                      onClick={handleResetView}
+                      className="rounded-full bg-slate-900 text-white hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700"
+                    >
+                      Reset View
+                    </Button>
                     
                     {isManipulationApplied && (
                       <Button 
                         onClick={handleResetManipulation}
                         variant="outline"
-                        className="w-full rounded-full"
+                        className="rounded-full"
                       >
                         Reset to Original
                       </Button>
                     )}
-                  </div>
-                  
-                  {showGraph && selectedQuantities.size > 0 && (
-                    <Button
-                      variant="outline"
-                      className="w-full rounded-full"
-                      onClick={() => {
+                    
+                    {showGraph && selectedQuantities.size > 0 && (
+                      <Button
+                        variant="outline"
+                        className="rounded-full"
+                        onClick={() => {
                         const data = isManipulationApplied ? manipulatedData : loadProfileData;
                         
                         const cleanedData = data.map((point) => {
@@ -731,6 +728,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                       Download Graph Data
                     </Button>
                   )}
+                </div>
                 </div>
                 
                 {/* Y-Axis Controls */}
