@@ -4,7 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine } from "recharts";
 import { format, parseISO } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -750,8 +750,36 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                       data={isManipulationApplied ? manipulatedData : loadProfileData}
                       margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
                     >
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis 
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                      {/* Vertical lines at day boundaries */}
+                      {(() => {
+                        const data = isManipulationApplied ? manipulatedData : loadProfileData;
+                        const dayBoundaries: string[] = [];
+                        let lastDay: number | null = null;
+                        
+                        data.forEach((point) => {
+                          if (point.timestampStr) {
+                            const date = new Date(point.timestampStr);
+                            const currentDay = date.getDate();
+                            
+                            if (lastDay !== null && currentDay !== lastDay) {
+                              dayBoundaries.push(point.timestampStr);
+                            }
+                            lastDay = currentDay;
+                          }
+                        });
+                        
+                        return dayBoundaries.map((timestamp, idx) => (
+                          <ReferenceLine 
+                            key={`day-${idx}`}
+                            x={timestamp}
+                            stroke="#9ca3af"
+                            strokeWidth={1}
+                            strokeOpacity={0.5}
+                          />
+                        ));
+                      })()}
+                      <XAxis
                         dataKey="timestampStr"
                         height={100}
                         tick={(props: any) => {
