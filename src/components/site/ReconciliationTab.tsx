@@ -44,16 +44,22 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
 
     try {
       let newTotal = 0;
+      const selectedOps = Array.from(selectedColumns).map(column => ({
+        column,
+        operation: columnOperations.get(column) || "sum",
+        total: Number(previewData.columnTotals[column] || 0)
+      }));
 
       // Calculate based on operations
-      Array.from(selectedColumns).forEach((column) => {
-        const operation = columnOperations.get(column) || "add";
-        const columnTotal = Number(previewData.columnTotals[column] || 0);
-
-        if (operation === "add") {
-          newTotal += columnTotal;
-        } else if (operation === "subtract") {
-          newTotal -= columnTotal;
+      selectedOps.forEach(({ operation, total }) => {
+        if (operation === "sum") {
+          newTotal += total;
+        } else if (operation === "max") {
+          newTotal = Math.max(newTotal, total);
+        } else if (operation === "min") {
+          newTotal = newTotal === 0 ? total : Math.min(newTotal, total);
+        } else if (operation === "count") {
+          newTotal += 1;
         }
       });
 
@@ -669,11 +675,11 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
               </div>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-2">
               <Label className="text-sm font-semibold">Available Columns - Select to Include in Calculations</Label>
-              <div className="space-y-2">
+              <div className="space-y-1">
                 {previewData.availableColumns.map((column: string) => (
-                  <div key={column} className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/50">
+                  <div key={column} className="flex items-center gap-2 p-2 rounded border hover:bg-muted/50">
                     <Checkbox
                       id={`column-${column}`}
                       checked={selectedColumns.has(column)}
@@ -683,7 +689,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                           newSelected.add(column);
                           if (!columnOperations.has(column)) {
                             const newOps = new Map(columnOperations);
-                            newOps.set(column, "add");
+                            newOps.set(column, "sum");
                             setColumnOperations(newOps);
                           }
                         } else {
@@ -694,32 +700,34 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                     />
                     <Label
                       htmlFor={`column-${column}`}
-                      className="text-sm cursor-pointer flex-1"
+                      className="text-xs cursor-pointer flex-1"
                     >
                       {column}
                     </Label>
                     {selectedColumns.has(column) && (
                       <Select
-                        value={columnOperations.get(column) || "add"}
+                        value={columnOperations.get(column) || "sum"}
                         onValueChange={(value) => {
                           const newOps = new Map(columnOperations);
                           newOps.set(column, value);
                           setColumnOperations(newOps);
                         }}
                       >
-                        <SelectTrigger className="w-32">
+                        <SelectTrigger className="w-24 h-7 text-xs">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="add">Add (+)</SelectItem>
-                          <SelectItem value="subtract">Subtract (-)</SelectItem>
+                          <SelectItem value="sum">Sum</SelectItem>
+                          <SelectItem value="max">Max</SelectItem>
+                          <SelectItem value="min">Min</SelectItem>
+                          <SelectItem value="count">Count</SelectItem>
                         </SelectContent>
                       </Select>
                     )}
                   </div>
                 ))}
               </div>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between pt-1">
                 <div className="text-xs text-muted-foreground">
                   {selectedColumns.size} of {previewData.availableColumns.length} columns selected
                 </div>
