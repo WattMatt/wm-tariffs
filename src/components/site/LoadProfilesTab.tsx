@@ -614,7 +614,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
 
           {!isLoading && dataLoaded && loadProfileData.length > 0 && (
             <div className="space-y-6">
-              <div className="grid grid-cols-[200px_180px_1fr] gap-4 mb-4 items-start">
+              <div className="grid grid-cols-[200px_180px_50vw] gap-4 mb-4 items-start">
                 {/* Quantities to Plot */}
                 <div className="space-y-3">
                   <Label className="font-semibold">Quantities to Plot</Label>
