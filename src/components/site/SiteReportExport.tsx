@@ -19,14 +19,17 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
   const [periodStart, setPeriodStart] = useState("");
   const [periodEnd, setPeriodEnd] = useState("");
 
-  // Helper to combine date and time (no timezone conversion - treat as naive timestamp)
-  const getFullDateTime = (dateStr: string, time: string = "00:00"): Date => {
+  // Helper to combine date and time and format as naive timestamp string
+  const getFullDateTime = (dateStr: string, time: string = "00:00"): string => {
     const date = new Date(dateStr);
     const [hours, minutes] = time.split(':').map(Number);
     const year = date.getFullYear();
-    const month = date.getMonth();
-    const day = date.getDate();
-    return new Date(year, month, day, hours, minutes, 0, 0);
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hrs = String(hours).padStart(2, '0');
+    const mins = String(minutes).padStart(2, '0');
+    // Return formatted string without timezone: "YYYY-MM-DD HH:mm:ss"
+    return `${year}-${month}-${day} ${hrs}:${mins}:00`;
   };
 
   const generateReport = async () => {
@@ -83,8 +86,8 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
               .from("meter_readings")
               .select("kwh_value, reading_timestamp, metadata")
               .eq("meter_id", meter.id)
-              .gte("reading_timestamp", fullDateTimeFrom.toISOString())
-              .lte("reading_timestamp", fullDateTimeTo.toISOString())
+              .gte("reading_timestamp", fullDateTimeFrom)
+              .lte("reading_timestamp", fullDateTimeTo)
               .order("reading_timestamp", { ascending: true })
               .range(from, from + pageSize - 1);
 
