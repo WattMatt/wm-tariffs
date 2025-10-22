@@ -92,6 +92,11 @@ Deno.serve(async (req) => {
         case 'float':
           const floatVal = parseFloat(cleaned);
           return isNaN(floatVal) ? null : floatVal;
+        case 'boolean':
+          const lowerVal = cleaned.toLowerCase();
+          if (lowerVal === 'true' || lowerVal === '1' || lowerVal === 'yes') return true;
+          if (lowerVal === 'false' || lowerVal === '0' || lowerVal === 'no') return false;
+          return null;
         case 'datetime':
           const dateVal = new Date(cleaned);
           return isNaN(dateVal.getTime()) ? null : dateVal.toISOString();

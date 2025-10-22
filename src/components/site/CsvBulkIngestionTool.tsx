@@ -83,7 +83,7 @@ interface ColumnMapping {
     separator: string; 
     parts: Array<{ name: string; columnId: string }> 
   }>;
-  columnDataTypes?: Record<string, 'datetime' | 'float' | 'int' | 'string'>; // data type for each column
+  columnDataTypes?: Record<string, 'datetime' | 'float' | 'int' | 'string' | 'boolean'>; // data type for each column
 }
 
 interface FileItem {
@@ -1559,7 +1559,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                       <Label className="text-xs mb-1">Data Type</Label>
                                       <Select
                                         value={currentDataType}
-                                        onValueChange={(type: 'datetime' | 'float' | 'int' | 'string') => {
+                                        onValueChange={(type: 'datetime' | 'string' | 'int' | 'float' | 'boolean') => {
                                           const newMapping = {...columnMapping};
                                           newMapping.columnDataTypes = {
                                             ...newMapping.columnDataTypes,
@@ -1572,10 +1572,11 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                           <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent className="bg-background z-50">
-                                          <SelectItem value="string">String (Text)</SelectItem>
+                                          <SelectItem value="datetime">Datetime</SelectItem>
+                                          <SelectItem value="string">String</SelectItem>
                                           <SelectItem value="int">Integer</SelectItem>
-                                          <SelectItem value="float">Float (Decimal)</SelectItem>
-                                          <SelectItem value="datetime">DateTime</SelectItem>
+                                          <SelectItem value="float">Float</SelectItem>
+                                          <SelectItem value="boolean">Boolean</SelectItem>
                                         </SelectContent>
                                       </Select>
                                     </div>
