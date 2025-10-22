@@ -44,6 +44,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
   const [yAxisMin, setYAxisMin] = useState<string>("");
   const [yAxisMax, setYAxisMax] = useState<string>("");
   const [hiddenLines, setHiddenLines] = useState<Set<string>>(new Set());
+  const [useBrush, setUseBrush] = useState<boolean>(false);
   const [brushStartIndex, setBrushStartIndex] = useState<number>(0);
   const [brushEndIndex, setBrushEndIndex] = useState<number>(0);
   const [manipulationOperation, setManipulationOperation] = useState<string>("sum");
@@ -226,9 +227,10 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
     console.log("Load Profile - Chart data to display:", chartData);
     console.log("Deduplication: Original readings:", readings.length, "Unique readings:", uniqueReadings.length);
     setLoadProfileData(chartData);
-    // Set brush to show ALL data
+    // Reset brush - show all data
+    setUseBrush(false);
     setBrushStartIndex(0);
-    setBrushEndIndex(Math.max(0, chartData.length - 1));
+    setBrushEndIndex(0);
   };
 
   const handleQuantityToggle = (quantity: string, checked: boolean) => {
@@ -262,9 +264,9 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
   };
 
   const handleResetView = () => {
-    const currentData = isManipulationApplied ? manipulatedData : loadProfileData;
+    setUseBrush(false);
     setBrushStartIndex(0);
-    setBrushEndIndex(Math.max(0, currentData.length - 1));
+    setBrushEndIndex(0);
     setYAxisMin("");
     setYAxisMax("");
   };
@@ -279,6 +281,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
     const maxIndex = currentData.length - 1;
     const minIndex = Math.max(0, maxIndex - totalReadings + 1);
     
+    setUseBrush(true);
     setBrushStartIndex(minIndex);
     setBrushEndIndex(maxIndex);
   };
@@ -432,9 +435,10 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
 
       setManipulatedData(manipulated);
       setIsManipulationApplied(true);
-      // Set brush to show ALL manipulated data
+      // Reset brush - show all manipulated data
+      setUseBrush(false);
       setBrushStartIndex(0);
-      setBrushEndIndex(Math.max(0, manipulated.length - 1));
+      setBrushEndIndex(0);
       
       const subsetDurationDays = subsetDurationMs / (1000 * 60 * 60 * 24);
       const intervalDesc = subsetDurationDays < 1 
@@ -451,9 +455,10 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
   const handleResetManipulation = () => {
     setManipulatedData([]);
     setIsManipulationApplied(false);
-    // Reset brush to show ALL original data
+    // Reset brush - show all original data
+    setUseBrush(false);
     setBrushStartIndex(0);
-    setBrushEndIndex(Math.max(0, loadProfileData.length - 1));
+    setBrushEndIndex(0);
     toast.info("Reset to original load profile");
   };
 
@@ -835,18 +840,20 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                       onClick={(e: any) => e.dataKey && handleLegendClick(String(e.dataKey))}
                       wrapperStyle={{ cursor: "pointer" }}
                     />
-                    <Brush
-                      dataKey="time"
-                      height={30}
-                      stroke="hsl(var(--primary))"
-                      fill="hsl(var(--muted))"
-                      startIndex={brushStartIndex}
-                      endIndex={brushEndIndex}
-                      onChange={(e: any) => {
-                        setBrushStartIndex(e.startIndex);
-                        setBrushEndIndex(e.endIndex);
-                      }}
-                    />
+                    {useBrush && (
+                      <Brush
+                        dataKey="time"
+                        height={30}
+                        stroke="hsl(var(--primary))"
+                        fill="hsl(var(--muted))"
+                        startIndex={brushStartIndex}
+                        endIndex={brushEndIndex}
+                        onChange={(e: any) => {
+                          setBrushStartIndex(e.startIndex);
+                          setBrushEndIndex(e.endIndex);
+                        }}
+                      />
+                    )}
                     {Array.from(selectedQuantities).map((quantity, index) => {
                       const colors = [
                         "#3b82f6", // blue
