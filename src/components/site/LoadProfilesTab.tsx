@@ -201,13 +201,11 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                       className="p-3"
                     />
                     <div className="border-t px-3 py-3">
-                      <Label htmlFor="time-from" className="text-sm">Time</Label>
                       <Input
                         id="time-from"
                         type="time"
                         value={timeFrom}
                         onChange={(e) => setTimeFrom(e.target.value)}
-                        className="mt-2"
                       />
                     </div>
                   </div>
@@ -244,13 +242,11 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                       className="p-3"
                     />
                     <div className="border-t px-3 py-3">
-                      <Label htmlFor="time-to" className="text-sm">Time</Label>
                       <Input
                         id="time-to"
                         type="time"
                         value={timeTo}
                         onChange={(e) => setTimeTo(e.target.value)}
-                        className="mt-2"
                       />
                     </div>
                   </div>
