@@ -615,7 +615,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
 
           {!isLoading && dataLoaded && loadProfileData.length > 0 && (
             <div className="space-y-6">
-              <div className="grid grid-cols-[200px_180px_1fr] gap-4 mb-4 items-start max-w-full">
+              <div className="grid grid-cols-[200px_180px_1fr] gap-2 mb-4 items-start max-w-full">
                 {/* Quantities to Plot */}
                 <div className="space-y-3">
                   <Label className="font-semibold">Quantities to Plot</Label>
@@ -649,10 +649,69 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                   >
                     Graph
                   </Button>
+                  
+                  {showGraph && selectedQuantities.size > 0 && (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        const data = isManipulationApplied ? manipulatedData : loadProfileData;
+                        
+                        const cleanedData = data.map((point) => {
+                          const measurements: Record<string, any> = {};
+                          
+                          Object.entries(point).forEach(([key, value]) => {
+                            if (key !== 'timestampStr' && key !== 'timestamp') {
+                              measurements[key] = value;
+                            }
+                          });
+                          
+                          const formattedTimestamp = point.timestampStr 
+                            ? format(new Date(point.timestampStr), 'yyyy-MM-dd HH:mm:ss')
+                            : '';
+                          
+                          return {
+                            timestamp: formattedTimestamp,
+                            ...measurements
+                          };
+                        });
+
+                        const headers = Object.keys(cleanedData[0]).join(",");
+                        const rows = cleanedData.map(row => 
+                          Object.values(row).map(val => 
+                            typeof val === 'string' && val.includes(',') ? `"${val}"` : val
+                          ).join(",")
+                        ).join("\n");
+                        
+                        const csv = `${headers}\n${rows}`;
+                        const blob = new Blob([csv], { type: 'text/csv' });
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        
+                        const selectedMeter = meters.find(m => m.id === selectedMeterId);
+                        const dateRange = dateFrom && dateTo 
+                          ? `${format(dateFrom, 'yyyy-MM-dd')}_to_${format(dateTo, 'yyyy-MM-dd')}`
+                          : 'data';
+                        const dataType = isManipulationApplied ? 'manipulated' : 'load_profile';
+                        a.download = `${dataType}_${selectedMeter?.meter_number || 'meter'}_${dateRange}.csv`;
+                        
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        window.URL.revokeObjectURL(url);
+                        
+                        toast.success("Data downloaded successfully");
+                      }}
+                      className="w-full mt-2"
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Download Graph Data
+                    </Button>
+                  )}
                 </div>
                 
                 {/* Y-Axis and X-Axis Controls - Stacked Vertically */}
-                <div className="space-y-4">
+                <div className="space-y-2">
                   <div className="space-y-2">
                     <Label htmlFor="y-min" className="font-semibold">Y-Axis Min</Label>
                     <Input
@@ -688,9 +747,9 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                 </div>
 
                 {/* Data Manipulation */}
-                <div className="space-y-3 border-l pl-4">
+                <div className="space-y-2 border-l pl-4">
                   <Label className="font-semibold">Data Manipulation</Label>
-                  <div className="space-y-3">
+                  <div className="space-y-2">
                     <div className="space-y-2">
                       <Label htmlFor="manipulation-op" className="text-sm">Operation</Label>
                       <Select value={manipulationOperation} onValueChange={setManipulationOperation}>
@@ -931,60 +990,6 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                       })}
                     </LineChart>
                   </ResponsiveContainer>
-                  
-                  <div className="flex gap-3 justify-end">
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        const currentData = isManipulationApplied ? manipulatedData : loadProfileData;
-                        if (currentData.length === 0) {
-                          toast.error("No data to download");
-                          return;
-                        }
-
-                        const cleanedData = currentData.map(row => {
-                          const { timestamp, timestampStr, ...measurements } = row;
-                          const formattedTimestamp = timestampStr 
-                            ? timestampStr.split('+')[0].split('T').join(' ').substring(0, 19)
-                            : new Date(timestamp).toISOString().split('+')[0].split('T').join(' ').substring(0, 19);
-                          return {
-                            timestamp: formattedTimestamp,
-                            ...measurements
-                          };
-                        });
-
-                        const headers = Object.keys(cleanedData[0]).join(",");
-                        const rows = cleanedData.map(row => 
-                          Object.values(row).map(val => 
-                            typeof val === 'string' && val.includes(',') ? `"${val}"` : val
-                          ).join(",")
-                        ).join("\n");
-                        
-                        const csv = `${headers}\n${rows}`;
-                        const blob = new Blob([csv], { type: 'text/csv' });
-                        const url = window.URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        
-                        const selectedMeter = meters.find(m => m.id === selectedMeterId);
-                        const dateRange = dateFrom && dateTo 
-                          ? `${format(dateFrom, 'yyyy-MM-dd')}_to_${format(dateTo, 'yyyy-MM-dd')}`
-                          : 'data';
-                        const dataType = isManipulationApplied ? 'manipulated' : 'load_profile';
-                        a.download = `${dataType}_${selectedMeter?.meter_number || 'meter'}_${dateRange}.csv`;
-                        
-                        document.body.appendChild(a);
-                        a.click();
-                        document.body.removeChild(a);
-                        window.URL.revokeObjectURL(url);
-                        
-                        toast.success("Data downloaded successfully");
-                      }}
-                    >
-                      <Download className="h-4 w-4 mr-2" />
-                      Download Graph Data
-                    </Button>
-                  </div>
                 </div>
               )}
 
