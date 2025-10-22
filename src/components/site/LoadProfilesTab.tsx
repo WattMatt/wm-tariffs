@@ -779,129 +779,80 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                           />
                         ));
                       })()}
-                      <XAxis 
+                       <XAxis 
                         dataKey="timestampStr"
                         height={100}
-                        ticks={(() => {
-                          const data = isManipulationApplied ? manipulatedData : loadProfileData;
-                          const dayBoundaries: string[] = [];
-                          let lastDay: number | null = null;
-                          
-                          // Find the start of each day
-                          data.forEach((point) => {
-                            if (point.timestampStr) {
-                              const date = new Date(point.timestampStr);
-                              const currentDay = date.getDate();
-                              
-                              if (lastDay === null || currentDay !== lastDay) {
-                                dayBoundaries.push(point.timestampStr);
-                              }
-                              lastDay = currentDay;
-                            }
-                          });
-                          
-                          // Create center points between day boundaries
-                          const centerTicks: string[] = [];
-                          for (let i = 0; i < dayBoundaries.length; i++) {
-                            const startTime = new Date(dayBoundaries[i]).getTime();
-                            let endTime: number;
-                            
-                            if (i < dayBoundaries.length - 1) {
-                              // Middle between this boundary and next
-                              endTime = new Date(dayBoundaries[i + 1]).getTime();
-                            } else {
-                              // Last day - use last data point
-                              endTime = new Date(data[data.length - 1].timestampStr).getTime();
-                            }
-                            
-                            const centerTime = (startTime + endTime) / 2;
-                            centerTicks.push(new Date(centerTime).toISOString());
-                          }
-                          
-                          return centerTicks;
-                        })()}
+                        interval="preserveStartEnd"
+                        tickLine={false}
                         tick={(props: any) => {
-                          const { x, y, payload, index } = props;
-                          if (!payload.value) return null;
+                          const { x, y, payload, index, visibleTicksCount } = props;
+                          if (!payload || !payload.value) return null;
                           
                           try {
                             const data = isManipulationApplied ? manipulatedData : loadProfileData;
                             
-                            // Get the day number from the center point timestamp
-                            const currentDate = new Date(payload.value);
-                            const currentDay = currentDate.getDate();
-                            const currentMonth = currentDate.getMonth();
-                            const currentYear = currentDate.getFullYear();
-                            
-                            // Find all unique months and their center positions
-                            const monthCenters = new Map<string, number>();
-                            const yearCenters = new Map<number, number>();
-                            
-                            data.forEach((point, idx) => {
-                              if (point.timestampStr) {
-                                const d = new Date(point.timestampStr);
-                                const monthKey = `${d.getFullYear()}-${d.getMonth()}`;
-                                const yearKey = d.getFullYear();
-                                
-                                if (!monthCenters.has(monthKey)) {
-                                  monthCenters.set(monthKey, idx);
-                                }
-                                if (!yearCenters.has(yearKey)) {
-                                  yearCenters.set(yearKey, idx);
-                                }
-                              }
-                            });
-                            
-                            // Calculate if this tick should show month/year labels
-                            // by finding the tick closest to the center of the month/year
-                            const monthKey = `${currentYear}-${currentMonth}`;
-                            const monthData = data.filter(d => {
-                              const date = new Date(d.timestampStr);
-                              return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
-                            });
-                            
-                            const yearData = data.filter(d => {
-                              const date = new Date(d.timestampStr);
-                              return date.getFullYear() === currentYear;
-                            });
-                            
-                            // Determine if this is the middle tick of the month
-                            const dayBoundaries: string[] = [];
+                            // Find all day boundaries
+                            const dayBoundaries: { timestamp: string, day: number, month: number, year: number }[] = [];
                             let lastDay: number | null = null;
+                            
                             data.forEach((point) => {
                               if (point.timestampStr) {
                                 const date = new Date(point.timestampStr);
-                                const day = date.getDate();
-                                if (lastDay === null || day !== lastDay) {
-                                  dayBoundaries.push(point.timestampStr);
+                                const currentDay = date.getDate();
+                                
+                                if (lastDay === null || currentDay !== lastDay) {
+                                  dayBoundaries.push({
+                                    timestamp: point.timestampStr,
+                                    day: currentDay,
+                                    month: date.getMonth(),
+                                    year: date.getFullYear()
+                                  });
                                 }
-                                lastDay = day;
+                                lastDay = currentDay;
                               }
                             });
                             
-                            const monthBoundaries = dayBoundaries.filter(ts => {
-                              const d = new Date(ts);
-                              return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
-                            });
+                            // Find which day segment this data point belongs to
+                            const currentTimestamp = new Date(payload.value).getTime();
+                            let dayIndex = -1;
                             
-                            const yearBoundaries = dayBoundaries.filter(ts => {
-                              const d = new Date(ts);
-                              return d.getFullYear() === currentYear;
-                            });
+                            for (let i = 0; i < dayBoundaries.length; i++) {
+                              const startTime = new Date(dayBoundaries[i].timestamp).getTime();
+                              const endTime = i < dayBoundaries.length - 1 
+                                ? new Date(dayBoundaries[i + 1].timestamp).getTime()
+                                : new Date(data[data.length - 1].timestampStr).getTime();
+                              
+                              const centerTime = (startTime + endTime) / 2;
+                              
+                              // Check if this data point is the closest to the center
+                              if (Math.abs(currentTimestamp - centerTime) < (endTime - startTime) / 4) {
+                                dayIndex = i;
+                                break;
+                              }
+                            }
                             
-                            const showMonth = index === Math.floor(monthBoundaries.length / 2) && 
-                                            monthBoundaries.length > 0 &&
-                                            dayBoundaries.indexOf(dayBoundaries.find(ts => {
-                                              const d = new Date(ts);
-                                              return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
-                                            }) || '') <= index;
+                            // Only show label if this is near the center of a day
+                            if (dayIndex === -1) return null;
                             
-                            const showYear = index === Math.floor(yearBoundaries.length / 2) &&
-                                           yearBoundaries.length > 0;
+                            const dayInfo = dayBoundaries[dayIndex];
+                            
+                            // Determine if we should show month/year (center of those ranges)
+                            const monthDays = dayBoundaries.filter(d => 
+                              d.month === dayInfo.month && d.year === dayInfo.year
+                            );
+                            const yearDays = dayBoundaries.filter(d => 
+                              d.year === dayInfo.year
+                            );
+                            
+                            const monthCenterIdx = Math.floor(monthDays.length / 2);
+                            const yearCenterIdx = Math.floor(yearDays.length / 2);
+                            
+                            const showMonth = monthDays[monthCenterIdx]?.day === dayInfo.day;
+                            const showYear = yearDays[yearCenterIdx]?.day === dayInfo.day;
                             
                             return (
                               <g transform={`translate(${x},${y})`}>
-                                {/* Day number - always show */}
+                                {/* Day number */}
                                 <text 
                                   x={0} 
                                   y={0} 
@@ -910,10 +861,10 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                                   fill="currentColor"
                                   fontSize={12}
                                 >
-                                  {currentDay}
+                                  {dayInfo.day}
                                 </text>
                                 
-                                {/* Month name - show at center of month */}
+                                {/* Month name */}
                                 {showMonth && (
                                   <text 
                                     x={0} 
@@ -924,11 +875,11 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                                     fontSize={13}
                                     fontWeight="500"
                                   >
-                                    {format(currentDate, 'MMM')}
+                                    {format(new Date(dayInfo.timestamp), 'MMM')}
                                   </text>
                                 )}
                                 
-                                {/* Year - show at center of year */}
+                                {/* Year */}
                                 {showYear && (
                                   <text 
                                     x={0} 
@@ -939,7 +890,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                                     fontSize={13}
                                     fontWeight="500"
                                   >
-                                    {currentYear}
+                                    {dayInfo.year}
                                   </text>
                                 )}
                               </g>
