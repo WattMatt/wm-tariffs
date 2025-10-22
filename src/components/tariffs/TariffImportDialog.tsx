@@ -464,28 +464,54 @@ export default function PdfImportDialog() {
           .eq('name', structure.name)
           .maybeSingle();
 
-        if (existingTariff) continue;
+        let tariffStructureId: string;
 
-        const { data: newTariff, error: tariffError } = await supabase
-          .from('tariff_structures')
-          .insert({
-            supply_authority_id: supplyAuthorityId,
-            name: structure.name,
-            tariff_type: structure.tariffType,
-            voltage_level: structure.voltageLevel || null,
-            uses_tou: structure.usesTou,
-            effective_from: new Date().toISOString().split('T')[0],
-            active: true
-          })
-          .select('id')
-          .single();
+        if (existingTariff) {
+          // Delete existing blocks, charges, and periods for this tariff
+          await Promise.all([
+            supabase.from('tariff_blocks').delete().eq('tariff_structure_id', existingTariff.id),
+            supabase.from('tariff_charges').delete().eq('tariff_structure_id', existingTariff.id),
+            supabase.from('tariff_time_periods').delete().eq('tariff_structure_id', existingTariff.id)
+          ]);
 
-        if (tariffError) throw tariffError;
+          // Update the tariff structure
+          const { error: updateError } = await supabase
+            .from('tariff_structures')
+            .update({
+              tariff_type: structure.tariffType,
+              voltage_level: structure.voltageLevel || null,
+              uses_tou: structure.usesTou,
+              effective_from: new Date().toISOString().split('T')[0],
+              active: true
+            })
+            .eq('id', existingTariff.id);
+
+          if (updateError) throw updateError;
+          tariffStructureId = existingTariff.id;
+        } else {
+          // Create new tariff structure
+          const { data: newTariff, error: tariffError } = await supabase
+            .from('tariff_structures')
+            .insert({
+              supply_authority_id: supplyAuthorityId,
+              name: structure.name,
+              tariff_type: structure.tariffType,
+              voltage_level: structure.voltageLevel || null,
+              uses_tou: structure.usesTou,
+              effective_from: new Date().toISOString().split('T')[0],
+              active: true
+            })
+            .select('id')
+            .single();
+
+          if (tariffError) throw tariffError;
+          tariffStructureId = newTariff.id;
+        }
 
         // Save blocks
         if (structure.blocks && structure.blocks.length > 0) {
           const blocksToInsert = structure.blocks.map((block: any) => ({
-            tariff_structure_id: newTariff.id,
+            tariff_structure_id: tariffStructureId,
             block_number: block.blockNumber,
             kwh_from: block.kwhFrom,
             kwh_to: block.kwhTo,
@@ -501,7 +527,7 @@ export default function PdfImportDialog() {
         // Save charges
         if (structure.charges && structure.charges.length > 0) {
           const chargesToInsert = structure.charges.map((charge: any) => ({
-            tariff_structure_id: newTariff.id,
+            tariff_structure_id: tariffStructureId,
             charge_type: charge.chargeType,
             description: charge.description || '',
             charge_amount: charge.chargeAmount,
@@ -517,7 +543,7 @@ export default function PdfImportDialog() {
         // Save TOU periods
         if (structure.touPeriods && structure.touPeriods.length > 0) {
           const periodsToInsert = structure.touPeriods.map((period: any) => ({
-            tariff_structure_id: newTariff.id,
+            tariff_structure_id: tariffStructureId,
             period_type: period.periodType,
             season: period.season,
             day_type: period.dayType,
