@@ -133,7 +133,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
 
       // Create document record
       const { data: user } = await supabase.auth.getUser();
-      const { data: document, error: docError } = await supabase
+      const { error: docError } = await supabase
         .from("site_documents")
         .insert({
           site_id: siteId,
@@ -143,38 +143,11 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
           document_type: documentType as any,
           uploaded_by: user.user?.id || null,
           extraction_status: 'pending'
-        })
-        .select()
-        .single();
+        });
 
       if (docError) throw docError;
 
       toast.success("Document uploaded successfully");
-
-      // Get signed URL for AI processing
-      const { data: urlData } = await supabase.storage
-        .from("site-documents")
-        .createSignedUrl(uploadData.path, 3600);
-
-      if (urlData?.signedUrl) {
-        // Trigger AI extraction
-        toast.info("Starting AI extraction...");
-        const { error: extractError } = await supabase.functions.invoke("extract-document-data", {
-          body: {
-            documentId: document.id,
-            fileUrl: urlData.signedUrl,
-            documentType: documentType
-          }
-        });
-
-        if (extractError) {
-          console.error("Extraction error:", extractError);
-          toast.warning("Document uploaded but extraction failed");
-        } else {
-          toast.success("Data extracted successfully!");
-        }
-      }
-
       setSelectedFile(null);
       fetchDocuments();
     } catch (error) {
@@ -182,6 +155,66 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
       toast.error("Failed to upload document");
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const handleExtract = async () => {
+    const pendingDocs = documents.filter(doc => doc.extraction_status === 'pending');
+    
+    if (pendingDocs.length === 0) {
+      toast.info("No pending documents to extract");
+      return;
+    }
+
+    setIsLoading(true);
+    let successCount = 0;
+    let failCount = 0;
+
+    try {
+      toast.info(`Starting extraction for ${pendingDocs.length} document(s)...`);
+
+      for (const doc of pendingDocs) {
+        try {
+          // Get signed URL for AI processing
+          const { data: urlData } = await supabase.storage
+            .from("site-documents")
+            .createSignedUrl(doc.file_path, 3600);
+
+          if (urlData?.signedUrl) {
+            const { error: extractError } = await supabase.functions.invoke("extract-document-data", {
+              body: {
+                documentId: doc.id,
+                fileUrl: urlData.signedUrl,
+                documentType: doc.document_type
+              }
+            });
+
+            if (extractError) {
+              console.error(`Extraction error for ${doc.file_name}:`, extractError);
+              failCount++;
+            } else {
+              successCount++;
+            }
+          }
+        } catch (error) {
+          console.error(`Error processing ${doc.file_name}:`, error);
+          failCount++;
+        }
+      }
+
+      if (successCount > 0) {
+        toast.success(`Successfully extracted ${successCount} document(s)`);
+      }
+      if (failCount > 0) {
+        toast.error(`Failed to extract ${failCount} document(s)`);
+      }
+
+      fetchDocuments();
+    } catch (error) {
+      console.error("Extraction error:", error);
+      toast.error("Failed to extract documents");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -286,11 +319,31 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                 ) : (
                   <>
                     <Upload className="w-4 h-4 mr-2" />
-                    Upload & Extract
+                    Upload
                   </>
                 )}
               </Button>
             </div>
+          </div>
+
+          <div className="flex justify-end">
+            <Button
+              onClick={handleExtract}
+              disabled={isLoading || documents.filter(doc => doc.extraction_status === 'pending').length === 0}
+              variant="secondary"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Extracting...
+                </>
+              ) : (
+                <>
+                  <FileText className="w-4 h-4 mr-2" />
+                  Extract Pending ({documents.filter(doc => doc.extraction_status === 'pending').length})
+                </>
+              )}
+            </Button>
           </div>
 
           {isLoading ? (
