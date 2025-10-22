@@ -40,8 +40,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
   const [loadProfileData, setLoadProfileData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [normalizedData, setNormalizedData] = useState<any[]>([]);
-  const [showKva, setShowKva] = useState(true);
-  const [showKwh, setShowKwh] = useState(false);
+  const [selectedQuantities, setSelectedQuantities] = useState<Set<string>>(new Set(["kva"]));
   const [yAxisMin, setYAxisMin] = useState<string>("");
   const [yAxisMax, setYAxisMax] = useState<string>("");
   const [hiddenLines, setHiddenLines] = useState<Set<string>>(new Set());
@@ -146,6 +145,18 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
       }));
       setNormalizedData(normalized);
     }
+  };
+
+  const handleQuantityToggle = (quantity: string, checked: boolean) => {
+    setSelectedQuantities(prev => {
+      const newSet = new Set(prev);
+      if (checked) {
+        newSet.add(quantity);
+      } else {
+        newSet.delete(quantity);
+      }
+      return newSet;
+    });
   };
 
   const handleLegendClick = (dataKey: string) => {
@@ -295,28 +306,67 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                   <div className="flex flex-col gap-2">
                     <div className="flex items-center space-x-2">
                       <Checkbox
-                        id="show-kva"
-                        checked={showKva}
-                        onCheckedChange={(checked) => setShowKva(checked === true)}
+                        id="show-sum"
+                        checked={selectedQuantities.has("sum")}
+                        onCheckedChange={(checked) => handleQuantityToggle("sum", checked === true)}
                       />
                       <label
-                        htmlFor="show-kva"
+                        htmlFor="show-sum"
                         className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                       >
-                        kVA
+                        Sum
                       </label>
                     </div>
                     <div className="flex items-center space-x-2">
                       <Checkbox
-                        id="show-kwh"
-                        checked={showKwh}
-                        onCheckedChange={(checked) => setShowKwh(checked === true)}
+                        id="show-min"
+                        checked={selectedQuantities.has("min")}
+                        onCheckedChange={(checked) => handleQuantityToggle("min", checked === true)}
                       />
                       <label
-                        htmlFor="show-kwh"
+                        htmlFor="show-min"
                         className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                       >
-                        kWh
+                        Min
+                      </label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="show-max"
+                        checked={selectedQuantities.has("max")}
+                        onCheckedChange={(checked) => handleQuantityToggle("max", checked === true)}
+                      />
+                      <label
+                        htmlFor="show-max"
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                      >
+                        Max
+                      </label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="show-avg"
+                        checked={selectedQuantities.has("avg")}
+                        onCheckedChange={(checked) => handleQuantityToggle("avg", checked === true)}
+                      />
+                      <label
+                        htmlFor="show-avg"
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                      >
+                        Avg
+                      </label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="show-cnt"
+                        checked={selectedQuantities.has("cnt")}
+                        onCheckedChange={(checked) => handleQuantityToggle("cnt", checked === true)}
+                      />
+                      <label
+                        htmlFor="show-cnt"
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                      >
+                        Cnt
                       </label>
                     </div>
                   </div>
@@ -386,26 +436,59 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                       onClick={(e: any) => e.dataKey && handleLegendClick(String(e.dataKey))}
                       wrapperStyle={{ cursor: "pointer" }}
                     />
-                    {showKva && (
+                    {selectedQuantities.has("sum") && (
                       <Line
                         type="monotone"
                         dataKey="kva"
                         stroke="hsl(var(--primary))"
                         strokeWidth={2}
                         dot={false}
-                        name="kVA"
-                        hide={hiddenLines.has("kva")}
+                        name="Sum"
+                        hide={hiddenLines.has("sum")}
                       />
                     )}
-                    {showKwh && (
+                    {selectedQuantities.has("min") && (
                       <Line
                         type="monotone"
-                        dataKey="kwh"
+                        dataKey="kva"
                         stroke="hsl(220, 90%, 56%)"
                         strokeWidth={2}
                         dot={false}
-                        name="kWh"
-                        hide={hiddenLines.has("kwh")}
+                        name="Min"
+                        hide={hiddenLines.has("min")}
+                      />
+                    )}
+                    {selectedQuantities.has("max") && (
+                      <Line
+                        type="monotone"
+                        dataKey="kva"
+                        stroke="hsl(160, 90%, 56%)"
+                        strokeWidth={2}
+                        dot={false}
+                        name="Max"
+                        hide={hiddenLines.has("max")}
+                      />
+                    )}
+                    {selectedQuantities.has("avg") && (
+                      <Line
+                        type="monotone"
+                        dataKey="kva"
+                        stroke="hsl(30, 90%, 56%)"
+                        strokeWidth={2}
+                        dot={false}
+                        name="Avg"
+                        hide={hiddenLines.has("avg")}
+                      />
+                    )}
+                    {selectedQuantities.has("cnt") && (
+                      <Line
+                        type="monotone"
+                        dataKey="kwh"
+                        stroke="hsl(280, 90%, 56%)"
+                        strokeWidth={2}
+                        dot={false}
+                        name="Cnt"
+                        hide={hiddenLines.has("cnt")}
                       />
                     )}
                   </LineChart>
