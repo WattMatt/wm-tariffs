@@ -337,7 +337,8 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
             // Sum all interval consumption values
             totalKwh = uniqueReadings.reduce((sum, r) => sum + Number(r.kwh_value), 0);
             
-            // Sum all numeric columns from metadata, track max for kVA
+            // Process all numeric columns from metadata
+            const columnValues: Record<string, number[]> = {};
             uniqueReadings.forEach(reading => {
               const importedFields = (reading.metadata as any)?.imported_fields || {};
               Object.entries(importedFields).forEach(([key, value]) => {
@@ -349,15 +350,44 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                 
                 const numValue = Number(value);
                 if (!isNaN(numValue) && value !== null && value !== '') {
-                  // For kVA columns, track maximum value
-                  if (key.toLowerCase().includes('kva') || key.toLowerCase().includes('s (kva)')) {
-                    columnMaxValues[key] = Math.max(columnMaxValues[key] || 0, numValue);
-                  } else {
-                    // Sum all other columns (interval consumption)
-                    columnTotals[key] = (columnTotals[key] || 0) + numValue;
+                  if (!columnValues[key]) {
+                    columnValues[key] = [];
                   }
+                  columnValues[key].push(numValue);
                 }
               });
+            });
+            
+            // Apply operations and scaling to each column
+            Object.entries(columnValues).forEach(([key, values]) => {
+              const operation = columnOperations.get(key) || 'sum';
+              const factor = Number(columnFactors.get(key) || 1);
+              
+              let result = 0;
+              switch (operation) {
+                case 'sum':
+                  result = values.reduce((sum, val) => sum + val, 0);
+                  break;
+                case 'average':
+                  result = values.reduce((sum, val) => sum + val, 0) / values.length;
+                  break;
+                case 'max':
+                  result = Math.max(...values);
+                  break;
+                case 'min':
+                  result = Math.min(...values);
+                  break;
+              }
+              
+              // Apply scaling factor
+              result = result * factor;
+              
+              // For kVA columns, track as max values
+              if (key.toLowerCase().includes('kva') || key.toLowerCase().includes('s (kva)')) {
+                columnMaxValues[key] = result;
+              } else {
+                columnTotals[key] = result;
+              }
             });
             
             // Debug logging
