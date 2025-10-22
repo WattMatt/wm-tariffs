@@ -4,7 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine } from "recharts";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { format, parseISO } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -750,144 +750,21 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                       data={isManipulationApplied ? manipulatedData : loadProfileData}
                       margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
                     >
-                      <CartesianGrid 
-                        horizontal={true}
-                        vertical={false}
-                        stroke="#e8e8e8"
-                        strokeWidth={0.5}
-                      />
-                      {/* Add custom vertical lines for day boundaries */}
-                      {(() => {
-                        const data = isManipulationApplied ? manipulatedData : loadProfileData;
-                        const dayBoundaryLines: JSX.Element[] = [];
-                        
-                        data.forEach((point, index) => {
-                          if (index > 0) {
-                            const currentDate = new Date(point.timestampStr);
-                            const prevDate = new Date(data[index - 1].timestampStr);
-                            
-                            if (currentDate.getDate() !== prevDate.getDate() ||
-                                currentDate.getMonth() !== prevDate.getMonth() ||
-                                currentDate.getFullYear() !== prevDate.getFullYear()) {
-                              dayBoundaryLines.push(
-                                <ReferenceLine 
-                                  key={`day-${index}`}
-                                  x={point.timestampStr} 
-                                  stroke="#666" 
-                                  strokeWidth={1.5}
-                                  strokeOpacity={0.6}
-                                />
-                              );
-                            }
-                          }
-                        });
-                        
-                        return dayBoundaryLines;
-                      })()}
-                       <XAxis 
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis 
                         dataKey="timestampStr"
-                        tick={(props) => {
-                          const { x, y, payload } = props;
-                          if (!payload?.value) return null;
-                          
+                        tickFormatter={(value) => {
+                          if (!value) return '';
                           try {
-                            const date = new Date(payload.value);
-                            const data = isManipulationApplied ? manipulatedData : loadProfileData;
-                            const dataIndex = data.findIndex(d => d.timestampStr === payload.value);
-                            
-                            let showDay = false;
-                            let showMonth = false;
-                            let showYear = false;
-                            
-                            if (dataIndex === 0) {
-                              showDay = true;
-                              showMonth = true;
-                              showYear = true;
-                            } else if (dataIndex > 0) {
-                              const prevData = data[dataIndex - 1];
-                              if (prevData?.timestampStr) {
-                                const prevDate = new Date(prevData.timestampStr);
-                                
-                                // Check if day changed
-                                if (date.getDate() !== prevDate.getDate()) {
-                                  showDay = true;
-                                }
-                                
-                                // Check if month changed
-                                if (date.getMonth() !== prevDate.getMonth()) {
-                                  showMonth = true;
-                                }
-                                
-                                // Check if year changed
-                                if (date.getFullYear() !== prevDate.getFullYear()) {
-                                  showYear = true;
-                                }
-                              }
-                            }
-                            
-                            return (
-                              <g transform={`translate(${x},${y})`}>
-                                {/* Time label - always show */}
-                                <text 
-                                  x={0} 
-                                  y={5} 
-                                  textAnchor="middle" 
-                                  fill="#666" 
-                                  fontSize={10}
-                                >
-                                  {format(date, 'HH:mm')}
-                                </text>
-                                
-                                {/* Day number - show when day changes */}
-                                {showDay && (
-                                  <text 
-                                    x={0} 
-                                    y={20} 
-                                    textAnchor="middle" 
-                                    fill="#444" 
-                                    fontSize={11}
-                                    fontWeight="600"
-                                  >
-                                    {format(date, 'd')}
-                                  </text>
-                                )}
-                                
-                                {/* Month name - show when month changes */}
-                                {showMonth && (
-                                  <text 
-                                    x={0} 
-                                    y={35} 
-                                    textAnchor="middle" 
-                                    fill="#333" 
-                                    fontSize={12}
-                                    fontWeight="bold"
-                                  >
-                                    {format(date, 'MMM')}
-                                  </text>
-                                )}
-                                
-                                {/* Year - show when year changes */}
-                                {showYear && (
-                                  <text 
-                                    x={0} 
-                                    y={50} 
-                                    textAnchor="middle" 
-                                    fill="#222" 
-                                    fontSize={12}
-                                    fontWeight="bold"
-                                  >
-                                    {format(date, 'yyyy')}
-                                  </text>
-                                )}
-                              </g>
-                            );
+                            const date = new Date(value);
+                            return format(date, 'MMM dd HH:mm');
                           } catch {
-                            return null;
+                            return value;
                           }
                         }}
+                        angle={-45}
+                        textAnchor="end"
                         height={80}
-                        interval={0}
-                        minTickGap={40}
                       />
                       <YAxis domain={getYAxisDomain()} />
                       <Tooltip 
