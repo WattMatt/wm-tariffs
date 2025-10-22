@@ -601,12 +601,21 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label className="text-sm font-semibold">First Actual Reading Found</Label>
-                  <div className="p-3 rounded-lg bg-muted/50 space-y-1">
-                    <div className="text-sm font-mono">
-                      {previewData.firstReading.reading_timestamp.split('T')[0]} {previewData.firstReading.reading_timestamp.split('T')[1]?.substring(0, 8) || '00:00:00'}
+                  <div className="p-3 rounded-lg bg-muted/50 space-y-3">
+                    <div className="space-y-1">
+                      <div className="text-xs text-muted-foreground">From Date & Time (Requested)</div>
+                      <div className="text-sm font-mono">
+                        {dateFrom ? format(dateFrom, "yyyy-MM-dd") : '-'} {timeFrom}
+                      </div>
                     </div>
-                    <div className="text-xs text-muted-foreground">
-                      kWh: {previewData.firstReading.kwh_value}
+                    <div className="space-y-1">
+                      <div className="text-xs text-muted-foreground">First Actual Reading Found</div>
+                      <div className="text-sm font-mono">
+                        {previewData.firstReading.reading_timestamp.split('T')[0]} {previewData.firstReading.reading_timestamp.split('T')[1]?.substring(0, 8) || '00:00:00'}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        kWh: {previewData.firstReading.kwh_value}
+                      </div>
                     </div>
                   </div>
                 </div>
