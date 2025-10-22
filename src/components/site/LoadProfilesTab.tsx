@@ -99,28 +99,27 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
   };
 
   const processLoadProfile = (readings: ReadingData[], endDate: Date) => {
-    // Plot actual kVA values for each time slot without any averaging
+    // Plot exact kVA values from database without any calculations
     const chartData = readings.map((reading) => {
       const date = parseISO(reading.reading_timestamp);
       const timeLabel = format(date, "HH:mm");
-      const kva = reading.kva_value || 0;
 
       return {
         time: timeLabel,
         timestamp: reading.reading_timestamp,
-        kva: Number(kva.toFixed(2)),
+        kva: reading.kva_value ?? 0, // Use exact value from database
       };
     });
 
     setLoadProfileData(chartData);
 
-    // Calculate normalized data
+    // Calculate normalized data (only for normalized chart)
     if (chartData.length > 0) {
       const maxKva = Math.max(...chartData.map((d) => d.kva));
       const normalized = chartData.map((d) => ({
         time: d.time,
         timestamp: d.timestamp,
-        normalized: maxKva > 0 ? Number((d.kva / maxKva).toFixed(3)) : 0,
+        normalized: maxKva > 0 ? (d.kva / maxKva) : 0,
         kva: d.kva,
       }));
       setNormalizedData(normalized);
