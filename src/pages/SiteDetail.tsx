@@ -5,11 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Gauge, BarChart3, FileText, Building2, Coins, Pencil } from "lucide-react";
+import { ArrowLeft, Gauge, BarChart3, FileText, Building2, Coins, Pencil, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 import MetersTab from "@/components/site/MetersTab";
 import SchematicsTab from "@/components/site/SchematicsTab";
 import ReconciliationTab from "@/components/site/ReconciliationTab";
+import LoadProfilesTab from "@/components/site/LoadProfilesTab";
 import CostCalculationTab from "@/components/site/CostCalculationTab";
 import SiteReportExport from "@/components/site/SiteReportExport";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -206,7 +207,7 @@ export default function SiteDetail() {
         )}
 
         <Tabs defaultValue="meters" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4 lg:w-auto">
+          <TabsList className="grid w-full grid-cols-5 lg:w-auto">
             <TabsTrigger value="meters" className="gap-2">
               <Gauge className="w-4 h-4" />
               Meters
@@ -218,6 +219,10 @@ export default function SiteDetail() {
             <TabsTrigger value="reconciliation" className="gap-2">
               <BarChart3 className="w-4 h-4" />
               Reconciliation
+            </TabsTrigger>
+            <TabsTrigger value="load-profiles" className="gap-2">
+              <TrendingUp className="w-4 h-4" />
+              Load Profiles
             </TabsTrigger>
             <TabsTrigger value="costs" className="gap-2">
               <Coins className="w-4 h-4" />
@@ -235,6 +240,10 @@ export default function SiteDetail() {
 
           <TabsContent value="reconciliation">
             <ReconciliationTab siteId={id!} />
+          </TabsContent>
+
+          <TabsContent value="load-profiles">
+            <LoadProfilesTab siteId={id!} />
           </TabsContent>
 
           <TabsContent value="costs">
