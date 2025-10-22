@@ -637,44 +637,46 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                     ))}
                   </div>
                   
-                  <div className="flex gap-2">
-                    <Button
-                      variant="default"
-                      onClick={() => {
-                        if (selectedQuantities.size === 0) {
-                          toast.error("Please select at least one quantity to plot");
-                          return;
-                        }
-                        setShowGraph(true);
-                      }}
-                      className="flex-1"
-                    >
-                      Graph
-                    </Button>
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <Button
+                        variant="default"
+                        onClick={() => {
+                          if (selectedQuantities.size === 0) {
+                            toast.error("Please select at least one quantity to plot");
+                            return;
+                          }
+                          setShowGraph(true);
+                        }}
+                        className="flex-1 rounded-full"
+                      >
+                        Graph
+                      </Button>
+                      
+                      <Button
+                        variant="secondary"
+                        onClick={handleResetView}
+                        className="flex-1 rounded-full bg-slate-900 text-white hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700"
+                      >
+                        Reset View
+                      </Button>
+                    </div>
                     
-                    <Button
-                      variant="secondary"
-                      onClick={handleResetView}
-                      className="flex-1"
-                    >
-                      Reset View
-                    </Button>
+                    {isManipulationApplied && (
+                      <Button 
+                        onClick={handleResetManipulation}
+                        variant="outline"
+                        className="w-full rounded-full"
+                      >
+                        Reset to Original
+                      </Button>
+                    )}
                   </div>
-                  
-                  {isManipulationApplied && (
-                    <Button 
-                      onClick={handleResetManipulation}
-                      size="sm"
-                      variant="outline"
-                      className="w-full"
-                    >
-                      Reset to Original
-                    </Button>
-                  )}
                   
                   {showGraph && selectedQuantities.size > 0 && (
                     <Button
                       variant="outline"
+                      className="w-full rounded-full"
                       onClick={() => {
                         const data = isManipulationApplied ? manipulatedData : loadProfileData;
                         
@@ -724,7 +726,6 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                         
                         toast.success("Data downloaded successfully");
                       }}
-                      className="w-full"
                     >
                       <Download className="h-4 w-4 mr-2" />
                       Download Graph Data
