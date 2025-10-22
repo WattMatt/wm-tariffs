@@ -202,12 +202,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
     
     // Plot exact values from database including all metadata columns
     const chartData = uniqueReadings.map((reading) => {
-      // Extract time directly from ISO string to avoid timezone conversion
-      const timestamp = reading.reading_timestamp; // Format: "2025-10-01T00:00:00+00:00"
-      const timePart = timestamp.split('T')[1]?.substring(0, 5) || "00:00"; // Extract "00:00"
-      
       const dataPoint: any = {
-        time: timePart,
         timestamp: reading.reading_timestamp,
       };
       
@@ -293,11 +288,11 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
       return;
     }
 
-    // Clean up data for export - remove internal "time" field and format timestamp
+    // Format timestamp without timezone for export
     const cleanedData = currentData.map(row => {
-      const { time, timestamp, ...measurements } = row;
+      const { timestamp, ...measurements } = row;
       
-      // Format timestamp without timezone (just YYYY-MM-DD HH:mm:ss)
+      // Format timestamp as YYYY-MM-DD HH:mm:ss
       const formattedTimestamp = timestamp 
         ? timestamp.split('+')[0].split('T').join(' ').substring(0, 19)
         : '';
@@ -396,7 +391,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
       const manipulated: any[] = [];
       
       groups.forEach((dataPoints, timeKey) => {
-        const result: any = { time: timeKey };
+        const result: any = { timestamp: timeKey };
 
         // Process each selected quantity
         selectedQuantities.forEach((quantity) => {
@@ -828,10 +823,20 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                   <LineChart data={isManipulationApplied ? manipulatedData : loadProfileData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                     <XAxis
-                      dataKey="time"
+                      dataKey="timestamp"
                       stroke="hsl(var(--muted-foreground))"
                       tick={{ fill: "hsl(var(--foreground))", fontSize: 11 }}
                       interval="preserveStartEnd"
+                      tickFormatter={(value) => {
+                        // Format timestamp for display: "MM-DD HH:mm"
+                        if (!value) return '';
+                        const date = new Date(value);
+                        const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+                        const day = String(date.getUTCDate()).padStart(2, '0');
+                        const hours = String(date.getUTCHours()).padStart(2, '0');
+                        const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+                        return `${month}-${day} ${hours}:${minutes}`;
+                      }}
                     />
                     <YAxis
                       stroke="hsl(var(--muted-foreground))"
@@ -857,7 +862,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                     />
                     {useBrush && (
                       <Brush
-                        dataKey="time"
+                        dataKey="timestamp"
                         height={30}
                         stroke="hsl(var(--primary))"
                         fill="hsl(var(--muted))"
@@ -866,6 +871,14 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                         onChange={(e: any) => {
                           setBrushStartIndex(e.startIndex);
                           setBrushEndIndex(e.endIndex);
+                        }}
+                        tickFormatter={(value) => {
+                          // Format timestamp for brush display
+                          if (!value) return '';
+                          const date = new Date(value);
+                          const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+                          const day = String(date.getUTCDate()).padStart(2, '0');
+                          return `${month}-${day}`;
                         }}
                       />
                     )}
