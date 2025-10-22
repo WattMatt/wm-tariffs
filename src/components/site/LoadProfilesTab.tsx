@@ -300,73 +300,34 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
 
           {!isLoading && loadProfileData.length > 0 && (
             <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+              <div className="grid grid-cols-1 md:grid-cols-[200px_1fr_1fr] gap-6 mb-4">
                 <div className="space-y-3">
                   <Label>Quantities to Plot</Label>
-                  <div className="flex flex-col gap-2">
+                  <div className="flex flex-col gap-3">
                     <div className="flex items-center space-x-2">
                       <Checkbox
-                        id="show-sum"
-                        checked={selectedQuantities.has("sum")}
-                        onCheckedChange={(checked) => handleQuantityToggle("sum", checked === true)}
+                        id="show-kva"
+                        checked={selectedQuantities.has("kva")}
+                        onCheckedChange={(checked) => handleQuantityToggle("kva", checked === true)}
                       />
                       <label
-                        htmlFor="show-sum"
-                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                        htmlFor="show-kva"
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
                       >
-                        Sum
+                        kVA
                       </label>
                     </div>
                     <div className="flex items-center space-x-2">
                       <Checkbox
-                        id="show-min"
-                        checked={selectedQuantities.has("min")}
-                        onCheckedChange={(checked) => handleQuantityToggle("min", checked === true)}
+                        id="show-kwh"
+                        checked={selectedQuantities.has("kwh")}
+                        onCheckedChange={(checked) => handleQuantityToggle("kwh", checked === true)}
                       />
                       <label
-                        htmlFor="show-min"
-                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                        htmlFor="show-kwh"
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
                       >
-                        Min
-                      </label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id="show-max"
-                        checked={selectedQuantities.has("max")}
-                        onCheckedChange={(checked) => handleQuantityToggle("max", checked === true)}
-                      />
-                      <label
-                        htmlFor="show-max"
-                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                      >
-                        Max
-                      </label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id="show-avg"
-                        checked={selectedQuantities.has("avg")}
-                        onCheckedChange={(checked) => handleQuantityToggle("avg", checked === true)}
-                      />
-                      <label
-                        htmlFor="show-avg"
-                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                      >
-                        Avg
-                      </label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id="show-cnt"
-                        checked={selectedQuantities.has("cnt")}
-                        onCheckedChange={(checked) => handleQuantityToggle("cnt", checked === true)}
-                      />
-                      <label
-                        htmlFor="show-cnt"
-                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                      >
-                        Cnt
+                        kWh
                       </label>
                     </div>
                   </div>
@@ -376,7 +337,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                   <Label htmlFor="y-min">Y-Axis Min</Label>
                   <Input
                     id="y-min"
-                    type="number"
+                    type="text"
                     placeholder="Auto"
                     value={yAxisMin}
                     onChange={(e) => setYAxisMin(e.target.value)}
@@ -387,7 +348,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                   <Label htmlFor="y-max">Y-Axis Max</Label>
                   <Input
                     id="y-max"
-                    type="number"
+                    type="text"
                     placeholder="Auto"
                     value={yAxisMax}
                     onChange={(e) => setYAxisMax(e.target.value)}
@@ -445,6 +406,17 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                         dot={false}
                         name="kVA"
                         hide={hiddenLines.has("kva")}
+                      />
+                    )}
+                    {selectedQuantities.has("kwh") && (
+                      <Line
+                        type="monotone"
+                        dataKey="kwh"
+                        stroke="hsl(160, 90%, 56%)"
+                        strokeWidth={2}
+                        dot={false}
+                        name="kWh"
+                        hide={hiddenLines.has("kwh")}
                       />
                     )}
                   </LineChart>
