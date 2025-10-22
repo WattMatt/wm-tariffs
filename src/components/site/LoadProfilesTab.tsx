@@ -390,7 +390,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
 
           {!isLoading && loadProfileData.length > 0 && (
             <div className="space-y-6">
-              <div className="grid grid-cols-[200px_180px_180px_1fr] gap-4 mb-4 items-start">
+              <div className="grid grid-cols-[200px_180px_1fr] gap-4 mb-4 items-start">
                 {/* Quantities to Plot */}
                 <div className="space-y-3">
                   <Label className="font-semibold">Quantities to Plot</Label>
@@ -413,30 +413,31 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                   </div>
                 </div>
                 
-                {/* Y-Axis Min */}
-                <div className="space-y-2">
-                  <Label htmlFor="y-min" className="font-semibold block h-6">Y-Axis Min</Label>
-                  <Input
-                    id="y-min"
-                    type="text"
-                    placeholder="Auto"
-                    value={yAxisMin}
-                    onChange={(e) => setYAxisMin(e.target.value)}
-                    className="h-10"
-                  />
-                </div>
-                
-                {/* Y-Axis Max */}
-                <div className="space-y-2">
-                  <Label htmlFor="y-max" className="font-semibold block h-6">Y-Axis Max</Label>
-                  <Input
-                    id="y-max"
-                    type="text"
-                    placeholder="Auto"
-                    value={yAxisMax}
-                    onChange={(e) => setYAxisMax(e.target.value)}
-                    className="h-10"
-                  />
+                {/* Y-Axis Controls - Stacked Vertically */}
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="y-min" className="font-semibold">Y-Axis Min</Label>
+                    <Input
+                      id="y-min"
+                      type="text"
+                      placeholder="Auto"
+                      value={yAxisMin}
+                      onChange={(e) => setYAxisMin(e.target.value)}
+                      className="h-10"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="y-max" className="font-semibold">Y-Axis Max</Label>
+                    <Input
+                      id="y-max"
+                      type="text"
+                      placeholder="Auto"
+                      value={yAxisMax}
+                      onChange={(e) => setYAxisMax(e.target.value)}
+                      className="h-10"
+                    />
+                  </div>
                 </div>
 
                 {/* Data Manipulation */}
