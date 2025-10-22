@@ -537,6 +537,7 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
                                 <TableHead key={columnKey} className="min-w-40">
                                    <div className="flex flex-col gap-2">
                                     <div className="flex flex-col gap-1">
+                                      <Label className="text-xs font-medium">Column Name</Label>
                                       <Input
                                         value={displayName}
                                         onChange={(e) => setSplitColumnNames(prev => ({
@@ -550,11 +551,69 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
                                         {type}
                                       </Badge>
                                     </div>
+                                    <div className="flex flex-col gap-1">
+                                      <Label className="text-xs font-medium">Data Type</Label>
+                                      <Select
+                                        value={columnDataTypes[displayName] || "string"}
+                                        onValueChange={(val) => setColumnDataTypes(prev => ({
+                                          ...prev,
+                                          [displayName]: val
+                                        }))}
+                                      >
+                                        <SelectTrigger className="h-7 text-xs bg-background">
+                                          <SelectValue placeholder="Data Type" />
+                                        </SelectTrigger>
+                                        <SelectContent className="z-[100] bg-popover">
+                                          <SelectItem value="datetime">datetime</SelectItem>
+                                          <SelectItem value="float">float</SelectItem>
+                                          <SelectItem value="int">int</SelectItem>
+                                          <SelectItem value="string">string</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                    {partIdx === 0 && (
+                                      <div className="flex flex-col gap-1">
+                                        <Label className="text-xs font-medium">Split Column By</Label>
+                                        <Select 
+                                          value={splitType} 
+                                          onValueChange={(val) => setColumnSplits(prev => ({...prev, [idx]: val}))}
+                                        >
+                                          <SelectTrigger className="h-7 text-xs bg-background">
+                                            <SelectValue placeholder="Split by..." />
+                                          </SelectTrigger>
+                                          <SelectContent className="z-[100] bg-popover">
+                                            <SelectItem value="none">No split</SelectItem>
+                                            <SelectItem value="tab">Split by Tab</SelectItem>
+                                            <SelectItem value="comma">Split by Comma</SelectItem>
+                                            <SelectItem value="semicolon">Split by Semicolon</SelectItem>
+                                            <SelectItem value="space">Split by Space</SelectItem>
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
+                                    )}
+                                  </div>
+                                </TableHead>
+                              );
+                            });
+                          }
+                          
+                          return (
+                            <TableHead key={idx} className="min-w-40">
+                                <div className="flex flex-col gap-2">
+                                  <div className="flex flex-col gap-1">
+                                    <Label className="text-xs font-medium">Column Name</Label>
+                                    <span className="font-medium">{header}</span>
+                                    <Badge variant="outline" className={`text-[10px] ${color} w-fit`}>
+                                      {type}
+                                    </Badge>
+                                  </div>
+                                  <div className="flex flex-col gap-1">
+                                    <Label className="text-xs font-medium">Data Type</Label>
                                     <Select
-                                      value={columnDataTypes[displayName] || "string"}
+                                      value={columnDataTypes[header] || "string"}
                                       onValueChange={(val) => setColumnDataTypes(prev => ({
                                         ...prev,
-                                        [displayName]: val
+                                        [header]: val
                                       }))}
                                     >
                                       <SelectTrigger className="h-7 text-xs bg-background">
@@ -567,71 +626,26 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
                                         <SelectItem value="string">string</SelectItem>
                                       </SelectContent>
                                     </Select>
-                                    {partIdx === 0 && (
-                                      <Select 
-                                        value={splitType} 
-                                        onValueChange={(val) => setColumnSplits(prev => ({...prev, [idx]: val}))}
-                                      >
-                                        <SelectTrigger className="h-7 text-xs bg-background">
-                                          <SelectValue placeholder="Split by..." />
-                                        </SelectTrigger>
-                                        <SelectContent className="z-[100] bg-popover">
-                                          <SelectItem value="none">No split</SelectItem>
-                                          <SelectItem value="tab">Split by Tab</SelectItem>
-                                          <SelectItem value="comma">Split by Comma</SelectItem>
-                                          <SelectItem value="semicolon">Split by Semicolon</SelectItem>
-                                          <SelectItem value="space">Split by Space</SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                    )}
                                   </div>
-                                </TableHead>
-                              );
-                            });
-                          }
-                          
-                          return (
-                            <TableHead key={idx} className="min-w-40">
-                              <div className="flex flex-col gap-2">
-                                <div className="flex flex-col gap-1">
-                                  <span className="font-medium">{header}</span>
-                                  <Badge variant="outline" className={`text-[10px] ${color} w-fit`}>
-                                    {type}
-                                  </Badge>
+                                  <div className="flex flex-col gap-1">
+                                    <Label className="text-xs font-medium">Split Column By</Label>
+                                    <Select 
+                                      value={columnSplits[idx] || 'none'} 
+                                      onValueChange={(val) => setColumnSplits(prev => ({...prev, [idx]: val}))}
+                                    >
+                                      <SelectTrigger className="h-7 text-xs bg-background">
+                                        <SelectValue placeholder="Split by..." />
+                                      </SelectTrigger>
+                                      <SelectContent className="z-[100] bg-popover">
+                                        <SelectItem value="none">No split</SelectItem>
+                                        <SelectItem value="tab">Split by Tab</SelectItem>
+                                        <SelectItem value="comma">Split by Comma</SelectItem>
+                                        <SelectItem value="semicolon">Split by Semicolon</SelectItem>
+                                        <SelectItem value="space">Split by Space</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
                                 </div>
-                                <Select
-                                  value={columnDataTypes[header] || "string"}
-                                  onValueChange={(val) => setColumnDataTypes(prev => ({
-                                    ...prev,
-                                    [header]: val
-                                  }))}
-                                >
-                                  <SelectTrigger className="h-7 text-xs bg-background">
-                                    <SelectValue placeholder="Data Type" />
-                                  </SelectTrigger>
-                                  <SelectContent className="z-[100] bg-popover">
-                                    <SelectItem value="datetime">datetime</SelectItem>
-                                    <SelectItem value="float">float</SelectItem>
-                                    <SelectItem value="int">int</SelectItem>
-                                    <SelectItem value="string">string</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                                <Select 
-                                  value={columnSplits[idx] || 'none'} 
-                                  onValueChange={(val) => setColumnSplits(prev => ({...prev, [idx]: val}))}
-                                >
-                                  <SelectTrigger className="h-7 text-xs bg-background">
-                                    <SelectValue placeholder="Split by..." />
-                                  </SelectTrigger>
-                                  <SelectContent className="z-[100] bg-popover">
-                                    <SelectItem value="none">No split</SelectItem>
-                                    <SelectItem value="tab">Split by Tab</SelectItem>
-                                    <SelectItem value="comma">Split by Comma</SelectItem>
-                                    <SelectItem value="semicolon">Split by Semicolon</SelectItem>
-                                    <SelectItem value="space">Split by Space</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </div>
                             </TableHead>
                           );
                         })}
