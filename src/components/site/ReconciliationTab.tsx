@@ -30,7 +30,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
   const [previewData, setPreviewData] = useState<any>(null);
   const [selectedColumns, setSelectedColumns] = useState<Set<string>>(new Set());
   const [columnOperations, setColumnOperations] = useState<Map<string, string>>(new Map());
-  const [columnFactors, setColumnFactors] = useState<Map<string, number>>(new Map());
+  const [columnFactors, setColumnFactors] = useState<Map<string, string>>(new Map());
   const [recalculatedTotal, setRecalculatedTotal] = useState<number | null>(null);
   const [isRecalculating, setIsRecalculating] = useState(false);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
@@ -45,12 +45,28 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
 
     try {
       let newTotal = 0;
-      const selectedOps = Array.from(selectedColumns).map(column => ({
-        column,
-        operation: columnOperations.get(column) || "sum",
-        total: Number(previewData.columnTotals[column] || 0),
-        factor: columnFactors.get(column) || 1
-      }));
+      const selectedOps = Array.from(selectedColumns).map(column => {
+        const factorStr = columnFactors.get(column) || "1";
+        let factor = 1;
+        
+        try {
+          // Safely evaluate the expression
+          factor = Function('"use strict"; return (' + factorStr + ')')();
+          if (isNaN(factor) || !isFinite(factor)) {
+            factor = 1;
+          }
+        } catch (e) {
+          console.warn(`Invalid factor for ${column}: ${factorStr}, using 1`);
+          factor = 1;
+        }
+        
+        return {
+          column,
+          operation: columnOperations.get(column) || "sum",
+          total: Number(previewData.columnTotals[column] || 0),
+          factor
+        };
+      });
 
       // Calculate based on operations and factors
       selectedOps.forEach(({ operation, total, factor }) => {
@@ -698,7 +714,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                           }
                           if (!columnFactors.has(column)) {
                             const newFactors = new Map(columnFactors);
-                            newFactors.set(column, 1);
+                            newFactors.set(column, "1");
                             setColumnFactors(newFactors);
                           }
                         } else {
@@ -734,13 +750,12 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                           </SelectContent>
                         </Select>
                         <Input
-                          type="number"
-                          step="0.01"
+                          type="text"
                           placeholder="Factor"
                           value={columnFactors.get(column) || 1}
                           onChange={(e) => {
                             const newFactors = new Map(columnFactors);
-                            newFactors.set(column, parseFloat(e.target.value) || 1);
+                            newFactors.set(column, e.target.value || "1");
                             setColumnFactors(newFactors);
                           }}
                           className="w-20 h-7 text-xs"
@@ -778,13 +793,24 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                 </div>
                 {Array.from(selectedColumns).map((column) => {
                   const total = Number(previewData.columnTotals[column] || 0);
-                  const factor = columnFactors.get(column) || 1;
+                  const factorStr = columnFactors.get(column) || "1";
+                  let factor = 1;
+                  
+                  try {
+                    factor = Function('"use strict"; return (' + factorStr + ')')();
+                    if (isNaN(factor) || !isFinite(factor)) {
+                      factor = 1;
+                    }
+                  } catch (e) {
+                    factor = 1;
+                  }
+                  
                   const adjustedTotal = total * factor;
                   
                   return (
                     <div key={column} className="space-y-1">
                       <div className="text-xs text-muted-foreground">
-                        {column} {factor !== 1 && `(×${factor})`}
+                        {column} {factorStr !== "1" && `(×${factorStr})`}
                       </div>
                       <div className="text-lg font-semibold">{adjustedTotal.toFixed(2)}</div>
                     </div>
