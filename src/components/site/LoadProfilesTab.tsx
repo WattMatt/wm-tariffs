@@ -48,10 +48,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
   const [brushStartIndex, setBrushStartIndex] = useState<number>(0);
   const [brushEndIndex, setBrushEndIndex] = useState<number>(0);
   const [manipulationOperation, setManipulationOperation] = useState<string>("sum");
-  const [manipulationDateFrom, setManipulationDateFrom] = useState<Date>();
-  const [manipulationDateTo, setManipulationDateTo] = useState<Date>();
-  const [manipulationTimeFrom, setManipulationTimeFrom] = useState<string>("00:00");
-  const [manipulationTimeTo, setManipulationTimeTo] = useState<string>("23:59");
+  const [manipulationPeriod, setManipulationPeriod] = useState<number>(1);
   const [manipulatedData, setManipulatedData] = useState<any[]>([]);
   const [isManipulationApplied, setIsManipulationApplied] = useState(false);
 
@@ -334,57 +331,40 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
   };
 
   const handleApplyManipulation = () => {
-    if (!manipulationDateFrom || !manipulationDateTo) {
-      toast.error("Please select a subset date range");
-      return;
-    }
-
     if (loadProfileData.length === 0) {
       toast.error("No load profile data to manipulate");
       return;
     }
 
     try {
-      // Calculate the subset interval duration using UTC to avoid timezone shifts
-      const subsetStart = getFullDateTime(manipulationDateFrom, manipulationTimeFrom);
-      const subsetEnd = getFullDateTime(manipulationDateTo, manipulationTimeTo);
-      const subsetDurationMs = subsetEnd.getTime() - subsetStart.getTime();
+      // Calculate period duration in milliseconds
+      const periodDurationMs = manipulationPeriod * 24 * 60 * 60 * 1000;
 
-      // Group data points by their position within the subset pattern
+      // Group data points by their position within the period
       const groups = new Map<string, any[]>();
 
+      // Find the earliest timestamp to use as reference
+      const timestamps = loadProfileData.map(d => new Date(d.timestamp).getTime());
+      const earliestTime = Math.min(...timestamps);
+
       loadProfileData.forEach((dataPoint) => {
-        // Parse timestamp directly without timezone conversion
-        const timestamp = dataPoint.timestamp; // "2025-10-01T00:00:00+00:00"
-        const datePart = timestamp.split('T')[0]; // "2025-10-01"
-        const timePart = timestamp.split('T')[1]?.substring(0, 5) || "00:00"; // "00:00"
+        const dataTime = new Date(dataPoint.timestamp).getTime();
         
-        // Reconstruct as UTC date
-        const [year, month, day] = datePart.split('-').map(Number);
-        const [hour, minute] = timePart.split(':').map(Number);
-        const dataTime = Date.UTC(year, month - 1, day, hour, minute, 0, 0);
+        // Calculate position within the repeating period pattern
+        const timeSincePeriodStart = (dataTime - earliestTime) % periodDurationMs;
         
-        // Calculate position within the repeating subset pattern
-        const timeSinceSubsetStart = (dataTime - subsetStart.getTime()) % subsetDurationMs;
+        // Create a time key for grouping (relative time within the period)
+        const relativeDate = new Date(earliestTime + timeSincePeriodStart);
+        const day = String(relativeDate.getUTCDate()).padStart(2, '0');
+        const month = String(relativeDate.getUTCMonth() + 1).padStart(2, '0');
+        const hours = String(relativeDate.getUTCHours()).padStart(2, '0');
+        const minutes = String(relativeDate.getUTCMinutes()).padStart(2, '0');
+        const timeKey = `${month}-${day} ${hours}:${minutes}`;
         
-        // Only process data points that fall within the subset interval pattern
-        if (timeSinceSubsetStart >= 0 && timeSinceSubsetStart < subsetDurationMs) {
-          // Create a time key using UTC offset from subset start
-          const relativeMs = timeSinceSubsetStart;
-          const relativeDate = new Date(subsetStart.getTime() + relativeMs);
-          
-          // Format without timezone conversion
-          const relDay = relativeDate.getUTCDate();
-          const relMonth = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][relativeDate.getUTCMonth()];
-          const relHour = String(relativeDate.getUTCHours()).padStart(2, '0');
-          const relMin = String(relativeDate.getUTCMinutes()).padStart(2, '0');
-          const timeKey = `${relMonth} ${relDay}, ${relHour}:${relMin}`;
-          
-          if (!groups.has(timeKey)) {
-            groups.set(timeKey, []);
-          }
-          groups.get(timeKey)!.push(dataPoint);
+        if (!groups.has(timeKey)) {
+          groups.set(timeKey, []);
         }
+        groups.get(timeKey)!.push(dataPoint);
       });
 
       // Apply the selected operation to each group
@@ -432,15 +412,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
 
       // Sort by time key chronologically
       manipulated.sort((a, b) => {
-        // Parse the time keys for proper sorting
-        const parseTimeKey = (key: string) => {
-          const [datePart, timePart] = key.split(', ');
-          const [monthStr, dayStr] = datePart.split(' ');
-          const [hourStr, minStr] = timePart.split(':');
-          const monthIndex = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].indexOf(monthStr);
-          return monthIndex * 100000 + parseInt(dayStr) * 1000 + parseInt(hourStr) * 60 + parseInt(minStr);
-        };
-        return parseTimeKey(a.time) - parseTimeKey(b.time);
+        return a.timestamp.localeCompare(b.timestamp);
       });
 
       setManipulatedData(manipulated);
@@ -450,12 +422,8 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
       setBrushStartIndex(0);
       setBrushEndIndex(0);
       
-      const subsetDurationDays = subsetDurationMs / (1000 * 60 * 60 * 24);
-      const intervalDesc = subsetDurationDays < 1 
-        ? `${Math.round(subsetDurationMs / (1000 * 60 * 60))} hour${Math.round(subsetDurationMs / (1000 * 60 * 60)) !== 1 ? 's' : ''}`
-        : `${Math.round(subsetDurationDays)} day${Math.round(subsetDurationDays) !== 1 ? 's' : ''}`;
-      
-      toast.success(`Applied ${manipulationOperation} operation over ${intervalDesc} interval`);
+      const periodLabel = manipulationPeriod === 1 ? 'daily' : manipulationPeriod === 7 ? 'weekly' : 'monthly';
+      toast.success(`Applied ${manipulationOperation} operation over ${periodLabel} period`);
     } catch (error) {
       console.error("Manipulation error:", error);
       toast.error("Failed to apply manipulation");
@@ -690,83 +658,17 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                     </div>
 
                     <div className="space-y-2">
-                      <Label className="text-sm">Subset Date From</Label>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="outline"
-                            className={cn(
-                              "w-full justify-start text-left font-normal h-10",
-                              !manipulationDateFrom && "text-muted-foreground"
-                            )}
-                          >
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {manipulationDateFrom ? (
-                              <span className="text-xs">{format(manipulationDateFrom, "MMM d")} {manipulationTimeFrom}</span>
-                            ) : (
-                              <span className="text-xs">Pick date</span>
-                            )}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                          <div className="pointer-events-auto">
-                            <Calendar
-                              mode="single"
-                              selected={manipulationDateFrom}
-                              onSelect={setManipulationDateFrom}
-                              initialFocus
-                              className="p-3"
-                            />
-                            <div className="border-t px-3 py-3">
-                              <Input
-                                type="time"
-                                value={manipulationTimeFrom}
-                                onChange={(e) => setManipulationTimeFrom(e.target.value)}
-                              />
-                            </div>
-                          </div>
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label className="text-sm">Subset Date To</Label>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="outline"
-                            className={cn(
-                              "w-full justify-start text-left font-normal h-10",
-                              !manipulationDateTo && "text-muted-foreground"
-                            )}
-                          >
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {manipulationDateTo ? (
-                              <span className="text-xs">{format(manipulationDateTo, "MMM d")} {manipulationTimeTo}</span>
-                            ) : (
-                              <span className="text-xs">Pick date</span>
-                            )}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                          <div className="pointer-events-auto">
-                            <Calendar
-                              mode="single"
-                              selected={manipulationDateTo}
-                              onSelect={setManipulationDateTo}
-                              initialFocus
-                              className="p-3"
-                            />
-                            <div className="border-t px-3 py-3">
-                              <Input
-                                type="time"
-                                value={manipulationTimeTo}
-                                onChange={(e) => setManipulationTimeTo(e.target.value)}
-                              />
-                            </div>
-                          </div>
-                        </PopoverContent>
-                      </Popover>
+                      <Label htmlFor="manipulation-period" className="text-sm">Period</Label>
+                      <Select value={String(manipulationPeriod)} onValueChange={(val) => setManipulationPeriod(Number(val))}>
+                        <SelectTrigger id="manipulation-period" className="h-10">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="1">Daily (1 day)</SelectItem>
+                          <SelectItem value="7">Weekly (7 days)</SelectItem>
+                          <SelectItem value="30">Monthly (30 days)</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
 
                     <Button 
@@ -798,7 +700,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                       Load Profile - {selectedMeter?.meter_number}
                       {isManipulationApplied && (
                         <span className="ml-2 text-sm font-normal text-primary">
-                          ({manipulationOperation} manipulation applied)
+                          ({manipulationOperation} - {manipulationPeriod === 1 ? 'daily' : manipulationPeriod === 7 ? 'weekly' : 'monthly'})
                         </span>
                       )}
                     </h3>
