@@ -54,19 +54,6 @@ function Calendar({
   return (
     <div className="space-y-4">
       <div className="space-y-2 px-3 pt-3">
-        <Select value={currentMonth.toString()} onValueChange={handleMonthChange}>
-          <SelectTrigger className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {months.map((monthName, index) => (
-              <SelectItem key={index} value={index.toString()}>
-                {monthName}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
         <Select value={currentYear.toString()} onValueChange={handleYearChange}>
           <SelectTrigger className="w-full">
             <SelectValue />
@@ -75,6 +62,19 @@ function Calendar({
             {years.map((year) => (
               <SelectItem key={year} value={year.toString()}>
                 {year}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={currentMonth.toString()} onValueChange={handleMonthChange}>
+          <SelectTrigger className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {months.map((monthName, index) => (
+              <SelectItem key={index} value={index.toString()}>
+                {monthName}
               </SelectItem>
             ))}
           </SelectContent>
