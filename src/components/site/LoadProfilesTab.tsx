@@ -754,71 +754,96 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                        <XAxis 
                         dataKey="timestampStr"
                         tick={(props) => {
-                          const { x, y, payload, index } = props;
+                          const { x, y, payload } = props;
                           if (!payload?.value) return null;
                           
                           try {
                             const date = new Date(payload.value);
                             const data = isManipulationApplied ? manipulatedData : loadProfileData;
-                            
-                            // Find the actual data index for this tick
                             const dataIndex = data.findIndex(d => d.timestampStr === payload.value);
                             
-                            let showDate = false;
+                            let showDay = false;
                             let showMonth = false;
+                            let showYear = false;
                             
                             if (dataIndex === 0) {
-                              // First tick - always show full date
-                              showDate = true;
+                              showDay = true;
                               showMonth = true;
+                              showYear = true;
                             } else if (dataIndex > 0) {
                               const prevData = data[dataIndex - 1];
                               if (prevData?.timestampStr) {
                                 const prevDate = new Date(prevData.timestampStr);
                                 
                                 // Check if day changed
-                                if (date.getDate() !== prevDate.getDate() || 
-                                    date.getMonth() !== prevDate.getMonth() ||
-                                    date.getFullYear() !== prevDate.getFullYear()) {
-                                  showDate = true;
-                                  
-                                  // Check if month or year changed
-                                  if (date.getMonth() !== prevDate.getMonth() ||
-                                      date.getFullYear() !== prevDate.getFullYear()) {
-                                    showMonth = true;
-                                  }
+                                if (date.getDate() !== prevDate.getDate()) {
+                                  showDay = true;
+                                }
+                                
+                                // Check if month changed
+                                if (date.getMonth() !== prevDate.getMonth()) {
+                                  showMonth = true;
+                                }
+                                
+                                // Check if year changed
+                                if (date.getFullYear() !== prevDate.getFullYear()) {
+                                  showYear = true;
                                 }
                               }
                             }
                             
                             return (
                               <g transform={`translate(${x},${y})`}>
-                                {/* Time label */}
+                                {/* Time label - always show */}
                                 <text 
                                   x={0} 
-                                  y={0} 
-                                  dy={16} 
-                                  textAnchor="end" 
+                                  y={5} 
+                                  textAnchor="middle" 
                                   fill="#666" 
-                                  transform="rotate(-45)"
-                                  fontSize={11}
+                                  fontSize={10}
                                 >
                                   {format(date, 'HH:mm')}
                                 </text>
                                 
-                                {/* Date label when day changes */}
-                                {showDate && (
+                                {/* Day number - show when day changes */}
+                                {showDay && (
                                   <text 
                                     x={0} 
-                                    y={0} 
-                                    dy={28} 
-                                    textAnchor="end" 
-                                    fill="#333" 
-                                    transform="rotate(-45)"
+                                    y={20} 
+                                    textAnchor="middle" 
+                                    fill="#444" 
                                     fontSize={11}
+                                    fontWeight="600"
+                                  >
+                                    {format(date, 'd')}
+                                  </text>
+                                )}
+                                
+                                {/* Month name - show when month changes */}
+                                {showMonth && (
+                                  <text 
+                                    x={0} 
+                                    y={35} 
+                                    textAnchor="middle" 
+                                    fill="#333" 
+                                    fontSize={12}
                                     fontWeight="bold"
                                   >
-                                    {showMonth ? format(date, 'MMM dd yyyy') : format(date, 'dd')}
+                                    {format(date, 'MMM')}
+                                  </text>
+                                )}
+                                
+                                {/* Year - show when year changes */}
+                                {showYear && (
+                                  <text 
+                                    x={0} 
+                                    y={50} 
+                                    textAnchor="middle" 
+                                    fill="#222" 
+                                    fontSize={12}
+                                    fontWeight="bold"
+                                  >
+                                    {format(date, 'yyyy')}
                                   </text>
                                 )}
                               </g>
@@ -827,9 +852,9 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                             return null;
                           }
                         }}
-                        height={120}
+                        height={80}
                         interval={0}
-                        minTickGap={30}
+                        minTickGap={40}
                       />
                       <YAxis domain={getYAxisDomain()} />
                       <Tooltip 
