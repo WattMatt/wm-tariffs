@@ -19,6 +19,16 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
   const [periodStart, setPeriodStart] = useState("");
   const [periodEnd, setPeriodEnd] = useState("");
 
+  // Helper to combine date and time as UTC
+  const getFullDateTime = (dateStr: string, time: string = "00:00"): Date => {
+    const date = new Date(dateStr);
+    const [hours, minutes] = time.split(':').map(Number);
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const day = date.getDate();
+    return new Date(Date.UTC(year, month, day, hours, minutes, 0, 0));
+  };
+
   const generateReport = async () => {
     if (!periodStart || !periodEnd) {
       toast.error("Please select both start and end dates");
@@ -28,6 +38,8 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
     setIsGenerating(true);
 
     try {
+      toast.info("Running reconciliation for selected period...");
+
       // 1. Fetch all meters for this site
       const { data: meters, error: metersError } = await supabase
         .from("meters")
@@ -54,87 +66,125 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
 
       if (metersError) throw metersError;
 
-      // 2. Fetch meter readings for the period
-      const { data: readings, error: readingsError } = await supabase
-        .from("meter_readings")
-        .select("*")
-        .in("meter_id", meters?.map(m => m.id) || [])
-        .gte("reading_timestamp", periodStart)
-        .lte("reading_timestamp", periodEnd);
+      // 2. Set up date range with full day coverage
+      const fullDateTimeFrom = getFullDateTime(periodStart, "00:00");
+      const fullDateTimeTo = getFullDateTime(periodEnd, "23:59");
 
-      if (readingsError) throw readingsError;
+      // 3. Fetch readings for each meter with pagination and deduplication
+      const meterData = await Promise.all(
+        meters?.map(async (meter) => {
+          let allReadings: any[] = [];
+          let from = 0;
+          const pageSize = 1000;
+          let hasMore = true;
 
-      // 3. Calculate consumption per meter
-      const meterConsumption = meters?.map(meter => {
-        const meterReadings = readings?.filter(r => r.meter_id === meter.id) || [];
-        
-        if (meterReadings.length < 2) {
+          while (hasMore) {
+            const { data: pageData, error: readingsError } = await supabase
+              .from("meter_readings")
+              .select("kwh_value, reading_timestamp, metadata")
+              .eq("meter_id", meter.id)
+              .gte("reading_timestamp", fullDateTimeFrom.toISOString())
+              .lte("reading_timestamp", fullDateTimeTo.toISOString())
+              .order("reading_timestamp", { ascending: true })
+              .range(from, from + pageSize - 1);
+
+            if (readingsError) {
+              console.error(`Error fetching readings for meter ${meter.meter_number}:`, readingsError);
+              break;
+            }
+
+            if (pageData && pageData.length > 0) {
+              allReadings = [...allReadings, ...pageData];
+              from += pageSize;
+              hasMore = pageData.length === pageSize;
+            } else {
+              hasMore = false;
+            }
+          }
+
+          // Deduplicate by timestamp
+          const uniqueReadings = Array.from(
+            new Map(allReadings.map(r => [r.reading_timestamp, r])).values()
+          );
+
+          // Sum all interval readings
+          const totalKwh = uniqueReadings.reduce((sum, r) => sum + Number(r.kwh_value || 0), 0);
+          
+          const columnTotals: Record<string, number> = {};
+          const columnMaxValues: Record<string, number> = {};
+          
+          uniqueReadings.forEach(reading => {
+            const importedFields = (reading.metadata as any)?.imported_fields || {};
+            Object.entries(importedFields).forEach(([key, value]) => {
+              if (key.toLowerCase().includes('time') || key.toLowerCase().includes('date')) return;
+              
+              const numValue = Number(value);
+              if (!isNaN(numValue) && value !== null && value !== '') {
+                if (key.toLowerCase().includes('kva')) {
+                  columnMaxValues[key] = Math.max(columnMaxValues[key] || 0, numValue);
+                } else {
+                  columnTotals[key] = (columnTotals[key] || 0) + numValue;
+                }
+              }
+            });
+          });
+
           return {
-            meter,
-            consumption: 0,
-            readingsCount: meterReadings.length,
-            firstReading: null,
-            lastReading: null
+            ...meter,
+            totalKwh,
+            columnTotals,
+            columnMaxValues,
+            readingsCount: uniqueReadings.length,
           };
-        }
-
-        meterReadings.sort((a, b) => 
-          new Date(a.reading_timestamp).getTime() - new Date(b.reading_timestamp).getTime()
-        );
-
-        const firstReading = meterReadings[0];
-        const lastReading = meterReadings[meterReadings.length - 1];
-        const consumption = lastReading.kwh_value - firstReading.kwh_value;
-
-        return {
-          meter,
-          consumption,
-          readingsCount: meterReadings.length,
-          firstReading,
-          lastReading
-        };
-      }) || [];
-
-      // 4. Identify bulk meter (meter with no parent)
-      const bulkMeter = meterConsumption.find(
-        mc => !mc.meter.parent_connections || mc.meter.parent_connections.length === 0
+        }) || []
       );
 
-      // 5. Calculate total sub-meter consumption
-      const subMeters = meterConsumption.filter(
-        mc => mc.meter.id !== bulkMeter?.meter.id
-      );
-      const totalSubMeterConsumption = subMeters.reduce((sum, mc) => sum + mc.consumption, 0);
+      // 4. Categorize meters by type
+      const councilBulk = meterData.filter((m) => m.meter_type === "council_bulk");
+      const checkMeters = meterData.filter((m) => m.meter_type === "check_meter");
+      const solarMeters = meterData.filter((m) => m.meter_type === "solar");
+      const distribution = meterData.filter((m) => m.meter_type === "distribution");
 
-      // 6. Calculate variance
-      const bulkConsumption = bulkMeter?.consumption || 0;
-      const variance = bulkConsumption - totalSubMeterConsumption;
-      const variancePercentage = bulkConsumption > 0 
-        ? ((variance / bulkConsumption) * 100).toFixed(2)
+      const councilTotal = councilBulk.reduce((sum, m) => sum + m.totalKwh, 0);
+      const solarTotal = solarMeters.reduce((sum, m) => sum + m.totalKwh, 0);
+      const distributionTotal = distribution.reduce((sum, m) => sum + m.totalKwh, 0);
+      
+      const totalSupply = councilTotal + solarTotal;
+      const recoveryRate = totalSupply > 0 ? (distributionTotal / totalSupply) * 100 : 0;
+      const discrepancy = totalSupply - distributionTotal;
+      const variancePercentage = totalSupply > 0 
+        ? ((discrepancy / totalSupply) * 100).toFixed(2)
         : "0";
 
-      // 7. Detect anomalies
+      // 5. Detect anomalies
       const anomalies: any[] = [];
 
       // Missing readings
-      meterConsumption.forEach(mc => {
-        if (mc.readingsCount < 2) {
+      meterData.forEach(m => {
+        if (m.readingsCount === 0) {
+          anomalies.push({
+            type: "no_readings",
+            meter: m.meter_number,
+            description: "No readings available for the period",
+            severity: "critical"
+          });
+        } else if (m.readingsCount < 10) {
           anomalies.push({
             type: "insufficient_readings",
-            meter: mc.meter.meter_number,
-            description: `Only ${mc.readingsCount} reading(s) available for the period`,
+            meter: m.meter_number,
+            description: `Only ${m.readingsCount} reading(s) available for the period`,
             severity: "high"
           });
         }
       });
 
       // Negative consumption
-      meterConsumption.forEach(mc => {
-        if (mc.consumption < 0) {
+      meterData.forEach(m => {
+        if (m.totalKwh < 0) {
           anomalies.push({
             type: "negative_consumption",
-            meter: mc.meter.meter_number,
-            consumption: mc.consumption,
+            meter: m.meter_number,
+            consumption: m.totalKwh.toFixed(2),
             description: "Negative consumption detected - possible meter rollback or tampering",
             severity: "critical"
           });
@@ -145,9 +195,19 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
       if (Math.abs(parseFloat(variancePercentage)) > 10) {
         anomalies.push({
           type: "high_variance",
-          variance: variance.toFixed(2),
+          variance: discrepancy.toFixed(2),
           variancePercentage,
-          description: `Variance of ${variancePercentage}% between bulk and sub-meters exceeds acceptable threshold`,
+          description: `Variance of ${variancePercentage}% between supply and distribution exceeds acceptable threshold`,
+          severity: "high"
+        });
+      }
+
+      // Low recovery rate
+      if (recoveryRate < 90) {
+        anomalies.push({
+          type: "low_recovery",
+          recoveryRate: recoveryRate.toFixed(2),
+          description: `Recovery rate of ${recoveryRate.toFixed(2)}% is below acceptable threshold of 90%`,
           severity: "high"
         });
       }
@@ -170,32 +230,59 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
         extraction: doc.document_extractions?.[0]
       })).filter(d => d.extraction) || [];
 
-      // 9. Prepare reconciliation data
+      // 6. Prepare reconciliation data
       const reconciliationData = {
-        bulkMeter: bulkMeter?.meter.meter_number || "N/A",
-        bulkConsumption: bulkConsumption.toFixed(2),
-        totalSubMeterConsumption: totalSubMeterConsumption.toFixed(2),
-        variance: variance.toFixed(2),
+        councilBulkMeters: councilBulk.map(m => m.meter_number).join(", ") || "N/A",
+        councilTotal: councilTotal.toFixed(2),
+        solarTotal: solarTotal.toFixed(2),
+        totalSupply: totalSupply.toFixed(2),
+        distributionTotal: distributionTotal.toFixed(2),
+        variance: discrepancy.toFixed(2),
         variancePercentage,
-        subMeterCount: subMeters.length,
+        recoveryRate: recoveryRate.toFixed(2),
+        meterCount: meterData.length,
+        councilBulkCount: councilBulk.length,
+        solarCount: solarMeters.length,
+        distributionCount: distribution.length,
         readingsPeriod: `${format(new Date(periodStart), "dd MMM yyyy")} - ${format(new Date(periodEnd), "dd MMM yyyy")}`
       };
 
-      // 10. Prepare meter hierarchy
-      const meterHierarchy = meters?.map(meter => ({
-        meterNumber: meter.meter_number,
-        name: meter.name,
-        type: meter.meter_type,
-        location: meter.location,
-        parentMeters: meter.parent_connections?.map((pc: any) => 
+      // 7. Prepare detailed meter breakdown
+      const meterBreakdown = meterData.map(m => ({
+        meterNumber: m.meter_number,
+        name: m.name,
+        type: m.meter_type,
+        location: m.location,
+        consumption: m.totalKwh.toFixed(2),
+        readingsCount: m.readingsCount,
+        parentMeters: m.parent_connections?.map((pc: any) => 
           pc.parent_meter?.meter_number
         ) || [],
-        childMeters: meter.child_connections?.map((cc: any) => 
+        childMeters: m.child_connections?.map((cc: any) => 
           cc.child_meter?.meter_number
         ) || []
-      })) || [];
+      }));
 
-      // 11. Generate AI narrative sections
+      // 8. Prepare meter hierarchy
+      const meterHierarchy = meters?.map(meter => {
+        const meterInfo = meterData.find(m => m.id === meter.id);
+        return {
+          meterNumber: meter.meter_number,
+          name: meter.name,
+          type: meter.meter_type,
+          location: meter.location,
+          consumption: meterInfo?.totalKwh.toFixed(2) || "0.00",
+          readingsCount: meterInfo?.readingsCount || 0,
+          parentMeters: meter.parent_connections?.map((pc: any) => 
+            pc.parent_meter?.meter_number
+          ) || [],
+          childMeters: meter.child_connections?.map((cc: any) => 
+            cc.child_meter?.meter_number
+          ) || []
+        };
+      }) || [];
+
+      // 9. Generate AI narrative sections
       toast.info("Generating report sections with AI...");
 
       const { data: reportData, error: aiError } = await supabase.functions.invoke(
@@ -206,6 +293,7 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
             auditPeriodStart: format(new Date(periodStart), "dd MMMM yyyy"),
             auditPeriodEnd: format(new Date(periodEnd), "dd MMMM yyyy"),
             meterHierarchy,
+            meterBreakdown,
             reconciliationData,
             documentExtractions,
             anomalies
@@ -274,23 +362,55 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
       // 3. Data Sources and Period
       addText("3. DATA SOURCES AND AUDIT PERIOD", 16, true);
       addText(`Audit Period: ${reconciliationData.readingsPeriod}`, 10, true);
-      addText(`Bulk Meter: ${reconciliationData.bulkMeter}`);
-      addText(`Number of Sub-Meters: ${reconciliationData.subMeterCount}`);
+      addText(`Council Bulk Meters: ${reconciliationData.councilBulkMeters}`);
+      addText(`Total Meters: ${reconciliationData.meterCount} (${reconciliationData.councilBulkCount} council, ${reconciliationData.solarCount} solar, ${reconciliationData.distributionCount} distribution)`);
       addText(`Documents Analyzed: ${documentExtractions.length}`);
 
       // 4. Metering Reconciliation
       addText("4. METERING RECONCILIATION", 16, true);
-      addText("Consumption Summary:", 12, true);
-      addText(`Bulk Supply Meter: ${reconciliationData.bulkConsumption} kWh`);
-      addText(`Total Sub-Meter Consumption: ${reconciliationData.totalSubMeterConsumption} kWh`);
-      addText(`Variance: ${reconciliationData.variance} kWh (${reconciliationData.variancePercentage}%)`);
+      addText("Supply Summary:", 12, true);
+      addText(`Council Bulk Supply: ${reconciliationData.councilTotal} kWh`);
+      if (parseFloat(reconciliationData.solarTotal) > 0) {
+        addText(`Solar Generation: ${reconciliationData.solarTotal} kWh`);
+      }
+      addText(`Total Supply: ${reconciliationData.totalSupply} kWh`);
+      addText("");
+      addText("Distribution Summary:", 12, true);
+      addText(`Total Distribution Consumption: ${reconciliationData.distributionTotal} kWh`);
+      addText(`Recovery Rate: ${reconciliationData.recoveryRate}%`);
+      addText(`Discrepancy: ${reconciliationData.variance} kWh (${reconciliationData.variancePercentage}%)`);
 
       // Meter details table
       yPos += 5;
       addText("Individual Meter Consumption:", 12, true);
-      meterConsumption.forEach(mc => {
-        addText(`${mc.meter.meter_number} (${mc.meter.name}): ${mc.consumption.toFixed(2)} kWh - ${mc.readingsCount} readings`);
-      });
+      
+      if (councilBulk.length > 0) {
+        addText("Council Bulk Meters:", 11, true);
+        councilBulk.forEach(m => {
+          addText(`  ${m.meter_number} (${m.name}): ${m.totalKwh.toFixed(2)} kWh - ${m.readingsCount} readings`);
+        });
+      }
+      
+      if (solarMeters.length > 0) {
+        addText("Solar Meters:", 11, true);
+        solarMeters.forEach(m => {
+          addText(`  ${m.meter_number} (${m.name}): ${m.totalKwh.toFixed(2)} kWh - ${m.readingsCount} readings`);
+        });
+      }
+      
+      if (distribution.length > 0) {
+        addText("Distribution Meters:", 11, true);
+        distribution.forEach(m => {
+          addText(`  ${m.meter_number} (${m.name}): ${m.totalKwh.toFixed(2)} kWh - ${m.readingsCount} readings`);
+        });
+      }
+      
+      if (checkMeters.length > 0) {
+        addText("Check Meters:", 11, true);
+        checkMeters.forEach(m => {
+          addText(`  ${m.meter_number} (${m.name}): ${m.totalKwh.toFixed(2)} kWh - ${m.readingsCount} readings`);
+        });
+      }
 
       // 5. Billing Validation
       if (reportData.sections.billingValidation) {
