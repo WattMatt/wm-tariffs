@@ -40,7 +40,8 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
   const [loadProfileData, setLoadProfileData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [normalizedData, setNormalizedData] = useState<any[]>([]);
-  const [selectedQuantities, setSelectedQuantities] = useState<Set<string>>(new Set(["kva"]));
+  const [selectedQuantities, setSelectedQuantities] = useState<Set<string>>(new Set());
+  const [availableColumns, setAvailableColumns] = useState<string[]>([]);
   const [yAxisMin, setYAxisMin] = useState<string>("");
   const [yAxisMax, setYAxisMax] = useState<string>("");
   const [hiddenLines, setHiddenLines] = useState<Set<string>>(new Set());
@@ -91,9 +92,23 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
       const fullDateTimeFrom = getFullDateTime(dateFrom, timeFrom);
       const fullDateTimeTo = getFullDateTime(dateTo, timeTo);
       
+      // Fetch column mapping to get available columns
+      const { data: csvFile, error: csvError } = await supabase
+        .from("meter_csv_files")
+        .select("column_mapping")
+        .eq("meter_id", selectedMeterId)
+        .not("column_mapping", "is", null)
+        .order("parsed_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (csvError) {
+        console.error("Error fetching column mapping:", csvError);
+      }
+      
       const { data, error } = await supabase
         .from("meter_readings")
-        .select("reading_timestamp, kva_value, kwh_value")
+        .select("reading_timestamp, kva_value, kwh_value, metadata")
         .eq("meter_id", selectedMeterId)
         .gte("reading_timestamp", fullDateTimeFrom.toISOString())
         .lte("reading_timestamp", fullDateTimeTo.toISOString())
@@ -102,12 +117,50 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
       if (error) throw error;
 
       if (data && data.length > 0) {
+        // Extract available columns from CSV mapping or first reading
+        const columnsSet = new Set<string>();
+        
+        // Add standard columns
+        columnsSet.add("kVA");
+        columnsSet.add("kWh");
+        
+        // Extract columns from metadata
+        const columnMapping = csvFile?.column_mapping as any;
+        if (columnMapping && columnMapping.renamedHeaders) {
+          Object.values(columnMapping.renamedHeaders).forEach((headerName: any) => {
+            if (headerName && typeof headerName === 'string' && 
+                !headerName.toLowerCase().includes('time') && 
+                !headerName.toLowerCase().includes('date')) {
+              columnsSet.add(headerName);
+            }
+          });
+        } else if (data[0]?.metadata) {
+          // Fallback: extract from first reading's metadata
+          const metadata = data[0].metadata as any;
+          if (metadata?.imported_fields) {
+            Object.keys(metadata.imported_fields).forEach(key => {
+              if (!key.toLowerCase().includes('time') && !key.toLowerCase().includes('date')) {
+                columnsSet.add(key);
+              }
+            });
+          }
+        }
+        
+        const columns = Array.from(columnsSet);
+        setAvailableColumns(columns);
+        
+        // Auto-select first column if none selected
+        if (selectedQuantities.size === 0 && columns.length > 0) {
+          setSelectedQuantities(new Set([columns[0]]));
+        }
+        
         console.log("Load Profile - Raw data from database:", data);
         processLoadProfile(data);
       } else {
         toast.info("No readings found for selected period");
         setLoadProfileData([]);
         setNormalizedData([]);
+        setAvailableColumns([]);
       }
     } catch (error) {
       console.error("Error fetching load profile:", error);
@@ -117,31 +170,43 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
     }
   };
 
-  const processLoadProfile = (readings: ReadingData[]) => {
-    // Plot exact values from database without any calculations
+  const processLoadProfile = (readings: any[]) => {
+    // Plot exact values from database including all metadata columns
     const chartData = readings.map((reading) => {
       const date = parseISO(reading.reading_timestamp);
       const timeLabel = format(date, "HH:mm");
-
-      return {
+      
+      const dataPoint: any = {
         time: timeLabel,
         timestamp: reading.reading_timestamp,
-        kva: reading.kva_value ?? 0,
-        kwh: reading.kwh_value ?? 0,
+        kVA: reading.kva_value ?? 0,
+        kWh: reading.kwh_value ?? 0,
       };
+      
+      // Add all columns from metadata
+      const metadata = reading.metadata as any;
+      if (metadata?.imported_fields) {
+        Object.entries(metadata.imported_fields).forEach(([key, value]) => {
+          if (!key.toLowerCase().includes('time') && !key.toLowerCase().includes('date')) {
+            dataPoint[key] = Number(value) || 0;
+          }
+        });
+      }
+      
+      return dataPoint;
     });
 
     console.log("Load Profile - Chart data to display:", chartData);
     setLoadProfileData(chartData);
 
-    // Calculate normalized data (only for normalized chart)
-    if (chartData.length > 0) {
-      const maxKva = Math.max(...chartData.map((d) => d.kva));
+    // Calculate normalized data based on selected quantities
+    if (chartData.length > 0 && selectedQuantities.size > 0) {
+      const firstSelected = Array.from(selectedQuantities)[0];
+      const maxValue = Math.max(...chartData.map((d) => d[firstSelected] || 0));
       const normalized = chartData.map((d) => ({
         time: d.time,
         timestamp: d.timestamp,
-        normalized: maxKva > 0 ? (d.kva / maxKva) : 0,
-        kva: d.kva,
+        normalized: maxValue > 0 ? ((d[firstSelected] || 0) / maxValue) : 0,
       }));
       setNormalizedData(normalized);
     }
@@ -303,33 +368,22 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
               <div className="grid grid-cols-1 md:grid-cols-[200px_1fr_1fr] gap-6 mb-4">
                 <div className="space-y-3">
                   <Label>Quantities to Plot</Label>
-                  <div className="flex flex-col gap-3">
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id="show-kva"
-                        checked={selectedQuantities.has("kva")}
-                        onCheckedChange={(checked) => handleQuantityToggle("kva", checked === true)}
-                      />
-                      <label
-                        htmlFor="show-kva"
-                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                      >
-                        kVA
-                      </label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id="show-kwh"
-                        checked={selectedQuantities.has("kwh")}
-                        onCheckedChange={(checked) => handleQuantityToggle("kwh", checked === true)}
-                      />
-                      <label
-                        htmlFor="show-kwh"
-                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                      >
-                        kWh
-                      </label>
-                    </div>
+                  <div className="flex flex-col gap-3 max-h-[400px] overflow-y-auto pr-2">
+                    {availableColumns.map((column) => (
+                      <div key={column} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`show-${column}`}
+                          checked={selectedQuantities.has(column)}
+                          onCheckedChange={(checked) => handleQuantityToggle(column, checked === true)}
+                        />
+                        <label
+                          htmlFor={`show-${column}`}
+                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                        >
+                          {column}
+                        </label>
+                      </div>
+                    ))}
                   </div>
                 </div>
                 
@@ -397,28 +451,29 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                       onClick={(e: any) => e.dataKey && handleLegendClick(String(e.dataKey))}
                       wrapperStyle={{ cursor: "pointer" }}
                     />
-                    {selectedQuantities.has("kva") && (
-                      <Line
-                        type="monotone"
-                        dataKey="kva"
-                        stroke="hsl(var(--primary))"
-                        strokeWidth={2}
-                        dot={false}
-                        name="kVA"
-                        hide={hiddenLines.has("kva")}
-                      />
-                    )}
-                    {selectedQuantities.has("kwh") && (
-                      <Line
-                        type="monotone"
-                        dataKey="kwh"
-                        stroke="hsl(160, 90%, 56%)"
-                        strokeWidth={2}
-                        dot={false}
-                        name="kWh"
-                        hide={hiddenLines.has("kwh")}
-                      />
-                    )}
+                    {Array.from(selectedQuantities).map((quantity, index) => {
+                      const colors = [
+                        "hsl(var(--primary))",
+                        "hsl(160, 90%, 56%)",
+                        "hsl(30, 90%, 56%)",
+                        "hsl(280, 90%, 56%)",
+                        "hsl(220, 90%, 56%)",
+                        "hsl(0, 90%, 56%)",
+                        "hsl(120, 90%, 56%)",
+                      ];
+                      return (
+                        <Line
+                          key={quantity}
+                          type="monotone"
+                          dataKey={quantity}
+                          stroke={colors[index % colors.length]}
+                          strokeWidth={2}
+                          dot={false}
+                          name={quantity}
+                          hide={hiddenLines.has(quantity)}
+                        />
+                      );
+                    })}
                   </LineChart>
                 </ResponsiveContainer>
               </div>
