@@ -49,6 +49,8 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
   const [manipulationDateTo, setManipulationDateTo] = useState<Date>();
   const [manipulationTimeFrom, setManipulationTimeFrom] = useState<string>("00:00");
   const [manipulationTimeTo, setManipulationTimeTo] = useState<string>("23:59");
+  const [manipulatedData, setManipulatedData] = useState<any[]>([]);
+  const [isManipulationApplied, setIsManipulationApplied] = useState(false);
 
   useEffect(() => {
     fetchMeters();
@@ -252,6 +254,97 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
     const min = yAxisMin && !isNaN(parseFloat(yAxisMin)) ? parseFloat(yAxisMin) : "auto";
     const max = yAxisMax && !isNaN(parseFloat(yAxisMax)) ? parseFloat(yAxisMax) : "auto";
     return [min, max];
+  };
+
+  const handleApplyManipulation = () => {
+    if (!manipulationDateFrom || !manipulationDateTo) {
+      toast.error("Please select a subset date range");
+      return;
+    }
+
+    if (loadProfileData.length === 0) {
+      toast.error("No load profile data to manipulate");
+      return;
+    }
+
+    try {
+      // Calculate the interval duration in milliseconds
+      const intervalStart = getFullDateTime(manipulationDateFrom, manipulationTimeFrom);
+      const intervalEnd = getFullDateTime(manipulationDateTo, manipulationTimeTo);
+      const intervalDuration = intervalEnd.getTime() - intervalStart.getTime();
+
+      // Group data by time slots within the interval
+      const timeSlotGroups = new Map<string, any[]>();
+
+      loadProfileData.forEach((dataPoint) => {
+        const time = dataPoint.time; // "00:00", "00:30", etc.
+        
+        if (!timeSlotGroups.has(time)) {
+          timeSlotGroups.set(time, []);
+        }
+        timeSlotGroups.get(time)!.push(dataPoint);
+      });
+
+      // Apply the selected operation to each time slot
+      const manipulated: any[] = [];
+      
+      timeSlotGroups.forEach((dataPoints, time) => {
+        const result: any = { time };
+
+        // Process each selected quantity
+        selectedQuantities.forEach((quantity) => {
+          const values = dataPoints
+            .map(dp => dp[quantity])
+            .filter(v => v !== undefined && v !== null && !isNaN(v));
+
+          if (values.length === 0) {
+            result[quantity] = 0;
+            return;
+          }
+
+          let calculatedValue = 0;
+          
+          switch (manipulationOperation) {
+            case "sum":
+              calculatedValue = values.reduce((sum, val) => sum + val, 0);
+              break;
+            case "min":
+              calculatedValue = Math.min(...values);
+              break;
+            case "max":
+              calculatedValue = Math.max(...values);
+              break;
+            case "avg":
+              calculatedValue = values.reduce((sum, val) => sum + val, 0) / values.length;
+              break;
+            case "cnt":
+              calculatedValue = values.length;
+              break;
+          }
+
+          result[quantity] = calculatedValue;
+        });
+
+        manipulated.push(result);
+      });
+
+      // Sort by time
+      manipulated.sort((a, b) => a.time.localeCompare(b.time));
+
+      setManipulatedData(manipulated);
+      setIsManipulationApplied(true);
+      
+      toast.success(`Applied ${manipulationOperation} operation across load profile`);
+    } catch (error) {
+      console.error("Manipulation error:", error);
+      toast.error("Failed to apply manipulation");
+    }
+  };
+
+  const handleResetManipulation = () => {
+    setManipulatedData([]);
+    setIsManipulationApplied(false);
+    toast.info("Reset to original load profile");
   };
 
   const selectedMeter = meters.find((m) => m.id === selectedMeterId);
@@ -528,15 +621,23 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                     </div>
 
                     <Button 
-                      onClick={() => {
-                        // TODO: Apply manipulation
-                        toast.info("Data manipulation will be applied to the chart");
-                      }}
+                      onClick={handleApplyManipulation}
                       size="sm"
                       className="w-full"
                     >
                       Apply Manipulation
                     </Button>
+                    
+                    {isManipulationApplied && (
+                      <Button 
+                        onClick={handleResetManipulation}
+                        size="sm"
+                        variant="outline"
+                        className="w-full"
+                      >
+                        Reset to Original
+                      </Button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -544,6 +645,11 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
               <div>
                 <h3 className="text-lg font-semibold mb-4">
                   Load Profile - {selectedMeter?.meter_number}
+                  {isManipulationApplied && (
+                    <span className="ml-2 text-sm font-normal text-primary">
+                      ({manipulationOperation} manipulation applied)
+                    </span>
+                  )}
                 </h3>
                 <p className="text-sm text-muted-foreground mb-2">
                   Click on legend items to toggle visibility
@@ -552,7 +658,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                   )}
                 </p>
                 <ResponsiveContainer width="100%" height={400}>
-                  <LineChart data={loadProfileData}>
+                  <LineChart data={isManipulationApplied ? manipulatedData : loadProfileData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                     <XAxis
                       dataKey="time"
