@@ -25,7 +25,7 @@ interface Meter {
 
 interface ReadingData {
   reading_timestamp: string;
-  metadata: any; // Json type from Supabase
+  kva_value: number | null;
 }
 
 export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
@@ -74,7 +74,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
       
       const { data, error } = await supabase
         .from("meter_readings")
-        .select("reading_timestamp, metadata")
+        .select("reading_timestamp, kva_value")
         .eq("meter_id", selectedMeterId)
         .gte("reading_timestamp", startOfDay(dateRange.from).toISOString())
         .lte("reading_timestamp", endOfDay(endDate).toISOString())
@@ -106,9 +106,8 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
       const date = parseISO(reading.reading_timestamp);
       const hour = format(date, "HH:00");
 
-      // Extract kVA value from metadata
-      const kvaValue = reading.metadata?.imported_fields?.kva;
-      const kva = typeof kvaValue === 'string' ? parseFloat(kvaValue) : (kvaValue || 0);
+      // Use the kva_value column directly
+      const kva = reading.kva_value || 0;
 
       if (!hourlyData[hour]) {
         hourlyData[hour] = { total: 0, count: 0 };
