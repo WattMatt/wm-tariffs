@@ -45,12 +45,13 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
 
     try {
       let newTotal = 0;
-      const selectedOps = Array.from(selectedColumns).map(column => {
+      
+      Array.from(selectedColumns).forEach((column) => {
+        const operation = columnOperations.get(column) || "sum";
         const factorStr = columnFactors.get(column) || "1";
         let factor = 1;
         
         try {
-          // Safely evaluate the expression
           factor = Function('"use strict"; return (' + factorStr + ')')();
           if (isNaN(factor) || !isFinite(factor)) {
             factor = 1;
@@ -60,19 +61,10 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
           factor = 1;
         }
         
-        return {
-          column,
-          operation: columnOperations.get(column) || "sum",
-          total: Number(previewData.columnTotals[column] || 0),
-          factor
-        };
-      });
-
-      // Calculate based on operations and factors - only sum columns with "sum" operation
-      selectedOps.forEach(({ operation, total, factor }) => {
-        const adjustedTotal = total * factor;
-        
+        // Only sum columns with "sum" operation
         if (operation === "sum") {
+          const total = Number(previewData.columnTotals[column] || 0);
+          const adjustedTotal = total * factor;
           newTotal += adjustedTotal;
         }
       });
@@ -210,9 +202,10 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
       // Auto-select all columns initially
       setSelectedColumns(new Set(availableColumns));
 
-      // Calculate totals
+      // Calculate totals and store raw values for operations
       const totalKwh = readings.reduce((sum, r) => sum + Number(r.kwh_value || 0), 0);
       const columnTotals: Record<string, number> = {};
+      const columnValues: Record<string, number[]> = {};
       
       readings.forEach(reading => {
         const metadata = reading.metadata as any;
@@ -220,7 +213,13 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
         Object.entries(importedFields).forEach(([key, value]) => {
           const numValue = Number(value);
           if (!isNaN(numValue) && value !== null && value !== '') {
+            // Store for sum operation
             columnTotals[key] = (columnTotals[key] || 0) + numValue;
+            // Store raw values for other operations
+            if (!columnValues[key]) {
+              columnValues[key] = [];
+            }
+            columnValues[key].push(numValue);
           }
         });
       });
@@ -233,7 +232,8 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
         sampleReadings: readings.slice(0, 5),
         availableColumns: Array.from(availableColumns),
         totalKwh,
-        columnTotals
+        columnTotals,
+        columnValues
       });
 
       toast.success("Preview loaded successfully");
@@ -786,7 +786,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                   </div>
                 </div>
                 {Array.from(selectedColumns).map((column) => {
-                  const total = Number(previewData.columnTotals[column] || 0);
+                  const operation = columnOperations.get(column) || "sum";
                   const factorStr = columnFactors.get(column) || "1";
                   let factor = 1;
                   
@@ -797,6 +797,20 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                     }
                   } catch (e) {
                     factor = 1;
+                  }
+                  
+                  // Calculate the correct total based on operation
+                  let total = 0;
+                  const values = previewData.columnValues?.[column] || [];
+                  
+                  if (operation === "sum") {
+                    total = previewData.columnTotals[column] || 0;
+                  } else if (operation === "max") {
+                    total = values.length > 0 ? Math.max(...values) : 0;
+                  } else if (operation === "min") {
+                    total = values.length > 0 ? Math.min(...values) : 0;
+                  } else if (operation === "count") {
+                    total = values.length;
                   }
                   
                   const adjustedTotal = total * factor;
