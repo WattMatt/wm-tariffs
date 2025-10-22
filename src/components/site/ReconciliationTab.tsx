@@ -925,7 +925,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                 <CardTitle className="text-sm font-medium text-muted-foreground">
                   Grid Supply
                 </CardTitle>
-                <div className="text-xs text-muted-foreground mt-1">Council</div>
+                <div className="text-xs text-muted-foreground mt-1">Grid</div>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
@@ -942,7 +942,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
             <Card className="border-border/50">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Renewable Energy
+                  Solar Energy
                 </CardTitle>
                 <div className="text-xs text-muted-foreground mt-1">Solar</div>
               </CardHeader>
@@ -963,7 +963,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                 <CardTitle className="text-sm font-medium text-muted-foreground">
                   Total Supply
                 </CardTitle>
-                <div className="text-xs text-muted-foreground mt-1">(Grid + Solar)</div>
+                <div className="text-xs text-muted-foreground mt-1">Grid + Solar</div>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-primary">
