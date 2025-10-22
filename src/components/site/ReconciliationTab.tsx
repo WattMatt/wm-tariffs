@@ -344,8 +344,8 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                 // Skip timestamp columns
                 if (key.toLowerCase().includes('time') || key.toLowerCase().includes('date')) return;
                 
-                // Only process selected columns for council_bulk meters
-                if (meter.meter_type === 'council_bulk' && !selectedColumns.has(key)) return;
+                // Only process selected columns
+                if (!selectedColumns.has(key)) return;
                 
                 const numValue = Number(value);
                 if (!isNaN(numValue) && value !== null && value !== '') {
