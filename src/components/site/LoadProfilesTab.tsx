@@ -219,10 +219,10 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
     console.log("Load Profile - Chart data to display:", chartData);
     console.log("Deduplication: Original readings:", readings.length, "Unique readings:", uniqueReadings.length);
     setLoadProfileData(chartData);
-    // Reset brush - show all data
-    setUseBrush(false);
+    // Always enable brush with full data range
+    setUseBrush(true);
     setBrushStartIndex(0);
-    setBrushEndIndex(0);
+    setBrushEndIndex(Math.max(0, chartData.length - 1));
   };
 
   const handleQuantityToggle = (quantity: string, checked: boolean) => {
@@ -256,9 +256,10 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
   };
 
   const handleResetView = () => {
-    setUseBrush(false);
+    const currentData = isManipulationApplied ? manipulatedData : loadProfileData;
+    setUseBrush(true);
     setBrushStartIndex(0);
-    setBrushEndIndex(0);
+    setBrushEndIndex(Math.max(0, currentData.length - 1));
     setYAxisMin("");
     setYAxisMax("");
   };
@@ -274,19 +275,19 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
     const firstTimestamp = new Date(currentData[0].timestamp).getTime();
     const viewportEndMs = firstTimestamp + targetMs;
     
-    // Find the end index for the viewport
-    let endIndex = currentData.length - 1;
+    // Find the end index for the initial viewport
+    let viewportEndIndex = currentData.length - 1;
     for (let i = 0; i < currentData.length; i++) {
       const pointMs = new Date(currentData[i].timestamp).getTime();
       if (pointMs >= viewportEndMs) {
-        endIndex = i;
+        viewportEndIndex = i;
         break;
       }
     }
     
-    // Set viewport window - brush always allows panning across full dataset
+    // Set initial viewport, but brush extends across full dataset to allow panning anywhere
     setBrushStartIndex(0);
-    setBrushEndIndex(Math.min(endIndex, currentData.length - 1));
+    setBrushEndIndex(viewportEndIndex);
     setUseBrush(true);
   };
 
@@ -429,10 +430,10 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
 
       setManipulatedData(manipulated);
       setIsManipulationApplied(true);
-      // Reset brush - show all manipulated data
-      setUseBrush(false);
+      // Always enable brush with full range
+      setUseBrush(true);
       setBrushStartIndex(0);
-      setBrushEndIndex(0);
+      setBrushEndIndex(Math.max(0, manipulated.length - 1));
       
       const periodLabel = manipulationPeriod === 1 ? 'daily' : manipulationPeriod === 7 ? 'weekly' : 'monthly';
       toast.success(`Applied ${manipulationOperation} operation over ${periodLabel} period`);
@@ -445,10 +446,10 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
   const handleResetManipulation = () => {
     setManipulatedData([]);
     setIsManipulationApplied(false);
-    // Reset brush - show all original data
-    setUseBrush(false);
+    // Always enable brush with full range
+    setUseBrush(true);
     setBrushStartIndex(0);
-    setBrushEndIndex(0);
+    setBrushEndIndex(Math.max(0, loadProfileData.length - 1));
     toast.info("Reset to original load profile");
   };
 
@@ -786,6 +787,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                           setBrushStartIndex(e.startIndex);
                           setBrushEndIndex(e.endIndex);
                         }}
+                        alwaysShowText={false}
                         tickFormatter={(value) => {
                           // Format timestamp for brush display
                           if (!value) return '';
