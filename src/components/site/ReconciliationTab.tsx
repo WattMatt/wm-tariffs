@@ -619,12 +619,18 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
 
                 <div className="space-y-2">
                   <Label className="text-sm font-semibold">Last Actual Reading Found</Label>
-                  <div className="p-3 rounded-lg bg-muted/50 space-y-1">
-                    <div className="text-sm font-mono">
-                      {previewData.lastReading.reading_timestamp.split('T')[0]} {previewData.lastReading.reading_timestamp.split('T')[1]?.substring(0, 8) || '00:00:00'}
+                  <div className="p-3 rounded-lg bg-muted/50 space-y-3">
+                    <div className="space-y-1">
+                      <div className="text-xs text-muted-foreground">To Date & Time</div>
+                      <div className="text-sm font-mono">
+                        {dateTo ? format(dateTo, "yyyy-MM-dd") : '-'} {timeTo}
+                      </div>
                     </div>
-                    <div className="text-xs text-muted-foreground">
-                      kWh: {previewData.lastReading.kwh_value}
+                    <div className="space-y-1">
+                      <div className="text-xs text-muted-foreground">Last Actual Reading Found</div>
+                      <div className="text-sm font-mono">
+                        {previewData.lastReading.reading_timestamp.split('T')[0]} {previewData.lastReading.reading_timestamp.split('T')[1]?.substring(0, 8) || '00:00:00'}
+                      </div>
                     </div>
                   </div>
                 </div>
