@@ -68,18 +68,12 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
         };
       });
 
-      // Calculate based on operations and factors
+      // Calculate based on operations and factors - only sum columns with "sum" operation
       selectedOps.forEach(({ operation, total, factor }) => {
         const adjustedTotal = total * factor;
         
         if (operation === "sum") {
           newTotal += adjustedTotal;
-        } else if (operation === "max") {
-          newTotal = Math.max(newTotal, adjustedTotal);
-        } else if (operation === "min") {
-          newTotal = newTotal === 0 ? adjustedTotal : Math.min(newTotal, adjustedTotal);
-        } else if (operation === "count") {
-          newTotal += 1;
         }
       });
 
