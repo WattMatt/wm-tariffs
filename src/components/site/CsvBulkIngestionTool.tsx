@@ -1612,7 +1612,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                 }}
                                 className="shrink-0 mt-6"
                               />
-                              <div className="flex-1 space-y-3">
+                              <div className="flex-1">
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                                   <div>
                                     <Label className="text-xs mb-1">Column Name</Label>
@@ -1654,11 +1654,8 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                                       </SelectContent>
                                     </Select>
                                   </div>
-                                </div>
-                                
-                                <div>
-                                  <Label className="text-xs mb-1">Split Column By</Label>
-                                  <div className="flex gap-2">
+                                  <div>
+                                    <Label className="text-xs mb-1">Split Column By</Label>
                                     <Select
                                       value={splitConfig ? 'split' : 'none'}
                                       onValueChange={(sep) => {
