@@ -762,7 +762,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                             const date = new Date(point.timestampStr);
                             const currentDay = date.getDate();
                             
-                            if (lastDay !== null && currentDay !== lastDay) {
+                            if (lastDay === null || currentDay !== lastDay) {
                               dayBoundaries.push(point.timestampStr);
                             }
                             lastDay = currentDay;
@@ -779,9 +779,28 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                           />
                         ));
                       })()}
-                      <XAxis
+                      <XAxis 
                         dataKey="timestampStr"
                         height={100}
+                        ticks={(() => {
+                          const data = isManipulationApplied ? manipulatedData : loadProfileData;
+                          const dayBoundaries: string[] = [];
+                          let lastDay: number | null = null;
+                          
+                          data.forEach((point) => {
+                            if (point.timestampStr) {
+                              const date = new Date(point.timestampStr);
+                              const currentDay = date.getDate();
+                              
+                              if (lastDay === null || currentDay !== lastDay) {
+                                dayBoundaries.push(point.timestampStr);
+                              }
+                              lastDay = currentDay;
+                            }
+                          });
+                          
+                          return dayBoundaries;
+                         })()}
                         tick={(props: any) => {
                           const { x, y, payload, index, visibleTicksCount } = props;
                           if (!payload.value) return null;
