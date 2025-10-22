@@ -802,74 +802,57 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                           return dayBoundaries;
                          })()}
                         tick={(props: any) => {
-                          const { x, y, payload, index, visibleTicksCount } = props;
+                          const { x, y, payload, index } = props;
                           if (!payload.value) return null;
                           
                           try {
+                            const data = isManipulationApplied ? manipulatedData : loadProfileData;
+                            const dayBoundaries: string[] = [];
+                            let lastDay: number | null = null;
+                            
+                            data.forEach((point) => {
+                              if (point.timestampStr) {
+                                const date = new Date(point.timestampStr);
+                                const currentDay = date.getDate();
+                                
+                                if (lastDay === null || currentDay !== lastDay) {
+                                  dayBoundaries.push(point.timestampStr);
+                                }
+                                lastDay = currentDay;
+                              }
+                            });
+                            
+                            // Current tick is at a day boundary
                             const currentDate = new Date(payload.value);
                             const currentDay = currentDate.getDate();
                             const currentMonth = currentDate.getMonth();
                             const currentYear = currentDate.getFullYear();
                             
-                            const data = isManipulationApplied ? manipulatedData : loadProfileData;
+                            // Calculate center position between this boundary and the next
+                            // The label should be in the middle of this day's data
                             
-                            // Find the center of the current month's range in visible data
-                            let monthStartIdx = index;
-                            let monthEndIdx = index;
+                            // Find all data points in the entire dataset to establish month/year ranges
+                            const allDates = data.map(d => new Date(d.timestampStr));
                             
-                            // Find start of month
-                            for (let i = index; i >= 0; i--) {
-                              const d = new Date(data[i]?.timestampStr);
-                              if (d.getMonth() === currentMonth && d.getFullYear() === currentYear) {
-                                monthStartIdx = i;
-                              } else {
-                                break;
-                              }
-                            }
+                            // Determine if we should show month label (center of month)
+                            const monthData = allDates.filter(d => 
+                              d.getMonth() === currentMonth && d.getFullYear() === currentYear
+                            );
+                            const monthMiddleTime = monthData.length > 0 
+                              ? new Date((monthData[0].getTime() + monthData[monthData.length - 1].getTime()) / 2)
+                              : currentDate;
+                            const showMonth = Math.abs(currentDate.getTime() - monthMiddleTime.getTime()) < 12 * 60 * 60 * 1000; // Within 12 hours
                             
-                            // Find end of month
-                            for (let i = index; i < data.length; i++) {
-                              const d = new Date(data[i]?.timestampStr);
-                              if (d.getMonth() === currentMonth && d.getFullYear() === currentYear) {
-                                monthEndIdx = i;
-                              } else {
-                                break;
-                              }
-                            }
-                            
-                            const monthCenterIdx = Math.floor((monthStartIdx + monthEndIdx) / 2);
-                            const showMonth = index === monthCenterIdx;
-                            
-                            // Find the center of the current year's range
-                            let yearStartIdx = index;
-                            let yearEndIdx = index;
-                            
-                            // Find start of year
-                            for (let i = index; i >= 0; i--) {
-                              const d = new Date(data[i]?.timestampStr);
-                              if (d.getFullYear() === currentYear) {
-                                yearStartIdx = i;
-                              } else {
-                                break;
-                              }
-                            }
-                            
-                            // Find end of year
-                            for (let i = index; i < data.length; i++) {
-                              const d = new Date(data[i]?.timestampStr);
-                              if (d.getFullYear() === currentYear) {
-                                yearEndIdx = i;
-                              } else {
-                                break;
-                              }
-                            }
-                            
-                            const yearCenterIdx = Math.floor((yearStartIdx + yearEndIdx) / 2);
-                            const showYear = index === yearCenterIdx;
+                            // Determine if we should show year label (center of year)
+                            const yearData = allDates.filter(d => d.getFullYear() === currentYear);
+                            const yearMiddleTime = yearData.length > 0
+                              ? new Date((yearData[0].getTime() + yearData[yearData.length - 1].getTime()) / 2)
+                              : currentDate;
+                            const showYear = Math.abs(currentDate.getTime() - yearMiddleTime.getTime()) < 12 * 60 * 60 * 1000; // Within 12 hours
                             
                             return (
                               <g transform={`translate(${x},${y})`}>
-                                {/* Day number */}
+                                {/* Day number - always show */}
                                 <text 
                                   x={0} 
                                   y={0} 
