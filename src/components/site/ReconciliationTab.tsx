@@ -597,22 +597,6 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
-              <Label className="text-sm font-semibold mb-3 block">Total Consumption in Selected Period</Label>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                <div className="space-y-1">
-                  <div className="text-xs text-muted-foreground">Total kWh</div>
-                  <div className="text-2xl font-bold">{previewData.totalKwh.toFixed(2)}</div>
-                </div>
-                {Object.entries(previewData.columnTotals).map(([column, total]: [string, any]) => (
-                  <div key={column} className="space-y-1">
-                    <div className="text-xs text-muted-foreground">{column}</div>
-                    <div className="text-lg font-semibold">{Number(total).toFixed(2)}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -641,6 +625,22 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                     Note: This shows the last data point found in your database within the selected range. If it doesn't match your end date, there's no data beyond this point.
                   </div>
                 </div>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
+              <Label className="text-sm font-semibold mb-3 block">Total Consumption in Selected Period</Label>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <div className="text-xs text-muted-foreground">Total kWh</div>
+                  <div className="text-2xl font-bold">{previewData.totalKwh.toFixed(2)}</div>
+                </div>
+                {Object.entries(previewData.columnTotals).map(([column, total]: [string, any]) => (
+                  <div key={column} className="space-y-1">
+                    <div className="text-xs text-muted-foreground">{column}</div>
+                    <div className="text-lg font-semibold">{Number(total).toFixed(2)}</div>
+                  </div>
+                ))}
               </div>
             </div>
 
