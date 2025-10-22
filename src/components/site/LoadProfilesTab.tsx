@@ -39,7 +39,6 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
   const [timeTo, setTimeTo] = useState<string>("23:59");
   const [loadProfileData, setLoadProfileData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [normalizedData, setNormalizedData] = useState<any[]>([]);
   const [selectedQuantities, setSelectedQuantities] = useState<Set<string>>(new Set());
   const [availableColumns, setAvailableColumns] = useState<string[]>([]);
   const [yAxisMin, setYAxisMin] = useState<string>("");
@@ -160,7 +159,6 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
       } else {
         toast.info("No readings found for selected period");
         setLoadProfileData([]);
-        setNormalizedData([]);
         setAvailableColumns([]);
       }
     } catch (error) {
@@ -223,18 +221,6 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
     console.log("Load Profile - Chart data to display:", chartData);
     console.log("Deduplication: Original readings:", readings.length, "Unique readings:", uniqueReadings.length);
     setLoadProfileData(chartData);
-
-    // Calculate normalized data based on selected quantities
-    if (chartData.length > 0 && selectedQuantities.size > 0) {
-      const firstSelected = Array.from(selectedQuantities)[0];
-      const maxValue = Math.max(...chartData.map((d) => d[firstSelected] || 0));
-      const normalized = chartData.map((d) => ({
-        time: d.time,
-        timestamp: d.timestamp,
-        normalized: maxValue > 0 ? ((d[firstSelected] || 0) / maxValue) : 0,
-      }));
-      setNormalizedData(normalized);
-    }
   };
 
   const handleQuantityToggle = (quantity: string, checked: boolean) => {
@@ -621,61 +607,6 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                     })}
                   </LineChart>
                 </ResponsiveContainer>
-              </div>
-
-              <div>
-                <h3 className="text-lg font-semibold mb-4">
-                  Normalized Daily Load Profile - {selectedMeter?.meter_number}
-                </h3>
-                <ResponsiveContainer width="100%" height={400}>
-                  <LineChart data={normalizedData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                    <XAxis
-                      dataKey="time"
-                      stroke="hsl(var(--muted-foreground))"
-                      tick={{ fill: "hsl(var(--foreground))", fontSize: 11 }}
-                      interval="preserveStartEnd"
-                      label={{
-                        value: "Time",
-                        position: "insideBottom",
-                        offset: -5,
-                        style: { fill: "hsl(var(--foreground))" },
-                      }}
-                    />
-                    <YAxis
-                      stroke="hsl(var(--muted-foreground))"
-                      tick={{ fill: "hsl(var(--foreground))" }}
-                      domain={[0, 1.2]}
-                      ticks={[0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.2]}
-                      label={{
-                        value: "Normalized power factor (p.u.)",
-                        angle: -90,
-                        position: "insideLeft",
-                        style: { fill: "hsl(var(--foreground))" },
-                      }}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "hsl(var(--background))",
-                        border: "1px solid hsl(var(--border))",
-                        borderRadius: "6px",
-                      }}
-                      formatter={(value: number) => [value.toFixed(3), "Normalized"]}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="normalized"
-                      stroke="hsl(220, 90%, 56%)"
-                      strokeWidth={3}
-                      dot={false}
-                      name="Normalized Load"
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-                <p className="text-sm text-muted-foreground mt-4">
-                  Normalized values represent the load as a fraction of the maximum load during
-                  the selected period. Peak load = 1.0
-                </p>
               </div>
             </div>
           )}
