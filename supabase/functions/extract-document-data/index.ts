@@ -25,6 +25,83 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // Check if file is PDF and convert to image
+    let imageUrl = fileUrl;
+    if (fileUrl.toLowerCase().includes('.pdf')) {
+      console.log("PDF detected, converting to image...");
+      
+      try {
+        // Download PDF from the signed URL
+        const pdfResponse = await fetch(fileUrl);
+        if (!pdfResponse.ok) {
+          throw new Error(`Failed to download PDF: ${pdfResponse.status}`);
+        }
+        
+        const pdfData = await pdfResponse.blob();
+        const arrayBuffer = await pdfData.arrayBuffer();
+        const uint8Array = new Uint8Array(arrayBuffer);
+
+        // Import pdfjs-serverless
+        const { getDocument } = await import('https://esm.sh/pdfjs-serverless@0.3.2');
+
+        // Load PDF
+        const loadingTask = getDocument(uint8Array);
+        const pdf = await loadingTask.promise;
+        console.log(`PDF loaded, pages: ${pdf.numPages}`);
+
+        // Get first page
+        const page = await pdf.getPage(1);
+        const viewport = page.getViewport({ scale: 2.0 });
+
+        // Create canvas
+        const { createCanvas } = await import('https://deno.land/x/canvas@v1.4.1/mod.ts');
+        const canvas = createCanvas(viewport.width, viewport.height);
+        const context = canvas.getContext('2d');
+
+        // Render PDF page to canvas
+        await page.render({
+          canvasContext: context,
+          viewport: viewport,
+        }).promise;
+
+        console.log('PDF rendered to canvas');
+
+        // Convert canvas to PNG buffer
+        const imageBuffer = canvas.toBuffer('image/png');
+        
+        // Upload the converted image to site-documents bucket
+        const imagePath = `temp/${documentId}_converted.png`;
+        const { error: uploadError } = await supabase
+          .storage
+          .from('site-documents')
+          .upload(imagePath, imageBuffer, {
+            contentType: 'image/png',
+            upsert: true,
+          });
+
+        if (uploadError) {
+          console.error('Error uploading converted image:', uploadError);
+          throw new Error('Failed to upload converted image');
+        }
+
+        // Get signed URL for the converted image
+        const { data: urlData } = await supabase
+          .storage
+          .from('site-documents')
+          .createSignedUrl(imagePath, 3600);
+
+        if (!urlData?.signedUrl) {
+          throw new Error('Failed to get signed URL for converted image');
+        }
+
+        imageUrl = urlData.signedUrl;
+        console.log('PDF converted successfully to image');
+      } catch (conversionError) {
+        console.error('PDF conversion failed:', conversionError);
+        throw new Error(`PDF conversion failed: ${conversionError instanceof Error ? conversionError.message : 'Unknown error'}`);
+      }
+    }
+
     // Define the extraction prompt based on document type
     const systemPrompt = documentType === 'municipal_account'
       ? `You are an expert at extracting data from South African municipal electricity accounts. Extract the following information:
@@ -57,7 +134,7 @@ Return the data in a structured format.`;
             role: "user",
             content: [
               { type: "text", text: "Extract the relevant billing information from this document." },
-              { type: "image_url", image_url: { url: fileUrl } }
+              { type: "image_url", image_url: { url: imageUrl } }
             ]
           }
         ],
