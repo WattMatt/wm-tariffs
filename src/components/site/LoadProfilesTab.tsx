@@ -44,7 +44,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
   const [yAxisMin, setYAxisMin] = useState<string>("");
   const [yAxisMax, setYAxisMax] = useState<string>("");
   const [hiddenLines, setHiddenLines] = useState<Set<string>>(new Set());
-  const [brushStartIndex, setBrushStartIndex] = useState<number | undefined>(undefined);
+  const [brushStartIndex, setBrushStartIndex] = useState<number>(0);
   const [brushEndIndex, setBrushEndIndex] = useState<number | undefined>(undefined);
   const [manipulationOperation, setManipulationOperation] = useState<string>("sum");
   const [manipulationDateFrom, setManipulationDateFrom] = useState<Date>();
@@ -226,9 +226,9 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
     console.log("Load Profile - Chart data to display:", chartData);
     console.log("Deduplication: Original readings:", readings.length, "Unique readings:", uniqueReadings.length);
     setLoadProfileData(chartData);
-    // Reset brush to show all data
+    // Set brush to show all data by default
     setBrushStartIndex(0);
-    setBrushEndIndex(chartData.length - 1);
+    setBrushEndIndex(chartData.length > 0 ? chartData.length - 1 : undefined);
   };
 
   const handleQuantityToggle = (quantity: string, checked: boolean) => {
@@ -264,7 +264,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
   const handleResetView = () => {
     const currentData = isManipulationApplied ? manipulatedData : loadProfileData;
     setBrushStartIndex(0);
-    setBrushEndIndex(currentData.length - 1);
+    setBrushEndIndex(currentData.length > 0 ? currentData.length - 1 : undefined);
     setYAxisMin("");
     setYAxisMax("");
   };
@@ -273,8 +273,12 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
     const currentData = isManipulationApplied ? manipulatedData : loadProfileData;
     if (currentData.length === 0) return;
     
+    // Calculate based on 30-minute intervals (48 per day)
+    const readingsPerDay = 48;
+    const totalReadings = days * readingsPerDay;
     const maxIndex = currentData.length - 1;
-    const minIndex = Math.max(0, maxIndex - (days * 48) + 1); // Assuming 48 readings per day (30min intervals)
+    const minIndex = Math.max(0, maxIndex - totalReadings + 1);
+    
     setBrushStartIndex(minIndex);
     setBrushEndIndex(maxIndex);
   };
@@ -430,7 +434,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
       setIsManipulationApplied(true);
       // Reset brush to show all manipulated data
       setBrushStartIndex(0);
-      setBrushEndIndex(manipulated.length - 1);
+      setBrushEndIndex(manipulated.length > 0 ? manipulated.length - 1 : undefined);
       
       const subsetDurationDays = subsetDurationMs / (1000 * 60 * 60 * 24);
       const intervalDesc = subsetDurationDays < 1 
@@ -449,7 +453,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
     setIsManipulationApplied(false);
     // Reset brush to show all original data
     setBrushStartIndex(0);
-    setBrushEndIndex(loadProfileData.length - 1);
+    setBrushEndIndex(loadProfileData.length > 0 ? loadProfileData.length - 1 : undefined);
     toast.info("Reset to original load profile");
   };
 
