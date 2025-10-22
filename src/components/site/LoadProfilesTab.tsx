@@ -753,18 +753,122 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis 
                         dataKey="timestampStr"
-                        tickFormatter={(value) => {
-                          if (!value) return '';
+                        height={100}
+                        tick={(props: any) => {
+                          const { x, y, payload, index, visibleTicksCount } = props;
+                          if (!payload.value) return null;
+                          
                           try {
-                            const date = new Date(value);
-                            return format(date, 'MMM dd HH:mm');
+                            const currentDate = new Date(payload.value);
+                            const currentDay = currentDate.getDate();
+                            const currentMonth = currentDate.getMonth();
+                            const currentYear = currentDate.getFullYear();
+                            
+                            const data = isManipulationApplied ? manipulatedData : loadProfileData;
+                            
+                            // Find the center of the current month's range in visible data
+                            let monthStartIdx = index;
+                            let monthEndIdx = index;
+                            
+                            // Find start of month
+                            for (let i = index; i >= 0; i--) {
+                              const d = new Date(data[i]?.timestampStr);
+                              if (d.getMonth() === currentMonth && d.getFullYear() === currentYear) {
+                                monthStartIdx = i;
+                              } else {
+                                break;
+                              }
+                            }
+                            
+                            // Find end of month
+                            for (let i = index; i < data.length; i++) {
+                              const d = new Date(data[i]?.timestampStr);
+                              if (d.getMonth() === currentMonth && d.getFullYear() === currentYear) {
+                                monthEndIdx = i;
+                              } else {
+                                break;
+                              }
+                            }
+                            
+                            const monthCenterIdx = Math.floor((monthStartIdx + monthEndIdx) / 2);
+                            const showMonth = index === monthCenterIdx;
+                            
+                            // Find the center of the current year's range
+                            let yearStartIdx = index;
+                            let yearEndIdx = index;
+                            
+                            // Find start of year
+                            for (let i = index; i >= 0; i--) {
+                              const d = new Date(data[i]?.timestampStr);
+                              if (d.getFullYear() === currentYear) {
+                                yearStartIdx = i;
+                              } else {
+                                break;
+                              }
+                            }
+                            
+                            // Find end of year
+                            for (let i = index; i < data.length; i++) {
+                              const d = new Date(data[i]?.timestampStr);
+                              if (d.getFullYear() === currentYear) {
+                                yearEndIdx = i;
+                              } else {
+                                break;
+                              }
+                            }
+                            
+                            const yearCenterIdx = Math.floor((yearStartIdx + yearEndIdx) / 2);
+                            const showYear = index === yearCenterIdx;
+                            
+                            return (
+                              <g transform={`translate(${x},${y})`}>
+                                {/* Day number */}
+                                <text 
+                                  x={0} 
+                                  y={0} 
+                                  dy={16} 
+                                  textAnchor="middle" 
+                                  fill="currentColor"
+                                  fontSize={12}
+                                >
+                                  {currentDay}
+                                </text>
+                                
+                                {/* Month name - centered in the month's range */}
+                                {showMonth && (
+                                  <text 
+                                    x={0} 
+                                    y={0} 
+                                    dy={38} 
+                                    textAnchor="middle" 
+                                    fill="currentColor"
+                                    fontSize={13}
+                                    fontWeight="500"
+                                  >
+                                    {format(currentDate, 'MMM')}
+                                  </text>
+                                )}
+                                
+                                {/* Year - centered in the year's range */}
+                                {showYear && (
+                                  <text 
+                                    x={0} 
+                                    y={0} 
+                                    dy={60} 
+                                    textAnchor="middle" 
+                                    fill="currentColor"
+                                    fontSize={13}
+                                    fontWeight="500"
+                                  >
+                                    {currentYear}
+                                  </text>
+                                )}
+                              </g>
+                            );
                           } catch {
-                            return value;
+                            return null;
                           }
                         }}
-                        angle={-45}
-                        textAnchor="end"
-                        height={80}
                       />
                       <YAxis domain={getYAxisDomain()} />
                       <Tooltip 
