@@ -44,8 +44,8 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
   const [yAxisMin, setYAxisMin] = useState<string>("");
   const [yAxisMax, setYAxisMax] = useState<string>("");
   const [hiddenLines, setHiddenLines] = useState<Set<string>>(new Set());
-  const [brushStartIndex, setBrushStartIndex] = useState<number | undefined>(undefined);
-  const [brushEndIndex, setBrushEndIndex] = useState<number | undefined>(undefined);
+  const [brushStartIndex, setBrushStartIndex] = useState<number>(0);
+  const [brushEndIndex, setBrushEndIndex] = useState<number>(0);
   const [manipulationOperation, setManipulationOperation] = useState<string>("sum");
   const [manipulationDateFrom, setManipulationDateFrom] = useState<Date>();
   const [manipulationDateTo, setManipulationDateTo] = useState<Date>();
@@ -226,9 +226,9 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
     console.log("Load Profile - Chart data to display:", chartData);
     console.log("Deduplication: Original readings:", readings.length, "Unique readings:", uniqueReadings.length);
     setLoadProfileData(chartData);
-    // Don't set brush indices - let it show all data by default
-    setBrushStartIndex(undefined);
-    setBrushEndIndex(undefined);
+    // Set brush to show ALL data
+    setBrushStartIndex(0);
+    setBrushEndIndex(Math.max(0, chartData.length - 1));
   };
 
   const handleQuantityToggle = (quantity: string, checked: boolean) => {
@@ -262,8 +262,9 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
   };
 
   const handleResetView = () => {
-    setBrushStartIndex(undefined);
-    setBrushEndIndex(undefined);
+    const currentData = isManipulationApplied ? manipulatedData : loadProfileData;
+    setBrushStartIndex(0);
+    setBrushEndIndex(Math.max(0, currentData.length - 1));
     setYAxisMin("");
     setYAxisMax("");
   };
@@ -431,9 +432,9 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
 
       setManipulatedData(manipulated);
       setIsManipulationApplied(true);
-      // Don't set brush indices - let it show all manipulated data by default
-      setBrushStartIndex(undefined);
-      setBrushEndIndex(undefined);
+      // Set brush to show ALL manipulated data
+      setBrushStartIndex(0);
+      setBrushEndIndex(Math.max(0, manipulated.length - 1));
       
       const subsetDurationDays = subsetDurationMs / (1000 * 60 * 60 * 24);
       const intervalDesc = subsetDurationDays < 1 
@@ -450,9 +451,9 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
   const handleResetManipulation = () => {
     setManipulatedData([]);
     setIsManipulationApplied(false);
-    // Reset brush to show all original data
-    setBrushStartIndex(undefined);
-    setBrushEndIndex(undefined);
+    // Reset brush to show ALL original data
+    setBrushStartIndex(0);
+    setBrushEndIndex(Math.max(0, loadProfileData.length - 1));
     toast.info("Reset to original load profile");
   };
 
@@ -839,8 +840,8 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                       height={30}
                       stroke="hsl(var(--primary))"
                       fill="hsl(var(--muted))"
-                      startIndex={brushStartIndex ?? 0}
-                      endIndex={brushEndIndex ?? (isManipulationApplied ? manipulatedData.length - 1 : loadProfileData.length - 1)}
+                      startIndex={brushStartIndex}
+                      endIndex={brushEndIndex}
                       onChange={(e: any) => {
                         setBrushStartIndex(e.startIndex);
                         setBrushEndIndex(e.endIndex);
