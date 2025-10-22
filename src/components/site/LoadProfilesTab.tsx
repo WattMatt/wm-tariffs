@@ -155,7 +155,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label htmlFor="meter-select">Select Meter</Label>
               <Select value={selectedMeterId} onValueChange={setSelectedMeterId}>
@@ -173,7 +173,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
             </div>
 
             <div className="space-y-2">
-              <Label>Date From</Label>
+              <Label>Date & Time From</Label>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
@@ -184,23 +184,39 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                     )}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
-                    {dateFrom ? format(dateFrom, "PPP") : <span>Pick start date</span>}
+                    {dateFrom ? (
+                      <span>{format(dateFrom, "PPP")} at {timeFrom}</span>
+                    ) : (
+                      <span>Pick start date & time</span>
+                    )}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={dateFrom}
-                    onSelect={setDateFrom}
-                    initialFocus
-                    className={cn("p-3 pointer-events-auto")}
-                  />
+                  <div className="pointer-events-auto">
+                    <Calendar
+                      mode="single"
+                      selected={dateFrom}
+                      onSelect={setDateFrom}
+                      initialFocus
+                      className="p-3"
+                    />
+                    <div className="border-t px-3 py-3">
+                      <Label htmlFor="time-from" className="text-sm">Time</Label>
+                      <Input
+                        id="time-from"
+                        type="time"
+                        value={timeFrom}
+                        onChange={(e) => setTimeFrom(e.target.value)}
+                        className="mt-2"
+                      />
+                    </div>
+                  </div>
                 </PopoverContent>
               </Popover>
             </div>
 
             <div className="space-y-2">
-              <Label>Date To</Label>
+              <Label>Date & Time To</Label>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
@@ -211,39 +227,35 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                     )}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
-                    {dateTo ? format(dateTo, "PPP") : <span>Pick end date</span>}
+                    {dateTo ? (
+                      <span>{format(dateTo, "PPP")} at {timeTo}</span>
+                    ) : (
+                      <span>Pick end date & time</span>
+                    )}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={dateTo}
-                    onSelect={setDateTo}
-                    initialFocus
-                    className={cn("p-3 pointer-events-auto")}
-                  />
+                  <div className="pointer-events-auto">
+                    <Calendar
+                      mode="single"
+                      selected={dateTo}
+                      onSelect={setDateTo}
+                      initialFocus
+                      className="p-3"
+                    />
+                    <div className="border-t px-3 py-3">
+                      <Label htmlFor="time-to" className="text-sm">Time</Label>
+                      <Input
+                        id="time-to"
+                        type="time"
+                        value={timeTo}
+                        onChange={(e) => setTimeTo(e.target.value)}
+                        className="mt-2"
+                      />
+                    </div>
+                  </div>
                 </PopoverContent>
               </Popover>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="time-from">Time From</Label>
-              <Input
-                id="time-from"
-                type="time"
-                value={timeFrom}
-                onChange={(e) => setTimeFrom(e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="time-to">Time To</Label>
-              <Input
-                id="time-to"
-                type="time"
-                value={timeTo}
-                onChange={(e) => setTimeTo(e.target.value)}
-              />
             </div>
           </div>
 
