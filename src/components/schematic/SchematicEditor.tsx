@@ -475,9 +475,9 @@ export default function SchematicEditor({
       const x = (meter.position.x / 100) * canvasWidth;
       const y = (meter.position.y / 100) * canvasHeight;
       
-      const scaleX = meter.scale_x || 1;
-      const scaleY = meter.scale_y || 1;
-      
+      const scaleX = meter.scale_x || 1.0;
+      const scaleY = meter.scale_y || 1.0;
+
       console.log(`🎨 Rendering meter ${capturedIndex} "${meter.meter_number}":`, {
         percentPos: meter.position,
         pixelPos: { x: Math.round(x), y: Math.round(y) },
@@ -739,8 +739,8 @@ export default function SchematicEditor({
         originX: 'center',
         originY: 'center',
         lockRotation: true,
-        scaleX: (pos as any).scale_x ? Number((pos as any).scale_x) : 1,
-        scaleY: (pos as any).scale_y ? Number((pos as any).scale_y) : 1,
+        scaleX: (pos as any).scale_x ? Number((pos as any).scale_x) : 1.0,
+        scaleY: (pos as any).scale_y ? Number((pos as any).scale_y) : 1.0,
       });
 
       background.set('data', { meterId: pos.meter_id, positionId: pos.id });
@@ -767,8 +767,8 @@ export default function SchematicEditor({
       ];
 
       const textElements: Text[] = [];
-      const savedScaleX = (pos as any).scale_x ? Number((pos as any).scale_x) : 1;
-      const savedScaleY = (pos as any).scale_y ? Number((pos as any).scale_y) : 1;
+      const savedScaleX = (pos as any).scale_x ? Number((pos as any).scale_x) : 1.0;
+      const savedScaleY = (pos as any).scale_y ? Number((pos as any).scale_y) : 1.0;
       
       fields.forEach((field, i) => {
         // Label text (left column)
