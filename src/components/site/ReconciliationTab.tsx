@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { CalendarIcon, Download, Eye, FileDown } from "lucide-react";
 import { format } from "date-fns";
@@ -28,6 +29,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [previewData, setPreviewData] = useState<any>(null);
   const [selectedColumns, setSelectedColumns] = useState<Set<string>>(new Set());
+  const [columnOperations, setColumnOperations] = useState<Map<string, string>>(new Map());
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
 
   // Helper to combine date and time as UTC (no timezone conversion)
@@ -592,15 +594,11 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
               <span>Bulk Check Meter Preview - {previewData.meterNumber}</span>
               <Badge variant="outline">{previewData.totalReadings} readings</Badge>
             </CardTitle>
-            <CardDescription>
-              Select columns to include in reconciliation calculations. Range: {dateFrom && `${format(dateFrom, "yyyy-MM-dd")} ${timeFrom}`} to {dateTo && `${format(dateTo, "yyyy-MM-dd")} ${timeTo}`}
-            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold">First Actual Reading Found</Label>
+                <div>
                   <div className="p-3 rounded-lg bg-muted/50 space-y-3">
                     <div className="space-y-1">
                       <div className="text-xs text-muted-foreground">From Date & Time</div>
@@ -617,8 +615,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold">Last Actual Reading Found</Label>
+                <div>
                   <div className="p-3 rounded-lg bg-muted/50 space-y-3">
                     <div className="space-y-1">
                       <div className="text-xs text-muted-foreground">To Date & Time</div>
@@ -655,9 +652,9 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
 
             <div className="space-y-3">
               <Label className="text-sm font-semibold">Available Columns - Select to Include in Calculations</Label>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              <div className="space-y-2">
                 {previewData.availableColumns.map((column: string) => (
-                  <div key={column} className="flex items-center space-x-2 p-2 rounded-lg hover:bg-muted/50">
+                  <div key={column} className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/50">
                     <Checkbox
                       id={`column-${column}`}
                       checked={selectedColumns.has(column)}
@@ -665,6 +662,11 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                         const newSelected = new Set(selectedColumns);
                         if (checked) {
                           newSelected.add(column);
+                          if (!columnOperations.has(column)) {
+                            const newOps = new Map(columnOperations);
+                            newOps.set(column, "add");
+                            setColumnOperations(newOps);
+                          }
                         } else {
                           newSelected.delete(column);
                         }
@@ -677,6 +679,24 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                     >
                       {column}
                     </Label>
+                    {selectedColumns.has(column) && (
+                      <Select
+                        value={columnOperations.get(column) || "add"}
+                        onValueChange={(value) => {
+                          const newOps = new Map(columnOperations);
+                          newOps.set(column, value);
+                          setColumnOperations(newOps);
+                        }}
+                      >
+                        <SelectTrigger className="w-32">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="add">Add (+)</SelectItem>
+                          <SelectItem value="subtract">Subtract (-)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
                   </div>
                 ))}
               </div>
