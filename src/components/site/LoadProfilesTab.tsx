@@ -298,7 +298,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {dateFrom ? (
-                      <span>{format(dateFrom, "PPP")} at {timeFrom}</span>
+                      <span>{format(dateFrom, "MMM d, yyyy")} at {timeFrom}</span>
                     ) : (
                       <span>Pick start date & time</span>
                     )}
@@ -339,7 +339,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {dateTo ? (
-                      <span>{format(dateTo, "PPP")} at {timeTo}</span>
+                      <span>{format(dateTo, "MMM d, yyyy")} at {timeTo}</span>
                     ) : (
                       <span>Pick end date & time</span>
                     )}
