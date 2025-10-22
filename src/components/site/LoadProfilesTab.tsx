@@ -5,13 +5,13 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
-import { format, parseISO, startOfDay, endOfDay } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { CalendarIcon, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { DateRange } from "react-day-picker";
+import { Input } from "@/components/ui/input";
 
 interface LoadProfilesTabProps {
   siteId: string;
@@ -31,7 +31,10 @@ interface ReadingData {
 export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
   const [meters, setMeters] = useState<Meter[]>([]);
   const [selectedMeterId, setSelectedMeterId] = useState<string>("");
-  const [dateRange, setDateRange] = useState<DateRange | undefined>();
+  const [dateFrom, setDateFrom] = useState<Date>();
+  const [dateTo, setDateTo] = useState<Date>();
+  const [timeFrom, setTimeFrom] = useState<string>("00:00");
+  const [timeTo, setTimeTo] = useState<string>("23:59");
   const [loadProfileData, setLoadProfileData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [normalizedData, setNormalizedData] = useState<any[]>([]);
@@ -41,10 +44,20 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
   }, [siteId]);
 
   useEffect(() => {
-    if (selectedMeterId && dateRange?.from) {
+    if (selectedMeterId && dateFrom && dateTo) {
       fetchLoadProfile();
     }
-  }, [selectedMeterId, dateRange]);
+  }, [selectedMeterId, dateFrom, dateTo, timeFrom, timeTo]);
+
+  // Helper to combine date and time as UTC (no timezone conversion)
+  const getFullDateTime = (date: Date, time: string): Date => {
+    const [hours, minutes] = time.split(':').map(Number);
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const day = date.getDate();
+    // Create UTC date directly to avoid timezone shifts
+    return new Date(Date.UTC(year, month, day, hours, minutes, 0, 0));
+  };
 
   const fetchMeters = async () => {
     const { data, error } = await supabase
@@ -65,27 +78,26 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
   };
 
   const fetchLoadProfile = async () => {
-    if (!selectedMeterId || !dateRange?.from) return;
+    if (!selectedMeterId || !dateFrom || !dateTo) return;
 
     setIsLoading(true);
     try {
-      // Use same day for both start and end if only one date selected
-      const endDate = dateRange.to || dateRange.from;
+      const fullDateTimeFrom = getFullDateTime(dateFrom, timeFrom);
+      const fullDateTimeTo = getFullDateTime(dateTo, timeTo);
       
       const { data, error } = await supabase
         .from("meter_readings")
         .select("reading_timestamp, kva_value")
         .eq("meter_id", selectedMeterId)
-        .gte("reading_timestamp", startOfDay(dateRange.from).toISOString())
-        .lte("reading_timestamp", endOfDay(endDate).toISOString())
+        .gte("reading_timestamp", fullDateTimeFrom.toISOString())
+        .lte("reading_timestamp", fullDateTimeTo.toISOString())
         .order("reading_timestamp");
 
       if (error) throw error;
 
       if (data && data.length > 0) {
         console.log("Load Profile - Raw data from database:", data);
-        const endDate = dateRange.to || dateRange.from;
-        processLoadProfile(data, endDate);
+        processLoadProfile(data);
       } else {
         toast.info("No readings found for selected period");
         setLoadProfileData([]);
@@ -99,7 +111,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
     }
   };
 
-  const processLoadProfile = (readings: ReadingData[], endDate: Date) => {
+  const processLoadProfile = (readings: ReadingData[]) => {
     // Plot exact kVA values from database without any calculations
     const chartData = readings.map((reading) => {
       const date = parseISO(reading.reading_timestamp);
@@ -139,11 +151,11 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
             Load Profiles
           </CardTitle>
           <CardDescription>
-            Analyze meter load patterns using kVA data over selected time periods
+            Analyze meter load patterns using kVA data over selected time periods with precise date and time selection
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="space-y-2">
               <Label htmlFor="meter-select">Select Meter</Label>
               <Select value={selectedMeterId} onValueChange={setSelectedMeterId}>
@@ -161,46 +173,77 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
             </div>
 
             <div className="space-y-2">
-              <Label>Date Range (or Single Date)</Label>
+              <Label>Date From</Label>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
                     className={cn(
                       "w-full justify-start text-left font-normal",
-                      !dateRange && "text-muted-foreground"
+                      !dateFrom && "text-muted-foreground"
                     )}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
-                    {dateRange?.from ? (
-                      dateRange.to ? (
-                        <>
-                          {format(dateRange.from, "LLL dd, y")} -{" "}
-                          {format(dateRange.to, "LLL dd, y")}
-                        </>
-                      ) : (
-                        format(dateRange.from, "LLL dd, y")
-                      )
-                    ) : (
-                      <span>Pick a date or date range</span>
-                    )}
+                    {dateFrom ? format(dateFrom, "PPP") : <span>Pick start date</span>}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
                   <Calendar
+                    mode="single"
+                    selected={dateFrom}
+                    onSelect={setDateFrom}
                     initialFocus
-                    mode="range"
-                    defaultMonth={dateRange?.from}
-                    selected={dateRange}
-                    onSelect={setDateRange}
-                    numberOfMonths={2}
                     className={cn("p-3 pointer-events-auto")}
                   />
                 </PopoverContent>
               </Popover>
-              <p className="text-xs text-muted-foreground">
-                Select a single date for that day's hourly profile, or a range to average across multiple days
-              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Date To</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !dateTo && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {dateTo ? format(dateTo, "PPP") : <span>Pick end date</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={dateTo}
+                    onSelect={setDateTo}
+                    initialFocus
+                    className={cn("p-3 pointer-events-auto")}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="time-from">Time From</Label>
+              <Input
+                id="time-from"
+                type="time"
+                value={timeFrom}
+                onChange={(e) => setTimeFrom(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="time-to">Time To</Label>
+              <Input
+                id="time-to"
+                type="time"
+                value={timeTo}
+                onChange={(e) => setTimeTo(e.target.value)}
+              />
             </div>
           </div>
 
@@ -217,9 +260,9 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                   Load Profile (kVA) - {selectedMeter?.meter_number}
                 </h3>
                 <p className="text-sm text-muted-foreground mb-2">
-                  Showing actual kVA values for each time slot (no averaging)
-                  {dateRange?.to && dateRange.from.getTime() !== dateRange.to.getTime() && (
-                    <> • {Math.ceil((dateRange.to.getTime() - dateRange.from.getTime()) / (1000 * 60 * 60 * 24)) + 1} day(s) selected</>
+                  Showing actual kVA values for each time slot
+                  {dateFrom && dateTo && dateFrom.getTime() !== dateTo.getTime() && (
+                    <> • {Math.ceil((dateTo.getTime() - dateFrom.getTime()) / (1000 * 60 * 60 * 24)) + 1} day(s) selected</>
                   )}
                 </p>
                 <ResponsiveContainer width="100%" height={400}>
@@ -318,7 +361,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
             </div>
           )}
 
-          {!isLoading && loadProfileData.length === 0 && dateRange?.from && (
+          {!isLoading && loadProfileData.length === 0 && dateFrom && dateTo && (
             <div className="flex items-center justify-center py-12 text-muted-foreground">
               <div className="text-center">
                 <TrendingUp className="w-12 h-12 mx-auto mb-2 opacity-50" />
@@ -328,12 +371,12 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
             </div>
           )}
 
-          {!dateRange?.from && (
+          {(!dateFrom || !dateTo) && (
             <div className="flex items-center justify-center py-12 text-muted-foreground">
               <div className="text-center">
                 <CalendarIcon className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                <p>Select a meter and date (or date range) to view load profiles</p>
-                <p className="text-sm mt-1">Choose a single date for that day's profile, or a range to average</p>
+                <p>Select a meter and date range to view load profiles</p>
+                <p className="text-sm mt-1">Choose dates and times to analyze load patterns</p>
               </div>
             </div>
           )}
