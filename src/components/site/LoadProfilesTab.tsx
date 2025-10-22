@@ -226,6 +226,9 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
     console.log("Load Profile - Chart data to display:", chartData);
     console.log("Deduplication: Original readings:", readings.length, "Unique readings:", uniqueReadings.length);
     setLoadProfileData(chartData);
+    // Reset brush to show all data
+    setBrushStartIndex(0);
+    setBrushEndIndex(chartData.length - 1);
   };
 
   const handleQuantityToggle = (quantity: string, checked: boolean) => {
@@ -259,8 +262,9 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
   };
 
   const handleResetView = () => {
-    setBrushStartIndex(undefined);
-    setBrushEndIndex(undefined);
+    const currentData = isManipulationApplied ? manipulatedData : loadProfileData;
+    setBrushStartIndex(0);
+    setBrushEndIndex(currentData.length - 1);
     setYAxisMin("");
     setYAxisMax("");
   };
@@ -424,6 +428,9 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
 
       setManipulatedData(manipulated);
       setIsManipulationApplied(true);
+      // Reset brush to show all manipulated data
+      setBrushStartIndex(0);
+      setBrushEndIndex(manipulated.length - 1);
       
       const subsetDurationDays = subsetDurationMs / (1000 * 60 * 60 * 24);
       const intervalDesc = subsetDurationDays < 1 
@@ -440,6 +447,9 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
   const handleResetManipulation = () => {
     setManipulatedData([]);
     setIsManipulationApplied(false);
+    // Reset brush to show all original data
+    setBrushStartIndex(0);
+    setBrushEndIndex(loadProfileData.length - 1);
     toast.info("Reset to original load profile");
   };
 
