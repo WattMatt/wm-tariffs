@@ -62,14 +62,14 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
     }
   }, [selectedMeterId, dateFrom, dateTo, timeFrom, timeTo]);
 
-  // Helper to combine date and time as UTC (no timezone conversion)
+  // Helper to combine date and time (no timezone conversion - treat as naive timestamp)
   const getFullDateTime = (date: Date, time: string): Date => {
     const [hours, minutes] = time.split(':').map(Number);
     const year = date.getFullYear();
     const month = date.getMonth();
     const day = date.getDate();
-    // Create UTC date directly to avoid timezone shifts
-    return new Date(Date.UTC(year, month, day, hours, minutes, 0, 0));
+    // Create date as naive timestamp
+    return new Date(year, month, day, hours, minutes, 0, 0);
   };
 
   const fetchMeters = async () => {
@@ -368,10 +368,10 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
         
         // Create a time key for grouping (relative time within the period)
         const relativeDate = new Date(earliestTime + timeSincePeriodStart);
-        const day = String(relativeDate.getUTCDate()).padStart(2, '0');
-        const month = String(relativeDate.getUTCMonth() + 1).padStart(2, '0');
-        const hours = String(relativeDate.getUTCHours()).padStart(2, '0');
-        const minutes = String(relativeDate.getUTCMinutes()).padStart(2, '0');
+        const day = String(relativeDate.getDate()).padStart(2, '0');
+        const month = String(relativeDate.getMonth() + 1).padStart(2, '0');
+        const hours = String(relativeDate.getHours()).padStart(2, '0');
+        const minutes = String(relativeDate.getMinutes()).padStart(2, '0');
         const timeKey = `${month}-${day} ${hours}:${minutes}`;
         
         if (!groups.has(timeKey)) {
@@ -840,10 +840,10 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                         // Format timestamp for display: "MM-DD HH:mm"
                         if (!value) return '';
                         const date = new Date(value);
-                        const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-                        const day = String(date.getUTCDate()).padStart(2, '0');
-                        const hours = String(date.getUTCHours()).padStart(2, '0');
-                        const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+                        const month = String(date.getMonth() + 1).padStart(2, '0');
+                        const day = String(date.getDate()).padStart(2, '0');
+                        const hours = String(date.getHours()).padStart(2, '0');
+                        const minutes = String(date.getMinutes()).padStart(2, '0');
                         return `${month}-${day} ${hours}:${minutes}`;
                       }}
                     />
@@ -887,8 +887,8 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                           // Format timestamp for brush display
                           if (!value) return '';
                           const date = new Date(value);
-                          const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-                          const day = String(date.getUTCDate()).padStart(2, '0');
+                          const month = String(date.getMonth() + 1).padStart(2, '0');
+                          const day = String(date.getDate()).padStart(2, '0');
                           return `${month}-${day}`;
                         }}
                       />

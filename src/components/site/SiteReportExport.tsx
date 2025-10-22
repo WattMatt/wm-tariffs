@@ -19,14 +19,14 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
   const [periodStart, setPeriodStart] = useState("");
   const [periodEnd, setPeriodEnd] = useState("");
 
-  // Helper to combine date and time as UTC
+  // Helper to combine date and time (no timezone conversion - treat as naive timestamp)
   const getFullDateTime = (dateStr: string, time: string = "00:00"): Date => {
     const date = new Date(dateStr);
     const [hours, minutes] = time.split(':').map(Number);
     const year = date.getFullYear();
     const month = date.getMonth();
     const day = date.getDate();
-    return new Date(Date.UTC(year, month, day, hours, minutes, 0, 0));
+    return new Date(year, month, day, hours, minutes, 0, 0);
   };
 
   const generateReport = async () => {

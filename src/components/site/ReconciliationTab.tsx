@@ -79,14 +79,14 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
     }
   };
 
-  // Helper to combine date and time as UTC (no timezone conversion)
+  // Helper to combine date and time (no timezone conversion - treat as naive timestamp)
   const getFullDateTime = (date: Date, time: string): Date => {
     const [hours, minutes] = time.split(':').map(Number);
     const year = date.getFullYear();
     const month = date.getMonth();
     const day = date.getDate();
-    // Create UTC date directly to avoid timezone shifts
-    return new Date(Date.UTC(year, month, day, hours, minutes, 0, 0));
+    // Create date as naive timestamp
+    return new Date(year, month, day, hours, minutes, 0, 0);
   };
 
   const handlePreview = async () => {
