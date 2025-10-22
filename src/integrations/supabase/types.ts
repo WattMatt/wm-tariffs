@@ -80,6 +80,53 @@ export type Database = {
         }
         Relationships: []
       }
+      document_extractions: {
+        Row: {
+          confidence_score: number | null
+          created_at: string
+          currency: string | null
+          document_id: string
+          extracted_at: string
+          extracted_data: Json | null
+          id: string
+          period_end: string | null
+          period_start: string | null
+          total_amount: number | null
+        }
+        Insert: {
+          confidence_score?: number | null
+          created_at?: string
+          currency?: string | null
+          document_id: string
+          extracted_at?: string
+          extracted_data?: Json | null
+          id?: string
+          period_end?: string | null
+          period_start?: string | null
+          total_amount?: number | null
+        }
+        Update: {
+          confidence_score?: number | null
+          created_at?: string
+          currency?: string | null
+          document_id?: string
+          extracted_at?: string
+          extracted_data?: Json | null
+          id?: string
+          period_end?: string | null
+          period_start?: string | null
+          total_amount?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_extractions_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "site_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meter_connections: {
         Row: {
           child_meter_id: string
@@ -496,6 +543,56 @@ export type Database = {
           },
         ]
       }
+      site_documents: {
+        Row: {
+          created_at: string
+          document_type: Database["public"]["Enums"]["document_type"]
+          extraction_status: string
+          file_name: string
+          file_path: string
+          file_size: number | null
+          id: string
+          site_id: string
+          updated_at: string
+          upload_date: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          document_type: Database["public"]["Enums"]["document_type"]
+          extraction_status?: string
+          file_name: string
+          file_path: string
+          file_size?: number | null
+          id?: string
+          site_id: string
+          updated_at?: string
+          upload_date?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          document_type?: Database["public"]["Enums"]["document_type"]
+          extraction_status?: string
+          file_name?: string
+          file_path?: string
+          file_size?: number | null
+          id?: string
+          site_id?: string
+          updated_at?: string
+          upload_date?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_documents_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sites: {
         Row: {
           address: string | null
@@ -808,6 +905,7 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "auditor" | "operator"
+      document_type: "municipal_account" | "tenant_bill" | "other"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -936,6 +1034,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "auditor", "operator"],
+      document_type: ["municipal_account", "tenant_bill", "other"],
     },
   },
 } as const

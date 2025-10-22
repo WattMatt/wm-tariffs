@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Gauge, BarChart3, FileText, Building2, Coins, Pencil, TrendingUp, DollarSign, Activity, Calendar } from "lucide-react";
+import { ArrowLeft, Gauge, BarChart3, FileText, Building2, Coins, Pencil, TrendingUp, DollarSign, Activity, Calendar, FolderOpen } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import MetersTab from "@/components/site/MetersTab";
@@ -15,6 +15,7 @@ import LoadProfilesTab from "@/components/site/LoadProfilesTab";
 import TariffAssignmentTab from "@/components/site/TariffAssignmentTab";
 import CostCalculationTab from "@/components/site/CostCalculationTab";
 import SiteReportExport from "@/components/site/SiteReportExport";
+import DocumentsTab from "@/components/site/DocumentsTab";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -314,7 +315,7 @@ export default function SiteDetail() {
         )}
 
         <Tabs defaultValue="meters" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-6 lg:w-auto">
+          <TabsList className="grid w-full grid-cols-7 lg:w-auto">
             <TabsTrigger value="meters" className="gap-2">
               <Gauge className="w-4 h-4" />
               Meters
@@ -322,6 +323,10 @@ export default function SiteDetail() {
             <TabsTrigger value="schematics" className="gap-2">
               <FileText className="w-4 h-4" />
               Schematics
+            </TabsTrigger>
+            <TabsTrigger value="documents" className="gap-2">
+              <FolderOpen className="w-4 h-4" />
+              Documents
             </TabsTrigger>
             <TabsTrigger value="reconciliation" className="gap-2">
               <BarChart3 className="w-4 h-4" />
@@ -347,6 +352,10 @@ export default function SiteDetail() {
 
           <TabsContent value="schematics">
             <SchematicsTab siteId={id!} />
+          </TabsContent>
+
+          <TabsContent value="documents">
+            <DocumentsTab siteId={id!} />
           </TabsContent>
 
           <TabsContent value="reconciliation">
