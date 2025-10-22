@@ -197,11 +197,12 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
     
     // Plot exact values from database including all metadata columns
     const chartData = uniqueReadings.map((reading) => {
-      const date = parseISO(reading.reading_timestamp);
-      const timeLabel = format(date, "HH:mm");
+      // Extract time directly from ISO string to avoid timezone conversion
+      const timestamp = reading.reading_timestamp; // Format: "2025-10-01T00:00:00+00:00"
+      const timePart = timestamp.split('T')[1]?.substring(0, 5) || "00:00"; // Extract "00:00"
       
       const dataPoint: any = {
-        time: timeLabel,
+        time: timePart,
         timestamp: reading.reading_timestamp,
       };
       
