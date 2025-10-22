@@ -753,10 +753,40 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis 
                         dataKey="timestampStr"
-                        tickFormatter={(value) => {
+                        tickFormatter={(value, index) => {
                           if (!value) return '';
                           try {
                             const date = new Date(value);
+                            const data = isManipulationApplied ? manipulatedData : loadProfileData;
+                            
+                            // Check if this is the first tick or if day changed from previous tick
+                            if (index === 0 || index === undefined) {
+                              return format(date, 'MMM dd HH:mm');
+                            }
+                            
+                            const prevValue = data[index - 1]?.timestampStr;
+                            if (prevValue) {
+                              const prevDate = new Date(prevValue);
+                              
+                              // Year changed - show full date with year
+                              if (date.getFullYear() !== prevDate.getFullYear()) {
+                                return format(date, 'yyyy MMM dd HH:mm');
+                              }
+                              
+                              // Month changed - show month and day
+                              if (date.getMonth() !== prevDate.getMonth()) {
+                                return format(date, 'MMM dd HH:mm');
+                              }
+                              
+                              // Day changed - show day and time
+                              if (date.getDate() !== prevDate.getDate()) {
+                                return format(date, 'MMM dd HH:mm');
+                              }
+                              
+                              // Same day - show only time
+                              return format(date, 'HH:mm');
+                            }
+                            
                             return format(date, 'MMM dd HH:mm');
                           } catch {
                             return value;
@@ -765,6 +795,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                         angle={-45}
                         textAnchor="end"
                         height={80}
+                        interval="preserveStartEnd"
                       />
                       <YAxis domain={getYAxisDomain()} />
                       <Tooltip 
