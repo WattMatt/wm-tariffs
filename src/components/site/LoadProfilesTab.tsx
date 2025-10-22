@@ -739,12 +739,12 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                       </Button>
                     )}
                     
-                    {showGraph && selectedQuantities.size > 0 && (
+                    {isManipulationApplied && (
                       <Button
                         variant="outline"
                         className="w-full rounded-full"
                         onClick={() => {
-                        const data = isManipulationApplied ? manipulatedData : loadProfileData;
+                        const data = manipulatedData;
                         
                         const cleanedData = data.map((point) => {
                           const measurements: Record<string, any> = {};
