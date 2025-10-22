@@ -41,7 +41,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
   }, [siteId]);
 
   useEffect(() => {
-    if (selectedMeterId && dateRange?.from && dateRange?.to) {
+    if (selectedMeterId && dateRange?.from) {
       fetchLoadProfile();
     }
   }, [selectedMeterId, dateRange]);
@@ -65,22 +65,26 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
   };
 
   const fetchLoadProfile = async () => {
-    if (!selectedMeterId || !dateRange?.from || !dateRange?.to) return;
+    if (!selectedMeterId || !dateRange?.from) return;
 
     setIsLoading(true);
     try {
+      // Use same day for both start and end if only one date selected
+      const endDate = dateRange.to || dateRange.from;
+      
       const { data, error } = await supabase
         .from("meter_readings")
         .select("reading_timestamp, metadata")
         .eq("meter_id", selectedMeterId)
         .gte("reading_timestamp", startOfDay(dateRange.from).toISOString())
-        .lte("reading_timestamp", endOfDay(dateRange.to).toISOString())
+        .lte("reading_timestamp", endOfDay(endDate).toISOString())
         .order("reading_timestamp");
 
       if (error) throw error;
 
       if (data && data.length > 0) {
-        processLoadProfile(data);
+        const endDate = dateRange.to || dateRange.from;
+        processLoadProfile(data, endDate);
       } else {
         toast.info("No readings found for selected period");
         setLoadProfileData([]);
@@ -94,7 +98,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
     }
   };
 
-  const processLoadProfile = (readings: ReadingData[]) => {
+  const processLoadProfile = (readings: ReadingData[], endDate: Date) => {
     // Group by hour and calculate average kVA
     const hourlyData: { [key: string]: { total: number; count: number } } = {};
 
@@ -169,7 +173,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
             </div>
 
             <div className="space-y-2">
-              <Label>Date Range</Label>
+              <Label>Date Range (or Single Date)</Label>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
@@ -190,7 +194,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                         format(dateRange.from, "LLL dd, y")
                       )
                     ) : (
-                      <span>Pick a date range</span>
+                      <span>Pick a date or date range</span>
                     )}
                   </Button>
                 </PopoverTrigger>
@@ -202,9 +206,13 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                     selected={dateRange}
                     onSelect={setDateRange}
                     numberOfMonths={2}
+                    className={cn("p-3 pointer-events-auto")}
                   />
                 </PopoverContent>
               </Popover>
+              <p className="text-xs text-muted-foreground">
+                Select a single date for that day's hourly profile, or a range to average across multiple days
+              </p>
             </div>
           </div>
 
@@ -218,8 +226,15 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
             <div className="space-y-6">
               <div>
                 <h3 className="text-lg font-semibold mb-4">
-                  Average Hourly Load (kVA) - {selectedMeter?.meter_number}
+                  {dateRange?.to && dateRange.from.getTime() !== dateRange.to.getTime() 
+                    ? "Average Hourly Load (kVA)" 
+                    : "Hourly Load Profile (kVA)"} - {selectedMeter?.meter_number}
                 </h3>
+                {dateRange?.to && dateRange.from.getTime() !== dateRange.to.getTime() && (
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Averaged across {Math.ceil((dateRange.to.getTime() - dateRange.from.getTime()) / (1000 * 60 * 60 * 24))} day(s)
+                  </p>
+                )}
                 <ResponsiveContainer width="100%" height={400}>
                   <LineChart data={loadProfileData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
@@ -314,12 +329,12 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
             </div>
           )}
 
-          {!isLoading && loadProfileData.length === 0 && dateRange?.from && dateRange?.to && (
+          {!isLoading && loadProfileData.length === 0 && dateRange?.from && (
             <div className="flex items-center justify-center py-12 text-muted-foreground">
               <div className="text-center">
                 <TrendingUp className="w-12 h-12 mx-auto mb-2 opacity-50" />
                 <p>No readings available for the selected meter and period</p>
-                <p className="text-sm">Try selecting a different date range</p>
+                <p className="text-sm">Try selecting a different date or date range</p>
               </div>
             </div>
           )}
@@ -328,7 +343,8 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
             <div className="flex items-center justify-center py-12 text-muted-foreground">
               <div className="text-center">
                 <CalendarIcon className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                <p>Select a meter and date range to view load profiles</p>
+                <p>Select a meter and date (or date range) to view load profiles</p>
+                <p className="text-sm mt-1">Choose a single date for that day's profile, or a range to average</p>
               </div>
             </div>
           )}
