@@ -823,8 +823,11 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                         
                         data.forEach((point) => {
                           if (point.timestampStr) {
-                            const date = new Date(point.timestampStr);
-                            const currentDay = date.getDate();
+                            // Parse day directly from string without timezone conversion
+                            const timestampStr = point.timestampStr.replace('T', ' ').split('.')[0];
+                            const [datePart] = timestampStr.split(' ');
+                            const [, , day] = datePart.split('-');
+                            const currentDay = parseInt(day);
                             
                             if (lastDay === null || currentDay !== lastDay) {
                               dayBoundaries.push(point.timestampStr);
@@ -853,41 +856,67 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                           if (!payload?.value) return null;
                           
                           try {
-                            const currentDate = new Date(payload.value);
                             const data = isManipulationApplied ? manipulatedData : loadProfileData;
                             
-                            // Find all day boundaries
+                            // Find all day boundaries without timezone conversion
                             const dayBoundaries: { timestamp: string, day: number, month: number, year: number }[] = [];
                             let lastDay: number | null = null;
                             
                             data.forEach((point) => {
                               if (point.timestampStr) {
-                                const date = new Date(point.timestampStr);
-                                const currentDay = date.getDate();
+                                // Parse date directly from string
+                                const timestampStr = point.timestampStr.replace('T', ' ').split('.')[0];
+                                const [datePart] = timestampStr.split(' ');
+                                const [year, month, day] = datePart.split('-');
+                                const currentDay = parseInt(day);
                                 
                                 if (lastDay === null || currentDay !== lastDay) {
                                   dayBoundaries.push({
                                     timestamp: point.timestampStr,
                                     day: currentDay,
-                                    month: date.getMonth(),
-                                    year: date.getFullYear()
+                                    month: parseInt(month) - 1, // 0-based for consistency
+                                    year: parseInt(year)
                                   });
                                 }
                                 lastDay = currentDay;
                               }
                             });
                             
+                            // Parse current timestamp
+                            const currentStr = payload.value.replace('T', ' ').split('.')[0];
+                            const [currentDatePart, currentTimePart] = currentStr.split(' ');
+                            const [currentYear, currentMonth, currentDay] = currentDatePart.split('-').map(Number);
+                            const [currentHour, currentMinute, currentSecond] = currentTimePart.split(':').map(Number);
+                            const currentTimeMs = Date.UTC(currentYear, currentMonth - 1, currentDay, currentHour, currentMinute, currentSecond);
+                            
                             // Find which day segment this timestamp belongs to
                             let dayIndex = -1;
                             for (let i = 0; i < dayBoundaries.length; i++) {
-                              const startTime = new Date(dayBoundaries[i].timestamp).getTime();
-                              const endTime = i < dayBoundaries.length - 1
-                                ? new Date(dayBoundaries[i + 1].timestamp).getTime()
-                                : new Date(data[data.length - 1].timestampStr).getTime();
+                              const startStr = dayBoundaries[i].timestamp.replace('T', ' ').split('.')[0];
+                              const [startDatePart, startTimePart] = startStr.split(' ');
+                              const [startYear, startMonth, startDay] = startDatePart.split('-').map(Number);
+                              const [startHour, startMinute, startSecond] = startTimePart.split(':').map(Number);
+                              const startTime = Date.UTC(startYear, startMonth - 1, startDay, startHour, startMinute, startSecond);
+                              
+                              let endTime;
+                              if (i < dayBoundaries.length - 1) {
+                                const endStr = dayBoundaries[i + 1].timestamp.replace('T', ' ').split('.')[0];
+                                const [endDatePart, endTimePart] = endStr.split(' ');
+                                const [endYear, endMonth, endDay] = endDatePart.split('-').map(Number);
+                                const [endHour, endMinute, endSecond] = endTimePart.split(':').map(Number);
+                                endTime = Date.UTC(endYear, endMonth - 1, endDay, endHour, endMinute, endSecond);
+                              } else {
+                                const lastStr = data[data.length - 1].timestampStr.replace('T', ' ').split('.')[0];
+                                const [lastDatePart, lastTimePart] = lastStr.split(' ');
+                                const [lastYear, lastMonth, lastDay] = lastDatePart.split('-').map(Number);
+                                const [lastHour, lastMinute, lastSecond] = lastTimePart.split(':').map(Number);
+                                endTime = Date.UTC(lastYear, lastMonth - 1, lastDay, lastHour, lastMinute, lastSecond);
+                              }
+                              
                               const centerTime = (startTime + endTime) / 2;
                               
                               // If this timestamp is close to the center of this day segment
-                              if (Math.abs(currentDate.getTime() - centerTime) < 15 * 60 * 1000) { // within 15 minutes
+                              if (Math.abs(currentTimeMs - centerTime) < 15 * 60 * 1000) { // within 15 minutes
                                 dayIndex = i;
                                 break;
                               }
@@ -911,6 +940,10 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                             
                             const showMonth = monthDays[monthCenterIdx]?.day === dayInfo.day;
                             const showYear = yearDays[yearCenterIdx]?.day === dayInfo.day;
+                            
+                            // Format month name
+                            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                            const monthName = monthNames[dayInfo.month];
                             
                             return (
                               <g transform={`translate(${x},${y})`}>
@@ -937,7 +970,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                                      fontSize={13}
                                      fontWeight="500"
                                    >
-                                     {format(new Date(dayInfo.timestamp), 'MMM')}
+                                     {monthName}
                                    </text>
                                  )}
                                  
@@ -956,10 +989,10 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                                  )}
                                </g>
                              );
-                            } catch (error) {
-                              console.error('Error rendering X-axis tick:', error);
-                              return null;
-                            }
+                           } catch (error) {
+                             console.error('Error rendering X-axis tick:', error);
+                             return null;
+                           }
                        }}
                        />
                        <YAxis domain={getYAxisDomain()} />
@@ -967,8 +1000,26 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                          labelFormatter={(label) => {
                            if (!label) return '';
                            try {
-                             const date = new Date(label);
-                             return format(date, 'PPpp');
+                             // Parse timestamp string directly without timezone conversion
+                             // Expected format: "YYYY-MM-DD HH:mm:ss" or "YYYY-MM-DDTHH:mm:ss"
+                             const timestampStr = String(label);
+                             const cleanStr = timestampStr.replace('T', ' ').split('.')[0];
+                             
+                             // Parse components directly
+                             const [datePart, timePart] = cleanStr.split(' ');
+                             if (!datePart || !timePart) return timestampStr;
+                             
+                             const [year, month, day] = datePart.split('-');
+                             const [hours, minutes, seconds] = timePart.split(':');
+                             
+                             // Format as: "MMM d, yyyy, h:mm:ss a"
+                             const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                             const monthName = monthNames[parseInt(month) - 1];
+                             const hour = parseInt(hours);
+                             const ampm = hour >= 12 ? 'PM' : 'AM';
+                             const displayHour = hour % 12 || 12;
+                             
+                             return `${monthName} ${parseInt(day)}, ${year}, ${displayHour}:${minutes}:${seconds} ${ampm}`;
                            } catch {
                              return label;
                            }
