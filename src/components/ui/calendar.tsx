@@ -52,8 +52,8 @@ function Calendar({
   };
 
   return (
-    <div className="space-y-4">
-      <div className="space-y-2 px-3 pt-3">
+    <div>
+      <div className="space-y-2 px-3 pt-3 pb-2">
         <Select value={currentYear.toString()} onValueChange={handleYearChange}>
           <SelectTrigger className="w-full">
             <SelectValue />
@@ -116,8 +116,7 @@ function Calendar({
       />
 
       {showTime && (
-        <div className="px-3 pb-3 space-y-2">
-          <label className="text-sm font-medium">Time</label>
+        <div className="px-3 pb-3">
           <div className="relative">
             <Input
               type="time"
