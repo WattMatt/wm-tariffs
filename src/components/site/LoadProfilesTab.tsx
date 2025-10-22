@@ -4,12 +4,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Brush } from "recharts";
 import { format, parseISO } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
-import { CalendarIcon, TrendingUp } from "lucide-react";
+import { CalendarIcon, TrendingUp, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -44,9 +44,8 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
   const [yAxisMin, setYAxisMin] = useState<string>("");
   const [yAxisMax, setYAxisMax] = useState<string>("");
   const [hiddenLines, setHiddenLines] = useState<Set<string>>(new Set());
-  const [xAxisDomain, setXAxisDomain] = useState<[number | "auto", number | "auto"]>(["auto", "auto"]);
-  const [isPanning, setIsPanning] = useState(false);
-  const [panStart, setPanStart] = useState<{ x: number; y: number } | null>(null);
+  const [brushStartIndex, setBrushStartIndex] = useState<number | undefined>(undefined);
+  const [brushEndIndex, setBrushEndIndex] = useState<number | undefined>(undefined);
   const [manipulationOperation, setManipulationOperation] = useState<string>("sum");
   const [manipulationDateFrom, setManipulationDateFrom] = useState<Date>();
   const [manipulationDateTo, setManipulationDateTo] = useState<Date>();
@@ -260,16 +259,57 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
   };
 
   const handleResetView = () => {
-    setXAxisDomain(["auto", "auto"]);
+    setBrushStartIndex(undefined);
+    setBrushEndIndex(undefined);
     setYAxisMin("");
     setYAxisMax("");
   };
 
   const handleSetDayRange = (days: number) => {
-    if (loadProfileData.length === 0) return;
-    const maxIndex = loadProfileData.length - 1;
+    const currentData = isManipulationApplied ? manipulatedData : loadProfileData;
+    if (currentData.length === 0) return;
+    
+    const maxIndex = currentData.length - 1;
     const minIndex = Math.max(0, maxIndex - (days * 48) + 1); // Assuming 48 readings per day (30min intervals)
-    setXAxisDomain([minIndex, maxIndex]);
+    setBrushStartIndex(minIndex);
+    setBrushEndIndex(maxIndex);
+  };
+
+  const handleDownloadData = () => {
+    const currentData = isManipulationApplied ? manipulatedData : loadProfileData;
+    if (currentData.length === 0) {
+      toast.error("No data to download");
+      return;
+    }
+
+    // Convert data to CSV
+    const headers = Object.keys(currentData[0]).join(",");
+    const rows = currentData.map(row => 
+      Object.values(row).map(val => 
+        typeof val === 'string' && val.includes(',') ? `"${val}"` : val
+      ).join(",")
+    ).join("\n");
+    
+    const csv = `${headers}\n${rows}`;
+    
+    // Create blob and download
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    
+    const selectedMeter = meters.find(m => m.id === selectedMeterId);
+    const dateRange = dateFrom && dateTo 
+      ? `${format(dateFrom, 'yyyy-MM-dd')}_to_${format(dateTo, 'yyyy-MM-dd')}`
+      : 'data';
+    a.download = `load_profile_${selectedMeter?.meter_number || 'meter'}_${dateRange}.csv`;
+    
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+    
+    toast.success("Data downloaded successfully");
   };
 
   const handleApplyManipulation = () => {
@@ -723,20 +763,33 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
               </div>
 
               <div>
-                <h3 className="text-lg font-semibold mb-4">
-                  Load Profile - {selectedMeter?.meter_number}
-                  {isManipulationApplied && (
-                    <span className="ml-2 text-sm font-normal text-primary">
-                      ({manipulationOperation} manipulation applied)
-                    </span>
-                  )}
-                </h3>
-                <p className="text-sm text-muted-foreground mb-2">
-                  Click on legend items to toggle visibility
-                  {dateFrom && dateTo && dateFrom.getTime() !== dateTo.getTime() && (
-                    <> • {Math.ceil((dateTo.getTime() - dateFrom.getTime()) / (1000 * 60 * 60 * 24)) + 1} day(s) selected</>
-                  )}
-                </p>
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="text-lg font-semibold">
+                      Load Profile - {selectedMeter?.meter_number}
+                      {isManipulationApplied && (
+                        <span className="ml-2 text-sm font-normal text-primary">
+                          ({manipulationOperation} manipulation applied)
+                        </span>
+                      )}
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      Click on legend items to toggle visibility
+                      {dateFrom && dateTo && dateFrom.getTime() !== dateTo.getTime() && (
+                        <> • {Math.ceil((dateTo.getTime() - dateFrom.getTime()) / (1000 * 60 * 60 * 24)) + 1} day(s) selected</>
+                      )}
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleDownloadData}
+                    className="flex items-center gap-2"
+                  >
+                    <Download className="h-4 w-4" />
+                    Download
+                  </Button>
+                </div>
                 <ResponsiveContainer width="100%" height={400}>
                   <LineChart data={isManipulationApplied ? manipulatedData : loadProfileData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
@@ -745,8 +798,6 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                       stroke="hsl(var(--muted-foreground))"
                       tick={{ fill: "hsl(var(--foreground))", fontSize: 11 }}
                       interval="preserveStartEnd"
-                      domain={xAxisDomain}
-                      allowDataOverflow
                     />
                     <YAxis
                       stroke="hsl(var(--muted-foreground))"
@@ -769,6 +820,18 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                     <Legend 
                       onClick={(e: any) => e.dataKey && handleLegendClick(String(e.dataKey))}
                       wrapperStyle={{ cursor: "pointer" }}
+                    />
+                    <Brush
+                      dataKey="time"
+                      height={30}
+                      stroke="hsl(var(--primary))"
+                      fill="hsl(var(--muted))"
+                      startIndex={brushStartIndex}
+                      endIndex={brushEndIndex}
+                      onChange={(e: any) => {
+                        setBrushStartIndex(e.startIndex);
+                        setBrushEndIndex(e.endIndex);
+                      }}
                     />
                     {Array.from(selectedQuantities).map((quantity, index) => {
                       const colors = [
