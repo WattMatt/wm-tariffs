@@ -167,8 +167,33 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
   };
 
   const processLoadProfile = (readings: any[]) => {
+    // Deduplicate readings by timestamp, keeping most recent import
+    const readingsByTime = new Map<string, any>();
+    
+    readings.forEach((reading) => {
+      const timestamp = reading.reading_timestamp;
+      const existingReading = readingsByTime.get(timestamp);
+      
+      // Keep the reading with the most recent imported_at timestamp
+      if (!existingReading) {
+        readingsByTime.set(timestamp, reading);
+      } else {
+        const existingImportedAt = existingReading.metadata?.imported_at || '';
+        const currentImportedAt = reading.metadata?.imported_at || '';
+        
+        if (currentImportedAt > existingImportedAt) {
+          readingsByTime.set(timestamp, reading);
+        }
+      }
+    });
+    
+    // Convert back to array and sort by timestamp
+    const uniqueReadings = Array.from(readingsByTime.values()).sort(
+      (a, b) => new Date(a.reading_timestamp).getTime() - new Date(b.reading_timestamp).getTime()
+    );
+    
     // Plot exact values from database including all metadata columns
-    const chartData = readings.map((reading) => {
+    const chartData = uniqueReadings.map((reading) => {
       const date = parseISO(reading.reading_timestamp);
       const timeLabel = format(date, "HH:mm");
       
@@ -191,6 +216,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
     });
 
     console.log("Load Profile - Chart data to display:", chartData);
+    console.log("Deduplication: Original readings:", readings.length, "Unique readings:", uniqueReadings.length);
     setLoadProfileData(chartData);
 
     // Calculate normalized data based on selected quantities
