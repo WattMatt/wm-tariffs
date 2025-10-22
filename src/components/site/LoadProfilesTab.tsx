@@ -724,15 +724,109 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                       )}
                     </p>
                   </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleDownloadData}
-                    className="flex items-center gap-2"
-                  >
-                    <Download className="h-4 w-4" />
-                    Download
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        if (loadProfileData.length === 0) {
+                          toast.error("No data to download");
+                          return;
+                        }
+
+                        const cleanedData = loadProfileData.map(row => {
+                          const { timestamp, ...measurements } = row;
+                          const formattedTimestamp = timestamp 
+                            ? timestamp.split('+')[0].split('T').join(' ').substring(0, 19)
+                            : '';
+                          return {
+                            timestamp: formattedTimestamp,
+                            ...measurements
+                          };
+                        });
+
+                        const headers = Object.keys(cleanedData[0]).join(",");
+                        const rows = cleanedData.map(row => 
+                          Object.values(row).map(val => 
+                            typeof val === 'string' && val.includes(',') ? `"${val}"` : val
+                          ).join(",")
+                        ).join("\n");
+                        
+                        const csv = `${headers}\n${rows}`;
+                        const blob = new Blob([csv], { type: 'text/csv' });
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        
+                        const selectedMeter = meters.find(m => m.id === selectedMeterId);
+                        const dateRange = dateFrom && dateTo 
+                          ? `${format(dateFrom, 'yyyy-MM-dd')}_to_${format(dateTo, 'yyyy-MM-dd')}`
+                          : 'data';
+                        a.download = `load_profile_original_${selectedMeter?.meter_number || 'meter'}_${dateRange}.csv`;
+                        
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        window.URL.revokeObjectURL(url);
+                        
+                        toast.success("Original data downloaded");
+                      }}
+                      className="flex items-center gap-2"
+                    >
+                      <Download className="h-4 w-4" />
+                      Original Data
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        if (manipulatedData.length === 0) {
+                          toast.error("No manipulated data to download. Apply a manipulation first.");
+                          return;
+                        }
+
+                        const cleanedData = manipulatedData.map(row => {
+                          const { timestamp, ...measurements } = row;
+                          return {
+                            timestamp,
+                            ...measurements
+                          };
+                        });
+
+                        const headers = Object.keys(cleanedData[0]).join(",");
+                        const rows = cleanedData.map(row => 
+                          Object.values(row).map(val => 
+                            typeof val === 'string' && val.includes(',') ? `"${val}"` : val
+                          ).join(",")
+                        ).join("\n");
+                        
+                        const csv = `${headers}\n${rows}`;
+                        const blob = new Blob([csv], { type: 'text/csv' });
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        
+                        const selectedMeter = meters.find(m => m.id === selectedMeterId);
+                        const dateRange = dateFrom && dateTo 
+                          ? `${format(dateFrom, 'yyyy-MM-dd')}_to_${format(dateTo, 'yyyy-MM-dd')}`
+                          : 'data';
+                        const periodLabel = manipulationPeriod === 1 ? 'daily' : manipulationPeriod === 7 ? 'weekly' : 'monthly';
+                        a.download = `load_profile_${manipulationOperation}_${periodLabel}_${selectedMeter?.meter_number || 'meter'}_${dateRange}.csv`;
+                        
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        window.URL.revokeObjectURL(url);
+                        
+                        toast.success("Manipulated data downloaded");
+                      }}
+                      className="flex items-center gap-2"
+                      disabled={!isManipulationApplied}
+                    >
+                      <Download className="h-4 w-4" />
+                      Manipulated Data
+                    </Button>
+                  </div>
                 </div>
                 <ResponsiveContainer width="100%" height={400}>
                   <LineChart data={isManipulationApplied ? manipulatedData : loadProfileData}>
