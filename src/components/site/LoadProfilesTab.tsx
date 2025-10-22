@@ -788,6 +788,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                           setBrushEndIndex(e.endIndex);
                         }}
                         alwaysShowText={false}
+                        data={isManipulationApplied ? manipulatedData : loadProfileData}
                         tickFormatter={(value) => {
                           // Format timestamp for brush display
                           if (!value) return '';
