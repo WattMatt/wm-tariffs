@@ -34,6 +34,8 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
   const [recalculatedTotal, setRecalculatedTotal] = useState<number | null>(null);
   const [isRecalculating, setIsRecalculating] = useState(false);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+  const [isDateFromOpen, setIsDateFromOpen] = useState(false);
+  const [isDateToOpen, setIsDateToOpen] = useState(false);
 
   const handleRecalculateTotals = () => {
     if (!previewData || selectedColumns.size === 0) {
@@ -588,7 +590,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>From Date & Time</Label>
-              <Popover>
+              <Popover open={isDateFromOpen} onOpenChange={setIsDateFromOpen}>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
@@ -606,7 +608,10 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                     <Calendar 
                       mode="single" 
                       selected={dateFrom} 
-                      onSelect={setDateFrom}
+                      onSelect={(date) => {
+                        setDateFrom(date);
+                        setIsDateFromOpen(false);
+                      }}
                       className={cn("p-3 pointer-events-auto")}
                       disabled={false}
                       fromYear={2000}
@@ -628,7 +633,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
 
             <div className="space-y-2">
               <Label>To Date & Time</Label>
-              <Popover>
+              <Popover open={isDateToOpen} onOpenChange={setIsDateToOpen}>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
@@ -646,7 +651,10 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                     <Calendar 
                       mode="single" 
                       selected={dateTo} 
-                      onSelect={setDateTo}
+                      onSelect={(date) => {
+                        setDateTo(date);
+                        setIsDateToOpen(false);
+                      }}
                       className={cn("p-3 pointer-events-auto")}
                       disabled={false}
                       fromYear={2000}
