@@ -823,8 +823,11 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                         
                         data.forEach((point) => {
                           if (point.timestampStr) {
-                            const date = new Date(point.timestampStr);
-                            const currentDay = date.getDate();
+                            // Parse timestamp string directly without timezone conversion
+                            const cleanTimestamp = point.timestampStr.split('+')[0].split('.')[0].replace('T', ' ');
+                            const [datePart] = cleanTimestamp.split(' ');
+                            const [, , day] = datePart.split('-');
+                            const currentDay = parseInt(day, 10);
                             
                             if (lastDay === null || currentDay !== lastDay) {
                               dayBoundaries.push(point.timestampStr);
