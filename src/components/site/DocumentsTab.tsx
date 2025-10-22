@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { FileText, Upload, Loader2, Download, Trash2, Eye } from "lucide-react";
+import { FileText, Upload, Loader2, Download, Trash2, Eye, Network } from "lucide-react";
 import { format } from "date-fns";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
@@ -40,9 +40,12 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [documentType, setDocumentType] = useState<string>("municipal_account");
   const [viewingExtraction, setViewingExtraction] = useState<any>(null);
+  const [schematicPreviewUrl, setSchematicPreviewUrl] = useState<string | null>(null);
+  const [isLoadingSchematic, setIsLoadingSchematic] = useState(false);
 
   useEffect(() => {
     fetchDocuments();
+    fetchSchematicPreview();
   }, [siteId]);
 
   const fetchDocuments = async () => {
@@ -70,6 +73,39 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
       toast.error("Failed to load documents");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const fetchSchematicPreview = async () => {
+    setIsLoadingSchematic(true);
+    try {
+      const { data: schematic, error } = await supabase
+        .from("schematics")
+        .select("file_path, converted_image_path")
+        .eq("site_id", siteId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (schematic) {
+        // Prefer converted image for PDFs, otherwise use original
+        const imagePath = schematic.converted_image_path || schematic.file_path;
+        
+        const { data: urlData } = await supabase.storage
+          .from("schematics")
+          .createSignedUrl(imagePath, 3600);
+
+        if (urlData?.signedUrl) {
+          setSchematicPreviewUrl(urlData.signedUrl);
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching schematic preview:", error);
+      // Fail silently - schematic preview is optional
+    } finally {
+      setIsLoadingSchematic(false);
     }
   };
 
@@ -198,16 +234,17 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FileText className="w-5 h-5" />
-            Document Repository
-          </CardTitle>
-          <CardDescription>
-            Upload municipal accounts and tenant bills for AI-powered data extraction
-          </CardDescription>
-        </CardHeader>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="w-5 h-5" />
+              Document Repository
+            </CardTitle>
+            <CardDescription>
+              Upload municipal accounts and tenant bills for AI-powered data extraction
+            </CardDescription>
+          </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 border rounded-lg bg-muted/30">
             <div className="space-y-2">
@@ -347,6 +384,46 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
           )}
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Network className="w-5 h-5" />
+            Site Schematic Preview
+          </CardTitle>
+          <CardDescription>
+            Fixed reference view of the electrical distribution
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoadingSchematic ? (
+            <div className="flex justify-center items-center h-64 bg-muted/30 rounded-lg">
+              <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : schematicPreviewUrl ? (
+            <div className="relative bg-muted/30 rounded-lg overflow-hidden border">
+              <img 
+                src={schematicPreviewUrl} 
+                alt="Site schematic preview"
+                className="w-full h-auto object-contain"
+                style={{ maxHeight: "600px" }}
+              />
+              <div className="absolute bottom-2 right-2">
+                <Badge variant="secondary" className="bg-background/80 backdrop-blur-sm">
+                  Reference Only
+                </Badge>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col justify-center items-center h-64 bg-muted/30 rounded-lg text-muted-foreground">
+              <Network className="w-12 h-12 mb-4 opacity-50" />
+              <p>No schematic available</p>
+              <p className="text-sm mt-1">Upload a schematic in the Schematics tab</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+      </div>
 
       <Dialog open={!!viewingExtraction} onOpenChange={() => setViewingExtraction(null)}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
