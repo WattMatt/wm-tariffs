@@ -967,8 +967,18 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                          labelFormatter={(label) => {
                            if (!label) return '';
                            try {
-                             const date = new Date(label);
-                             return format(date, 'PPpp');
+                             // Parse timestamp string directly without timezone conversion
+                             // Expected format: "YYYY-MM-DDTHH:mm:ss" or "YYYY-MM-DD HH:mm:ss"
+                             const cleanLabel = label.split('+')[0].split('.')[0].replace('T', ' ');
+                             const [datePart, timePart] = cleanLabel.split(' ');
+                             
+                             if (!datePart || !timePart) return label;
+                             
+                             const [year, month, day] = datePart.split('-');
+                             const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+                             const formattedDate = format(date, 'MMM d, yyyy');
+                             
+                             return `${formattedDate}, ${timePart}`;
                            } catch {
                              return label;
                            }
