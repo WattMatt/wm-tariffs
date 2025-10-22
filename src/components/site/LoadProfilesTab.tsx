@@ -848,6 +848,12 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                         stroke="hsl(var(--muted-foreground))"
                         tick={{ fill: "hsl(var(--foreground))", fontSize: 11 }}
                         interval="preserveStartEnd"
+                        domain={[
+                          dateFrom && timeFrom ? new Date(dateFrom.getFullYear(), dateFrom.getMonth(), dateFrom.getDate(), parseInt(timeFrom.split(':')[0]), parseInt(timeFrom.split(':')[1])).getTime() : 'auto',
+                          dateTo && timeTo ? new Date(dateTo.getFullYear(), dateTo.getMonth(), dateTo.getDate(), parseInt(timeTo.split(':')[0]), parseInt(timeTo.split(':')[1])).getTime() : 'auto'
+                        ]}
+                        scale="time"
+                        type="number"
                         tickFormatter={(value) => {
                           if (!value) return '';
                           const date = new Date(value);
