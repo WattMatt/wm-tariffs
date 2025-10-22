@@ -268,64 +268,59 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
     }
 
     try {
-      // Calculate the subset date range duration
-      const intervalStart = getFullDateTime(manipulationDateFrom, manipulationTimeFrom);
-      const intervalEnd = getFullDateTime(manipulationDateTo, manipulationTimeTo);
-      const durationMs = intervalEnd.getTime() - intervalStart.getTime();
-      const durationDays = durationMs / (1000 * 60 * 60 * 24);
+      // Calculate the subset interval duration
+      const subsetStart = getFullDateTime(manipulationDateFrom, manipulationTimeFrom);
+      const subsetEnd = getFullDateTime(manipulationDateTo, manipulationTimeTo);
+      const subsetDurationMs = subsetEnd.getTime() - subsetStart.getTime();
 
-      // Determine grouping type based on subset duration
-      let groupingType: 'time' | 'day' | 'date' | 'month' | 'year';
-      if (durationDays <= 1) {
-        groupingType = 'time'; // Group by time of day (00:00, 00:30, etc.)
-      } else if (durationDays <= 7) {
-        groupingType = 'day'; // Group by day of week (Mon, Tue, etc.)
-      } else if (durationDays <= 31) {
-        groupingType = 'date'; // Group by date (1, 2, 3, etc.)
-      } else if (durationDays <= 365) {
-        groupingType = 'month'; // Group by month (Jan, Feb, etc.)
-      } else {
-        groupingType = 'year'; // Group by year
-      }
+      // Create a template of time points within the subset interval
+      const subsetTemplate: string[] = [];
+      loadProfileData.forEach((dataPoint) => {
+        const dataTimestamp = parseISO(dataPoint.timestamp);
+        const dataTime = dataTimestamp.getTime();
+        
+        // Calculate where this data point falls relative to the subset pattern
+        // by finding its position within a repeating interval
+        const timeSinceSubsetStart = (dataTime - subsetStart.getTime()) % subsetDurationMs;
+        
+        // Only include data points that fall within the subset interval pattern
+        if (timeSinceSubsetStart >= 0 && timeSinceSubsetStart < subsetDurationMs) {
+          const relativeTime = new Date(subsetStart.getTime() + timeSinceSubsetStart);
+          const timeKey = format(relativeTime, "MMM d, HH:mm");
+          
+          if (!subsetTemplate.includes(timeKey)) {
+            subsetTemplate.push(timeKey);
+          }
+        }
+      });
 
-      // Group data based on the determined type
+      // Group data points by their position within the subset pattern
       const groups = new Map<string, any[]>();
 
       loadProfileData.forEach((dataPoint) => {
-        let groupKey: string;
-        const timestamp = parseISO(dataPoint.timestamp);
+        const dataTimestamp = parseISO(dataPoint.timestamp);
+        const dataTime = dataTimestamp.getTime();
         
-        switch (groupingType) {
-          case 'time':
-            groupKey = dataPoint.time; // "00:00", "00:30", etc.
-            break;
-          case 'day':
-            groupKey = format(timestamp, 'EEEE'); // "Monday", "Tuesday", etc.
-            break;
-          case 'date':
-            groupKey = format(timestamp, 'd'); // "1", "2", "3", etc.
-            break;
-          case 'month':
-            groupKey = format(timestamp, 'MMM yyyy'); // "Jan 2025", "Feb 2025", etc.
-            break;
-          case 'year':
-            groupKey = format(timestamp, 'yyyy'); // "2025", "2026", etc.
-            break;
-          default:
-            groupKey = dataPoint.time;
-        }
+        // Calculate position within the repeating subset pattern
+        const timeSinceSubsetStart = (dataTime - subsetStart.getTime()) % subsetDurationMs;
         
-        if (!groups.has(groupKey)) {
-          groups.set(groupKey, []);
+        // Only process data points that fall within the subset interval pattern
+        if (timeSinceSubsetStart >= 0 && timeSinceSubsetStart < subsetDurationMs) {
+          const relativeTime = new Date(subsetStart.getTime() + timeSinceSubsetStart);
+          const timeKey = format(relativeTime, "MMM d, HH:mm");
+          
+          if (!groups.has(timeKey)) {
+            groups.set(timeKey, []);
+          }
+          groups.get(timeKey)!.push(dataPoint);
         }
-        groups.get(groupKey)!.push(dataPoint);
       });
 
       // Apply the selected operation to each group
       const manipulated: any[] = [];
       
-      groups.forEach((dataPoints, groupKey) => {
-        const result: any = { time: groupKey };
+      groups.forEach((dataPoints, timeKey) => {
+        const result: any = { time: timeKey };
 
         // Process each selected quantity
         selectedQuantities.forEach((quantity) => {
@@ -364,28 +359,22 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
         manipulated.push(result);
       });
 
-      // Sort the results appropriately based on grouping type
-      if (groupingType === 'time') {
-        manipulated.sort((a, b) => a.time.localeCompare(b.time));
-      } else if (groupingType === 'day') {
-        const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-        manipulated.sort((a, b) => dayOrder.indexOf(a.time) - dayOrder.indexOf(b.time));
-      } else if (groupingType === 'date') {
-        manipulated.sort((a, b) => parseInt(a.time) - parseInt(b.time));
-      } else {
-        // For month and year, sort alphabetically (which works for date formats)
-        manipulated.sort((a, b) => a.time.localeCompare(b.time));
-      }
+      // Sort by time
+      manipulated.sort((a, b) => {
+        const timeA = new Date(a.time).getTime();
+        const timeB = new Date(b.time).getTime();
+        return timeA - timeB;
+      });
 
       setManipulatedData(manipulated);
       setIsManipulationApplied(true);
       
-      const groupLabel = groupingType === 'time' ? 'time slots' : 
-                         groupingType === 'day' ? 'days of week' :
-                         groupingType === 'date' ? 'dates' :
-                         groupingType === 'month' ? 'months' : 'years';
+      const subsetDurationDays = subsetDurationMs / (1000 * 60 * 60 * 24);
+      const intervalDesc = subsetDurationDays < 1 
+        ? `${Math.round(subsetDurationMs / (1000 * 60 * 60))} hour${Math.round(subsetDurationMs / (1000 * 60 * 60)) !== 1 ? 's' : ''}`
+        : `${Math.round(subsetDurationDays)} day${Math.round(subsetDurationDays) !== 1 ? 's' : ''}`;
       
-      toast.success(`Applied ${manipulationOperation} operation grouped by ${groupLabel}`);
+      toast.success(`Applied ${manipulationOperation} operation over ${intervalDesc} interval`);
     } catch (error) {
       console.error("Manipulation error:", error);
       toast.error("Failed to apply manipulation");
