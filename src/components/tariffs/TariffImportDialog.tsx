@@ -359,9 +359,196 @@ export default function PdfImportDialog() {
 
     try {
       await processSingleMunicipality(municipalityName, index);
-      toast.success(`Successfully saved tariffs for ${municipalityName}`);
+      
+      setMunicipalities(prev => prev.map((m, i) => 
+        i === index ? { ...m, status: 'complete' } : m
+      ));
     } catch (error: any) {
       toast.error(`Failed to process ${municipalityName}: ${error.message}`);
+      setMunicipalities(prev => prev.map((m, i) => 
+        i === index ? { ...m, status: 'error', error: error.message } : m
+      ));
+    } finally {
+      setCurrentMunicipality(null);
+    }
+  };
+
+  const handleExtractWithAI = async (municipalityName: string, index: number) => {
+    if (!file) return;
+
+    setCurrentMunicipality(municipalityName);
+    setMunicipalities(prev => prev.map((m, i) => 
+      i === index ? { ...m, status: 'extracting' } : m
+    ));
+
+    try {
+      toast.info(`Using AI to extract ${municipalityName} tariffs...`);
+      
+      // Read and parse the Excel file
+      const XLSX = await import('xlsx');
+      const arrayBuffer = await file.arrayBuffer();
+      const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+      
+      // Find the sheet for this municipality
+      let targetSheet = null;
+      const normalizedMunicipality = municipalityName.toLowerCase().trim();
+      
+      for (const sheetName of workbook.SheetNames) {
+        if (sheetName.toLowerCase().includes(normalizedMunicipality) || 
+            normalizedMunicipality.includes(sheetName.toLowerCase())) {
+          const worksheet = workbook.Sheets[sheetName];
+          targetSheet = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+          break;
+        }
+      }
+      
+      if (!targetSheet && workbook.SheetNames.length === 1) {
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        targetSheet = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+      }
+      
+      if (!targetSheet) {
+        throw new Error(`Could not find sheet for ${municipalityName}`);
+      }
+
+      // Call AI extraction edge function
+      const { data: aiResult, error: aiError } = await supabase.functions.invoke('extract-tariff-ai', {
+        body: {
+          sheetData: targetSheet,
+          municipalityName: municipalityName
+        }
+      });
+
+      if (aiError) throw aiError;
+      if (!aiResult?.success) throw new Error(aiResult?.error || 'AI extraction failed');
+
+      const extractedData = aiResult.data;
+      
+      // Save to database
+      const { data: authority, error: authorityError } = await supabase
+        .from('supply_authorities')
+        .select('id')
+        .eq('name', municipalityName)
+        .maybeSingle();
+
+      let supplyAuthorityId = authority?.id;
+
+      if (!supplyAuthorityId) {
+        const { data: newAuthority, error: createError } = await supabase
+          .from('supply_authorities')
+          .insert({
+            name: municipalityName,
+            region: municipalities[index].province || 'Unknown',
+            nersa_increase_percentage: extractedData.nersaIncrease || 0,
+            active: true
+          })
+          .select('id')
+          .single();
+
+        if (createError) throw createError;
+        supplyAuthorityId = newAuthority.id;
+      } else {
+        await supabase
+          .from('supply_authorities')
+          .update({ nersa_increase_percentage: extractedData.nersaIncrease || 0 })
+          .eq('id', supplyAuthorityId);
+      }
+
+      // Save tariff structures
+      for (const structure of extractedData.tariffStructures) {
+        const { data: existingTariff } = await supabase
+          .from('tariff_structures')
+          .select('id')
+          .eq('supply_authority_id', supplyAuthorityId)
+          .eq('name', structure.name)
+          .maybeSingle();
+
+        if (existingTariff) continue;
+
+        const { data: newTariff, error: tariffError } = await supabase
+          .from('tariff_structures')
+          .insert({
+            supply_authority_id: supplyAuthorityId,
+            name: structure.name,
+            tariff_type: structure.tariffType,
+            voltage_level: structure.voltageLevel || null,
+            uses_tou: structure.usesTou,
+            effective_from: new Date().toISOString().split('T')[0],
+            active: true
+          })
+          .select('id')
+          .single();
+
+        if (tariffError) throw tariffError;
+
+        // Save blocks
+        if (structure.blocks && structure.blocks.length > 0) {
+          const blocksToInsert = structure.blocks.map((block: any) => ({
+            tariff_structure_id: newTariff.id,
+            block_number: block.blockNumber,
+            kwh_from: block.kwhFrom,
+            kwh_to: block.kwhTo,
+            energy_charge_cents: block.energyChargeCents
+          }));
+          
+          const { error: blocksError } = await supabase
+            .from('tariff_blocks')
+            .insert(blocksToInsert);
+          if (blocksError) throw blocksError;
+        }
+
+        // Save charges
+        if (structure.charges && structure.charges.length > 0) {
+          const chargesToInsert = structure.charges.map((charge: any) => ({
+            tariff_structure_id: newTariff.id,
+            charge_type: charge.chargeType,
+            description: charge.description || '',
+            charge_amount: charge.chargeAmount,
+            unit: charge.unit
+          }));
+          
+          const { error: chargesError } = await supabase
+            .from('tariff_charges')
+            .insert(chargesToInsert);
+          if (chargesError) throw chargesError;
+        }
+
+        // Save TOU periods
+        if (structure.touPeriods && structure.touPeriods.length > 0) {
+          const periodsToInsert = structure.touPeriods.map((period: any) => ({
+            tariff_structure_id: newTariff.id,
+            period_type: period.periodType,
+            season: period.season,
+            day_type: period.dayType,
+            start_hour: period.startHour,
+            end_hour: period.endHour,
+            energy_charge_cents: period.energyChargeCents
+          }));
+          
+          const { error: periodsError } = await supabase
+            .from('tariff_time_periods')
+            .insert(periodsToInsert);
+          if (periodsError) throw periodsError;
+        }
+      }
+
+      setMunicipalities(prev => prev.map((m, i) => 
+        i === index ? { 
+          ...m, 
+          status: 'complete',
+          nersaIncrease: extractedData.nersaIncrease || 0,
+          data: extractedData
+        } : m
+      ));
+
+      toast.success(`Successfully extracted and saved ${extractedData.tariffStructures.length} tariff structure(s) for ${municipalityName} with AI`);
+    } catch (error: any) {
+      console.error(`AI extraction error for ${municipalityName}:`, error);
+      toast.error(`AI extraction failed: ${error.message}`);
+      setMunicipalities(prev => prev.map((m, i) => 
+        i === index ? { ...m, status: 'error', error: error.message } : m
+      ));
     } finally {
       setCurrentMunicipality(null);
     }
@@ -1056,30 +1243,44 @@ export default function PdfImportDialog() {
                   {municipalities.map((municipality, index) => (
                     <Card key={index}>
                       <CardHeader className="pb-3">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
+                         <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3 flex-1">
                             {getStatusIcon(municipality.status)}
-                            <div>
+                            <div className="flex-1">
                               <CardTitle className="text-lg">{municipality.name}</CardTitle>
                               <CardDescription>
                                 {municipality.province && `${municipality.province} · `}
-                                NERSA: {municipality.nersaIncrease}% · {getStatusText(municipality.status)}
+                                NERSA: {municipality.nersaIncrease || 0}% · {getStatusText(municipality.status)}
                               </CardDescription>
                               {municipality.error && (
                                 <p className="text-sm text-destructive mt-1">{municipality.error}</p>
                               )}
                             </div>
                           </div>
-                          {municipality.status === 'pending' && (
-                            <Button
-                              onClick={() => handleExtractAndSave(municipality.name, index)}
-                              disabled={currentMunicipality !== null || isProcessing}
-                              size="sm"
-                              variant="outline"
-                            >
-                              Process Only This
-                            </Button>
-                          )}
+                          <div className="flex gap-2">
+                            {municipality.status === 'pending' && (
+                              <>
+                                <Button
+                                  onClick={() => handleExtractWithAI(municipality.name, index)}
+                                  disabled={currentMunicipality !== null || isProcessing}
+                                  size="sm"
+                                  variant="default"
+                                  className="gap-2"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg>
+                                  AI Extract
+                                </Button>
+                                <Button
+                                  onClick={() => handleExtractAndSave(municipality.name, index)}
+                                  disabled={currentMunicipality !== null || isProcessing}
+                                  size="sm"
+                                  variant="outline"
+                                >
+                                  Legacy Extract
+                                </Button>
+                              </>
+                            )}
+                          </div>
                         </div>
                       </CardHeader>
                       {municipality.data && municipality.status === 'complete' && (

@@ -9,5 +9,8 @@ verify_jwt = false
 [functions.extract-tariff-data]
 verify_jwt = false
 
+[functions.extract-tariff-ai]
+verify_jwt = false
+
 [functions.convert-pdf-to-image]
 verify_jwt = false
