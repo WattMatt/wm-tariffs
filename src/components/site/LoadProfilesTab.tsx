@@ -889,24 +889,22 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                         onClick={(e: any) => e.dataKey && handleLegendClick(String(e.dataKey))}
                         wrapperStyle={{ cursor: "pointer" }}
                       />
-                      {useBrush && dateFrom && dateTo && timeFrom && timeTo && (
-                        <Brush
-                          dataKey="timestamp"
-                          height={30}
-                          stroke="hsl(var(--primary))"
-                          fill="hsl(var(--muted))"
-                          startIndex={0}
-                          endIndex={(isManipulationApplied ? manipulatedData : loadProfileData).length - 1}
-                          alwaysShowText={false}
-                          tickFormatter={(value) => {
-                            if (!value) return '';
-                            const date = new Date(value);
-                            const month = String(date.getMonth() + 1).padStart(2, '0');
-                            const day = String(date.getDate()).padStart(2, '0');
-                            return `${month}-${day}`;
-                          }}
-                        />
-                      )}
+                      <Brush
+                        dataKey="timestamp"
+                        height={30}
+                        stroke="hsl(var(--primary))"
+                        fill="hsl(var(--muted))"
+                        startIndex={0}
+                        endIndex={(isManipulationApplied ? manipulatedData : loadProfileData).length - 1}
+                        alwaysShowText={false}
+                        tickFormatter={(value) => {
+                          if (!value) return '';
+                          const date = new Date(value);
+                          const month = String(date.getMonth() + 1).padStart(2, '0');
+                          const day = String(date.getDate()).padStart(2, '0');
+                          return `${month}-${day}`;
+                        }}
+                      />
                       {Array.from(selectedQuantities).map((quantity, index) => {
                         const colors = [
                           "#3b82f6", // blue
