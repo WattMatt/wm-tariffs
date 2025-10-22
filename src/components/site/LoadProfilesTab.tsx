@@ -293,9 +293,24 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
       return;
     }
 
+    // Clean up data for export - remove internal "time" field and format timestamp
+    const cleanedData = currentData.map(row => {
+      const { time, timestamp, ...measurements } = row;
+      
+      // Format timestamp without timezone (just YYYY-MM-DD HH:mm:ss)
+      const formattedTimestamp = timestamp 
+        ? timestamp.split('+')[0].split('T').join(' ').substring(0, 19)
+        : '';
+      
+      return {
+        timestamp: formattedTimestamp,
+        ...measurements
+      };
+    });
+
     // Convert data to CSV
-    const headers = Object.keys(currentData[0]).join(",");
-    const rows = currentData.map(row => 
+    const headers = Object.keys(cleanedData[0]).join(",");
+    const rows = cleanedData.map(row => 
       Object.values(row).map(val => 
         typeof val === 'string' && val.includes(',') ? `"${val}"` : val
       ).join(",")
