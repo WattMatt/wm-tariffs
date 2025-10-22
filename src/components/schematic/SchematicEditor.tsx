@@ -328,13 +328,17 @@ export default function SchematicEditor({
           
           if (data && data.meter) {
             // Add extracted meter to the list with position at center of drawn region
+            // Store the entire region for side-by-side comparison
             const newMeter = {
               ...data.meter,
               status: 'pending' as const,
               position: {
                 x: region.x + (region.width / 2),
                 y: region.y + (region.height / 2)
-              }
+              },
+              extractedRegion: region, // Store the drawn region for display
+              scale_x: 1,
+              scale_y: 1
             };
             
             const updatedMeters = [...extractedMeters, newMeter];
@@ -1237,6 +1241,15 @@ export default function SchematicEditor({
   return (
     <div className="space-y-4">
       <div className="flex gap-2 items-center flex-wrap">
+        <div className="flex items-center gap-2 p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg">
+          <Scan className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+          <div className="text-sm">
+            <p className="font-semibold text-blue-900 dark:text-blue-100">Workflow: Click "Scan PDF Region" → Draw a box around a meter → AI extracts data → Verify & approve</p>
+          </div>
+        </div>
+      </div>
+      
+      <div className="flex gap-2 items-center flex-wrap">
         <Button onClick={handleScanAll} disabled={isSaving} variant="default">
           <Scan className="w-4 h-4 mr-2" />
           {isSaving ? 'Scanning...' : 'Scan All Meters'}
@@ -1251,12 +1264,15 @@ export default function SchematicEditor({
         </Button>
         <Button
           variant={activeTool === "draw" ? "default" : "outline"}
-          onClick={() => setActiveTool("draw")}
+          onClick={() => {
+            setActiveTool("draw");
+            toast.info("Click once to start, click again to finish the region box");
+          }}
           size="sm"
           className="gap-2"
         >
-          <Pencil className="w-4 h-4" />
-          Draw to Extract
+          <Scan className="w-4 h-4" />
+          Scan PDF Region
         </Button>
         <Button
           variant={activeTool === "meter" ? "default" : "outline"}
@@ -1529,31 +1545,32 @@ export default function SchematicEditor({
           
           {selectedMeterIndex !== null && extractedMeters[selectedMeterIndex] && (
             <div className="grid grid-cols-2 gap-6">
-              {/* Left side: Meter preview from PDF */}
+              {/* Left side: Extracted region from PDF */}
               <div className="space-y-2">
-                <Label className="text-base font-semibold">Actual Meter from PDF</Label>
+                <Label className="text-base font-semibold">Scanned Area from PDF</Label>
                 <div className="border-2 border-primary rounded-lg overflow-hidden bg-muted">
-                  <div 
-                    className="relative w-full" 
-                    style={{
-                      height: '600px',
-                      backgroundImage: `url(${schematicUrl})`,
-                      backgroundSize: `${100 / (extractedMeters[selectedMeterIndex].scale_x || 1)}% ${100 / (extractedMeters[selectedMeterIndex].scale_y || 1)}%`,
-                      backgroundPosition: `${extractedMeters[selectedMeterIndex].x_position || 50}% ${extractedMeters[selectedMeterIndex].y_position || 50}%`,
-                      backgroundRepeat: 'no-repeat',
-                    }}
-                  >
-                    {/* Crosshair to show center */}
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <div className="w-full h-[2px] bg-red-500 opacity-50"></div>
+                  {extractedMeters[selectedMeterIndex].extractedRegion ? (
+                    <div 
+                      className="relative w-full" 
+                      style={{
+                        height: '600px',
+                        backgroundImage: `url(${schematicUrl})`,
+                        backgroundSize: `${100 / (extractedMeters[selectedMeterIndex].extractedRegion.width / 100)}% auto`,
+                        backgroundPosition: `-${extractedMeters[selectedMeterIndex].extractedRegion.x / (extractedMeters[selectedMeterIndex].extractedRegion.width / 100)}% -${extractedMeters[selectedMeterIndex].extractedRegion.y / (extractedMeters[selectedMeterIndex].extractedRegion.height / 100)}%`,
+                        backgroundRepeat: 'no-repeat',
+                      }}
+                    >
+                      {/* Border highlight showing the extracted region */}
+                      <div className="absolute inset-2 border-2 border-green-500 pointer-events-none"></div>
                     </div>
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <div className="h-full w-[2px] bg-red-500 opacity-50"></div>
+                  ) : (
+                    <div className="relative w-full h-[600px] flex items-center justify-center text-muted-foreground">
+                      No region data available
                     </div>
-                  </div>
+                  )}
                 </div>
                 <p className="text-xs text-muted-foreground text-center">
-                  Visual reference: Compare the data fields with this actual meter image
+                  This is the exact area you drew on the PDF - verify all fields match this region
                 </p>
               </div>
 
