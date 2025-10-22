@@ -210,12 +210,22 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
       readings.forEach(reading => {
         const metadata = reading.metadata as any;
         const importedFields = metadata?.imported_fields || {};
+        
+        // Add P1 (kWh) from kwh_value field
+        const p1Value = Number(reading.kwh_value || 0);
+        if (p1Value !== 0) {
+          columnTotals['P1 (kWh)'] = (columnTotals['P1 (kWh)'] || 0) + p1Value;
+          if (!columnValues['P1 (kWh)']) {
+            columnValues['P1 (kWh)'] = [];
+          }
+          columnValues['P1 (kWh)'].push(p1Value);
+        }
+        
+        // Add all other columns from imported_fields
         Object.entries(importedFields).forEach(([key, value]) => {
           const numValue = Number(value);
           if (!isNaN(numValue) && value !== null && value !== '') {
-            // Store for sum operation
             columnTotals[key] = (columnTotals[key] || 0) + numValue;
-            // Store raw values for other operations
             if (!columnValues[key]) {
               columnValues[key] = [];
             }
