@@ -108,7 +108,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
       
       const { data, error } = await supabase
         .from("meter_readings")
-        .select("reading_timestamp, kva_value, kwh_value, metadata")
+        .select("reading_timestamp, metadata")
         .eq("meter_id", selectedMeterId)
         .gte("reading_timestamp", fullDateTimeFrom.toISOString())
         .lte("reading_timestamp", fullDateTimeTo.toISOString())
@@ -120,11 +120,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
         // Extract available columns from CSV mapping or first reading
         const columnsSet = new Set<string>();
         
-        // Add standard columns
-        columnsSet.add("kVA");
-        columnsSet.add("kWh");
-        
-        // Extract columns from metadata
+        // Extract columns from metadata only
         const columnMapping = csvFile?.column_mapping as any;
         if (columnMapping && columnMapping.renamedHeaders) {
           Object.values(columnMapping.renamedHeaders).forEach((headerName: any) => {
@@ -179,8 +175,6 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
       const dataPoint: any = {
         time: timeLabel,
         timestamp: reading.reading_timestamp,
-        kVA: reading.kva_value ?? 0,
-        kWh: reading.kwh_value ?? 0,
       };
       
       // Add all columns from metadata
