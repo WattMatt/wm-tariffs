@@ -930,6 +930,11 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                 <div className="text-2xl font-bold">
                   {reconciliationData.councilTotal.toFixed(2)} kWh
                 </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  {reconciliationData.totalSupply > 0 
+                    ? ((reconciliationData.councilTotal / reconciliationData.totalSupply) * 100).toFixed(1) 
+                    : '0.0'}%
+                </div>
               </CardContent>
             </Card>
 
@@ -942,6 +947,11 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
               <CardContent>
                 <div className="text-2xl font-bold text-green-600">
                   {reconciliationData.solarTotal.toFixed(2)} kWh
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  {reconciliationData.totalSupply > 0 
+                    ? ((reconciliationData.solarTotal / reconciliationData.totalSupply) * 100).toFixed(1) 
+                    : '0.0'}%
                 </div>
               </CardContent>
             </Card>
@@ -957,7 +967,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                   {reconciliationData.totalSupply.toFixed(2)} kWh
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">
-                  Grid + Solar
+                  100.0% (Grid + Solar)
                 </div>
               </CardContent>
             </Card>
@@ -973,7 +983,9 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                   {reconciliationData.distributionTotal.toFixed(2)} kWh
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">
-                  Recovery: {reconciliationData.recoveryRate.toFixed(1)}%
+                  {reconciliationData.totalSupply > 0 
+                    ? ((reconciliationData.distributionTotal / reconciliationData.totalSupply) * 100).toFixed(1) 
+                    : '0.0'}% (Recovery: {reconciliationData.recoveryRate.toFixed(1)}%)
                 </div>
               </CardContent>
             </Card>
@@ -994,7 +1006,9 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                   {reconciliationData.discrepancy.toFixed(2)} kWh
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">
-                  {reconciliationData.discrepancy > 0 ? "Unaccounted" : "Over-recovered"}
+                  {reconciliationData.totalSupply > 0 
+                    ? ((Math.abs(reconciliationData.discrepancy) / reconciliationData.totalSupply) * 100).toFixed(1) 
+                    : '0.0'}% {reconciliationData.discrepancy > 0 ? "Unaccounted" : "Over-recovered"}
                 </div>
               </CardContent>
             </Card>
