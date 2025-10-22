@@ -43,9 +43,10 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
   const [availableColumns, setAvailableColumns] = useState<string[]>([]);
   const [yAxisMin, setYAxisMin] = useState<string>("");
   const [yAxisMax, setYAxisMax] = useState<string>("");
-  const [xAxisMin, setXAxisMin] = useState<string>("");
-  const [xAxisMax, setXAxisMax] = useState<string>("");
   const [hiddenLines, setHiddenLines] = useState<Set<string>>(new Set());
+  const [xAxisDomain, setXAxisDomain] = useState<[number | "auto", number | "auto"]>(["auto", "auto"]);
+  const [isPanning, setIsPanning] = useState(false);
+  const [panStart, setPanStart] = useState<{ x: number; y: number } | null>(null);
   const [manipulationOperation, setManipulationOperation] = useState<string>("sum");
   const [manipulationDateFrom, setManipulationDateFrom] = useState<Date>();
   const [manipulationDateTo, setManipulationDateTo] = useState<Date>();
@@ -258,10 +259,17 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
     return [min, max];
   };
 
-  const getXAxisDomain = (): [number | "auto", number | "auto"] => {
-    const min = xAxisMin && !isNaN(parseFloat(xAxisMin)) ? parseFloat(xAxisMin) : "auto";
-    const max = xAxisMax && !isNaN(parseFloat(xAxisMax)) ? parseFloat(xAxisMax) : "auto";
-    return [min, max];
+  const handleResetView = () => {
+    setXAxisDomain(["auto", "auto"]);
+    setYAxisMin("");
+    setYAxisMax("");
+  };
+
+  const handleSetDayRange = (days: number) => {
+    if (loadProfileData.length === 0) return;
+    const maxIndex = loadProfileData.length - 1;
+    const minIndex = Math.max(0, maxIndex - (days * 48) + 1); // Assuming 48 readings per day (30min intervals)
+    setXAxisDomain([minIndex, maxIndex]);
   };
 
   const handleApplyManipulation = () => {
@@ -568,28 +576,28 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="x-min" className="font-semibold">X-Axis Min</Label>
-                    <Input
-                      id="x-min"
-                      type="text"
-                      placeholder="Auto"
-                      value={xAxisMin}
-                      onChange={(e) => setXAxisMin(e.target.value)}
-                      className="h-10"
-                    />
+                    <Label className="font-semibold">X-Axis Range (Days)</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {[1, 7, 14, 21, 28, 30, 31].map((days) => (
+                        <Button
+                          key={days}
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleSetDayRange(days)}
+                        >
+                          {days}d
+                        </Button>
+                      ))}
+                    </div>
                   </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="x-max" className="font-semibold">X-Axis Max</Label>
-                    <Input
-                      id="x-max"
-                      type="text"
-                      placeholder="Auto"
-                      value={xAxisMax}
-                      onChange={(e) => setXAxisMax(e.target.value)}
-                      className="h-10"
-                    />
-                  </div>
+
+                  <Button
+                    variant="secondary"
+                    onClick={handleResetView}
+                    className="w-full"
+                  >
+                    Reset View
+                  </Button>
                 </div>
 
                 {/* Data Manipulation */}
@@ -737,7 +745,8 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                       stroke="hsl(var(--muted-foreground))"
                       tick={{ fill: "hsl(var(--foreground))", fontSize: 11 }}
                       interval="preserveStartEnd"
-                      domain={getXAxisDomain()}
+                      domain={xAxisDomain}
+                      allowDataOverflow
                     />
                     <YAxis
                       stroke="hsl(var(--muted-foreground))"
