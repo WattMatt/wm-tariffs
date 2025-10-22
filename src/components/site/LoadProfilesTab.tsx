@@ -823,11 +823,8 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                         
                         data.forEach((point) => {
                           if (point.timestampStr) {
-                            // Parse day directly from string without timezone conversion
-                            const timestampStr = point.timestampStr.replace('T', ' ').split('.')[0];
-                            const [datePart] = timestampStr.split(' ');
-                            const [, , day] = datePart.split('-');
-                            const currentDay = parseInt(day);
+                            const date = new Date(point.timestampStr);
+                            const currentDay = date.getDate();
                             
                             if (lastDay === null || currentDay !== lastDay) {
                               dayBoundaries.push(point.timestampStr);
@@ -850,63 +847,70 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                         dataKey="timestampStr"
                         height={100}
                         tickLine={false}
-                        interval="preserveStartEnd"
+                        interval={0}
                         tick={(props: any) => {
-                          const { x, y, payload, index } = props;
+                          const { x, y, payload } = props;
                           if (!payload?.value) return null;
                           
                           try {
+                            const currentDate = new Date(payload.value);
                             const data = isManipulationApplied ? manipulatedData : loadProfileData;
                             
                             // Find all day boundaries
-                            const dayBoundaries = new Map<string, { timestamp: string, day: number, month: number, year: number, index: number }>();
+                            const dayBoundaries: { timestamp: string, day: number, month: number, year: number }[] = [];
+                            let lastDay: number | null = null;
                             
-                            data.forEach((point, idx) => {
+                            data.forEach((point) => {
                               if (point.timestampStr) {
-                                // Parse date directly from string
-                                const timestampStr = point.timestampStr.replace('T', ' ').split('+')[0].split('.')[0];
-                                const [datePart] = timestampStr.split(' ');
-                                const [year, month, day] = datePart.split('-').map(Number);
-                                const dateKey = `${year}-${month}-${day}`;
+                                const date = new Date(point.timestampStr);
+                                const currentDay = date.getDate();
                                 
-                                if (!dayBoundaries.has(dateKey)) {
-                                  dayBoundaries.set(dateKey, {
+                                if (lastDay === null || currentDay !== lastDay) {
+                                  dayBoundaries.push({
                                     timestamp: point.timestampStr,
-                                    day: day,
-                                    month: month - 1,
-                                    year: year,
-                                    index: idx
+                                    day: currentDay,
+                                    month: date.getMonth(),
+                                    year: date.getFullYear()
                                   });
                                 }
+                                lastDay = currentDay;
                               }
                             });
                             
-                            // Check if current point is a day boundary
-                            const currentStr = payload.value.replace('T', ' ').split('+')[0].split('.')[0];
-                            const [currentDatePart] = currentStr.split(' ');
-                            const [currentYear, currentMonth, currentDay] = currentDatePart.split('-').map(Number);
-                            const currentDateKey = `${currentYear}-${currentMonth}-${currentDay}`;
-                            
-                            const dayInfo = dayBoundaries.get(currentDateKey);
-                            if (!dayInfo || dayInfo.timestamp !== payload.value) {
-                              return null; // Only show labels at first timestamp of each day
+                            // Find which day segment this timestamp belongs to
+                            let dayIndex = -1;
+                            for (let i = 0; i < dayBoundaries.length; i++) {
+                              const startTime = new Date(dayBoundaries[i].timestamp).getTime();
+                              const endTime = i < dayBoundaries.length - 1
+                                ? new Date(dayBoundaries[i + 1].timestamp).getTime()
+                                : new Date(data[data.length - 1].timestampStr).getTime();
+                              const centerTime = (startTime + endTime) / 2;
+                              
+                              // If this timestamp is close to the center of this day segment
+                              if (Math.abs(currentDate.getTime() - centerTime) < 15 * 60 * 1000) { // within 15 minutes
+                                dayIndex = i;
+                                break;
+                              }
                             }
                             
+                            // Only show label if this is a center point
+                            if (dayIndex === -1) return null;
+                            
+                            const dayInfo = dayBoundaries[dayIndex];
+                            
                             // Determine if we should show month/year
-                            const allDays = Array.from(dayBoundaries.values());
-                            const monthDays = allDays.filter(d => 
+                            const monthDays = dayBoundaries.filter(d => 
                               d.month === dayInfo.month && d.year === dayInfo.year
                             );
-                            const yearDays = allDays.filter(d => 
+                            const yearDays = dayBoundaries.filter(d => 
                               d.year === dayInfo.year
                             );
                             
-                            const isFirstDayOfMonth = monthDays[0]?.day === dayInfo.day;
-                            const isFirstDayOfYear = yearDays[0]?.day === dayInfo.day;
+                            const monthCenterIdx = Math.floor(monthDays.length / 2);
+                            const yearCenterIdx = Math.floor(yearDays.length / 2);
                             
-                            // Format month name
-                            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                            const monthName = monthNames[dayInfo.month];
+                            const showMonth = monthDays[monthCenterIdx]?.day === dayInfo.day;
+                            const showYear = yearDays[yearCenterIdx]?.day === dayInfo.day;
                             
                             return (
                               <g transform={`translate(${x},${y})`}>
@@ -923,7 +927,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                                 </text>
                                 
                                 {/* Month name */}
-                                {isFirstDayOfMonth && (
+                                {showMonth && (
                                   <text 
                                     x={0} 
                                     y={0} 
@@ -933,12 +937,12 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                                      fontSize={13}
                                      fontWeight="500"
                                    >
-                                     {monthName}
+                                     {format(new Date(dayInfo.timestamp), 'MMM')}
                                    </text>
                                  )}
                                  
                                  {/* Year */}
-                                 {isFirstDayOfYear && (
+                                 {showYear && (
                                    <text 
                                      x={0} 
                                      y={0} 
@@ -952,10 +956,10 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                                  )}
                                </g>
                              );
-                           } catch (error) {
-                             console.error('Error rendering X-axis tick:', error);
-                             return null;
-                           }
+                            } catch (error) {
+                              console.error('Error rendering X-axis tick:', error);
+                              return null;
+                            }
                        }}
                        />
                        <YAxis domain={getYAxisDomain()} />
@@ -963,33 +967,10 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                          labelFormatter={(label) => {
                            if (!label) return '';
                            try {
-                             // Parse timestamp string directly without timezone conversion
-                             // Expected format: "YYYY-MM-DD HH:mm:ss" or "YYYY-MM-DDTHH:mm:ss" possibly with +00
-                             const timestampStr = String(label);
-                             // Remove timezone info and milliseconds
-                             const cleanStr = timestampStr.replace('T', ' ').split('+')[0].split('.')[0].trim();
-                             
-                             // Parse components directly
-                             const parts = cleanStr.split(' ');
-                             if (parts.length < 2) return timestampStr;
-                             
-                             const datePart = parts[0];
-                             const timePart = parts[1];
-                             
-                             const [year, month, day] = datePart.split('-');
-                             const [hours, minutes, seconds] = timePart.split(':');
-                             
-                             // Format as: "MMM d, yyyy, h:mm:ss a"
-                             const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                             const monthName = monthNames[parseInt(month) - 1];
-                             const hour = parseInt(hours);
-                             const ampm = hour >= 12 ? 'PM' : 'AM';
-                             const displayHour = hour % 12 || 12;
-                             
-                             return `${monthName} ${parseInt(day)}, ${year}, ${displayHour}:${minutes}:${seconds || '00'} ${ampm}`;
-                           } catch (error) {
-                             console.error('Tooltip format error:', error);
-                             return String(label);
+                             const date = new Date(label);
+                             return format(date, 'PPpp');
+                           } catch {
+                             return label;
                            }
                          }}
                        />
