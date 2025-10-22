@@ -783,47 +783,16 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                         dataKey="timestampStr"
                         height={100}
                         tickLine={false}
-                        ticks={(() => {
-                          const data = isManipulationApplied ? manipulatedData : loadProfileData;
-                          
-                          // Find all day boundaries
-                          const dayBoundaries: string[] = [];
-                          let lastDay: number | null = null;
-                          
-                          data.forEach((point) => {
-                            if (point.timestampStr) {
-                              const date = new Date(point.timestampStr);
-                              const currentDay = date.getDate();
-                              
-                              if (lastDay === null || currentDay !== lastDay) {
-                                dayBoundaries.push(point.timestampStr);
-                              }
-                              lastDay = currentDay;
-                            }
-                          });
-                          
-                          // Calculate center point between each pair of boundaries
-                          const centerTicks: string[] = [];
-                          for (let i = 0; i < dayBoundaries.length; i++) {
-                            const startTime = new Date(dayBoundaries[i]).getTime();
-                            const endTime = i < dayBoundaries.length - 1
-                              ? new Date(dayBoundaries[i + 1]).getTime()
-                              : new Date(data[data.length - 1].timestampStr).getTime();
-                            
-                            const centerTime = (startTime + endTime) / 2;
-                            centerTicks.push(new Date(centerTime).toISOString());
-                          }
-                          
-                          return centerTicks;
-                        })()}
+                        interval={0}
                         tick={(props: any) => {
-                          const { x, y, payload, index } = props;
-                          if (!payload || !payload.value) return null;
+                          const { x, y, payload } = props;
+                          if (!payload?.value) return null;
                           
                           try {
+                            const currentDate = new Date(payload.value);
                             const data = isManipulationApplied ? manipulatedData : loadProfileData;
                             
-                            // Find all day boundaries with their info
+                            // Find all day boundaries
                             const dayBoundaries: { timestamp: string, day: number, month: number, year: number }[] = [];
                             let lastDay: number | null = null;
                             
@@ -844,12 +813,28 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                               }
                             });
                             
-                            // This tick represents the center of day at index
-                            if (index >= dayBoundaries.length) return null;
+                            // Find which day segment this timestamp belongs to
+                            let dayIndex = -1;
+                            for (let i = 0; i < dayBoundaries.length; i++) {
+                              const startTime = new Date(dayBoundaries[i].timestamp).getTime();
+                              const endTime = i < dayBoundaries.length - 1
+                                ? new Date(dayBoundaries[i + 1].timestamp).getTime()
+                                : new Date(data[data.length - 1].timestampStr).getTime();
+                              const centerTime = (startTime + endTime) / 2;
+                              
+                              // If this timestamp is close to the center of this day segment
+                              if (Math.abs(currentDate.getTime() - centerTime) < 15 * 60 * 1000) { // within 15 minutes
+                                dayIndex = i;
+                                break;
+                              }
+                            }
                             
-                            const dayInfo = dayBoundaries[index];
+                            // Only show label if this is a center point
+                            if (dayIndex === -1) return null;
                             
-                            // Determine if we should show month/year (center of those ranges)
+                            const dayInfo = dayBoundaries[dayIndex];
+                            
+                            // Determine if we should show month/year
                             const monthDays = dayBoundaries.filter(d => 
                               d.month === dayInfo.month && d.year === dayInfo.year
                             );
@@ -882,39 +867,38 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                                   <text 
                                     x={0} 
                                     y={0} 
-                                    dy={38} 
-                                    textAnchor="middle" 
-                                    fill="currentColor"
-                                    fontSize={13}
-                                    fontWeight="500"
-                                  >
-                                    {format(new Date(dayInfo.timestamp), 'MMM')}
-                                  </text>
-                                )}
-                                
-                                {/* Year */}
-                                {showYear && (
-                                  <text 
-                                    x={0} 
-                                    y={0} 
-                                    dy={60} 
-                                    textAnchor="middle" 
-                                    fill="currentColor"
-                                    fontSize={13}
-                                    fontWeight="500"
-                                  >
-                                    {dayInfo.year}
-                                  </text>
-                                )}
-                              </g>
-                            );
-                          } catch (error) {
-                            console.error('XAxis tick error:', error);
-                            return null;
-                          }
-                        }}
-                      />
-                      <YAxis domain={getYAxisDomain()} />
+                                     dy={38} 
+                                     textAnchor="middle" 
+                                     fill="currentColor"
+                                     fontSize={13}
+                                     fontWeight="500"
+                                   >
+                                     {format(new Date(dayInfo.timestamp), 'MMM')}
+                                   </text>
+                                 )}
+                                 
+                                 {/* Year */}
+                                 {showYear && (
+                                   <text 
+                                     x={0} 
+                                     y={0} 
+                                     dy={60} 
+                                     textAnchor="middle" 
+                                     fill="currentColor"
+                                     fontSize={12}
+                                   >
+                                     {dayInfo.year}
+                                   </text>
+                                 )}
+                               </g>
+                             );
+                            } catch (error) {
+                              console.error('Error rendering X-axis tick:', error);
+                              return null;
+                            }
+                          }}
+                        />
+                       <YAxis domain={getYAxisDomain()} />
                       <Tooltip 
                         labelFormatter={(label) => {
                           if (!label) return '';
