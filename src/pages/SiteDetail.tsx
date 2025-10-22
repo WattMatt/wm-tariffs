@@ -215,7 +215,6 @@ export default function SiteDetail() {
             </div>
           </div>
           <div className="flex gap-2">
-            <SiteReportExport site={site} />
             <Button variant="outline" onClick={() => setIsEditDialogOpen(true)}>
               <Pencil className="w-4 h-4 mr-2" />
               Edit Site
@@ -315,7 +314,7 @@ export default function SiteDetail() {
         )}
 
         <Tabs defaultValue="meters" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-7 lg:w-auto">
+          <TabsList className="grid w-full grid-cols-8 lg:w-auto">
             <TabsTrigger value="meters" className="gap-2">
               <Gauge className="w-4 h-4" />
               Meters
@@ -343,6 +342,10 @@ export default function SiteDetail() {
             <TabsTrigger value="costs" className="gap-2">
               <Coins className="w-4 h-4" />
               Costs
+            </TabsTrigger>
+            <TabsTrigger value="audit-report" className="gap-2">
+              <FileText className="w-4 h-4" />
+              Audit Report
             </TabsTrigger>
           </TabsList>
 
@@ -372,6 +375,10 @@ export default function SiteDetail() {
 
           <TabsContent value="costs">
             <CostCalculationTab siteId={id!} />
+          </TabsContent>
+
+          <TabsContent value="audit-report">
+            <SiteReportExport siteId={id!} siteName={site.name} />
           </TabsContent>
         </Tabs>
 

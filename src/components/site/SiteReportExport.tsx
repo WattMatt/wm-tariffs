@@ -1,279 +1,414 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
-import { FileDown, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { FileText, Loader2, Download } from "lucide-react";
 import { format } from "date-fns";
 import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
-
-interface Site {
-  id: string;
-  name: string;
-  address: string | null;
-  council_connection_point: string | null;
-  clients: { name: string; code: string } | null;
-  supply_authorities: { name: string; region: string } | null;
-}
 
 interface SiteReportExportProps {
-  site: Site;
+  siteId: string;
+  siteName: string;
 }
 
-export default function SiteReportExport({ site }: SiteReportExportProps) {
-  const [isOpen, setIsOpen] = useState(false);
+export default function SiteReportExport({ siteId, siteName }: SiteReportExportProps) {
   const [isGenerating, setIsGenerating] = useState(false);
+  const [periodStart, setPeriodStart] = useState("");
+  const [periodEnd, setPeriodEnd] = useState("");
 
   const generateReport = async () => {
+    if (!periodStart || !periodEnd) {
+      toast.error("Please select both start and end dates");
+      return;
+    }
+
     setIsGenerating(true);
+
     try {
-      // Fetch all data
-      const [metersData, schematicsData, connectionsData] = await Promise.all([
-        supabase.from("meters").select("*").eq("site_id", site.id).order("meter_type, meter_number"),
-        supabase.from("schematics").select("*").eq("site_id", site.id).order("created_at"),
-        supabase.from("meter_connections").select("id, connection_type, parent_meter_id, child_meter_id").order("created_at")
-      ]);
-
-      // Fetch meter details separately
-      const meterIds = [...new Set([
-        ...(connectionsData.data || []).map(c => c.parent_meter_id),
-        ...(connectionsData.data || []).map(c => c.child_meter_id)
-      ])];
-      
-      const { data: connectionMetersData } = await supabase
+      // 1. Fetch all meters for this site
+      const { data: meters, error: metersError } = await supabase
         .from("meters")
-        .select("id, meter_number, name")
-        .in("id", meterIds);
-      
-      const meterMap = new Map((connectionMetersData || []).map(m => [m.id, m]));
+        .select(`
+          *,
+          parent_connections:meter_connections!meter_connections_child_meter_id_fkey(
+            parent_meter_id,
+            connection_type,
+            parent_meter:meters!meter_connections_parent_meter_id_fkey(
+              meter_number,
+              name
+            )
+          ),
+          child_connections:meter_connections!meter_connections_parent_meter_id_fkey(
+            child_meter_id,
+            connection_type,
+            child_meter:meters!meter_connections_child_meter_id_fkey(
+              meter_number,
+              name
+            )
+          )
+        `)
+        .eq("site_id", siteId);
 
-      const meters = metersData.data || [];
-      const schematics = schematicsData.data || [];
-      const connections = (connectionsData.data || []).map(conn => ({
-        ...conn,
-        parent: meterMap.get(conn.parent_meter_id),
-        child: meterMap.get(conn.child_meter_id)
-      }));
+      if (metersError) throw metersError;
 
-      // Create temporary container for HTML rendering
-      const tempContainer = document.createElement("div");
-      tempContainer.style.position = "absolute";
-      tempContainer.style.left = "-9999px";
-      tempContainer.style.width = "794px"; // A4 width in pixels at 96 DPI
-      tempContainer.style.background = "#fff";
-      tempContainer.style.padding = "40px";
-      
-      // Generate HTML content
-      tempContainer.innerHTML = `
-  <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #1a1a1a;">
-    <div style="border-bottom: 3px solid #2563eb; padding-bottom: 20px; margin-bottom: 40px;">
-      <h1 style="font-size: 32px; color: #1a1a1a; margin-bottom: 8px;">${site.name}</h1>
-      <div style="font-size: 14px; color: #666; text-transform: uppercase; letter-spacing: 1px;">Site Comprehensive Report</div>
-    </div>
+      // 2. Fetch meter readings for the period
+      const { data: readings, error: readingsError } = await supabase
+        .from("meter_readings")
+        .select("*")
+        .in("meter_id", meters?.map(m => m.id) || [])
+        .gte("reading_timestamp", periodStart)
+        .lte("reading_timestamp", periodEnd);
 
-    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-bottom: 40px; background: #f8fafc; padding: 20px; border-radius: 8px;">
-      <div>
-        <div style="font-size: 12px; color: #666; text-transform: uppercase; margin-bottom: 4px;">Client</div>
-        <div style="font-size: 16px; color: #1a1a1a; font-weight: 500;">${site.clients?.name || "—"} ${site.clients?.code ? `(${site.clients.code})` : ""}</div>
-      </div>
-      <div>
-        <div style="font-size: 12px; color: #666; text-transform: uppercase; margin-bottom: 4px;">Address</div>
-        <div style="font-size: 16px; color: #1a1a1a; font-weight: 500;">${site.address || "—"}</div>
-      </div>
-      <div>
-        <div style="font-size: 12px; color: #666; text-transform: uppercase; margin-bottom: 4px;">Council Connection Point</div>
-        <div style="font-size: 16px; color: #1a1a1a; font-weight: 500;">${site.council_connection_point || "—"}</div>
-      </div>
-      <div>
-        <div style="font-size: 12px; color: #666; text-transform: uppercase; margin-bottom: 4px;">Supply Authority</div>
-        <div style="font-size: 16px; color: #1a1a1a; font-weight: 500;">${site.supply_authorities?.name || "—"}</div>
-      </div>
-      <div>
-        <div style="font-size: 12px; color: #666; text-transform: uppercase; margin-bottom: 4px;">Report Generated</div>
-        <div style="font-size: 16px; color: #1a1a1a; font-weight: 500;">${format(new Date(), "dd MMM yyyy, HH:mm")}</div>
-      </div>
-      <div>
-        <div style="font-size: 12px; color: #666; text-transform: uppercase; margin-bottom: 4px;">Total Meters</div>
-        <div style="font-size: 16px; color: #1a1a1a; font-weight: 500;">${meters.length}</div>
-      </div>
-    </div>
+      if (readingsError) throw readingsError;
 
-    <div style="margin-bottom: 40px;">
-      <h2 style="font-size: 24px; color: #1a1a1a; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 2px solid #e5e7eb;">Meters Overview</h2>
-      ${meters.length === 0 ? `
-        <div style="padding: 40px; text-align: center; color: #666; background: #f8fafc; border-radius: 8px;">No meters registered</div>
-      ` : `
-        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-          <thead style="background: #f8fafc;">
-            <tr>
-              <th style="text-align: left; padding: 10px; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Meter No.</th>
-              <th style="text-align: left; padding: 10px; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Name</th>
-              <th style="text-align: left; padding: 10px; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Type</th>
-              <th style="text-align: left; padding: 10px; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Rating</th>
-              <th style="text-align: left; padding: 10px; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Critical</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${meters.map(meter => `
-              <tr>
-                <td style="padding: 8px 10px; border-bottom: 1px solid #f1f5f9;"><strong>${meter.meter_number}</strong></td>
-                <td style="padding: 8px 10px; border-bottom: 1px solid #f1f5f9;">${meter.name || "—"}</td>
-                <td style="padding: 8px 10px; border-bottom: 1px solid #f1f5f9;">${meter.meter_type.replace(/_/g, ' ')}</td>
-                <td style="padding: 8px 10px; border-bottom: 1px solid #f1f5f9;">${meter.rating || "—"}</td>
-                <td style="padding: 8px 10px; border-bottom: 1px solid #f1f5f9;">${meter.is_revenue_critical ? '✓' : '—'}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      `}
-    </div>
+      // 3. Calculate consumption per meter
+      const meterConsumption = meters?.map(meter => {
+        const meterReadings = readings?.filter(r => r.meter_id === meter.id) || [];
+        
+        if (meterReadings.length < 2) {
+          return {
+            meter,
+            consumption: 0,
+            readingsCount: meterReadings.length,
+            firstReading: null,
+            lastReading: null
+          };
+        }
 
-    <div style="margin-bottom: 40px;">
-      <h2 style="font-size: 24px; color: #1a1a1a; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 2px solid #e5e7eb;">Meter Connections</h2>
-      ${connections.length === 0 ? `
-        <div style="padding: 40px; text-align: center; color: #666; background: #f8fafc; border-radius: 8px;">No connections configured</div>
-      ` : `
-        ${connections.map(conn => `
-          <div style="padding: 12px; background: #f8fafc; border-left: 4px solid #2563eb; margin-bottom: 8px; border-radius: 4px;">
-            <div style="font-size: 11px; text-transform: uppercase; color: #666; margin-bottom: 4px;">${conn.connection_type.replace(/_/g, ' ')}</div>
-            <div style="font-size: 14px; color: #1a1a1a;"><strong>${conn.parent?.meter_number || '?'}</strong> → <strong>${conn.child?.meter_number || '?'}</strong></div>
-          </div>
-        `).join('')}
-      `}
-    </div>
+        meterReadings.sort((a, b) => 
+          new Date(a.reading_timestamp).getTime() - new Date(b.reading_timestamp).getTime()
+        );
 
-    <div style="margin-bottom: 40px;">
-      <h2 style="font-size: 24px; color: #1a1a1a; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 2px solid #e5e7eb;">Schematics</h2>
-      ${schematics.length === 0 ? `
-        <div style="padding: 40px; text-align: center; color: #666; background: #f8fafc; border-radius: 8px;">No schematics uploaded</div>
-      ` : `
-        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-          <thead style="background: #f8fafc;">
-            <tr>
-              <th style="text-align: left; padding: 10px; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Name</th>
-              <th style="text-align: left; padding: 10px; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Type</th>
-              <th style="text-align: left; padding: 10px; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Pages</th>
-              <th style="text-align: left; padding: 10px; font-weight: 600; border-bottom: 2px solid #e5e7eb;">Uploaded</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${schematics.map(schematic => `
-              <tr>
-                <td style="padding: 8px 10px; border-bottom: 1px solid #f1f5f9;"><strong>${schematic.name}</strong></td>
-                <td style="padding: 8px 10px; border-bottom: 1px solid #f1f5f9;">${schematic.file_type.toUpperCase()}</td>
-                <td style="padding: 8px 10px; border-bottom: 1px solid #f1f5f9;">${schematic.page_number}/${schematic.total_pages}</td>
-                <td style="padding: 8px 10px; border-bottom: 1px solid #f1f5f9;">${format(new Date(schematic.created_at), "dd MMM yyyy")}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      `}
-    </div>
+        const firstReading = meterReadings[0];
+        const lastReading = meterReadings[meterReadings.length - 1];
+        const consumption = lastReading.kwh_value - firstReading.kwh_value;
 
-    <div style="margin-top: 60px; padding-top: 20px; border-top: 2px solid #e5e7eb; text-align: center; color: #666; font-size: 12px;">
-      <p>Generated on ${format(new Date(), "dd MMMM yyyy 'at' HH:mm")}</p>
-    </div>
-  </div>
-      `;
+        return {
+          meter,
+          consumption,
+          readingsCount: meterReadings.length,
+          firstReading,
+          lastReading
+        };
+      }) || [];
 
-      document.body.appendChild(tempContainer);
+      // 4. Identify bulk meter (meter with no parent)
+      const bulkMeter = meterConsumption.find(
+        mc => !mc.meter.parent_connections || mc.meter.parent_connections.length === 0
+      );
 
-      // Convert HTML to canvas
-      const canvas = await html2canvas(tempContainer, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: "#ffffff"
+      // 5. Calculate total sub-meter consumption
+      const subMeters = meterConsumption.filter(
+        mc => mc.meter.id !== bulkMeter?.meter.id
+      );
+      const totalSubMeterConsumption = subMeters.reduce((sum, mc) => sum + mc.consumption, 0);
+
+      // 6. Calculate variance
+      const bulkConsumption = bulkMeter?.consumption || 0;
+      const variance = bulkConsumption - totalSubMeterConsumption;
+      const variancePercentage = bulkConsumption > 0 
+        ? ((variance / bulkConsumption) * 100).toFixed(2)
+        : "0";
+
+      // 7. Detect anomalies
+      const anomalies: any[] = [];
+
+      // Missing readings
+      meterConsumption.forEach(mc => {
+        if (mc.readingsCount < 2) {
+          anomalies.push({
+            type: "insufficient_readings",
+            meter: mc.meter.meter_number,
+            description: `Only ${mc.readingsCount} reading(s) available for the period`,
+            severity: "high"
+          });
+        }
       });
 
-      document.body.removeChild(tempContainer);
-
-      // Create PDF
-      const pdf = new jsPDF({
-        orientation: "portrait",
-        unit: "mm",
-        format: "a4"
+      // Negative consumption
+      meterConsumption.forEach(mc => {
+        if (mc.consumption < 0) {
+          anomalies.push({
+            type: "negative_consumption",
+            meter: mc.meter.meter_number,
+            consumption: mc.consumption,
+            description: "Negative consumption detected - possible meter rollback or tampering",
+            severity: "critical"
+          });
+        }
       });
 
-      const imgData = canvas.toDataURL("image/png");
-      const imgWidth = 210; // A4 width in mm
-      const pageHeight = 297; // A4 height in mm
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      let heightLeft = imgHeight;
-      let position = 0;
-
-      // Add first page
-      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
-
-      // Add additional pages if content is longer
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
+      // High variance
+      if (Math.abs(parseFloat(variancePercentage)) > 10) {
+        anomalies.push({
+          type: "high_variance",
+          variance: variance.toFixed(2),
+          variancePercentage,
+          description: `Variance of ${variancePercentage}% between bulk and sub-meters exceeds acceptable threshold`,
+          severity: "high"
+        });
       }
 
-      // Download PDF
-      pdf.save(`${site.name.replace(/[^a-z0-9]/gi, '_')}_Report_${format(new Date(), "yyyy-MM-dd")}.pdf`);
+      // 8. Fetch document extractions
+      const { data: documents, error: docsError } = await supabase
+        .from("site_documents")
+        .select(`
+          *,
+          document_extractions(*)
+        `)
+        .eq("site_id", siteId)
+        .eq("extraction_status", "completed");
 
-      toast.success("PDF report generated successfully");
-      setIsOpen(false);
+      if (docsError) throw docsError;
+
+      const documentExtractions = documents?.map(doc => ({
+        fileName: doc.file_name,
+        documentType: doc.document_type,
+        extraction: doc.document_extractions?.[0]
+      })).filter(d => d.extraction) || [];
+
+      // 9. Prepare reconciliation data
+      const reconciliationData = {
+        bulkMeter: bulkMeter?.meter.meter_number || "N/A",
+        bulkConsumption: bulkConsumption.toFixed(2),
+        totalSubMeterConsumption: totalSubMeterConsumption.toFixed(2),
+        variance: variance.toFixed(2),
+        variancePercentage,
+        subMeterCount: subMeters.length,
+        readingsPeriod: `${format(new Date(periodStart), "dd MMM yyyy")} - ${format(new Date(periodEnd), "dd MMM yyyy")}`
+      };
+
+      // 10. Prepare meter hierarchy
+      const meterHierarchy = meters?.map(meter => ({
+        meterNumber: meter.meter_number,
+        name: meter.name,
+        type: meter.meter_type,
+        location: meter.location,
+        parentMeters: meter.parent_connections?.map((pc: any) => 
+          pc.parent_meter?.meter_number
+        ) || [],
+        childMeters: meter.child_connections?.map((cc: any) => 
+          cc.child_meter?.meter_number
+        ) || []
+      })) || [];
+
+      // 11. Generate AI narrative sections
+      toast.info("Generating report sections with AI...");
+
+      const { data: reportData, error: aiError } = await supabase.functions.invoke(
+        "generate-audit-report",
+        {
+          body: {
+            siteName,
+            auditPeriodStart: format(new Date(periodStart), "dd MMMM yyyy"),
+            auditPeriodEnd: format(new Date(periodEnd), "dd MMMM yyyy"),
+            meterHierarchy,
+            reconciliationData,
+            documentExtractions,
+            anomalies
+          }
+        }
+      );
+
+      if (aiError) throw aiError;
+
+      // 12. Generate PDF
+      toast.info("Generating PDF...");
+      const pdf = new jsPDF();
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 20;
+      let yPos = margin;
+
+      // Helper function to add text with wrapping
+      const addText = (text: string, fontSize: number = 10, isBold: boolean = false) => {
+        pdf.setFontSize(fontSize);
+        pdf.setFont("helvetica", isBold ? "bold" : "normal");
+        const lines = pdf.splitTextToSize(text, pageWidth - 2 * margin);
+        
+        lines.forEach((line: string) => {
+          if (yPos > pageHeight - margin) {
+            pdf.addPage();
+            yPos = margin;
+          }
+          pdf.text(line, margin, yPos);
+          yPos += fontSize * 0.5;
+        });
+        yPos += 5;
+      };
+
+      // Title Page
+      pdf.setFontSize(24);
+      pdf.setFont("helvetica", "bold");
+      pdf.text("METERING AUDIT REPORT", pageWidth / 2, 60, { align: "center" });
+      
+      pdf.setFontSize(16);
+      pdf.setFont("helvetica", "normal");
+      pdf.text(siteName, pageWidth / 2, 80, { align: "center" });
+      
+      pdf.setFontSize(12);
+      pdf.text(
+        `Audit Period: ${format(new Date(periodStart), "dd MMM yyyy")} - ${format(new Date(periodEnd), "dd MMM yyyy")}`,
+        pageWidth / 2,
+        100,
+        { align: "center" }
+      );
+
+      pdf.text(`Generated: ${format(new Date(), "dd MMM yyyy HH:mm")}`, pageWidth / 2, 115, { align: "center" });
+
+      // New page for content
+      pdf.addPage();
+      yPos = margin;
+
+      // 1. Executive Summary
+      addText("1. EXECUTIVE SUMMARY", 16, true);
+      addText(reportData.sections.executiveSummary);
+
+      // 2. Metering Hierarchy Overview
+      addText("2. METERING HIERARCHY OVERVIEW", 16, true);
+      addText(reportData.sections.hierarchyOverview);
+
+      // 3. Data Sources and Period
+      addText("3. DATA SOURCES AND AUDIT PERIOD", 16, true);
+      addText(`Audit Period: ${reconciliationData.readingsPeriod}`, 10, true);
+      addText(`Bulk Meter: ${reconciliationData.bulkMeter}`);
+      addText(`Number of Sub-Meters: ${reconciliationData.subMeterCount}`);
+      addText(`Documents Analyzed: ${documentExtractions.length}`);
+
+      // 4. Metering Reconciliation
+      addText("4. METERING RECONCILIATION", 16, true);
+      addText("Consumption Summary:", 12, true);
+      addText(`Bulk Supply Meter: ${reconciliationData.bulkConsumption} kWh`);
+      addText(`Total Sub-Meter Consumption: ${reconciliationData.totalSubMeterConsumption} kWh`);
+      addText(`Variance: ${reconciliationData.variance} kWh (${reconciliationData.variancePercentage}%)`);
+
+      // Meter details table
+      yPos += 5;
+      addText("Individual Meter Consumption:", 12, true);
+      meterConsumption.forEach(mc => {
+        addText(`${mc.meter.meter_number} (${mc.meter.name}): ${mc.consumption.toFixed(2)} kWh - ${mc.readingsCount} readings`);
+      });
+
+      // 5. Billing Validation
+      if (reportData.sections.billingValidation) {
+        addText("5. BILLING VALIDATION", 16, true);
+        addText(reportData.sections.billingValidation);
+      }
+
+      // 6. Observations and Anomalies
+      addText("6. OBSERVATIONS AND ANOMALIES", 16, true);
+      addText(reportData.sections.observations);
+      
+      if (anomalies.length > 0) {
+        addText("Detected Anomalies:", 12, true);
+        anomalies.forEach((anomaly, index) => {
+          addText(`${index + 1}. [${anomaly.severity.toUpperCase()}] ${anomaly.description}`);
+          if (anomaly.meter) addText(`   Meter: ${anomaly.meter}`);
+        });
+      }
+
+      // 7. Recommendations
+      addText("7. RECOMMENDATIONS", 16, true);
+      addText(reportData.sections.recommendations);
+
+      // 8. Appendices
+      pdf.addPage();
+      yPos = margin;
+      addText("8. APPENDICES", 16, true);
+      
+      addText("Appendix A: Meter Hierarchy", 12, true);
+      meterHierarchy.forEach(meter => {
+        addText(`${meter.meterNumber} - ${meter.name} (${meter.type})`, 10, true);
+        if (meter.parentMeters.length > 0) {
+          addText(`  Parent(s): ${meter.parentMeters.join(", ")}`);
+        }
+        if (meter.childMeters.length > 0) {
+          addText(`  Children: ${meter.childMeters.join(", ")}`);
+        }
+      });
+
+      // Save PDF
+      const fileName = `${siteName.replace(/\s+/g, "_")}_Audit_Report_${format(new Date(), "yyyyMMdd")}.pdf`;
+      pdf.save(fileName);
+
+      toast.success("Audit report generated successfully!");
+
     } catch (error) {
       console.error("Error generating report:", error);
-      toast.error("Failed to generate report");
+      toast.error("Failed to generate audit report");
     } finally {
       setIsGenerating(false);
     }
   };
 
   return (
-    <>
-      <Button variant="outline" onClick={() => setIsOpen(true)}>
-        <FileDown className="w-4 h-4 mr-2" />
-        Export Report
-      </Button>
-
-      <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Export Site Report</DialogTitle>
-            <DialogDescription>
-              Generate a comprehensive PDF report including site details, meters, connections, and schematics.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="bg-muted/50 p-4 rounded-lg space-y-2 text-sm">
-              <p className="font-medium">Report includes:</p>
-              <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-                <li>Site information and details</li>
-                <li>Complete meters inventory</li>
-                <li>Meter connections and hierarchy</li>
-                <li>Schematics documentation</li>
-                <li>Professional formatting for printing</li>
-              </ul>
-            </div>
-            <Button 
-              onClick={generateReport} 
-              disabled={isGenerating}
-              className="w-full"
-            >
-              {isGenerating ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Generating PDF...
-                </>
-              ) : (
-                <>
-                  <FileDown className="w-4 h-4 mr-2" />
-                  Generate & Download PDF
-                </>
-              )}
-            </Button>
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <FileText className="w-5 h-5" />
+          Generate Audit Report
+        </CardTitle>
+        <CardDescription>
+          Create a comprehensive metering audit report with AI-generated insights
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="period-start">Audit Period Start</Label>
+            <Input
+              id="period-start"
+              type="date"
+              value={periodStart}
+              onChange={(e) => setPeriodStart(e.target.value)}
+            />
           </div>
-        </DialogContent>
-      </Dialog>
-    </>
+          <div className="space-y-2">
+            <Label htmlFor="period-end">Audit Period End</Label>
+            <Input
+              id="period-end"
+              type="date"
+              value={periodEnd}
+              onChange={(e) => setPeriodEnd(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="p-4 border rounded-lg bg-muted/30 space-y-2">
+          <p className="text-sm font-medium">Report will include:</p>
+          <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
+            <li>Executive Summary</li>
+            <li>Metering Hierarchy Overview</li>
+            <li>Consumption Reconciliation</li>
+            <li>Billing Validation (from uploaded documents)</li>
+            <li>Anomaly Detection & Analysis</li>
+            <li>AI-Generated Recommendations</li>
+            <li>Detailed Appendices</li>
+          </ul>
+        </div>
+
+        <Button
+          onClick={generateReport}
+          disabled={isGenerating || !periodStart || !periodEnd}
+          className="w-full"
+          size="lg"
+        >
+          {isGenerating ? (
+            <>
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              Generating Report...
+            </>
+          ) : (
+            <>
+              <Download className="w-4 h-4 mr-2" />
+              Generate Audit Report
+            </>
+          )}
+        </Button>
+      </CardContent>
+    </Card>
   );
 }

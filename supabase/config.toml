@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.extract-document-data]
 verify_jwt = false
+
+[functions.generate-audit-report]
+verify_jwt = false
