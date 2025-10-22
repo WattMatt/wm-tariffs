@@ -62,14 +62,14 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
     }
   }, [selectedMeterId, dateFrom, dateTo, timeFrom, timeTo]);
 
-  // Helper to combine date and time as UTC (no timezone conversion)
+  // Helper to combine date and time in local timezone, then return as-is for UTC query
   const getFullDateTime = (date: Date, time: string): Date => {
     const [hours, minutes] = time.split(':').map(Number);
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    const day = date.getDate();
-    // Create UTC date directly to avoid timezone shifts
-    return new Date(Date.UTC(year, month, day, hours, minutes, 0, 0));
+    // Create a new date in local timezone with the specified time
+    const localDate = new Date(date);
+    localDate.setHours(hours, minutes, 0, 0);
+    // Return the date - when converted to ISO string for query, it will use UTC
+    return localDate;
   };
 
   const fetchMeters = async () => {
