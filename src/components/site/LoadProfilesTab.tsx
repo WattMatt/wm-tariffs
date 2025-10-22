@@ -887,20 +887,15 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                         onClick={(e: any) => e.dataKey && handleLegendClick(String(e.dataKey))}
                         wrapperStyle={{ cursor: "pointer" }}
                       />
-                      {useBrush && (
+                      {useBrush && dateFrom && dateTo && timeFrom && timeTo && (
                         <Brush
                           dataKey="timestamp"
                           height={30}
                           stroke="hsl(var(--primary))"
                           fill="hsl(var(--muted))"
-                          startIndex={brushStartIndex}
-                          endIndex={brushEndIndex}
-                          onChange={(e: any) => {
-                            setBrushStartIndex(e.startIndex);
-                            setBrushEndIndex(e.endIndex);
-                          }}
+                          startIndex={0}
+                          endIndex={(isManipulationApplied ? manipulatedData : loadProfileData).length - 1}
                           alwaysShowText={false}
-                          data={isManipulationApplied ? manipulatedData : loadProfileData}
                           tickFormatter={(value) => {
                             if (!value) return '';
                             const date = new Date(value);
