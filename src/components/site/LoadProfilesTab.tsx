@@ -839,8 +839,8 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                       height={30}
                       stroke="hsl(var(--primary))"
                       fill="hsl(var(--muted))"
-                      startIndex={brushStartIndex}
-                      endIndex={brushEndIndex}
+                      startIndex={brushStartIndex ?? 0}
+                      endIndex={brushEndIndex ?? (isManipulationApplied ? manipulatedData.length - 1 : loadProfileData.length - 1)}
                       onChange={(e: any) => {
                         setBrushStartIndex(e.startIndex);
                         setBrushEndIndex(e.endIndex);
