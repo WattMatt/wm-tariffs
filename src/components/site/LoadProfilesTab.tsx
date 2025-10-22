@@ -336,22 +336,20 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
       const groups = new Map<string, any[]>();
 
       // Find the earliest timestamp to use as reference
-      const timestamps = loadProfileData.map(d => new Date(d.timestamp).getTime());
+      const timestamps = loadProfileData.map(d => new Date(d.timestampStr || d.timestamp).getTime());
       const earliestTime = Math.min(...timestamps);
 
       loadProfileData.forEach((dataPoint) => {
-        const dataTime = new Date(dataPoint.timestamp).getTime();
+        const dataTime = new Date(dataPoint.timestampStr || dataPoint.timestamp).getTime();
         
         // Calculate position within the repeating period pattern
         const timeSincePeriodStart = (dataTime - earliestTime) % periodDurationMs;
         
         // Create a time key for grouping (relative time within the period)
         const relativeDate = new Date(earliestTime + timeSincePeriodStart);
-        const day = String(relativeDate.getDate()).padStart(2, '0');
-        const month = String(relativeDate.getMonth() + 1).padStart(2, '0');
-        const hours = String(relativeDate.getHours()).padStart(2, '0');
-        const minutes = String(relativeDate.getMinutes()).padStart(2, '0');
-        const timeKey = `${month}-${day} ${hours}:${minutes}`;
+        
+        // Format as ISO string for proper display
+        const timeKey = relativeDate.toISOString();
         
         if (!groups.has(timeKey)) {
           groups.set(timeKey, []);
@@ -363,7 +361,10 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
       const manipulated: any[] = [];
       
       groups.forEach((dataPoints, timeKey) => {
-        const result: any = { timestamp: timeKey };
+        const result: any = { 
+          timestamp: timeKey,
+          timestampStr: timeKey  // Add timestampStr for graph display
+        };
 
         // Process each selected quantity
         selectedQuantities.forEach((quantity) => {
@@ -741,6 +742,119 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                   </div>
                 </div>
               </div>
+
+              {showGraph && selectedQuantities.size > 0 && (
+                <div className="mt-6 space-y-4">
+                  <ResponsiveContainer width="100%" height={500}>
+                    <LineChart
+                      data={isManipulationApplied ? manipulatedData : loadProfileData}
+                      margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis 
+                        dataKey="timestampStr"
+                        tickFormatter={(value) => {
+                          if (!value) return '';
+                          try {
+                            const date = new Date(value);
+                            return format(date, 'MMM dd HH:mm');
+                          } catch {
+                            return value;
+                          }
+                        }}
+                        angle={-45}
+                        textAnchor="end"
+                        height={80}
+                      />
+                      <YAxis domain={getYAxisDomain()} />
+                      <Tooltip 
+                        labelFormatter={(label) => {
+                          if (!label) return '';
+                          try {
+                            const date = new Date(label);
+                            return format(date, 'PPpp');
+                          } catch {
+                            return label;
+                          }
+                        }}
+                      />
+                      <Legend 
+                        onClick={(e) => handleLegendClick(e.dataKey as string)}
+                        wrapperStyle={{ cursor: 'pointer' }}
+                      />
+                      {Array.from(selectedQuantities).map((quantity, index) => {
+                        const colors = ['#8884d8', '#82ca9d', '#ffc658', '#ff7c7c', '#8dd1e1', '#d084d0', '#a4de6c'];
+                        return (
+                          <Line
+                            key={quantity}
+                            type="monotone"
+                            dataKey={quantity}
+                            stroke={colors[index % colors.length]}
+                            strokeWidth={2}
+                            dot={false}
+                            hide={hiddenLines.has(quantity)}
+                            connectNulls
+                          />
+                        );
+                      })}
+                    </LineChart>
+                  </ResponsiveContainer>
+                  
+                  <div className="flex gap-3 justify-end">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        const currentData = isManipulationApplied ? manipulatedData : loadProfileData;
+                        if (currentData.length === 0) {
+                          toast.error("No data to download");
+                          return;
+                        }
+
+                        const cleanedData = currentData.map(row => {
+                          const { timestamp, timestampStr, ...measurements } = row;
+                          const formattedTimestamp = timestampStr 
+                            ? timestampStr.split('+')[0].split('T').join(' ').substring(0, 19)
+                            : new Date(timestamp).toISOString().split('+')[0].split('T').join(' ').substring(0, 19);
+                          return {
+                            timestamp: formattedTimestamp,
+                            ...measurements
+                          };
+                        });
+
+                        const headers = Object.keys(cleanedData[0]).join(",");
+                        const rows = cleanedData.map(row => 
+                          Object.values(row).map(val => 
+                            typeof val === 'string' && val.includes(',') ? `"${val}"` : val
+                          ).join(",")
+                        ).join("\n");
+                        
+                        const csv = `${headers}\n${rows}`;
+                        const blob = new Blob([csv], { type: 'text/csv' });
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        
+                        const selectedMeter = meters.find(m => m.id === selectedMeterId);
+                        const dateRange = dateFrom && dateTo 
+                          ? `${format(dateFrom, 'yyyy-MM-dd')}_to_${format(dateTo, 'yyyy-MM-dd')}`
+                          : 'data';
+                        const dataType = isManipulationApplied ? 'manipulated' : 'load_profile';
+                        a.download = `${dataType}_${selectedMeter?.meter_number || 'meter'}_${dateRange}.csv`;
+                        
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        window.URL.revokeObjectURL(url);
+                        
+                        toast.success("Data downloaded successfully");
+                      }}
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Download Graph Data
+                    </Button>
+                  </div>
+                </div>
+              )}
 
             </div>
           )}
