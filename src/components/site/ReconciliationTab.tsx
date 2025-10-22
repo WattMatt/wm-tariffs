@@ -513,7 +513,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0 bg-popover z-50" align="start">
-                  <div className="space-y-3">
+                  <div>
                     <Calendar 
                       mode="single" 
                       selected={dateFrom} 
@@ -524,8 +524,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                       toYear={2050}
                       captionLayout="dropdown-buttons"
                     />
-                    <div className="px-3 pb-3 border-t pt-3">
-                      <Label className="text-xs mb-2 block">Time</Label>
+                    <div className="px-3 pb-3">
                       <Input
                         type="time"
                         value={timeFrom}
@@ -554,7 +553,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0 bg-popover z-50" align="start">
-                  <div className="space-y-3">
+                  <div>
                     <Calendar 
                       mode="single" 
                       selected={dateTo} 
@@ -565,8 +564,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                       toYear={2050}
                       captionLayout="dropdown-buttons"
                     />
-                    <div className="px-3 pb-3 border-t pt-3">
-                      <Label className="text-xs mb-2 block">Time</Label>
+                    <div className="px-3 pb-3">
                       <Input
                         type="time"
                         value={timeTo}
