@@ -648,7 +648,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                           }
                           setShowGraph(true);
                         }}
-                        className="flex-1 rounded-full"
+                        className="flex-1 rounded-full bg-primary text-primary-foreground hover:bg-primary/90"
                       >
                         Graph
                       </Button>
