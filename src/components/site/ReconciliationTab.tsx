@@ -621,9 +621,6 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                       kWh: {previewData.lastReading.kwh_value}
                     </div>
                   </div>
-                  <div className="text-xs text-muted-foreground italic">
-                    Note: This shows the last data point found in your database within the selected range. If it doesn't match your end date, there's no data beyond this point.
-                  </div>
                 </div>
               </div>
             </div>
