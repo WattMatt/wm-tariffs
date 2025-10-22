@@ -198,7 +198,8 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
     // Plot exact values from database including all metadata columns
     const chartData = uniqueReadings.map((reading) => {
       const dataPoint: any = {
-        timestamp: reading.reading_timestamp,
+        timestamp: new Date(reading.reading_timestamp).getTime(), // Convert to numeric timestamp
+        timestampStr: reading.reading_timestamp, // Keep string for reference
       };
       
       // Add all columns from metadata
@@ -849,8 +850,8 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                         tick={{ fill: "hsl(var(--foreground))", fontSize: 11 }}
                         interval="preserveStartEnd"
                         domain={[
-                          dateFrom && timeFrom ? new Date(dateFrom.getFullYear(), dateFrom.getMonth(), dateFrom.getDate(), parseInt(timeFrom.split(':')[0]), parseInt(timeFrom.split(':')[1])).getTime() : 'auto',
-                          dateTo && timeTo ? new Date(dateTo.getFullYear(), dateTo.getMonth(), dateTo.getDate(), parseInt(timeTo.split(':')[0]), parseInt(timeTo.split(':')[1])).getTime() : 'auto'
+                          dateFrom && timeFrom ? new Date(dateFrom.getFullYear(), dateFrom.getMonth(), dateFrom.getDate(), parseInt(timeFrom.split(':')[0]), parseInt(timeFrom.split(':')[1])).getTime() : 'dataMin',
+                          dateTo && timeTo ? new Date(dateTo.getFullYear(), dateTo.getMonth(), dateTo.getDate(), parseInt(timeTo.split(':')[0]), parseInt(timeTo.split(':')[1])).getTime() : 'dataMax'
                         ]}
                         scale="time"
                         type="number"
