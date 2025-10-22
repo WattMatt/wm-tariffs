@@ -614,10 +614,10 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
           )}
 
           {!isLoading && dataLoaded && loadProfileData.length > 0 && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-[200px_180px_1fr] gap-2 mb-4 items-start max-w-full">
+              <div className="space-y-6">
+              <div className="flex gap-2 mb-4 items-start">
                 {/* Quantities to Plot */}
-                <div className="space-y-3">
+                <div className="w-[200px] space-y-3">
                   <Label className="font-semibold">Quantities to Plot</Label>
                   <div className="flex flex-col gap-3 h-[280px] overflow-y-auto pr-2 border rounded-md p-3 bg-muted/20">
                     {availableColumns.map((column) => (
@@ -636,19 +636,41 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                       </div>
                     ))}
                   </div>
-                  <Button
-                    variant="default"
-                    onClick={() => {
-                      if (selectedQuantities.size === 0) {
-                        toast.error("Please select at least one quantity to plot");
-                        return;
-                      }
-                      setShowGraph(true);
-                    }}
-                    className="w-full mt-3"
-                  >
-                    Graph
-                  </Button>
+                  
+                  <div className="flex gap-2">
+                    <Button
+                      variant="default"
+                      onClick={() => {
+                        if (selectedQuantities.size === 0) {
+                          toast.error("Please select at least one quantity to plot");
+                          return;
+                        }
+                        setShowGraph(true);
+                      }}
+                      className="flex-1"
+                    >
+                      Graph
+                    </Button>
+                    
+                    <Button
+                      variant="secondary"
+                      onClick={handleResetView}
+                      className="flex-1"
+                    >
+                      Reset View
+                    </Button>
+                  </div>
+                  
+                  {isManipulationApplied && (
+                    <Button 
+                      onClick={handleResetManipulation}
+                      size="sm"
+                      variant="outline"
+                      className="w-full"
+                    >
+                      Reset to Original
+                    </Button>
+                  )}
                   
                   {showGraph && selectedQuantities.size > 0 && (
                     <Button
@@ -702,7 +724,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                         
                         toast.success("Data downloaded successfully");
                       }}
-                      className="w-full mt-2"
+                      className="w-full"
                     >
                       <Download className="h-4 w-4 mr-2" />
                       Download Graph Data
@@ -710,8 +732,8 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                   )}
                 </div>
                 
-                {/* Y-Axis and X-Axis Controls - Stacked Vertically */}
-                <div className="space-y-2">
+                {/* Y-Axis Controls */}
+                <div className="w-[180px] space-y-2">
                   <div className="space-y-2">
                     <Label htmlFor="y-min" className="font-semibold">Y-Axis Min</Label>
                     <Input
@@ -735,19 +757,10 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                       className="h-10"
                     />
                   </div>
-
-
-                  <Button
-                    variant="secondary"
-                    onClick={handleResetView}
-                    className="w-full"
-                  >
-                    Reset View
-                  </Button>
                 </div>
 
                 {/* Data Manipulation */}
-                <div className="space-y-2 border-l pl-4">
+                <div className="flex-1 space-y-2 border-l pl-4">
                   <Label className="font-semibold">Data Manipulation</Label>
                   <div className="space-y-2">
                     <div className="space-y-2">
@@ -787,17 +800,6 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                     >
                       Apply Manipulation
                     </Button>
-                    
-                    {isManipulationApplied && (
-                      <Button 
-                        onClick={handleResetManipulation}
-                        size="sm"
-                        variant="outline"
-                        className="w-full"
-                      >
-                        Reset to Original
-                      </Button>
-                    )}
                   </div>
                 </div>
               </div>
@@ -807,9 +809,15 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                   <ResponsiveContainer width="100%" height={500}>
                     <LineChart
                       data={isManipulationApplied ? manipulatedData : loadProfileData}
-                      margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                      margin={{ top: 40, right: 30, left: 0, bottom: 5 }}
                     >
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                      <Legend 
+                        onClick={(e) => handleLegendClick(e.dataKey as string)}
+                        wrapperStyle={{ cursor: 'pointer' }}
+                        verticalAlign="top"
+                        height={36}
+                      />
                       {/* Vertical lines at day boundaries */}
                       {(() => {
                         const data = isManipulationApplied ? manipulatedData : loadProfileData;
@@ -955,25 +963,21 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                               console.error('Error rendering X-axis tick:', error);
                               return null;
                             }
-                          }}
-                        />
+                       }}
+                       />
                        <YAxis domain={getYAxisDomain()} />
-                      <Tooltip 
-                        labelFormatter={(label) => {
-                          if (!label) return '';
-                          try {
-                            const date = new Date(label);
-                            return format(date, 'PPpp');
-                          } catch {
-                            return label;
-                          }
-                        }}
-                      />
-                      <Legend 
-                        onClick={(e) => handleLegendClick(e.dataKey as string)}
-                        wrapperStyle={{ cursor: 'pointer' }}
-                      />
-                      {Array.from(selectedQuantities).map((quantity, index) => {
+                       <Tooltip 
+                         labelFormatter={(label) => {
+                           if (!label) return '';
+                           try {
+                             const date = new Date(label);
+                             return format(date, 'PPpp');
+                           } catch {
+                             return label;
+                           }
+                         }}
+                       />
+                       {Array.from(selectedQuantities).map((quantity, index) => {
                         const colors = ['#8884d8', '#82ca9d', '#ffc658', '#ff7c7c', '#8dd1e1', '#d084d0', '#a4de6c'];
                         return (
                           <Line
