@@ -1,11 +1,11 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-Deno.serve(async (req) => {
+serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -88,7 +88,8 @@ Return your findings in JSON format.`;
                       },
                       tariffType: {
                         type: 'string',
-                        description: 'Type like residential, commercial, industrial'
+                        enum: ['domestic', 'commercial', 'industrial', 'agricultural'],
+                        description: 'Tariff type: domestic (residential/household), commercial (business), industrial (manufacturing), agricultural (farming)'
                       },
                       voltageLevel: {
                         type: 'string',
@@ -191,6 +192,15 @@ Return your findings in JSON format.`;
     }
 
     const extractedData = JSON.parse(toolCall.function.arguments);
+    
+    // Validate and normalize tariff types
+    const validTariffTypes = ['domestic', 'commercial', 'industrial', 'agricultural'];
+    extractedData.tariffStructures = extractedData.tariffStructures?.map((ts: any) => ({
+      ...ts,
+      tariffType: validTariffTypes.includes(ts.tariffType?.toLowerCase()) 
+        ? ts.tariffType.toLowerCase() 
+        : 'commercial' // default fallback
+    }));
     
     console.log(`✓ Extracted data for ${municipalityName}:`, {
       nersaIncrease: extractedData.nersaIncrease,
