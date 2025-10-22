@@ -50,6 +50,8 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
   const [isManipulationApplied, setIsManipulationApplied] = useState(false);
   const [showGraph, setShowGraph] = useState(false);
   const [dataLoaded, setDataLoaded] = useState(false);
+  const [isDateFromOpen, setIsDateFromOpen] = useState(false);
+  const [isDateToOpen, setIsDateToOpen] = useState(false);
 
   useEffect(() => {
     fetchMeters();
@@ -459,7 +461,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
 
             <div className="space-y-2">
               <Label>Date & Time From</Label>
-              <Popover>
+              <Popover open={isDateFromOpen} onOpenChange={setIsDateFromOpen}>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
@@ -481,7 +483,10 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                     <Calendar
                       mode="single"
                       selected={dateFrom}
-                      onSelect={setDateFrom}
+                      onSelect={(date) => {
+                        setDateFrom(date);
+                        setIsDateFromOpen(false);
+                      }}
                       initialFocus
                       className="p-3"
                     />
@@ -500,7 +505,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
 
             <div className="space-y-2">
               <Label>Date & Time To</Label>
-              <Popover>
+              <Popover open={isDateToOpen} onOpenChange={setIsDateToOpen}>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
@@ -522,7 +527,10 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                     <Calendar
                       mode="single"
                       selected={dateTo}
-                      onSelect={setDateTo}
+                      onSelect={(date) => {
+                        setDateTo(date);
+                        setIsDateToOpen(false);
+                      }}
                       initialFocus
                       className="p-3"
                     />
