@@ -922,6 +922,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
             <Card className="border-border/50">
               <CardHeader className="pb-2">
+                <div className="text-xs text-muted-foreground mb-1">Grid Supply</div>
                 <CardTitle className="text-sm font-medium text-muted-foreground">
                   Council (Grid)
                 </CardTitle>
@@ -932,14 +933,15 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">
                   {reconciliationData.totalSupply > 0 
-                    ? ((reconciliationData.councilTotal / reconciliationData.totalSupply) * 100).toFixed(1) 
-                    : '0.0'}%
+                    ? ((reconciliationData.councilTotal / reconciliationData.totalSupply) * 100).toFixed(2) 
+                    : '0.00'}%
                 </div>
               </CardContent>
             </Card>
 
             <Card className="border-border/50">
               <CardHeader className="pb-2">
+                <div className="text-xs text-muted-foreground mb-1">Renewable Energy</div>
                 <CardTitle className="text-sm font-medium text-muted-foreground">
                   Solar (Generated)
                 </CardTitle>
@@ -950,8 +952,8 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">
                   {reconciliationData.totalSupply > 0 
-                    ? ((reconciliationData.solarTotal / reconciliationData.totalSupply) * 100).toFixed(1) 
-                    : '0.0'}%
+                    ? ((reconciliationData.solarTotal / reconciliationData.totalSupply) * 100).toFixed(2) 
+                    : '0.00'}%
                 </div>
               </CardContent>
             </Card>
@@ -968,13 +970,14 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                   {reconciliationData.totalSupply.toFixed(2)} kWh
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">
-                  100.0%
+                  100.00%
                 </div>
               </CardContent>
             </Card>
 
             <Card className="border-border/50">
               <CardHeader className="pb-2">
+                <div className="text-xs text-muted-foreground mb-1">Metered Consumption</div>
                 <CardTitle className="text-sm font-medium text-muted-foreground">
                   Distribution
                 </CardTitle>
@@ -985,14 +988,15 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">
                   {reconciliationData.totalSupply > 0 
-                    ? ((reconciliationData.distributionTotal / reconciliationData.totalSupply) * 100).toFixed(1) 
-                    : '0.0'}%
+                    ? ((reconciliationData.distributionTotal / reconciliationData.totalSupply) * 100).toFixed(2) 
+                    : '0.00'}%
                 </div>
               </CardContent>
             </Card>
 
             <Card className="border-border/50">
               <CardHeader className="pb-2">
+                <div className="text-xs text-muted-foreground mb-1">Unmetered Loss</div>
                 <CardTitle className="text-sm font-medium text-muted-foreground">
                   Discrepancy
                 </CardTitle>
@@ -1008,8 +1012,8 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">
                   {reconciliationData.totalSupply > 0 
-                    ? ((Math.abs(reconciliationData.discrepancy) / reconciliationData.totalSupply) * 100).toFixed(1) 
-                    : '0.0'}%
+                    ? ((Math.abs(reconciliationData.discrepancy) / reconciliationData.totalSupply) * 100).toFixed(2) 
+                    : '0.00'}%
                 </div>
               </CardContent>
             </Card>
