@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, Gauge, Upload, Pencil, Trash2, Database, FileCheck } from "lucide-react";
+import { Plus, Gauge, Upload, Pencil, Trash2, Database } from "lucide-react";
 import NegativeReadingsDetector from "./NegativeReadingsDetector";
 import { toast } from "sonner";
 import CsvImportDialog from "./CsvImportDialog";
@@ -650,7 +650,15 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                           </Badge>
                         )}
                         {meter.has_parsed && (
-                          <Badge variant="outline" className="gap-1 bg-green-500/10 border-green-500/50 text-green-600 dark:text-green-400">
+                          <Badge 
+                            variant="outline" 
+                            className="gap-1 bg-green-500/10 border-green-500/50 text-green-600 dark:text-green-400 cursor-pointer hover:bg-green-500/20 transition-colors"
+                            onClick={async () => {
+                              await fetchParsedCsvData(meter.id);
+                              setIsParsedCsvViewOpen(true);
+                            }}
+                            title="View parsed CSV data"
+                          >
                             <Database className="w-3 h-3" />
                             Parsed
                           </Badge>
@@ -687,19 +695,6 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                         >
                           <Upload className="w-4 h-4" />
                         </Button>
-                        {meter.has_parsed && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={async () => {
-                              await fetchParsedCsvData(meter.id);
-                              setIsParsedCsvViewOpen(true);
-                            }}
-                            title="View parsed CSV data"
-                          >
-                            <FileCheck className="w-4 h-4" />
-                          </Button>
-                        )}
                       </div>
                     </TableCell>
                   </TableRow>
