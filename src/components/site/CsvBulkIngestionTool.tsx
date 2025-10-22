@@ -1600,117 +1600,186 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                         const currentDataType = columnMapping.columnDataTypes?.[columnId] || 'string';
                         
                         return (
-                          <div key={idx} className="p-3 border rounded-md bg-background space-y-3">
-                            <div className="flex items-start gap-3">
-                              <Checkbox
-                                checked={visibleColumns[columnId] !== false}
-                                onCheckedChange={(checked) => {
-                                  setVisibleColumns(prev => ({
-                                    ...prev,
-                                    [columnId]: checked === true
-                                  }));
-                                }}
-                                className="shrink-0 mt-6"
-                              />
-                              <div className="flex-1">
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                  <div>
-                                    <Label className="text-xs mb-1">Column Name</Label>
-                                    <Input
-                                      value={displayName}
-                                      onChange={(e) => {
-                                        const newMapping = {...columnMapping};
-                                        newMapping.renamedHeaders = {
-                                          ...newMapping.renamedHeaders,
-                                          [idx]: e.target.value
-                                        };
-                                        setColumnMapping(newMapping);
-                                      }}
-                                      className="h-8 text-xs"
-                                      placeholder="Column name"
-                                    />
-                                  </div>
-                                  <div>
-                                    <Label className="text-xs mb-1">Data Type</Label>
-                                    <Select
-                                      value={currentDataType}
-                                      onValueChange={(type: 'datetime' | 'float' | 'int' | 'string') => {
-                                        const newMapping = {...columnMapping};
-                                        newMapping.columnDataTypes = {
-                                          ...newMapping.columnDataTypes,
-                                          [columnId]: type
-                                        };
-                                        setColumnMapping(newMapping);
-                                      }}
-                                    >
-                                      <SelectTrigger className="h-8 text-xs bg-background">
-                                        <SelectValue />
-                                      </SelectTrigger>
-                                      <SelectContent className="bg-background z-50">
-                                        <SelectItem value="string">String (Text)</SelectItem>
-                                        <SelectItem value="int">Integer</SelectItem>
-                                        <SelectItem value="float">Float (Decimal)</SelectItem>
-                                        <SelectItem value="datetime">DateTime</SelectItem>
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
-                                  <div>
-                                    <Label className="text-xs mb-1">Split Column By</Label>
-                                    <Select
-                                      value={splitConfig ? 'split' : 'none'}
-                                      onValueChange={(sep) => {
-                                        if (sep === "none") {
-                                          // Remove split
+                          <div key={idx} className="space-y-2">
+                            <div className="p-3 border rounded-md bg-background">
+                              <div className="flex items-start gap-3">
+                                <Checkbox
+                                  checked={visibleColumns[columnId] !== false}
+                                  onCheckedChange={(checked) => {
+                                    setVisibleColumns(prev => ({
+                                      ...prev,
+                                      [columnId]: checked === true
+                                    }));
+                                  }}
+                                  className="shrink-0 mt-6"
+                                />
+                                <div className="flex-1">
+                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                    <div>
+                                      <Label className="text-xs mb-1">Column Name</Label>
+                                      <Input
+                                        value={displayName}
+                                        onChange={(e) => {
                                           const newMapping = {...columnMapping};
-                                          const newSplits = {...newMapping.splitColumns};
-                                          delete newSplits[idx];
-                                          newMapping.splitColumns = newSplits;
-                                          setColumnMapping(newMapping);
-                                          setSplitPreview(null);
-                                        } else {
-                                          // Show split preview
-                                          const sampleValue = previewData.rows[0]?.[idx] || "";
-                                          const sepChar = 
-                                            sep === "space" ? " " :
-                                            sep === "comma" ? "," :
-                                            sep === "dash" ? "-" :
-                                            sep === "slash" ? "/" : ":";
-                                          const parts = sampleValue.split(sepChar);
-                                          setSplitPreview({index: idx, parts});
-                                          
-                                          // Create split config
-                                          const newMapping = {...columnMapping};
-                                          newMapping.splitColumns = {
-                                            ...newMapping.splitColumns,
-                                            [idx]: {
-                                              separator: sep,
-                                              parts: parts.map((_, i) => ({
-                                                name: `${displayName} Part ${i + 1}`,
-                                                columnId: `${idx}_split_${i}`
-                                              }))
-                                            }
+                                          newMapping.renamedHeaders = {
+                                            ...newMapping.renamedHeaders,
+                                            [idx]: e.target.value
                                           };
                                           setColumnMapping(newMapping);
-                                          toast.success("Column split applied");
-                                        }
-                                      }}
-                                    >
-                                      <SelectTrigger className="h-8 text-xs bg-background">
-                                        <SelectValue />
-                                      </SelectTrigger>
-                                      <SelectContent className="bg-background z-50">
-                                        <SelectItem value="none">No Split</SelectItem>
-                                        <SelectItem value="space">Space ( )</SelectItem>
-                                        <SelectItem value="comma">Comma (,)</SelectItem>
-                                        <SelectItem value="dash">Dash (-)</SelectItem>
-                                        <SelectItem value="colon">Colon (:)</SelectItem>
-                                        <SelectItem value="slash">Slash (/)</SelectItem>
-                                      </SelectContent>
-                                    </Select>
+                                        }}
+                                        className="h-8 text-xs"
+                                        placeholder="Column name"
+                                      />
+                                    </div>
+                                    <div>
+                                      <Label className="text-xs mb-1">Data Type</Label>
+                                      <Select
+                                        value={currentDataType}
+                                        onValueChange={(type: 'datetime' | 'float' | 'int' | 'string') => {
+                                          const newMapping = {...columnMapping};
+                                          newMapping.columnDataTypes = {
+                                            ...newMapping.columnDataTypes,
+                                            [columnId]: type
+                                          };
+                                          setColumnMapping(newMapping);
+                                        }}
+                                      >
+                                        <SelectTrigger className="h-8 text-xs bg-background">
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-background z-50">
+                                          <SelectItem value="string">String (Text)</SelectItem>
+                                          <SelectItem value="int">Integer</SelectItem>
+                                          <SelectItem value="float">Float (Decimal)</SelectItem>
+                                          <SelectItem value="datetime">DateTime</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                    <div>
+                                      <Label className="text-xs mb-1">Split Column By</Label>
+                                      <Select
+                                        value={splitConfig ? splitConfig.separator : 'none'}
+                                        onValueChange={(sep) => {
+                                          if (sep === "none") {
+                                            // Remove split
+                                            const newMapping = {...columnMapping};
+                                            const newSplits = {...newMapping.splitColumns};
+                                            delete newSplits[idx];
+                                            newMapping.splitColumns = newSplits;
+                                            setColumnMapping(newMapping);
+                                            setSplitPreview(null);
+                                          } else {
+                                            // Show split preview
+                                            const sampleValue = previewData.rows[0]?.[idx] || "";
+                                            const sepChar = 
+                                              sep === "space" ? " " :
+                                              sep === "comma" ? "," :
+                                              sep === "dash" ? "-" :
+                                              sep === "slash" ? "/" : ":";
+                                            const parts = sampleValue.split(sepChar);
+                                            setSplitPreview({index: idx, parts});
+                                            
+                                            // Create split config
+                                            const newMapping = {...columnMapping};
+                                            newMapping.splitColumns = {
+                                              ...newMapping.splitColumns,
+                                              [idx]: {
+                                                separator: sep,
+                                                parts: parts.map((_, i) => ({
+                                                  name: `${displayName} Part ${i + 1}`,
+                                                  columnId: `${idx}_split_${i}`
+                                                }))
+                                              }
+                                            };
+                                            setColumnMapping(newMapping);
+                                            toast.success("Column split applied");
+                                          }
+                                        }}
+                                      >
+                                        <SelectTrigger className="h-8 text-xs bg-background">
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-background z-50">
+                                          <SelectItem value="none">No Split</SelectItem>
+                                          <SelectItem value="space">Space ( )</SelectItem>
+                                          <SelectItem value="comma">Comma (,)</SelectItem>
+                                          <SelectItem value="dash">Dash (-)</SelectItem>
+                                          <SelectItem value="colon">Colon (:)</SelectItem>
+                                          <SelectItem value="slash">Slash (/)</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
                                   </div>
                                 </div>
                               </div>
                             </div>
+                            
+                            {/* Split Column Parts - Grouped Together */}
+                            {splitConfig && (
+                              <div className="ml-8 p-3 border rounded-md bg-muted/30 space-y-2">
+                                <div className="text-xs font-medium text-muted-foreground mb-2">Split Parts:</div>
+                                {splitConfig.parts.map((part, partIdx) => {
+                                  const partColumnId = part.columnId;
+                                  const partDataType = columnMapping.columnDataTypes?.[partColumnId] || 'string';
+                                  
+                                  return (
+                                    <div key={partIdx} className="flex items-start gap-3 p-2 bg-background rounded border">
+                                      <Checkbox
+                                        checked={visibleColumns[partColumnId] !== false}
+                                        onCheckedChange={(checked) => {
+                                          setVisibleColumns(prev => ({
+                                            ...prev,
+                                            [partColumnId]: checked === true
+                                          }));
+                                        }}
+                                        className="shrink-0 mt-6"
+                                      />
+                                      <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        <div>
+                                          <Label className="text-xs mb-1">Part {partIdx + 1} Name</Label>
+                                          <Input
+                                            value={part.name}
+                                            onChange={(e) => {
+                                              const newMapping = {...columnMapping};
+                                              if (newMapping.splitColumns?.[idx]) {
+                                                newMapping.splitColumns[idx].parts[partIdx].name = e.target.value;
+                                                setColumnMapping(newMapping);
+                                              }
+                                            }}
+                                            className="h-8 text-xs"
+                                            placeholder="Part name"
+                                          />
+                                        </div>
+                                        <div>
+                                          <Label className="text-xs mb-1">Data Type</Label>
+                                          <Select
+                                            value={partDataType}
+                                            onValueChange={(type: 'datetime' | 'float' | 'int' | 'string') => {
+                                              const newMapping = {...columnMapping};
+                                              newMapping.columnDataTypes = {
+                                                ...newMapping.columnDataTypes,
+                                                [partColumnId]: type
+                                              };
+                                              setColumnMapping(newMapping);
+                                            }}
+                                          >
+                                            <SelectTrigger className="h-8 text-xs bg-background">
+                                              <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent className="bg-background z-50">
+                                              <SelectItem value="string">String (Text)</SelectItem>
+                                              <SelectItem value="int">Integer</SelectItem>
+                                              <SelectItem value="float">Float (Decimal)</SelectItem>
+                                              <SelectItem value="datetime">DateTime</SelectItem>
+                                            </SelectContent>
+                                          </Select>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
                         );
                       })}
