@@ -458,13 +458,14 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                        return (
                         <Line
                           key={quantity}
-                          type="monotone"
+                          type="linear"
                           dataKey={quantity}
                           stroke={colors[index % colors.length]}
-                          strokeWidth={4}
-                          dot={{ r: 3, fill: colors[index % colors.length] }}
+                          strokeWidth={3}
+                          dot={false}
                           name={quantity}
                           hide={hiddenLines.has(quantity)}
+                          connectNulls={true}
                         />
                       );
                     })}
