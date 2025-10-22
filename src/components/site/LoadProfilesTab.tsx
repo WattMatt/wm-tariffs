@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { CalendarIcon, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface LoadProfilesTabProps {
   siteId: string;
@@ -26,6 +27,7 @@ interface Meter {
 interface ReadingData {
   reading_timestamp: string;
   kva_value: number | null;
+  kwh_value: number | null;
 }
 
 export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
@@ -38,6 +40,11 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
   const [loadProfileData, setLoadProfileData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [normalizedData, setNormalizedData] = useState<any[]>([]);
+  const [showKva, setShowKva] = useState(true);
+  const [showKwh, setShowKwh] = useState(false);
+  const [yAxisMin, setYAxisMin] = useState<string>("");
+  const [yAxisMax, setYAxisMax] = useState<string>("");
+  const [hiddenLines, setHiddenLines] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetchMeters();
@@ -87,7 +94,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
       
       const { data, error } = await supabase
         .from("meter_readings")
-        .select("reading_timestamp, kva_value")
+        .select("reading_timestamp, kva_value, kwh_value")
         .eq("meter_id", selectedMeterId)
         .gte("reading_timestamp", fullDateTimeFrom.toISOString())
         .lte("reading_timestamp", fullDateTimeTo.toISOString())
@@ -112,7 +119,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
   };
 
   const processLoadProfile = (readings: ReadingData[]) => {
-    // Plot exact kVA values from database without any calculations
+    // Plot exact values from database without any calculations
     const chartData = readings.map((reading) => {
       const date = parseISO(reading.reading_timestamp);
       const timeLabel = format(date, "HH:mm");
@@ -120,7 +127,8 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
       return {
         time: timeLabel,
         timestamp: reading.reading_timestamp,
-        kva: reading.kva_value ?? 0, // Use exact value from database
+        kva: reading.kva_value ?? 0,
+        kwh: reading.kwh_value ?? 0,
       };
     });
 
@@ -138,6 +146,24 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
       }));
       setNormalizedData(normalized);
     }
+  };
+
+  const handleLegendClick = (dataKey: string) => {
+    setHiddenLines(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(dataKey)) {
+        newSet.delete(dataKey);
+      } else {
+        newSet.add(dataKey);
+      }
+      return newSet;
+    });
+  };
+
+  const getYAxisDomain = (): [number | "auto", number | "auto"] => {
+    const min = yAxisMin && !isNaN(parseFloat(yAxisMin)) ? parseFloat(yAxisMin) : "auto";
+    const max = yAxisMax && !isNaN(parseFloat(yAxisMax)) ? parseFloat(yAxisMax) : "auto";
+    return [min, max];
   };
 
   const selectedMeter = meters.find((m) => m.id === selectedMeterId);
@@ -263,12 +289,68 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
 
           {!isLoading && loadProfileData.length > 0 && (
             <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                <div className="space-y-3">
+                  <Label>Quantities to Plot</Label>
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="show-kva"
+                        checked={showKva}
+                        onCheckedChange={(checked) => setShowKva(checked === true)}
+                      />
+                      <label
+                        htmlFor="show-kva"
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                      >
+                        kVA
+                      </label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="show-kwh"
+                        checked={showKwh}
+                        onCheckedChange={(checked) => setShowKwh(checked === true)}
+                      />
+                      <label
+                        htmlFor="show-kwh"
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                      >
+                        kWh
+                      </label>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="y-min">Y-Axis Min</Label>
+                  <Input
+                    id="y-min"
+                    type="number"
+                    placeholder="Auto"
+                    value={yAxisMin}
+                    onChange={(e) => setYAxisMin(e.target.value)}
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="y-max">Y-Axis Max</Label>
+                  <Input
+                    id="y-max"
+                    type="number"
+                    placeholder="Auto"
+                    value={yAxisMax}
+                    onChange={(e) => setYAxisMax(e.target.value)}
+                  />
+                </div>
+              </div>
+
               <div>
                 <h3 className="text-lg font-semibold mb-4">
-                  Load Profile (kVA) - {selectedMeter?.meter_number}
+                  Load Profile - {selectedMeter?.meter_number}
                 </h3>
                 <p className="text-sm text-muted-foreground mb-2">
-                  Showing actual kVA values for each time slot
+                  Click on legend items to toggle visibility
                   {dateFrom && dateTo && dateFrom.getTime() !== dateTo.getTime() && (
                     <> • {Math.ceil((dateTo.getTime() - dateFrom.getTime()) / (1000 * 60 * 60 * 24)) + 1} day(s) selected</>
                   )}
@@ -285,8 +367,9 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                     <YAxis
                       stroke="hsl(var(--muted-foreground))"
                       tick={{ fill: "hsl(var(--foreground))" }}
+                      domain={getYAxisDomain()}
                       label={{
-                        value: "kVA",
+                        value: "Value",
                         angle: -90,
                         position: "insideLeft",
                         style: { fill: "hsl(var(--foreground))" },
@@ -299,15 +382,32 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                         borderRadius: "6px",
                       }}
                     />
-                    <Legend />
-                    <Line
-                      type="monotone"
-                      dataKey="kva"
-                      stroke="hsl(var(--primary))"
-                      strokeWidth={2}
-                      dot={false}
-                      name="kVA"
+                    <Legend 
+                      onClick={(e: any) => e.dataKey && handleLegendClick(String(e.dataKey))}
+                      wrapperStyle={{ cursor: "pointer" }}
                     />
+                    {showKva && (
+                      <Line
+                        type="monotone"
+                        dataKey="kva"
+                        stroke="hsl(var(--primary))"
+                        strokeWidth={2}
+                        dot={false}
+                        name="kVA"
+                        hide={hiddenLines.has("kva")}
+                      />
+                    )}
+                    {showKwh && (
+                      <Line
+                        type="monotone"
+                        dataKey="kwh"
+                        stroke="hsl(220, 90%, 56%)"
+                        strokeWidth={2}
+                        dot={false}
+                        name="kWh"
+                        hide={hiddenLines.has("kwh")}
+                      />
+                    )}
                   </LineChart>
                 </ResponsiveContainer>
               </div>
