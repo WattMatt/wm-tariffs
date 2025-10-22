@@ -30,7 +30,42 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
   const [previewData, setPreviewData] = useState<any>(null);
   const [selectedColumns, setSelectedColumns] = useState<Set<string>>(new Set());
   const [columnOperations, setColumnOperations] = useState<Map<string, string>>(new Map());
+  const [recalculatedTotal, setRecalculatedTotal] = useState<number | null>(null);
+  const [isRecalculating, setIsRecalculating] = useState(false);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+
+  const handleRecalculateTotals = () => {
+    if (!previewData || selectedColumns.size === 0) {
+      toast.error("Please select columns to calculate");
+      return;
+    }
+
+    setIsRecalculating(true);
+
+    try {
+      let newTotal = 0;
+
+      // Calculate based on operations
+      Array.from(selectedColumns).forEach((column) => {
+        const operation = columnOperations.get(column) || "add";
+        const columnTotal = Number(previewData.columnTotals[column] || 0);
+
+        if (operation === "add") {
+          newTotal += columnTotal;
+        } else if (operation === "subtract") {
+          newTotal -= columnTotal;
+        }
+      });
+
+      setRecalculatedTotal(newTotal);
+      toast.success("Total consumption recalculated");
+    } catch (error) {
+      console.error("Recalculation error:", error);
+      toast.error("Failed to recalculate totals");
+    } finally {
+      setIsRecalculating(false);
+    }
+  };
 
   // Helper to combine date and time as UTC (no timezone conversion)
   const getFullDateTime = (date: Date, time: string): Date => {
@@ -634,22 +669,6 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
               </div>
             </div>
 
-            <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
-              <Label className="text-sm font-semibold mb-3 block">Total Consumption in Selected Period</Label>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                <div className="space-y-1">
-                  <div className="text-xs text-muted-foreground">Total kWh</div>
-                  <div className="text-2xl font-bold">{previewData.totalKwh.toFixed(2)}</div>
-                </div>
-                {Object.entries(previewData.columnTotals).map(([column, total]: [string, any]) => (
-                  <div key={column} className="space-y-1">
-                    <div className="text-xs text-muted-foreground">{column}</div>
-                    <div className="text-lg font-semibold">{Number(total).toFixed(2)}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
             <div className="space-y-3">
               <Label className="text-sm font-semibold">Available Columns - Select to Include in Calculations</Label>
               <div className="space-y-2">
@@ -700,8 +719,38 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                   </div>
                 ))}
               </div>
-              <div className="text-xs text-muted-foreground">
-                {selectedColumns.size} of {previewData.availableColumns.length} columns selected
+              <div className="flex items-center justify-between">
+                <div className="text-xs text-muted-foreground">
+                  {selectedColumns.size} of {previewData.availableColumns.length} columns selected
+                </div>
+                <Button 
+                  onClick={handleRecalculateTotals} 
+                  disabled={isRecalculating || selectedColumns.size === 0}
+                  variant="outline"
+                  size="sm"
+                >
+                  {isRecalculating ? "Calculating..." : "Recalculate Total"}
+                </Button>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
+              <Label className="text-sm font-semibold mb-3 block">Total Consumption in Selected Period</Label>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <div className="text-xs text-muted-foreground">
+                    {recalculatedTotal !== null ? "Recalculated Total" : "Total kWh"}
+                  </div>
+                  <div className="text-2xl font-bold">
+                    {recalculatedTotal !== null ? recalculatedTotal.toFixed(2) : previewData.totalKwh.toFixed(2)}
+                  </div>
+                </div>
+                {Object.entries(previewData.columnTotals).map(([column, total]: [string, any]) => (
+                  <div key={column} className="space-y-1">
+                    <div className="text-xs text-muted-foreground">{column}</div>
+                    <div className="text-lg font-semibold">{Number(total).toFixed(2)}</div>
+                  </div>
+                ))}
               </div>
             </div>
 
