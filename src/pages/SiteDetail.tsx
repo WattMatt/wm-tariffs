@@ -313,19 +313,19 @@ export default function SiteDetail() {
           </Card>
         )}
 
-        <Tabs defaultValue="meters" className="space-y-6">
+        <Tabs defaultValue="documents" className="space-y-6">
           <TabsList className="grid w-full grid-cols-8 lg:w-auto">
-            <TabsTrigger value="meters" className="gap-2">
-              <Gauge className="w-4 h-4" />
-              Meters
+            <TabsTrigger value="documents" className="gap-2">
+              <FolderOpen className="w-4 h-4" />
+              Documents
             </TabsTrigger>
             <TabsTrigger value="schematics" className="gap-2">
               <FileText className="w-4 h-4" />
               Schematics
             </TabsTrigger>
-            <TabsTrigger value="documents" className="gap-2">
-              <FolderOpen className="w-4 h-4" />
-              Documents
+            <TabsTrigger value="meters" className="gap-2">
+              <Gauge className="w-4 h-4" />
+              Meters
             </TabsTrigger>
             <TabsTrigger value="reconciliation" className="gap-2">
               <BarChart3 className="w-4 h-4" />
@@ -349,16 +349,16 @@ export default function SiteDetail() {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="meters">
-            <MetersTab siteId={id!} />
+          <TabsContent value="documents">
+            <DocumentsTab siteId={id!} />
           </TabsContent>
 
           <TabsContent value="schematics">
             <SchematicsTab siteId={id!} />
           </TabsContent>
 
-          <TabsContent value="documents">
-            <DocumentsTab siteId={id!} />
+          <TabsContent value="meters">
+            <MetersTab siteId={id!} />
           </TabsContent>
 
           <TabsContent value="reconciliation">
