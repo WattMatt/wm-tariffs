@@ -414,8 +414,8 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                 </div>
                 
                 {/* Y-Axis Min */}
-                <div className="space-y-3">
-                  <Label htmlFor="y-min" className="font-semibold">Y-Axis Min</Label>
+                <div className="space-y-2">
+                  <Label htmlFor="y-min" className="font-semibold block h-6">Y-Axis Min</Label>
                   <Input
                     id="y-min"
                     type="text"
@@ -427,8 +427,8 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                 </div>
                 
                 {/* Y-Axis Max */}
-                <div className="space-y-3">
-                  <Label htmlFor="y-max" className="font-semibold">Y-Axis Max</Label>
+                <div className="space-y-2">
+                  <Label htmlFor="y-max" className="font-semibold block h-6">Y-Axis Max</Label>
                   <Input
                     id="y-max"
                     type="text"
