@@ -1206,7 +1206,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                                 <div className="flex items-center gap-2">
                                   <span className="font-semibold">{meter.totalKwh.toFixed(2)} kWh</span>
                                   <span className="text-xs text-muted-foreground bg-background px-2 py-1 rounded border border-border">
-                                    {percentage.toFixed(1)}%
+                                    {percentage.toFixed(2)}%
                                   </span>
                                   <Button
                                     size="sm"
