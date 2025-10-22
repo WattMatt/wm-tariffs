@@ -40,7 +40,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
   const [loadProfileData, setLoadProfileData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [normalizedData, setNormalizedData] = useState<any[]>([]);
-  const [selectedQuantities, setSelectedQuantities] = useState<Set<string>>(new Set(["kva"]));
+  const [selectedQuantities, setSelectedQuantities] = useState<Set<string>>(new Set(["max"]));
   const [yAxisMin, setYAxisMin] = useState<string>("");
   const [yAxisMax, setYAxisMax] = useState<string>("");
   const [hiddenLines, setHiddenLines] = useState<Set<string>>(new Set());
@@ -118,30 +118,47 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
   };
 
   const processLoadProfile = (readings: ReadingData[]) => {
-    // Plot exact values from database without any calculations
-    const chartData = readings.map((reading) => {
+    // Group readings by time intervals (30 min buckets)
+    const timeGroups = new Map<string, { kva: number[], kwh: number[] }>();
+    
+    readings.forEach((reading) => {
       const date = parseISO(reading.reading_timestamp);
       const timeLabel = format(date, "HH:mm");
+      
+      if (!timeGroups.has(timeLabel)) {
+        timeGroups.set(timeLabel, { kva: [], kwh: [] });
+      }
+      
+      const group = timeGroups.get(timeLabel)!;
+      group.kva.push(reading.kva_value ?? 0);
+      group.kwh.push(reading.kwh_value ?? 0);
+    });
 
+    // Calculate aggregations for each time group
+    const chartData = Array.from(timeGroups.entries()).map(([timeLabel, values]) => {
+      const kvaValues = values.kva;
+      const kwhValues = values.kwh;
+      
       return {
         time: timeLabel,
-        timestamp: reading.reading_timestamp,
-        kva: reading.kva_value ?? 0,
-        kwh: reading.kwh_value ?? 0,
+        sum: kvaValues.reduce((a, b) => a + b, 0),
+        min: Math.min(...kvaValues),
+        max: Math.max(...kvaValues),
+        avg: kvaValues.length > 0 ? kvaValues.reduce((a, b) => a + b, 0) / kvaValues.length : 0,
+        cnt: kvaValues.length,
       };
-    });
+    }).sort((a, b) => a.time.localeCompare(b.time));
 
     console.log("Load Profile - Chart data to display:", chartData);
     setLoadProfileData(chartData);
 
     // Calculate normalized data (only for normalized chart)
     if (chartData.length > 0) {
-      const maxKva = Math.max(...chartData.map((d) => d.kva));
+      const maxKva = Math.max(...chartData.map((d) => d.max));
       const normalized = chartData.map((d) => ({
         time: d.time,
-        timestamp: d.timestamp,
-        normalized: maxKva > 0 ? (d.kva / maxKva) : 0,
-        kva: d.kva,
+        normalized: maxKva > 0 ? (d.max / maxKva) : 0,
+        max: d.max,
       }));
       setNormalizedData(normalized);
     }
@@ -439,7 +456,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                     {selectedQuantities.has("sum") && (
                       <Line
                         type="monotone"
-                        dataKey="kva"
+                        dataKey="sum"
                         stroke="hsl(var(--primary))"
                         strokeWidth={2}
                         dot={false}
@@ -450,7 +467,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                     {selectedQuantities.has("min") && (
                       <Line
                         type="monotone"
-                        dataKey="kva"
+                        dataKey="min"
                         stroke="hsl(220, 90%, 56%)"
                         strokeWidth={2}
                         dot={false}
@@ -461,7 +478,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                     {selectedQuantities.has("max") && (
                       <Line
                         type="monotone"
-                        dataKey="kva"
+                        dataKey="max"
                         stroke="hsl(160, 90%, 56%)"
                         strokeWidth={2}
                         dot={false}
@@ -472,7 +489,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                     {selectedQuantities.has("avg") && (
                       <Line
                         type="monotone"
-                        dataKey="kva"
+                        dataKey="avg"
                         stroke="hsl(30, 90%, 56%)"
                         strokeWidth={2}
                         dot={false}
@@ -483,7 +500,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                     {selectedQuantities.has("cnt") && (
                       <Line
                         type="monotone"
-                        dataKey="kwh"
+                        dataKey="cnt"
                         stroke="hsl(280, 90%, 56%)"
                         strokeWidth={2}
                         dot={false}
