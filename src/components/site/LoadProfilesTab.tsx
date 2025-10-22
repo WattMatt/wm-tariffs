@@ -268,28 +268,64 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
     }
 
     try {
-      // Calculate the interval duration in milliseconds
+      // Calculate the subset date range duration
       const intervalStart = getFullDateTime(manipulationDateFrom, manipulationTimeFrom);
       const intervalEnd = getFullDateTime(manipulationDateTo, manipulationTimeTo);
-      const intervalDuration = intervalEnd.getTime() - intervalStart.getTime();
+      const durationMs = intervalEnd.getTime() - intervalStart.getTime();
+      const durationDays = durationMs / (1000 * 60 * 60 * 24);
 
-      // Group data by time slots within the interval
-      const timeSlotGroups = new Map<string, any[]>();
+      // Determine grouping type based on subset duration
+      let groupingType: 'time' | 'day' | 'date' | 'month' | 'year';
+      if (durationDays <= 1) {
+        groupingType = 'time'; // Group by time of day (00:00, 00:30, etc.)
+      } else if (durationDays <= 7) {
+        groupingType = 'day'; // Group by day of week (Mon, Tue, etc.)
+      } else if (durationDays <= 31) {
+        groupingType = 'date'; // Group by date (1, 2, 3, etc.)
+      } else if (durationDays <= 365) {
+        groupingType = 'month'; // Group by month (Jan, Feb, etc.)
+      } else {
+        groupingType = 'year'; // Group by year
+      }
+
+      // Group data based on the determined type
+      const groups = new Map<string, any[]>();
 
       loadProfileData.forEach((dataPoint) => {
-        const time = dataPoint.time; // "00:00", "00:30", etc.
+        let groupKey: string;
+        const timestamp = parseISO(dataPoint.timestamp);
         
-        if (!timeSlotGroups.has(time)) {
-          timeSlotGroups.set(time, []);
+        switch (groupingType) {
+          case 'time':
+            groupKey = dataPoint.time; // "00:00", "00:30", etc.
+            break;
+          case 'day':
+            groupKey = format(timestamp, 'EEEE'); // "Monday", "Tuesday", etc.
+            break;
+          case 'date':
+            groupKey = format(timestamp, 'd'); // "1", "2", "3", etc.
+            break;
+          case 'month':
+            groupKey = format(timestamp, 'MMM yyyy'); // "Jan 2025", "Feb 2025", etc.
+            break;
+          case 'year':
+            groupKey = format(timestamp, 'yyyy'); // "2025", "2026", etc.
+            break;
+          default:
+            groupKey = dataPoint.time;
         }
-        timeSlotGroups.get(time)!.push(dataPoint);
+        
+        if (!groups.has(groupKey)) {
+          groups.set(groupKey, []);
+        }
+        groups.get(groupKey)!.push(dataPoint);
       });
 
-      // Apply the selected operation to each time slot
+      // Apply the selected operation to each group
       const manipulated: any[] = [];
       
-      timeSlotGroups.forEach((dataPoints, time) => {
-        const result: any = { time };
+      groups.forEach((dataPoints, groupKey) => {
+        const result: any = { time: groupKey };
 
         // Process each selected quantity
         selectedQuantities.forEach((quantity) => {
@@ -328,13 +364,28 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
         manipulated.push(result);
       });
 
-      // Sort by time
-      manipulated.sort((a, b) => a.time.localeCompare(b.time));
+      // Sort the results appropriately based on grouping type
+      if (groupingType === 'time') {
+        manipulated.sort((a, b) => a.time.localeCompare(b.time));
+      } else if (groupingType === 'day') {
+        const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+        manipulated.sort((a, b) => dayOrder.indexOf(a.time) - dayOrder.indexOf(b.time));
+      } else if (groupingType === 'date') {
+        manipulated.sort((a, b) => parseInt(a.time) - parseInt(b.time));
+      } else {
+        // For month and year, sort alphabetically (which works for date formats)
+        manipulated.sort((a, b) => a.time.localeCompare(b.time));
+      }
 
       setManipulatedData(manipulated);
       setIsManipulationApplied(true);
       
-      toast.success(`Applied ${manipulationOperation} operation across load profile`);
+      const groupLabel = groupingType === 'time' ? 'time slots' : 
+                         groupingType === 'day' ? 'days of week' :
+                         groupingType === 'date' ? 'dates' :
+                         groupingType === 'month' ? 'months' : 'years';
+      
+      toast.success(`Applied ${manipulationOperation} operation grouped by ${groupLabel}`);
     } catch (error) {
       console.error("Manipulation error:", error);
       toast.error("Failed to apply manipulation");
