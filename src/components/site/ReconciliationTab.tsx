@@ -922,10 +922,10 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
             <Card className="border-border/50">
               <CardHeader className="pb-2">
-                <div className="text-xs text-muted-foreground mb-1">Grid Supply</div>
                 <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Council (Grid)
+                  Grid Supply
                 </CardTitle>
+                <div className="text-xs text-muted-foreground mt-1">Council</div>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
@@ -941,10 +941,10 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
 
             <Card className="border-border/50">
               <CardHeader className="pb-2">
-                <div className="text-xs text-muted-foreground mb-1">Renewable Energy</div>
                 <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Solar (Generated)
+                  Renewable Energy
                 </CardTitle>
+                <div className="text-xs text-muted-foreground mt-1">Solar</div>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-green-600">
@@ -960,10 +960,10 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
 
             <Card className="border-border/50 bg-primary/5">
               <CardHeader className="pb-2">
-                <div className="text-xs text-muted-foreground mb-1">(Grid + Solar)</div>
                 <CardTitle className="text-sm font-medium text-muted-foreground">
                   Total Supply
                 </CardTitle>
+                <div className="text-xs text-muted-foreground mt-1">(Grid + Solar)</div>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-primary">
@@ -977,10 +977,10 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
 
             <Card className="border-border/50">
               <CardHeader className="pb-2">
-                <div className="text-xs text-muted-foreground mb-1">Metered Consumption</div>
                 <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Distribution
+                  Metered Consumption
                 </CardTitle>
+                <div className="text-xs text-muted-foreground mt-1">Distribution</div>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
@@ -996,10 +996,10 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
 
             <Card className="border-border/50">
               <CardHeader className="pb-2">
-                <div className="text-xs text-muted-foreground mb-1">Unmetered Loss</div>
                 <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Discrepancy
+                  Unmetered Loss
                 </CardTitle>
+                <div className="text-xs text-muted-foreground mt-1">Discrepancy</div>
               </CardHeader>
               <CardContent>
                 <div
