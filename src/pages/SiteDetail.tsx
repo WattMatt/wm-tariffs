@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Gauge, BarChart3, FileText, Building2, Coins, Pencil, TrendingUp, DollarSign } from "lucide-react";
+import { ArrowLeft, Gauge, BarChart3, FileText, Building2, Coins, Pencil, TrendingUp, DollarSign, Activity, Calendar } from "lucide-react";
+import { format } from "date-fns";
 import { toast } from "sonner";
 import MetersTab from "@/components/site/MetersTab";
 import SchematicsTab from "@/components/site/SchematicsTab";
@@ -53,11 +54,18 @@ export default function SiteDetail() {
   const [provinces, setProvinces] = useState<string[]>([]);
   const [selectedProvince, setSelectedProvince] = useState<string>("");
   const [filteredAuthorities, setFilteredAuthorities] = useState<SupplyAuthority[]>([]);
+  const [siteStats, setSiteStats] = useState({
+    meters: 0,
+    readings: 0,
+    latestReading: null as string | null,
+    schematics: 0,
+  });
 
   useEffect(() => {
     if (id) {
       fetchSite();
       fetchSupplyAuthorities();
+      fetchSiteStats();
     }
   }, [id]);
 
@@ -102,6 +110,42 @@ export default function SiteDetail() {
       const uniqueProvinces = [...new Set(data.map(auth => auth.region))].filter(Boolean);
       setProvinces(uniqueProvinces.sort());
     }
+  };
+
+  const fetchSiteStats = async () => {
+    if (!id) return;
+
+    // First get all meter IDs for this site
+    const { data: meters } = await supabase
+      .from("meters")
+      .select("id")
+      .eq("site_id", id);
+
+    const meterIds = meters?.map(m => m.id) || [];
+
+    // Then fetch stats
+    const [metersRes, readingsRes, schematicsRes, latestReadingRes] = await Promise.all([
+      supabase.from("meters").select("id", { count: "exact", head: true }).eq("site_id", id),
+      meterIds.length > 0 
+        ? supabase.from("meter_readings").select("id", { count: "exact", head: true }).in("meter_id", meterIds)
+        : Promise.resolve({ count: 0 }),
+      supabase.from("schematics").select("id", { count: "exact", head: true }).eq("site_id", id),
+      meterIds.length > 0
+        ? supabase.from("meter_readings")
+            .select("reading_timestamp")
+            .in("meter_id", meterIds)
+            .order("reading_timestamp", { ascending: false })
+            .limit(1)
+            .maybeSingle()
+        : Promise.resolve({ data: null })
+    ]);
+
+    setSiteStats({
+      meters: metersRes.count || 0,
+      readings: readingsRes.count || 0,
+      latestReading: latestReadingRes.data?.reading_timestamp || null,
+      schematics: schematicsRes.count || 0,
+    });
   };
 
   const handleEditSite = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -176,6 +220,68 @@ export default function SiteDetail() {
               Edit Site
             </Button>
           </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Card className="border-border/50 shadow-sm hover:shadow-md transition-shadow">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Meters
+              </CardTitle>
+              <Gauge className="w-5 h-5 text-warning" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold">{siteStats.meters}</div>
+              <p className="text-xs text-muted-foreground mt-1">Connected meters</p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/50 shadow-sm hover:shadow-md transition-shadow">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Readings
+              </CardTitle>
+              <Activity className="w-5 h-5 text-primary" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold">{siteStats.readings.toLocaleString()}</div>
+              <p className="text-xs text-muted-foreground mt-1">Data points collected</p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/50 shadow-sm hover:shadow-md transition-shadow">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Latest Reading
+              </CardTitle>
+              <Calendar className="w-5 h-5 text-accent" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-xl font-bold">
+                {siteStats.latestReading 
+                  ? format(new Date(siteStats.latestReading), "MMM dd, yyyy")
+                  : "No data"}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {siteStats.latestReading 
+                  ? format(new Date(siteStats.latestReading), "HH:mm")
+                  : "Upload readings to begin"}
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/50 shadow-sm hover:shadow-md transition-shadow">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Schematics
+              </CardTitle>
+              <FileText className="w-5 h-5 text-primary" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold">{siteStats.schematics}</div>
+              <p className="text-xs text-muted-foreground mt-1">Uploaded diagrams</p>
+            </CardContent>
+          </Card>
         </div>
 
         {(site.address || site.council_connection_point) && (
