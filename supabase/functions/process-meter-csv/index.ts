@@ -457,6 +457,14 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        // Add the main value column to extraFields with its renamed header
+        if (columnMapping && columnMapping.renamedHeaders && columnMapping.valueColumn) {
+          const valueColumnName = columnMapping.renamedHeaders[columnMapping.valueColumn];
+          if (valueColumnName) {
+            extraFields[valueColumnName] = value;
+          }
+        }
+
         // Build metadata object
         const metadata: any = {
           source_file: fileName,
