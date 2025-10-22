@@ -99,31 +99,18 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
   };
 
   const processLoadProfile = (readings: ReadingData[], endDate: Date) => {
-    // Group by hour and calculate average kVA
-    const hourlyData: { [key: string]: { total: number; count: number } } = {};
-
-    readings.forEach((reading) => {
+    // Plot actual kVA values for each time slot without any averaging
+    const chartData = readings.map((reading) => {
       const date = parseISO(reading.reading_timestamp);
-      const hour = format(date, "HH:00");
-
-      // Use the kva_value column directly
+      const timeLabel = format(date, "HH:mm");
       const kva = reading.kva_value || 0;
 
-      if (!hourlyData[hour]) {
-        hourlyData[hour] = { total: 0, count: 0 };
-      }
-
-      hourlyData[hour].total += kva;
-      hourlyData[hour].count += 1;
+      return {
+        time: timeLabel,
+        timestamp: reading.reading_timestamp,
+        kva: Number(kva.toFixed(2)),
+      };
     });
-
-    // Calculate averages and create chart data
-    const chartData = Object.keys(hourlyData)
-      .sort()
-      .map((hour) => ({
-        hour,
-        kva: Number((hourlyData[hour].total / hourlyData[hour].count).toFixed(2)),
-      }));
 
     setLoadProfileData(chartData);
 
@@ -131,7 +118,8 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
     if (chartData.length > 0) {
       const maxKva = Math.max(...chartData.map((d) => d.kva));
       const normalized = chartData.map((d) => ({
-        hour: d.hour,
+        time: d.time,
+        timestamp: d.timestamp,
         normalized: maxKva > 0 ? Number((d.kva / maxKva).toFixed(3)) : 0,
         kva: d.kva,
       }));
@@ -225,22 +213,22 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
             <div className="space-y-6">
               <div>
                 <h3 className="text-lg font-semibold mb-4">
-                  {dateRange?.to && dateRange.from.getTime() !== dateRange.to.getTime() 
-                    ? "Average Hourly Load (kVA)" 
-                    : "Hourly Load Profile (kVA)"} - {selectedMeter?.meter_number}
+                  Load Profile (kVA) - {selectedMeter?.meter_number}
                 </h3>
-                {dateRange?.to && dateRange.from.getTime() !== dateRange.to.getTime() && (
-                  <p className="text-sm text-muted-foreground mb-2">
-                    Averaged across {Math.ceil((dateRange.to.getTime() - dateRange.from.getTime()) / (1000 * 60 * 60 * 24))} day(s)
-                  </p>
-                )}
+                <p className="text-sm text-muted-foreground mb-2">
+                  Showing actual kVA values for each time slot (no averaging)
+                  {dateRange?.to && dateRange.from.getTime() !== dateRange.to.getTime() && (
+                    <> • {Math.ceil((dateRange.to.getTime() - dateRange.from.getTime()) / (1000 * 60 * 60 * 24)) + 1} day(s) selected</>
+                  )}
+                </p>
                 <ResponsiveContainer width="100%" height={400}>
                   <LineChart data={loadProfileData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                     <XAxis
-                      dataKey="hour"
+                      dataKey="time"
                       stroke="hsl(var(--muted-foreground))"
-                      tick={{ fill: "hsl(var(--foreground))" }}
+                      tick={{ fill: "hsl(var(--foreground))", fontSize: 11 }}
+                      interval="preserveStartEnd"
                     />
                     <YAxis
                       stroke="hsl(var(--muted-foreground))"
@@ -264,9 +252,9 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                       type="monotone"
                       dataKey="kva"
                       stroke="hsl(var(--primary))"
-                      strokeWidth={3}
+                      strokeWidth={2}
                       dot={false}
-                      name="Average kVA"
+                      name="kVA"
                     />
                   </LineChart>
                 </ResponsiveContainer>
@@ -280,11 +268,12 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                   <LineChart data={normalizedData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                     <XAxis
-                      dataKey="hour"
+                      dataKey="time"
                       stroke="hsl(var(--muted-foreground))"
-                      tick={{ fill: "hsl(var(--foreground))" }}
+                      tick={{ fill: "hsl(var(--foreground))", fontSize: 11 }}
+                      interval="preserveStartEnd"
                       label={{
-                        value: "Hour",
+                        value: "Time",
                         position: "insideBottom",
                         offset: -5,
                         style: { fill: "hsl(var(--foreground))" },
