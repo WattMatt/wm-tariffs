@@ -49,16 +49,11 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
   const [manipulatedData, setManipulatedData] = useState<any[]>([]);
   const [isManipulationApplied, setIsManipulationApplied] = useState(false);
   const [showGraph, setShowGraph] = useState(false);
+  const [dataLoaded, setDataLoaded] = useState(false);
 
   useEffect(() => {
     fetchMeters();
   }, [siteId]);
-
-  useEffect(() => {
-    if (selectedMeterId && dateFrom && dateTo) {
-      fetchLoadProfile();
-    }
-  }, [selectedMeterId, dateFrom, dateTo, timeFrom, timeTo]);
 
   // Helper to combine date and time and format as naive timestamp string
   const getFullDateTime = (date: Date, time: string): string => {
@@ -525,13 +520,80 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
             </div>
           </div>
 
+          <div className="flex gap-3 justify-end">
+            <Button
+              variant="default"
+              onClick={() => {
+                if (!selectedMeterId || !dateFrom || !dateTo) {
+                  toast.error("Please select meter and date range");
+                  return;
+                }
+                setDataLoaded(true);
+                fetchLoadProfile();
+              }}
+              disabled={!selectedMeterId || !dateFrom || !dateTo || isLoading}
+            >
+              Load Data
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (loadProfileData.length === 0) {
+                  toast.error("No data to download. Please load data first.");
+                  return;
+                }
+
+                const cleanedData = loadProfileData.map(row => {
+                  const { timestamp, timestampStr, ...measurements } = row;
+                  const formattedTimestamp = timestampStr 
+                    ? timestampStr.split('+')[0].split('T').join(' ').substring(0, 19)
+                    : new Date(timestamp).toISOString().split('+')[0].split('T').join(' ').substring(0, 19);
+                  return {
+                    timestamp: formattedTimestamp,
+                    ...measurements
+                  };
+                });
+
+                const headers = Object.keys(cleanedData[0]).join(",");
+                const rows = cleanedData.map(row => 
+                  Object.values(row).map(val => 
+                    typeof val === 'string' && val.includes(',') ? `"${val}"` : val
+                  ).join(",")
+                ).join("\n");
+                
+                const csv = `${headers}\n${rows}`;
+                const blob = new Blob([csv], { type: 'text/csv' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                
+                const selectedMeter = meters.find(m => m.id === selectedMeterId);
+                const dateRange = dateFrom && dateTo 
+                  ? `${format(dateFrom, 'yyyy-MM-dd')}_to_${format(dateTo, 'yyyy-MM-dd')}`
+                  : 'data';
+                a.download = `meter_data_${selectedMeter?.meter_number || 'meter'}_${dateRange}.csv`;
+                
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                
+                toast.success("CSV data downloaded");
+              }}
+              disabled={!dataLoaded || loadProfileData.length === 0}
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Download CSV
+            </Button>
+          </div>
+
           {isLoading && (
             <div className="flex items-center justify-center py-12">
               <div className="text-muted-foreground">Loading load profile data...</div>
             </div>
           )}
 
-          {!isLoading && loadProfileData.length > 0 && (
+          {!isLoading && dataLoaded && loadProfileData.length > 0 && (
             <div className="space-y-6">
               <div className="grid grid-cols-[200px_180px_1fr] gap-4 mb-4 items-start">
                 {/* Quantities to Plot */}
