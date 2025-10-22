@@ -636,99 +636,6 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                       </div>
                     ))}
                   </div>
-                  
-                  <div className="flex flex-wrap gap-2 items-start">
-                    <Button
-                      variant="default"
-                      onClick={() => {
-                        if (selectedQuantities.size === 0) {
-                          toast.error("Please select at least one quantity to plot");
-                          return;
-                        }
-                        setShowGraph(true);
-                      }}
-                      className="rounded-full"
-                    >
-                      Graph
-                    </Button>
-                    
-                    <Button
-                      variant="secondary"
-                      onClick={handleResetView}
-                      className="rounded-full bg-slate-900 text-white hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700"
-                    >
-                      Reset View
-                    </Button>
-                    
-                    {isManipulationApplied && (
-                      <Button 
-                        onClick={handleResetManipulation}
-                        variant="outline"
-                        className="rounded-full"
-                      >
-                        Reset to Original
-                      </Button>
-                    )}
-                    
-                    {showGraph && selectedQuantities.size > 0 && (
-                      <Button
-                        variant="outline"
-                        className="rounded-full"
-                        onClick={() => {
-                        const data = isManipulationApplied ? manipulatedData : loadProfileData;
-                        
-                        const cleanedData = data.map((point) => {
-                          const measurements: Record<string, any> = {};
-                          
-                          Object.entries(point).forEach(([key, value]) => {
-                            if (key !== 'timestampStr' && key !== 'timestamp') {
-                              measurements[key] = value;
-                            }
-                          });
-                          
-                          const formattedTimestamp = point.timestampStr 
-                            ? format(new Date(point.timestampStr), 'yyyy-MM-dd HH:mm:ss')
-                            : '';
-                          
-                          return {
-                            timestamp: formattedTimestamp,
-                            ...measurements
-                          };
-                        });
-
-                        const headers = Object.keys(cleanedData[0]).join(",");
-                        const rows = cleanedData.map(row => 
-                          Object.values(row).map(val => 
-                            typeof val === 'string' && val.includes(',') ? `"${val}"` : val
-                          ).join(",")
-                        ).join("\n");
-                        
-                        const csv = `${headers}\n${rows}`;
-                        const blob = new Blob([csv], { type: 'text/csv' });
-                        const url = window.URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        
-                        const selectedMeter = meters.find(m => m.id === selectedMeterId);
-                        const dateRange = dateFrom && dateTo 
-                          ? `${format(dateFrom, 'yyyy-MM-dd')}_to_${format(dateTo, 'yyyy-MM-dd')}`
-                          : 'data';
-                        const dataType = isManipulationApplied ? 'manipulated' : 'load_profile';
-                        a.download = `${dataType}_${selectedMeter?.meter_number || 'meter'}_${dateRange}.csv`;
-                        
-                        document.body.appendChild(a);
-                        a.click();
-                        document.body.removeChild(a);
-                        window.URL.revokeObjectURL(url);
-                        
-                        toast.success("Data downloaded successfully");
-                      }}
-                    >
-                      <Download className="h-4 w-4 mr-2" />
-                      Download Graph Data
-                    </Button>
-                  )}
-                </div>
                 </div>
                 
                 {/* Y-Axis Controls */}
@@ -801,6 +708,100 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                     </Button>
                   </div>
                 </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-wrap gap-2 items-center">
+                <Button
+                  variant="default"
+                  onClick={() => {
+                    if (selectedQuantities.size === 0) {
+                      toast.error("Please select at least one quantity to plot");
+                      return;
+                    }
+                    setShowGraph(true);
+                  }}
+                  className="rounded-full"
+                >
+                  Graph
+                </Button>
+                
+                <Button
+                  variant="secondary"
+                  onClick={handleResetView}
+                  className="rounded-full"
+                >
+                  Reset View
+                </Button>
+                
+                {isManipulationApplied && (
+                  <Button 
+                    onClick={handleResetManipulation}
+                    variant="outline"
+                    className="rounded-full"
+                  >
+                    Reset to Original
+                  </Button>
+                )}
+                
+                {showGraph && selectedQuantities.size > 0 && (
+                  <Button
+                    variant="outline"
+                    className="rounded-full"
+                    onClick={() => {
+                    const data = isManipulationApplied ? manipulatedData : loadProfileData;
+                    
+                    const cleanedData = data.map((point) => {
+                      const measurements: Record<string, any> = {};
+                      
+                      Object.entries(point).forEach(([key, value]) => {
+                        if (key !== 'timestampStr' && key !== 'timestamp') {
+                          measurements[key] = value;
+                        }
+                      });
+                      
+                      const formattedTimestamp = point.timestampStr 
+                        ? format(new Date(point.timestampStr), 'yyyy-MM-dd HH:mm:ss')
+                        : '';
+                      
+                      return {
+                        timestamp: formattedTimestamp,
+                        ...measurements
+                      };
+                    });
+
+                    const headers = Object.keys(cleanedData[0]).join(",");
+                    const rows = cleanedData.map(row => 
+                      Object.values(row).map(val => 
+                        typeof val === 'string' && val.includes(',') ? `"${val}"` : val
+                      ).join(",")
+                    ).join("\n");
+                    
+                    const csv = `${headers}\n${rows}`;
+                    const blob = new Blob([csv], { type: 'text/csv' });
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    
+                    const selectedMeter = meters.find(m => m.id === selectedMeterId);
+                    const dateRange = dateFrom && dateTo 
+                      ? `${format(dateFrom, 'yyyy-MM-dd')}_to_${format(dateTo, 'yyyy-MM-dd')}`
+                      : 'data';
+                    const dataType = isManipulationApplied ? 'manipulated' : 'load_profile';
+                    a.download = `${dataType}_${selectedMeter?.meter_number || 'meter'}_${dateRange}.csv`;
+                    
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                    
+                    toast.success("Data downloaded successfully");
+                  }}
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  Download Graph Data
+                </Button>
+              )}
               </div>
 
               {showGraph && selectedQuantities.size > 0 && (
