@@ -267,15 +267,27 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
     const currentData = isManipulationApplied ? manipulatedData : loadProfileData;
     if (currentData.length === 0) return;
     
-    // Calculate based on 30-minute intervals (48 per day)
-    const readingsPerDay = 48;
-    const totalReadings = days * readingsPerDay;
-    const maxIndex = currentData.length - 1;
-    const minIndex = Math.max(0, maxIndex - totalReadings + 1);
+    const msPerDay = 24 * 60 * 60 * 1000;
+    const targetMs = days * msPerDay;
     
+    // Calculate viewport window (N days from the start)
+    const firstTimestamp = new Date(currentData[0].timestamp).getTime();
+    const viewportEndMs = firstTimestamp + targetMs;
+    
+    // Find the end index for the viewport
+    let endIndex = currentData.length - 1;
+    for (let i = 0; i < currentData.length; i++) {
+      const pointMs = new Date(currentData[i].timestamp).getTime();
+      if (pointMs >= viewportEndMs) {
+        endIndex = i;
+        break;
+      }
+    }
+    
+    // Set viewport window - brush always allows panning across full dataset
+    setBrushStartIndex(0);
+    setBrushEndIndex(Math.min(endIndex, currentData.length - 1));
     setUseBrush(true);
-    setBrushStartIndex(minIndex);
-    setBrushEndIndex(maxIndex);
   };
 
   const handleDownloadData = () => {
