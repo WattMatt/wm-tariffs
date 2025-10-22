@@ -45,6 +45,11 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
   const [yAxisMin, setYAxisMin] = useState<string>("");
   const [yAxisMax, setYAxisMax] = useState<string>("");
   const [hiddenLines, setHiddenLines] = useState<Set<string>>(new Set());
+  const [manipulationOperation, setManipulationOperation] = useState<string>("sum");
+  const [manipulationDateFrom, setManipulationDateFrom] = useState<Date>();
+  const [manipulationDateTo, setManipulationDateTo] = useState<Date>();
+  const [manipulationTimeFrom, setManipulationTimeFrom] = useState<string>("00:00");
+  const [manipulationTimeTo, setManipulationTimeTo] = useState<string>("23:59");
 
   useEffect(() => {
     fetchMeters();
@@ -385,10 +390,11 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
 
           {!isLoading && loadProfileData.length > 0 && (
             <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-[200px_1fr_1fr] gap-6 mb-4">
+              <div className="grid grid-cols-[200px_180px_180px_1fr] gap-4 mb-4 items-start">
+                {/* Quantities to Plot */}
                 <div className="space-y-3">
-                  <Label>Quantities to Plot</Label>
-                  <div className="flex flex-col gap-3 max-h-[400px] overflow-y-auto pr-2">
+                  <Label className="font-semibold">Quantities to Plot</Label>
+                  <div className="flex flex-col gap-3 h-[280px] overflow-y-auto pr-2 border rounded-md p-3 bg-muted/20">
                     {availableColumns.map((column) => (
                       <div key={column} className="flex items-center space-x-2">
                         <Checkbox
@@ -407,26 +413,143 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                   </div>
                 </div>
                 
-                <div className="space-y-2">
-                  <Label htmlFor="y-min">Y-Axis Min</Label>
+                {/* Y-Axis Min */}
+                <div className="space-y-3">
+                  <Label htmlFor="y-min" className="font-semibold">Y-Axis Min</Label>
                   <Input
                     id="y-min"
                     type="text"
                     placeholder="Auto"
                     value={yAxisMin}
                     onChange={(e) => setYAxisMin(e.target.value)}
+                    className="h-10"
                   />
                 </div>
                 
-                <div className="space-y-2">
-                  <Label htmlFor="y-max">Y-Axis Max</Label>
+                {/* Y-Axis Max */}
+                <div className="space-y-3">
+                  <Label htmlFor="y-max" className="font-semibold">Y-Axis Max</Label>
                   <Input
                     id="y-max"
                     type="text"
                     placeholder="Auto"
                     value={yAxisMax}
                     onChange={(e) => setYAxisMax(e.target.value)}
+                    className="h-10"
                   />
+                </div>
+
+                {/* Data Manipulation */}
+                <div className="space-y-3 border-l pl-4">
+                  <Label className="font-semibold">Data Manipulation</Label>
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="manipulation-op" className="text-sm">Operation</Label>
+                      <Select value={manipulationOperation} onValueChange={setManipulationOperation}>
+                        <SelectTrigger id="manipulation-op" className="h-10">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="sum">Sum</SelectItem>
+                          <SelectItem value="min">Min</SelectItem>
+                          <SelectItem value="max">Max</SelectItem>
+                          <SelectItem value="avg">Avg</SelectItem>
+                          <SelectItem value="cnt">Cnt</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-sm">Subset Date From</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              "w-full justify-start text-left font-normal h-10",
+                              !manipulationDateFrom && "text-muted-foreground"
+                            )}
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {manipulationDateFrom ? (
+                              <span className="text-xs">{format(manipulationDateFrom, "MMM d")} {manipulationTimeFrom}</span>
+                            ) : (
+                              <span className="text-xs">Pick date</span>
+                            )}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <div className="pointer-events-auto">
+                            <Calendar
+                              mode="single"
+                              selected={manipulationDateFrom}
+                              onSelect={setManipulationDateFrom}
+                              initialFocus
+                              className="p-3"
+                            />
+                            <div className="border-t px-3 py-3">
+                              <Input
+                                type="time"
+                                value={manipulationTimeFrom}
+                                onChange={(e) => setManipulationTimeFrom(e.target.value)}
+                              />
+                            </div>
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-sm">Subset Date To</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              "w-full justify-start text-left font-normal h-10",
+                              !manipulationDateTo && "text-muted-foreground"
+                            )}
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {manipulationDateTo ? (
+                              <span className="text-xs">{format(manipulationDateTo, "MMM d")} {manipulationTimeTo}</span>
+                            ) : (
+                              <span className="text-xs">Pick date</span>
+                            )}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <div className="pointer-events-auto">
+                            <Calendar
+                              mode="single"
+                              selected={manipulationDateTo}
+                              onSelect={setManipulationDateTo}
+                              initialFocus
+                              className="p-3"
+                            />
+                            <div className="border-t px-3 py-3">
+                              <Input
+                                type="time"
+                                value={manipulationTimeTo}
+                                onChange={(e) => setManipulationTimeTo(e.target.value)}
+                              />
+                            </div>
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+
+                    <Button 
+                      onClick={() => {
+                        // TODO: Apply manipulation
+                        toast.info("Data manipulation will be applied to the chart");
+                      }}
+                      size="sm"
+                      className="w-full"
+                    >
+                      Apply Manipulation
+                    </Button>
+                  </div>
                 </div>
               </div>
 
