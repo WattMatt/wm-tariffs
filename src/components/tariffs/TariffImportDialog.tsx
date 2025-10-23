@@ -7,9 +7,10 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
-import { FileUp, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import { FileUp, Loader2, CheckCircle2, AlertCircle, Eye } from "lucide-react";
 import { toast } from "sonner";
 import ExtractionSteps from "./ExtractionSteps";
+import TariffReviewDialog from "./TariffReviewDialog";
 
 interface ExtractedTariffData {
   supplyAuthority: {
@@ -72,6 +73,8 @@ export default function PdfImportDialog() {
   const [extractionDialogOpen, setExtractionDialogOpen] = useState(false);
   const [extractionStep, setExtractionStep] = useState<"extract" | "review" | "save" | "complete">("extract");
   const [currentExtractionIndex, setCurrentExtractionIndex] = useState<number | null>(null);
+  const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
+  const [reviewMunicipalityIndex, setReviewMunicipalityIndex] = useState<number | null>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -1244,27 +1247,165 @@ export default function PdfImportDialog() {
                       Process all at once or select individual municipalities.
                     </p>
                   </div>
-                  <Button
-                    onClick={handleBulkExtractAndSave}
-                    disabled={
-                      isProcessing || 
-                      municipalities.every(m => m.status === 'complete')
-                    }
-                    size="sm"
-                    className="whitespace-nowrap"
-                  >
-                    {isProcessing ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Processing...
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle2 className="w-4 h-4 mr-2" />
-                        Extract & Save All
-                      </>
-                    )}
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={async () => {
+                        // Extract all pending municipalities
+                        setIsProcessing(true);
+                        for (let i = 0; i < municipalities.length; i++) {
+                          const municipality = municipalities[i];
+                          if (municipality.status === 'pending') {
+                            setCurrentMunicipality(municipality.name);
+                            setMunicipalities(prev => prev.map((m, idx) => 
+                              idx === i ? { ...m, status: 'extracting' } : m
+                            ));
+                            
+                            try {
+                              const isExcel = file!.name.toLowerCase().endsWith('.xlsx') || file!.name.toLowerCase().endsWith('.xls');
+                              let extractedData: ExtractedTariffData;
+                              
+                              if (isExcel) {
+                                const XLSX = await import('xlsx');
+                                const arrayBuffer = await file!.arrayBuffer();
+                                const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+                                
+                                let targetSheet = null;
+                                const normalizedMunicipality = municipality.name.toLowerCase().trim();
+                                
+                                for (const sheetName of workbook.SheetNames) {
+                                  if (sheetName.toLowerCase().includes(normalizedMunicipality) || 
+                                      normalizedMunicipality.includes(sheetName.toLowerCase())) {
+                                    const worksheet = workbook.Sheets[sheetName];
+                                    targetSheet = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+                                    break;
+                                  }
+                                }
+                                
+                                if (!targetSheet && workbook.SheetNames.length === 1) {
+                                  const sheetName = workbook.SheetNames[0];
+                                  const worksheet = workbook.Sheets[sheetName];
+                                  targetSheet = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+                                }
+                                
+                                if (!targetSheet) {
+                                  throw new Error(`Could not find sheet for ${municipality.name}`);
+                                }
+
+                                const { data: aiResult, error: aiError } = await supabase.functions.invoke('extract-tariff-ai', {
+                                  body: {
+                                    sheetData: targetSheet,
+                                    municipalityName: municipality.name
+                                  }
+                                });
+
+                                if (aiError) throw aiError;
+                                if (!aiResult?.success) throw new Error(aiResult?.error || 'AI extraction failed');
+
+                                const aiData = aiResult.data;
+                                
+                                extractedData = {
+                                  supplyAuthority: {
+                                    name: municipality.name,
+                                    region: municipality.province || 'Unknown',
+                                    nersaIncreasePercentage: aiData.nersaIncrease || 0
+                                  },
+                                  tariffStructures: aiData.tariffStructures || []
+                                };
+                              } else {
+                                const documentContent = await extractTextFromPdf(file!);
+                                const { data, error } = await supabase.functions.invoke("extract-tariff-data", {
+                                  body: { documentContent, phase: "extract", municipalityName: municipality.name }
+                                });
+
+                                if (error) throw error;
+                                if (!data.success || !data.data) {
+                                  throw new Error("Failed to extract tariff data");
+                                }
+                                
+                                extractedData = data.data;
+                              }
+
+                              setMunicipalities(prev => prev.map((m, idx) => 
+                                idx === i ? { ...m, status: 'pending', data: extractedData } : m
+                              ));
+                            } catch (error: any) {
+                              console.error(`Error extracting ${municipality.name}:`, error);
+                              setMunicipalities(prev => prev.map((m, idx) => 
+                                idx === i ? { ...m, status: 'error', error: error.message } : m
+                              ));
+                            }
+                          }
+                        }
+                        setCurrentMunicipality(null);
+                        setIsProcessing(false);
+                        toast.success("Extraction complete!");
+                      }}
+                      disabled={
+                        isProcessing || 
+                        municipalities.every(m => m.status !== 'pending')
+                      }
+                      size="sm"
+                      className="whitespace-nowrap"
+                    >
+                      {isProcessing ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Extracting...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="w-4 h-4 mr-2" />
+                          Extract All
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      onClick={async () => {
+                        // Save all extracted municipalities
+                        setIsProcessing(true);
+                        for (let i = 0; i < municipalities.length; i++) {
+                          const municipality = municipalities[i];
+                          if (municipality.data && municipality.status === 'pending') {
+                            setCurrentMunicipality(municipality.name);
+                            setMunicipalities(prev => prev.map((m, idx) => 
+                              idx === i ? { ...m, status: 'saving' } : m
+                            ));
+                            
+                            try {
+                              await saveTariffData(municipality.data);
+                              setMunicipalities(prev => prev.map((m, idx) => 
+                                idx === i ? { ...m, status: 'complete' } : m
+                              ));
+                            } catch (error: any) {
+                              console.error(`Error saving ${municipality.name}:`, error);
+                              setMunicipalities(prev => prev.map((m, idx) => 
+                                idx === i ? { ...m, status: 'error', error: error.message } : m
+                              ));
+                            }
+                          }
+                        }
+                        setCurrentMunicipality(null);
+                        setIsProcessing(false);
+                        toast.success("Save complete!");
+                      }}
+                      disabled={
+                        isProcessing || 
+                        municipalities.every(m => !m.data || m.status === 'complete')
+                      }
+                      size="sm"
+                      variant="outline"
+                      className="whitespace-nowrap"
+                    >
+                      {isProcessing ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        "Save All"
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </div>
 
@@ -1288,7 +1429,7 @@ export default function PdfImportDialog() {
                             </div>
                           </div>
                           <div className="flex gap-2">
-                            {municipality.status === 'pending' && (
+                            {municipality.status === 'pending' && !municipality.data && (
                               <>
                                 <Button
                                   onClick={() => {
@@ -1309,6 +1450,46 @@ export default function PdfImportDialog() {
                                   variant="outline"
                                 >
                                   Legacy Extract
+                                </Button>
+                              </>
+                            )}
+                            {municipality.data && municipality.status === 'pending' && (
+                              <>
+                                <Button
+                                  onClick={() => {
+                                    setReviewMunicipalityIndex(index);
+                                    setReviewDialogOpen(true);
+                                  }}
+                                  disabled={isProcessing}
+                                  size="sm"
+                                  variant="outline"
+                                >
+                                  <Eye className="w-4 h-4 mr-2" />
+                                  Review
+                                </Button>
+                                <Button
+                                  onClick={async () => {
+                                    setMunicipalities(prev => prev.map((m, i) => 
+                                      i === index ? { ...m, status: 'saving' } : m
+                                    ));
+                                    try {
+                                      await saveTariffData(municipality.data!);
+                                      setMunicipalities(prev => prev.map((m, i) => 
+                                        i === index ? { ...m, status: 'complete' } : m
+                                      ));
+                                      toast.success(`Saved ${municipality.name}`);
+                                    } catch (error: any) {
+                                      console.error(`Error saving ${municipality.name}:`, error);
+                                      setMunicipalities(prev => prev.map((m, i) => 
+                                        i === index ? { ...m, status: 'error', error: error.message } : m
+                                      ));
+                                      toast.error(`Failed to save ${municipality.name}`);
+                                    }
+                                  }}
+                                  disabled={currentMunicipality !== null || isProcessing}
+                                  size="sm"
+                                >
+                                  Save
                                 </Button>
                               </>
                             )}
@@ -1457,6 +1638,101 @@ export default function PdfImportDialog() {
         </div>
       </DialogContent>
     </Dialog>
+
+    {/* Review Dialog */}
+    {reviewMunicipalityIndex !== null && municipalities[reviewMunicipalityIndex] && (
+      <TariffReviewDialog
+        open={reviewDialogOpen}
+        onClose={() => {
+          setReviewDialogOpen(false);
+          setReviewMunicipalityIndex(null);
+        }}
+        municipalityName={municipalities[reviewMunicipalityIndex].name}
+        extractedData={municipalities[reviewMunicipalityIndex].data || null}
+        sourceImageUrl={undefined}
+        onRescan={async () => {
+          const municipality = municipalities[reviewMunicipalityIndex];
+          const isExcel = file!.name.toLowerCase().endsWith('.xlsx') || file!.name.toLowerCase().endsWith('.xls');
+          
+          if (isExcel) {
+            const XLSX = await import('xlsx');
+            const arrayBuffer = await file!.arrayBuffer();
+            const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+            
+            let targetSheet = null;
+            const normalizedMunicipality = municipality.name.toLowerCase().trim();
+            
+            for (const sheetName of workbook.SheetNames) {
+              if (sheetName.toLowerCase().includes(normalizedMunicipality) || 
+                  normalizedMunicipality.includes(sheetName.toLowerCase())) {
+                const worksheet = workbook.Sheets[sheetName];
+                targetSheet = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+                break;
+              }
+            }
+            
+            if (!targetSheet && workbook.SheetNames.length === 1) {
+              const sheetName = workbook.SheetNames[0];
+              const worksheet = workbook.Sheets[sheetName];
+              targetSheet = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+            }
+            
+            if (!targetSheet) {
+              throw new Error(`Could not find sheet for ${municipality.name}`);
+            }
+
+            const { data: aiResult, error: aiError } = await supabase.functions.invoke('extract-tariff-ai', {
+              body: {
+                sheetData: targetSheet,
+                municipalityName: municipality.name
+              }
+            });
+
+            if (aiError) throw aiError;
+            if (!aiResult?.success) throw new Error(aiResult?.error || 'AI extraction failed');
+
+            const aiData = aiResult.data;
+            
+            const extractedData: ExtractedTariffData = {
+              supplyAuthority: {
+                name: municipality.name,
+                region: municipality.province || 'Unknown',
+                nersaIncreasePercentage: aiData.nersaIncrease || 0
+              },
+              tariffStructures: aiData.tariffStructures || []
+            };
+
+            setMunicipalities(prev => prev.map((m, idx) => 
+              idx === reviewMunicipalityIndex ? { ...m, data: extractedData } : m
+            ));
+          }
+        }}
+        onReset={() => {
+          setMunicipalities(prev => prev.map((m, idx) => 
+            idx === reviewMunicipalityIndex ? { ...m, data: undefined } : m
+          ));
+          setReviewDialogOpen(false);
+          setReviewMunicipalityIndex(null);
+        }}
+        onSave={async (data) => {
+          setMunicipalities(prev => prev.map((m, i) => 
+            i === reviewMunicipalityIndex ? { ...m, status: 'saving', data } : m
+          ));
+          try {
+            await saveTariffData(data);
+            setMunicipalities(prev => prev.map((m, i) => 
+              i === reviewMunicipalityIndex ? { ...m, status: 'complete' } : m
+            ));
+          } catch (error: any) {
+            console.error('Save error:', error);
+            setMunicipalities(prev => prev.map((m, i) => 
+              i === reviewMunicipalityIndex ? { ...m, status: 'error', error: error.message } : m
+            ));
+            throw error;
+          }
+        }}
+      />
+    )}
     </>
   );
 }
