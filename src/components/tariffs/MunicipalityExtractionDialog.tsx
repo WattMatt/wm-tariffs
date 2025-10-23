@@ -156,8 +156,8 @@ export default function MunicipalityExtractionDialog({
     canvas.on('mouse:wheel', (opt) => {
       let newZoom = canvas.getZoom();
       newZoom *= 0.999 ** opt.e.deltaY;
-      if (newZoom > 10) newZoom = 10;
-      if (newZoom < 0.5) newZoom = 0.5;
+      if (newZoom > 30) newZoom = 30;
+      if (newZoom < 0.3) newZoom = 0.3;
       
       const pointer = canvas.getPointer(opt.e);
       canvas.zoomToPoint(pointer, newZoom);
