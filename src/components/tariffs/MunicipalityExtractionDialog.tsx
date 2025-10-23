@@ -528,9 +528,12 @@ export default function MunicipalityExtractionDialog({
       fabricCanvas.renderAll();
     }
     
+    console.log('handleStartSelection called');
     drawStartPointRef.current = null;
     setExtractedData(null);
     setSelectionMode(true);
+    selectionModeRef.current = true;
+    console.log('Selection mode activated, ref is now:', selectionModeRef.current);
     toast.info("Click once to start, then click again to complete the selection");
   };
 
