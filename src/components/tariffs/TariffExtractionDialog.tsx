@@ -584,7 +584,7 @@ export default function TariffExtractionDialog({
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm">Extracted Data</CardTitle>
               </CardHeader>
-              <CardContent className="flex-1 overflow-hidden p-0">
+              <CardContent className="flex-1 overflow-y-auto p-0">
                 {extractionStep === "extract" && (
                   <div className="flex flex-col items-center justify-center h-full p-6">
                     <Loader2 className="w-12 h-12 animate-spin text-primary mb-4" />
@@ -592,11 +592,14 @@ export default function TariffExtractionDialog({
                     <p className="text-sm text-muted-foreground text-center">
                       Analyzing tariff document and extracting structured data...
                     </p>
+                    <p className="text-xs text-muted-foreground text-center mt-2">
+                      This may take up to 60 seconds for large documents
+                    </p>
                   </div>
                 )}
 
                 {extractionStep === "review" && extractedData && (
-                  <ScrollArea className="h-full px-6 pb-6">
+                  <div className="h-full overflow-y-auto px-6 pb-6">
                     <div className="space-y-6">
                       {/* Supply Authority Info */}
                       <div className="space-y-3">
@@ -987,7 +990,7 @@ export default function TariffExtractionDialog({
                         </p>
                       )}
                     </div>
-                  </ScrollArea>
+                  </div>
                 )}
               </CardContent>
             </Card>
@@ -995,7 +998,7 @@ export default function TariffExtractionDialog({
 
           {/* Action Buttons */}
           <div className="flex gap-2 mt-4">
-            {!extractedData && convertedPdfImage && !selectionMode && (
+            {!extractedData && convertedPdfImage && !selectionMode && !cropRegion && (
               <Button
                 onClick={handleStartSelection}
                 variant="outline"
@@ -1004,7 +1007,23 @@ export default function TariffExtractionDialog({
                 Select Region
               </Button>
             )}
-            {cropRegion && !extractedData && (
+            {selectionMode && (
+              <Button
+                onClick={() => {
+                  setSelectionMode(false);
+                  if (fabricCanvas) {
+                    fabricCanvas.clear();
+                  }
+                  setSelectionRect(null);
+                  toast.info("Selection cancelled");
+                }}
+                variant="outline"
+                size="sm"
+              >
+                Cancel Selection
+              </Button>
+            )}
+            {cropRegion && !extractedData && !selectionMode && (
               <Button
                 onClick={handleClearSelection}
                 variant="outline"

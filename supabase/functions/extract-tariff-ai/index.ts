@@ -82,20 +82,29 @@ Return your findings in JSON format.`;
     const userPrompt = `Extract tariff data from this spreadsheet for ${municipalityName}:\n\n${sheetText.substring(0, 15000)}`;
 
     console.log('Calling AI for tariff extraction...');
+    console.log('Sheet data rows:', filteredSheetData.length);
+    console.log('First few rows:', filteredSheetData.slice(0, 3));
 
-    const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ],
-        tools: [{
+    // Set a timeout for the AI request (60 seconds)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
+
+    let aiResponse;
+    try {
+      aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        signal: controller.signal,
+        body: JSON.stringify({
+          model: 'google/gemini-2.5-flash',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+          ],
+          tools: [{
           type: 'function',
           function: {
             name: 'extract_tariff_data',
@@ -197,7 +206,19 @@ Return your findings in JSON format.`;
         }],
         tool_choice: { type: 'function', function: { name: 'extract_tariff_data' } }
       }),
-    });
+      });
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        console.error('AI request timed out after 60 seconds');
+        throw new Error('AI extraction timed out. The document may be too large or complex. Try selecting a smaller region.');
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+
+    console.log('AI response status:', aiResponse.status);
 
     if (!aiResponse.ok) {
       const errorText = await aiResponse.text();
