@@ -6,9 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, CheckCircle2, X, ZoomIn, ZoomOut, Maximize2, Trash2, Plus } from "lucide-react";
+import { Loader2, CheckCircle2, X, Trash2, Plus } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { pdfjs } from 'react-pdf';
@@ -122,7 +121,11 @@ export default function TariffExtractionDialog({
         canvas.height = viewport.height;
         canvas.width = viewport.width;
         
-        await page.render({ canvasContext: context, viewport }).promise;
+        await page.render({
+          canvasContext: context,
+          viewport: viewport,
+          canvas: canvas
+        }).promise;
         
         pageCanvases.push(canvas);
         maxWidth = Math.max(maxWidth, viewport.width);
