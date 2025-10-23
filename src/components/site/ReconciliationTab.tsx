@@ -36,6 +36,51 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
   const [isDateFromOpen, setIsDateFromOpen] = useState(false);
   const [isDateToOpen, setIsDateToOpen] = useState(false);
+  const [earliestDate, setEarliestDate] = useState<Date | null>(null);
+  const [latestDate, setLatestDate] = useState<Date | null>(null);
+
+  // Fetch earliest and latest dates from database
+  useEffect(() => {
+    const fetchDateRange = async () => {
+      try {
+        // Get all meters for this site
+        const { data: meters } = await supabase
+          .from("meters")
+          .select("id")
+          .eq("site_id", siteId);
+
+        if (!meters || meters.length === 0) return;
+
+        const meterIds = meters.map((m) => m.id);
+
+        // Get earliest and latest reading timestamps
+        const { data: readings } = await supabase
+          .from("meter_readings")
+          .select("reading_timestamp")
+          .in("meter_id", meterIds)
+          .order("reading_timestamp", { ascending: true })
+          .limit(1);
+
+        const { data: latestReadings } = await supabase
+          .from("meter_readings")
+          .select("reading_timestamp")
+          .in("meter_id", meterIds)
+          .order("reading_timestamp", { ascending: false })
+          .limit(1);
+
+        if (readings && readings.length > 0) {
+          setEarliestDate(new Date(readings[0].reading_timestamp));
+        }
+        if (latestReadings && latestReadings.length > 0) {
+          setLatestDate(new Date(latestReadings[0].reading_timestamp));
+        }
+      } catch (error) {
+        console.error("Error fetching date range:", error);
+      }
+    };
+
+    fetchDateRange();
+  }, [siteId]);
 
   const handleRecalculateTotals = () => {
     if (!previewData || selectedColumns.size === 0) {
@@ -583,8 +628,24 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
 
       <Card className="border-border/50">
         <CardHeader>
-          <CardTitle>Analysis Parameters</CardTitle>
-          <CardDescription>Select date range for reconciliation</CardDescription>
+          <div className="flex items-start justify-between">
+            <div>
+              <CardTitle>Analysis Parameters</CardTitle>
+              <CardDescription>Select date range for reconciliation</CardDescription>
+            </div>
+            <div className="text-right text-sm text-muted-foreground space-y-0.5">
+              {earliestDate && (
+                <div>
+                  Earliest: {format(earliestDate, "PP")}
+                </div>
+              )}
+              {latestDate && (
+                <div>
+                  Latest: {format(latestDate, "PP")}
+                </div>
+              )}
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
