@@ -10,7 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { FileText, Upload, Loader2, Download, Trash2, Eye, ZoomIn, ZoomOut, Maximize2 } from "lucide-react";
+import { FileText, Upload, Loader2, Download, Trash2, Eye, ZoomIn, ZoomOut, Maximize2, GripVertical, Plus, X } from "lucide-react";
 import { format } from "date-fns";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { pdfjs } from 'react-pdf';
@@ -837,62 +837,159 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
 
                     {editedData.extracted_data.meter_readings && (
                       <div className="space-y-3">
-                        <Label className="text-sm font-medium">Meter Readings</Label>
-                        <div className="grid grid-cols-3 gap-3">
-                          <div className="space-y-2">
-                            <Label className="text-xs">Previous</Label>
-                            <Input
-                              type="number"
-                              step="0.01"
-                              value={editedData.extracted_data.meter_readings.previous || ''}
-                              onChange={(e) => setEditedData({
+                        <div className="flex items-center justify-between">
+                          <Label className="text-sm font-medium">Meter Readings</Label>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              const readings = Array.isArray(editedData.extracted_data.meter_readings)
+                                ? editedData.extracted_data.meter_readings
+                                : [{
+                                    previous: editedData.extracted_data.meter_readings.previous || 0,
+                                    current: editedData.extracted_data.meter_readings.current || 0,
+                                    consumption_kwh: editedData.extracted_data.meter_readings.consumption_kwh || 0
+                                  }];
+                              
+                              setEditedData({
                                 ...editedData,
                                 extracted_data: {
                                   ...editedData.extracted_data,
-                                  meter_readings: {
-                                    ...editedData.extracted_data.meter_readings,
-                                    previous: parseFloat(e.target.value)
-                                  }
+                                  meter_readings: [...readings, { previous: 0, current: 0, consumption_kwh: 0 }]
                                 }
-                              })}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label className="text-xs">Current</Label>
-                            <Input
-                              type="number"
-                              step="0.01"
-                              value={editedData.extracted_data.meter_readings.current || ''}
-                              onChange={(e) => setEditedData({
-                                ...editedData,
-                                extracted_data: {
-                                  ...editedData.extracted_data,
-                                  meter_readings: {
-                                    ...editedData.extracted_data.meter_readings,
-                                    current: parseFloat(e.target.value)
+                              });
+                            }}
+                          >
+                            <Plus className="w-4 h-4 mr-1" />
+                            Add Row
+                          </Button>
+                        </div>
+                        <div className="space-y-2">
+                          {(() => {
+                            // Convert to array if it's an object
+                            const readings = Array.isArray(editedData.extracted_data.meter_readings)
+                              ? editedData.extracted_data.meter_readings
+                              : [{
+                                  previous: editedData.extracted_data.meter_readings.previous || 0,
+                                  current: editedData.extracted_data.meter_readings.current || 0,
+                                  consumption_kwh: editedData.extracted_data.meter_readings.consumption_kwh || 0
+                                }];
+
+                            return readings.map((reading: any, index: number) => (
+                              <div
+                                key={index}
+                                draggable
+                                onDragStart={(e) => {
+                                  e.dataTransfer.effectAllowed = 'move';
+                                  e.dataTransfer.setData('text/plain', index.toString());
+                                }}
+                                onDragOver={(e) => {
+                                  e.preventDefault();
+                                  e.dataTransfer.dropEffect = 'move';
+                                }}
+                                onDrop={(e) => {
+                                  e.preventDefault();
+                                  const fromIndex = parseInt(e.dataTransfer.getData('text/plain'));
+                                  const toIndex = index;
+                                  
+                                  if (fromIndex !== toIndex) {
+                                    const newReadings = [...readings];
+                                    const [movedItem] = newReadings.splice(fromIndex, 1);
+                                    newReadings.splice(toIndex, 0, movedItem);
+                                    
+                                    setEditedData({
+                                      ...editedData,
+                                      extracted_data: {
+                                        ...editedData.extracted_data,
+                                        meter_readings: newReadings
+                                      }
+                                    });
                                   }
-                                }
-                              })}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label className="text-xs">Consumption (kWh)</Label>
-                            <Input
-                              type="number"
-                              step="0.01"
-                              value={editedData.extracted_data.meter_readings.consumption_kwh || ''}
-                              onChange={(e) => setEditedData({
-                                ...editedData,
-                                extracted_data: {
-                                  ...editedData.extracted_data,
-                                  meter_readings: {
-                                    ...editedData.extracted_data.meter_readings,
-                                    consumption_kwh: parseFloat(e.target.value)
-                                  }
-                                }
-                              })}
-                            />
-                          </div>
+                                }}
+                                className="flex gap-3 items-start p-3 border rounded-lg bg-muted/30 hover:bg-muted/50 cursor-move transition-colors"
+                              >
+                                <GripVertical className="w-5 h-5 text-muted-foreground mt-8 flex-shrink-0" />
+                                <div className="flex-1 space-y-3">
+                                  <div className="space-y-2">
+                                    <Label className="text-xs">Previous</Label>
+                                    <Input
+                                      type="number"
+                                      step="0.01"
+                                      value={reading.previous || ''}
+                                      onChange={(e) => {
+                                        const newReadings = [...readings];
+                                        newReadings[index] = { ...reading, previous: parseFloat(e.target.value) || 0 };
+                                        setEditedData({
+                                          ...editedData,
+                                          extracted_data: {
+                                            ...editedData.extracted_data,
+                                            meter_readings: newReadings
+                                          }
+                                        });
+                                      }}
+                                    />
+                                  </div>
+                                  <div className="space-y-2">
+                                    <Label className="text-xs">Current</Label>
+                                    <Input
+                                      type="number"
+                                      step="0.01"
+                                      value={reading.current || ''}
+                                      onChange={(e) => {
+                                        const newReadings = [...readings];
+                                        newReadings[index] = { ...reading, current: parseFloat(e.target.value) || 0 };
+                                        setEditedData({
+                                          ...editedData,
+                                          extracted_data: {
+                                            ...editedData.extracted_data,
+                                            meter_readings: newReadings
+                                          }
+                                        });
+                                      }}
+                                    />
+                                  </div>
+                                  <div className="space-y-2">
+                                    <Label className="text-xs">Consumption (kWh)</Label>
+                                    <Input
+                                      type="number"
+                                      step="0.01"
+                                      value={reading.consumption_kwh || ''}
+                                      onChange={(e) => {
+                                        const newReadings = [...readings];
+                                        newReadings[index] = { ...reading, consumption_kwh: parseFloat(e.target.value) || 0 };
+                                        setEditedData({
+                                          ...editedData,
+                                          extracted_data: {
+                                            ...editedData.extracted_data,
+                                            meter_readings: newReadings
+                                          }
+                                        });
+                                      }}
+                                    />
+                                  </div>
+                                </div>
+                                {readings.length > 1 && (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="flex-shrink-0 mt-8"
+                                    onClick={() => {
+                                      const newReadings = readings.filter((_: any, i: number) => i !== index);
+                                      setEditedData({
+                                        ...editedData,
+                                        extracted_data: {
+                                          ...editedData.extracted_data,
+                                          meter_readings: newReadings
+                                        }
+                                      });
+                                    }}
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </Button>
+                                )}
+                              </div>
+                            ));
+                          })()}
                         </div>
                       </div>
                     )}
