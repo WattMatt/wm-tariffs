@@ -69,6 +69,9 @@ export default function PdfImportDialog() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [municipalities, setMunicipalities] = useState<MunicipalityProgress[]>([]);
   const [currentMunicipality, setCurrentMunicipality] = useState<string | null>(null);
+  const [extractionDialogOpen, setExtractionDialogOpen] = useState(false);
+  const [extractionStep, setExtractionStep] = useState<"extract" | "review" | "save" | "complete">("extract");
+  const [currentExtractionIndex, setCurrentExtractionIndex] = useState<number | null>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -1180,6 +1183,7 @@ export default function PdfImportDialog() {
   };
 
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         <Button className="gap-2">
@@ -1287,14 +1291,16 @@ export default function PdfImportDialog() {
                             {municipality.status === 'pending' && (
                               <>
                                 <Button
-                                  onClick={() => handleExtractWithAI(municipality.name, index)}
+                                  onClick={() => {
+                                    setCurrentExtractionIndex(index);
+                                    setExtractionDialogOpen(true);
+                                    setExtractionStep("extract");
+                                  }}
                                   disabled={currentMunicipality !== null || isProcessing}
                                   size="sm"
                                   variant="default"
-                                  className="gap-2"
                                 >
-                                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg>
-                                  AI Extract
+                                  Extract
                                 </Button>
                                 <Button
                                   onClick={() => handleExtractAndSave(municipality.name, index)}
@@ -1343,5 +1349,114 @@ export default function PdfImportDialog() {
         </div>
       </DialogContent>
     </Dialog>
+
+    {/* Extraction Process Dialog */}
+    <Dialog open={extractionDialogOpen} onOpenChange={setExtractionDialogOpen}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>
+            Extracting Tariff Data
+          </DialogTitle>
+          <DialogDescription>
+            {currentExtractionIndex !== null && municipalities[currentExtractionIndex] && (
+              <>Processing tariff data for {municipalities[currentExtractionIndex].name}</>
+            )}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-6">
+          <ExtractionSteps currentStep={extractionStep} />
+
+          <div className="border rounded-lg p-6">
+            {extractionStep === "extract" && (
+              <div className="text-center space-y-4">
+                <Loader2 className="w-12 h-12 animate-spin mx-auto text-primary" />
+                <div>
+                  <h3 className="font-semibold mb-2">Extracting Data with AI</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Analyzing tariff document and extracting structured data...
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {extractionStep === "review" && (
+              <div className="text-center space-y-4">
+                <CheckCircle2 className="w-12 h-12 mx-auto text-green-600" />
+                <div>
+                  <h3 className="font-semibold mb-2">Data Extracted Successfully</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Tariff structures and charges have been identified
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {extractionStep === "save" && (
+              <div className="text-center space-y-4">
+                <Loader2 className="w-12 h-12 animate-spin mx-auto text-primary" />
+                <div>
+                  <h3 className="font-semibold mb-2">Saving to Database</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Storing tariff structures, blocks, charges, and TOU periods...
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {extractionStep === "complete" && (
+              <div className="text-center space-y-4">
+                <CheckCircle2 className="w-12 h-12 mx-auto text-green-600" />
+                <div>
+                  <h3 className="font-semibold mb-2">Complete!</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Tariff data has been successfully saved
+                  </p>
+                </div>
+                <Button
+                  onClick={() => {
+                    setExtractionDialogOpen(false);
+                    setExtractionStep("extract");
+                    setCurrentExtractionIndex(null);
+                  }}
+                  className="mt-4"
+                >
+                  Close
+                </Button>
+              </div>
+            )}
+          </div>
+
+          {extractionStep === "extract" && (
+            <Button
+              onClick={async () => {
+                if (currentExtractionIndex !== null) {
+                  setExtractionStep("review");
+                  setTimeout(async () => {
+                    setExtractionStep("save");
+                    await handleExtractWithAI(municipalities[currentExtractionIndex].name, currentExtractionIndex);
+                    setTimeout(() => {
+                      setExtractionStep("complete");
+                    }, 1000);
+                  }, 1500);
+                }
+              }}
+              disabled={isProcessing}
+              className="w-full"
+            >
+              {isProcessing ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                "Start Extraction"
+              )}
+            </Button>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
