@@ -41,6 +41,7 @@ Return the data in a structured format.`
 - Consumption in kWh
 - Shop number
 - Tenant name
+- Account reference number
 - Tenant information
 Return the data in a structured format.`;
 
