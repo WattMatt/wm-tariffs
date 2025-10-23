@@ -470,7 +470,7 @@ export default function MunicipalityExtractionDialog({
                     maxScale={4}
                     wheel={{
                       step: 0.1,
-                      wheelDisabled: false,
+                      wheelDisabled: selectionMode,
                       touchPadDisabled: false,
                       activationKeys: ["Control"]
                     }}
@@ -478,10 +478,14 @@ export default function MunicipalityExtractionDialog({
                       disabled: selectionMode || hasSelection,
                       velocityDisabled: true
                     }}
+                    disabled={selectionMode}
                   >
                     <TransformComponent
                       wrapperClass="w-full h-full overflow-auto"
                       contentClass="w-full h-full flex items-center justify-center"
+                      wrapperStyle={{ 
+                        pointerEvents: selectionMode ? 'none' : 'auto' 
+                      }}
                     >
                       <div 
                         ref={canvasContainerRef}
@@ -508,9 +512,19 @@ export default function MunicipalityExtractionDialog({
               </CardContent>
               <div className="border-t p-3 space-y-2">
                 {selectionMode && (
-                  <p className="text-xs text-muted-foreground text-center mb-2">
-                    Click and drag to select a region
-                  </p>
+                  <>
+                    <p className="text-xs text-muted-foreground text-center mb-2">
+                      Click and drag to select a region
+                    </p>
+                    <Button
+                      size="sm"
+                      onClick={handleCancelSelection}
+                      variant="outline"
+                      className="w-full"
+                    >
+                      Cancel Selection
+                    </Button>
+                  </>
                 )}
                 {!selectionMode && !hasSelection && (
                   <Button
