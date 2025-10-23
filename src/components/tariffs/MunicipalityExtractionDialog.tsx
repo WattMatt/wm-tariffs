@@ -185,17 +185,23 @@ export default function MunicipalityExtractionDialog({
       const evt = opt.e as MouseEvent;
       const target = opt.target;
       
-      console.log('Mouse down - selectionMode:', selectionModeRef.current, 'button:', evt.button);
+      // Use ref to get current selection mode value
+      const isInSelectionMode = selectionModeRef.current;
+      console.log('Mouse down - selectionModeRef.current:', isInSelectionMode, 'button:', evt.button, 'target type:', target?.type);
       
       // SELECTION MODE: Handle two-click region drawing
-      if (selectionModeRef.current && evt.button === 0) {
+      if (isInSelectionMode && evt.button === 0) {
+        console.log('Inside selection mode handler');
         // Only process clicks on empty canvas or the image
         const isInteractiveObject = target && target.type !== 'image';
-        if (isInteractiveObject) return;
+        if (isInteractiveObject) {
+          console.log('Clicked on interactive object, ignoring');
+          return;
+        }
         
         const pointer = canvas.getPointer(opt.e);
         
-        console.log('Selection click at:', pointer);
+        console.log('Selection click at:', pointer, 'drawStartPointRef:', drawStartPointRef.current);
         
         // First click - set start point
         if (!drawStartPointRef.current) {
