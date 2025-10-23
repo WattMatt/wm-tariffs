@@ -10,7 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { FileText, Upload, Loader2, Download, Trash2, Eye, ZoomIn, ZoomOut, Maximize2, GripVertical, Plus, X, Sparkles } from "lucide-react";
+import { FileText, Upload, Loader2, Download, Trash2, Eye, ZoomIn, ZoomOut, Maximize2, GripVertical, Plus, X, Sparkles, RefreshCw } from "lucide-react";
 import { format } from "date-fns";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { pdfjs } from 'react-pdf';
@@ -56,6 +56,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
   const [editedData, setEditedData] = useState<any>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
+  const [isBulkExtracting, setIsBulkExtracting] = useState(false);
 
   useEffect(() => {
     fetchDocuments();
@@ -371,6 +372,71 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
     }
   };
 
+  const handleBulkRescan = async () => {
+    if (selectedDocuments.size === 0) return;
+
+    const docsToRescan = documents.filter(doc => selectedDocuments.has(doc.id));
+    
+    if (!confirm(`Re-scan ${docsToRescan.length} document(s) with AI extraction? This will update their extracted data.`)) return;
+
+    setIsBulkExtracting(true);
+    setUploadProgress({ current: 0, total: docsToRescan.length, action: 'Re-scanning' });
+
+    let successCount = 0;
+    let failCount = 0;
+
+    try {
+      for (let i = 0; i < docsToRescan.length; i++) {
+        const doc = docsToRescan[i];
+        setUploadProgress({ current: i + 1, total: docsToRescan.length, action: 'Re-scanning' });
+
+        try {
+          // Get signed URL for the document
+          const pathToProcess = doc.converted_image_path || doc.file_path;
+          const { data: urlData } = await supabase.storage
+            .from("site-documents")
+            .createSignedUrl(pathToProcess, 3600);
+
+          if (!urlData?.signedUrl) {
+            throw new Error("Failed to get document URL");
+          }
+
+          // Call AI extraction
+          const { error: extractionError } = await supabase.functions.invoke("extract-document-data", {
+            body: {
+              documentId: doc.id,
+              fileUrl: urlData.signedUrl,
+              documentType: doc.document_type
+            }
+          });
+
+          if (extractionError) throw extractionError;
+          
+          successCount++;
+        } catch (error) {
+          console.error(`Error rescanning ${doc.file_name}:`, error);
+          failCount++;
+        }
+      }
+
+      if (successCount > 0) {
+        toast.success(`Successfully re-scanned ${successCount} document(s)`);
+      }
+      if (failCount > 0) {
+        toast.error(`Failed to re-scan ${failCount} document(s)`);
+      }
+
+      setSelectedDocuments(new Set());
+      fetchDocuments();
+    } catch (error) {
+      console.error("Bulk rescan error:", error);
+      toast.error("Failed to complete bulk re-scan");
+    } finally {
+      setIsBulkExtracting(false);
+      setUploadProgress({ current: 0, total: 0, action: '' });
+    }
+  };
+
   const handleViewDocument = async (doc: SiteDocument) => {
     setViewingDocument(doc);
     setViewingExtraction(doc.document_extractions?.[0] || null);
@@ -569,12 +635,36 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                 <span className="text-sm font-medium">
                   {selectedDocuments.size} document(s) selected
                 </span>
+                {isBulkExtracting && (
+                  <span className="text-sm text-muted-foreground">
+                    ({uploadProgress.current}/{uploadProgress.total} {uploadProgress.action})
+                  </span>
+                )}
               </div>
               <div className="flex gap-2">
                 <Button
                   variant="outline"
                   size="sm"
+                  onClick={handleBulkRescan}
+                  disabled={isBulkExtracting}
+                >
+                  {isBulkExtracting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Re-scanning...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="w-4 h-4 mr-2" />
+                      Rescan Selected
+                    </>
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={handleBulkDownload}
+                  disabled={isBulkExtracting}
                 >
                   <Download className="w-4 h-4 mr-2" />
                   Download Selected
@@ -583,6 +673,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                   variant="destructive"
                   size="sm"
                   onClick={handleBulkDelete}
+                  disabled={isBulkExtracting}
                 >
                   <Trash2 className="w-4 h-4 mr-2" />
                   Delete Selected
