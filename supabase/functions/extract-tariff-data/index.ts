@@ -11,23 +11,25 @@ serve(async (req) => {
   }
 
   try {
-    const { imageUrl, phase, municipalityName, cropRegion } = await req.json();
+    const { documentContent, phase, municipalityName, cropRegion } = await req.json();
     
-    if (!imageUrl) {
+    if (!documentContent) {
       return new Response(
-        JSON.stringify({ error: "Image URL is required" }),
+        JSON.stringify({ error: "Document content is required", success: false }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
+    console.log(`Processing ${phase} phase with text content (${documentContent.length} chars)`);
+
     // Phase 1: Identify province/municipality structure
     if (phase === "identify") {
-      return await identifyStructure(imageUrl);
+      return await identifyStructure(documentContent);
     }
     
     // Phase 2: Extract specific municipality tariffs
     if (phase === "extract" && municipalityName) {
-      return await extractMunicipalityTariffs(imageUrl, municipalityName, cropRegion);
+      return await extractMunicipalityTariffs(documentContent, municipalityName, cropRegion);
     }
     
     return new Response(
@@ -164,41 +166,30 @@ Return ONLY valid JSON, no markdown, no explanations.`;
   }
 }
 
-async function extractMunicipalityTariffs(imageUrl: string, municipalityName: string, cropRegion?: { x: number; y: number; width: number; height: number }) {
+async function extractMunicipalityTariffs(documentContent: string, municipalityName: string, cropRegion?: { x: number; y: number; width: number; height: number }) {
   const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
   if (!LOVABLE_API_KEY) {
     throw new Error("LOVABLE_API_KEY is not configured");
   }
 
-  console.log(`Phase 2: Extracting tariffs for ${municipalityName} from image`);
-  console.log(`Image URL: ${imageUrl}`);
+  console.log(`Phase 2: Extracting tariffs for ${municipalityName} from text (${documentContent.length} chars)`);
   if (cropRegion) {
-    console.log(`Using crop region:`, cropRegion);
+    console.log(`Note: crop region specified but not applicable for text extraction:`, cropRegion);
   }
 
-  const systemPrompt = `Extract electricity tariff data ONLY for: "${municipalityName}" by analyzing the document IMAGE.
-
-VISUAL ANALYSIS:
-- Identify tables and their visual structure
-- Read values from table cells
-- Distinguish between headers and data rows
-- Look for tiered pricing blocks (usually in separate rows)
-- Find charge types in leftmost columns
-- Extract amounts from rightmost columns
-- Identify TOU periods by time ranges in tables
-- Pay attention to borders, formatting, and layout
+  const systemPrompt = `Extract electricity tariff data ONLY for: "${municipalityName}" from the document text.
 
 CRITICAL RULES:
 1. Extract ONLY tariffs for "${municipalityName}" - ignore all other municipalities
 2. Each municipality has multiple tariff categories (Domestic, Commercial, Industrial, etc.)
-3. Look for section headers indicating tariff types (check for bold/larger text)
+3. Look for section headers indicating tariff types
 4. Extract ALL charges: energy charges (c/kWh), capacity charges (R/kVA), service charges (R/day)
 5. Handle TOU periods if present (Peak/Standard/Off-peak with times)
 6. Handle blocks for domestic tariffs (0-600 kWh, 600+ kWh, etc.)
 
 SEARCH PATTERN:
-- Find "${municipalityName}" header (look for bold/large text)
-- Extract all tariff sections until next municipality
+- Find "${municipalityName}" header in text
+- Extract all tariff sections until next municipality appears
 - Each tariff has: name, type, charges, blocks/TOU periods
 
 OUTPUT STRUCTURE:
@@ -262,24 +253,6 @@ EXTRACTION STRATEGY:
 
 Return ONLY valid JSON, no markdown.`;
 
-  let userMessage: any = {
-    role: "user",
-    content: [
-      {
-        type: "text",
-        text: cropRegion 
-          ? `Analyze the selected region of this tariff document and extract data for ${municipalityName}:`
-          : `Analyze this complete tariff document and extract data for ${municipalityName}:`
-      },
-      {
-        type: "image_url",
-        image_url: {
-          url: imageUrl
-        }
-      }
-    ]
-  };
-
   console.log("Calling Lovable AI gateway for extraction...");
   const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
@@ -291,7 +264,7 @@ Return ONLY valid JSON, no markdown.`;
       model: "google/gemini-2.5-pro",
       messages: [
         { role: "system", content: systemPrompt },
-        userMessage
+        { role: "user", content: `Document text to extract from:\n\n${documentContent.slice(0, 100000)}` }
       ],
     }),
   });
