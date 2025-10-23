@@ -30,6 +30,7 @@ interface SiteDocument {
   document_type: string;
   upload_date: string;
   extraction_status: string;
+  converted_image_path?: string | null;
   document_extractions: Array<{
     period_start: string;
     period_end: string;
@@ -49,6 +50,10 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
   const [isConvertingPdf, setIsConvertingPdf] = useState(false);
   const [selectedDocuments, setSelectedDocuments] = useState<Set<string>>(new Set());
   const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0, action: '' });
+  const [viewingDocument, setViewingDocument] = useState<SiteDocument | null>(null);
+  const [documentImageUrl, setDocumentImageUrl] = useState<string | null>(null);
+  const [editedData, setEditedData] = useState<any>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     fetchDocuments();
@@ -364,6 +369,80 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
     }
   };
 
+  const handleViewDocument = async (doc: SiteDocument) => {
+    setViewingDocument(doc);
+    setViewingExtraction(doc.document_extractions?.[0] || null);
+    
+    if (doc.document_extractions?.[0]) {
+      setEditedData({ ...doc.document_extractions[0] });
+    }
+
+    // Fetch the document image
+    try {
+      const pathToView = doc.converted_image_path || doc.file_path;
+      const { data } = await supabase.storage
+        .from("site-documents")
+        .createSignedUrl(pathToView, 3600);
+      
+      if (data?.signedUrl) {
+        setDocumentImageUrl(data.signedUrl);
+      }
+    } catch (error) {
+      console.error("Error fetching document image:", error);
+      toast.error("Failed to load document image");
+    }
+  };
+
+  const handleCloseDialog = () => {
+    setViewingDocument(null);
+    setViewingExtraction(null);
+    setDocumentImageUrl(null);
+    setEditedData(null);
+  };
+
+  const handleReset = () => {
+    if (viewingExtraction) {
+      setEditedData({ ...viewingExtraction });
+      toast.info("Changes reset");
+    }
+  };
+
+  const handleSave = async () => {
+    if (!editedData || !viewingDocument) return;
+
+    setIsSaving(true);
+    try {
+      const extraction = viewingDocument.document_extractions?.[0];
+      if (!extraction) {
+        toast.error("No extraction found");
+        return;
+      }
+
+      // Update the extraction in the database
+      const { error } = await supabase
+        .from("document_extractions")
+        .update({
+          period_start: editedData.period_start,
+          period_end: editedData.period_end,
+          total_amount: editedData.total_amount,
+          currency: editedData.currency,
+          extracted_data: editedData.extracted_data,
+        })
+        .eq("document_id", viewingDocument.id);
+
+      if (error) throw error;
+
+      toast.success("Changes saved successfully");
+      fetchDocuments();
+      handleCloseDialog();
+    } catch (error) {
+      console.error("Error saving changes:", error);
+      toast.error("Failed to save changes");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
     <>
       <Card>
@@ -538,17 +617,17 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                             {doc.document_extractions?.[0] && (
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => setViewingExtraction(doc.document_extractions[0])}
-                                  >
-                                    <Eye className="w-4 h-4" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>View extracted data</p>
-                                </TooltipContent>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleViewDocument(doc)}
+                                >
+                                  <Eye className="w-4 h-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>View data</p>
+                              </TooltipContent>
                               </Tooltip>
                             )}
                             <Tooltip>
@@ -591,73 +670,199 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
         </CardContent>
       </Card>
 
-      <Dialog open={!!viewingExtraction} onOpenChange={() => setViewingExtraction(null)}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+      <Dialog open={!!viewingDocument} onOpenChange={handleCloseDialog}>
+        <DialogContent className="max-w-7xl max-h-[90vh] overflow-hidden">
           <DialogHeader>
-            <DialogTitle>Extracted Data</DialogTitle>
+            <DialogTitle>Document Extraction</DialogTitle>
             <DialogDescription>
-              AI-extracted information from the document
+              Review and edit the AI-extracted information
             </DialogDescription>
           </DialogHeader>
-          {viewingExtraction && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-muted-foreground">Period Start</Label>
-                  <p className="font-medium">
-                    {format(new Date(viewingExtraction.period_start), "MMM dd, yyyy")}
-                  </p>
-                </div>
-                <div>
-                  <Label className="text-muted-foreground">Period End</Label>
-                  <p className="font-medium">
-                    {format(new Date(viewingExtraction.period_end), "MMM dd, yyyy")}
-                  </p>
-                </div>
-                <div>
-                  <Label className="text-muted-foreground">Total Amount</Label>
-                  <p className="font-medium text-lg">
-                    {viewingExtraction.currency} {viewingExtraction.total_amount.toLocaleString()}
-                  </p>
+          {viewingDocument && editedData && (
+            <div className="grid grid-cols-2 gap-6 h-[70vh]">
+              {/* Left side - Document Image */}
+              <div className="border rounded-lg overflow-hidden bg-muted/30">
+                <div className="h-full flex items-center justify-center">
+                  {documentImageUrl ? (
+                    <img 
+                      src={documentImageUrl} 
+                      alt={viewingDocument.file_name}
+                      className="max-w-full max-h-full object-contain"
+                    />
+                  ) : (
+                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                      <Loader2 className="w-8 h-8 animate-spin" />
+                      <p>Loading document...</p>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {(viewingExtraction.extracted_data?.shop_number || 
-                viewingExtraction.extracted_data?.tenant_name || 
-                viewingExtraction.extracted_data?.account_reference) && (
-                <div className="space-y-3 p-4 border rounded-lg">
-                  <Label className="text-muted-foreground">Extracted Details</Label>
-                  {viewingExtraction.extracted_data?.shop_number && (
-                    <div>
-                      <span className="text-sm text-muted-foreground">Shop Number:</span>
-                      <p className="font-medium">{viewingExtraction.extracted_data.shop_number}</p>
-                    </div>
-                  )}
-                  {viewingExtraction.extracted_data?.tenant_name && (
-                    <div>
-                      <span className="text-sm text-muted-foreground">Tenant Name:</span>
-                      <p className="font-medium">{viewingExtraction.extracted_data.tenant_name}</p>
-                    </div>
-                  )}
-                  {viewingExtraction.extracted_data?.account_reference && (
-                    <div>
-                      <span className="text-sm text-muted-foreground">Account Reference:</span>
-                      <p className="font-medium">{viewingExtraction.extracted_data.account_reference}</p>
-                    </div>
-                  )}
+              {/* Right side - Editable Data */}
+              <div className="overflow-y-auto space-y-4 pr-2">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Period Start</Label>
+                    <Input
+                      type="date"
+                      value={editedData.period_start || ''}
+                      onChange={(e) => setEditedData({ ...editedData, period_start: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Period End</Label>
+                    <Input
+                      type="date"
+                      value={editedData.period_end || ''}
+                      onChange={(e) => setEditedData({ ...editedData, period_end: e.target.value })}
+                    />
+                  </div>
                 </div>
-              )}
 
-              {viewingExtraction.extracted_data && (
-                <div>
-                  <Label className="text-muted-foreground">All Extracted Data</Label>
-                  <pre className="mt-2 p-4 bg-muted rounded-lg text-sm overflow-x-auto">
-                    {JSON.stringify(viewingExtraction.extracted_data, null, 2)}
-                  </pre>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Currency</Label>
+                    <Input
+                      value={editedData.currency || ''}
+                      onChange={(e) => setEditedData({ ...editedData, currency: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Total Amount</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={editedData.total_amount || ''}
+                      onChange={(e) => setEditedData({ ...editedData, total_amount: parseFloat(e.target.value) })}
+                    />
+                  </div>
                 </div>
-              )}
+
+                {editedData.extracted_data && (
+                  <div className="space-y-4 p-4 border rounded-lg">
+                    <Label className="text-base font-semibold">Additional Details</Label>
+                    
+                    {editedData.extracted_data.shop_number !== undefined && (
+                      <div className="space-y-2">
+                        <Label>Shop Number</Label>
+                        <Input
+                          value={editedData.extracted_data.shop_number || ''}
+                          onChange={(e) => setEditedData({
+                            ...editedData,
+                            extracted_data: { ...editedData.extracted_data, shop_number: e.target.value }
+                          })}
+                        />
+                      </div>
+                    )}
+
+                    {editedData.extracted_data.tenant_name !== undefined && (
+                      <div className="space-y-2">
+                        <Label>Tenant Name</Label>
+                        <Input
+                          value={editedData.extracted_data.tenant_name || ''}
+                          onChange={(e) => setEditedData({
+                            ...editedData,
+                            extracted_data: { ...editedData.extracted_data, tenant_name: e.target.value }
+                          })}
+                        />
+                      </div>
+                    )}
+
+                    {editedData.extracted_data.account_reference !== undefined && (
+                      <div className="space-y-2">
+                        <Label>Account Reference</Label>
+                        <Input
+                          value={editedData.extracted_data.account_reference || ''}
+                          onChange={(e) => setEditedData({
+                            ...editedData,
+                            extracted_data: { ...editedData.extracted_data, account_reference: e.target.value }
+                          })}
+                        />
+                      </div>
+                    )}
+
+                    {editedData.extracted_data.meter_readings && (
+                      <div className="space-y-3">
+                        <Label className="text-sm font-medium">Meter Readings</Label>
+                        <div className="grid grid-cols-3 gap-3">
+                          <div className="space-y-2">
+                            <Label className="text-xs">Previous</Label>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              value={editedData.extracted_data.meter_readings.previous || ''}
+                              onChange={(e) => setEditedData({
+                                ...editedData,
+                                extracted_data: {
+                                  ...editedData.extracted_data,
+                                  meter_readings: {
+                                    ...editedData.extracted_data.meter_readings,
+                                    previous: parseFloat(e.target.value)
+                                  }
+                                }
+                              })}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-xs">Current</Label>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              value={editedData.extracted_data.meter_readings.current || ''}
+                              onChange={(e) => setEditedData({
+                                ...editedData,
+                                extracted_data: {
+                                  ...editedData.extracted_data,
+                                  meter_readings: {
+                                    ...editedData.extracted_data.meter_readings,
+                                    current: parseFloat(e.target.value)
+                                  }
+                                }
+                              })}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-xs">Consumption (kWh)</Label>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              value={editedData.extracted_data.meter_readings.consumption_kwh || ''}
+                              onChange={(e) => setEditedData({
+                                ...editedData,
+                                extracted_data: {
+                                  ...editedData.extracted_data,
+                                  meter_readings: {
+                                    ...editedData.extracted_data.meter_readings,
+                                    consumption_kwh: parseFloat(e.target.value)
+                                  }
+                                }
+                              })}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           )}
+          
+          <div className="flex justify-end gap-2 pt-4 border-t">
+            <Button variant="outline" onClick={handleReset}>
+              Reset
+            </Button>
+            <Button onClick={handleSave} disabled={isSaving}>
+              {isSaving ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                'Save'
+              )}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </>
