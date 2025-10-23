@@ -7,8 +7,9 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { FileCheck2, AlertCircle, CheckCircle2, DollarSign } from "lucide-react";
+import { FileCheck2, AlertCircle, CheckCircle2, DollarSign, Eye } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import TariffDetailsDialog from "@/components/tariffs/TariffDetailsDialog";
 
 interface TariffAssignmentTabProps {
   siteId: string;
@@ -51,6 +52,7 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
   const [selectedTariffs, setSelectedTariffs] = useState<{ [meterId: string]: string }>({});
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [viewingTariffId, setViewingTariffId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchSiteData();
@@ -350,8 +352,8 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
                   key={tariff.id}
                   className="p-4 border rounded-lg hover:border-primary/50 transition-colors"
                 >
-                  <div className="flex items-start justify-between">
-                    <div className="space-y-1">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="space-y-1 flex-1">
                       <h4 className="font-semibold">{tariff.name}</h4>
                       {tariff.description && (
                         <p className="text-sm text-muted-foreground">{tariff.description}</p>
@@ -363,19 +365,36 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
                         )}
                         {tariff.uses_tou && <Badge variant="secondary">Time-of-Use</Badge>}
                       </div>
+                      <div className="text-sm text-muted-foreground pt-1">
+                        <p>
+                          Effective: {new Date(tariff.effective_from).toLocaleDateString()}
+                          {tariff.effective_to && ` - ${new Date(tariff.effective_to).toLocaleDateString()}`}
+                        </p>
+                      </div>
                     </div>
-                    <div className="text-right text-sm text-muted-foreground">
-                      <p>
-                        Effective: {new Date(tariff.effective_from).toLocaleDateString()}
-                        {tariff.effective_to && ` - ${new Date(tariff.effective_to).toLocaleDateString()}`}
-                      </p>
-                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setViewingTariffId(tariff.id)}
+                      className="shrink-0"
+                    >
+                      <Eye className="w-4 h-4 mr-2" />
+                      View Details
+                    </Button>
                   </div>
                 </div>
               ))}
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {viewingTariffId && (
+        <TariffDetailsDialog
+          tariffId={viewingTariffId}
+          tariffName={tariffStructures.find(t => t.id === viewingTariffId)?.name || "Tariff Details"}
+          onClose={() => setViewingTariffId(null)}
+        />
       )}
     </div>
   );
