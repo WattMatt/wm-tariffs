@@ -565,11 +565,22 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
           {viewingDocument && (
             <div className="overflow-y-auto max-h-[calc(90vh-120px)]">
               {viewingDocument.isPdf ? (
-                <iframe
-                  src={viewingDocument.url}
-                  className="w-full h-[calc(90vh-120px)] border-0"
-                  title={viewingDocument.fileName}
-                />
+                <div className="flex flex-col gap-4">
+                  <div className="flex justify-center">
+                    <Button
+                      onClick={() => window.open(viewingDocument.url, '_blank')}
+                      className="gap-2"
+                    >
+                      <Download className="w-4 h-4" />
+                      Open PDF in New Tab
+                    </Button>
+                  </div>
+                  <embed
+                    src={viewingDocument.url}
+                    type="application/pdf"
+                    className="w-full h-[calc(90vh-200px)] border rounded-lg"
+                  />
+                </div>
               ) : (
                 <img 
                   src={viewingDocument.url} 
