@@ -166,153 +166,156 @@ export default function MunicipalityExtractionDialog({
       opt.e.stopPropagation();
     });
 
-    // Mouse down - handle selection drawing (two-click approach)
+    // Panning variables
+    let isPanningLocal = false;
+    let lastX = 0;
+    let lastY = 0;
+
+    // Mouse down - handle selection drawing (two-click approach) and panning
     canvas.on('mouse:down', (opt) => {
-      if (!selectionMode) return;
-      
       const evt = opt.e as MouseEvent;
       const target = opt.target;
       
-      // Only process clicks on empty canvas or the image
-      const isInteractiveObject = target && target.type !== 'image';
-      if (isInteractiveObject) return;
-      
-      const pointer = canvas.getPointer(opt.e);
-      
-      // First click - set start point
-      if (!drawStartPointRef.current) {
-        drawStartPointRef.current = { x: pointer.x, y: pointer.y };
+      // SELECTION MODE: Handle two-click region drawing
+      if (selectionMode && evt.button === 0) {
+        // Only process clicks on empty canvas or the image
+        const isInteractiveObject = target && target.type !== 'image';
+        if (isInteractiveObject) return;
         
-        // Show a marker at start point
-        const marker = new Circle({
-          left: pointer.x,
-          top: pointer.y,
-          radius: 5,
-          fill: '#3b82f6',
-          stroke: '#ffffff',
+        const pointer = canvas.getPointer(opt.e);
+        
+        // First click - set start point
+        if (!drawStartPointRef.current) {
+          drawStartPointRef.current = { x: pointer.x, y: pointer.y };
+          
+          // Show a marker at start point
+          const marker = new Circle({
+            left: pointer.x,
+            top: pointer.y,
+            radius: 5,
+            fill: '#3b82f6',
+            stroke: '#ffffff',
+            strokeWidth: 2,
+            selectable: false,
+            evented: false,
+            originX: 'center',
+            originY: 'center',
+          });
+          
+          canvas.add(marker);
+          startMarkerRef.current = marker;
+          canvas.renderAll();
+          toast.info('Click again to set the end point');
+          evt.preventDefault();
+          evt.stopPropagation();
+          return;
+        }
+        
+        // Second click - create rectangle and extract
+        const startPoint = drawStartPointRef.current;
+        
+        const left = Math.min(startPoint.x, pointer.x);
+        const top = Math.min(startPoint.y, pointer.y);
+        const width = Math.abs(pointer.x - startPoint.x);
+        const height = Math.abs(pointer.y - startPoint.y);
+        
+        if (width < 10 || height < 10) {
+          toast.error('Selection too small');
+          // Clean up
+          if (startMarkerRef.current) {
+            canvas.remove(startMarkerRef.current);
+            startMarkerRef.current = null;
+          }
+          drawStartPointRef.current = null;
+          return;
+        }
+        
+        const rect = new FabricRect({
+          left,
+          top,
+          width,
+          height,
+          fill: 'rgba(59, 130, 246, 0.2)',
+          stroke: '#3b82f6',
           strokeWidth: 2,
-          selectable: false,
-          evented: false,
-          originX: 'center',
-          originY: 'center',
+          selectable: true,
+          evented: true,
         });
         
-        canvas.add(marker);
-        startMarkerRef.current = marker;
+        canvas.add(rect);
+        selectionRectRef.current = rect;
         canvas.renderAll();
-        toast.info('Click again to set the end point');
+        
+        // Clean up marker
+        if (startMarkerRef.current) {
+          canvas.remove(startMarkerRef.current);
+          startMarkerRef.current = null;
+        }
+        
+        // Exit selection mode
+        setSelectionMode(false);
+        drawStartPointRef.current = null;
+        
+        // Trigger extraction
+        handleExtractFromRegion(canvas, rect);
+        
         evt.preventDefault();
         evt.stopPropagation();
         return;
       }
       
-      // Second click - create rectangle and extract
-      const startPoint = drawStartPointRef.current;
-      
-      const left = Math.min(startPoint.x, pointer.x);
-      const top = Math.min(startPoint.y, pointer.y);
-      const width = Math.abs(pointer.x - startPoint.x);
-      const height = Math.abs(pointer.y - startPoint.y);
-      
-      if (width < 10 || height < 10) {
-        toast.error('Selection too small');
-        // Clean up
-        if (startMarkerRef.current) {
-          canvas.remove(startMarkerRef.current);
-          startMarkerRef.current = null;
+      // PANNING: Only allow when NOT in selection mode
+      if (!selectionMode && !target) {
+        if (evt.button === 0 || evt.button === 1 || evt.button === 2) {
+          isPanningLocal = true;
+          lastX = evt.clientX;
+          lastY = evt.clientY;
+          canvas.selection = false;
         }
-        drawStartPointRef.current = null;
+      }
+    });
+
+    // Mouse move - show preview rectangle and handle panning
+    canvas.on('mouse:move', (opt) => {
+      // SELECTION MODE: Show preview rectangle
+      if (selectionMode && drawStartPointRef.current && !selectionRectRef.current) {
+        const pointer = canvas.getPointer(opt.e);
+        const startPoint = drawStartPointRef.current;
+        
+        // Remove old preview
+        const objects = canvas.getObjects();
+        const oldPreview = objects.find(obj => (obj as any).isPreview);
+        if (oldPreview) {
+          canvas.remove(oldPreview);
+        }
+        
+        // Create preview rectangle
+        const left = Math.min(startPoint.x, pointer.x);
+        const top = Math.min(startPoint.y, pointer.y);
+        const width = Math.abs(pointer.x - startPoint.x);
+        const height = Math.abs(pointer.y - startPoint.y);
+        
+        const preview = new FabricRect({
+          left,
+          top,
+          width,
+          height,
+          fill: 'rgba(59, 130, 246, 0.1)',
+          stroke: '#3b82f6',
+          strokeWidth: 1,
+          strokeDashArray: [5, 5],
+          selectable: false,
+          evented: false,
+        });
+        
+        (preview as any).isPreview = true;
+        canvas.add(preview);
+        canvas.renderAll();
         return;
       }
       
-      const rect = new FabricRect({
-        left,
-        top,
-        width,
-        height,
-        fill: 'rgba(59, 130, 246, 0.2)',
-        stroke: '#3b82f6',
-        strokeWidth: 2,
-        selectable: true,
-        evented: true,
-      });
-      
-      canvas.add(rect);
-      selectionRectRef.current = rect;
-      canvas.renderAll();
-      
-      // Clean up marker
-      if (startMarkerRef.current) {
-        canvas.remove(startMarkerRef.current);
-        startMarkerRef.current = null;
-      }
-      
-      // Exit selection mode
-      setSelectionMode(false);
-      drawStartPointRef.current = null;
-      
-      // Trigger extraction
-      handleExtractFromRegion(canvas, rect);
-      
-      evt.preventDefault();
-      evt.stopPropagation();
-    });
-
-    // Mouse move - show preview rectangle
-    canvas.on('mouse:move', (opt) => {
-      if (!selectionMode || !drawStartPointRef.current || selectionRectRef.current) return;
-      
-      const pointer = canvas.getPointer(opt.e);
-      const startPoint = drawStartPointRef.current;
-      
-      // Remove old preview
-      const objects = canvas.getObjects();
-      const oldPreview = objects.find(obj => (obj as any).isPreview);
-      if (oldPreview) {
-        canvas.remove(oldPreview);
-      }
-      
-      // Create preview rectangle
-      const left = Math.min(startPoint.x, pointer.x);
-      const top = Math.min(startPoint.y, pointer.y);
-      const width = Math.abs(pointer.x - startPoint.x);
-      const height = Math.abs(pointer.y - startPoint.y);
-      
-      const preview = new FabricRect({
-        left,
-        top,
-        width,
-        height,
-        fill: 'rgba(59, 130, 246, 0.1)',
-        stroke: '#3b82f6',
-        strokeWidth: 1,
-        strokeDashArray: [5, 5],
-        selectable: false,
-        evented: false,
-      });
-      
-      (preview as any).isPreview = true;
-      canvas.add(preview);
-      canvas.renderAll();
-    });
-
-    // Pan with middle mouse or space+drag
-    let isPanning = false;
-    let lastX = 0;
-    let lastY = 0;
-
-    canvas.on('mouse:down', (opt) => {
-      const evt = opt.e as MouseEvent;
-      if (evt.button === 1 || (evt.button === 0 && evt.shiftKey)) {
-        isPanning = true;
-        lastX = evt.clientX;
-        lastY = evt.clientY;
-        canvas.selection = false;
-      }
-    });
-
-    canvas.on('mouse:move', (opt) => {
-      if (isPanning) {
+      // PANNING: Only when not in selection mode
+      if (isPanningLocal && !selectionMode) {
         const evt = opt.e as MouseEvent;
         const vpt = canvas.viewportTransform;
         if (vpt) {
@@ -325,9 +328,12 @@ export default function MunicipalityExtractionDialog({
       }
     });
 
+    // Mouse up - clean up panning state
     canvas.on('mouse:up', () => {
-      isPanning = false;
-      canvas.selection = true;
+      if (isPanningLocal) {
+        isPanningLocal = false;
+        canvas.selection = true;
+      }
     });
 
     setFabricCanvas(canvas);
