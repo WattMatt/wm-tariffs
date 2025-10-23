@@ -92,52 +92,59 @@ export default function TariffExtractionDialog({
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
 
-  // Convert PDF to image for display
+  // Convert PDF to image for display (all pages stitched vertically)
   const convertPdfToImage = async (pdfFile: File): Promise<string> => {
     setIsConvertingPdf(true);
     try {
       console.log('Converting PDF to image:', pdfFile.name);
       
-      // Read the PDF file as array buffer
       const arrayBuffer = await pdfFile.arrayBuffer();
-      
-      // Load the PDF
       const loadingTask = pdfjs.getDocument(arrayBuffer);
       const pdf = await loadingTask.promise;
       
-      console.log('PDF loaded, converting first page to image...');
+      console.log(`PDF loaded with ${pdf.numPages} pages, converting all pages...`);
       
-      // Get the first page
-      const page = await pdf.getPage(1);
-      
-      // Set scale for high quality
       const scale = 2.0;
-      const viewport = page.getViewport({ scale });
+      const pageCanvases: HTMLCanvasElement[] = [];
+      let maxWidth = 0;
+      let totalHeight = 0;
       
-      // Create canvas
-      const canvas = document.createElement('canvas');
-      const context = canvas.getContext('2d');
-      
-      if (!context) {
-        throw new Error('Could not get canvas context');
+      // Render all pages
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+        const page = await pdf.getPage(pageNum);
+        const viewport = page.getViewport({ scale });
+        
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        
+        if (!context) throw new Error('Could not get canvas context');
+        
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+        
+        await page.render({ canvasContext: context, viewport }).promise;
+        
+        pageCanvases.push(canvas);
+        maxWidth = Math.max(maxWidth, viewport.width);
+        totalHeight += viewport.height;
       }
       
-      canvas.height = viewport.height;
-      canvas.width = viewport.width;
+      // Stitch all pages vertically
+      const stitchedCanvas = document.createElement('canvas');
+      stitchedCanvas.width = maxWidth;
+      stitchedCanvas.height = totalHeight;
+      const stitchedContext = stitchedCanvas.getContext('2d');
       
-      // Render PDF page to canvas
-      const renderContext = {
-        canvasContext: context,
-        viewport: viewport,
-        canvas: canvas
-      };
+      if (!stitchedContext) throw new Error('Could not get stitched canvas context');
       
-      await page.render(renderContext).promise;
+      let currentY = 0;
+      for (const pageCanvas of pageCanvases) {
+        stitchedContext.drawImage(pageCanvas, 0, currentY);
+        currentY += pageCanvas.height;
+      }
       
-      console.log('PDF rendered to canvas, converting to data URL...');
-      
-      // Convert canvas to data URL
-      return canvas.toDataURL('image/png', 1.0);
+      console.log('All pages stitched, converting to data URL...');
+      return stitchedCanvas.toDataURL('image/png', 1.0);
     } catch (error) {
       console.error('Error converting PDF to image:', error);
       toast.error('Failed to convert PDF to image');
@@ -280,12 +287,12 @@ export default function TariffExtractionDialog({
     }
   }, [selectionMode, fabricCanvas]);
 
-  // Start extraction when dialog opens (but not in selection mode)
+  // Start extraction automatically when dialog opens
   useEffect(() => {
-    if (open && !isExtracting && !extractedData && !selectionMode) {
-      // Don't auto-extract, wait for user to click Extract
+    if (open && !isExtracting && !extractedData && !selectionMode && (convertedPdfImage || fileUrl)) {
+      handleExtract();
     }
-  }, [open]);
+  }, [open, convertedPdfImage, fileUrl]);
 
   const handleExtract = async () => {
     if (selectionMode) {
@@ -477,75 +484,20 @@ export default function TariffExtractionDialog({
                     <p className="text-sm text-muted-foreground">Converting PDF...</p>
                   </div>
                 ) : convertedPdfImage ? (
-                  <div className="h-full flex items-center justify-center">
-                    <TransformWrapper
-                      initialScale={1}
-                      minScale={0.5}
-                      maxScale={4}
-                      centerOnInit
-                    >
-                      {({ zoomIn, zoomOut, resetTransform }) => (
-                        <>
-                          <div className="absolute top-4 right-4 z-10 flex flex-col gap-2">
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              onClick={() => zoomIn()}
-                              className="shadow-lg"
-                            >
-                              <ZoomIn className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              onClick={() => zoomOut()}
-                              className="shadow-lg"
-                            >
-                              <ZoomOut className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              onClick={() => resetTransform()}
-                              className="shadow-lg"
-                            >
-                              <Maximize2 className="w-4 h-4" />
-                            </Button>
-                          </div>
-                          <TransformComponent
-                            wrapperClass="!w-full !h-full"
-                            contentClass="!w-full !h-full flex items-center justify-center"
-                          >
-                            <div className="relative" ref={canvasContainerRef}>
-                              <img 
-                                ref={imageRef}
-                                src={convertedPdfImage} 
-                                alt="PDF Preview" 
-                                className="max-w-full max-h-full object-contain"
-                                draggable={false}
-                                onLoad={() => {
-                                  // Reinitialize Fabric canvas when image loads
-                                  if (canvasContainerRef.current && imageRef.current) {
-                                    const rect = imageRef.current.getBoundingClientRect();
-                                    if (fabricCanvas) {
-                                      fabricCanvas.setDimensions({ width: rect.width, height: rect.height });
-                                    }
-                                  }
-                                }}
-                              />
-                              <canvas 
-                                className="absolute top-0 left-0"
-                                style={{ 
-                                  cursor: selectionMode ? 'crosshair' : 'default',
-                                  pointerEvents: selectionMode ? 'auto' : 'none'
-                                }}
-                              />
-                            </div>
-                          </TransformComponent>
-                        </>
-                      )}
-                    </TransformWrapper>
-                  </div>
+                  <ScrollArea className="h-full w-full">
+                    <div ref={canvasContainerRef} className="relative inline-block">
+                      <img
+                        ref={imageRef}
+                        src={convertedPdfImage}
+                        alt="PDF Preview"
+                        className="w-full"
+                      />
+                      <canvas
+                        className="absolute top-0 left-0 pointer-events-auto"
+                        style={{ cursor: selectionMode ? 'crosshair' : 'default' }}
+                      />
+                    </div>
+                  </ScrollArea>
                 ) : isExcelFile ? (
                   <ScrollArea className="h-full">
                     <div className="p-4">

@@ -127,7 +127,7 @@ Return ONLY valid JSON, no markdown, no explanations.`;
     const cleanedText = extractedText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     const municipalities = JSON.parse(cleanedText);
     
-    console.log(`Found ${municipalities.length} municipalities in image`);
+    console.log(`Found ${municipalities.length} municipalities in text`);
     console.log("Municipalities extracted:", JSON.stringify(municipalities.slice(0, 3))); // Log first 3
     
     // Log province distribution to detect hallucinations
