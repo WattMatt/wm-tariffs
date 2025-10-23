@@ -40,8 +40,8 @@ Return the data in a structured format.`
 - Meter readings if available
 - Consumption in kWh
 - Shop number
-- Tenant name
-- Account reference number
+- Tenant name (NOTE: The tenant name appears BEFORE the account reference number. Extract only the tenant name, not the account reference)
+- Account reference number (This appears AFTER the tenant name. Extract only the reference number)
 - Tenant information
 Return the data in a structured format.`;
 
