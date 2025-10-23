@@ -111,49 +111,16 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      setSelectedFile(e.target.files[0]);
+      const file = e.target.files[0];
+      const maxSize = 50 * 1024 * 1024; // 50MB
+      
+      if (file.size > maxSize) {
+        toast.error("File size must be less than 50MB");
+        return;
+      }
+      
+      setSelectedFile(file);
     }
-  };
-
-  const convertPdfToImage = async (pdfFile: File): Promise<Blob> => {
-    const pdfjsLib = await import('pdfjs-dist');
-    
-    // Use local worker from node_modules
-    pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-      'pdfjs-dist/build/pdf.worker.min.mjs',
-      import.meta.url
-    ).toString();
-    
-    // Load PDF
-    const arrayBuffer = await pdfFile.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-    
-    // Get first page
-    const page = await pdf.getPage(1);
-    const viewport = page.getViewport({ scale: 2.0 }); // 2x scale for quality
-    
-    // Create canvas
-    const canvas = document.createElement('canvas');
-    const context = canvas.getContext('2d');
-    if (!context) throw new Error('Could not get canvas context');
-    
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
-    
-    // Render PDF page to canvas
-    await page.render({
-      canvasContext: context,
-      viewport: viewport,
-      canvas: canvas,
-    }).promise;
-    
-    // Convert canvas to blob
-    return new Promise((resolve, reject) => {
-      canvas.toBlob((blob) => {
-        if (blob) resolve(blob);
-        else reject(new Error('Failed to convert canvas to blob'));
-      }, 'image/png');
-    });
   };
 
   const handleUpload = async () => {
@@ -166,8 +133,9 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
     try {
       const timestamp = Date.now();
       const isPdf = selectedFile.name.toLowerCase().endsWith('.pdf');
+      const fileExtension = selectedFile.name.split('.').pop()?.toLowerCase();
       
-      // Upload original file to storage
+      // Upload original file to storage with timestamped filename
       const fileName = `${siteId}/${timestamp}-${selectedFile.name}`;
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from("site-documents")
@@ -175,50 +143,47 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
 
       if (uploadError) throw uploadError;
 
-      let imagePath = uploadData.path;
-      
-      // If PDF, convert to image and upload
-      if (isPdf) {
-        toast.info("Converting PDF to image...");
-        try {
-          const imageBlob = await convertPdfToImage(selectedFile);
-          const imageName = `${siteId}/${timestamp}-${selectedFile.name.replace('.pdf', '.png')}`;
-          
-          const { data: imageUploadData, error: imageUploadError } = await supabase.storage
-            .from("site-documents")
-            .upload(imageName, imageBlob);
-
-          if (imageUploadError) {
-            console.error("Image upload error:", imageUploadError);
-            toast.warning("PDF uploaded but image conversion failed");
-          } else {
-            imagePath = imageUploadData.path;
-            toast.success("PDF converted to image successfully");
-          }
-        } catch (conversionError) {
-          console.error("PDF conversion error:", conversionError);
-          toast.warning("PDF uploaded but conversion failed - extraction may not work");
-        }
-      }
-
-      // Create document record with both paths
+      // Create document record with metadata
       const { data: user } = await supabase.auth.getUser();
-      const { error: docError } = await supabase
+      const { data: docData, error: docError } = await supabase
         .from("site_documents")
         .insert({
           site_id: siteId,
           file_name: selectedFile.name,
           file_path: uploadData.path,
-          converted_image_path: isPdf ? imagePath : null,
           file_size: selectedFile.size,
           document_type: documentType as any,
           uploaded_by: user.user?.id || null,
           extraction_status: 'pending'
-        });
+        })
+        .select()
+        .single();
 
       if (docError) throw docError;
 
       toast.success("Document uploaded successfully");
+
+      // If PDF, trigger background conversion (don't wait for it)
+      if (isPdf && docData) {
+        console.log("Triggering background PDF conversion for document:", docData.id);
+        supabase.functions.invoke("convert-pdf-to-image", {
+          body: {
+            documentId: docData.id,
+            filePath: uploadData.path,
+            bucketName: 'site-documents',
+            tableName: 'site_documents'
+          }
+        }).then(({ error }) => {
+          if (error) {
+            console.error("Background conversion error:", error);
+          } else {
+            console.log("Background PDF conversion started successfully");
+            // Refresh documents to show converted image when ready
+            setTimeout(() => fetchDocuments(), 3000);
+          }
+        });
+      }
+
       setSelectedFile(null);
       fetchDocuments();
     } catch (error) {
@@ -373,10 +338,13 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
               <Input
                 id="file-upload"
                 type="file"
-                accept=".pdf,.jpg,.jpeg,.png"
+                accept=".pdf,.jpg,.jpeg,.png,.svg"
                 onChange={handleFileSelect}
                 disabled={isUploading}
               />
+              <p className="text-xs text-muted-foreground">
+                PDF, PNG, JPG, or SVG (max 50MB)
+              </p>
             </div>
 
             <div className="flex items-end">

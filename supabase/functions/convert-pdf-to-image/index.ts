@@ -12,16 +12,17 @@ serve(async (req) => {
   }
 
   try {
-    const { schematicId, filePath } = await req.json();
+    const { schematicId, documentId, filePath, bucketName = 'schematics', tableName = 'schematics' } = await req.json();
     
-    if (!schematicId || !filePath) {
+    if ((!schematicId && !documentId) || !filePath || !bucketName || !tableName) {
       return new Response(
-        JSON.stringify({ error: 'schematicId and filePath are required' }),
+        JSON.stringify({ error: 'ID, filePath, bucketName, and tableName are required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log(`Converting PDF to image for schematic ${schematicId}, file: ${filePath}`);
+    const recordId = schematicId || documentId;
+    console.log(`Converting PDF to image for ${tableName} ${recordId}, file: ${filePath}`);
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -30,7 +31,7 @@ serve(async (req) => {
     // Download the PDF from storage
     const { data: pdfData, error: downloadError } = await supabase
       .storage
-      .from('schematics')
+      .from(bucketName)
       .download(filePath);
       
     if (downloadError || !pdfData) {
@@ -80,7 +81,7 @@ serve(async (req) => {
     // Upload the converted image to storage
     const { error: uploadError } = await supabase
       .storage
-      .from('schematics')
+      .from(bucketName)
       .upload(imagePath, imageBuffer, {
         contentType: 'image/png',
         upsert: true,
@@ -93,23 +94,23 @@ serve(async (req) => {
 
     console.log('Converted image uploaded:', imagePath);
 
-    // Update the schematic record with the converted image path
+    // Update the record with the converted image path
     const { error: updateError } = await supabase
-      .from('schematics')
+      .from(tableName)
       .update({ converted_image_path: imagePath })
-      .eq('id', schematicId);
+      .eq('id', recordId);
 
     if (updateError) {
-      console.error('Error updating schematic record:', updateError);
-      throw new Error('Failed to update schematic record');
+      console.error(`Error updating ${tableName} record:`, updateError);
+      throw new Error(`Failed to update ${tableName} record`);
     }
 
-    console.log('Schematic record updated successfully');
+    console.log(`${tableName} record updated successfully`);
 
-    // Get public URL for the converted image
+    // Get public URL for the converted image (or signed URL for private buckets)
     const { data: urlData } = supabase
       .storage
-      .from('schematics')
+      .from(bucketName)
       .getPublicUrl(imagePath);
 
     return new Response(
