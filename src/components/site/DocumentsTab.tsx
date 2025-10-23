@@ -506,12 +506,40 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                 </div>
               </div>
 
-              <div>
-                <Label className="text-muted-foreground">Additional Extracted Data</Label>
-                <pre className="mt-2 p-4 bg-muted rounded-lg text-sm overflow-x-auto">
-                  {JSON.stringify(viewingExtraction.extracted_data, null, 2)}
-                </pre>
-              </div>
+              {(viewingExtraction.extracted_data?.shop_number || 
+                viewingExtraction.extracted_data?.tenant_name || 
+                viewingExtraction.extracted_data?.account_reference) && (
+                <div className="space-y-3 p-4 border rounded-lg">
+                  <Label className="text-muted-foreground">Extracted Details</Label>
+                  {viewingExtraction.extracted_data?.shop_number && (
+                    <div>
+                      <span className="text-sm text-muted-foreground">Shop Number:</span>
+                      <p className="font-medium">{viewingExtraction.extracted_data.shop_number}</p>
+                    </div>
+                  )}
+                  {viewingExtraction.extracted_data?.tenant_name && (
+                    <div>
+                      <span className="text-sm text-muted-foreground">Tenant Name:</span>
+                      <p className="font-medium">{viewingExtraction.extracted_data.tenant_name}</p>
+                    </div>
+                  )}
+                  {viewingExtraction.extracted_data?.account_reference && (
+                    <div>
+                      <span className="text-sm text-muted-foreground">Account Reference:</span>
+                      <p className="font-medium">{viewingExtraction.extracted_data.account_reference}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {viewingExtraction.extracted_data && (
+                <div>
+                  <Label className="text-muted-foreground">All Extracted Data</Label>
+                  <pre className="mt-2 p-4 bg-muted rounded-lg text-sm overflow-x-auto">
+                    {JSON.stringify(viewingExtraction.extracted_data, null, 2)}
+                  </pre>
+                </div>
+              )}
             </div>
           )}
         </DialogContent>

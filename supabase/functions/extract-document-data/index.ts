@@ -39,6 +39,8 @@ Return the data in a structured format.`
 - Total amount
 - Meter readings if available
 - Consumption in kWh
+- Shop number
+- Tenant name
 - Tenant information
 Return the data in a structured format.`;
 
@@ -97,6 +99,14 @@ Return the data in a structured format.`;
                 account_reference: {
                   type: "string",
                   description: "Account or reference number"
+                },
+                shop_number: {
+                  type: "string",
+                  description: "Shop number (for tenant bills)"
+                },
+                tenant_name: {
+                  type: "string",
+                  description: "Name of the tenant (for tenant bills)"
                 },
                 additional_data: {
                   type: "object",
