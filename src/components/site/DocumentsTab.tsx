@@ -748,17 +748,27 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                   <div className="space-y-2">
                     <Label>Period Start</Label>
                     <Input
-                      type="date"
-                      value={editedData.period_start || ''}
-                      onChange={(e) => setEditedData({ ...editedData, period_start: e.target.value })}
+                      type="text"
+                      value={editedData.period_start ? format(new Date(editedData.period_start), 'dd MMM yyyy') : ''}
+                      onChange={(e) => {
+                        const date = new Date(e.target.value);
+                        if (!isNaN(date.getTime())) {
+                          setEditedData({ ...editedData, period_start: date.toISOString().split('T')[0] });
+                        }
+                      }}
                     />
                   </div>
                   <div className="space-y-2">
                     <Label>Period End</Label>
                     <Input
-                      type="date"
-                      value={editedData.period_end || ''}
-                      onChange={(e) => setEditedData({ ...editedData, period_end: e.target.value })}
+                      type="text"
+                      value={editedData.period_end ? format(new Date(editedData.period_end), 'dd MMM yyyy') : ''}
+                      onChange={(e) => {
+                        const date = new Date(e.target.value);
+                        if (!isNaN(date.getTime())) {
+                          setEditedData({ ...editedData, period_end: date.toISOString().split('T')[0] });
+                        }
+                      }}
                     />
                   </div>
                 </div>
