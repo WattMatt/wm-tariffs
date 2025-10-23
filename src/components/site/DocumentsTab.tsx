@@ -10,10 +10,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { FileText, Upload, Loader2, Download, Trash2, Eye } from "lucide-react";
+import { FileText, Upload, Loader2, Download, Trash2, Eye, ZoomIn, ZoomOut, Maximize2 } from "lucide-react";
 import { format } from "date-fns";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { pdfjs } from 'react-pdf';
+import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 
 // Set up PDF.js worker
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
@@ -681,14 +682,57 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
           {viewingDocument && editedData && (
             <div className="grid grid-cols-2 gap-6 h-[70vh]">
               {/* Left side - Document Image */}
-              <div className="border rounded-lg overflow-hidden bg-muted/30">
+              <div className="border rounded-lg overflow-hidden bg-muted/30 relative">
                 <div className="h-full flex items-center justify-center">
                   {documentImageUrl ? (
-                    <img 
-                      src={documentImageUrl} 
-                      alt={viewingDocument.file_name}
-                      className="max-w-full max-h-full object-contain"
-                    />
+                    <TransformWrapper
+                      initialScale={1}
+                      minScale={0.5}
+                      maxScale={4}
+                      centerOnInit
+                    >
+                      {({ zoomIn, zoomOut, resetTransform }) => (
+                        <>
+                          <div className="absolute top-4 right-4 z-10 flex flex-col gap-2">
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => zoomIn()}
+                              className="shadow-lg"
+                            >
+                              <ZoomIn className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => zoomOut()}
+                              className="shadow-lg"
+                            >
+                              <ZoomOut className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => resetTransform()}
+                              className="shadow-lg"
+                            >
+                              <Maximize2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                          <TransformComponent
+                            wrapperClass="!w-full !h-full"
+                            contentClass="!w-full !h-full flex items-center justify-center"
+                          >
+                            <img 
+                              src={documentImageUrl} 
+                              alt={viewingDocument.file_name}
+                              className="max-w-full max-h-full object-contain"
+                              draggable={false}
+                            />
+                          </TransformComponent>
+                        </>
+                      )}
+                    </TransformWrapper>
                   ) : (
                     <div className="flex flex-col items-center gap-2 text-muted-foreground">
                       <Loader2 className="w-8 h-8 animate-spin" />
