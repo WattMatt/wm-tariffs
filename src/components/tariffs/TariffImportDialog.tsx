@@ -74,6 +74,7 @@ export default function PdfImportDialog() {
   const [extractionDialogOpen, setExtractionDialogOpen] = useState(false);
   const [currentExtractionIndex, setCurrentExtractionIndex] = useState<number | null>(null);
   const [currentExtractionSheetData, setCurrentExtractionSheetData] = useState<any[][] | null>(null);
+  const [currentExtractionFile, setCurrentExtractionFile] = useState<File | null>(null);
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
   const [reviewMunicipalityIndex, setReviewMunicipalityIndex] = useState<number | null>(null);
 
@@ -1464,6 +1465,7 @@ export default function PdfImportDialog() {
 
                                     setCurrentExtractionIndex(index);
                                     setCurrentExtractionSheetData(targetSheet);
+                                    setCurrentExtractionFile(file);
                                     setExtractionDialogOpen(true);
                                   }}
                                   disabled={currentMunicipality !== null || isProcessing}
@@ -1568,9 +1570,11 @@ export default function PdfImportDialog() {
           setExtractionDialogOpen(false);
           setCurrentExtractionIndex(null);
           setCurrentExtractionSheetData(null);
+          setCurrentExtractionFile(null);
         }}
         municipalityName={municipalities[currentExtractionIndex].name}
         sheetData={currentExtractionSheetData}
+        sourceFile={currentExtractionFile}
         onExtract={async () => {
           const municipality = municipalities[currentExtractionIndex];
           
@@ -1604,6 +1608,7 @@ export default function PdfImportDialog() {
           setExtractionDialogOpen(false);
           setCurrentExtractionIndex(null);
           setCurrentExtractionSheetData(null);
+          setCurrentExtractionFile(null);
           toast.success("Data extracted successfully! You can now review or save it.");
         }}
       />

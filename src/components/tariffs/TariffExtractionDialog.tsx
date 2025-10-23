@@ -7,6 +7,12 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, CheckCircle2, X } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Document, Page, pdfjs } from 'react-pdf';
+import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
+import 'react-pdf/dist/esm/Page/TextLayer.css';
+
+// Configure PDF.js worker
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 interface ExtractedTariffData {
   supplyAuthority: {
@@ -53,6 +59,7 @@ interface TariffExtractionDialogProps {
   onClose: () => void;
   municipalityName: string;
   sheetData: any[][];
+  sourceFile: File | null;
   onExtract: () => Promise<ExtractedTariffData>;
   onComplete: (data: ExtractedTariffData) => void;
 }
@@ -62,12 +69,27 @@ export default function TariffExtractionDialog({
   onClose,
   municipalityName,
   sheetData,
+  sourceFile,
   onExtract,
   onComplete
 }: TariffExtractionDialogProps) {
   const [extractionStep, setExtractionStep] = useState<"extract" | "review" | "save" | "complete">("extract");
   const [extractedData, setExtractedData] = useState<ExtractedTariffData | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
+  const [numPages, setNumPages] = useState<number | null>(null);
+  const [fileUrl, setFileUrl] = useState<string | null>(null);
+  const [isExcelFile, setIsExcelFile] = useState(false);
+
+  // Create object URL for the file
+  useEffect(() => {
+    if (sourceFile) {
+      const url = URL.createObjectURL(sourceFile);
+      setFileUrl(url);
+      setIsExcelFile(sourceFile.name.toLowerCase().endsWith('.xlsx') || sourceFile.name.toLowerCase().endsWith('.xls'));
+      
+      return () => URL.revokeObjectURL(url);
+    }
+  }, [sourceFile]);
 
   // Start extraction when dialog opens
   useEffect(() => {
@@ -155,35 +177,54 @@ export default function TariffExtractionDialog({
 
         <div className="flex-1 overflow-hidden flex flex-col p-6 pt-4">
           <div className="flex-1 grid grid-cols-2 gap-4 overflow-hidden">
-            {/* Left: Source Data Preview */}
+            {/* Left: Source Document Preview */}
             <Card className="overflow-hidden flex flex-col">
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm">Source Document</CardTitle>
               </CardHeader>
               <CardContent className="flex-1 overflow-hidden p-0">
                 <ScrollArea className="h-full">
-                  <div className="p-4">
-                    <table className="w-full text-xs">
-                      <tbody>
-                        {sheetData.slice(0, 100).map((row, rowIdx) => (
-                          <tr key={rowIdx} className={rowIdx % 2 === 0 ? 'bg-muted/30' : ''}>
-                            {row.map((cell, cellIdx) => (
-                              <td 
-                                key={cellIdx} 
-                                className="border border-border px-2 py-1 text-left align-top"
-                                style={{
-                                  fontWeight: rowIdx === 0 || (cell?.toString().match(/^[A-Z\s]+$/) && cell?.toString().length < 50) ? 600 : 400,
-                                  fontSize: rowIdx < 5 ? '0.8rem' : '0.75rem'
-                                }}
-                              >
-                                {cell?.toString() || ''}
-                              </td>
-                            ))}
-                          </tr>
+                  {!isExcelFile && fileUrl ? (
+                    <div className="p-4">
+                      <Document
+                        file={fileUrl}
+                        onLoadSuccess={({ numPages }) => setNumPages(numPages)}
+                        className="flex flex-col items-center gap-4"
+                      >
+                        {numPages && Array.from(new Array(numPages), (el, index) => (
+                          <Page
+                            key={`page_${index + 1}`}
+                            pageNumber={index + 1}
+                            width={500}
+                            className="border border-border"
+                          />
                         ))}
-                      </tbody>
-                    </table>
-                  </div>
+                      </Document>
+                    </div>
+                  ) : (
+                    <div className="p-4">
+                      <table className="w-full text-xs border-collapse">
+                        <tbody>
+                          {sheetData.slice(0, 100).map((row, rowIdx) => (
+                            <tr key={rowIdx} className={rowIdx % 2 === 0 ? 'bg-muted/30' : ''}>
+                              {row.map((cell, cellIdx) => (
+                                <td 
+                                  key={cellIdx} 
+                                  className="border border-border px-2 py-1 text-left align-top"
+                                  style={{
+                                    fontWeight: rowIdx === 0 ? 600 : 400,
+                                    fontSize: '0.75rem'
+                                  }}
+                                >
+                                  {cell?.toString() || ''}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </ScrollArea>
               </CardContent>
             </Card>
