@@ -42,7 +42,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
   const [viewingExtraction, setViewingExtraction] = useState<any>(null);
   const [schematicPreviewUrl, setSchematicPreviewUrl] = useState<string | null>(null);
   const [isLoadingSchematic, setIsLoadingSchematic] = useState(false);
-  const [viewingDocument, setViewingDocument] = useState<{ url: string; fileName: string } | null>(null);
+  const [viewingDocument, setViewingDocument] = useState<{ url: string; fileName: string; isPdf: boolean } | null>(null);
 
   useEffect(() => {
     fetchDocuments();
@@ -294,13 +294,19 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
 
   const handleViewDocument = async (doc: SiteDocument) => {
     try {
+      const isPdf = doc.file_name.toLowerCase().endsWith('.pdf');
       const filePathToUse = (doc as any).converted_image_path || doc.file_path;
+      
       const { data } = await supabase.storage
         .from("site-documents")
         .createSignedUrl(filePathToUse, 3600);
 
       if (data?.signedUrl) {
-        setViewingDocument({ url: data.signedUrl, fileName: doc.file_name });
+        setViewingDocument({ 
+          url: data.signedUrl, 
+          fileName: doc.file_name,
+          isPdf: isPdf && !(doc as any).converted_image_path
+        });
       }
     } catch (error) {
       console.error("View error:", error);
@@ -558,11 +564,19 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
           </DialogHeader>
           {viewingDocument && (
             <div className="overflow-y-auto max-h-[calc(90vh-120px)]">
-              <img 
-                src={viewingDocument.url} 
-                alt={viewingDocument.fileName}
-                className="w-full h-auto"
-              />
+              {viewingDocument.isPdf ? (
+                <iframe
+                  src={viewingDocument.url}
+                  className="w-full h-[calc(90vh-120px)] border-0"
+                  title={viewingDocument.fileName}
+                />
+              ) : (
+                <img 
+                  src={viewingDocument.url} 
+                  alt={viewingDocument.fileName}
+                  className="w-full h-auto"
+                />
+              )}
             </div>
           )}
         </DialogContent>
