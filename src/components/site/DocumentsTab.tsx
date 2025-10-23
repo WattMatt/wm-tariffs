@@ -118,8 +118,11 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
   const convertPdfToImage = async (pdfFile: File): Promise<Blob> => {
     const pdfjsLib = await import('pdfjs-dist');
     
-    // Set worker from CDN
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+    // Use local worker from node_modules
+    pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+      'pdfjs-dist/build/pdf.worker.min.mjs',
+      import.meta.url
+    ).toString();
     
     // Load PDF
     const arrayBuffer = await pdfFile.arrayBuffer();
