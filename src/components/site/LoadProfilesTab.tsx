@@ -52,10 +52,57 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
   const [dataLoaded, setDataLoaded] = useState(false);
   const [isDateFromOpen, setIsDateFromOpen] = useState(false);
   const [isDateToOpen, setIsDateToOpen] = useState(false);
+  const [earliestDate, setEarliestDate] = useState<string | null>(null);
+  const [latestDate, setLatestDate] = useState<string | null>(null);
 
   useEffect(() => {
     fetchMeters();
   }, [siteId]);
+
+  // Fetch earliest and latest dates for selected meter
+  useEffect(() => {
+    const fetchDateRange = async () => {
+      if (!selectedMeterId) {
+        setEarliestDate(null);
+        setLatestDate(null);
+        return;
+      }
+
+      try {
+        // Get earliest reading timestamp
+        const { data: readings } = await supabase
+          .from("meter_readings")
+          .select("reading_timestamp")
+          .eq("meter_id", selectedMeterId)
+          .order("reading_timestamp", { ascending: true })
+          .limit(1);
+
+        // Get latest reading timestamp
+        const { data: latestReadings } = await supabase
+          .from("meter_readings")
+          .select("reading_timestamp")
+          .eq("meter_id", selectedMeterId)
+          .order("reading_timestamp", { ascending: false })
+          .limit(1);
+
+        if (readings && readings.length > 0) {
+          setEarliestDate(readings[0].reading_timestamp);
+        } else {
+          setEarliestDate(null);
+        }
+
+        if (latestReadings && latestReadings.length > 0) {
+          setLatestDate(latestReadings[0].reading_timestamp);
+        } else {
+          setLatestDate(null);
+        }
+      } catch (error) {
+        console.error("Error fetching date range:", error);
+      }
+    };
+
+    fetchDateRange();
+  }, [selectedMeterId]);
 
   // Helper to combine date and time and format as naive timestamp string
   const getFullDateTime = (date: Date, time: string): string => {
@@ -433,13 +480,35 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <TrendingUp className="w-5 h-5" />
-            Load Profiles
-          </CardTitle>
-          <CardDescription>
-            Analyze meter load patterns using kVA data over selected time periods with precise date and time selection
-          </CardDescription>
+          <div className="flex items-start justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp className="w-5 h-5" />
+                Load Profiles
+              </CardTitle>
+              <CardDescription>
+                Analyze meter load patterns using kVA data over selected time periods with precise date and time selection
+              </CardDescription>
+            </div>
+            <div className="text-right text-sm text-muted-foreground space-y-0.5">
+              {earliestDate && (
+                <div>
+                  Earliest: {earliestDate.split('T')[0].replace(/(\d{4})-(\d{2})-(\d{2})/, (_, y, m, d) => {
+                    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                    return `${months[parseInt(m)-1]} ${parseInt(d)}, ${y}`;
+                  })} at {earliestDate.split('T')[1]?.substring(0, 5) || '00:00'}
+                </div>
+              )}
+              {latestDate && (
+                <div>
+                  Latest: {latestDate.split('T')[0].replace(/(\d{4})-(\d{2})-(\d{2})/, (_, y, m, d) => {
+                    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                    return `${months[parseInt(m)-1]} ${parseInt(d)}, ${y}`;
+                  })} at {latestDate.split('T')[1]?.substring(0, 5) || '00:00'}
+                </div>
+              )}
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
