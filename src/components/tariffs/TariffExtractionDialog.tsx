@@ -7,12 +7,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, CheckCircle2, X } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Document, Page, pdfjs } from 'react-pdf';
-import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
-import 'react-pdf/dist/esm/Page/TextLayer.css';
-
-// Configure PDF.js worker
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 interface ExtractedTariffData {
   supplyAuthority: {
@@ -76,7 +70,6 @@ export default function TariffExtractionDialog({
   const [extractionStep, setExtractionStep] = useState<"extract" | "review" | "save" | "complete">("extract");
   const [extractedData, setExtractedData] = useState<ExtractedTariffData | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
-  const [numPages, setNumPages] = useState<number | null>(null);
   const [fileUrl, setFileUrl] = useState<string | null>(null);
   const [isExcelFile, setIsExcelFile] = useState(false);
 
@@ -186,20 +179,11 @@ export default function TariffExtractionDialog({
                 <ScrollArea className="h-full">
                   {!isExcelFile && fileUrl ? (
                     <div className="p-4">
-                      <Document
-                        file={fileUrl}
-                        onLoadSuccess={({ numPages }) => setNumPages(numPages)}
-                        className="flex flex-col items-center gap-4"
-                      >
-                        {numPages && Array.from(new Array(numPages), (el, index) => (
-                          <Page
-                            key={`page_${index + 1}`}
-                            pageNumber={index + 1}
-                            width={500}
-                            className="border border-border"
-                          />
-                        ))}
-                      </Document>
+                      <embed
+                        src={fileUrl}
+                        type="application/pdf"
+                        className="w-full h-[calc(90vh-12rem)] border border-border rounded"
+                      />
                     </div>
                   ) : (
                     <div className="p-4">
