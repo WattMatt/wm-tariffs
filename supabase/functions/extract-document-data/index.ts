@@ -39,9 +39,9 @@ Return the data in a structured format.`
 - Total amount
 - Meter readings if available
 - Consumption in kWh
-- Shop number
 - Tenant name (NOTE: The tenant name appears BEFORE the account reference number. Extract only the tenant name, not the account reference)
 - Account reference number (This appears AFTER the tenant name. Extract only the reference number)
+- Shop number (CRITICAL: The shop number is ALWAYS located BELOW the tenant name and account reference. Look for it in the lower section of the document)
 - Tenant information
 Return the data in a structured format.`;
 
