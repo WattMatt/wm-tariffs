@@ -11,6 +11,7 @@ import { FileUp, Loader2, CheckCircle2, AlertCircle, Eye } from "lucide-react";
 import { toast } from "sonner";
 import ExtractionSteps from "./ExtractionSteps";
 import TariffReviewDialog from "./TariffReviewDialog";
+import TariffExtractionDialog from "./TariffExtractionDialog";
 
 interface ExtractedTariffData {
   supplyAuthority: {
@@ -71,8 +72,8 @@ export default function PdfImportDialog() {
   const [municipalities, setMunicipalities] = useState<MunicipalityProgress[]>([]);
   const [currentMunicipality, setCurrentMunicipality] = useState<string | null>(null);
   const [extractionDialogOpen, setExtractionDialogOpen] = useState(false);
-  const [extractionStep, setExtractionStep] = useState<"extract" | "review" | "save" | "complete">("extract");
   const [currentExtractionIndex, setCurrentExtractionIndex] = useState<number | null>(null);
+  const [currentExtractionSheetData, setCurrentExtractionSheetData] = useState<any[][] | null>(null);
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
   const [reviewMunicipalityIndex, setReviewMunicipalityIndex] = useState<number | null>(null);
 
@@ -1432,10 +1433,38 @@ export default function PdfImportDialog() {
                             {municipality.status === 'pending' && !municipality.data && (
                               <>
                                 <Button
-                                  onClick={() => {
+                                  onClick={async () => {
+                                    // Prepare sheet data for extraction
+                                    const XLSX = await import('xlsx');
+                                    const arrayBuffer = await file!.arrayBuffer();
+                                    const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+                                    
+                                    let targetSheet = null;
+                                    const normalizedMunicipality = municipality.name.toLowerCase().trim();
+                                    
+                                    for (const sheetName of workbook.SheetNames) {
+                                      if (sheetName.toLowerCase().includes(normalizedMunicipality) || 
+                                          normalizedMunicipality.includes(sheetName.toLowerCase())) {
+                                        const worksheet = workbook.Sheets[sheetName];
+                                        targetSheet = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+                                        break;
+                                      }
+                                    }
+                                    
+                                    if (!targetSheet && workbook.SheetNames.length === 1) {
+                                      const sheetName = workbook.SheetNames[0];
+                                      const worksheet = workbook.Sheets[sheetName];
+                                      targetSheet = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+                                    }
+                                    
+                                    if (!targetSheet) {
+                                      toast.error(`Could not find sheet for ${municipality.name}`);
+                                      return;
+                                    }
+
                                     setCurrentExtractionIndex(index);
+                                    setCurrentExtractionSheetData(targetSheet);
                                     setExtractionDialogOpen(true);
-                                    setExtractionStep("extract");
                                   }}
                                   disabled={currentMunicipality !== null || isProcessing}
                                   size="sm"
@@ -1532,112 +1561,53 @@ export default function PdfImportDialog() {
     </Dialog>
 
     {/* Extraction Process Dialog */}
-    <Dialog open={extractionDialogOpen} onOpenChange={setExtractionDialogOpen}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>
-            Extracting Tariff Data
-          </DialogTitle>
-          <DialogDescription>
-            {currentExtractionIndex !== null && municipalities[currentExtractionIndex] && (
-              <>Processing tariff data for {municipalities[currentExtractionIndex].name}</>
-            )}
-          </DialogDescription>
-        </DialogHeader>
+    {currentExtractionIndex !== null && currentExtractionSheetData && (
+      <TariffExtractionDialog
+        open={extractionDialogOpen}
+        onClose={() => {
+          setExtractionDialogOpen(false);
+          setCurrentExtractionIndex(null);
+          setCurrentExtractionSheetData(null);
+        }}
+        municipalityName={municipalities[currentExtractionIndex].name}
+        sheetData={currentExtractionSheetData}
+        onExtract={async () => {
+          const municipality = municipalities[currentExtractionIndex];
+          
+          const { data: aiResult, error: aiError } = await supabase.functions.invoke('extract-tariff-ai', {
+            body: {
+              sheetData: currentExtractionSheetData,
+              municipalityName: municipality.name
+            }
+          });
 
-        <div className="space-y-6">
-          <ExtractionSteps currentStep={extractionStep} />
+          if (aiError) throw aiError;
+          if (!aiResult?.success) throw new Error(aiResult?.error || 'AI extraction failed');
 
-          <div className="border rounded-lg p-6">
-            {extractionStep === "extract" && (
-              <div className="text-center space-y-4">
-                <Loader2 className="w-12 h-12 animate-spin mx-auto text-primary" />
-                <div>
-                  <h3 className="font-semibold mb-2">Extracting Data with AI</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Analyzing tariff document and extracting structured data...
-                  </p>
-                </div>
-              </div>
-            )}
+          const aiData = aiResult.data;
+          
+          const extractedData: ExtractedTariffData = {
+            supplyAuthority: {
+              name: municipality.name,
+              region: municipality.province || 'Unknown',
+              nersaIncreasePercentage: aiData.nersaIncrease || 0
+            },
+            tariffStructures: aiData.tariffStructures || []
+          };
 
-            {extractionStep === "review" && (
-              <div className="text-center space-y-4">
-                <CheckCircle2 className="w-12 h-12 mx-auto text-green-600" />
-                <div>
-                  <h3 className="font-semibold mb-2">Data Extracted Successfully</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Tariff structures and charges have been identified
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {extractionStep === "save" && (
-              <div className="text-center space-y-4">
-                <Loader2 className="w-12 h-12 animate-spin mx-auto text-primary" />
-                <div>
-                  <h3 className="font-semibold mb-2">Saving to Database</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Storing tariff structures, blocks, charges, and TOU periods...
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {extractionStep === "complete" && (
-              <div className="text-center space-y-4">
-                <CheckCircle2 className="w-12 h-12 mx-auto text-green-600" />
-                <div>
-                  <h3 className="font-semibold mb-2">Complete!</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Tariff data has been successfully saved
-                  </p>
-                </div>
-                <Button
-                  onClick={() => {
-                    setExtractionDialogOpen(false);
-                    setExtractionStep("extract");
-                    setCurrentExtractionIndex(null);
-                  }}
-                  className="mt-4"
-                >
-                  Close
-                </Button>
-              </div>
-            )}
-          </div>
-
-          {extractionStep === "extract" && (
-            <Button
-              onClick={async () => {
-                if (currentExtractionIndex !== null) {
-                  setExtractionStep("review");
-                  setTimeout(async () => {
-                    setExtractionStep("save");
-                    await handleExtractWithAI(municipalities[currentExtractionIndex].name, currentExtractionIndex);
-                    setTimeout(() => {
-                      setExtractionStep("complete");
-                    }, 1000);
-                  }, 1500);
-                }
-              }}
-              disabled={isProcessing}
-              className="w-full"
-            >
-              {isProcessing ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Processing...
-                </>
-              ) : (
-                "Start Extraction"
-              )}
-            </Button>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
+          return extractedData;
+        }}
+        onComplete={(data) => {
+          setMunicipalities(prev => prev.map((m, idx) => 
+            idx === currentExtractionIndex ? { ...m, data, status: 'pending' } : m
+          ));
+          setExtractionDialogOpen(false);
+          setCurrentExtractionIndex(null);
+          setCurrentExtractionSheetData(null);
+          toast.success("Data extracted successfully! You can now review or save it.");
+        }}
+      />
+    )}
 
     {/* Review Dialog */}
     {reviewMunicipalityIndex !== null && municipalities[reviewMunicipalityIndex] && (
