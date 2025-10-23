@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, Trash2, Eye, Plus, ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
+import { Loader2, Trash2, Eye, Plus, ZoomIn, ZoomOut, RotateCcw, ChevronLeft, ChevronRight } from "lucide-react";
 import { pdfjs } from 'react-pdf';
 import { toast } from "sonner";
 import { Canvas as FabricCanvas, Rect as FabricRect, FabricImage, Circle } from "fabric";
@@ -52,6 +52,7 @@ export default function MunicipalityExtractionDialog({
   const startMarkerRef = useRef<Circle | null>(null);
   const [zoom, setZoom] = useState(1);
   const currentImageRef = useRef<FabricImage | null>(null);
+  const [isAcceptedPanelCollapsed, setIsAcceptedPanelCollapsed] = useState(false);
 
   // Convert PDF to individual page images
   const convertPdfToImages = async (pdfFile: File): Promise<string[]> => {
@@ -640,302 +641,311 @@ export default function MunicipalityExtractionDialog({
           <DialogTitle>Extract Municipality Data from PDF</DialogTitle>
         </DialogHeader>
 
-        <div className="flex-1 overflow-hidden flex flex-col px-6 gap-4">
-          {/* Top Section: Left (PDF) + Right (Extracted Data) */}
-          <div className="grid grid-cols-2 gap-4 h-[60%]">
-            {/* Left: PDF Preview with Selection */}
-            <Card className="overflow-hidden flex flex-col">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-sm">
-                    Source Document {totalPages > 0 && `(Page ${currentPage + 1} of ${totalPages})`}
-                  </CardTitle>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={handleZoomIn}
-                      disabled={pdfPageImages.length === 0}
-                    >
-                      <ZoomIn className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={handleZoomOut}
-                      disabled={pdfPageImages.length === 0}
-                    >
-                      <ZoomOut className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={handleResetZoom}
-                      disabled={pdfPageImages.length === 0}
-                    >
-                      <RotateCcw className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="flex-1 overflow-hidden p-4 bg-muted/20">
-                {isConvertingPdf ? (
-                  <div className="flex flex-col items-center justify-center h-full">
-                    <Loader2 className="w-8 h-8 animate-spin text-primary mb-2" />
-                    <p className="text-sm text-muted-foreground">Converting PDF...</p>
-                  </div>
-                ) : (
-                  <canvas
-                    ref={canvasRef}
-                    style={{ cursor: selectionMode ? 'crosshair' : 'default' }}
-                  />
-                )}
-              </CardContent>
-              <div className="border-t p-3 space-y-2">
-                {/* Pagination controls */}
-                {totalPages > 1 && (
-                  <div className="flex items-center justify-between gap-2 pb-2 border-b">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setCurrentPage(prev => Math.max(0, prev - 1))}
-                      disabled={currentPage === 0 || selectionMode}
-                    >
-                      Previous
-                    </Button>
-                    <span className="text-xs text-muted-foreground">
-                      Page {currentPage + 1} / {totalPages}
-                    </span>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setCurrentPage(prev => Math.min(totalPages - 1, prev + 1))}
-                      disabled={currentPage === totalPages - 1 || selectionMode}
-                    >
-                      Next
-                    </Button>
-                  </div>
-                )}
-                
-                {selectionMode ? (
-                  <>
-                    <p className="text-xs text-muted-foreground text-center mb-2">
-                      Click once to start, then click again to complete the selection
-                    </p>
-                    <Button
-                      size="sm"
-                      onClick={handleCancelSelection}
-                      variant="outline"
-                      className="w-full"
-                    >
-                      Cancel Selection
-                    </Button>
-                  </>
-                ) : (
+        <div className="flex-1 overflow-hidden flex px-6 gap-4">
+          {/* Left: PDF Preview - Full Height */}
+          <Card className="overflow-hidden flex flex-col flex-1">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm">
+                  Source Document {totalPages > 0 && `(Page ${currentPage + 1} of ${totalPages})`}
+                </CardTitle>
+                <div className="flex items-center gap-2">
                   <Button
                     size="sm"
-                    onClick={handleStartSelection}
-                    disabled={pdfPageImages.length === 0 || isExtracting}
+                    variant="ghost"
+                    onClick={handleZoomIn}
+                    disabled={pdfPageImages.length === 0}
+                  >
+                    <ZoomIn className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={handleZoomOut}
+                    disabled={pdfPageImages.length === 0}
+                  >
+                    <ZoomOut className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={handleResetZoom}
+                    disabled={pdfPageImages.length === 0}
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="flex-1 overflow-hidden p-4 bg-muted/20">
+              {isConvertingPdf ? (
+                <div className="flex flex-col items-center justify-center h-full">
+                  <Loader2 className="w-8 h-8 animate-spin text-primary mb-2" />
+                  <p className="text-sm text-muted-foreground">Converting PDF...</p>
+                </div>
+              ) : (
+                <canvas
+                  ref={canvasRef}
+                  style={{ cursor: selectionMode ? 'crosshair' : 'default' }}
+                />
+              )}
+            </CardContent>
+            <div className="border-t p-3 space-y-2">
+              {/* Pagination controls */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between gap-2 pb-2 border-b">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setCurrentPage(prev => Math.max(0, prev - 1))}
+                    disabled={currentPage === 0 || selectionMode}
+                  >
+                    Previous
+                  </Button>
+                  <span className="text-xs text-muted-foreground">
+                    Page {currentPage + 1} / {totalPages}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setCurrentPage(prev => Math.min(totalPages - 1, prev + 1))}
+                    disabled={currentPage === totalPages - 1 || selectionMode}
+                  >
+                    Next
+                  </Button>
+                </div>
+              )}
+              
+              {selectionMode ? (
+                <>
+                  <p className="text-xs text-muted-foreground text-center mb-2">
+                    Click once to start, then click again to complete the selection
+                  </p>
+                  <Button
+                    size="sm"
+                    onClick={handleCancelSelection}
+                    variant="outline"
                     className="w-full"
                   >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Select Region
+                    Cancel Selection
                   </Button>
-                )}
-              </div>
-            </Card>
+                </>
+              ) : (
+                <Button
+                  size="sm"
+                  onClick={handleStartSelection}
+                  disabled={pdfPageImages.length === 0 || isExtracting}
+                  className="w-full"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Select Region
+                </Button>
+              )}
+            </div>
+          </Card>
 
-            {/* Right: Extracted Data */}
-            <Card className="overflow-hidden flex flex-col">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm">Extracted Data</CardTitle>
-              </CardHeader>
-              <CardContent className="flex-1 overflow-y-auto">
-                {isExtracting ? (
-                  <div className="flex flex-col items-center justify-center h-full p-6">
-                    <Loader2 className="w-12 h-12 animate-spin text-primary mb-4" />
-                    <h3 className="font-semibold mb-2">Extracting Municipality Data</h3>
-                    <p className="text-sm text-muted-foreground text-center">
-                      Analyzing selected region with AI...
-                    </p>
-                  </div>
-                ) : extractedData ? (
-                  <ScrollArea className="h-full">
-                    <div className="space-y-4 p-1">
-                      <div>
-                        <Label className="text-xs">Municipality Name</Label>
-                        <Input
-                          value={extractedData.municipalityName || ""}
-                          onChange={(e) => setExtractedData({ ...extractedData, municipalityName: e.target.value })}
-                          className="h-9 mt-1"
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs">NERSA Increase (%)</Label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          value={extractedData.nersaIncrease || 0}
-                          onChange={(e) => setExtractedData({ ...extractedData, nersaIncrease: parseFloat(e.target.value) || 0 })}
-                          className="h-9 mt-1"
-                        />
-                      </div>
-                      
-                      {extractedData.tariffName && (
-                        <div>
-                          <Label className="text-xs">Tariff Name</Label>
-                          <Input
-                            value={extractedData.tariffName}
-                            onChange={(e) => setExtractedData({ ...extractedData, tariffName: e.target.value })}
-                            className="h-9 mt-1"
-                          />
-                        </div>
-                      )}
-                      
-                      {extractedData.blocks && extractedData.blocks.length > 0 && (
-                        <div className="space-y-2">
-                          <Label className="text-xs font-semibold">Blocks</Label>
-                          {extractedData.blocks.map((block: any, idx: number) => (
-                            <Card key={idx} className="p-3 bg-muted/30">
-                              <div className="space-y-2">
-                                <p className="text-xs font-medium">
-                                  Block {block.blockNumber}: {block.kwhFrom}-{block.kwhTo} kWh
-                                </p>
-                                <p className="text-sm">
-                                  <span className="font-semibold">{block.energyChargeCents}</span> c/kWh
-                                </p>
-                                {block.description && (
-                                  <p className="text-xs text-muted-foreground">{block.description}</p>
-                                )}
-                              </div>
-                            </Card>
-                          ))}
-                        </div>
-                      )}
-                      
-                      {extractedData.charges && extractedData.charges.length > 0 && (
-                        <div className="space-y-2">
-                          <Label className="text-xs font-semibold">Charges</Label>
-                          {extractedData.charges.map((charge: any, idx: number) => (
-                            <Card key={idx} className="p-3 bg-muted/30">
-                              <div className="space-y-1">
-                                <p className="text-xs font-medium capitalize">
-                                  {charge.chargeType.replace(/_/g, ' ')}
-                                </p>
-                                <p className="text-sm">
-                                  <span className="font-semibold">{charge.chargeAmount}</span> {charge.unit}
-                                </p>
-                                {charge.description && (
-                                  <p className="text-xs text-muted-foreground">{charge.description}</p>
-                                )}
-                              </div>
-                            </Card>
-                          ))}
-                        </div>
-                      )}
-                      
-                      {extractedData.touPeriods && extractedData.touPeriods.length > 0 && (
-                        <div className="space-y-2">
-                          <Label className="text-xs font-semibold">TOU Periods</Label>
-                          {extractedData.touPeriods.map((period: any, idx: number) => (
-                            <Card key={idx} className="p-3 bg-muted/30">
-                              <div className="space-y-1">
-                                <p className="text-xs font-medium">{period.periodName}</p>
-                                {period.timeRange && (
-                                  <p className="text-xs text-muted-foreground">{period.timeRange}</p>
-                                )}
-                                <p className="text-sm">
-                                  <span className="font-semibold">{period.energyChargeCents}</span> c/kWh
-                                </p>
-                              </div>
-                            </Card>
-                          ))}
-                        </div>
-                      )}
-                      
-                      <Button
-                        onClick={handleAcceptExtraction}
-                        className="w-full"
-                      >
-                        Accept & Add to List
-                      </Button>
+          {/* Middle: Extracted Data - Full Height */}
+          <Card className="overflow-hidden flex flex-col flex-1">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm">Extracted Data</CardTitle>
+            </CardHeader>
+            <CardContent className="flex-1 overflow-y-auto">
+              {isExtracting ? (
+                <div className="flex flex-col items-center justify-center h-full p-6">
+                  <Loader2 className="w-12 h-12 animate-spin text-primary mb-4" />
+                  <h3 className="font-semibold mb-2">Extracting Municipality Data</h3>
+                  <p className="text-sm text-muted-foreground text-center">
+                    Analyzing selected region with AI...
+                  </p>
+                </div>
+              ) : extractedData ? (
+                <ScrollArea className="h-full">
+                  <div className="space-y-4 p-1">
+                    <div>
+                      <Label className="text-xs">Municipality Name</Label>
+                      <Input
+                        value={extractedData.municipalityName || ""}
+                        onChange={(e) => setExtractedData({ ...extractedData, municipalityName: e.target.value })}
+                        className="h-9 mt-1"
+                      />
                     </div>
-                  </ScrollArea>
-                ) : selectionRectRef.current ? (
-                  <div className="flex flex-col items-center justify-center h-full p-6 gap-4">
-                    <p className="text-sm text-muted-foreground text-center">
-                      Region selected. Click the button below to extract municipality data.
-                    </p>
+                    <div>
+                      <Label className="text-xs">NERSA Increase (%)</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={extractedData.nersaIncrease || 0}
+                        onChange={(e) => setExtractedData({ ...extractedData, nersaIncrease: parseFloat(e.target.value) || 0 })}
+                        className="h-9 mt-1"
+                      />
+                    </div>
+                    
+                    {extractedData.tariffName && (
+                      <div>
+                        <Label className="text-xs">Tariff Name</Label>
+                        <Input
+                          value={extractedData.tariffName}
+                          onChange={(e) => setExtractedData({ ...extractedData, tariffName: e.target.value })}
+                          className="h-9 mt-1"
+                        />
+                      </div>
+                    )}
+                    
+                    {extractedData.blocks && extractedData.blocks.length > 0 && (
+                      <div className="space-y-2">
+                        <Label className="text-xs font-semibold">Blocks</Label>
+                        {extractedData.blocks.map((block: any, idx: number) => (
+                          <Card key={idx} className="p-3 bg-muted/30">
+                            <div className="space-y-2">
+                              <p className="text-xs font-medium">
+                                Block {block.blockNumber}: {block.kwhFrom}-{block.kwhTo} kWh
+                              </p>
+                              <p className="text-sm">
+                                <span className="font-semibold">{block.energyChargeCents}</span> c/kWh
+                              </p>
+                              {block.description && (
+                                <p className="text-xs text-muted-foreground">{block.description}</p>
+                              )}
+                            </div>
+                          </Card>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {extractedData.charges && extractedData.charges.length > 0 && (
+                      <div className="space-y-2">
+                        <Label className="text-xs font-semibold">Charges</Label>
+                        {extractedData.charges.map((charge: any, idx: number) => (
+                          <Card key={idx} className="p-3 bg-muted/30">
+                            <div className="space-y-1">
+                              <p className="text-xs font-medium capitalize">
+                                {charge.chargeType.replace(/_/g, ' ')}
+                              </p>
+                              <p className="text-sm">
+                                <span className="font-semibold">{charge.chargeAmount}</span> {charge.unit}
+                              </p>
+                              {charge.description && (
+                                <p className="text-xs text-muted-foreground">{charge.description}</p>
+                              )}
+                            </div>
+                          </Card>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {extractedData.touPeriods && extractedData.touPeriods.length > 0 && (
+                      <div className="space-y-2">
+                        <Label className="text-xs font-semibold">TOU Periods</Label>
+                        {extractedData.touPeriods.map((period: any, idx: number) => (
+                          <Card key={idx} className="p-3 bg-muted/30">
+                            <div className="space-y-1">
+                              <p className="text-xs font-medium">{period.periodName}</p>
+                              {period.timeRange && (
+                                <p className="text-xs text-muted-foreground">{period.timeRange}</p>
+                              )}
+                              <p className="text-sm">
+                                <span className="font-semibold">{period.energyChargeCents}</span> c/kWh
+                              </p>
+                            </div>
+                          </Card>
+                        ))}
+                      </div>
+                    )}
+                    
                     <Button
-                      onClick={() => {
-                        if (fabricCanvas && selectionRectRef.current) {
-                          handleExtractFromRegion(fabricCanvas, selectionRectRef.current);
-                        }
-                      }}
-                      disabled={!fabricCanvas || !selectionRectRef.current}
+                      onClick={handleAcceptExtraction}
                       className="w-full"
                     >
-                      Extract Data
+                      Accept & Add to List
                     </Button>
                   </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-full p-6 text-center">
-                    <p className="text-sm text-muted-foreground">
-                      Click "Select Region" and draw a box around municipality data to extract it.
-                    </p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+                </ScrollArea>
+              ) : selectionRectRef.current ? (
+                <div className="flex flex-col items-center justify-center h-full p-6 gap-4">
+                  <p className="text-sm text-muted-foreground text-center">
+                    Region selected. Click the button below to extract municipality data.
+                  </p>
+                  <Button
+                    onClick={() => {
+                      if (fabricCanvas && selectionRectRef.current) {
+                        handleExtractFromRegion(fabricCanvas, selectionRectRef.current);
+                      }
+                    }}
+                    disabled={!fabricCanvas || !selectionRectRef.current}
+                    className="w-full"
+                  >
+                    Extract Data
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full p-6 text-center">
+                  <p className="text-sm text-muted-foreground">
+                    Click "Select Region" and draw a box around municipality data to extract it.
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
-          {/* Bottom Section: Accepted Municipalities List */}
-          <Card className="h-[35%] overflow-hidden flex flex-col">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm">Accepted Municipalities ({acceptedMunicipalities.length})</CardTitle>
+          {/* Right: Accepted Municipalities - Full Height, Collapsible */}
+          <Card className={`overflow-hidden flex flex-col transition-all duration-300 ${isAcceptedPanelCollapsed ? 'w-12' : 'flex-1'}`}>
+            <CardHeader className="pb-3 flex flex-row items-center justify-between">
+              {!isAcceptedPanelCollapsed && (
+                <CardTitle className="text-sm">Accepted Municipalities ({acceptedMunicipalities.length})</CardTitle>
+              )}
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => setIsAcceptedPanelCollapsed(!isAcceptedPanelCollapsed)}
+                className="h-8 w-8 ml-auto"
+              >
+                {isAcceptedPanelCollapsed ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+              </Button>
             </CardHeader>
-            <CardContent className="flex-1 overflow-y-auto p-0">
-              <ScrollArea className="h-full">
-                <div className="space-y-2 p-4">
-                  {acceptedMunicipalities.map((municipality) => (
-                    <div
-                      key={municipality.id}
-                      className="flex items-center justify-between p-3 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors"
-                    >
-                      <div className="flex-1">
-                        <div className="font-medium text-sm">{municipality.name}</div>
-                        <div className="text-xs text-muted-foreground">
-                          NERSA Increase: {municipality.nersaIncrease}%
+            {!isAcceptedPanelCollapsed && (
+              <CardContent className="flex-1 overflow-y-auto p-0">
+                <ScrollArea className="h-full">
+                  <div className="space-y-2 p-4">
+                    {acceptedMunicipalities.map((municipality) => (
+                      <div
+                        key={municipality.id}
+                        className="flex items-center justify-between p-3 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors"
+                      >
+                        <div className="flex-1">
+                          <div className="font-medium text-sm">{municipality.name}</div>
+                          <div className="text-xs text-muted-foreground">
+                            NERSA Increase: {municipality.nersaIncrease}%
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => handleViewMunicipality(municipality)}
+                            className="h-8 w-8"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => handleDeleteMunicipality(municipality.id)}
+                            className="h-8 w-8 text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => handleViewMunicipality(municipality)}
-                          className="h-8 w-8"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => handleDeleteMunicipality(municipality.id)}
-                          className="h-8 w-8 text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                    ))}
+                    {acceptedMunicipalities.length === 0 && (
+                      <div className="flex items-center justify-center h-24 text-sm text-muted-foreground">
+                        No municipalities added yet
                       </div>
-                    </div>
-                  ))}
-                  {acceptedMunicipalities.length === 0 && (
-                    <div className="flex items-center justify-center h-24 text-sm text-muted-foreground">
-                      No municipalities added yet
-                    </div>
-                  )}
-                </div>
-              </ScrollArea>
-            </CardContent>
+                    )}
+                  </div>
+                </ScrollArea>
+              </CardContent>
+            )}
           </Card>
         </div>
 
