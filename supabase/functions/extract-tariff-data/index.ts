@@ -49,53 +49,49 @@ serve(async (req) => {
   }
 });
 
-async function identifyStructure(imageUrl: string) {
+async function identifyStructure(documentContent: string) {
   const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
   if (!LOVABLE_API_KEY) {
     throw new Error("LOVABLE_API_KEY is not configured");
   }
 
-  console.log("Phase 1: Identifying province/municipality structure from image");
+  console.log("Phase 1: Identifying province/municipality structure from text");
 
-  const identifyPrompt = `You are analyzing a SCANNED IMAGE of a South African electricity tariff document. Your task is to extract ONLY the text that is VISUALLY PRESENT in this specific image.
+  const identifyPrompt = `You are analyzing extracted text from a South African electricity tariff document. Your task is to identify ONLY the municipalities that are present in this specific document text.
 
 CRITICAL RULES:
-1. READ ONLY what you can SEE in the image - DO NOT use any prior knowledge or training data
+1. Extract ONLY municipality names that you can find in the provided text
 2. DO NOT invent or guess any municipality names
-3. DO NOT use examples from other provinces or documents
-4. If you cannot clearly read a municipality name in the image, DO NOT include it
+3. DO NOT use examples from your training data
+4. If you cannot find a municipality name in the text, DO NOT include it
 5. Extract the EXACT text as it appears - do not correct spellings or format names
 
-VISUAL CUES TO LOOK FOR:
-- Municipality headers in bold/large font (usually all caps)
-- Format typically: "MUNICIPALITY_NAME - XX.XX%" (e.g., "BA-PHALABORWA - 12.92%")
-- Sections may be separated by borders, spacing, or page breaks
-- Table headers and structure
-- Province name may be visible at top of document
+SEARCH PATTERN:
+- Look for municipality headers (usually in format: "MUNICIPALITY_NAME - XX.XX%")
+- Format typically: "BA-PHALABORWA - 12.92%"
+- Look for NERSA increase percentages next to municipality names
+- Province name may be mentioned at the start of the document
 
 TASK: 
-Carefully scan the ENTIRE IMAGE from top to bottom and extract ONLY the municipality names that you can ACTUALLY SEE written in the image, along with their NERSA increase percentages that appear next to them.
+Scan through the provided document text and extract ONLY the municipality names that you can FIND in the text, along with their NERSA increase percentages.
 
-Return ONLY a JSON array of objects for municipalities you can VISUALLY CONFIRM are in the image:
+Return ONLY a JSON array of objects for municipalities you can CONFIRM are in the text:
 [
   {
     "name": "EXACT_NAME_AS_SHOWN",
     "nersaIncrease": XX.XX,
-    "province": "Province name if visible in image"
+    "province": "Province name if found in text"
   }
 ]
 
 IMPORTANT:
-- If you see "Limpopo" in the document, all municipalities should have "province": "Limpopo"
-- If you see "Eastern Cape" in the document, all municipalities should have "province": "Eastern Cape"  
-- The province MUST match what's written in the image
-- Only return municipalities that are CLEARLY VISIBLE in this specific image
+- Only return municipalities that are CLEARLY PRESENT in the provided text
 - Do not pad the results with municipalities from your training data
+- The province MUST match what's written in the document text
 
 Return ONLY valid JSON, no markdown, no explanations.`;
 
-  console.log("Phase 1: Identifying province/municipality structure from image");
-  console.log("CRITICAL: AI must extract ONLY from the actual image, not from training data");
+  console.log("CRITICAL: AI must extract ONLY from the actual document text, not from training data");
 
   const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
@@ -108,18 +104,7 @@ Return ONLY valid JSON, no markdown, no explanations.`;
       messages: [
         { 
           role: "user", 
-          content: [
-            {
-              type: "text",
-              text: identifyPrompt + "\n\nREMINDER: Extract ONLY what is VISUALLY PRESENT in this specific image. Do not use any prior knowledge."
-            },
-            {
-              type: "image_url",
-              image_url: {
-                url: imageUrl
-              }
-            }
-          ]
+          content: `${identifyPrompt}\n\nDocument text to analyze:\n\n${documentContent.slice(0, 50000)}`
         }
       ],
     }),
