@@ -8,9 +8,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Loader2, Trash2, Eye, Plus, ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
 import { pdfjs } from 'react-pdf';
 import { toast } from "sonner";
-import { Canvas as FabricCanvas, Rect as FabricRect } from "fabric";
+import { Canvas as FabricCanvas, Rect as FabricRect, FabricImage, Circle } from "fabric";
 import { supabase } from "@/integrations/supabase/client";
-import { TransformWrapper, TransformComponent, ReactZoomPanPinchRef } from "react-zoom-pan-pinch";
 
 // Set up PDF.js worker
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
@@ -40,28 +39,23 @@ export default function MunicipalityExtractionDialog({
   const [convertedPdfImage, setConvertedPdfImage] = useState<string | null>(null);
   const [isConvertingPdf, setIsConvertingPdf] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
-  const [hasSelection, setHasSelection] = useState(false);
   const [fabricCanvas, setFabricCanvas] = useState<FabricCanvas | null>(null);
-  const [selectionRect, setSelectionRect] = useState<FabricRect | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
   const [extractedData, setExtractedData] = useState<MunicipalityData | null>(null);
   const [acceptedMunicipalities, setAcceptedMunicipalities] = useState<AcceptedMunicipality[]>([]);
-  const canvasContainerRef = useRef<HTMLDivElement>(null);
-  const imageRef = useRef<HTMLImageElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const transformRef = useRef<ReactZoomPanPinchRef>(null);
+  const drawStartPointRef = useRef<{ x: number; y: number } | null>(null);
+  const selectionRectRef = useRef<FabricRect | null>(null);
+  const startMarkerRef = useRef<Circle | null>(null);
+  const [zoom, setZoom] = useState(1);
 
   // Convert PDF to image (all pages stitched vertically)
   const convertPdfToImage = async (pdfFile: File): Promise<string> => {
     setIsConvertingPdf(true);
     try {
-      console.log('Converting PDF to image:', pdfFile.name);
-      
       const arrayBuffer = await pdfFile.arrayBuffer();
       const loadingTask = pdfjs.getDocument(arrayBuffer);
       const pdf = await loadingTask.promise;
-      
-      console.log(`PDF loaded with ${pdf.numPages} pages, converting all pages...`);
       
       const scale = 2.0;
       const pageCanvases: HTMLCanvasElement[] = [];
@@ -106,7 +100,6 @@ export default function MunicipalityExtractionDialog({
         currentY += pageCanvas.height;
       }
       
-      console.log('All pages stitched, converting to data URL...');
       return stitchedCanvas.toDataURL('image/png', 1.0);
     } catch (error) {
       console.error('Error converting PDF to image:', error);
@@ -128,180 +121,264 @@ export default function MunicipalityExtractionDialog({
     }
   }, [open, pdfFile]);
 
-  // Initialize Fabric canvas for selection
+  // Initialize Fabric canvas with PDF image
   useEffect(() => {
-    if (!canvasRef.current || !imageRef.current || !convertedPdfImage) return;
+    if (!canvasRef.current || !convertedPdfImage) return;
 
-    const img = imageRef.current;
-    const canvas = canvasRef.current;
-    
-    const initCanvas = () => {
-      console.log('Initializing canvas...');
-      const imgRect = img.getBoundingClientRect();
+    const canvas = new FabricCanvas(canvasRef.current, {
+      width: 1200,
+      height: 700,
+      backgroundColor: "#f8f9fa",
+    });
+
+    // Load the PDF image onto the canvas
+    FabricImage.fromURL(convertedPdfImage).then((img) => {
+      // Scale image to fit canvas
+      const scale = Math.min(
+        canvas.width! / img.width!,
+        canvas.height! / img.height!
+      );
       
-      console.log('Image rect:', imgRect);
-      console.log('Image natural size:', img.naturalWidth, 'x', img.naturalHeight);
-      
-      // Set canvas dimensions to match image
-      canvas.width = img.naturalWidth;
-      canvas.height = img.naturalHeight;
-      canvas.style.width = `${imgRect.width}px`;
-      canvas.style.height = `${imgRect.height}px`;
-
-      if (fabricCanvas) {
-        fabricCanvas.dispose();
-      }
-
-      const fabricCanvasInstance = new FabricCanvas(canvas, {
-        selection: false,
+      img.scale(scale * 0.9); // Scale down a bit to add margins
+      img.set({
+        left: (canvas.width! - img.width! * img.scaleX!) / 2,
+        top: (canvas.height! - img.height! * img.scaleY!) / 2,
+        selectable: false,
+        evented: false,
       });
-
-      fabricCanvasInstance.backgroundColor = 'transparent';
       
-      // Scale to match display
-      const scale = imgRect.width / img.naturalWidth;
-      fabricCanvasInstance.setZoom(scale);
-      
-      console.log('Fabric canvas created, zoom:', scale);
-      setFabricCanvas(fabricCanvasInstance);
-    };
+      canvas.add(img);
+      canvas.sendObjectToBack(img);
+      canvas.renderAll();
+    });
 
-    if (img.complete) {
-      initCanvas();
-    } else {
-      img.onload = initCanvas;
-    }
+    // Mouse wheel zoom
+    canvas.on('mouse:wheel', (opt) => {
+      let newZoom = canvas.getZoom();
+      newZoom *= 0.999 ** opt.e.deltaY;
+      if (newZoom > 10) newZoom = 10;
+      if (newZoom < 0.5) newZoom = 0.5;
+      
+      const pointer = canvas.getPointer(opt.e);
+      canvas.zoomToPoint(pointer, newZoom);
+      setZoom(newZoom);
+      opt.e.preventDefault();
+      opt.e.stopPropagation();
+    });
+
+    // Mouse down - handle selection drawing (two-click approach)
+    canvas.on('mouse:down', (opt) => {
+      if (!selectionMode) return;
+      
+      const evt = opt.e as MouseEvent;
+      const target = opt.target;
+      
+      // Only process clicks on empty canvas or the image
+      const isInteractiveObject = target && target.type !== 'image';
+      if (isInteractiveObject) return;
+      
+      const pointer = canvas.getPointer(opt.e);
+      
+      // First click - set start point
+      if (!drawStartPointRef.current) {
+        drawStartPointRef.current = { x: pointer.x, y: pointer.y };
+        
+        // Show a marker at start point
+        const marker = new Circle({
+          left: pointer.x,
+          top: pointer.y,
+          radius: 5,
+          fill: '#3b82f6',
+          stroke: '#ffffff',
+          strokeWidth: 2,
+          selectable: false,
+          evented: false,
+          originX: 'center',
+          originY: 'center',
+        });
+        
+        canvas.add(marker);
+        startMarkerRef.current = marker;
+        canvas.renderAll();
+        toast.info('Click again to set the end point');
+        evt.preventDefault();
+        evt.stopPropagation();
+        return;
+      }
+      
+      // Second click - create rectangle and extract
+      const startPoint = drawStartPointRef.current;
+      
+      const left = Math.min(startPoint.x, pointer.x);
+      const top = Math.min(startPoint.y, pointer.y);
+      const width = Math.abs(pointer.x - startPoint.x);
+      const height = Math.abs(pointer.y - startPoint.y);
+      
+      if (width < 10 || height < 10) {
+        toast.error('Selection too small');
+        // Clean up
+        if (startMarkerRef.current) {
+          canvas.remove(startMarkerRef.current);
+          startMarkerRef.current = null;
+        }
+        drawStartPointRef.current = null;
+        return;
+      }
+      
+      const rect = new FabricRect({
+        left,
+        top,
+        width,
+        height,
+        fill: 'rgba(59, 130, 246, 0.2)',
+        stroke: '#3b82f6',
+        strokeWidth: 2,
+        selectable: true,
+        evented: true,
+      });
+      
+      canvas.add(rect);
+      selectionRectRef.current = rect;
+      canvas.renderAll();
+      
+      // Clean up marker
+      if (startMarkerRef.current) {
+        canvas.remove(startMarkerRef.current);
+        startMarkerRef.current = null;
+      }
+      
+      // Exit selection mode
+      setSelectionMode(false);
+      drawStartPointRef.current = null;
+      
+      // Trigger extraction
+      handleExtractFromRegion(canvas, rect);
+      
+      evt.preventDefault();
+      evt.stopPropagation();
+    });
+
+    // Mouse move - show preview rectangle
+    canvas.on('mouse:move', (opt) => {
+      if (!selectionMode || !drawStartPointRef.current || selectionRectRef.current) return;
+      
+      const pointer = canvas.getPointer(opt.e);
+      const startPoint = drawStartPointRef.current;
+      
+      // Remove old preview
+      const objects = canvas.getObjects();
+      const oldPreview = objects.find(obj => (obj as any).isPreview);
+      if (oldPreview) {
+        canvas.remove(oldPreview);
+      }
+      
+      // Create preview rectangle
+      const left = Math.min(startPoint.x, pointer.x);
+      const top = Math.min(startPoint.y, pointer.y);
+      const width = Math.abs(pointer.x - startPoint.x);
+      const height = Math.abs(pointer.y - startPoint.y);
+      
+      const preview = new FabricRect({
+        left,
+        top,
+        width,
+        height,
+        fill: 'rgba(59, 130, 246, 0.1)',
+        stroke: '#3b82f6',
+        strokeWidth: 1,
+        strokeDashArray: [5, 5],
+        selectable: false,
+        evented: false,
+      });
+      
+      (preview as any).isPreview = true;
+      canvas.add(preview);
+      canvas.renderAll();
+    });
+
+    // Pan with middle mouse or space+drag
+    let isPanning = false;
+    let lastX = 0;
+    let lastY = 0;
+
+    canvas.on('mouse:down', (opt) => {
+      const evt = opt.e as MouseEvent;
+      if (evt.button === 1 || (evt.button === 0 && evt.shiftKey)) {
+        isPanning = true;
+        lastX = evt.clientX;
+        lastY = evt.clientY;
+        canvas.selection = false;
+      }
+    });
+
+    canvas.on('mouse:move', (opt) => {
+      if (isPanning) {
+        const evt = opt.e as MouseEvent;
+        const vpt = canvas.viewportTransform;
+        if (vpt) {
+          vpt[4] += evt.clientX - lastX;
+          vpt[5] += evt.clientY - lastY;
+          canvas.requestRenderAll();
+          lastX = evt.clientX;
+          lastY = evt.clientY;
+        }
+      }
+    });
+
+    canvas.on('mouse:up', () => {
+      isPanning = false;
+      canvas.selection = true;
+    });
+
+    setFabricCanvas(canvas);
 
     return () => {
-      if (fabricCanvas) {
-        fabricCanvas.dispose();
-      }
+      canvas.dispose();
     };
   }, [convertedPdfImage]);
 
-  // Handle selection mode
-  useEffect(() => {
-    if (!fabricCanvas) return;
-
-    if (selectionMode) {
-      console.log('Selection mode activated, fabricCanvas:', fabricCanvas);
-      let isDrawing = false;
-      let startX = 0;
-      let startY = 0;
-
-      const handleMouseDown = (e: any) => {
-        console.log('Mouse down on canvas', e);
-        if (hasSelection) return; // Don't start new selection if one exists
-        
-        isDrawing = true;
-        const pointer = fabricCanvas.getPointer(e.e);
-        console.log('Pointer at:', pointer);
-        startX = pointer.x;
-        startY = pointer.y;
-
-        const rect = new FabricRect({
-          left: startX,
-          top: startY,
-          width: 0,
-          height: 0,
-          fill: 'rgba(59, 130, 246, 0.2)',
-          stroke: 'rgb(59, 130, 246)',
-          strokeWidth: 2,
-          selectable: true,
-          evented: true,
-          hasControls: true,
-          hasBorders: true,
-          lockRotation: true,
-        });
-
-        console.log('Created rect:', rect);
-        fabricCanvas.add(rect);
-        setSelectionRect(rect);
-      };
-
-      const handleMouseMove = (e: any) => {
-        if (!isDrawing || !selectionRect) return;
-        
-        const pointer = fabricCanvas.getPointer(e.e);
-        const width = pointer.x - startX;
-        const height = pointer.y - startY;
-
-        if (width > 0) {
-          selectionRect.set({ width });
-        } else {
-          selectionRect.set({ left: pointer.x, width: Math.abs(width) });
-        }
-
-        if (height > 0) {
-          selectionRect.set({ height });
-        } else {
-          selectionRect.set({ top: pointer.y, height: Math.abs(height) });
-        }
-
-        fabricCanvas.renderAll();
-      };
-
-      const handleMouseUp = () => {
-        console.log('Mouse up, isDrawing:', isDrawing, 'selectionRect:', selectionRect);
-        if (isDrawing && selectionRect) {
-          isDrawing = false;
-          
-          // Check if selection is big enough
-          if ((selectionRect.width || 0) > 10 && (selectionRect.height || 0) > 10) {
-            setHasSelection(true);
-            setSelectionMode(false);
-            fabricCanvas.setActiveObject(selectionRect);
-            fabricCanvas.renderAll();
-            console.log('Selection completed');
-          } else {
-            // Remove tiny selections
-            fabricCanvas.remove(selectionRect);
-            setSelectionRect(null);
-            setSelectionMode(false);
-            console.log('Selection too small, removed');
-          }
-        }
-      };
-
-      fabricCanvas.on('mouse:down', handleMouseDown);
-      fabricCanvas.on('mouse:move', handleMouseMove);
-      fabricCanvas.on('mouse:up', handleMouseUp);
-
-      return () => {
-        fabricCanvas.off('mouse:down', handleMouseDown);
-        fabricCanvas.off('mouse:move', handleMouseMove);
-        fabricCanvas.off('mouse:up', handleMouseUp);
-      };
-    }
-  }, [selectionMode, fabricCanvas, hasSelection, selectionRect]);
-
-  const handleExtractFromRegion = async (cropRegion: { x: number; y: number; width: number; height: number }) => {
-    if (!convertedPdfImage || !imageRef.current) return;
+  const handleExtractFromRegion = async (canvas: FabricCanvas, rect: FabricRect) => {
+    if (!convertedPdfImage) return;
 
     setIsExtracting(true);
     try {
-      // Crop the image to the selected region
-      const croppedCanvas = document.createElement('canvas');
-      croppedCanvas.width = cropRegion.width;
-      croppedCanvas.height = cropRegion.height;
-      const ctx = croppedCanvas.getContext('2d');
+      // Get the image object from canvas
+      const objects = canvas.getObjects();
+      const imageObj = objects.find(obj => obj.type === 'image') as FabricImage;
       
-      if (!ctx) throw new Error('Could not get canvas context');
+      if (!imageObj) throw new Error('Image not found on canvas');
       
+      // Calculate coordinates in original image space
+      const zoom = canvas.getZoom();
+      const vpt = canvas.viewportTransform || [1, 0, 0, 1, 0, 0];
+      
+      const imgScaleX = imageObj.scaleX || 1;
+      const imgScaleY = imageObj.scaleY || 1;
+      const imgLeft = imageObj.left || 0;
+      const imgTop = imageObj.top || 0;
+      
+      // Convert rect coordinates to image coordinates
+      const rectLeft = (rect.left! - imgLeft) / (imgScaleX * zoom);
+      const rectTop = (rect.top! - imgTop) / (imgScaleY * zoom);
+      const rectWidth = rect.width! / (imgScaleX * zoom);
+      const rectHeight = rect.height! / (imgScaleY * zoom);
+      
+      // Crop the original image
       const img = new Image();
       img.src = convertedPdfImage;
       await new Promise((resolve) => { img.onload = resolve; });
       
+      const croppedCanvas = document.createElement('canvas');
+      croppedCanvas.width = rectWidth;
+      croppedCanvas.height = rectHeight;
+      const ctx = croppedCanvas.getContext('2d');
+      
+      if (!ctx) throw new Error('Could not get canvas context');
+      
       ctx.drawImage(
         img,
-        cropRegion.x,
-        cropRegion.y,
-        cropRegion.width,
-        cropRegion.height,
-        0,
-        0,
-        cropRegion.width,
-        cropRegion.height
+        rectLeft, rectTop, rectWidth, rectHeight,
+        0, 0, rectWidth, rectHeight
       );
       
       const croppedImageUrl = croppedCanvas.toDataURL('image/png');
@@ -312,7 +389,7 @@ export default function MunicipalityExtractionDialog({
       const timestamp = Date.now();
       const fileName = `municipality-extract-${timestamp}.png`;
       
-      const { data: uploadData, error: uploadError } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from('tariff-extractions')
         .upload(fileName, blob, {
           contentType: 'image/png',
@@ -353,41 +430,79 @@ export default function MunicipalityExtractionDialog({
 
   const handleStartSelection = () => {
     if (fabricCanvas) {
-      fabricCanvas.clear();
-      setSelectionRect(null);
+      // Remove any existing selection rectangle
+      if (selectionRectRef.current) {
+        fabricCanvas.remove(selectionRectRef.current);
+        selectionRectRef.current = null;
+      }
+      // Remove any start marker
+      if (startMarkerRef.current) {
+        fabricCanvas.remove(startMarkerRef.current);
+        startMarkerRef.current = null;
+      }
+      // Remove preview rectangles
+      const objects = fabricCanvas.getObjects();
+      objects.forEach(obj => {
+        if ((obj as any).isPreview) {
+          fabricCanvas.remove(obj);
+        }
+      });
+      fabricCanvas.renderAll();
     }
+    
+    drawStartPointRef.current = null;
     setExtractedData(null);
-    setHasSelection(false);
     setSelectionMode(true);
-    toast.info("Draw a box around the municipality information you want to extract.");
+    toast.info("Click once to start, then click again to complete the selection");
   };
 
   const handleCancelSelection = () => {
-    if (fabricCanvas && selectionRect) {
-      fabricCanvas.remove(selectionRect);
-      setSelectionRect(null);
+    if (fabricCanvas) {
+      if (selectionRectRef.current) {
+        fabricCanvas.remove(selectionRectRef.current);
+        selectionRectRef.current = null;
+      }
+      if (startMarkerRef.current) {
+        fabricCanvas.remove(startMarkerRef.current);
+        startMarkerRef.current = null;
+      }
+      // Remove preview rectangles
+      const objects = fabricCanvas.getObjects();
+      objects.forEach(obj => {
+        if ((obj as any).isPreview) {
+          fabricCanvas.remove(obj);
+        }
+      });
+      fabricCanvas.renderAll();
     }
+    drawStartPointRef.current = null;
     setSelectionMode(false);
-    setHasSelection(false);
   };
 
-  const handleExtractClick = () => {
-    if (!selectionRect || !imageRef.current) return;
-    
-    // Calculate relative coordinates
-    const img = imageRef.current;
-    const rect = img.getBoundingClientRect();
-    const scaleX = img.naturalWidth / rect.width;
-    const scaleY = img.naturalHeight / rect.height;
-    
-    const cropRegion = {
-      x: (selectionRect.left || 0) * scaleX,
-      y: (selectionRect.top || 0) * scaleY,
-      width: (selectionRect.width || 0) * scaleX,
-      height: (selectionRect.height || 0) * scaleY,
-    };
-    
-    handleExtractFromRegion(cropRegion);
+  const handleZoomIn = () => {
+    if (!fabricCanvas) return;
+    let newZoom = fabricCanvas.getZoom() * 1.2;
+    if (newZoom > 10) newZoom = 10;
+    fabricCanvas.setZoom(newZoom);
+    setZoom(newZoom);
+    fabricCanvas.renderAll();
+  };
+
+  const handleZoomOut = () => {
+    if (!fabricCanvas) return;
+    let newZoom = fabricCanvas.getZoom() / 1.2;
+    if (newZoom < 0.5) newZoom = 0.5;
+    fabricCanvas.setZoom(newZoom);
+    setZoom(newZoom);
+    fabricCanvas.renderAll();
+  };
+
+  const handleResetZoom = () => {
+    if (!fabricCanvas) return;
+    fabricCanvas.setZoom(1);
+    fabricCanvas.viewportTransform = [1, 0, 0, 1, 0, 0];
+    setZoom(1);
+    fabricCanvas.renderAll();
   };
 
   const handleAcceptExtraction = () => {
@@ -401,11 +516,11 @@ export default function MunicipalityExtractionDialog({
     setAcceptedMunicipalities(prev => [...prev, newMunicipality]);
     setExtractedData(null);
     
-    if (fabricCanvas) {
-      fabricCanvas.clear();
+    if (fabricCanvas && selectionRectRef.current) {
+      fabricCanvas.remove(selectionRectRef.current);
+      selectionRectRef.current = null;
+      fabricCanvas.renderAll();
     }
-    setHasSelection(false);
-    setSelectionRect(null);
     
     toast.success(`${extractedData.name} added to list!`);
   };
@@ -451,7 +566,7 @@ export default function MunicipalityExtractionDialog({
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() => transformRef.current?.zoomIn()}
+                      onClick={handleZoomIn}
                       disabled={!convertedPdfImage}
                     >
                       <ZoomIn className="h-4 w-4" />
@@ -459,7 +574,7 @@ export default function MunicipalityExtractionDialog({
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() => transformRef.current?.zoomOut()}
+                      onClick={handleZoomOut}
                       disabled={!convertedPdfImage}
                     >
                       <ZoomOut className="h-4 w-4" />
@@ -467,7 +582,7 @@ export default function MunicipalityExtractionDialog({
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() => transformRef.current?.resetTransform()}
+                      onClick={handleResetZoom}
                       disabled={!convertedPdfImage}
                     >
                       <RotateCcw className="h-4 w-4" />
@@ -475,65 +590,24 @@ export default function MunicipalityExtractionDialog({
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="flex-1 overflow-hidden p-0 relative">
+              <CardContent className="flex-1 overflow-hidden p-4 bg-muted/20">
                 {isConvertingPdf ? (
-                  <div className="flex flex-col items-center justify-center h-full p-6">
+                  <div className="flex flex-col items-center justify-center h-full">
                     <Loader2 className="w-8 h-8 animate-spin text-primary mb-2" />
                     <p className="text-sm text-muted-foreground">Converting PDF...</p>
                   </div>
-                ) : convertedPdfImage ? (
-                  <TransformWrapper
-                    ref={transformRef}
-                    initialScale={1}
-                    minScale={0.5}
-                    maxScale={4}
-                    wheel={{
-                      step: 0.1,
-                      wheelDisabled: selectionMode,
-                      touchPadDisabled: false,
-                      activationKeys: ["Control"]
-                    }}
-                    panning={{ 
-                      disabled: selectionMode || hasSelection,
-                      velocityDisabled: true
-                    }}
-                    disabled={selectionMode}
-                  >
-                    <TransformComponent
-                      wrapperClass="w-full h-full overflow-auto"
-                      contentClass="w-full h-full flex items-center justify-center"
-                    >
-                      <div 
-                        ref={canvasContainerRef}
-                        className="relative inline-block"
-                        style={{
-                          cursor: selectionMode ? 'crosshair' : hasSelection ? 'default' : 'move'
-                        }}
-                      >
-                        <img
-                          ref={imageRef}
-                          src={convertedPdfImage}
-                          alt="PDF Preview"
-                          className="max-w-none select-none block"
-                        />
-                        <canvas
-                          ref={canvasRef}
-                          className="absolute top-0 left-0"
-                          style={{ 
-                            pointerEvents: selectionMode || hasSelection ? 'auto' : 'none',
-                            cursor: selectionMode ? 'crosshair' : 'default',
-                          }}
-                        />
-                      </div>
-                    </TransformComponent>
-                  </TransformWrapper>
-                ) : null}
+                ) : (
+                  <canvas
+                    ref={canvasRef}
+                    style={{ cursor: selectionMode ? 'crosshair' : 'default' }}
+                  />
+                )}
               </CardContent>
               <div className="border-t p-3 space-y-2">
-                {selectionMode && (
+                {selectionMode ? (
                   <>
                     <p className="text-xs text-muted-foreground text-center mb-2">
-                      Click and drag to select a region
+                      Click once to start, then click again to complete the selection
                     </p>
                     <Button
                       size="sm"
@@ -544,8 +618,7 @@ export default function MunicipalityExtractionDialog({
                       Cancel Selection
                     </Button>
                   </>
-                )}
-                {!selectionMode && !hasSelection && (
+                ) : (
                   <Button
                     size="sm"
                     onClick={handleStartSelection}
@@ -555,33 +628,6 @@ export default function MunicipalityExtractionDialog({
                     <Plus className="h-4 w-4 mr-2" />
                     Select Region
                   </Button>
-                )}
-                {hasSelection && !selectionMode && (
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      onClick={handleExtractClick}
-                      disabled={isExtracting}
-                      className="flex-1"
-                    >
-                      {isExtracting ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                          Extracting...
-                        </>
-                      ) : (
-                        "Extract"
-                      )}
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={handleCancelSelection}
-                      variant="outline"
-                      className="flex-1"
-                    >
-                      Cancel
-                    </Button>
-                  </div>
                 )}
               </div>
             </Card>
