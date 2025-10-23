@@ -11,7 +11,7 @@ serve(async (req) => {
   }
 
   try {
-    const { sheetData, municipalityName } = await req.json();
+    const { sheetData, municipalityName, cropRegion } = await req.json();
     
     if (!sheetData || !municipalityName) {
       throw new Error('Missing required parameters: sheetData and municipalityName');
@@ -22,8 +22,37 @@ serve(async (req) => {
       throw new Error('LOVABLE_API_KEY not configured');
     }
 
+    // Filter sheet data if crop region is provided
+    let filteredSheetData = sheetData;
+    if (cropRegion) {
+      console.log('Applying crop region filter:', cropRegion);
+      
+      const { y, height, imageHeight, x, width, imageWidth } = cropRegion;
+      
+      // Calculate which rows to include based on Y coordinates
+      const totalRows = sheetData.length;
+      const startRowIndex = Math.floor((y / imageHeight) * totalRows);
+      const endRowIndex = Math.ceil(((y + height) / imageHeight) * totalRows);
+      
+      // Extract rows within the region
+      const rowsInRegion = sheetData.slice(startRowIndex, endRowIndex);
+      
+      // For each row, filter columns based on X coordinates
+      filteredSheetData = rowsInRegion.map((row: any[]) => {
+        if (!row || row.length === 0) return row;
+        
+        const totalCols = row.length;
+        const startColIndex = Math.floor((x / imageWidth) * totalCols);
+        const endColIndex = Math.ceil(((x + width) / imageWidth) * totalCols);
+        
+        return row.slice(startColIndex, endColIndex);
+      });
+      
+      console.log(`Filtered from ${sheetData.length} rows to ${filteredSheetData.length} rows`);
+    }
+
     // Convert sheet data to a readable text format for AI
-    const sheetText = sheetData.map((row: any[], idx: number) => 
+    const sheetText = filteredSheetData.map((row: any[], idx: number) => 
       `Row ${idx + 1}: ${row.map(cell => cell?.toString() || '').join(' | ')}`
     ).join('\n');
 
@@ -46,6 +75,7 @@ Important rules:
 - Common charge types: service charge, network charge, demand charge, capacity charge
 - TOU periods: peak, standard, off-peak with different rates
 - Be thorough - extract ALL tariff structures found in the data
+${cropRegion ? '- Focus only on the data provided, which is from a selected region of the document' : ''}
 
 Return your findings in JSON format.`;
 

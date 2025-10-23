@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { pdfjs } from 'react-pdf';
 import { toast } from "sonner";
+import { Canvas as FabricCanvas, Rect as FabricRect } from "fabric";
+import { supabase } from "@/integrations/supabase/client";
 
 // Set up PDF.js worker
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
@@ -63,7 +65,7 @@ interface TariffExtractionDialogProps {
   municipalityName: string;
   sheetData: any[][];
   sourceFile: File | null;
-  onExtract: () => Promise<ExtractedTariffData>;
+  onExtract: (cropRegion?: { x: number; y: number; width: number; height: number; imageWidth: number; imageHeight: number }) => Promise<ExtractedTariffData>;
   onComplete: (data: ExtractedTariffData) => void;
 }
 
@@ -83,6 +85,12 @@ export default function TariffExtractionDialog({
   const [isExcelFile, setIsExcelFile] = useState(false);
   const [convertedPdfImage, setConvertedPdfImage] = useState<string | null>(null);
   const [isConvertingPdf, setIsConvertingPdf] = useState(false);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [fabricCanvas, setFabricCanvas] = useState<FabricCanvas | null>(null);
+  const [selectionRect, setSelectionRect] = useState<FabricRect | null>(null);
+  const [cropRegion, setCropRegion] = useState<{ x: number; y: number; width: number; height: number; imageWidth: number; imageHeight: number } | null>(null);
+  const canvasContainerRef = useRef<HTMLDivElement>(null);
+  const imageRef = useRef<HTMLImageElement>(null);
 
   // Convert PDF to image for display
   const convertPdfToImage = async (pdfFile: File): Promise<string> => {
@@ -162,26 +170,161 @@ export default function TariffExtractionDialog({
     }
   }, [sourceFile]);
 
-  // Start extraction when dialog opens
+  // Initialize Fabric canvas for selection
   useEffect(() => {
-    if (open && !isExtracting && !extractedData) {
-      handleExtract();
+    if (!canvasContainerRef.current || !convertedPdfImage || !imageRef.current) return;
+
+    const img = imageRef.current;
+    const rect = img.getBoundingClientRect();
+
+    const canvas = new FabricCanvas(canvasContainerRef.current.querySelector('canvas')!, {
+      width: rect.width,
+      height: rect.height,
+      selection: false,
+    });
+
+    canvas.backgroundColor = 'transparent';
+    setFabricCanvas(canvas);
+
+    return () => {
+      canvas.dispose();
+    };
+  }, [convertedPdfImage]);
+
+  // Handle selection mode
+  useEffect(() => {
+    if (!fabricCanvas) return;
+
+    if (selectionMode) {
+      let isDrawing = false;
+      let startX = 0;
+      let startY = 0;
+
+      const handleMouseDown = (e: any) => {
+        isDrawing = true;
+        const pointer = fabricCanvas.getPointer(e.e);
+        startX = pointer.x;
+        startY = pointer.y;
+
+        const rect = new FabricRect({
+          left: startX,
+          top: startY,
+          width: 0,
+          height: 0,
+          fill: 'rgba(59, 130, 246, 0.2)',
+          stroke: 'rgb(59, 130, 246)',
+          strokeWidth: 2,
+          selectable: false,
+        });
+
+        fabricCanvas.add(rect);
+        setSelectionRect(rect);
+      };
+
+      const handleMouseMove = (e: any) => {
+        if (!isDrawing || !selectionRect) return;
+        
+        const pointer = fabricCanvas.getPointer(e.e);
+        const width = pointer.x - startX;
+        const height = pointer.y - startY;
+
+        if (width > 0) {
+          selectionRect.set({ width });
+        } else {
+          selectionRect.set({ left: pointer.x, width: Math.abs(width) });
+        }
+
+        if (height > 0) {
+          selectionRect.set({ height });
+        } else {
+          selectionRect.set({ top: pointer.y, height: Math.abs(height) });
+        }
+
+        fabricCanvas.renderAll();
+      };
+
+      const handleMouseUp = () => {
+        if (isDrawing && selectionRect) {
+          isDrawing = false;
+          
+          // Calculate relative coordinates
+          if (imageRef.current) {
+            const rect = imageRef.current.getBoundingClientRect();
+            const scaleX = imageRef.current.naturalWidth / rect.width;
+            const scaleY = imageRef.current.naturalHeight / rect.height;
+            
+            setCropRegion({
+              x: (selectionRect.left || 0) * scaleX,
+              y: (selectionRect.top || 0) * scaleY,
+              width: (selectionRect.width || 0) * scaleX,
+              height: (selectionRect.height || 0) * scaleY,
+              imageWidth: imageRef.current.naturalWidth,
+              imageHeight: imageRef.current.naturalHeight,
+            });
+            
+            toast.success("Region selected! Click Extract to analyze this area.");
+          }
+          setSelectionMode(false);
+        }
+      };
+
+      fabricCanvas.on('mouse:down', handleMouseDown);
+      fabricCanvas.on('mouse:move', handleMouseMove);
+      fabricCanvas.on('mouse:up', handleMouseUp);
+
+      return () => {
+        fabricCanvas.off('mouse:down', handleMouseDown);
+        fabricCanvas.off('mouse:move', handleMouseMove);
+        fabricCanvas.off('mouse:up', handleMouseUp);
+      };
+    }
+  }, [selectionMode, fabricCanvas]);
+
+  // Start extraction when dialog opens (but not in selection mode)
+  useEffect(() => {
+    if (open && !isExtracting && !extractedData && !selectionMode) {
+      // Don't auto-extract, wait for user to click Extract
     }
   }, [open]);
 
   const handleExtract = async () => {
+    if (selectionMode) {
+      toast.info("Please draw a selection box on the image.");
+      return;
+    }
+
     setIsExtracting(true);
     setExtractionStep("extract");
     try {
-      const data = await onExtract();
+      const data = await onExtract(cropRegion || undefined);
       setExtractedData(data);
       setExtractionStep("review");
     } catch (error: any) {
       console.error("Extraction failed:", error);
+      toast.error(error.message || "Extraction failed");
       setExtractionStep("extract");
     } finally {
       setIsExtracting(false);
     }
+  };
+
+  const handleStartSelection = () => {
+    if (fabricCanvas) {
+      fabricCanvas.clear();
+      setSelectionRect(null);
+      setCropRegion(null);
+    }
+    setSelectionMode(true);
+    toast.info("Draw a box around the area you want to extract.");
+  };
+
+  const handleClearSelection = () => {
+    if (fabricCanvas) {
+      fabricCanvas.clear();
+    }
+    setSelectionRect(null);
+    setCropRegion(null);
+    setSelectionMode(false);
   };
 
   const handleAccept = () => {
@@ -341,6 +484,26 @@ export default function TariffExtractionDialog({
                         minScale={0.5}
                         maxScale={3}
                         centerOnInit={true}
+                        wheel={{ 
+                          step: 0.1,
+                          wheelDisabled: true // Disable default wheel zoom
+                        }}
+                        panning={{
+                          wheelPanning: true, // Enable wheel for panning
+                        }}
+                        onWheel={(ref, event) => {
+                          // Custom wheel handler: CTRL+wheel for zoom, wheel for scroll
+                          if (event.ctrlKey) {
+                            event.preventDefault();
+                            const delta = -event.deltaY;
+                            if (delta > 0) {
+                              ref.zoomIn(0.1);
+                            } else {
+                              ref.zoomOut(0.1);
+                            }
+                          }
+                          // Otherwise, let default scroll behavior work
+                        }}
                       >
                         {({ zoomIn, zoomOut, resetTransform }) => (
                           <>
@@ -356,11 +519,28 @@ export default function TariffExtractionDialog({
                               </Button>
                             </div>
                             <TransformComponent wrapperClass="!w-full !h-full" contentClass="!w-full !h-full">
-                              <div className="p-4">
+                              <div className="p-4 relative" ref={canvasContainerRef}>
                                 <img 
+                                  ref={imageRef}
                                   src={convertedPdfImage} 
                                   alt="PDF Preview" 
                                   className="w-full border border-border rounded"
+                                  onLoad={() => {
+                                    // Reinitialize Fabric canvas when image loads
+                                    if (canvasContainerRef.current && imageRef.current) {
+                                      const rect = imageRef.current.getBoundingClientRect();
+                                      if (fabricCanvas) {
+                                        fabricCanvas.setDimensions({ width: rect.width, height: rect.height });
+                                      }
+                                    }
+                                  }}
+                                />
+                                <canvas 
+                                  className="absolute top-0 left-0 pointer-events-auto"
+                                  style={{ 
+                                    cursor: selectionMode ? 'crosshair' : 'default',
+                                    pointerEvents: selectionMode ? 'auto' : 'none'
+                                  }}
                                 />
                               </div>
                             </TransformComponent>
@@ -816,11 +996,29 @@ export default function TariffExtractionDialog({
 
           {/* Action Buttons */}
           <div className="flex gap-2 mt-4">
-            {extractionStep === "review" && (
+            {!extractedData && convertedPdfImage && !selectionMode && (
+              <Button
+                onClick={handleStartSelection}
+                variant="outline"
+                size="sm"
+              >
+                Select Region
+              </Button>
+            )}
+            {cropRegion && !extractedData && (
+              <Button
+                onClick={handleClearSelection}
+                variant="outline"
+                size="sm"
+              >
+                Clear Selection
+              </Button>
+            )}
+            {!extractedData && (
               <Button
                 onClick={handleExtract}
-                disabled={isExtracting}
-                variant="outline"
+                disabled={isExtracting || selectionMode}
+                variant="default"
                 size="sm"
               >
                 {isExtracting ? (
@@ -829,12 +1027,12 @@ export default function TariffExtractionDialog({
                     Extracting...
                   </>
                 ) : (
-                  "Extract"
+                  <>Extract{cropRegion ? " Selected Region" : ""}</>
                 )}
               </Button>
             )}
             <div className="flex-1" />
-            {extractionStep === "review" && (
+            {extractionStep === "review" && extractedData && (
               <Button
                 onClick={handleAccept}
                 disabled={!extractedData}

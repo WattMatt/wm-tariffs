@@ -1575,13 +1575,14 @@ export default function PdfImportDialog() {
         municipalityName={municipalities[currentExtractionIndex].name}
         sheetData={currentExtractionSheetData}
         sourceFile={currentExtractionFile}
-        onExtract={async () => {
+        onExtract={async (cropRegion) => {
           const municipality = municipalities[currentExtractionIndex];
           
           const { data: aiResult, error: aiError } = await supabase.functions.invoke('extract-tariff-ai', {
             body: {
               sheetData: currentExtractionSheetData,
-              municipalityName: municipality.name
+              municipalityName: municipality.name,
+              cropRegion: cropRegion || null
             }
           });
 
