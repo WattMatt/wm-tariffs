@@ -36,7 +36,9 @@ export default function MunicipalityExtractionDialog({
   pdfFile,
   onComplete
 }: MunicipalityExtractionDialogProps) {
-  const [convertedPdfImage, setConvertedPdfImage] = useState<string | null>(null);
+  const [pdfPageImages, setPdfPageImages] = useState<string[]>([]);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
   const [isConvertingPdf, setIsConvertingPdf] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
   const [fabricCanvas, setFabricCanvas] = useState<FabricCanvas | null>(null);
@@ -48,9 +50,10 @@ export default function MunicipalityExtractionDialog({
   const selectionRectRef = useRef<FabricRect | null>(null);
   const startMarkerRef = useRef<Circle | null>(null);
   const [zoom, setZoom] = useState(1);
+  const currentImageRef = useRef<FabricImage | null>(null);
 
-  // Convert PDF to image (all pages stitched vertically)
-  const convertPdfToImage = async (pdfFile: File): Promise<string> => {
+  // Convert PDF to individual page images
+  const convertPdfToImages = async (pdfFile: File): Promise<string[]> => {
     setIsConvertingPdf(true);
     try {
       const arrayBuffer = await pdfFile.arrayBuffer();
@@ -58,11 +61,9 @@ export default function MunicipalityExtractionDialog({
       const pdf = await loadingTask.promise;
       
       const scale = 2.0;
-      const pageCanvases: HTMLCanvasElement[] = [];
-      let maxWidth = 0;
-      let totalHeight = 0;
+      const pageImages: string[] = [];
       
-      // Render all pages
+      // Render each page as a separate image
       for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
         const page = await pdf.getPage(pageNum);
         const viewport = page.getViewport({ scale });
@@ -81,29 +82,14 @@ export default function MunicipalityExtractionDialog({
           canvas: canvas
         }).promise;
         
-        pageCanvases.push(canvas);
-        maxWidth = Math.max(maxWidth, viewport.width);
-        totalHeight += viewport.height;
+        pageImages.push(canvas.toDataURL('image/png', 1.0));
       }
       
-      // Stitch all pages vertically
-      const stitchedCanvas = document.createElement('canvas');
-      stitchedCanvas.width = maxWidth;
-      stitchedCanvas.height = totalHeight;
-      const stitchedContext = stitchedCanvas.getContext('2d');
-      
-      if (!stitchedContext) throw new Error('Could not get stitched canvas context');
-      
-      let currentY = 0;
-      for (const pageCanvas of pageCanvases) {
-        stitchedContext.drawImage(pageCanvas, 0, currentY);
-        currentY += pageCanvas.height;
-      }
-      
-      return stitchedCanvas.toDataURL('image/png', 1.0);
+      setTotalPages(pdf.numPages);
+      return pageImages;
     } catch (error) {
-      console.error('Error converting PDF to image:', error);
-      toast.error('Failed to convert PDF to image');
+      console.error('Error converting PDF to images:', error);
+      toast.error('Failed to convert PDF to images');
       throw error;
     } finally {
       setIsConvertingPdf(false);
@@ -113,17 +99,18 @@ export default function MunicipalityExtractionDialog({
   // Convert PDF when dialog opens
   useEffect(() => {
     if (open && pdfFile) {
-      convertPdfToImage(pdfFile).then(imageUrl => {
-        setConvertedPdfImage(imageUrl);
+      convertPdfToImages(pdfFile).then(images => {
+        setPdfPageImages(images);
+        setCurrentPage(0);
       }).catch(error => {
         console.error('Failed to convert PDF:', error);
       });
     }
   }, [open, pdfFile]);
 
-  // Initialize Fabric canvas with PDF image
+  // Initialize Fabric canvas
   useEffect(() => {
-    if (!canvasRef.current || !convertedPdfImage) return;
+    if (!canvasRef.current || pdfPageImages.length === 0) return;
 
     const canvas = new FabricCanvas(canvasRef.current, {
       width: 1200,
@@ -131,26 +118,47 @@ export default function MunicipalityExtractionDialog({
       backgroundColor: "#f8f9fa",
     });
 
-    // Load the PDF image onto the canvas
-    FabricImage.fromURL(convertedPdfImage).then((img) => {
-      // Scale image to fit canvas
-      const scale = Math.min(
-        canvas.width! / img.width!,
-        canvas.height! / img.height!
-      );
+    // Load the current page image
+    const loadCurrentPage = () => {
+      // Remove existing image
+      if (currentImageRef.current) {
+        canvas.remove(currentImageRef.current);
+      }
       
-      img.scale(scale * 0.9); // Scale down a bit to add margins
-      img.set({
-        left: (canvas.width! - img.width! * img.scaleX!) / 2,
-        top: (canvas.height! - img.height! * img.scaleY!) / 2,
-        selectable: false,
-        evented: false,
+      // Clear any selection state
+      drawStartPointRef.current = null;
+      if (selectionRectRef.current) {
+        canvas.remove(selectionRectRef.current);
+        selectionRectRef.current = null;
+      }
+      if (startMarkerRef.current) {
+        canvas.remove(startMarkerRef.current);
+        startMarkerRef.current = null;
+      }
+
+      FabricImage.fromURL(pdfPageImages[currentPage]).then((img) => {
+        // Scale image to fit canvas
+        const scale = Math.min(
+          canvas.width! / img.width!,
+          canvas.height! / img.height!
+        );
+        
+        img.scale(scale * 0.9);
+        img.set({
+          left: (canvas.width! - img.width! * img.scaleX!) / 2,
+          top: (canvas.height! - img.height! * img.scaleY!) / 2,
+          selectable: false,
+          evented: false,
+        });
+        
+        currentImageRef.current = img;
+        canvas.add(img);
+        canvas.sendObjectToBack(img);
+        canvas.renderAll();
       });
-      
-      canvas.add(img);
-      canvas.sendObjectToBack(img);
-      canvas.renderAll();
-    });
+    };
+
+    loadCurrentPage();
 
     // Mouse wheel zoom
     canvas.on('mouse:wheel', (opt) => {
@@ -341,10 +349,59 @@ export default function MunicipalityExtractionDialog({
     return () => {
       canvas.dispose();
     };
-  }, [convertedPdfImage]);
+  }, [pdfPageImages, currentPage]);
+
+  // When page changes, reload the current page on canvas
+  useEffect(() => {
+    if (!fabricCanvas || pdfPageImages.length === 0) return;
+
+    // Remove existing image
+    if (currentImageRef.current) {
+      fabricCanvas.remove(currentImageRef.current);
+    }
+    
+    // Clear any selection state
+    drawStartPointRef.current = null;
+    if (selectionRectRef.current) {
+      fabricCanvas.remove(selectionRectRef.current);
+      selectionRectRef.current = null;
+    }
+    if (startMarkerRef.current) {
+      fabricCanvas.remove(startMarkerRef.current);
+      startMarkerRef.current = null;
+    }
+    setSelectionMode(false);
+
+    // Reset zoom and pan
+    fabricCanvas.setZoom(1);
+    fabricCanvas.viewportTransform = [1, 0, 0, 1, 0, 0];
+    setZoom(1);
+
+    FabricImage.fromURL(pdfPageImages[currentPage]).then((img) => {
+      if (!fabricCanvas) return;
+      
+      const scale = Math.min(
+        fabricCanvas.width! / img.width!,
+        fabricCanvas.height! / img.height!
+      );
+      
+      img.scale(scale * 0.9);
+      img.set({
+        left: (fabricCanvas.width! - img.width! * img.scaleX!) / 2,
+        top: (fabricCanvas.height! - img.height! * img.scaleY!) / 2,
+        selectable: false,
+        evented: false,
+      });
+      
+      currentImageRef.current = img;
+      fabricCanvas.add(img);
+      fabricCanvas.sendObjectToBack(img);
+      fabricCanvas.renderAll();
+    });
+  }, [currentPage, fabricCanvas]);
 
   const handleExtractFromRegion = async (canvas: FabricCanvas, rect: FabricRect) => {
-    if (!convertedPdfImage) return;
+    if (pdfPageImages.length === 0) return;
 
     setIsExtracting(true);
     try {
@@ -369,9 +426,9 @@ export default function MunicipalityExtractionDialog({
       const rectWidth = rect.width! / (imgScaleX * zoom);
       const rectHeight = rect.height! / (imgScaleY * zoom);
       
-      // Crop the original image
+      // Crop the current page image
       const img = new Image();
-      img.src = convertedPdfImage;
+      img.src = pdfPageImages[currentPage];
       await new Promise((resolve) => { img.onload = resolve; });
       
       const croppedCanvas = document.createElement('canvas');
@@ -567,13 +624,15 @@ export default function MunicipalityExtractionDialog({
             <Card className="overflow-hidden flex flex-col">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-sm">Source Document</CardTitle>
+                  <CardTitle className="text-sm">
+                    Source Document {totalPages > 0 && `(Page ${currentPage + 1} of ${totalPages})`}
+                  </CardTitle>
                   <div className="flex items-center gap-2">
                     <Button
                       size="sm"
                       variant="ghost"
                       onClick={handleZoomIn}
-                      disabled={!convertedPdfImage}
+                      disabled={pdfPageImages.length === 0}
                     >
                       <ZoomIn className="h-4 w-4" />
                     </Button>
@@ -581,7 +640,7 @@ export default function MunicipalityExtractionDialog({
                       size="sm"
                       variant="ghost"
                       onClick={handleZoomOut}
-                      disabled={!convertedPdfImage}
+                      disabled={pdfPageImages.length === 0}
                     >
                       <ZoomOut className="h-4 w-4" />
                     </Button>
@@ -589,7 +648,7 @@ export default function MunicipalityExtractionDialog({
                       size="sm"
                       variant="ghost"
                       onClick={handleResetZoom}
-                      disabled={!convertedPdfImage}
+                      disabled={pdfPageImages.length === 0}
                     >
                       <RotateCcw className="h-4 w-4" />
                     </Button>
@@ -610,6 +669,31 @@ export default function MunicipalityExtractionDialog({
                 )}
               </CardContent>
               <div className="border-t p-3 space-y-2">
+                {/* Pagination controls */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between gap-2 pb-2 border-b">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setCurrentPage(prev => Math.max(0, prev - 1))}
+                      disabled={currentPage === 0 || selectionMode}
+                    >
+                      Previous
+                    </Button>
+                    <span className="text-xs text-muted-foreground">
+                      Page {currentPage + 1} / {totalPages}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setCurrentPage(prev => Math.min(totalPages - 1, prev + 1))}
+                      disabled={currentPage === totalPages - 1 || selectionMode}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                )}
+                
                 {selectionMode ? (
                   <>
                     <p className="text-xs text-muted-foreground text-center mb-2">
@@ -628,7 +712,7 @@ export default function MunicipalityExtractionDialog({
                   <Button
                     size="sm"
                     onClick={handleStartSelection}
-                    disabled={!convertedPdfImage || isExtracting}
+                    disabled={pdfPageImages.length === 0 || isExtracting}
                     className="w-full"
                   >
                     <Plus className="h-4 w-4 mr-2" />
