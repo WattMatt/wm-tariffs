@@ -42,7 +42,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
   const [documents, setDocuments] = useState<SiteDocument[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [documentType, setDocumentType] = useState<string>("municipal_account");
   const [viewingExtraction, setViewingExtraction] = useState<any>(null);
   const [isConvertingPdf, setIsConvertingPdf] = useState(false);
@@ -81,8 +81,8 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
 
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setSelectedFile(e.target.files[0]);
+    if (e.target.files && e.target.files.length > 0) {
+      setSelectedFiles(Array.from(e.target.files));
     }
   };
 
@@ -145,96 +145,103 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
   };
 
   const handleUpload = async () => {
-    if (!selectedFile) {
-      toast.error("Please select a file");
+    if (selectedFiles.length === 0) {
+      toast.error("Please select at least one file");
       return;
     }
 
     setIsUploading(true);
     try {
-      const fileExt = selectedFile.name.split('.').pop()?.toLowerCase();
-      const isPdf = fileExt === 'pdf';
-
-      // Upload original file to storage
-      const fileName = `${siteId}/${Date.now()}-${selectedFile.name}`;
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from("site-documents")
-        .upload(fileName, selectedFile);
-
-      if (uploadError) throw uploadError;
-
-      let convertedImagePath: string | null = null;
-
-      // If it's a PDF, convert to image and upload
-      if (isPdf) {
-        toast.info("Converting PDF to image for AI processing...");
-        const imageBlob = await convertPdfToImage(selectedFile);
-        const imagePath = `${siteId}/${Date.now()}-converted.png`;
-        
-        const { error: imageUploadError } = await supabase.storage
-          .from("site-documents")
-          .upload(imagePath, imageBlob);
-
-        if (imageUploadError) {
-          console.error("Error uploading converted image:", imageUploadError);
-          toast.error("Failed to convert PDF for AI processing");
-        } else {
-          convertedImagePath = imagePath;
-          toast.success("PDF converted to image successfully");
-        }
-      }
-
-      // Create document record
       const { data: user } = await supabase.auth.getUser();
-      const { data: document, error: docError } = await supabase
-        .from("site_documents")
-        .insert({
-          site_id: siteId,
-          file_name: selectedFile.name,
-          file_path: uploadData.path,
-          file_size: selectedFile.size,
-          document_type: documentType as any,
-          uploaded_by: user.user?.id || null,
-          extraction_status: 'pending',
-          converted_image_path: convertedImagePath,
-        })
-        .select()
-        .single();
+      let successCount = 0;
+      let failCount = 0;
 
-      if (docError) throw docError;
+      // Process all files in parallel
+      await Promise.all(
+        selectedFiles.map(async (file) => {
+          try {
+            const fileExt = file.name.split('.').pop()?.toLowerCase();
+            const isPdf = fileExt === 'pdf';
 
-      toast.success("Document uploaded successfully");
+            // Upload original file to storage
+            const fileName = `${siteId}/${Date.now()}-${file.name}`;
+            const { data: uploadData, error: uploadError } = await supabase.storage
+              .from("site-documents")
+              .upload(fileName, file);
 
-      // Get signed URL for AI processing (use converted image if available)
-      const pathToProcess = convertedImagePath || uploadData.path;
-      const { data: urlData } = await supabase.storage
-        .from("site-documents")
-        .createSignedUrl(pathToProcess, 3600);
+            if (uploadError) throw uploadError;
 
-      if (urlData?.signedUrl) {
-        // Trigger AI extraction
-        toast.info("Starting AI extraction...");
-        const { error: extractError } = await supabase.functions.invoke("extract-document-data", {
-          body: {
-            documentId: document.id,
-            fileUrl: urlData.signedUrl,
-            documentType: documentType
+            let convertedImagePath: string | null = null;
+
+            // If it's a PDF, convert to image and upload
+            if (isPdf) {
+              const imageBlob = await convertPdfToImage(file);
+              const imagePath = `${siteId}/${Date.now()}-converted.png`;
+              
+              const { error: imageUploadError } = await supabase.storage
+                .from("site-documents")
+                .upload(imagePath, imageBlob);
+
+              if (!imageUploadError) {
+                convertedImagePath = imagePath;
+              }
+            }
+
+            // Create document record
+            const { data: document, error: docError } = await supabase
+              .from("site_documents")
+              .insert({
+                site_id: siteId,
+                file_name: file.name,
+                file_path: uploadData.path,
+                file_size: file.size,
+                document_type: documentType as any,
+                uploaded_by: user.user?.id || null,
+                extraction_status: 'pending',
+                converted_image_path: convertedImagePath,
+              })
+              .select()
+              .single();
+
+            if (docError) throw docError;
+
+            // Get signed URL for AI processing (use converted image if available)
+            const pathToProcess = convertedImagePath || uploadData.path;
+            const { data: urlData } = await supabase.storage
+              .from("site-documents")
+              .createSignedUrl(pathToProcess, 3600);
+
+            if (urlData?.signedUrl) {
+              // Trigger AI extraction
+              await supabase.functions.invoke("extract-document-data", {
+                body: {
+                  documentId: document.id,
+                  fileUrl: urlData.signedUrl,
+                  documentType: documentType
+                }
+              });
+            }
+
+            successCount++;
+          } catch (error) {
+            console.error(`Error uploading ${file.name}:`, error);
+            failCount++;
           }
-        });
+        })
+      );
 
-        if (extractError) {
-          console.error("Extraction error:", extractError);
-          toast.warning("Document uploaded but extraction failed");
-        } else {
-          toast.success("Data extracted successfully!");
-        }
+      if (successCount > 0) {
+        toast.success(`${successCount} document(s) uploaded successfully`);
+      }
+      if (failCount > 0) {
+        toast.error(`${failCount} document(s) failed to upload`);
       }
 
-      setSelectedFile(null);
+      setSelectedFiles([]);
       fetchDocuments();
     } catch (error) {
       console.error("Upload error:", error);
-      toast.error("Failed to upload document");
+      toast.error("Failed to upload documents");
     } finally {
       setIsUploading(false);
     }
@@ -316,20 +323,26 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="file-upload">Select File</Label>
+              <Label htmlFor="file-upload">Select Files</Label>
               <Input
                 id="file-upload"
                 type="file"
                 accept=".pdf,.jpg,.jpeg,.png"
                 onChange={handleFileSelect}
                 disabled={isUploading}
+                multiple
               />
+              {selectedFiles.length > 0 && (
+                <p className="text-sm text-muted-foreground">
+                  {selectedFiles.length} file(s) selected
+                </p>
+              )}
             </div>
 
             <div className="flex items-end">
               <Button
                 onClick={handleUpload}
-                disabled={!selectedFile || isUploading || isConvertingPdf}
+                disabled={selectedFiles.length === 0 || isUploading || isConvertingPdf}
                 className="w-full"
               >
                 {isUploading || isConvertingPdf ? (
