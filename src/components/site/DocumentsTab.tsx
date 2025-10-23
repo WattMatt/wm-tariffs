@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -46,6 +47,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
   const [documentType, setDocumentType] = useState<string>("municipal_account");
   const [viewingExtraction, setViewingExtraction] = useState<any>(null);
   const [isConvertingPdf, setIsConvertingPdf] = useState(false);
+  const [selectedDocuments, setSelectedDocuments] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetchDocuments();
@@ -294,6 +296,67 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
     }
   };
 
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedDocuments(new Set(documents.map(doc => doc.id)));
+    } else {
+      setSelectedDocuments(new Set());
+    }
+  };
+
+  const handleSelectDocument = (docId: string, checked: boolean) => {
+    const newSelected = new Set(selectedDocuments);
+    if (checked) {
+      newSelected.add(docId);
+    } else {
+      newSelected.delete(docId);
+    }
+    setSelectedDocuments(newSelected);
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedDocuments.size === 0) return;
+    
+    if (!confirm(`Are you sure you want to delete ${selectedDocuments.size} document(s)?`)) return;
+
+    try {
+      const docsToDelete = documents.filter(doc => selectedDocuments.has(doc.id));
+      
+      await Promise.all(
+        docsToDelete.map(async (doc) => {
+          await supabase.storage.from("site-documents").remove([doc.file_path]);
+          await supabase.from("site_documents").delete().eq("id", doc.id);
+        })
+      );
+
+      toast.success(`${selectedDocuments.size} document(s) deleted`);
+      setSelectedDocuments(new Set());
+      fetchDocuments();
+    } catch (error) {
+      console.error("Bulk delete error:", error);
+      toast.error("Failed to delete documents");
+    }
+  };
+
+  const handleBulkDownload = async () => {
+    if (selectedDocuments.size === 0) return;
+
+    try {
+      const docsToDownload = documents.filter(doc => selectedDocuments.has(doc.id));
+      
+      for (const doc of docsToDownload) {
+        await handleDownload(doc.file_path, doc.file_name);
+        // Add small delay between downloads to avoid overwhelming the browser
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+
+      toast.success(`Downloaded ${selectedDocuments.size} document(s)`);
+    } catch (error) {
+      console.error("Bulk download error:", error);
+      toast.error("Failed to download documents");
+    }
+  };
+
   return (
     <>
       <Card>
@@ -360,6 +423,34 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
             </div>
           </div>
 
+          {selectedDocuments.size > 0 && (
+            <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/50">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">
+                  {selectedDocuments.size} document(s) selected
+                </span>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleBulkDownload}
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  Download Selected
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleBulkDelete}
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete Selected
+                </Button>
+              </div>
+            </div>
+          )}
+
           {isLoading ? (
             <div className="flex justify-center py-8">
               <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
@@ -375,6 +466,12 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-12">
+                      <Checkbox
+                        checked={selectedDocuments.size === documents.length && documents.length > 0}
+                        onCheckedChange={handleSelectAll}
+                      />
+                    </TableHead>
                     <TableHead>File Name</TableHead>
                     <TableHead>Type</TableHead>
                     <TableHead>Upload Date</TableHead>
@@ -387,6 +484,12 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                 <TableBody>
                   {documents.map((doc) => (
                     <TableRow key={doc.id}>
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedDocuments.has(doc.id)}
+                          onCheckedChange={(checked) => handleSelectDocument(doc.id, checked as boolean)}
+                        />
+                      </TableCell>
                       <TableCell className="font-medium">{doc.file_name}</TableCell>
                       <TableCell>
                         <Badge variant="outline">
