@@ -42,7 +42,6 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
   const [viewingExtraction, setViewingExtraction] = useState<any>(null);
   const [schematicPreviewUrl, setSchematicPreviewUrl] = useState<string | null>(null);
   const [isLoadingSchematic, setIsLoadingSchematic] = useState(false);
-  const [viewingDocument, setViewingDocument] = useState<{ url: string; fileName: string; isPdf?: boolean } | null>(null);
 
   useEffect(() => {
     fetchDocuments();
@@ -112,15 +111,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      const maxSize = 50 * 1024 * 1024; // 50MB
-      
-      if (file.size > maxSize) {
-        toast.error("File size must be less than 50MB");
-        return;
-      }
-      
-      setSelectedFile(file);
+      setSelectedFile(e.target.files[0]);
     }
   };
 
@@ -132,21 +123,17 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
 
     setIsUploading(true);
     try {
-      const timestamp = Date.now();
-      const isPdf = selectedFile.name.toLowerCase().endsWith('.pdf');
-      const fileExtension = selectedFile.name.split('.').pop()?.toLowerCase();
-      
-      // Upload original file to storage with timestamped filename
-      const fileName = `${siteId}/${timestamp}-${selectedFile.name}`;
+      // Upload file to storage
+      const fileName = `${siteId}/${Date.now()}-${selectedFile.name}`;
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from("site-documents")
         .upload(fileName, selectedFile);
 
       if (uploadError) throw uploadError;
 
-      // Create document record with metadata
+      // Create document record
       const { data: user } = await supabase.auth.getUser();
-      const { data: docData, error: docError } = await supabase
+      const { data: document, error: docError } = await supabase
         .from("site_documents")
         .insert({
           site_id: siteId,
@@ -164,25 +151,28 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
 
       toast.success("Document uploaded successfully");
 
-      // If PDF, trigger background conversion (don't wait for it)
-      if (isPdf && docData) {
-        console.log("Triggering background PDF conversion for document:", docData.id);
-        supabase.functions.invoke("convert-pdf-to-image", {
+      // Get signed URL for AI processing
+      const { data: urlData } = await supabase.storage
+        .from("site-documents")
+        .createSignedUrl(uploadData.path, 3600);
+
+      if (urlData?.signedUrl) {
+        // Trigger AI extraction
+        toast.info("Starting AI extraction...");
+        const { error: extractError } = await supabase.functions.invoke("extract-document-data", {
           body: {
-            documentId: docData.id,
-            filePath: uploadData.path,
-            bucketName: 'site-documents',
-            tableName: 'site_documents'
-          }
-        }).then(({ error }) => {
-          if (error) {
-            console.error("Background conversion error:", error);
-          } else {
-            console.log("Background PDF conversion started successfully");
-            // Refresh documents to show converted image when ready
-            setTimeout(() => fetchDocuments(), 3000);
+            documentId: document.id,
+            fileUrl: urlData.signedUrl,
+            documentType: documentType
           }
         });
+
+        if (extractError) {
+          console.error("Extraction error:", extractError);
+          toast.warning("Document uploaded but extraction failed");
+        } else {
+          toast.success("Data extracted successfully!");
+        }
       }
 
       setSelectedFile(null);
@@ -192,69 +182,6 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
       toast.error("Failed to upload document");
     } finally {
       setIsUploading(false);
-    }
-  };
-
-  const handleExtract = async () => {
-    const pendingDocs = documents.filter(doc => doc.extraction_status === 'pending');
-    
-    if (pendingDocs.length === 0) {
-      toast.info("No pending documents to extract");
-      return;
-    }
-
-    setIsLoading(true);
-    let successCount = 0;
-    let failCount = 0;
-
-    try {
-      toast.info(`Starting extraction for ${pendingDocs.length} document(s)...`);
-
-      for (const doc of pendingDocs) {
-        try {
-          // Use converted image path if available, otherwise use original file path
-          const filePathToUse = (doc as any).converted_image_path || doc.file_path;
-          
-          // Get signed URL for AI processing
-          const { data: urlData } = await supabase.storage
-            .from("site-documents")
-            .createSignedUrl(filePathToUse, 3600);
-
-          if (urlData?.signedUrl) {
-            const { error: extractError } = await supabase.functions.invoke("extract-document-data", {
-              body: {
-                documentId: doc.id,
-                fileUrl: urlData.signedUrl,
-                documentType: doc.document_type
-              }
-            });
-
-            if (extractError) {
-              console.error(`Extraction error for ${doc.file_name}:`, extractError);
-              failCount++;
-            } else {
-              successCount++;
-            }
-          }
-        } catch (error) {
-          console.error(`Error processing ${doc.file_name}:`, error);
-          failCount++;
-        }
-      }
-
-      if (successCount > 0) {
-        toast.success(`Successfully extracted ${successCount} document(s)`);
-      }
-      if (failCount > 0) {
-        toast.error(`Failed to extract ${failCount} document(s)`);
-      }
-
-      fetchDocuments();
-    } catch (error) {
-      console.error("Extraction error:", error);
-      toast.error("Failed to extract documents");
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -289,25 +216,6 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
     } catch (error) {
       console.error("Delete error:", error);
       toast.error("Failed to delete document");
-    }
-  };
-
-  const handleViewDocument = async (doc: SiteDocument) => {
-    try {
-      // Try converted image first, fall back to original file
-      const filePathToView = (doc as any).converted_image_path || doc.file_path;
-      
-      const { data } = await supabase.storage
-        .from("site-documents")
-        .createSignedUrl(filePathToView, 3600);
-
-      if (data?.signedUrl) {
-        const isPdf = doc.file_name.toLowerCase().endsWith('.pdf') && !filePathToView.includes('_converted');
-        setViewingDocument({ url: data.signedUrl, fileName: doc.file_name, isPdf });
-      }
-    } catch (error) {
-      console.error("View error:", error);
-      toast.error("Failed to view document");
     }
   };
 
@@ -358,13 +266,10 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
               <Input
                 id="file-upload"
                 type="file"
-                accept=".pdf,.jpg,.jpeg,.png,.svg"
+                accept=".pdf,.jpg,.jpeg,.png"
                 onChange={handleFileSelect}
                 disabled={isUploading}
               />
-              <p className="text-xs text-muted-foreground">
-                PDF, PNG, JPG, or SVG (max 50MB)
-              </p>
             </div>
 
             <div className="flex items-end">
@@ -381,31 +286,11 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                 ) : (
                   <>
                     <Upload className="w-4 h-4 mr-2" />
-                    Upload
+                    Upload & Extract
                   </>
                 )}
               </Button>
             </div>
-          </div>
-
-          <div className="flex justify-end">
-            <Button
-              onClick={handleExtract}
-              disabled={isLoading || documents.filter(doc => doc.extraction_status === 'pending').length === 0}
-              variant="secondary"
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Extracting...
-                </>
-              ) : (
-                <>
-                  <FileText className="w-4 h-4 mr-2" />
-                  Extract Pending ({documents.filter(doc => doc.extraction_status === 'pending').length})
-                </>
-              )}
-            </Button>
           </div>
 
           {isLoading ? (
@@ -466,20 +351,11 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleViewDocument(doc)}
-                            title="View document"
-                          >
-                            <FileText className="w-4 h-4" />
-                          </Button>
                           {doc.document_extractions?.[0] && (
                             <Button
                               variant="ghost"
                               size="sm"
                               onClick={() => setViewingExtraction(doc.document_extractions[0])}
-                              title="View extracted data"
                             >
                               <Eye className="w-4 h-4" />
                             </Button>
@@ -488,7 +364,6 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                             variant="ghost"
                             size="sm"
                             onClick={() => handleDownload(doc.file_path, doc.file_name)}
-                            title="Download document"
                           >
                             <Download className="w-4 h-4" />
                           </Button>
@@ -496,7 +371,6 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                             variant="ghost"
                             size="sm"
                             onClick={() => handleDelete(doc.id, doc.file_path)}
-                            title="Delete document"
                           >
                             <Trash2 className="w-4 h-4" />
                           </Button>
@@ -550,34 +424,6 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
         </CardContent>
       </Card>
       </div>
-
-      <Dialog open={!!viewingDocument} onOpenChange={() => setViewingDocument(null)}>
-        <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden">
-          <DialogHeader>
-            <DialogTitle>{viewingDocument?.fileName}</DialogTitle>
-            <DialogDescription>
-              Document preview
-            </DialogDescription>
-          </DialogHeader>
-          {viewingDocument && (
-            <div className="overflow-y-auto max-h-[calc(90vh-120px)]">
-              {viewingDocument.isPdf ? (
-                <iframe 
-                  src={viewingDocument.url}
-                  className="w-full h-[calc(90vh-120px)]"
-                  title={viewingDocument.fileName}
-                />
-              ) : (
-                <img 
-                  src={viewingDocument.url} 
-                  alt={viewingDocument.fileName}
-                  className="w-full h-auto"
-                />
-              )}
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
 
       <Dialog open={!!viewingExtraction} onOpenChange={() => setViewingExtraction(null)}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">

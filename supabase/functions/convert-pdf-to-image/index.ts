@@ -12,34 +12,111 @@ serve(async (req) => {
   }
 
   try {
-    const { schematicId, documentId, filePath, bucketName = 'schematics', tableName = 'schematics' } = await req.json();
+    const { schematicId, filePath } = await req.json();
     
-    if ((!schematicId && !documentId) || !filePath || !bucketName || !tableName) {
+    if (!schematicId || !filePath) {
       return new Response(
-        JSON.stringify({ error: 'ID, filePath, bucketName, and tableName are required' }),
+        JSON.stringify({ error: 'schematicId and filePath are required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const recordId = schematicId || documentId;
-    console.log(`PDF conversion requested for ${tableName} ${recordId}, file: ${filePath}`);
-    console.log(`Note: PDF viewing is now handled client-side for better compatibility`);
+    console.log(`Converting PDF to image for schematic ${schematicId}, file: ${filePath}`);
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // For now, we don't actually convert - PDFs are displayed directly in browser
-    // This edge function is kept for backwards compatibility but returns success immediately
-    // Future enhancement: could use external service like CloudConvert API for real conversion
+    // Download the PDF from storage
+    const { data: pdfData, error: downloadError } = await supabase
+      .storage
+      .from('schematics')
+      .download(filePath);
+      
+    if (downloadError || !pdfData) {
+      console.error('Error downloading PDF:', downloadError);
+      throw new Error('Failed to download PDF file');
+    }
 
-    console.log(`${tableName} record - PDF will be displayed directly in browser`);
+    console.log('PDF downloaded successfully');
+
+    // Convert PDF to image using pdfjs-serverless (designed for edge functions)
+    const arrayBuffer = await pdfData.arrayBuffer();
+    const uint8Array = new Uint8Array(arrayBuffer);
+
+    // Import pdfjs-serverless - works without workers in edge environments
+    const { getDocument } = await import('https://esm.sh/pdfjs-serverless@0.3.2');
+
+    // Load PDF
+    const loadingTask = getDocument(uint8Array);
+    const pdf = await loadingTask.promise;
+    
+    console.log(`PDF loaded, pages: ${pdf.numPages}`);
+
+    // Get first page
+    const page = await pdf.getPage(1);
+    const viewport = page.getViewport({ scale: 2.0 }); // 2x scale for better quality
+
+    // Create canvas (using canvas package for Deno)
+    const { createCanvas } = await import('https://deno.land/x/canvas@v1.4.1/mod.ts');
+    const canvas = createCanvas(viewport.width, viewport.height);
+    const context = canvas.getContext('2d');
+
+    // Render PDF page to canvas
+    await page.render({
+      canvasContext: context,
+      viewport: viewport,
+    }).promise;
+
+    console.log('PDF rendered to canvas');
+
+    // Convert canvas to PNG buffer
+    const imageBuffer = canvas.toBuffer('image/png');
+    
+    // Generate unique filename for the converted image
+    const originalFilename = filePath.split('/').pop()?.replace('.pdf', '') || 'schematic';
+    const imagePath = `${filePath.replace('.pdf', '')}_converted.png`;
+
+    // Upload the converted image to storage
+    const { error: uploadError } = await supabase
+      .storage
+      .from('schematics')
+      .upload(imagePath, imageBuffer, {
+        contentType: 'image/png',
+        upsert: true,
+      });
+
+    if (uploadError) {
+      console.error('Error uploading converted image:', uploadError);
+      throw new Error('Failed to upload converted image');
+    }
+
+    console.log('Converted image uploaded:', imagePath);
+
+    // Update the schematic record with the converted image path
+    const { error: updateError } = await supabase
+      .from('schematics')
+      .update({ converted_image_path: imagePath })
+      .eq('id', schematicId);
+
+    if (updateError) {
+      console.error('Error updating schematic record:', updateError);
+      throw new Error('Failed to update schematic record');
+    }
+
+    console.log('Schematic record updated successfully');
+
+    // Get public URL for the converted image
+    const { data: urlData } = supabase
+      .storage
+      .from('schematics')
+      .getPublicUrl(imagePath);
 
     return new Response(
       JSON.stringify({ 
         success: true,
-        message: 'PDF will be displayed directly - conversion not needed',
-        note: 'Modern browsers handle PDF display natively',
+        imagePath,
+        imageUrl: urlData.publicUrl,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
@@ -48,7 +125,7 @@ serve(async (req) => {
     console.error('Error in convert-pdf-to-image:', error);
     return new Response(
       JSON.stringify({ 
-        error: error instanceof Error ? error.message : 'Failed to process PDF',
+        error: error instanceof Error ? error.message : 'Failed to convert PDF',
         details: error instanceof Error ? error.stack : undefined
       }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

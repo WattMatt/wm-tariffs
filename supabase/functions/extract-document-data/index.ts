@@ -42,28 +42,7 @@ Return the data in a structured format.`
 - Tenant information
 Return the data in a structured format.`;
 
-    // Download the file and convert to base64 for AI processing
-    const fileResponse = await fetch(fileUrl);
-    if (!fileResponse.ok) {
-      throw new Error(`Failed to download file: ${fileResponse.status}`);
-    }
-    
-    const fileBuffer = await fileResponse.arrayBuffer();
-    const base64File = btoa(String.fromCharCode(...new Uint8Array(fileBuffer)));
-    
-    // Detect MIME type from URL
-    let mimeType = 'image/jpeg';
-    if (fileUrl.toLowerCase().includes('.png')) {
-      mimeType = 'image/png';
-    } else if (fileUrl.toLowerCase().includes('.pdf')) {
-      mimeType = 'application/pdf';
-    } else if (fileUrl.toLowerCase().includes('.webp')) {
-      mimeType = 'image/webp';
-    }
-    
-    console.log(`File downloaded, size: ${fileBuffer.byteLength} bytes, type: ${mimeType}`);
-
-    // Call Lovable AI for document extraction using base64 encoding
+    // Call Lovable AI for document extraction
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -78,12 +57,7 @@ Return the data in a structured format.`;
             role: "user",
             content: [
               { type: "text", text: "Extract the relevant billing information from this document." },
-              { 
-                type: "image_url", 
-                image_url: { 
-                  url: `data:${mimeType};base64,${base64File}` 
-                } 
-              }
+              { type: "image_url", image_url: { url: fileUrl } }
             ]
           }
         ],
