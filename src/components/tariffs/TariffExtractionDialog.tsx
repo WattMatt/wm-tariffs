@@ -3,10 +3,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, CheckCircle2, X } from "lucide-react";
+import { Loader2, CheckCircle2, X, ZoomIn, ZoomOut, Maximize2, Trash2, Plus } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { pdfjs } from 'react-pdf';
 import { toast } from "sonner";
 
@@ -232,6 +236,80 @@ export default function TariffExtractionDialog({
     setExtractedData(newData);
   };
 
+  const addBlock = (tariffIndex: number) => {
+    if (!extractedData) return;
+    
+    const newData = { ...extractedData };
+    const newBlock = {
+      blockNumber: newData.tariffStructures[tariffIndex].blocks.length + 1,
+      kwhFrom: 0,
+      kwhTo: null,
+      energyChargeCents: 0
+    };
+    newData.tariffStructures[tariffIndex].blocks.push(newBlock);
+    setExtractedData(newData);
+  };
+
+  const deleteBlock = (tariffIndex: number, blockIndex: number) => {
+    if (!extractedData) return;
+    
+    const newData = { ...extractedData };
+    newData.tariffStructures[tariffIndex].blocks.splice(blockIndex, 1);
+    setExtractedData(newData);
+  };
+
+  const addCharge = (tariffIndex: number) => {
+    if (!extractedData) return;
+    
+    const newData = { ...extractedData };
+    const newCharge = {
+      chargeType: "Other",
+      chargeAmount: 0,
+      description: "",
+      unit: "R"
+    };
+    newData.tariffStructures[tariffIndex].charges.push(newCharge);
+    setExtractedData(newData);
+  };
+
+  const deleteCharge = (tariffIndex: number, chargeIndex: number) => {
+    if (!extractedData) return;
+    
+    const newData = { ...extractedData };
+    newData.tariffStructures[tariffIndex].charges.splice(chargeIndex, 1);
+    setExtractedData(newData);
+  };
+
+  const addTouPeriod = (tariffIndex: number) => {
+    if (!extractedData) return;
+    
+    const newData = { ...extractedData };
+    const newPeriod = {
+      periodType: "Peak",
+      season: "Summer",
+      dayType: "Weekday",
+      startHour: 0,
+      endHour: 24,
+      energyChargeCents: 0
+    };
+    
+    if (!newData.tariffStructures[tariffIndex].touPeriods) {
+      newData.tariffStructures[tariffIndex].touPeriods = [];
+    }
+    newData.tariffStructures[tariffIndex].touPeriods!.push(newPeriod);
+    setExtractedData(newData);
+  };
+
+  const deleteTouPeriod = (tariffIndex: number, periodIndex: number) => {
+    if (!extractedData) return;
+    
+    const newData = { ...extractedData };
+    if (newData.tariffStructures[tariffIndex].touPeriods) {
+      newData.tariffStructures[tariffIndex].touPeriods.splice(periodIndex, 1);
+    }
+    setExtractedData(newData);
+  };
+
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-[95vw] h-[90vh] p-0">
@@ -257,12 +335,38 @@ export default function TariffExtractionDialog({
                       <p className="text-sm text-muted-foreground">Converting PDF...</p>
                     </div>
                   ) : convertedPdfImage ? (
-                    <div className="p-4">
-                      <img 
-                        src={convertedPdfImage} 
-                        alt="PDF Preview" 
-                        className="w-full border border-border rounded"
-                      />
+                    <div className="relative h-full">
+                      <TransformWrapper
+                        initialScale={1}
+                        minScale={0.5}
+                        maxScale={3}
+                        centerOnInit={true}
+                      >
+                        {({ zoomIn, zoomOut, resetTransform }) => (
+                          <>
+                            <div className="absolute top-2 right-2 z-10 flex gap-2">
+                              <Button size="icon" variant="secondary" onClick={() => zoomIn()}>
+                                <ZoomIn className="w-4 h-4" />
+                              </Button>
+                              <Button size="icon" variant="secondary" onClick={() => zoomOut()}>
+                                <ZoomOut className="w-4 h-4" />
+                              </Button>
+                              <Button size="icon" variant="secondary" onClick={() => resetTransform()}>
+                                <Maximize2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                            <TransformComponent wrapperClass="!w-full !h-full" contentClass="!w-full !h-full">
+                              <div className="p-4">
+                                <img 
+                                  src={convertedPdfImage} 
+                                  alt="PDF Preview" 
+                                  className="w-full border border-border rounded"
+                                />
+                              </div>
+                            </TransformComponent>
+                          </>
+                        )}
+                      </TransformWrapper>
                     </div>
                   ) : isExcelFile ? (
                     <div className="p-4">
@@ -352,9 +456,132 @@ export default function TariffExtractionDialog({
                       {extractedData.tariffStructures.map((tariff, tariffIdx) => (
                         <Card key={tariffIdx} className="border-2">
                           <CardHeader className="pb-3">
-                            <CardTitle className="text-sm">{tariff.name}</CardTitle>
+                            <div>
+                              <Label className="text-xs">Tariff Name</Label>
+                              <Input
+                                value={tariff.name}
+                                onChange={(e) =>
+                                  updateTariffStructure(tariffIdx, { name: e.target.value })
+                                }
+                                className="h-8 text-sm font-semibold mt-1"
+                              />
+                            </div>
                           </CardHeader>
                           <CardContent className="space-y-4">
+                            {/* Metadata Fields */}
+                            <div className="grid grid-cols-2 gap-3 p-3 bg-muted/30 rounded-lg">
+                              <div>
+                                <Label className="text-xs">Tariff Type</Label>
+                                <Select
+                                  value={tariff.tariffType}
+                                  onValueChange={(value) =>
+                                    updateTariffStructure(tariffIdx, { tariffType: value })
+                                  }
+                                >
+                                  <SelectTrigger className="h-8 text-sm">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="Domestic">Domestic</SelectItem>
+                                    <SelectItem value="Commercial">Commercial</SelectItem>
+                                    <SelectItem value="Industrial">Industrial</SelectItem>
+                                    <SelectItem value="Agricultural">Agricultural</SelectItem>
+                                    <SelectItem value="Other">Other</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div>
+                                <Label className="text-xs">Voltage Level</Label>
+                                <Input
+                                  value={tariff.voltageLevel || ""}
+                                  onChange={(e) =>
+                                    updateTariffStructure(tariffIdx, { voltageLevel: e.target.value })
+                                  }
+                                  placeholder="e.g., LV, MV, HV"
+                                  className="h-8 text-sm"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs">Transmission Zone</Label>
+                                <Input
+                                  value={tariff.transmissionZone || ""}
+                                  onChange={(e) =>
+                                    updateTariffStructure(tariffIdx, { transmissionZone: e.target.value })
+                                  }
+                                  className="h-8 text-sm"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs">Meter Configuration</Label>
+                                <Input
+                                  value={tariff.meterConfiguration || ""}
+                                  onChange={(e) =>
+                                    updateTariffStructure(tariffIdx, { meterConfiguration: e.target.value })
+                                  }
+                                  placeholder="e.g., Single, Three Phase"
+                                  className="h-8 text-sm"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs">Effective From</Label>
+                                <Input
+                                  type="date"
+                                  value={tariff.effectiveFrom}
+                                  onChange={(e) =>
+                                    updateTariffStructure(tariffIdx, { effectiveFrom: e.target.value })
+                                  }
+                                  className="h-8 text-sm"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs">Effective To</Label>
+                                <Input
+                                  type="date"
+                                  value={tariff.effectiveTo || ""}
+                                  onChange={(e) =>
+                                    updateTariffStructure(tariffIdx, { effectiveTo: e.target.value })
+                                  }
+                                  className="h-8 text-sm"
+                                />
+                              </div>
+                              <div className="col-span-2">
+                                <Label className="text-xs">Description</Label>
+                                <Textarea
+                                  value={tariff.description || ""}
+                                  onChange={(e) =>
+                                    updateTariffStructure(tariffIdx, { description: e.target.value })
+                                  }
+                                  placeholder="Additional notes about this tariff"
+                                  className="text-sm min-h-[60px]"
+                                />
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <Checkbox
+                                  id={`tou-${tariffIdx}`}
+                                  checked={tariff.usesTou}
+                                  onCheckedChange={(checked) =>
+                                    updateTariffStructure(tariffIdx, { usesTou: checked === true })
+                                  }
+                                />
+                                <Label htmlFor={`tou-${tariffIdx}`} className="text-xs">
+                                  Uses Time of Use (TOU)
+                                </Label>
+                              </div>
+                              {tariff.usesTou && (
+                                <div>
+                                  <Label className="text-xs">TOU Type</Label>
+                                  <Input
+                                    value={tariff.touType || ""}
+                                    onChange={(e) =>
+                                      updateTariffStructure(tariffIdx, { touType: e.target.value })
+                                    }
+                                    placeholder="e.g., Seasonal, Fixed"
+                                    className="h-8 text-sm"
+                                  />
+                                </div>
+                              )}
+                            </div>
+
                             <Tabs defaultValue="blocks" className="w-full">
                               <TabsList className="grid w-full grid-cols-3">
                                 <TabsTrigger value="blocks">Blocks</TabsTrigger>
@@ -364,7 +591,7 @@ export default function TariffExtractionDialog({
 
                               <TabsContent value="blocks" className="space-y-2 mt-4">
                                 {tariff.blocks.map((block, blockIdx) => (
-                                  <div key={blockIdx} className="grid grid-cols-3 gap-2">
+                                  <div key={blockIdx} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-end">
                                     <div>
                                       <Label className="text-xs">From (kWh)</Label>
                                       <Input
@@ -406,6 +633,14 @@ export default function TariffExtractionDialog({
                                         className="h-8 text-sm"
                                       />
                                     </div>
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      onClick={() => deleteBlock(tariffIdx, blockIdx)}
+                                      className="h-8 w-8"
+                                    >
+                                      <Trash2 className="w-4 h-4 text-destructive" />
+                                    </Button>
                                   </div>
                                 ))}
                                 {tariff.blocks.length === 0 && (
@@ -413,12 +648,21 @@ export default function TariffExtractionDialog({
                                     No blocks found
                                   </p>
                                 )}
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => addBlock(tariffIdx)}
+                                  className="w-full"
+                                >
+                                  <Plus className="w-4 h-4 mr-2" />
+                                  Add Block
+                                </Button>
                               </TabsContent>
 
                               <TabsContent value="charges" className="space-y-2 mt-4">
                                 {tariff.charges.map((charge, chargeIdx) => (
-                                  <div key={chargeIdx} className="grid grid-cols-3 gap-2">
-                                    <div className="col-span-2">
+                                  <div key={chargeIdx} className="grid grid-cols-[2fr_1fr_auto] gap-2 items-end">
+                                    <div>
                                       <Label className="text-xs">Description</Label>
                                       <Input
                                         value={charge.description}
@@ -444,6 +688,14 @@ export default function TariffExtractionDialog({
                                         className="h-8 text-sm"
                                       />
                                     </div>
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      onClick={() => deleteCharge(tariffIdx, chargeIdx)}
+                                      className="h-8 w-8"
+                                    >
+                                      <Trash2 className="w-4 h-4 text-destructive" />
+                                    </Button>
                                   </div>
                                 ))}
                                 {tariff.charges.length === 0 && (
@@ -451,12 +703,21 @@ export default function TariffExtractionDialog({
                                     No charges found
                                   </p>
                                 )}
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => addCharge(tariffIdx)}
+                                  className="w-full"
+                                >
+                                  <Plus className="w-4 h-4 mr-2" />
+                                  Add Charge
+                                </Button>
                               </TabsContent>
 
                               <TabsContent value="tou" className="space-y-2 mt-4">
                                 {tariff.touPeriods && tariff.touPeriods.length > 0 ? (
                                   tariff.touPeriods.map((period, periodIdx) => (
-                                    <div key={periodIdx} className="grid grid-cols-4 gap-2">
+                                    <div key={periodIdx} className="grid grid-cols-[1fr_1fr_1fr_1fr_auto] gap-2 items-end">
                                       <div>
                                         <Label className="text-xs">Type</Label>
                                         <Input
@@ -482,27 +743,43 @@ export default function TariffExtractionDialog({
                                         />
                                       </div>
                                       <div>
-                                        <Label className="text-xs">Hours</Label>
-                                        <Input
-                                          value={`${period.startHour}-${period.endHour}`}
-                                          disabled
-                                          className="h-8 text-sm"
-                                        />
-                                      </div>
-                                      <div>
-                                        <Label className="text-xs">Cents/kWh</Label>
+                                        <Label className="text-xs">Start Hour</Label>
                                         <Input
                                           type="number"
-                                          step="0.01"
-                                          value={period.energyChargeCents}
+                                          min="0"
+                                          max="23"
+                                          value={period.startHour}
                                           onChange={(e) =>
                                             updateTouPeriod(tariffIdx, periodIdx, {
-                                              energyChargeCents: parseFloat(e.target.value) || 0
+                                              startHour: parseInt(e.target.value) || 0
                                             })
                                           }
                                           className="h-8 text-sm"
                                         />
                                       </div>
+                                      <div>
+                                        <Label className="text-xs">End Hour</Label>
+                                        <Input
+                                          type="number"
+                                          min="0"
+                                          max="24"
+                                          value={period.endHour}
+                                          onChange={(e) =>
+                                            updateTouPeriod(tariffIdx, periodIdx, {
+                                              endHour: parseInt(e.target.value) || 24
+                                            })
+                                          }
+                                          className="h-8 text-sm"
+                                        />
+                                      </div>
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        onClick={() => deleteTouPeriod(tariffIdx, periodIdx)}
+                                        className="h-8 w-8"
+                                      >
+                                        <Trash2 className="w-4 h-4 text-destructive" />
+                                      </Button>
                                     </div>
                                   ))
                                 ) : (
@@ -510,6 +787,15 @@ export default function TariffExtractionDialog({
                                     No TOU periods found
                                   </p>
                                 )}
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => addTouPeriod(tariffIdx)}
+                                  className="w-full"
+                                >
+                                  <Plus className="w-4 h-4 mr-2" />
+                                  Add TOU Period
+                                </Button>
                               </TabsContent>
                             </Tabs>
                           </CardContent>
