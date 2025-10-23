@@ -42,6 +42,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
   const [viewingExtraction, setViewingExtraction] = useState<any>(null);
   const [schematicPreviewUrl, setSchematicPreviewUrl] = useState<string | null>(null);
   const [isLoadingSchematic, setIsLoadingSchematic] = useState(false);
+  const [viewingDocument, setViewingDocument] = useState<{ url: string; fileName: string } | null>(null);
 
   useEffect(() => {
     fetchDocuments();
@@ -291,6 +292,22 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
     }
   };
 
+  const handleViewDocument = async (doc: SiteDocument) => {
+    try {
+      const filePathToUse = (doc as any).converted_image_path || doc.file_path;
+      const { data } = await supabase.storage
+        .from("site-documents")
+        .createSignedUrl(filePathToUse, 3600);
+
+      if (data?.signedUrl) {
+        setViewingDocument({ url: data.signedUrl, fileName: doc.file_name });
+      }
+    } catch (error) {
+      console.error("View error:", error);
+      toast.error("Failed to view document");
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'completed':
@@ -446,11 +463,20 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleViewDocument(doc)}
+                            title="View document"
+                          >
+                            <FileText className="w-4 h-4" />
+                          </Button>
                           {doc.document_extractions?.[0] && (
                             <Button
                               variant="ghost"
                               size="sm"
                               onClick={() => setViewingExtraction(doc.document_extractions[0])}
+                              title="View extracted data"
                             >
                               <Eye className="w-4 h-4" />
                             </Button>
@@ -459,6 +485,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                             variant="ghost"
                             size="sm"
                             onClick={() => handleDownload(doc.file_path, doc.file_name)}
+                            title="Download document"
                           >
                             <Download className="w-4 h-4" />
                           </Button>
@@ -466,6 +493,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                             variant="ghost"
                             size="sm"
                             onClick={() => handleDelete(doc.id, doc.file_path)}
+                            title="Delete document"
                           >
                             <Trash2 className="w-4 h-4" />
                           </Button>
@@ -519,6 +547,26 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
         </CardContent>
       </Card>
       </div>
+
+      <Dialog open={!!viewingDocument} onOpenChange={() => setViewingDocument(null)}>
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>{viewingDocument?.fileName}</DialogTitle>
+            <DialogDescription>
+              Document preview
+            </DialogDescription>
+          </DialogHeader>
+          {viewingDocument && (
+            <div className="overflow-y-auto max-h-[calc(90vh-120px)]">
+              <img 
+                src={viewingDocument.url} 
+                alt={viewingDocument.fileName}
+                className="w-full h-auto"
+              />
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!viewingExtraction} onOpenChange={() => setViewingExtraction(null)}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
