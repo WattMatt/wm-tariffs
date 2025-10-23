@@ -470,85 +470,84 @@ export default function TariffExtractionDialog({
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm">Source Document</CardTitle>
               </CardHeader>
-              <CardContent className="flex-1 overflow-hidden p-0">
-                <ScrollArea className="h-full">
-                  {isConvertingPdf ? (
-                    <div className="flex flex-col items-center justify-center h-full p-6">
-                      <Loader2 className="w-8 h-8 animate-spin text-primary mb-2" />
-                      <p className="text-sm text-muted-foreground">Converting PDF...</p>
-                    </div>
-                  ) : convertedPdfImage ? (
-                    <div className="relative h-full">
-                      <TransformWrapper
-                        initialScale={1}
-                        minScale={0.5}
-                        maxScale={3}
-                        centerOnInit={true}
-                        wheel={{ 
-                          step: 0.1,
-                          wheelDisabled: true // Disable default wheel zoom
-                        }}
-                        panning={{
-                          wheelPanning: true, // Enable wheel for panning
-                        }}
-                        onWheel={(ref, event) => {
-                          // Custom wheel handler: CTRL+wheel for zoom, wheel for scroll
-                          if (event.ctrlKey) {
-                            event.preventDefault();
-                            const delta = -event.deltaY;
-                            if (delta > 0) {
-                              ref.zoomIn(0.1);
-                            } else {
-                              ref.zoomOut(0.1);
-                            }
-                          }
-                          // Otherwise, let default scroll behavior work
-                        }}
-                      >
-                        {({ zoomIn, zoomOut, resetTransform }) => (
-                          <>
-                            <div className="absolute top-2 right-2 z-10 flex gap-2">
-                              <Button size="icon" variant="secondary" onClick={() => zoomIn()}>
-                                <ZoomIn className="w-4 h-4" />
-                              </Button>
-                              <Button size="icon" variant="secondary" onClick={() => zoomOut()}>
-                                <ZoomOut className="w-4 h-4" />
-                              </Button>
-                              <Button size="icon" variant="secondary" onClick={() => resetTransform()}>
-                                <Maximize2 className="w-4 h-4" />
-                              </Button>
-                            </div>
-                            <TransformComponent wrapperClass="!w-full !h-full" contentClass="!w-full !h-full">
-                              <div className="p-4 relative" ref={canvasContainerRef}>
-                                <img 
-                                  ref={imageRef}
-                                  src={convertedPdfImage} 
-                                  alt="PDF Preview" 
-                                  className="w-full border border-border rounded"
-                                  onLoad={() => {
-                                    // Reinitialize Fabric canvas when image loads
-                                    if (canvasContainerRef.current && imageRef.current) {
-                                      const rect = imageRef.current.getBoundingClientRect();
-                                      if (fabricCanvas) {
-                                        fabricCanvas.setDimensions({ width: rect.width, height: rect.height });
-                                      }
+              <CardContent className="flex-1 overflow-hidden p-0 relative">
+                {isConvertingPdf ? (
+                  <div className="flex flex-col items-center justify-center h-full p-6">
+                    <Loader2 className="w-8 h-8 animate-spin text-primary mb-2" />
+                    <p className="text-sm text-muted-foreground">Converting PDF...</p>
+                  </div>
+                ) : convertedPdfImage ? (
+                  <div className="h-full flex items-center justify-center">
+                    <TransformWrapper
+                      initialScale={1}
+                      minScale={0.5}
+                      maxScale={4}
+                      centerOnInit
+                    >
+                      {({ zoomIn, zoomOut, resetTransform }) => (
+                        <>
+                          <div className="absolute top-4 right-4 z-10 flex flex-col gap-2">
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => zoomIn()}
+                              className="shadow-lg"
+                            >
+                              <ZoomIn className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => zoomOut()}
+                              className="shadow-lg"
+                            >
+                              <ZoomOut className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => resetTransform()}
+                              className="shadow-lg"
+                            >
+                              <Maximize2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                          <TransformComponent
+                            wrapperClass="!w-full !h-full"
+                            contentClass="!w-full !h-full flex items-center justify-center"
+                          >
+                            <div className="relative" ref={canvasContainerRef}>
+                              <img 
+                                ref={imageRef}
+                                src={convertedPdfImage} 
+                                alt="PDF Preview" 
+                                className="max-w-full max-h-full object-contain"
+                                draggable={false}
+                                onLoad={() => {
+                                  // Reinitialize Fabric canvas when image loads
+                                  if (canvasContainerRef.current && imageRef.current) {
+                                    const rect = imageRef.current.getBoundingClientRect();
+                                    if (fabricCanvas) {
+                                      fabricCanvas.setDimensions({ width: rect.width, height: rect.height });
                                     }
-                                  }}
-                                />
-                                <canvas 
-                                  className="absolute top-0 left-0 pointer-events-auto"
-                                  style={{ 
-                                    cursor: selectionMode ? 'crosshair' : 'default',
-                                    pointerEvents: selectionMode ? 'auto' : 'none'
-                                  }}
-                                />
-                              </div>
-                            </TransformComponent>
-                          </>
-                        )}
-                      </TransformWrapper>
-                    </div>
-                  ) : isExcelFile ? (
+                                  }
+                                }}
+                              />
+                              <canvas 
+                                className="absolute top-0 left-0"
+                                style={{ 
+                                  cursor: selectionMode ? 'crosshair' : 'default',
+                                  pointerEvents: selectionMode ? 'auto' : 'none'
+                                }}
+                              />
+                            </div>
+                          </TransformComponent>
+                        </>
+                      )}
+                    </TransformWrapper>
+                  </div>
+                ) : isExcelFile ? (
+                  <ScrollArea className="h-full">
                     <div className="p-4">
                       <table className="w-full text-xs border-collapse">
                         <tbody>
@@ -571,12 +570,12 @@ export default function TariffExtractionDialog({
                         </tbody>
                       </table>
                     </div>
-                  ) : (
-                    <div className="flex items-center justify-center h-full p-6">
-                      <p className="text-sm text-muted-foreground">No preview available</p>
-                    </div>
-                  )}
-                </ScrollArea>
+                  </ScrollArea>
+                ) : (
+                  <div className="flex items-center justify-center h-full p-6">
+                    <p className="text-sm text-muted-foreground">No preview available</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
