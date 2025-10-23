@@ -545,6 +545,7 @@ export type Database = {
       }
       site_documents: {
         Row: {
+          converted_image_path: string | null
           created_at: string
           document_type: Database["public"]["Enums"]["document_type"]
           extraction_status: string
@@ -558,6 +559,7 @@ export type Database = {
           uploaded_by: string | null
         }
         Insert: {
+          converted_image_path?: string | null
           created_at?: string
           document_type: Database["public"]["Enums"]["document_type"]
           extraction_status?: string
@@ -571,6 +573,7 @@ export type Database = {
           uploaded_by?: string | null
         }
         Update: {
+          converted_image_path?: string | null
           created_at?: string
           document_type?: Database["public"]["Enums"]["document_type"]
           extraction_status?: string
