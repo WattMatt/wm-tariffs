@@ -294,10 +294,16 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
 
   const handleViewDocument = async (doc: SiteDocument) => {
     try {
-      const filePathToUse = (doc as any).converted_image_path || doc.file_path;
+      const convertedImagePath = (doc as any).converted_image_path;
+      
+      if (!convertedImagePath) {
+        toast.info("Image conversion pending. Please wait a moment and try again.");
+        return;
+      }
+
       const { data } = await supabase.storage
         .from("site-documents")
-        .createSignedUrl(filePathToUse, 3600);
+        .createSignedUrl(convertedImagePath, 3600);
 
       if (data?.signedUrl) {
         setViewingDocument({ url: data.signedUrl, fileName: doc.file_name });
