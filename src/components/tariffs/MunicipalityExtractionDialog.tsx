@@ -133,24 +133,40 @@ export default function MunicipalityExtractionDialog({
     if (!canvasRef.current || !imageRef.current || !convertedPdfImage) return;
 
     const img = imageRef.current;
+    const canvas = canvasRef.current;
     
     const initCanvas = () => {
-      const rect = img.getBoundingClientRect();
-      const canvas = canvasRef.current!;
+      const imgRect = img.getBoundingClientRect();
+      const cardContent = canvas.parentElement;
       
-      // Set canvas to match natural image size
+      if (!cardContent) return;
+      
+      const cardRect = cardContent.getBoundingClientRect();
+      
+      // Position canvas to match image location within the card
+      canvas.style.left = `${imgRect.left - cardRect.left}px`;
+      canvas.style.top = `${imgRect.top - cardRect.top}px`;
+      canvas.style.width = `${imgRect.width}px`;
+      canvas.style.height = `${imgRect.height}px`;
+      
+      // Set canvas internal dimensions to match image
       canvas.width = img.naturalWidth;
       canvas.height = img.naturalHeight;
-      
-      // Set display size to match rendered image
-      canvas.style.width = `${rect.width}px`;
-      canvas.style.height = `${rect.height}px`;
+
+      if (fabricCanvas) {
+        fabricCanvas.dispose();
+      }
 
       const fabricCanvasInstance = new FabricCanvas(canvas, {
         selection: false,
       });
 
       fabricCanvasInstance.backgroundColor = 'transparent';
+      
+      // Scale canvas to match display size
+      const scaleX = imgRect.width / img.naturalWidth;
+      fabricCanvasInstance.setZoom(scaleX);
+      
       setFabricCanvas(fabricCanvasInstance);
     };
 
@@ -159,8 +175,15 @@ export default function MunicipalityExtractionDialog({
     } else {
       img.onload = initCanvas;
     }
+    
+    // Re-init on window resize
+    const handleResize = () => {
+      if (img.complete) initCanvas();
+    };
+    window.addEventListener('resize', handleResize);
 
     return () => {
+      window.removeEventListener('resize', handleResize);
       if (fabricCanvas) {
         fabricCanvas.dispose();
       }
@@ -463,51 +486,52 @@ export default function MunicipalityExtractionDialog({
                     <p className="text-sm text-muted-foreground">Converting PDF...</p>
                   </div>
                 ) : convertedPdfImage ? (
-                  <TransformWrapper
-                    ref={transformRef}
-                    initialScale={1}
-                    minScale={0.5}
-                    maxScale={4}
-                    wheel={{
-                      step: 0.1,
-                      wheelDisabled: selectionMode,
-                      touchPadDisabled: false,
-                      activationKeys: ["Control"]
-                    }}
-                    panning={{ 
-                      disabled: selectionMode || hasSelection,
-                      velocityDisabled: true
-                    }}
-                    disabled={selectionMode}
-                  >
-                    <TransformComponent
-                      wrapperClass="w-full h-full overflow-auto"
-                      contentClass="w-full h-full flex items-center justify-center"
-                      wrapperStyle={{ 
-                        pointerEvents: selectionMode ? 'none' : 'auto' 
+                  <div className="relative w-full h-full">
+                    <TransformWrapper
+                      ref={transformRef}
+                      initialScale={1}
+                      minScale={0.5}
+                      maxScale={4}
+                      wheel={{
+                        step: 0.1,
+                        wheelDisabled: selectionMode,
+                        touchPadDisabled: false,
+                        activationKeys: ["Control"]
                       }}
+                      panning={{ 
+                        disabled: selectionMode || hasSelection,
+                        velocityDisabled: true
+                      }}
+                      disabled={selectionMode}
                     >
-                      <div 
-                        ref={canvasContainerRef}
-                        className={`relative inline-block ${selectionMode ? 'cursor-crosshair' : hasSelection ? 'cursor-default' : 'cursor-move'}`}
+                      <TransformComponent
+                        wrapperClass="w-full h-full overflow-auto"
+                        contentClass="w-full h-full flex items-center justify-center"
                       >
-                        <img
-                          ref={imageRef}
-                          src={convertedPdfImage}
-                          alt="PDF Preview"
-                          className="max-w-none select-none"
-                          style={{ display: 'block' }}
-                        />
-                        <canvas
-                          ref={canvasRef}
-                          className="absolute top-0 left-0"
-                          style={{ 
-                            pointerEvents: selectionMode || hasSelection ? 'auto' : 'none',
-                          }}
-                        />
-                      </div>
-                    </TransformComponent>
-                  </TransformWrapper>
+                        <div 
+                          ref={canvasContainerRef}
+                          className={`relative inline-block ${selectionMode ? 'cursor-crosshair' : hasSelection ? 'cursor-default' : 'cursor-move'}`}
+                        >
+                          <img
+                            ref={imageRef}
+                            src={convertedPdfImage}
+                            alt="PDF Preview"
+                            className="max-w-none select-none"
+                            style={{ display: 'block' }}
+                          />
+                        </div>
+                      </TransformComponent>
+                    </TransformWrapper>
+                    {/* Canvas overlay outside transform for proper event handling */}
+                    <canvas
+                      ref={canvasRef}
+                      className="absolute top-0 left-0 z-10"
+                      style={{ 
+                        pointerEvents: selectionMode || hasSelection ? 'auto' : 'none',
+                        cursor: selectionMode ? 'crosshair' : 'default'
+                      }}
+                    />
+                  </div>
                 ) : null}
               </CardContent>
               <div className="border-t p-3 space-y-2">
