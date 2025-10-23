@@ -195,15 +195,18 @@ export default function MunicipalityExtractionDialog({
     if (!fabricCanvas) return;
 
     if (selectionMode) {
+      console.log('Selection mode activated, fabricCanvas:', fabricCanvas);
       let isDrawing = false;
       let startX = 0;
       let startY = 0;
 
       const handleMouseDown = (e: any) => {
+        console.log('Mouse down on canvas', e);
         if (hasSelection) return; // Don't start new selection if one exists
         
         isDrawing = true;
         const pointer = fabricCanvas.getPointer(e.e);
+        console.log('Pointer at:', pointer);
         startX = pointer.x;
         startY = pointer.y;
 
@@ -222,6 +225,7 @@ export default function MunicipalityExtractionDialog({
           lockRotation: true,
         });
 
+        console.log('Created rect:', rect);
         fabricCanvas.add(rect);
         setSelectionRect(rect);
       };
@@ -249,6 +253,7 @@ export default function MunicipalityExtractionDialog({
       };
 
       const handleMouseUp = () => {
+        console.log('Mouse up, isDrawing:', isDrawing, 'selectionRect:', selectionRect);
         if (isDrawing && selectionRect) {
           isDrawing = false;
           
@@ -258,11 +263,13 @@ export default function MunicipalityExtractionDialog({
             setSelectionMode(false);
             fabricCanvas.setActiveObject(selectionRect);
             fabricCanvas.renderAll();
+            console.log('Selection completed');
           } else {
             // Remove tiny selections
             fabricCanvas.remove(selectionRect);
             setSelectionRect(null);
             setSelectionMode(false);
+            console.log('Selection too small, removed');
           }
         }
       };
