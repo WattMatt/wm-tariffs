@@ -41,6 +41,7 @@ export default function MunicipalityExtractionDialog({
   const [totalPages, setTotalPages] = useState(0);
   const [isConvertingPdf, setIsConvertingPdf] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
+  const selectionModeRef = useRef(false);
   const [fabricCanvas, setFabricCanvas] = useState<FabricCanvas | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
   const [extractedData, setExtractedData] = useState<MunicipalityData | null>(null);
@@ -184,16 +185,21 @@ export default function MunicipalityExtractionDialog({
       const evt = opt.e as MouseEvent;
       const target = opt.target;
       
+      console.log('Mouse down - selectionMode:', selectionModeRef.current, 'button:', evt.button);
+      
       // SELECTION MODE: Handle two-click region drawing
-      if (selectionMode && evt.button === 0) {
+      if (selectionModeRef.current && evt.button === 0) {
         // Only process clicks on empty canvas or the image
         const isInteractiveObject = target && target.type !== 'image';
         if (isInteractiveObject) return;
         
         const pointer = canvas.getPointer(opt.e);
         
+        console.log('Selection click at:', pointer);
+        
         // First click - set start point
         if (!drawStartPointRef.current) {
+          console.log('Setting start point');
           drawStartPointRef.current = { x: pointer.x, y: pointer.y };
           
           // Show a marker at start point
@@ -220,6 +226,7 @@ export default function MunicipalityExtractionDialog({
         }
         
         // Second click - create rectangle and extract
+        console.log('Second click - creating rectangle');
         const startPoint = drawStartPointRef.current;
         
         const left = Math.min(startPoint.x, pointer.x);
@@ -262,6 +269,7 @@ export default function MunicipalityExtractionDialog({
         
         // Exit selection mode
         setSelectionMode(false);
+        selectionModeRef.current = false;
         drawStartPointRef.current = null;
         
         // Trigger extraction
@@ -273,7 +281,7 @@ export default function MunicipalityExtractionDialog({
       }
       
       // PANNING: Only allow when NOT in selection mode
-      if (!selectionMode && !target) {
+      if (!selectionModeRef.current && !target) {
         if (evt.button === 0 || evt.button === 1 || evt.button === 2) {
           isPanningLocal = true;
           lastX = evt.clientX;
@@ -286,7 +294,7 @@ export default function MunicipalityExtractionDialog({
     // Mouse move - show preview rectangle and handle panning
     canvas.on('mouse:move', (opt) => {
       // SELECTION MODE: Show preview rectangle
-      if (selectionMode && drawStartPointRef.current && !selectionRectRef.current) {
+      if (selectionModeRef.current && drawStartPointRef.current && !selectionRectRef.current) {
         const pointer = canvas.getPointer(opt.e);
         const startPoint = drawStartPointRef.current;
         
@@ -323,7 +331,7 @@ export default function MunicipalityExtractionDialog({
       }
       
       // PANNING: Only when not in selection mode
-      if (isPanningLocal && !selectionMode) {
+      if (isPanningLocal && !selectionModeRef.current) {
         const evt = opt.e as MouseEvent;
         const vpt = canvas.viewportTransform;
         if (vpt) {
@@ -371,6 +379,7 @@ export default function MunicipalityExtractionDialog({
       startMarkerRef.current = null;
     }
     setSelectionMode(false);
+    selectionModeRef.current = false;
 
     // Reset zoom and pan
     fabricCanvas.setZoom(1);
@@ -540,6 +549,7 @@ export default function MunicipalityExtractionDialog({
     }
     drawStartPointRef.current = null;
     setSelectionMode(false);
+    selectionModeRef.current = false;
   };
 
   const handleZoomIn = () => {
