@@ -468,11 +468,19 @@ export default function MunicipalityExtractionDialog({
                     initialScale={1}
                     minScale={0.5}
                     maxScale={4}
-                    wheel={{ step: 0.1 }}
-                    panning={{ disabled: selectionMode || hasSelection }}
+                    wheel={{
+                      step: 0.1,
+                      wheelDisabled: false,
+                      touchPadDisabled: false,
+                      activationKeys: ["Control"]
+                    }}
+                    panning={{ 
+                      disabled: selectionMode || hasSelection,
+                      velocityDisabled: true
+                    }}
                   >
                     <TransformComponent
-                      wrapperClass="w-full h-full"
+                      wrapperClass="w-full h-full overflow-auto"
                       contentClass="w-full h-full flex items-center justify-center"
                     >
                       <div 
