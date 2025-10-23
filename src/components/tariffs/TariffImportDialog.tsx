@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import ExtractionSteps from "./ExtractionSteps";
 import TariffReviewDialog from "./TariffReviewDialog";
 import TariffExtractionDialog from "./TariffExtractionDialog";
+import MunicipalityExtractionDialog from "./MunicipalityExtractionDialog";
 
 interface ExtractedTariffData {
   supplyAuthority: {
@@ -77,6 +78,7 @@ export default function PdfImportDialog() {
   const [currentExtractionFile, setCurrentExtractionFile] = useState<File | null>(null);
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
   const [reviewMunicipalityIndex, setReviewMunicipalityIndex] = useState<number | null>(null);
+  const [municipalityExtractionOpen, setMunicipalityExtractionOpen] = useState(false);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -310,37 +312,28 @@ export default function PdfImportDialog() {
   };
 
   const handlePdfIdentification = async () => {
-    toast.info("Extracting text from all PDF pages...");
-    const documentContent = await extractTextFromAllPdfPages(file!);
-    console.log("Total extracted text length:", documentContent.length);
+    // Open the municipality extraction dialog for region-based extraction
+    setMunicipalityExtractionOpen(true);
+  };
 
-    toast.info("Analyzing document with AI (this may take 30-60 seconds)...");
-    const { data, error } = await supabase.functions.invoke("extract-tariff-data", {
-      body: { documentContent, phase: "identify" }
-    });
-
-    if (error) {
-      console.error("Edge function error:", error);
-      throw error;
-    }
-    
-    if (!data) {
-      throw new Error("No response from extraction service");
-    }
-    
-    if (!data.success || !data.municipalities) {
-      throw new Error(data.error || "Failed to identify municipalities");
-    }
-
-    const foundMunicipalities: MunicipalityProgress[] = data.municipalities.map((m: MunicipalityInfo) => ({
+  const handleMunicipalityExtractionComplete = (municipalities: MunicipalityInfo[]) => {
+    const foundMunicipalities: MunicipalityProgress[] = municipalities.map((m) => ({
       name: m.name,
       nersaIncrease: m.nersaIncrease,
-      province: m.province,
+      province: file!.name.includes('Eastern') ? 'Eastern Cape' : 
+               file!.name.includes('Free') ? 'Free State' : 
+               file!.name.includes('Western') ? 'Western Cape' :
+               file!.name.includes('Northern') ? 'Northern Cape' :
+               file!.name.includes('Gauteng') ? 'Gauteng' :
+               file!.name.includes('KwaZulu') || file!.name.includes('KZN') ? 'KwaZulu-Natal' :
+               file!.name.includes('Limpopo') ? 'Limpopo' :
+               file!.name.includes('Mpumalanga') ? 'Mpumalanga' :
+               file!.name.includes('North West') || file!.name.includes('NorthWest') ? 'North West' : 'Unknown',
       status: 'pending' as const
     }));
 
     setMunicipalities(foundMunicipalities);
-    toast.success(`Found ${foundMunicipalities.length} municipality/municipalities. Click each to extract and save.`);
+    toast.success(`Added ${foundMunicipalities.length} municipality/municipalities. Click each to extract and save.`);
   };
 
   const processSingleMunicipality = async (municipalityName: string, index: number) => {
@@ -1769,6 +1762,15 @@ export default function PdfImportDialog() {
             throw error;
           }
         }}
+      />
+    )}
+
+    {municipalityExtractionOpen && file && (
+      <MunicipalityExtractionDialog
+        open={municipalityExtractionOpen}
+        onClose={() => setMunicipalityExtractionOpen(false)}
+        pdfFile={file}
+        onComplete={handleMunicipalityExtractionComplete}
       />
     )}
     </>

@@ -11,7 +11,12 @@ serve(async (req) => {
   }
 
   try {
-    const { documentContent, phase, municipalityName, cropRegion } = await req.json();
+    const { documentContent, phase, municipalityName, cropRegion, imageUrl } = await req.json();
+    
+    // Phase for extracting municipality from image
+    if (phase === "extractMunicipality" && imageUrl) {
+      return await extractMunicipalityFromImage(imageUrl);
+    }
     
     if (!documentContent) {
       return new Response(
@@ -310,6 +315,99 @@ Return ONLY valid JSON, no markdown.`;
         details: extractedText.slice(0, 1000),
         success: false
       }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+}
+
+async function extractMunicipalityFromImage(imageUrl: string) {
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  if (!LOVABLE_API_KEY) {
+    throw new Error("LOVABLE_API_KEY is not configured");
+  }
+
+  console.log("Extracting municipality data from image:", imageUrl);
+
+  const prompt = `Analyze this image and extract the municipality name and NERSA increase percentage.
+
+INSTRUCTIONS:
+1. Look for a municipality name (e.g., "BA-PHALABORWA", "BELA-BELA", "City of Cape Town")
+2. Look for a percentage value near the municipality name (e.g., "12.92%", "10.98%")
+3. Extract ONLY what you can see in this image - do not guess or invent information
+
+Return ONLY a JSON object in this format:
+{
+  "name": "MUNICIPALITY_NAME_AS_SHOWN",
+  "nersaIncrease": XX.XX
+}
+
+If you cannot find this information in the image, return:
+{
+  "name": "",
+  "nersaIncrease": 0
+}
+
+Return ONLY valid JSON, no markdown, no explanations.`;
+
+  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${LOVABLE_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-flash",
+      messages: [
+        { 
+          role: "user", 
+          content: [
+            { type: "text", text: prompt },
+            { type: "image_url", image_url: { url: imageUrl } }
+          ]
+        }
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    if (response.status === 429) {
+      return new Response(
+        JSON.stringify({ error: "Rate limit exceeded. Please try again later.", success: false }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    if (response.status === 402) {
+      return new Response(
+        JSON.stringify({ error: "Payment required. Please add credits to your workspace.", success: false }),
+        { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    const errorText = await response.text();
+    console.error("AI gateway error:", response.status, errorText);
+    throw new Error(`AI processing failed: ${response.status}`);
+  }
+
+  const aiResponse = await response.json();
+  const extractedText = aiResponse.choices?.[0]?.message?.content;
+
+  if (!extractedText) {
+    throw new Error("No content in AI response");
+  }
+
+  try {
+    const cleanedText = extractedText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    const municipality = JSON.parse(cleanedText);
+    
+    console.log("Extracted municipality:", municipality);
+    
+    return new Response(
+      JSON.stringify({ success: true, municipality }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  } catch (parseError) {
+    console.error("Failed to parse municipality data:", extractedText);
+    return new Response(
+      JSON.stringify({ error: "Failed to parse municipality data", details: extractedText, success: false }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
