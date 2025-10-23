@@ -100,15 +100,78 @@ export default function PdfImportDialog() {
     }
   };
 
-  const convertPdfToImage = async (pdfFile: File): Promise<string> => {
+  const convertPdfToImage = async (pdfFile: File, pageNumber?: number): Promise<string> => {
     const pdfjsLib = await import("pdfjs-dist");
     pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
     const arrayBuffer = await pdfFile.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
     
-    // Convert first page to image with high resolution
-    const page = await pdf.getPage(1);
+    // If no page number specified, convert all pages and stitch them vertically
+    if (!pageNumber) {
+      const pageCount = pdf.numPages;
+      console.log(`Converting ${pageCount} PDF pages to single image`);
+      
+      // Render all pages to canvases
+      const pageCanvases = [];
+      let totalHeight = 0;
+      let maxWidth = 0;
+      
+      for (let i = 1; i <= pageCount; i++) {
+        const page = await pdf.getPage(i);
+        const viewport = page.getViewport({ scale: 2.0 });
+        
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        if (!context) throw new Error('Failed to get canvas context');
+        
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        
+        await page.render({
+          canvasContext: context,
+          viewport: viewport,
+          canvas: canvas
+        }).promise;
+        
+        pageCanvases.push(canvas);
+        totalHeight += viewport.height;
+        maxWidth = Math.max(maxWidth, viewport.width);
+      }
+      
+      // Create combined canvas
+      const combinedCanvas = document.createElement('canvas');
+      const combinedContext = combinedCanvas.getContext('2d');
+      if (!combinedContext) throw new Error('Failed to get combined canvas context');
+      
+      combinedCanvas.width = maxWidth;
+      combinedCanvas.height = totalHeight;
+      
+      // Draw all pages vertically
+      let currentY = 0;
+      for (const pageCanvas of pageCanvases) {
+        combinedContext.drawImage(pageCanvas, 0, currentY);
+        currentY += pageCanvas.height;
+      }
+      
+      // Convert combined canvas to blob
+      return new Promise((resolve, reject) => {
+        combinedCanvas.toBlob((blob) => {
+          if (!blob) {
+            reject(new Error('Failed to convert canvas to blob'));
+            return;
+          }
+          
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        }, 'image/png');
+      });
+    }
+    
+    // Convert specific page to image with high resolution
+    const page = await pdf.getPage(pageNumber);
     const viewport = page.getViewport({ scale: 2.0 });
     
     const canvas = document.createElement('canvas');
@@ -328,21 +391,29 @@ export default function PdfImportDialog() {
   };
 
   const handlePdfIdentification = async () => {
-    toast.info("Converting PDF to image for AI analysis...");
-    const imageDataUrl = await convertPdfToImage(file!);
+    toast.info("Converting all PDF pages to image for AI analysis...");
+    const imageDataUrl = await convertPdfToImage(file!); // Convert all pages
     
-    toast.info("Uploading image to storage...");
+    toast.info("Uploading combined image to storage...");
     const imageUrl = await uploadPdfImageToStorage(imageDataUrl, file!.name);
-    console.log("Uploaded image URL:", imageUrl);
+    console.log("Uploaded combined image URL:", imageUrl);
 
-    toast.info("Analyzing document with AI...");
+    toast.info("Analyzing document with AI (this may take 30-60 seconds)...");
     const { data, error } = await supabase.functions.invoke("extract-tariff-data", {
       body: { imageUrl, phase: "identify" }
     });
 
-    if (error) throw error;
+    if (error) {
+      console.error("Edge function error:", error);
+      throw error;
+    }
+    
+    if (!data) {
+      throw new Error("No response from extraction service");
+    }
+    
     if (!data.success || !data.municipalities) {
-      throw new Error("Failed to identify municipalities");
+      throw new Error(data.error || "Failed to identify municipalities");
     }
 
     const foundMunicipalities: MunicipalityProgress[] = data.municipalities.map((m: MunicipalityInfo) => ({
@@ -366,18 +437,40 @@ export default function PdfImportDialog() {
         extractedData = await extractFromExcel(municipalityName);
       } else {
         toast.info(`Converting PDF to image for ${municipalityName}...`);
-        const imageDataUrl = await convertPdfToImage(file!);
+        const imageDataUrl = await convertPdfToImage(file!); // Convert all pages
+        
+        toast.info(`Uploading image for ${municipalityName}...`);
         const imageUrl = await uploadPdfImageToStorage(imageDataUrl, file!.name);
         
-        console.log(`Extracting tariffs for: ${municipalityName}`);
+        console.log(`Extracting tariffs for: ${municipalityName} using image:`, imageUrl);
+        
+        toast.info(`Analyzing ${municipalityName} with AI (may take up to 60 seconds)...`);
         
         const { data, error } = await supabase.functions.invoke("extract-tariff-data", {
-          body: { imageUrl, phase: "extract", municipalityName }
+          body: { 
+            imageUrl, 
+            phase: "extract", 
+            municipalityName 
+          }
         });
 
-        if (error) throw error;
-        if (!data.success || !data.data) {
-          throw new Error("Failed to extract tariff data");
+        console.log("Edge function response:", { data, error });
+
+        if (error) {
+          console.error("Edge function error:", error);
+          throw new Error(`Edge function failed: ${error.message}`);
+        }
+        
+        if (!data) {
+          throw new Error("No response from extraction service");
+        }
+        
+        if (!data.success) {
+          throw new Error(data.error || "Extraction failed");
+        }
+        
+        if (!data.data) {
+          throw new Error("No tariff data in response");
         }
         
         extractedData = data.data;

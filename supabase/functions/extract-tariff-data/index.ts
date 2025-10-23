@@ -156,6 +156,7 @@ async function extractMunicipalityTariffs(imageUrl: string, municipalityName: st
   }
 
   console.log(`Phase 2: Extracting tariffs for ${municipalityName} from image`);
+  console.log(`Image URL: ${imageUrl}`);
   if (cropRegion) {
     console.log(`Using crop region:`, cropRegion);
   }
@@ -264,6 +265,7 @@ Return ONLY valid JSON, no markdown.`;
     ]
   };
 
+  console.log("Calling Lovable AI gateway for extraction...");
   const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -279,52 +281,61 @@ Return ONLY valid JSON, no markdown.`;
     }),
   });
 
+  console.log(`AI gateway response status: ${response.status}`);
+
   if (!response.ok) {
     if (response.status === 429) {
+      console.error("Rate limit exceeded");
       return new Response(
-        JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
+        JSON.stringify({ error: "Rate limit exceeded. Please try again later.", success: false }),
         { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
     if (response.status === 402) {
+      console.error("Payment required");
       return new Response(
-        JSON.stringify({ error: "Payment required. Please add credits to your workspace." }),
+        JSON.stringify({ error: "Payment required. Please add credits to your workspace.", success: false }),
         { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
     const errorText = await response.text();
     console.error("AI gateway error:", response.status, errorText);
     return new Response(
-      JSON.stringify({ error: `AI processing failed: ${response.status}` }),
+      JSON.stringify({ error: `AI processing failed: ${response.status}`, details: errorText, success: false }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 
+  console.log("Parsing AI response...");
   const aiResponse = await response.json();
   const extractedText = aiResponse.choices?.[0]?.message?.content;
 
   if (!extractedText) {
+    console.error("No content in AI response");
     throw new Error("No content in AI response");
   }
 
   console.log(`Extraction result length: ${extractedText.length} characters`);
+  console.log(`First 200 chars of response: ${extractedText.slice(0, 200)}`);
 
   try {
     const cleanedText = extractedText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     const extractedData = JSON.parse(cleanedText);
     
-    console.log(`Extracted ${extractedData.tariffStructures?.length || 0} tariff structures`);
+    console.log(`Successfully extracted ${extractedData.tariffStructures?.length || 0} tariff structures`);
     
     return new Response(
       JSON.stringify({ success: true, data: extractedData }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (parseError) {
-    console.error("Failed to parse extraction result:", extractedText.slice(0, 500));
+    console.error("Failed to parse extraction result:", parseError);
+    console.error("Raw response (first 500 chars):", extractedText.slice(0, 500));
     return new Response(
       JSON.stringify({ 
         error: "Failed to parse tariff data", 
-        details: extractedText.slice(0, 1000)
+        details: extractedText.slice(0, 1000),
+        success: false
       }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
