@@ -11,6 +11,10 @@ import { toast } from "sonner";
 import { FileText, Upload, Loader2, Download, Trash2, Eye } from "lucide-react";
 import { format } from "date-fns";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { pdfjs } from 'react-pdf';
+
+// Set up PDF.js worker
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 interface DocumentsTabProps {
   siteId: string;
@@ -40,6 +44,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [documentType, setDocumentType] = useState<string>("municipal_account");
   const [viewingExtraction, setViewingExtraction] = useState<any>(null);
+  const [isConvertingPdf, setIsConvertingPdf] = useState(false);
 
   useEffect(() => {
     fetchDocuments();
@@ -80,6 +85,64 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
     }
   };
 
+  const convertPdfToImage = async (pdfFile: File): Promise<Blob> => {
+    setIsConvertingPdf(true);
+    try {
+      console.log('Converting PDF to image:', pdfFile.name);
+      
+      // Read the PDF file as array buffer
+      const arrayBuffer = await pdfFile.arrayBuffer();
+      
+      // Load the PDF
+      const loadingTask = pdfjs.getDocument(arrayBuffer);
+      const pdf = await loadingTask.promise;
+      
+      console.log('PDF loaded, converting first page to image...');
+      
+      // Get the first page
+      const page = await pdf.getPage(1);
+      
+      // Set scale for high quality
+      const scale = 2.0;
+      const viewport = page.getViewport({ scale });
+      
+      // Create canvas
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      
+      if (!context) {
+        throw new Error('Could not get canvas context');
+      }
+      
+      canvas.height = viewport.height;
+      canvas.width = viewport.width;
+      
+      // Render PDF page to canvas
+      const renderContext = {
+        canvasContext: context,
+        viewport: viewport,
+        canvas: canvas
+      };
+      
+      await page.render(renderContext).promise;
+      
+      console.log('PDF rendered to canvas, converting to blob...');
+      
+      // Convert canvas to blob
+      return new Promise((resolve, reject) => {
+        canvas.toBlob((blob) => {
+          if (blob) {
+            resolve(blob);
+          } else {
+            reject(new Error('Failed to convert canvas to blob'));
+          }
+        }, 'image/png', 1.0);
+      });
+    } finally {
+      setIsConvertingPdf(false);
+    }
+  };
+
   const handleUpload = async () => {
     if (!selectedFile) {
       toast.error("Please select a file");
@@ -88,13 +151,37 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
 
     setIsUploading(true);
     try {
-      // Upload file to storage
+      const fileExt = selectedFile.name.split('.').pop()?.toLowerCase();
+      const isPdf = fileExt === 'pdf';
+
+      // Upload original file to storage
       const fileName = `${siteId}/${Date.now()}-${selectedFile.name}`;
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from("site-documents")
         .upload(fileName, selectedFile);
 
       if (uploadError) throw uploadError;
+
+      let convertedImagePath: string | null = null;
+
+      // If it's a PDF, convert to image and upload
+      if (isPdf) {
+        toast.info("Converting PDF to image for AI processing...");
+        const imageBlob = await convertPdfToImage(selectedFile);
+        const imagePath = `${siteId}/${Date.now()}-converted.png`;
+        
+        const { error: imageUploadError } = await supabase.storage
+          .from("site-documents")
+          .upload(imagePath, imageBlob);
+
+        if (imageUploadError) {
+          console.error("Error uploading converted image:", imageUploadError);
+          toast.error("Failed to convert PDF for AI processing");
+        } else {
+          convertedImagePath = imagePath;
+          toast.success("PDF converted to image successfully");
+        }
+      }
 
       // Create document record
       const { data: user } = await supabase.auth.getUser();
@@ -107,7 +194,8 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
           file_size: selectedFile.size,
           document_type: documentType as any,
           uploaded_by: user.user?.id || null,
-          extraction_status: 'pending'
+          extraction_status: 'pending',
+          converted_image_path: convertedImagePath,
         })
         .select()
         .single();
@@ -116,10 +204,11 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
 
       toast.success("Document uploaded successfully");
 
-      // Get signed URL for AI processing
+      // Get signed URL for AI processing (use converted image if available)
+      const pathToProcess = convertedImagePath || uploadData.path;
       const { data: urlData } = await supabase.storage
         .from("site-documents")
-        .createSignedUrl(uploadData.path, 3600);
+        .createSignedUrl(pathToProcess, 3600);
 
       if (urlData?.signedUrl) {
         // Trigger AI extraction
@@ -239,13 +328,13 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
             <div className="flex items-end">
               <Button
                 onClick={handleUpload}
-                disabled={!selectedFile || isUploading}
+                disabled={!selectedFile || isUploading || isConvertingPdf}
                 className="w-full"
               >
-                {isUploading ? (
+                {isUploading || isConvertingPdf ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Uploading...
+                    {isConvertingPdf ? 'Converting PDF...' : 'Uploading...'}
                   </>
                 ) : (
                   <>
