@@ -72,13 +72,14 @@ export default function TariffExtractionDialog({
 
   // Start extraction when dialog opens
   useEffect(() => {
-    if (open && extractionStep === "extract" && !isExtracting) {
+    if (open && !isExtracting && !extractedData) {
       handleExtract();
     }
   }, [open]);
 
   const handleExtract = async () => {
     setIsExtracting(true);
+    setExtractionStep("extract");
     try {
       const data = await onExtract();
       setExtractedData(data);
@@ -91,10 +92,9 @@ export default function TariffExtractionDialog({
     }
   };
 
-  const handleComplete = () => {
+  const handleAccept = () => {
     if (extractedData) {
       onComplete(extractedData);
-      onClose();
     }
   };
 
@@ -163,17 +163,24 @@ export default function TariffExtractionDialog({
             {/* Left: Source Data Preview */}
             <Card className="overflow-hidden flex flex-col">
               <CardHeader className="pb-3">
-                <CardTitle className="text-sm">Source Data</CardTitle>
+                <CardTitle className="text-sm">Source Document</CardTitle>
               </CardHeader>
               <CardContent className="flex-1 overflow-hidden p-0">
                 <ScrollArea className="h-full">
                   <div className="p-4">
-                    <table className="text-xs border-collapse w-full">
+                    <table className="w-full text-xs">
                       <tbody>
-                        {sheetData.slice(0, 50).map((row, rowIdx) => (
-                          <tr key={rowIdx} className="border-b">
+                        {sheetData.slice(0, 100).map((row, rowIdx) => (
+                          <tr key={rowIdx} className={rowIdx % 2 === 0 ? 'bg-muted/30' : ''}>
                             {row.map((cell, cellIdx) => (
-                              <td key={cellIdx} className="border-r p-1 whitespace-nowrap">
+                              <td 
+                                key={cellIdx} 
+                                className="border border-border px-2 py-1 text-left align-top"
+                                style={{
+                                  fontWeight: rowIdx === 0 || (cell?.toString().match(/^[A-Z\s]+$/) && cell?.toString().length < 50) ? 600 : 400,
+                                  fontSize: rowIdx < 5 ? '0.8rem' : '0.75rem'
+                                }}
+                              >
                                 {cell?.toString() || ''}
                               </td>
                             ))}
@@ -186,12 +193,10 @@ export default function TariffExtractionDialog({
               </CardContent>
             </Card>
 
-            {/* Right: Extraction Progress / Extracted Data */}
+            {/* Right: Extracted Data */}
             <Card className="overflow-hidden flex flex-col">
               <CardHeader className="pb-3">
-                <CardTitle className="text-sm">
-                  {extractionStep === "extract" ? "Extracting..." : "Extracted Data"}
-                </CardTitle>
+                <CardTitle className="text-sm">Extracted Data</CardTitle>
               </CardHeader>
               <CardContent className="flex-1 overflow-hidden p-0">
                 {extractionStep === "extract" && (
@@ -423,33 +428,33 @@ export default function TariffExtractionDialog({
           {/* Action Buttons */}
           <div className="flex gap-2 mt-4">
             {extractionStep === "review" && (
-              <>
-                <Button
-                  onClick={handleComplete}
-                  disabled={!extractedData}
-                  size="sm"
-                >
-                  <CheckCircle2 className="w-4 h-4 mr-2" />
-                  Accept & Save
-                </Button>
-                <Button
-                  onClick={handleExtract}
-                  disabled={isExtracting}
-                  variant="outline"
-                  size="sm"
-                >
-                  {isExtracting ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Rescanning...
-                    </>
-                  ) : (
-                    "AI Rescan"
-                  )}
-                </Button>
-              </>
+              <Button
+                onClick={handleExtract}
+                disabled={isExtracting}
+                variant="outline"
+                size="sm"
+              >
+                {isExtracting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Extracting...
+                  </>
+                ) : (
+                  "Extract"
+                )}
+              </Button>
             )}
             <div className="flex-1" />
+            {extractionStep === "review" && (
+              <Button
+                onClick={handleAccept}
+                disabled={!extractedData}
+                size="sm"
+              >
+                <CheckCircle2 className="w-4 h-4 mr-2" />
+                Accept
+              </Button>
+            )}
             <Button
               onClick={onClose}
               variant="outline"
