@@ -55,35 +55,45 @@ async function identifyStructure(imageUrl: string) {
 
   console.log("Phase 1: Identifying province/municipality structure from image");
 
-  const identifyPrompt = `Analyze this South African electricity tariff document IMAGE and identify the structure.
+  const identifyPrompt = `You are analyzing a SCANNED IMAGE of a South African electricity tariff document. Your task is to extract ONLY the text that is VISUALLY PRESENT in this specific image.
+
+CRITICAL RULES:
+1. READ ONLY what you can SEE in the image - DO NOT use any prior knowledge or training data
+2. DO NOT invent or guess any municipality names
+3. DO NOT use examples from other provinces or documents
+4. If you cannot clearly read a municipality name in the image, DO NOT include it
+5. Extract the EXACT text as it appears - do not correct spellings or format names
 
 VISUAL CUES TO LOOK FOR:
-- Municipality headers in bold/large font
-- Format: "MUNICIPALITY_NAME - XX.XX%" (e.g., "AMAHLATHI - 10.76%")
-- Sections separated by borders or spacing
+- Municipality headers in bold/large font (usually all caps)
+- Format typically: "MUNICIPALITY_NAME - XX.XX%" (e.g., "BA-PHALABORWA - 12.92%")
+- Sections may be separated by borders, spacing, or page breaks
 - Table headers and structure
-- For Eskom: "Eskom Holdings SOC Ltd"
+- Province name may be visible at top of document
 
-TASK: Extract municipality names with their NERSA increase percentages by analyzing the visual layout.
+TASK: 
+Carefully scan the ENTIRE IMAGE from top to bottom and extract ONLY the municipality names that you can ACTUALLY SEE written in the image, along with their NERSA increase percentages that appear next to them.
 
-Return ONLY a JSON array of objects:
+Return ONLY a JSON array of objects for municipalities you can VISUALLY CONFIRM are in the image:
 [
   {
-    "name": "AMAHLATHI",
-    "nersaIncrease": 10.76,
-    "province": "Eastern Cape"
+    "name": "EXACT_NAME_AS_SHOWN",
+    "nersaIncrease": XX.XX,
+    "province": "Province name if visible in image"
   }
 ]
 
-Rules:
-- Extract ONLY municipality names (uppercase, no "- XX%")
-- Include the percentage as a number
-- Include province if visible
-- Be thorough - scan entire document
-- Pay attention to visual formatting and layout
-- For Eskom, use: {"name": "Eskom Holdings SOC Ltd", "nersaIncrease": XX, "province": "National"}
+IMPORTANT:
+- If you see "Limpopo" in the document, all municipalities should have "province": "Limpopo"
+- If you see "Eastern Cape" in the document, all municipalities should have "province": "Eastern Cape"  
+- The province MUST match what's written in the image
+- Only return municipalities that are CLEARLY VISIBLE in this specific image
+- Do not pad the results with municipalities from your training data
 
-Return ONLY valid JSON, no markdown.`;
+Return ONLY valid JSON, no markdown, no explanations.`;
+
+  console.log("Phase 1: Identifying province/municipality structure from image");
+  console.log("CRITICAL: AI must extract ONLY from the actual image, not from training data");
 
   const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
@@ -95,15 +105,11 @@ Return ONLY valid JSON, no markdown.`;
       model: "google/gemini-2.5-flash",
       messages: [
         { 
-          role: "system", 
-          content: identifyPrompt 
-        },
-        { 
           role: "user", 
           content: [
             {
               type: "text",
-              text: "Analyze this tariff document and extract municipality structure:"
+              text: identifyPrompt + "\n\nREMINDER: Extract ONLY what is VISUALLY PRESENT in this specific image. Do not use any prior knowledge."
             },
             {
               type: "image_url",
@@ -134,7 +140,16 @@ Return ONLY valid JSON, no markdown.`;
     const cleanedText = extractedText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     const municipalities = JSON.parse(cleanedText);
     
-    console.log(`Found ${municipalities.length} municipalities:`, municipalities);
+    console.log(`Found ${municipalities.length} municipalities in image`);
+    console.log("Municipalities extracted:", JSON.stringify(municipalities.slice(0, 3))); // Log first 3
+    
+    // Log province distribution to detect hallucinations
+    const provinceCount: Record<string, number> = {};
+    municipalities.forEach((m: any) => {
+      const province = m.province || 'Unknown';
+      provinceCount[province] = (provinceCount[province] || 0) + 1;
+    });
+    console.log("Province distribution:", provinceCount);
     
     return new Response(
       JSON.stringify({ success: true, municipalities }),
@@ -143,7 +158,7 @@ Return ONLY valid JSON, no markdown.`;
   } catch (parseError) {
     console.error("Failed to parse municipalities:", extractedText);
     return new Response(
-      JSON.stringify({ error: "Failed to parse structure", details: extractedText }),
+      JSON.stringify({ error: "Failed to parse structure", details: extractedText, success: false }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
