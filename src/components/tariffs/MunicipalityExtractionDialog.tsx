@@ -10,7 +10,7 @@ import { pdfjs } from 'react-pdf';
 import { toast } from "sonner";
 import { Canvas as FabricCanvas, Rect as FabricRect } from "fabric";
 import { supabase } from "@/integrations/supabase/client";
-import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
+import { TransformWrapper, TransformComponent, ReactZoomPanPinchRef } from "react-zoom-pan-pinch";
 
 // Set up PDF.js worker
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
@@ -49,6 +49,7 @@ export default function MunicipalityExtractionDialog({
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const transformRef = useRef<ReactZoomPanPinchRef>(null);
 
   // Convert PDF to image (all pages stitched vertically)
   const convertPdfToImage = async (pdfFile: File): Promise<string> => {
@@ -427,40 +428,32 @@ export default function MunicipalityExtractionDialog({
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-sm">Source Document</CardTitle>
-                  <TransformWrapper
-                    initialScale={1}
-                    minScale={0.5}
-                    maxScale={4}
-                  >
-                    {({ zoomIn, zoomOut, resetTransform }) => (
-                      <div className="flex items-center gap-2">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => zoomIn()}
-                          disabled={!convertedPdfImage}
-                        >
-                          <ZoomIn className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => zoomOut()}
-                          disabled={!convertedPdfImage}
-                        >
-                          <ZoomOut className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => resetTransform()}
-                          disabled={!convertedPdfImage}
-                        >
-                          <RotateCcw className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    )}
-                  </TransformWrapper>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => transformRef.current?.zoomIn()}
+                      disabled={!convertedPdfImage}
+                    >
+                      <ZoomIn className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => transformRef.current?.zoomOut()}
+                      disabled={!convertedPdfImage}
+                    >
+                      <ZoomOut className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => transformRef.current?.resetTransform()}
+                      disabled={!convertedPdfImage}
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="flex-1 overflow-hidden p-0 relative">
@@ -471,6 +464,7 @@ export default function MunicipalityExtractionDialog({
                   </div>
                 ) : convertedPdfImage ? (
                   <TransformWrapper
+                    ref={transformRef}
                     initialScale={1}
                     minScale={0.5}
                     maxScale={4}
