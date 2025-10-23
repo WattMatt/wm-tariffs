@@ -7,6 +7,11 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, CheckCircle2, X } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { pdfjs } from 'react-pdf';
+import { toast } from "sonner";
+
+// Set up PDF.js worker
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 interface ExtractedTariffData {
   supplyAuthority: {
@@ -72,15 +77,84 @@ export default function TariffExtractionDialog({
   const [isExtracting, setIsExtracting] = useState(false);
   const [fileUrl, setFileUrl] = useState<string | null>(null);
   const [isExcelFile, setIsExcelFile] = useState(false);
+  const [convertedPdfImage, setConvertedPdfImage] = useState<string | null>(null);
+  const [isConvertingPdf, setIsConvertingPdf] = useState(false);
 
-  // Create object URL for the file
+  // Convert PDF to image for display
+  const convertPdfToImage = async (pdfFile: File): Promise<string> => {
+    setIsConvertingPdf(true);
+    try {
+      console.log('Converting PDF to image:', pdfFile.name);
+      
+      // Read the PDF file as array buffer
+      const arrayBuffer = await pdfFile.arrayBuffer();
+      
+      // Load the PDF
+      const loadingTask = pdfjs.getDocument(arrayBuffer);
+      const pdf = await loadingTask.promise;
+      
+      console.log('PDF loaded, converting first page to image...');
+      
+      // Get the first page
+      const page = await pdf.getPage(1);
+      
+      // Set scale for high quality
+      const scale = 2.0;
+      const viewport = page.getViewport({ scale });
+      
+      // Create canvas
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      
+      if (!context) {
+        throw new Error('Could not get canvas context');
+      }
+      
+      canvas.height = viewport.height;
+      canvas.width = viewport.width;
+      
+      // Render PDF page to canvas
+      const renderContext = {
+        canvasContext: context,
+        viewport: viewport,
+        canvas: canvas
+      };
+      
+      await page.render(renderContext).promise;
+      
+      console.log('PDF rendered to canvas, converting to data URL...');
+      
+      // Convert canvas to data URL
+      return canvas.toDataURL('image/png', 1.0);
+    } catch (error) {
+      console.error('Error converting PDF to image:', error);
+      toast.error('Failed to convert PDF to image');
+      throw error;
+    } finally {
+      setIsConvertingPdf(false);
+    }
+  };
+
+  // Create object URL for the file and convert PDF if needed
   useEffect(() => {
     if (sourceFile) {
-      const url = URL.createObjectURL(sourceFile);
-      setFileUrl(url);
-      setIsExcelFile(sourceFile.name.toLowerCase().endsWith('.xlsx') || sourceFile.name.toLowerCase().endsWith('.xls'));
+      const isPdf = sourceFile.name.toLowerCase().endsWith('.pdf');
+      const isExcel = sourceFile.name.toLowerCase().endsWith('.xlsx') || sourceFile.name.toLowerCase().endsWith('.xls');
       
-      return () => URL.revokeObjectURL(url);
+      setIsExcelFile(isExcel);
+      
+      if (isPdf) {
+        // Convert PDF to image
+        convertPdfToImage(sourceFile).then(imageUrl => {
+          setConvertedPdfImage(imageUrl);
+        }).catch(error => {
+          console.error('Failed to convert PDF:', error);
+        });
+      } else {
+        const url = URL.createObjectURL(sourceFile);
+        setFileUrl(url);
+        return () => URL.revokeObjectURL(url);
+      }
     }
   }, [sourceFile]);
 
@@ -177,15 +251,20 @@ export default function TariffExtractionDialog({
               </CardHeader>
               <CardContent className="flex-1 overflow-hidden p-0">
                 <ScrollArea className="h-full">
-                  {!isExcelFile && fileUrl ? (
+                  {isConvertingPdf ? (
+                    <div className="flex flex-col items-center justify-center h-full p-6">
+                      <Loader2 className="w-8 h-8 animate-spin text-primary mb-2" />
+                      <p className="text-sm text-muted-foreground">Converting PDF...</p>
+                    </div>
+                  ) : convertedPdfImage ? (
                     <div className="p-4">
-                      <embed
-                        src={fileUrl}
-                        type="application/pdf"
-                        className="w-full h-[calc(90vh-12rem)] border border-border rounded"
+                      <img 
+                        src={convertedPdfImage} 
+                        alt="PDF Preview" 
+                        className="w-full border border-border rounded"
                       />
                     </div>
-                  ) : (
+                  ) : isExcelFile ? (
                     <div className="p-4">
                       <table className="w-full text-xs border-collapse">
                         <tbody>
@@ -207,6 +286,10 @@ export default function TariffExtractionDialog({
                           ))}
                         </tbody>
                       </table>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center h-full p-6">
+                      <p className="text-sm text-muted-foreground">No preview available</p>
                     </div>
                   )}
                 </ScrollArea>
