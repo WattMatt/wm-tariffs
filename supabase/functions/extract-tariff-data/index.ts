@@ -11,23 +11,23 @@ serve(async (req) => {
   }
 
   try {
-    const { documentContent, phase, municipalityName } = await req.json();
+    const { imageUrl, phase, municipalityName, cropRegion } = await req.json();
     
-    if (!documentContent) {
+    if (!imageUrl) {
       return new Response(
-        JSON.stringify({ error: "Document content is required" }),
+        JSON.stringify({ error: "Image URL is required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     // Phase 1: Identify province/municipality structure
     if (phase === "identify") {
-      return await identifyStructure(documentContent);
+      return await identifyStructure(imageUrl);
     }
     
     // Phase 2: Extract specific municipality tariffs
     if (phase === "extract" && municipalityName) {
-      return await extractMunicipalityTariffs(documentContent, municipalityName);
+      return await extractMunicipalityTariffs(imageUrl, municipalityName, cropRegion);
     }
     
     return new Response(
@@ -47,23 +47,24 @@ serve(async (req) => {
   }
 });
 
-async function identifyStructure(documentContent: string) {
+async function identifyStructure(imageUrl: string) {
   const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
   if (!LOVABLE_API_KEY) {
     throw new Error("LOVABLE_API_KEY is not configured");
   }
 
-  console.log("Phase 1: Identifying province/municipality structure");
+  console.log("Phase 1: Identifying province/municipality structure from image");
 
-  const identifyPrompt = `Analyze this South African electricity tariff document and identify the structure.
+  const identifyPrompt = `Analyze this South African electricity tariff document IMAGE and identify the structure.
 
-DOCUMENT FORMAT:
-- Provinces contain municipalities
-- Municipalities are shown as "MUNICIPALITY_NAME - XX.XX%" (e.g., "AMAHLATHI - 10.76%")
-- Each municipality has multiple tariff structures
+VISUAL CUES TO LOOK FOR:
+- Municipality headers in bold/large font
+- Format: "MUNICIPALITY_NAME - XX.XX%" (e.g., "AMAHLATHI - 10.76%")
+- Sections separated by borders or spacing
+- Table headers and structure
 - For Eskom: "Eskom Holdings SOC Ltd"
 
-TASK: Extract municipality names with their NERSA increase percentages.
+TASK: Extract municipality names with their NERSA increase percentages by analyzing the visual layout.
 
 Return ONLY a JSON array of objects:
 [
@@ -79,6 +80,7 @@ Rules:
 - Include the percentage as a number
 - Include province if visible
 - Be thorough - scan entire document
+- Pay attention to visual formatting and layout
 - For Eskom, use: {"name": "Eskom Holdings SOC Ltd", "nersaIncrease": XX, "province": "National"}
 
 Return ONLY valid JSON, no markdown.`;
@@ -92,8 +94,25 @@ Return ONLY valid JSON, no markdown.`;
     body: JSON.stringify({
       model: "google/gemini-2.5-flash",
       messages: [
-        { role: "system", content: identifyPrompt },
-        { role: "user", content: `Extract municipality structure:\n\n${documentContent.slice(0, 30000)}` }
+        { 
+          role: "system", 
+          content: identifyPrompt 
+        },
+        { 
+          role: "user", 
+          content: [
+            {
+              type: "text",
+              text: "Analyze this tariff document and extract municipality structure:"
+            },
+            {
+              type: "image_url",
+              image_url: {
+                url: imageUrl
+              }
+            }
+          ]
+        }
       ],
     }),
   });
@@ -130,26 +149,39 @@ Return ONLY valid JSON, no markdown.`;
   }
 }
 
-async function extractMunicipalityTariffs(documentContent: string, municipalityName: string) {
+async function extractMunicipalityTariffs(imageUrl: string, municipalityName: string, cropRegion?: { x: number; y: number; width: number; height: number }) {
   const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
   if (!LOVABLE_API_KEY) {
     throw new Error("LOVABLE_API_KEY is not configured");
   }
 
-  console.log(`Phase 2: Extracting tariffs for ${municipalityName}`);
+  console.log(`Phase 2: Extracting tariffs for ${municipalityName} from image`);
+  if (cropRegion) {
+    console.log(`Using crop region:`, cropRegion);
+  }
 
-  const systemPrompt = `Extract electricity tariff data ONLY for: "${municipalityName}"
+  const systemPrompt = `Extract electricity tariff data ONLY for: "${municipalityName}" by analyzing the document IMAGE.
+
+VISUAL ANALYSIS:
+- Identify tables and their visual structure
+- Read values from table cells
+- Distinguish between headers and data rows
+- Look for tiered pricing blocks (usually in separate rows)
+- Find charge types in leftmost columns
+- Extract amounts from rightmost columns
+- Identify TOU periods by time ranges in tables
+- Pay attention to borders, formatting, and layout
 
 CRITICAL RULES:
 1. Extract ONLY tariffs for "${municipalityName}" - ignore all other municipalities
 2. Each municipality has multiple tariff categories (Domestic, Commercial, Industrial, etc.)
-3. Look for section headers indicating tariff types
+3. Look for section headers indicating tariff types (check for bold/larger text)
 4. Extract ALL charges: energy charges (c/kWh), capacity charges (R/kVA), service charges (R/day)
 5. Handle TOU periods if present (Peak/Standard/Off-peak with times)
 6. Handle blocks for domestic tariffs (0-600 kWh, 600+ kWh, etc.)
 
 SEARCH PATTERN:
-- Find "${municipalityName}" header
+- Find "${municipalityName}" header (look for bold/large text)
 - Extract all tariff sections until next municipality
 - Each tariff has: name, type, charges, blocks/TOU periods
 
@@ -214,6 +246,24 @@ EXTRACTION STRATEGY:
 
 Return ONLY valid JSON, no markdown.`;
 
+  let userMessage: any = {
+    role: "user",
+    content: [
+      {
+        type: "text",
+        text: cropRegion 
+          ? `Analyze the selected region of this tariff document and extract data for ${municipalityName}:`
+          : `Analyze this complete tariff document and extract data for ${municipalityName}:`
+      },
+      {
+        type: "image_url",
+        image_url: {
+          url: imageUrl
+        }
+      }
+    ]
+  };
+
   const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -224,7 +274,7 @@ Return ONLY valid JSON, no markdown.`;
       model: "google/gemini-2.5-pro",
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content: `Document to extract from:\n\n${documentContent.slice(0, 100000)}` }
+        userMessage
       ],
     }),
   });

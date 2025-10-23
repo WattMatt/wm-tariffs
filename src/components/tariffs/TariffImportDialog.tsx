@@ -100,24 +100,72 @@ export default function PdfImportDialog() {
     }
   };
 
-  const extractTextFromPdf = async (pdfFile: File): Promise<string> => {
+  const convertPdfToImage = async (pdfFile: File): Promise<string> => {
     const pdfjsLib = await import("pdfjs-dist");
     pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
     const arrayBuffer = await pdfFile.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
     
-    let fullText = "";
-    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-      const page = await pdf.getPage(pageNum);
-      const textContent = await page.getTextContent();
-      const pageText = textContent.items
-        .map((item: any) => item.str)
-        .join(" ");
-      fullText += pageText + "\n\n";
-    }
+    // Convert first page to image with high resolution
+    const page = await pdf.getPage(1);
+    const viewport = page.getViewport({ scale: 2.0 });
     
-    return fullText;
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('Failed to get canvas context');
+    
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    
+    await page.render({
+      canvasContext: context,
+      viewport: viewport,
+      canvas: canvas
+    }).promise;
+    
+    // Convert to blob
+    return new Promise((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          reject(new Error('Failed to convert canvas to blob'));
+          return;
+        }
+        
+        // Create data URL
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      }, 'image/png');
+    });
+  };
+
+  const uploadPdfImageToStorage = async (imageDataUrl: string, fileName: string): Promise<string> => {
+    // Convert data URL to blob
+    const response = await fetch(imageDataUrl);
+    const blob = await response.blob();
+    
+    // Create unique file name
+    const timestamp = Date.now();
+    const uniqueFileName = `${timestamp}-${fileName.replace(/\.pdf$/i, '.png')}`;
+    
+    // Upload to storage
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('tariff-extractions')
+      .upload(uniqueFileName, blob, {
+        contentType: 'image/png',
+        upsert: false
+      });
+    
+    if (uploadError) throw uploadError;
+    
+    // Get public URL
+    const { data: { publicUrl } } = supabase.storage
+      .from('tariff-extractions')
+      .getPublicUrl(uniqueFileName);
+    
+    return publicUrl;
   };
 
   const handleIdentifyMunicipalities = async () => {
@@ -280,11 +328,16 @@ export default function PdfImportDialog() {
   };
 
   const handlePdfIdentification = async () => {
-    const documentContent = await extractTextFromPdf(file!);
-    console.log("Extracted text length:", documentContent.length);
+    toast.info("Converting PDF to image for AI analysis...");
+    const imageDataUrl = await convertPdfToImage(file!);
+    
+    toast.info("Uploading image to storage...");
+    const imageUrl = await uploadPdfImageToStorage(imageDataUrl, file!.name);
+    console.log("Uploaded image URL:", imageUrl);
 
+    toast.info("Analyzing document with AI...");
     const { data, error } = await supabase.functions.invoke("extract-tariff-data", {
-      body: { documentContent, phase: "identify" }
+      body: { imageUrl, phase: "identify" }
     });
 
     if (error) throw error;
@@ -312,11 +365,14 @@ export default function PdfImportDialog() {
       if (isExcel) {
         extractedData = await extractFromExcel(municipalityName);
       } else {
-        const documentContent = await extractTextFromPdf(file!);
+        toast.info(`Converting PDF to image for ${municipalityName}...`);
+        const imageDataUrl = await convertPdfToImage(file!);
+        const imageUrl = await uploadPdfImageToStorage(imageDataUrl, file!.name);
+        
         console.log(`Extracting tariffs for: ${municipalityName}`);
         
         const { data, error } = await supabase.functions.invoke("extract-tariff-data", {
-          body: { documentContent, phase: "extract", municipalityName }
+          body: { imageUrl, phase: "extract", municipalityName }
         });
 
         if (error) throw error;
@@ -1314,9 +1370,10 @@ export default function PdfImportDialog() {
                                   tariffStructures: aiData.tariffStructures || []
                                 };
                               } else {
-                                const documentContent = await extractTextFromPdf(file!);
+                                const imageDataUrl = await convertPdfToImage(file!);
+                                const imageUrl = await uploadPdfImageToStorage(imageDataUrl, file!.name);
                                 const { data, error } = await supabase.functions.invoke("extract-tariff-data", {
-                                  body: { documentContent, phase: "extract", municipalityName: municipality.name }
+                                  body: { imageUrl, phase: "extract", municipalityName: municipality.name }
                                 });
 
                                 if (error) throw error;
