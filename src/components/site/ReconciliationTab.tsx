@@ -36,8 +36,8 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
   const [isDateFromOpen, setIsDateFromOpen] = useState(false);
   const [isDateToOpen, setIsDateToOpen] = useState(false);
-  const [earliestDate, setEarliestDate] = useState<Date | null>(null);
-  const [latestDate, setLatestDate] = useState<Date | null>(null);
+  const [earliestDate, setEarliestDate] = useState<string | null>(null);
+  const [latestDate, setLatestDate] = useState<string | null>(null);
 
   // Fetch earliest and latest dates from database
   useEffect(() => {
@@ -69,10 +69,12 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
           .limit(1);
 
         if (readings && readings.length > 0) {
-          setEarliestDate(new Date(readings[0].reading_timestamp));
+          // Store the raw timestamp string instead of Date object
+          setEarliestDate(readings[0].reading_timestamp);
         }
         if (latestReadings && latestReadings.length > 0) {
-          setLatestDate(new Date(latestReadings[0].reading_timestamp));
+          // Store the raw timestamp string instead of Date object
+          setLatestDate(latestReadings[0].reading_timestamp);
         }
       } catch (error) {
         console.error("Error fetching date range:", error);
@@ -636,12 +638,18 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
             <div className="text-right text-sm text-muted-foreground space-y-0.5">
               {earliestDate && (
                 <div>
-                  Earliest: {format(earliestDate, "MMM d, yyyy 'at' HH:mm")}
+                  Earliest: {earliestDate.split('T')[0].replace(/(\d{4})-(\d{2})-(\d{2})/, (_, y, m, d) => {
+                    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                    return `${months[parseInt(m)-1]} ${parseInt(d)}, ${y}`;
+                  })} at {earliestDate.split('T')[1]?.substring(0, 5) || '00:00'}
                 </div>
               )}
               {latestDate && (
                 <div>
-                  Latest: {format(latestDate, "MMM d, yyyy 'at' HH:mm")}
+                  Latest: {latestDate.split('T')[0].replace(/(\d{4})-(\d{2})-(\d{2})/, (_, y, m, d) => {
+                    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                    return `${months[parseInt(m)-1]} ${parseInt(d)}, ${y}`;
+                  })} at {latestDate.split('T')[1]?.substring(0, 5) || '00:00'}
                 </div>
               )}
             </div>
