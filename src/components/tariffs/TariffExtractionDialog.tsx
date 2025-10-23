@@ -7,7 +7,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, CheckCircle2, X } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import ExtractionSteps from "./ExtractionSteps";
 
 interface ExtractedTariffData {
   supplyAuthority: {
@@ -155,10 +154,6 @@ export default function TariffExtractionDialog({
         </DialogHeader>
 
         <div className="flex-1 overflow-hidden flex flex-col p-6 pt-4">
-          <div className="mb-4">
-            <ExtractionSteps currentStep={extractionStep} />
-          </div>
-
           <div className="flex-1 grid grid-cols-2 gap-4 overflow-hidden">
             {/* Left: Source Data Preview */}
             <Card className="overflow-hidden flex flex-col">
