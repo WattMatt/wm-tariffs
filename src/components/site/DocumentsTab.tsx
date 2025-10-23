@@ -845,17 +845,17 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                             onClick={() => {
                               const readings = Array.isArray(editedData.extracted_data.meter_readings)
                                 ? editedData.extracted_data.meter_readings
-                                : [{
-                                    previous: editedData.extracted_data.meter_readings.previous || 0,
-                                    current: editedData.extracted_data.meter_readings.current || 0,
-                                    consumption_kwh: editedData.extracted_data.meter_readings.consumption_kwh || 0
-                                  }];
+                                : [
+                                    { name: 'Previous', value: editedData.extracted_data.meter_readings.previous || 0 },
+                                    { name: 'Current', value: editedData.extracted_data.meter_readings.current || 0 },
+                                    { name: 'Consumption (kWh)', value: editedData.extracted_data.meter_readings.consumption_kwh || 0 }
+                                  ];
                               
                               setEditedData({
                                 ...editedData,
                                 extracted_data: {
                                   ...editedData.extracted_data,
-                                  meter_readings: [...readings, { previous: 0, current: 0, consumption_kwh: 0 }]
+                                  meter_readings: [...readings, { name: '', value: 0 }]
                                 }
                               });
                             }}
@@ -866,14 +866,14 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                         </div>
                         <div className="space-y-2">
                           {(() => {
-                            // Convert to array if it's an object
+                            // Convert to name-value array if it's an object
                             const readings = Array.isArray(editedData.extracted_data.meter_readings)
                               ? editedData.extracted_data.meter_readings
-                              : [{
-                                  previous: editedData.extracted_data.meter_readings.previous || 0,
-                                  current: editedData.extracted_data.meter_readings.current || 0,
-                                  consumption_kwh: editedData.extracted_data.meter_readings.consumption_kwh || 0
-                                }];
+                              : [
+                                  { name: 'Previous', value: editedData.extracted_data.meter_readings.previous || 0 },
+                                  { name: 'Current', value: editedData.extracted_data.meter_readings.current || 0 },
+                                  { name: 'Consumption (kWh)', value: editedData.extracted_data.meter_readings.consumption_kwh || 0 }
+                                ];
 
                             return readings.map((reading: any, index: number) => (
                               <div
@@ -906,75 +906,16 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                                     });
                                   }
                                 }}
-                                className="flex gap-3 items-start p-3 border rounded-lg bg-muted/30 hover:bg-muted/50 cursor-move transition-colors"
+                                className="flex gap-3 items-center p-3 border rounded-lg bg-muted/30 hover:bg-muted/50 cursor-move transition-colors"
                               >
-                                <GripVertical className="w-5 h-5 text-muted-foreground mt-8 flex-shrink-0" />
-                                <div className="flex-1 space-y-3">
-                                  <div className="space-y-2">
-                                    <Label className="text-xs">Previous</Label>
-                                    <Input
-                                      type="number"
-                                      step="0.01"
-                                      value={reading.previous || ''}
-                                      onChange={(e) => {
-                                        const newReadings = [...readings];
-                                        newReadings[index] = { ...reading, previous: parseFloat(e.target.value) || 0 };
-                                        setEditedData({
-                                          ...editedData,
-                                          extracted_data: {
-                                            ...editedData.extracted_data,
-                                            meter_readings: newReadings
-                                          }
-                                        });
-                                      }}
-                                    />
-                                  </div>
-                                  <div className="space-y-2">
-                                    <Label className="text-xs">Current</Label>
-                                    <Input
-                                      type="number"
-                                      step="0.01"
-                                      value={reading.current || ''}
-                                      onChange={(e) => {
-                                        const newReadings = [...readings];
-                                        newReadings[index] = { ...reading, current: parseFloat(e.target.value) || 0 };
-                                        setEditedData({
-                                          ...editedData,
-                                          extracted_data: {
-                                            ...editedData.extracted_data,
-                                            meter_readings: newReadings
-                                          }
-                                        });
-                                      }}
-                                    />
-                                  </div>
-                                  <div className="space-y-2">
-                                    <Label className="text-xs">Consumption (kWh)</Label>
-                                    <Input
-                                      type="number"
-                                      step="0.01"
-                                      value={reading.consumption_kwh || ''}
-                                      onChange={(e) => {
-                                        const newReadings = [...readings];
-                                        newReadings[index] = { ...reading, consumption_kwh: parseFloat(e.target.value) || 0 };
-                                        setEditedData({
-                                          ...editedData,
-                                          extracted_data: {
-                                            ...editedData.extracted_data,
-                                            meter_readings: newReadings
-                                          }
-                                        });
-                                      }}
-                                    />
-                                  </div>
-                                </div>
-                                {readings.length > 1 && (
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="flex-shrink-0 mt-8"
-                                    onClick={() => {
-                                      const newReadings = readings.filter((_: any, i: number) => i !== index);
+                                <GripVertical className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+                                <div className="flex-1 grid grid-cols-2 gap-3">
+                                  <Input
+                                    placeholder="Name"
+                                    value={reading.name || ''}
+                                    onChange={(e) => {
+                                      const newReadings = [...readings];
+                                      newReadings[index] = { ...reading, name: e.target.value };
                                       setEditedData({
                                         ...editedData,
                                         extracted_data: {
@@ -983,10 +924,42 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                                         }
                                       });
                                     }}
-                                  >
-                                    <X className="w-4 h-4" />
-                                  </Button>
-                                )}
+                                  />
+                                  <Input
+                                    type="number"
+                                    step="0.01"
+                                    placeholder="Value"
+                                    value={reading.value || ''}
+                                    onChange={(e) => {
+                                      const newReadings = [...readings];
+                                      newReadings[index] = { ...reading, value: parseFloat(e.target.value) || 0 };
+                                      setEditedData({
+                                        ...editedData,
+                                        extracted_data: {
+                                          ...editedData.extracted_data,
+                                          meter_readings: newReadings
+                                        }
+                                      });
+                                    }}
+                                  />
+                                </div>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="flex-shrink-0"
+                                  onClick={() => {
+                                    const newReadings = readings.filter((_: any, i: number) => i !== index);
+                                    setEditedData({
+                                      ...editedData,
+                                      extracted_data: {
+                                        ...editedData.extracted_data,
+                                        meter_readings: newReadings.length > 0 ? newReadings : [{ name: '', value: 0 }]
+                                      }
+                                    });
+                                  }}
+                                >
+                                  <X className="w-4 h-4" />
+                                </Button>
                               </div>
                             ));
                           })()}
