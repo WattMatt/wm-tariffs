@@ -3,13 +3,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Trash2, Eye, Plus } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Loader2, Trash2, Eye, Plus, ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
 import { pdfjs } from 'react-pdf';
 import { toast } from "sonner";
 import { Canvas as FabricCanvas, Rect as FabricRect } from "fabric";
 import { supabase } from "@/integrations/supabase/client";
+import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 
 // Set up PDF.js worker
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
@@ -39,6 +40,7 @@ export default function MunicipalityExtractionDialog({
   const [convertedPdfImage, setConvertedPdfImage] = useState<string | null>(null);
   const [isConvertingPdf, setIsConvertingPdf] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
+  const [hasSelection, setHasSelection] = useState(false);
   const [fabricCanvas, setFabricCanvas] = useState<FabricCanvas | null>(null);
   const [selectionRect, setSelectionRect] = useState<FabricRect | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
@@ -46,6 +48,7 @@ export default function MunicipalityExtractionDialog({
   const [acceptedMunicipalities, setAcceptedMunicipalities] = useState<AcceptedMunicipality[]>([]);
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // Convert PDF to image (all pages stitched vertically)
   const convertPdfToImage = async (pdfFile: File): Promise<string> => {
@@ -126,22 +129,40 @@ export default function MunicipalityExtractionDialog({
 
   // Initialize Fabric canvas for selection
   useEffect(() => {
-    if (!canvasContainerRef.current || !convertedPdfImage || !imageRef.current) return;
+    if (!canvasRef.current || !imageRef.current || !convertedPdfImage) return;
 
     const img = imageRef.current;
-    const rect = img.getBoundingClientRect();
+    
+    const initCanvas = () => {
+      const rect = img.getBoundingClientRect();
+      const canvas = canvasRef.current!;
+      
+      // Set canvas to match natural image size
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      
+      // Set display size to match rendered image
+      canvas.style.width = `${rect.width}px`;
+      canvas.style.height = `${rect.height}px`;
 
-    const canvas = new FabricCanvas(canvasContainerRef.current.querySelector('canvas')!, {
-      width: rect.width,
-      height: rect.height,
-      selection: false,
-    });
+      const fabricCanvasInstance = new FabricCanvas(canvas, {
+        selection: false,
+      });
 
-    canvas.backgroundColor = 'transparent';
-    setFabricCanvas(canvas);
+      fabricCanvasInstance.backgroundColor = 'transparent';
+      setFabricCanvas(fabricCanvasInstance);
+    };
+
+    if (img.complete) {
+      initCanvas();
+    } else {
+      img.onload = initCanvas;
+    }
 
     return () => {
-      canvas.dispose();
+      if (fabricCanvas) {
+        fabricCanvas.dispose();
+      }
     };
   }, [convertedPdfImage]);
 
@@ -155,6 +176,8 @@ export default function MunicipalityExtractionDialog({
       let startY = 0;
 
       const handleMouseDown = (e: any) => {
+        if (hasSelection) return; // Don't start new selection if one exists
+        
         isDrawing = true;
         const pointer = fabricCanvas.getPointer(e.e);
         startX = pointer.x;
@@ -168,7 +191,11 @@ export default function MunicipalityExtractionDialog({
           fill: 'rgba(59, 130, 246, 0.2)',
           stroke: 'rgb(59, 130, 246)',
           strokeWidth: 2,
-          selectable: false,
+          selectable: true,
+          evented: true,
+          hasControls: true,
+          hasBorders: true,
+          lockRotation: true,
         });
 
         fabricCanvas.add(rect);
@@ -197,25 +224,22 @@ export default function MunicipalityExtractionDialog({
         fabricCanvas.renderAll();
       };
 
-      const handleMouseUp = async () => {
-        if (isDrawing && selectionRect && imageRef.current) {
+      const handleMouseUp = () => {
+        if (isDrawing && selectionRect) {
           isDrawing = false;
-          setSelectionMode(false);
           
-          // Calculate relative coordinates
-          const rect = imageRef.current.getBoundingClientRect();
-          const scaleX = imageRef.current.naturalWidth / rect.width;
-          const scaleY = imageRef.current.naturalHeight / rect.height;
-          
-          const cropRegion = {
-            x: (selectionRect.left || 0) * scaleX,
-            y: (selectionRect.top || 0) * scaleY,
-            width: (selectionRect.width || 0) * scaleX,
-            height: (selectionRect.height || 0) * scaleY,
-          };
-          
-          // Extract from the selected region
-          await handleExtractFromRegion(cropRegion);
+          // Check if selection is big enough
+          if ((selectionRect.width || 0) > 10 && (selectionRect.height || 0) > 10) {
+            setHasSelection(true);
+            setSelectionMode(false);
+            fabricCanvas.setActiveObject(selectionRect);
+            fabricCanvas.renderAll();
+          } else {
+            // Remove tiny selections
+            fabricCanvas.remove(selectionRect);
+            setSelectionRect(null);
+            setSelectionMode(false);
+          }
         }
       };
 
@@ -229,7 +253,7 @@ export default function MunicipalityExtractionDialog({
         fabricCanvas.off('mouse:up', handleMouseUp);
       };
     }
-  }, [selectionMode, fabricCanvas]);
+  }, [selectionMode, fabricCanvas, hasSelection, selectionRect]);
 
   const handleExtractFromRegion = async (cropRegion: { x: number; y: number; width: number; height: number }) => {
     if (!convertedPdfImage || !imageRef.current) return;
@@ -313,8 +337,37 @@ export default function MunicipalityExtractionDialog({
       setSelectionRect(null);
     }
     setExtractedData(null);
+    setHasSelection(false);
     setSelectionMode(true);
     toast.info("Draw a box around the municipality information you want to extract.");
+  };
+
+  const handleCancelSelection = () => {
+    if (fabricCanvas && selectionRect) {
+      fabricCanvas.remove(selectionRect);
+      setSelectionRect(null);
+    }
+    setSelectionMode(false);
+    setHasSelection(false);
+  };
+
+  const handleExtractClick = () => {
+    if (!selectionRect || !imageRef.current) return;
+    
+    // Calculate relative coordinates
+    const img = imageRef.current;
+    const rect = img.getBoundingClientRect();
+    const scaleX = img.naturalWidth / rect.width;
+    const scaleY = img.naturalHeight / rect.height;
+    
+    const cropRegion = {
+      x: (selectionRect.left || 0) * scaleX,
+      y: (selectionRect.top || 0) * scaleY,
+      width: (selectionRect.width || 0) * scaleX,
+      height: (selectionRect.height || 0) * scaleY,
+    };
+    
+    handleExtractFromRegion(cropRegion);
   };
 
   const handleAcceptExtraction = () => {
@@ -331,6 +384,8 @@ export default function MunicipalityExtractionDialog({
     if (fabricCanvas) {
       fabricCanvas.clear();
     }
+    setHasSelection(false);
+    setSelectionRect(null);
     
     toast.success(`${extractedData.name} added to list!`);
   };
@@ -372,14 +427,40 @@ export default function MunicipalityExtractionDialog({
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-sm">Source Document</CardTitle>
-                  <Button
-                    size="sm"
-                    onClick={handleStartSelection}
-                    disabled={isConvertingPdf || selectionMode || isExtracting}
+                  <TransformWrapper
+                    initialScale={1}
+                    minScale={0.5}
+                    maxScale={4}
                   >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Select Region
-                  </Button>
+                    {({ zoomIn, zoomOut, resetTransform }) => (
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => zoomIn()}
+                          disabled={!convertedPdfImage}
+                        >
+                          <ZoomIn className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => zoomOut()}
+                          disabled={!convertedPdfImage}
+                        >
+                          <ZoomOut className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => resetTransform()}
+                          disabled={!convertedPdfImage}
+                        >
+                          <RotateCcw className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
+                  </TransformWrapper>
                 </div>
               </CardHeader>
               <CardContent className="flex-1 overflow-hidden p-0 relative">
@@ -389,22 +470,85 @@ export default function MunicipalityExtractionDialog({
                     <p className="text-sm text-muted-foreground">Converting PDF...</p>
                   </div>
                 ) : convertedPdfImage ? (
-                  <ScrollArea className="h-full w-full">
-                    <div ref={canvasContainerRef} className="relative inline-block">
-                      <img
-                        ref={imageRef}
-                        src={convertedPdfImage}
-                        alt="PDF Preview"
-                        className="w-full"
-                      />
-                      <canvas
-                        className="absolute top-0 left-0 pointer-events-auto"
-                        style={{ cursor: selectionMode ? 'crosshair' : 'default' }}
-                      />
-                    </div>
-                  </ScrollArea>
+                  <TransformWrapper
+                    initialScale={1}
+                    minScale={0.5}
+                    maxScale={4}
+                    wheel={{ step: 0.1 }}
+                    panning={{ disabled: selectionMode || hasSelection }}
+                  >
+                    <TransformComponent
+                      wrapperClass="w-full h-full"
+                      contentClass="w-full h-full flex items-center justify-center"
+                    >
+                      <div 
+                        ref={canvasContainerRef}
+                        className={`relative inline-block ${selectionMode ? 'cursor-crosshair' : hasSelection ? 'cursor-default' : 'cursor-move'}`}
+                      >
+                        <img
+                          ref={imageRef}
+                          src={convertedPdfImage}
+                          alt="PDF Preview"
+                          className="max-w-none select-none"
+                          style={{ display: 'block' }}
+                        />
+                        <canvas
+                          ref={canvasRef}
+                          className="absolute top-0 left-0"
+                          style={{ 
+                            pointerEvents: selectionMode || hasSelection ? 'auto' : 'none',
+                          }}
+                        />
+                      </div>
+                    </TransformComponent>
+                  </TransformWrapper>
                 ) : null}
               </CardContent>
+              <div className="border-t p-3 space-y-2">
+                {selectionMode && (
+                  <p className="text-xs text-muted-foreground text-center mb-2">
+                    Click and drag to select a region
+                  </p>
+                )}
+                {!selectionMode && !hasSelection && (
+                  <Button
+                    size="sm"
+                    onClick={handleStartSelection}
+                    disabled={!convertedPdfImage || isExtracting}
+                    className="w-full"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Select Region
+                  </Button>
+                )}
+                {hasSelection && !selectionMode && (
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={handleExtractClick}
+                      disabled={isExtracting}
+                      className="flex-1"
+                    >
+                      {isExtracting ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                          Extracting...
+                        </>
+                      ) : (
+                        "Extract"
+                      )}
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={handleCancelSelection}
+                      variant="outline"
+                      className="flex-1"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                )}
+              </div>
             </Card>
 
             {/* Right: Extracted Data */}
@@ -491,16 +635,16 @@ export default function MunicipalityExtractionDialog({
                           size="icon"
                           variant="ghost"
                           onClick={() => handleDeleteMunicipality(municipality.id)}
-                          className="h-8 w-8"
+                          className="h-8 w-8 text-destructive hover:text-destructive"
                         >
-                          <Trash2 className="w-4 h-4 text-destructive" />
+                          <Trash2 className="w-4 h-4" />
                         </Button>
                       </div>
                     </div>
                   ))}
                   {acceptedMunicipalities.length === 0 && (
-                    <div className="text-center py-8 text-sm text-muted-foreground">
-                      No municipalities added yet. Extract and accept municipalities to build your list.
+                    <div className="flex items-center justify-center h-24 text-sm text-muted-foreground">
+                      No municipalities added yet
                     </div>
                   )}
                 </div>
@@ -509,12 +653,11 @@ export default function MunicipalityExtractionDialog({
           </Card>
         </div>
 
-        {/* Footer Actions */}
-        <div className="flex items-center justify-end gap-3 p-6 pt-0">
+        <div className="flex justify-between gap-3 p-6 pt-4 border-t">
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button
+          <Button 
             onClick={handleComplete}
             disabled={acceptedMunicipalities.length === 0}
           >
