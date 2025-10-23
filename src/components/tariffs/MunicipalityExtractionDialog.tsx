@@ -278,8 +278,8 @@ export default function MunicipalityExtractionDialog({
         selectionModeRef.current = false;
         drawStartPointRef.current = null;
         
-        // Trigger extraction
-        handleExtractFromRegion(canvas, rect);
+        // Don't automatically extract - wait for user to click Extract button
+        toast.success('Region selected! Click "Extract Data" to process.');
         
         evt.preventDefault();
         evt.stopPropagation();
@@ -780,6 +780,23 @@ export default function MunicipalityExtractionDialog({
                       className="w-full"
                     >
                       Accept & Add to List
+                    </Button>
+                  </div>
+                ) : selectionRectRef.current ? (
+                  <div className="flex flex-col items-center justify-center h-full p-6 gap-4">
+                    <p className="text-sm text-muted-foreground text-center">
+                      Region selected. Click the button below to extract municipality data.
+                    </p>
+                    <Button
+                      onClick={() => {
+                        if (fabricCanvas && selectionRectRef.current) {
+                          handleExtractFromRegion(fabricCanvas, selectionRectRef.current);
+                        }
+                      }}
+                      disabled={!fabricCanvas || !selectionRectRef.current}
+                      className="w-full"
+                    >
+                      Extract Data
                     </Button>
                   </div>
                 ) : (
