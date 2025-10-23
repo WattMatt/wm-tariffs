@@ -636,12 +636,12 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
             <div className="text-right text-sm text-muted-foreground space-y-0.5">
               {earliestDate && (
                 <div>
-                  Earliest: {format(earliestDate, "PP")}
+                  Earliest: {format(earliestDate, "PPp")}
                 </div>
               )}
               {latestDate && (
                 <div>
-                  Latest: {format(latestDate, "PP")}
+                  Latest: {format(latestDate, "PPp")}
                 </div>
               )}
             </div>
