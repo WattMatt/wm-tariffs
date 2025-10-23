@@ -326,26 +326,77 @@ async function extractMunicipalityFromImage(imageUrl: string) {
     throw new Error("LOVABLE_API_KEY is not configured");
   }
 
-  console.log("Extracting municipality data from image:", imageUrl);
+  console.log("Extracting tariff data from selected image region:", imageUrl);
 
-  const prompt = `Analyze this image and extract the municipality name and NERSA increase percentage.
+  const prompt = `Analyze this image and extract ALL tariff information visible in it.
 
-INSTRUCTIONS:
-1. Look for a municipality name (e.g., "BA-PHALABORWA", "BELA-BELA", "City of Cape Town")
-2. Look for a percentage value near the municipality name (e.g., "12.92%", "10.98%")
-3. Extract ONLY what you can see in this image - do not guess or invent information
+CRITICAL INSTRUCTIONS:
+1. Extract EVERYTHING you can see in this image
+2. Look for tariff blocks (e.g., "Block 1 (0 - 50 kWh): 175.08 c/kWh")
+3. Look for charge types (energy charges, service charges, capacity charges)
+4. Look for tariff categories (Domestic, Commercial, Industrial, etc.)
+5. Look for TOU periods (Peak, Standard, Off-peak with times if shown)
+6. Extract the tariff name (e.g., "Domestic Prepaid & Conventional")
+7. Look for any header information (municipality name, voltage level, meter type)
 
-Return ONLY a JSON object in this format:
+TARIFF STRUCTURE TO EXTRACT:
+- Tariff name and category
+- Voltage level (if shown)
+- Meter configuration (prepaid/conventional/both)
+- All blocks with kWh ranges and charges in c/kWh
+- All fixed charges (service/basic monthly in R/month or R/day)
+- Capacity charges (R/kVA if shown)
+- TOU periods with times and charges (if shown)
+
+CRITICAL VALUE EXTRACTION:
+1. Energy charges:
+   - If shown as "c/kWh" or "cents/kWh" → extract as-is
+   - If shown as "R/kWh" → MULTIPLY BY 100 to convert to c/kWh
+   - Examples: "175.08 c/kWh" → 175.08, "1.75 R/kWh" → 175.00
+2. Fixed charges:
+   - If shown as "R/month" or "R/day" → extract as-is (no multiplication)
+   - Examples: "246.19 R/month" → 246.19
+3. Capacity charges:
+   - If shown as "R/kVA" → extract as-is
+   - Example: "243.73 R/kVA" → 243.73
+
+Return ONLY a JSON object in this exact format:
 {
-  "name": "MUNICIPALITY_NAME_AS_SHOWN",
-  "nersaIncrease": XX.XX
+  "municipalityName": "Name if shown in header, or empty string",
+  "nersaIncrease": number or 0 if not shown,
+  "tariffName": "Full tariff name as shown",
+  "tariffType": "domestic|commercial|industrial|agricultural|other",
+  "voltageLevel": "voltage if shown, or null",
+  "meterConfiguration": "prepaid|conventional|both|null",
+  "description": "Brief description of tariff",
+  "blocks": [
+    {
+      "blockNumber": 1,
+      "kwhFrom": 0,
+      "kwhTo": 50,
+      "energyChargeCents": 175.08,
+      "description": "Block description if shown"
+    }
+  ],
+  "charges": [
+    {
+      "chargeType": "service_charge|basic_monthly|capacity_charge|demand_kva",
+      "chargeAmount": 246.19,
+      "description": "Charge description",
+      "unit": "R/month|R/day|R/kVA"
+    }
+  ],
+  "touPeriods": [
+    {
+      "periodName": "Peak|Standard|Off-peak",
+      "timeRange": "06:00-09:00" or null if not shown,
+      "energyChargeCents": 250.00,
+      "season": "Summer|Winter|All" or null
+    }
+  ]
 }
 
-If you cannot find this information in the image, return:
-{
-  "name": "",
-  "nersaIncrease": 0
-}
+If no tariff data is visible, return minimal structure with empty arrays.
 
 Return ONLY valid JSON, no markdown, no explanations.`;
 
@@ -356,7 +407,7 @@ Return ONLY valid JSON, no markdown, no explanations.`;
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "google/gemini-2.5-flash",
+      model: "google/gemini-2.5-pro",
       messages: [
         { 
           role: "user", 
@@ -396,18 +447,26 @@ Return ONLY valid JSON, no markdown, no explanations.`;
 
   try {
     const cleanedText = extractedText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    const municipality = JSON.parse(cleanedText);
+    const tariffData = JSON.parse(cleanedText);
     
-    console.log("Extracted municipality:", municipality);
+    console.log("Extracted tariff data from image:", JSON.stringify(tariffData, null, 2));
     
+    // Return in format compatible with frontend
     return new Response(
-      JSON.stringify({ success: true, municipality }),
+      JSON.stringify({ 
+        success: true, 
+        municipality: {
+          name: tariffData.municipalityName || "",
+          nersaIncrease: tariffData.nersaIncrease || 0
+        },
+        tariffData: tariffData
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (parseError) {
-    console.error("Failed to parse municipality data:", extractedText);
+    console.error("Failed to parse tariff data from image:", extractedText);
     return new Response(
-      JSON.stringify({ error: "Failed to parse municipality data", details: extractedText, success: false }),
+      JSON.stringify({ error: "Failed to parse tariff data", details: extractedText, success: false }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

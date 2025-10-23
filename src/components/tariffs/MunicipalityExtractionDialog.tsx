@@ -44,7 +44,7 @@ export default function MunicipalityExtractionDialog({
   const selectionModeRef = useRef(false);
   const [fabricCanvas, setFabricCanvas] = useState<FabricCanvas | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
-  const [extractedData, setExtractedData] = useState<MunicipalityData | null>(null);
+  const [extractedData, setExtractedData] = useState<any | null>(null);
   const [acceptedMunicipalities, setAcceptedMunicipalities] = useState<AcceptedMunicipality[]>([]);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawStartPointRef = useRef<{ x: number; y: number } | null>(null);
@@ -492,9 +492,12 @@ export default function MunicipalityExtractionDialog({
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || "Extraction failed");
       
-      setExtractedData({
-        name: data.municipality?.name || "",
-        nersaIncrease: data.municipality?.nersaIncrease || 0
+      setExtractedData(data.tariffData || {
+        municipalityName: data.municipality?.name || "",
+        nersaIncrease: data.municipality?.nersaIncrease || 0,
+        blocks: [],
+        charges: [],
+        touPeriods: []
       });
       
       toast.success("Municipality data extracted!");
@@ -591,7 +594,8 @@ export default function MunicipalityExtractionDialog({
     if (!extractedData) return;
     
     const newMunicipality: AcceptedMunicipality = {
-      ...extractedData,
+      name: extractedData.municipalityName || extractedData.name || "",
+      nersaIncrease: extractedData.nersaIncrease || 0,
       id: `${Date.now()}-${Math.random()}`
     };
     
@@ -756,32 +760,107 @@ export default function MunicipalityExtractionDialog({
                     </p>
                   </div>
                 ) : extractedData ? (
-                  <div className="space-y-4">
-                    <div>
-                      <Label className="text-xs">Municipality Name</Label>
-                      <Input
-                        value={extractedData.name}
-                        onChange={(e) => setExtractedData({ ...extractedData, name: e.target.value })}
-                        className="h-9 mt-1"
-                      />
+                  <ScrollArea className="h-full">
+                    <div className="space-y-4 p-1">
+                      <div>
+                        <Label className="text-xs">Municipality Name</Label>
+                        <Input
+                          value={extractedData.municipalityName || ""}
+                          onChange={(e) => setExtractedData({ ...extractedData, municipalityName: e.target.value })}
+                          className="h-9 mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">NERSA Increase (%)</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={extractedData.nersaIncrease || 0}
+                          onChange={(e) => setExtractedData({ ...extractedData, nersaIncrease: parseFloat(e.target.value) || 0 })}
+                          className="h-9 mt-1"
+                        />
+                      </div>
+                      
+                      {extractedData.tariffName && (
+                        <div>
+                          <Label className="text-xs">Tariff Name</Label>
+                          <Input
+                            value={extractedData.tariffName}
+                            onChange={(e) => setExtractedData({ ...extractedData, tariffName: e.target.value })}
+                            className="h-9 mt-1"
+                          />
+                        </div>
+                      )}
+                      
+                      {extractedData.blocks && extractedData.blocks.length > 0 && (
+                        <div className="space-y-2">
+                          <Label className="text-xs font-semibold">Blocks</Label>
+                          {extractedData.blocks.map((block: any, idx: number) => (
+                            <Card key={idx} className="p-3 bg-muted/30">
+                              <div className="space-y-2">
+                                <p className="text-xs font-medium">
+                                  Block {block.blockNumber}: {block.kwhFrom}-{block.kwhTo} kWh
+                                </p>
+                                <p className="text-sm">
+                                  <span className="font-semibold">{block.energyChargeCents}</span> c/kWh
+                                </p>
+                                {block.description && (
+                                  <p className="text-xs text-muted-foreground">{block.description}</p>
+                                )}
+                              </div>
+                            </Card>
+                          ))}
+                        </div>
+                      )}
+                      
+                      {extractedData.charges && extractedData.charges.length > 0 && (
+                        <div className="space-y-2">
+                          <Label className="text-xs font-semibold">Charges</Label>
+                          {extractedData.charges.map((charge: any, idx: number) => (
+                            <Card key={idx} className="p-3 bg-muted/30">
+                              <div className="space-y-1">
+                                <p className="text-xs font-medium capitalize">
+                                  {charge.chargeType.replace(/_/g, ' ')}
+                                </p>
+                                <p className="text-sm">
+                                  <span className="font-semibold">{charge.chargeAmount}</span> {charge.unit}
+                                </p>
+                                {charge.description && (
+                                  <p className="text-xs text-muted-foreground">{charge.description}</p>
+                                )}
+                              </div>
+                            </Card>
+                          ))}
+                        </div>
+                      )}
+                      
+                      {extractedData.touPeriods && extractedData.touPeriods.length > 0 && (
+                        <div className="space-y-2">
+                          <Label className="text-xs font-semibold">TOU Periods</Label>
+                          {extractedData.touPeriods.map((period: any, idx: number) => (
+                            <Card key={idx} className="p-3 bg-muted/30">
+                              <div className="space-y-1">
+                                <p className="text-xs font-medium">{period.periodName}</p>
+                                {period.timeRange && (
+                                  <p className="text-xs text-muted-foreground">{period.timeRange}</p>
+                                )}
+                                <p className="text-sm">
+                                  <span className="font-semibold">{period.energyChargeCents}</span> c/kWh
+                                </p>
+                              </div>
+                            </Card>
+                          ))}
+                        </div>
+                      )}
+                      
+                      <Button
+                        onClick={handleAcceptExtraction}
+                        className="w-full"
+                      >
+                        Accept & Add to List
+                      </Button>
                     </div>
-                    <div>
-                      <Label className="text-xs">NERSA Increase (%)</Label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        value={extractedData.nersaIncrease}
-                        onChange={(e) => setExtractedData({ ...extractedData, nersaIncrease: parseFloat(e.target.value) || 0 })}
-                        className="h-9 mt-1"
-                      />
-                    </div>
-                    <Button
-                      onClick={handleAcceptExtraction}
-                      className="w-full"
-                    >
-                      Accept & Add to List
-                    </Button>
-                  </div>
+                  </ScrollArea>
                 ) : selectionRectRef.current ? (
                   <div className="flex flex-col items-center justify-center h-full p-6 gap-4">
                     <p className="text-sm text-muted-foreground text-center">
