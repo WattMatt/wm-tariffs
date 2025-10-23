@@ -402,7 +402,8 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
               )}
             </div>
 
-            <div className="flex items-end">
+            <div className="space-y-2">
+              <Label>&nbsp;</Label>
               <Button
                 onClick={handleUpload}
                 disabled={selectedFiles.length === 0 || isUploading || isConvertingPdf}
