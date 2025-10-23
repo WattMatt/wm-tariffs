@@ -10,7 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { FileText, Upload, Loader2, Download, Trash2, Eye, ZoomIn, ZoomOut, Maximize2, GripVertical, Plus, X } from "lucide-react";
+import { FileText, Upload, Loader2, Download, Trash2, Eye, ZoomIn, ZoomOut, Maximize2, GripVertical, Plus, X, Sparkles } from "lucide-react";
 import { format } from "date-fns";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { pdfjs } from 'react-pdf';
@@ -55,6 +55,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
   const [documentImageUrl, setDocumentImageUrl] = useState<string | null>(null);
   const [editedData, setEditedData] = useState<any>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isExtracting, setIsExtracting] = useState(false);
 
   useEffect(() => {
     fetchDocuments();
@@ -405,6 +406,52 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
     if (viewingExtraction) {
       setEditedData({ ...viewingExtraction });
       toast.info("Changes reset");
+    }
+  };
+
+  const handleExtract = async () => {
+    if (!viewingDocument) return;
+
+    setIsExtracting(true);
+    try {
+      // Get signed URL for the document
+      const pathToProcess = viewingDocument.converted_image_path || viewingDocument.file_path;
+      const { data: urlData } = await supabase.storage
+        .from("site-documents")
+        .createSignedUrl(pathToProcess, 3600);
+
+      if (!urlData?.signedUrl) {
+        throw new Error("Failed to get document URL");
+      }
+
+      // Call AI extraction
+      const { data: extractionResult, error: extractionError } = await supabase.functions.invoke("extract-document-data", {
+        body: {
+          documentId: viewingDocument.id,
+          fileUrl: urlData.signedUrl,
+          documentType: viewingDocument.document_type
+        }
+      });
+
+      if (extractionError) throw extractionError;
+
+      // Update the edited data with new extraction
+      if (extractionResult?.extractedData) {
+        const newData = {
+          period_start: extractionResult.extractedData.period_start,
+          period_end: extractionResult.extractedData.period_end,
+          total_amount: extractionResult.extractedData.total_amount,
+          currency: extractionResult.extractedData.currency || 'ZAR',
+          extracted_data: extractionResult.extractedData
+        };
+        setEditedData(newData);
+        toast.success("Document re-extracted successfully");
+      }
+    } catch (error) {
+      console.error("Error extracting document:", error);
+      toast.error("Failed to extract document");
+    } finally {
+      setIsExtracting(false);
     }
   };
 
@@ -972,20 +1019,39 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
             </div>
           )}
           
-          <div className="flex justify-end gap-2 pt-4 border-t">
-            <Button variant="outline" onClick={handleReset}>
-              Reset
-            </Button>
-            <Button onClick={handleSave} disabled={isSaving}>
-              {isSaving ? (
+          <div className="flex justify-between pt-4 border-t">
+            <Button 
+              variant="outline" 
+              onClick={handleExtract}
+              disabled={isExtracting}
+            >
+              {isExtracting ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Saving...
+                  Extracting...
                 </>
               ) : (
-                'Save'
+                <>
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  Extract
+                </>
               )}
             </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={handleReset}>
+                Reset
+              </Button>
+              <Button onClick={handleSave} disabled={isSaving}>
+                {isSaving ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  'Save'
+                )}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
