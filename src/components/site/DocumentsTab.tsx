@@ -48,6 +48,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
   const [viewingExtraction, setViewingExtraction] = useState<any>(null);
   const [isConvertingPdf, setIsConvertingPdf] = useState(false);
   const [selectedDocuments, setSelectedDocuments] = useState<Set<string>>(new Set());
+  const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0, action: '' });
 
   useEffect(() => {
     fetchDocuments();
@@ -153,84 +154,89 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
     }
 
     setIsUploading(true);
+    setUploadProgress({ current: 0, total: selectedFiles.length, action: 'Uploading' });
+    
     try {
       const { data: user } = await supabase.auth.getUser();
       let successCount = 0;
       let failCount = 0;
 
-      // Process all files in parallel
-      await Promise.all(
-        selectedFiles.map(async (file) => {
-          try {
-            const fileExt = file.name.split('.').pop()?.toLowerCase();
-            const isPdf = fileExt === 'pdf';
+      // Process files sequentially to show progress
+      for (let i = 0; i < selectedFiles.length; i++) {
+        const file = selectedFiles[i];
+        setUploadProgress({ current: i + 1, total: selectedFiles.length, action: 'Uploading' });
+        
+        try {
+          const fileExt = file.name.split('.').pop()?.toLowerCase();
+          const isPdf = fileExt === 'pdf';
 
-            // Upload original file to storage
-            const fileName = `${siteId}/${Date.now()}-${file.name}`;
-            const { data: uploadData, error: uploadError } = await supabase.storage
+          // Upload original file to storage
+          const fileName = `${siteId}/${Date.now()}-${file.name}`;
+          const { data: uploadData, error: uploadError } = await supabase.storage
+            .from("site-documents")
+            .upload(fileName, file);
+
+          if (uploadError) throw uploadError;
+
+          let convertedImagePath: string | null = null;
+
+          // If it's a PDF, convert to image and upload
+          if (isPdf) {
+            const imageBlob = await convertPdfToImage(file);
+            const imagePath = `${siteId}/${Date.now()}-converted.png`;
+            
+            const { error: imageUploadError } = await supabase.storage
               .from("site-documents")
-              .upload(fileName, file);
+              .upload(imagePath, imageBlob);
 
-            if (uploadError) throw uploadError;
-
-            let convertedImagePath: string | null = null;
-
-            // If it's a PDF, convert to image and upload
-            if (isPdf) {
-              const imageBlob = await convertPdfToImage(file);
-              const imagePath = `${siteId}/${Date.now()}-converted.png`;
-              
-              const { error: imageUploadError } = await supabase.storage
-                .from("site-documents")
-                .upload(imagePath, imageBlob);
-
-              if (!imageUploadError) {
-                convertedImagePath = imagePath;
-              }
+            if (!imageUploadError) {
+              convertedImagePath = imagePath;
             }
-
-            // Create document record
-            const { data: document, error: docError } = await supabase
-              .from("site_documents")
-              .insert({
-                site_id: siteId,
-                file_name: file.name,
-                file_path: uploadData.path,
-                file_size: file.size,
-                document_type: documentType as any,
-                uploaded_by: user.user?.id || null,
-                extraction_status: 'pending',
-                converted_image_path: convertedImagePath,
-              })
-              .select()
-              .single();
-
-            if (docError) throw docError;
-
-            // Get signed URL for AI processing (use converted image if available)
-            const pathToProcess = convertedImagePath || uploadData.path;
-            const { data: urlData } = await supabase.storage
-              .from("site-documents")
-              .createSignedUrl(pathToProcess, 3600);
-
-            if (urlData?.signedUrl) {
-              // Trigger AI extraction
-              await supabase.functions.invoke("extract-document-data", {
-                body: {
-                  documentId: document.id,
-                  fileUrl: urlData.signedUrl,
-                  documentType: documentType
-                }
-              });
-            }
-
-            successCount++;
-          } catch (error) {
-            console.error(`Error uploading ${file.name}:`, error);
-            failCount++;
           }
-        })
-      );
+
+          // Create document record
+          const { data: document, error: docError } = await supabase
+            .from("site_documents")
+            .insert({
+              site_id: siteId,
+              file_name: file.name,
+              file_path: uploadData.path,
+              file_size: file.size,
+              document_type: documentType as any,
+              uploaded_by: user.user?.id || null,
+              extraction_status: 'pending',
+              converted_image_path: convertedImagePath,
+            })
+            .select()
+            .single();
+
+          if (docError) throw docError;
+
+          // Get signed URL for AI processing (use converted image if available)
+          setUploadProgress({ current: i + 1, total: selectedFiles.length, action: 'Extracting' });
+          
+          const pathToProcess = convertedImagePath || uploadData.path;
+          const { data: urlData } = await supabase.storage
+            .from("site-documents")
+            .createSignedUrl(pathToProcess, 3600);
+
+          if (urlData?.signedUrl) {
+            // Trigger AI extraction
+            await supabase.functions.invoke("extract-document-data", {
+              body: {
+                documentId: document.id,
+                fileUrl: urlData.signedUrl,
+                documentType: documentType
+              }
+            });
+          }
+
+          successCount++;
+        } catch (error) {
+          console.error(`Error uploading ${file.name}:`, error);
+          failCount++;
+        }
+      }
 
       if (successCount > 0) {
         toast.success(`${successCount} document(s) uploaded successfully`);
@@ -246,6 +252,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
       toast.error("Failed to upload documents");
     } finally {
       setIsUploading(false);
+      setUploadProgress({ current: 0, total: 0, action: '' });
     }
   };
 
@@ -409,10 +416,15 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                 disabled={selectedFiles.length === 0 || isUploading || isConvertingPdf}
                 className="w-full"
               >
-                {isUploading || isConvertingPdf ? (
+                {isUploading ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    {isConvertingPdf ? 'Converting PDF...' : 'Uploading...'}
+                    {uploadProgress.action} ({uploadProgress.current}/{uploadProgress.total})
+                  </>
+                ) : isConvertingPdf ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Converting PDF...
                   </>
                 ) : (
                   <>
