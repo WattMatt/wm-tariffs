@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import puppeteer from "https://deno.land/x/puppeteer@16.2.0/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -41,86 +42,89 @@ serve(async (req) => {
 
     console.log('PDF downloaded successfully');
 
-    // Convert PDF to image using pdfjs-serverless (designed for edge functions)
+    // Convert blob to base64
     const arrayBuffer = await pdfData.arrayBuffer();
-    const uint8Array = new Uint8Array(arrayBuffer);
-
-    // Import pdfjs-serverless - works without workers in edge environments
-    const { getDocument } = await import('https://esm.sh/pdfjs-serverless@0.3.2');
-
-    // Load PDF
-    const loadingTask = getDocument(uint8Array);
-    const pdf = await loadingTask.promise;
+    const base64Pdf = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
     
-    console.log(`PDF loaded, pages: ${pdf.numPages}`);
-
-    // Get first page
-    const page = await pdf.getPage(1);
-    const viewport = page.getViewport({ scale: 2.0 }); // 2x scale for better quality
-
-    // Create canvas (using canvas package for Deno)
-    const { createCanvas } = await import('https://deno.land/x/canvas@v1.4.1/mod.ts');
-    const canvas = createCanvas(viewport.width, viewport.height);
-    const context = canvas.getContext('2d');
-
-    // Render PDF page to canvas
-    await page.render({
-      canvasContext: context,
-      viewport: viewport,
-    }).promise;
-
-    console.log('PDF rendered to canvas');
-
-    // Convert canvas to PNG buffer
-    const imageBuffer = canvas.toBuffer('image/png');
+    console.log('Starting puppeteer browser...');
     
-    // Generate unique filename for the converted image
-    const originalFilename = filePath.split('/').pop()?.replace('.pdf', '') || 'schematic';
-    const imagePath = `${filePath.replace('.pdf', '')}_converted.png`;
+    // Launch browser
+    const browser = await puppeteer.launch({
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
 
-    // Upload the converted image to storage
-    const { error: uploadError } = await supabase
-      .storage
-      .from(bucketName)
-      .upload(imagePath, imageBuffer, {
-        contentType: 'image/png',
-        upsert: true,
+    try {
+      const page = await browser.newPage();
+      
+      // Set viewport for high quality
+      await page.setViewport({ width: 1920, height: 1080, deviceScaleFactor: 2 });
+      
+      // Create a data URL for the PDF
+      const pdfDataUrl = `data:application/pdf;base64,${base64Pdf}`;
+      
+      // Navigate to the PDF
+      await page.goto(pdfDataUrl, { waitUntil: 'networkidle2' });
+      
+      console.log('PDF loaded in browser, taking screenshot...');
+      
+      // Take screenshot of first page
+      const screenshot = await page.screenshot({
+        type: 'png',
+        fullPage: false,
       });
+      
+      console.log('Screenshot captured');
+      
+      // Generate unique filename for the converted image
+      const imagePath = `${filePath.replace('.pdf', '')}_converted.png`;
 
-    if (uploadError) {
-      console.error('Error uploading converted image:', uploadError);
-      throw new Error('Failed to upload converted image');
+      // Upload the converted image to storage
+      const { error: uploadError } = await supabase
+        .storage
+        .from(bucketName)
+        .upload(imagePath, screenshot, {
+          contentType: 'image/png',
+          upsert: true,
+        });
+
+      if (uploadError) {
+        console.error('Error uploading converted image:', uploadError);
+        throw new Error('Failed to upload converted image');
+      }
+
+      console.log('Converted image uploaded:', imagePath);
+
+      // Update the record with the converted image path
+      const { error: updateError } = await supabase
+        .from(tableName)
+        .update({ converted_image_path: imagePath })
+        .eq('id', recordId);
+
+      if (updateError) {
+        console.error(`Error updating ${tableName} record:`, updateError);
+        throw new Error(`Failed to update ${tableName} record`);
+      }
+
+      console.log(`${tableName} record updated successfully`);
+
+      // Get public URL for the converted image
+      const { data: urlData } = supabase
+        .storage
+        .from(bucketName)
+        .getPublicUrl(imagePath);
+
+      return new Response(
+        JSON.stringify({ 
+          success: true,
+          imagePath,
+          imageUrl: urlData.publicUrl,
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    } finally {
+      await browser.close();
+      console.log('Browser closed');
     }
-
-    console.log('Converted image uploaded:', imagePath);
-
-    // Update the record with the converted image path
-    const { error: updateError } = await supabase
-      .from(tableName)
-      .update({ converted_image_path: imagePath })
-      .eq('id', recordId);
-
-    if (updateError) {
-      console.error(`Error updating ${tableName} record:`, updateError);
-      throw new Error(`Failed to update ${tableName} record`);
-    }
-
-    console.log(`${tableName} record updated successfully`);
-
-    // Get public URL for the converted image (or signed URL for private buckets)
-    const { data: urlData } = supabase
-      .storage
-      .from(bucketName)
-      .getPublicUrl(imagePath);
-
-    return new Response(
-      JSON.stringify({ 
-        success: true,
-        imagePath,
-        imageUrl: urlData.publicUrl,
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
 
   } catch (error) {
     console.error('Error in convert-pdf-to-image:', error);
