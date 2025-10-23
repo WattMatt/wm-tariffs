@@ -5,8 +5,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2 } from "lucide-react";
+import { Loader2, FileImage } from "lucide-react";
 import { toast } from "sonner";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface TariffDetailsDialogProps {
   tariffId: string;
@@ -45,6 +46,8 @@ export default function TariffDetailsDialog({ tariffId, tariffName, onClose }: T
   const [charges, setCharges] = useState<TariffCharge[]>([]);
   const [touPeriods, setTouPeriods] = useState<TouPeriod[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [sourceImageUrl, setSourceImageUrl] = useState<string | null>(null);
+  const [hasSourceDocument, setHasSourceDocument] = useState(false);
 
   useEffect(() => {
     fetchTariffDetails();
@@ -52,6 +55,29 @@ export default function TariffDetailsDialog({ tariffId, tariffName, onClose }: T
 
   const fetchTariffDetails = async () => {
     setIsLoading(true);
+
+    // First, get the tariff structure to find source document
+    const { data: tariffData } = await supabase
+      .from("tariff_structures")
+      .select("source_document_id, site_documents(file_path, converted_image_path)")
+      .eq("id", tariffId)
+      .single();
+
+    if (tariffData?.source_document_id && tariffData.site_documents) {
+      setHasSourceDocument(true);
+      const doc = tariffData.site_documents as any;
+      const imagePath = doc.converted_image_path || doc.file_path;
+      
+      if (imagePath) {
+        const { data: urlData } = await supabase.storage
+          .from("site_documents")
+          .createSignedUrl(imagePath, 3600);
+        
+        if (urlData?.signedUrl) {
+          setSourceImageUrl(urlData.signedUrl);
+        }
+      }
+    }
 
     const [blocksResult, chargesResult, touResult] = await Promise.all([
       supabase
@@ -96,7 +122,7 @@ export default function TariffDetailsDialog({ tariffId, tariffName, onClose }: T
 
   return (
     <Dialog open={true} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="max-w-7xl max-h-[85vh] overflow-hidden">
         <DialogHeader>
           <DialogTitle>{tariffName}</DialogTitle>
           <DialogDescription>Complete tariff structure details</DialogDescription>
@@ -107,7 +133,45 @@ export default function TariffDetailsDialog({ tariffId, tariffName, onClose }: T
             <Loader2 className="w-8 h-8 animate-spin text-primary" />
           </div>
         ) : (
-          <Tabs defaultValue="blocks" className="w-full">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 overflow-y-auto max-h-[calc(85vh-120px)]">
+            {/* Left Column - Source Document */}
+            <div className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <FileImage className="w-5 h-5" />
+                    Source Document
+                  </CardTitle>
+                  <CardDescription>
+                    Original document used for data extraction
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {sourceImageUrl ? (
+                    <div className="border rounded-lg overflow-hidden bg-muted/50">
+                      <img 
+                        src={sourceImageUrl} 
+                        alt="Source tariff document" 
+                        className="w-full h-auto"
+                      />
+                    </div>
+                  ) : (
+                    <Alert>
+                      <FileImage className="h-4 w-4" />
+                      <AlertDescription>
+                        {hasSourceDocument 
+                          ? "Source document image not available" 
+                          : "No source document linked to this tariff"}
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Right Column - Extracted Data */}
+            <div className="space-y-4">
+              <Tabs defaultValue="blocks" className="w-full">
             <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="blocks">
                 Blocks ({blocks.length})
@@ -257,6 +321,8 @@ export default function TariffDetailsDialog({ tariffId, tariffName, onClose }: T
               )}
             </TabsContent>
           </Tabs>
+            </div>
+          </div>
         )}
       </DialogContent>
     </Dialog>

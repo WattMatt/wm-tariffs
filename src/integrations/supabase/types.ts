@@ -770,6 +770,7 @@ export type Database = {
           id: string
           meter_configuration: string | null
           name: string
+          source_document_id: string | null
           supply_authority_id: string
           tariff_type: string
           tou_type: string | null
@@ -787,6 +788,7 @@ export type Database = {
           id?: string
           meter_configuration?: string | null
           name: string
+          source_document_id?: string | null
           supply_authority_id: string
           tariff_type: string
           tou_type?: string | null
@@ -804,6 +806,7 @@ export type Database = {
           id?: string
           meter_configuration?: string | null
           name?: string
+          source_document_id?: string | null
           supply_authority_id?: string
           tariff_type?: string
           tou_type?: string | null
@@ -813,6 +816,13 @@ export type Database = {
           voltage_level?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "tariff_structures_source_document_id_fkey"
+            columns: ["source_document_id"]
+            isOneToOne: false
+            referencedRelation: "site_documents"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "tariff_structures_supply_authority_id_fkey"
             columns: ["supply_authority_id"]
