@@ -42,7 +42,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
   const [viewingExtraction, setViewingExtraction] = useState<any>(null);
   const [schematicPreviewUrl, setSchematicPreviewUrl] = useState<string | null>(null);
   const [isLoadingSchematic, setIsLoadingSchematic] = useState(false);
-  const [viewingDocument, setViewingDocument] = useState<{ url: string; fileName: string; isPdf: boolean } | null>(null);
+  const [viewingDocument, setViewingDocument] = useState<{ url: string; fileName: string } | null>(null);
 
   useEffect(() => {
     fetchDocuments();
@@ -294,19 +294,13 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
 
   const handleViewDocument = async (doc: SiteDocument) => {
     try {
-      const isPdf = doc.file_name.toLowerCase().endsWith('.pdf');
       const filePathToUse = (doc as any).converted_image_path || doc.file_path;
-      
       const { data } = await supabase.storage
         .from("site-documents")
         .createSignedUrl(filePathToUse, 3600);
 
       if (data?.signedUrl) {
-        setViewingDocument({ 
-          url: data.signedUrl, 
-          fileName: doc.file_name,
-          isPdf: isPdf && !(doc as any).converted_image_path
-        });
+        setViewingDocument({ url: data.signedUrl, fileName: doc.file_name });
       }
     } catch (error) {
       console.error("View error:", error);
@@ -564,30 +558,11 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
           </DialogHeader>
           {viewingDocument && (
             <div className="overflow-y-auto max-h-[calc(90vh-120px)]">
-              {viewingDocument.isPdf ? (
-                <div className="flex flex-col gap-4">
-                  <div className="flex justify-center">
-                    <Button
-                      onClick={() => window.open(viewingDocument.url, '_blank')}
-                      className="gap-2"
-                    >
-                      <Download className="w-4 h-4" />
-                      Open PDF in New Tab
-                    </Button>
-                  </div>
-                  <embed
-                    src={viewingDocument.url}
-                    type="application/pdf"
-                    className="w-full h-[calc(90vh-200px)] border rounded-lg"
-                  />
-                </div>
-              ) : (
-                <img 
-                  src={viewingDocument.url} 
-                  alt={viewingDocument.fileName}
-                  className="w-full h-auto"
-                />
-              )}
+              <img 
+                src={viewingDocument.url} 
+                alt={viewingDocument.fileName}
+                className="w-full h-auto"
+              />
             </div>
           )}
         </DialogContent>
