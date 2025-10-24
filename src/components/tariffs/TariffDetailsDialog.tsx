@@ -13,31 +13,23 @@ interface TariffDetailsDialogProps {
   onClose: () => void;
 }
 
-interface TariffData {
-  tariffName: string;
-  tariffType: string;
-  meterConfiguration: string;
-  description: string;
-  effectiveFrom: string;
-  blocks: any[];
-  charges: any[];
-  touPeriods: any[];
-}
-
 export default function TariffDetailsDialog({ tariffId, tariffName, onClose }: TariffDetailsDialogProps) {
   const [isLoading, setIsLoading] = useState(true);
-  const [tariffData, setTariffData] = useState<TariffData | null>(null);
+  const [tariff, setTariff] = useState<any>(null);
+  const [blocks, setBlocks] = useState<any[]>([]);
+  const [charges, setCharges] = useState<any[]>([]);
+  const [touPeriods, setTouPeriods] = useState<any[]>([]);
 
   useEffect(() => {
-    fetchTariffData();
+    fetchData();
   }, [tariffId]);
 
-  const fetchTariffData = async () => {
-    setIsLoading(true);
-
+  const fetchData = async () => {
     try {
-      // Fetch tariff structure
-      const { data: tariff, error: tariffError } = await supabase
+      setIsLoading(true);
+
+      // Fetch tariff
+      const { data: tariffData, error: tariffError } = await supabase
         .from("tariff_structures")
         .select("*")
         .eq("id", tariffId)
@@ -46,45 +38,37 @@ export default function TariffDetailsDialog({ tariffId, tariffName, onClose }: T
       if (tariffError) throw tariffError;
 
       // Fetch blocks
-      const { data: blocks } = await supabase
+      const { data: blocksData } = await supabase
         .from("tariff_blocks")
         .select("*")
         .eq("tariff_structure_id", tariffId)
         .order("block_number", { ascending: true });
 
       // Fetch charges
-      const { data: charges } = await supabase
+      const { data: chargesData } = await supabase
         .from("tariff_charges")
         .select("*")
         .eq("tariff_structure_id", tariffId);
 
       // Fetch TOU periods
-      const { data: touPeriods } = await supabase
+      const { data: touData } = await supabase
         .from("tariff_time_periods")
         .select("*")
         .eq("tariff_structure_id", tariffId)
         .order("season", { ascending: true });
 
-      const formattedData = {
-        tariffName: tariff.name,
-        tariffType: tariff.tariff_type,
-        meterConfiguration: tariff.meter_configuration || "prepaid",
-        description: tariff.description || "",
-        effectiveFrom: tariff.effective_from,
-        blocks: blocks || [],
-        charges: charges || [],
-        touPeriods: touPeriods || []
-      };
+      setTariff(tariffData);
+      setBlocks(blocksData || []);
+      setCharges(chargesData || []);
+      setTouPeriods(touData || []);
 
-      console.log('TariffDetailsDialog - Fetched data:', {
-        blocks: formattedData.blocks.length,
-        charges: formattedData.charges.length,
-        touPeriods: formattedData.touPeriods.length,
-        chargesData: formattedData.charges
+      console.log("Loaded:", {
+        blocks: blocksData?.length || 0,
+        charges: chargesData?.length || 0,
+        tou: touData?.length || 0
       });
-
-      setTariffData(formattedData);
     } catch (error: any) {
+      console.error("Error loading tariff:", error);
       toast.error(`Failed to load tariff: ${error.message}`);
       onClose();
     } finally {
@@ -92,168 +76,186 @@ export default function TariffDetailsDialog({ tariffId, tariffName, onClose }: T
     }
   };
 
-  return (
-    <Dialog open={true} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>View Tariff Structure</DialogTitle>
-          <DialogDescription>
-            Viewing details for {tariffName}
-          </DialogDescription>
-        </DialogHeader>
-
-        {isLoading ? (
+  if (isLoading) {
+    return (
+      <Dialog open={true} onOpenChange={onClose}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>View Tariff Structure</DialogTitle>
+            <DialogDescription>Loading tariff details...</DialogDescription>
+          </DialogHeader>
           <div className="flex items-center justify-center py-8">
             <Loader2 className="w-8 h-8 animate-spin text-primary" />
           </div>
-        ) : tariffData ? (
-          <div className="space-y-6">
-            {/* Debug Info */}
-            <div className="p-3 bg-blue-50 border border-blue-200 rounded text-sm">
-              <strong>Debug:</strong> Blocks: {tariffData.blocks.length}, Charges: {tariffData.charges.length}, TOU: {tariffData.touPeriods.length}
-            </div>
-            
-            {/* Basic Information */}
-            <div className="space-y-4">
-              <div>
-                <Label>Tariff Name</Label>
-                <Input value={tariffData.tariffName} disabled className="mt-1" />
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label>Tariff Type</Label>
-                  <Input value={tariffData.tariffType} disabled className="mt-1" />
-                </div>
-                <div>
-                  <Label>Meter Configuration</Label>
-                  <Input value={tariffData.meterConfiguration} disabled className="mt-1" />
-                </div>
-              </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
-              <div>
-                <Label>Description</Label>
-                <Input value={tariffData.description || "No description"} disabled className="mt-1" />
-              </div>
-
-              <div>
-                <Label>Effective From</Label>
-                <Input value={tariffData.effectiveFrom} disabled className="mt-1" />
-              </div>
-            </div>
-
-            {/* Energy Blocks */}
-            {tariffData.blocks.length > 0 && (
-              <>
-                <Separator />
-                <div>
-                  <h3 className="text-lg font-semibold mb-4">Energy Blocks</h3>
-                  <div className="space-y-3">
-                    {tariffData.blocks.map((block, index) => (
-                      <div key={index} className="grid grid-cols-4 gap-2 p-3 bg-muted/50 rounded-lg">
-                        <div>
-                          <Label className="text-xs">Block {block.block_number}</Label>
-                        </div>
-                        <div>
-                          <Label className="text-xs">From (kWh)</Label>
-                          <Input value={block.kwh_from} disabled className="mt-1" />
-                        </div>
-                        <div>
-                          <Label className="text-xs">To (kWh)</Label>
-                          <Input value={block.kwh_to || "∞"} disabled className="mt-1" />
-                        </div>
-                        <div>
-                          <Label className="text-xs">Rate (c/kWh)</Label>
-                          <Input value={block.energy_charge_cents} disabled className="mt-1" />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
-
-            {/* Charges */}
-            {tariffData.charges.length > 0 && (
-              <>
-                <Separator />
-                <div>
-                  <h3 className="text-lg font-semibold mb-4">Charges</h3>
-                  <div className="space-y-3">
-                    {tariffData.charges.map((charge, index) => (
-                      <div key={index} className="grid grid-cols-4 gap-2 p-3 bg-muted/50 rounded-lg">
-                        <div className="col-span-2">
-                          <Label className="text-xs">Type</Label>
-                          <Input value={charge.charge_type.replace(/_/g, ' ').toUpperCase()} disabled className="mt-1" />
-                        </div>
-                        <div>
-                          <Label className="text-xs">Amount</Label>
-                          <Input value={charge.charge_amount} disabled className="mt-1" />
-                        </div>
-                        <div>
-                          <Label className="text-xs">Unit</Label>
-                          <Input value={charge.unit} disabled className="mt-1" />
-                        </div>
-                        {charge.description && (
-                          <div className="col-span-4">
-                            <Label className="text-xs">Description</Label>
-                            <Input value={charge.description} disabled className="mt-1" />
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
-
-            {/* TOU Periods */}
-            {tariffData.touPeriods.length > 0 && (
-              <>
-                <Separator />
-                <div>
-                  <h3 className="text-lg font-semibold mb-4">Time-of-Use Periods</h3>
-                  <div className="space-y-3">
-                    {tariffData.touPeriods.map((period, index) => (
-                      <div key={index} className="grid grid-cols-5 gap-2 p-3 bg-muted/50 rounded-lg">
-                        <div>
-                          <Label className="text-xs">Season</Label>
-                          <Input value={period.season} disabled className="mt-1" />
-                        </div>
-                        <div>
-                          <Label className="text-xs">Period</Label>
-                          <Input value={period.period_type.replace(/_/g, ' ')} disabled className="mt-1" />
-                        </div>
-                        <div>
-                          <Label className="text-xs">Day Type</Label>
-                          <Input value={period.day_type} disabled className="mt-1" />
-                        </div>
-                        <div>
-                          <Label className="text-xs">Hours</Label>
-                          <Input value={`${period.start_hour}:00 - ${period.end_hour}:00`} disabled className="mt-1" />
-                        </div>
-                        <div>
-                          <Label className="text-xs">Rate (c/kWh)</Label>
-                          <Input value={period.energy_charge_cents} disabled className="mt-1" />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
-
-            {tariffData.blocks.length === 0 && tariffData.charges.length === 0 && tariffData.touPeriods.length === 0 && (
-              <div className="text-center py-8 text-muted-foreground">
-                No tariff data available
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="text-center py-8 text-muted-foreground">
+  if (!tariff) {
+    return (
+      <Dialog open={true} onOpenChange={onClose}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>View Tariff Structure</DialogTitle>
+          </DialogHeader>
+          <div className="text-center py-8 text-destructive">
             Failed to load tariff data
           </div>
-        )}
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  return (
+    <Dialog open={true} onOpenChange={onClose}>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>View Tariff Structure</DialogTitle>
+          <DialogDescription>Viewing details for {tariffName}</DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-6">
+          {/* Data Counter */}
+          <div className="p-3 bg-primary/10 border border-primary/20 rounded-lg text-sm">
+            <strong>Data loaded:</strong> {blocks.length} blocks, {charges.length} charges, {touPeriods.length} TOU periods
+          </div>
+
+          {/* Basic Info */}
+          <div className="space-y-4">
+            <div>
+              <Label>Tariff Name</Label>
+              <Input value={tariff.name} disabled className="mt-1" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Tariff Type</Label>
+                <Input value={tariff.tariff_type} disabled className="mt-1" />
+              </div>
+              <div>
+                <Label>Meter Configuration</Label>
+                <Input value={tariff.meter_configuration || "N/A"} disabled className="mt-1" />
+              </div>
+            </div>
+
+            <div>
+              <Label>Description</Label>
+              <Input value={tariff.description || "No description"} disabled className="mt-1" />
+            </div>
+
+            <div>
+              <Label>Effective From</Label>
+              <Input value={tariff.effective_from} disabled className="mt-1" />
+            </div>
+          </div>
+
+          {/* Blocks */}
+          {blocks.length > 0 && (
+            <>
+              <Separator />
+              <div>
+                <h3 className="text-lg font-semibold mb-3">Energy Blocks ({blocks.length})</h3>
+                <div className="space-y-2">
+                  {blocks.map((block) => (
+                    <div key={block.id} className="grid grid-cols-4 gap-3 p-3 bg-muted/50 rounded-lg">
+                      <div>
+                        <Label className="text-xs text-muted-foreground">Block</Label>
+                        <div className="font-medium">{block.block_number}</div>
+                      </div>
+                      <div>
+                        <Label className="text-xs text-muted-foreground">From (kWh)</Label>
+                        <div className="font-medium">{block.kwh_from}</div>
+                      </div>
+                      <div>
+                        <Label className="text-xs text-muted-foreground">To (kWh)</Label>
+                        <div className="font-medium">{block.kwh_to || "∞"}</div>
+                      </div>
+                      <div>
+                        <Label className="text-xs text-muted-foreground">Rate</Label>
+                        <div className="font-medium">{block.energy_charge_cents} c/kWh</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Charges */}
+          {charges.length > 0 && (
+            <>
+              <Separator />
+              <div>
+                <h3 className="text-lg font-semibold mb-3">Tariff Charges ({charges.length})</h3>
+                <div className="space-y-2">
+                  {charges.map((charge) => (
+                    <div key={charge.id} className="p-3 bg-muted/50 rounded-lg">
+                      <div className="grid grid-cols-3 gap-3">
+                        <div>
+                          <Label className="text-xs text-muted-foreground">Charge Type</Label>
+                          <div className="font-medium">{charge.charge_type.replace(/_/g, ' ').toUpperCase()}</div>
+                        </div>
+                        <div>
+                          <Label className="text-xs text-muted-foreground">Amount</Label>
+                          <div className="font-medium">{charge.charge_amount} {charge.unit}</div>
+                        </div>
+                        <div>
+                          <Label className="text-xs text-muted-foreground">Description</Label>
+                          <div className="font-medium">{charge.description || "N/A"}</div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* TOU Periods */}
+          {touPeriods.length > 0 && (
+            <>
+              <Separator />
+              <div>
+                <h3 className="text-lg font-semibold mb-3">Time-of-Use Periods ({touPeriods.length})</h3>
+                <div className="space-y-2">
+                  {touPeriods.map((period) => (
+                    <div key={period.id} className="p-3 bg-muted/50 rounded-lg">
+                      <div className="grid grid-cols-5 gap-3">
+                        <div>
+                          <Label className="text-xs text-muted-foreground">Season</Label>
+                          <div className="font-medium">{period.season}</div>
+                        </div>
+                        <div>
+                          <Label className="text-xs text-muted-foreground">Period Type</Label>
+                          <div className="font-medium">{period.period_type.replace(/_/g, ' ')}</div>
+                        </div>
+                        <div>
+                          <Label className="text-xs text-muted-foreground">Day Type</Label>
+                          <div className="font-medium">{period.day_type}</div>
+                        </div>
+                        <div>
+                          <Label className="text-xs text-muted-foreground">Hours</Label>
+                          <div className="font-medium">{period.start_hour}:00 - {period.end_hour}:00</div>
+                        </div>
+                        <div>
+                          <Label className="text-xs text-muted-foreground">Rate</Label>
+                          <div className="font-medium">{period.energy_charge_cents} c/kWh</div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+
+          {blocks.length === 0 && charges.length === 0 && touPeriods.length === 0 && (
+            <div className="text-center py-8 text-muted-foreground">
+              No detailed tariff structure data available for this tariff.
+            </div>
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   );
