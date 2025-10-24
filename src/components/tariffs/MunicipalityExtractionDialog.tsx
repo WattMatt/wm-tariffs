@@ -1590,6 +1590,7 @@ export default function MunicipalityExtractionDialog({
                                           <SelectContent>
                                             <SelectItem value="Low Season">Low Season</SelectItem>
                                             <SelectItem value="High Season">High Season</SelectItem>
+                                            <SelectItem value="Both Seasons">Both Seasons</SelectItem>
                                           </SelectContent>
                                         </Select>
                                       </div>
@@ -1690,6 +1691,7 @@ export default function MunicipalityExtractionDialog({
                                           <SelectContent>
                                             <SelectItem value="Low Season">Low Season</SelectItem>
                                             <SelectItem value="High Season">High Season</SelectItem>
+                                            <SelectItem value="Both Seasons">Both Seasons</SelectItem>
                                           </SelectContent>
                                         </Select>
                                       </div>
@@ -1884,6 +1886,7 @@ export default function MunicipalityExtractionDialog({
                                           <SelectContent>
                                             <SelectItem value="Low Season">Low Season</SelectItem>
                                             <SelectItem value="High Season">High Season</SelectItem>
+                                            <SelectItem value="Both Seasons">Both Seasons</SelectItem>
                                           </SelectContent>
                                         </Select>
                                       </div>
