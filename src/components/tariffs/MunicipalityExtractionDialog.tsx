@@ -57,6 +57,7 @@ export default function MunicipalityExtractionDialog({
   const [zoom, setZoom] = useState(1);
   const currentImageRef = useRef<FabricImage | null>(null);
   const [isAcceptedPanelCollapsed, setIsAcceptedPanelCollapsed] = useState(false);
+  const [appendSelectionDrawn, setAppendSelectionDrawn] = useState(false);
   const [draggedTariffIndex, setDraggedTariffIndex] = useState<number | null>(null);
   const [isAppendMode, setIsAppendMode] = useState(false);
 
@@ -285,10 +286,10 @@ export default function MunicipalityExtractionDialog({
         selectionModeRef.current = false;
         drawStartPointRef.current = null;
         
-        // In append mode, automatically extract
+        // In append mode, set flag to show Extract button
         if (isAppendMode) {
-          handleExtractFromRegion(canvas, rect, true);
-          setIsAppendMode(false);
+          setAppendSelectionDrawn(true);
+          toast.success('Region selected! Click "Extract" to append data.');
         } else {
           // Don't automatically extract - wait for user to click Extract button
           toast.success('Region selected! Click "Extract Data" to process.');
@@ -638,6 +639,7 @@ export default function MunicipalityExtractionDialog({
       setExtractedData(null);
     }
     setIsAppendMode(appendMode);
+    setAppendSelectionDrawn(false);
     setSelectionMode(true);
     selectionModeRef.current = true;
     console.log('Selection mode activated, ref is now:', selectionModeRef.current);
@@ -1544,14 +1546,24 @@ export default function MunicipalityExtractionDialog({
                 {/* Action buttons - Always visible at bottom */}
                 <div className="flex gap-2 p-4 border-t bg-background">
                   <Button
-                    onClick={() => handleStartSelection(true)}
+                    onClick={() => {
+                      if (appendSelectionDrawn && fabricCanvas && selectionRectRef.current) {
+                        // Extract the selected region and append
+                        handleExtractFromRegion(fabricCanvas, selectionRectRef.current, true);
+                        setAppendSelectionDrawn(false);
+                        setIsAppendMode(false);
+                      } else {
+                        // Start selection mode
+                        handleStartSelection(true);
+                      }
+                    }}
                     variant="outline"
                     size="sm"
-                    disabled={isExtracting || selectionMode}
+                    disabled={isExtracting || (selectionMode && !appendSelectionDrawn)}
                     className="flex-1"
                   >
                     <Plus className="h-4 w-4 mr-1" />
-                    Append
+                    {appendSelectionDrawn ? 'Extract' : 'Append'}
                   </Button>
                   <Button
                     onClick={() => {
