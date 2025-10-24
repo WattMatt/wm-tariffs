@@ -66,6 +66,8 @@ export default function TariffDetailsDialog({ tariffId, tariffName, onClose }: T
         .order("season", { ascending: true });
 
       // Transform data to match form structure
+      const basicChargeData = (charges || []).find(c => c.charge_type === 'basic_monthly' || c.charge_type === 'basic_charge');
+      
       const formData: TariffData = {
         tariffName: tariff.name,
         tariffType: tariff.tariff_type,
@@ -79,26 +81,40 @@ export default function TariffDetailsDialog({ tariffId, tariffName, onClose }: T
           energyChargeCents: block.energy_charge_cents
         })),
         seasonalEnergy: (charges || [])
-          .filter(c => c.charge_type.includes('energy'))
-          .map(c => ({
-            season: c.description.replace(' Energy Charge', ''),
-            rate: c.charge_amount,
-            unit: c.unit
-          })),
+          .filter(c => c.charge_type.includes('energy') && c.charge_type !== 'tou_energy')
+          .map(c => {
+            // Extract season from charge_type (e.g., "energy_high_season" -> "High Season")
+            const seasonMatch = c.charge_type.match(/energy_(.+)_season/);
+            const season = seasonMatch 
+              ? seasonMatch[1].split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+              : c.description || 'Standard';
+            return {
+              season: season,
+              rate: c.charge_amount,
+              unit: c.unit
+            };
+          }),
         touSeasons: groupTouPeriods(touPeriods || []),
-        basicCharge: (charges || []).find(c => c.charge_type === 'basic_monthly' || c.charge_type === 'basic_charge')
+        basicCharge: basicChargeData
           ? {
-              amount: charges.find(c => c.charge_type === 'basic_monthly' || c.charge_type === 'basic_charge')!.charge_amount,
-              unit: charges.find(c => c.charge_type === 'basic_monthly' || c.charge_type === 'basic_charge')!.unit
+              amount: basicChargeData.charge_amount,
+              unit: basicChargeData.unit
             }
           : undefined,
         demandCharges: (charges || [])
           .filter(c => c.charge_type.includes('demand'))
-          .map(c => ({
-            season: c.description.replace(' Demand Charge', ''),
-            rate: c.charge_amount,
-            unit: c.unit
-          }))
+          .map(c => {
+            // Extract season from charge_type (e.g., "demand_high_season" -> "High Season")
+            const seasonMatch = c.charge_type.match(/demand_(.+)_season/);
+            const season = seasonMatch 
+              ? seasonMatch[1].split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+              : c.description || 'Standard';
+            return {
+              season: season,
+              rate: c.charge_amount,
+              unit: c.unit
+            };
+          })
       };
 
       console.log('TariffDetailsDialog - Transformed data:', {
