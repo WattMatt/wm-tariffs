@@ -494,7 +494,8 @@ export default function MunicipalityExtractionDialog({
         .from('tariff-extractions')
         .getPublicUrl(fileName);
       
-      // Call AI to extract municipality data
+      // Call AI to extract municipality data from the cropped image
+      console.log("Calling extract-tariff-data with imageUrl:", publicUrl);
       toast.info("Analyzing selected region with AI...");
       const { data, error } = await supabase.functions.invoke("extract-tariff-data", {
         body: { 
@@ -502,6 +503,8 @@ export default function MunicipalityExtractionDialog({
           phase: "extractMunicipality"
         }
       });
+      
+      console.log("Edge function response:", JSON.stringify(data, null, 2));
 
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || "Extraction failed");
