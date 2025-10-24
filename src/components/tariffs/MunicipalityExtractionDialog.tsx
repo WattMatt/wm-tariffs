@@ -625,6 +625,14 @@ export default function MunicipalityExtractionDialog({
         // Set the merged data - spread to create new reference
         setExtractedData({...mergedData});
         toast.success(`Added ${newData.tariffStructures?.length || 0} new tariff structure(s)! Total: ${mergedData.tariffStructures?.length}`);
+        
+        // Clear the rectangle after successful append
+        if (fabricCanvas && selectionRectRef.current) {
+          fabricCanvas.remove(selectionRectRef.current);
+          selectionRectRef.current = null;
+          fabricCanvas.renderAll();
+        }
+        
         setIsExtracting(false);
         return;
       } else {
