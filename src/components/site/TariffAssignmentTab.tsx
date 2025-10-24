@@ -166,7 +166,15 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
   const hasUnsavedChanges = (meterId: string) => {
     const meter = meters.find(m => m.id === meterId);
     if (!meter) return false;
-    return selectedTariffs[meterId] !== meter.tariff;
+    
+    const currentSelection = selectedTariffs[meterId];
+    const savedTariff = meter.tariff;
+    
+    // If both are empty/null, no changes
+    if (!currentSelection && !savedTariff) return false;
+    
+    // If one is set and the other isn't, or if they're different
+    return currentSelection !== savedTariff;
   };
 
   const stats = getAssignmentStats();
