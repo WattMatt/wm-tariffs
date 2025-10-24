@@ -1140,7 +1140,6 @@ export default function MunicipalityExtractionDialog({
                                         updated[tariffIdx].fixedEnergy = [];
                                       }
                                       updated[tariffIdx].fixedEnergy.push({
-                                        chargeType: "Energy Charge",
                                         amount: 0,
                                         unit: "c/kWh"
                                       });
@@ -1155,18 +1154,6 @@ export default function MunicipalityExtractionDialog({
                                 {tariff.fixedEnergy && tariff.fixedEnergy.length > 0 ? (
                                   tariff.fixedEnergy.map((charge: any, chargeIdx: number) => (
                                     <div key={chargeIdx} className="p-2 bg-background rounded border space-y-2">
-                                      <div>
-                                        <Label className="text-xs">Charge Type</Label>
-                                        <Input
-                                          value={charge.chargeType || ""}
-                                          onChange={(e) => {
-                                            const updated = [...extractedData.tariffStructures];
-                                            updated[tariffIdx].fixedEnergy[chargeIdx].chargeType = e.target.value;
-                                            setExtractedData({ ...extractedData, tariffStructures: updated });
-                                          }}
-                                          className="h-8 mt-1"
-                                        />
-                                      </div>
                                       <div className="grid grid-cols-2 gap-2">
                                         <div>
                                           <Label className="text-xs">Amount</Label>
