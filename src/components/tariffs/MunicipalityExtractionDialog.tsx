@@ -427,6 +427,9 @@ export default function MunicipalityExtractionDialog({
       
       if (!imageObj) throw new Error('Image not found on canvas');
       
+      // Get the current bounding rect to capture any transformations (move/resize)
+      const boundingRect = rect.getBoundingRect();
+      
       // Calculate coordinates in original image space
       const zoom = canvas.getZoom();
       const vpt = canvas.viewportTransform || [1, 0, 0, 1, 0, 0];
@@ -436,11 +439,11 @@ export default function MunicipalityExtractionDialog({
       const imgLeft = imageObj.left || 0;
       const imgTop = imageObj.top || 0;
       
-      // Convert rect coordinates to image coordinates
-      const rectLeft = (rect.left! - imgLeft) / (imgScaleX * zoom);
-      const rectTop = (rect.top! - imgTop) / (imgScaleY * zoom);
-      const rectWidth = rect.width! / (imgScaleX * zoom);
-      const rectHeight = rect.height! / (imgScaleY * zoom);
+      // Convert rect coordinates to image coordinates using the bounding rect
+      const rectLeft = (boundingRect.left - imgLeft) / (imgScaleX * zoom);
+      const rectTop = (boundingRect.top - imgTop) / (imgScaleY * zoom);
+      const rectWidth = boundingRect.width / (imgScaleX * zoom);
+      const rectHeight = boundingRect.height / (imgScaleY * zoom);
       
       // Crop the current page image
       const img = new Image();
@@ -731,15 +734,31 @@ export default function MunicipalityExtractionDialog({
                   </Button>
                 </>
               ) : (
-                <Button
-                  size="sm"
-                  onClick={handleStartSelection}
-                  disabled={pdfPageImages.length === 0 || isExtracting}
-                  className="w-full"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Select Region
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    onClick={handleStartSelection}
+                    disabled={pdfPageImages.length === 0 || isExtracting}
+                    className="flex-1"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Select Region
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      if (fabricCanvas && selectionRectRef.current) {
+                        handleExtractFromRegion(fabricCanvas, selectionRectRef.current);
+                      }
+                    }}
+                    disabled={!fabricCanvas || !selectionRectRef.current || isExtracting}
+                    variant="outline"
+                    className="flex-1"
+                  >
+                    <RotateCw className="h-4 w-4 mr-2" />
+                    Rescan
+                  </Button>
+                </div>
               )}
             </div>
           </Card>
