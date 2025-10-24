@@ -1063,7 +1063,7 @@ export default function MunicipalityExtractionDialog({
                         className="flex-1"
                       >
                         <RotateCw className="h-4 w-4 mr-1" />
-                        Rescan
+                        Append
                       </Button>
                       <Button
                         onClick={() => {
