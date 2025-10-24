@@ -1,14 +1,9 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
 import { Plus, FileText, Clock, Eye, Trash2 } from "lucide-react";
@@ -16,6 +11,7 @@ import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
 import TouPeriodsDialog from "./TouPeriodsDialog";
 import TariffDetailsDialog from "./TariffDetailsDialog";
+import TariffStructureForm from "./TariffStructureForm";
 
 interface TariffStructure {
   id: string;
@@ -52,7 +48,6 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [usesTou, setUsesTou] = useState(false);
   const [selectedTariffForTou, setSelectedTariffForTou] = useState<string | null>(null);
   const [selectedTariffForDetails, setSelectedTariffForDetails] = useState<{ id: string; name: string } | null>(null);
 
@@ -146,33 +141,143 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const handleSubmit = async (tariffData: any) => {
     setIsLoading(true);
 
-    const formData = new FormData(e.currentTarget);
+    try {
+      // Insert the tariff structure
+      const { data: tariffStructure, error: tariffError } = await supabase
+        .from("tariff_structures")
+        .insert({
+          supply_authority_id: supplyAuthorityId,
+          name: tariffData.tariffName,
+          tariff_type: tariffData.tariffType,
+          meter_configuration: tariffData.meterConfiguration,
+          description: tariffData.description,
+          effective_from: tariffData.effectiveFrom,
+          uses_tou: tariffData.touSeasons.length > 0,
+          tou_type: tariffData.touSeasons.length > 0 ? "custom" : null,
+          active: true,
+        })
+        .select()
+        .single();
 
-    const { error } = await supabase.from("tariff_structures").insert({
-      supply_authority_id: supplyAuthorityId,
-      name: formData.get("name") as string,
-      tariff_type: formData.get("type") as string,
-      meter_configuration: formData.get("meter_config") as string,
-      description: formData.get("description") as string,
-      effective_from: formData.get("effective_from") as string,
-      uses_tou: usesTou,
-      tou_type: usesTou ? (formData.get("tou_type") as string) : null,
-      active: true,
-    });
+      if (tariffError) throw tariffError;
 
-    setIsLoading(false);
+      const tariffId = tariffStructure.id;
 
-    if (error) {
-      toast.error(error.message);
-    } else {
-      toast.success("Tariff structure created");
+      // Insert energy blocks
+      if (tariffData.blocks.length > 0) {
+        const blocksToInsert = tariffData.blocks.map((block: any) => ({
+          tariff_structure_id: tariffId,
+          block_number: block.blockNumber,
+          kwh_from: block.kwhFrom,
+          kwh_to: block.kwhTo,
+          energy_charge_cents: block.energyChargeCents,
+        }));
+
+        const { error: blocksError } = await supabase
+          .from("tariff_blocks")
+          .insert(blocksToInsert);
+
+        if (blocksError) throw blocksError;
+      }
+
+      // Insert seasonal energy charges
+      if (tariffData.seasonalEnergy.length > 0) {
+        const chargesToInsert = tariffData.seasonalEnergy.map((charge: any) => ({
+          tariff_structure_id: tariffId,
+          charge_type: "seasonal_energy",
+          description: charge.season,
+          charge_amount: charge.rate,
+          unit: charge.unit,
+        }));
+
+        const { error: chargesError } = await supabase
+          .from("tariff_charges")
+          .insert(chargesToInsert);
+
+        if (chargesError) throw chargesError;
+      }
+
+      // Insert TOU periods
+      if (tariffData.touSeasons.length > 0) {
+        const touToInsert = tariffData.touSeasons.flatMap((season: any) => [
+          {
+            tariff_structure_id: tariffId,
+            season: season.season,
+            day_type: "weekday",
+            period_type: "peak",
+            start_hour: 7,
+            end_hour: 10,
+            energy_charge_cents: season.peak,
+          },
+          {
+            tariff_structure_id: tariffId,
+            season: season.season,
+            day_type: "weekday",
+            period_type: "standard",
+            start_hour: 10,
+            end_hour: 18,
+            energy_charge_cents: season.standard,
+          },
+          {
+            tariff_structure_id: tariffId,
+            season: season.season,
+            day_type: "weekday",
+            period_type: "off_peak",
+            start_hour: 18,
+            end_hour: 7,
+            energy_charge_cents: season.offPeak,
+          },
+        ]);
+
+        const { error: touError } = await supabase
+          .from("tariff_time_periods")
+          .insert(touToInsert);
+
+        if (touError) throw touError;
+      }
+
+      // Insert basic charge
+      if (tariffData.basicCharge) {
+        const { error: basicChargeError } = await supabase
+          .from("tariff_charges")
+          .insert({
+            tariff_structure_id: tariffId,
+            charge_type: "basic_charge",
+            description: "Monthly Basic Charge",
+            charge_amount: tariffData.basicCharge.amount,
+            unit: tariffData.basicCharge.unit,
+          });
+
+        if (basicChargeError) throw basicChargeError;
+      }
+
+      // Insert demand charges
+      if (tariffData.demandCharges.length > 0) {
+        const demandChargesToInsert = tariffData.demandCharges.map((charge: any) => ({
+          tariff_structure_id: tariffId,
+          charge_type: "demand_charge",
+          description: charge.season,
+          charge_amount: charge.rate,
+          unit: charge.unit,
+        }));
+
+        const { error: demandError } = await supabase
+          .from("tariff_charges")
+          .insert(demandChargesToInsert);
+
+        if (demandError) throw demandError;
+      }
+
+      toast.success("Tariff structure created successfully");
       setIsDialogOpen(false);
-      setUsesTou(false);
       fetchStructures();
+    } catch (error: any) {
+      toast.error(`Failed to create tariff: ${error.message}`);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -210,99 +315,12 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
                 Add Tariff
               </Button>
             </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>Add Tariff Structure</DialogTitle>
-              <DialogDescription>Create a new tariff configuration</DialogDescription>
+              <DialogDescription>Create a new tariff with blocks, charges, and TOU periods</DialogDescription>
             </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Tariff Name</Label>
-                <Input id="name" name="name" required placeholder="Domestic Prepaid" />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="type">Tariff Type</Label>
-                <Select name="type" required>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="domestic">Domestic</SelectItem>
-                    <SelectItem value="commercial">Commercial</SelectItem>
-                    <SelectItem value="industrial">Industrial</SelectItem>
-                    <SelectItem value="agricultural">Agricultural</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="meter_config">Meter Configuration</Label>
-                <Select name="meter_config">
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select configuration" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="prepaid">Prepaid</SelectItem>
-                    <SelectItem value="conventional">Conventional</SelectItem>
-                    <SelectItem value="both">Both</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="effective_from">Effective From</Label>
-                <Input id="effective_from" name="effective_from" type="date" required />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  name="description"
-                  placeholder="Additional details about this tariff..."
-                  rows={3}
-                />
-              </div>
-
-              <div className="flex items-center space-x-2 p-4 bg-muted/50 rounded-lg">
-                <Switch
-                  id="uses_tou"
-                  checked={usesTou}
-                  onCheckedChange={setUsesTou}
-                />
-                <div className="flex-1">
-                  <Label htmlFor="uses_tou" className="cursor-pointer">
-                    Time-of-Use (TOU) Tariff
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    Enable for Eskom TOU structures (Nightsave, Megaflex, etc.)
-                  </p>
-                </div>
-              </div>
-
-              {usesTou && (
-                <div className="space-y-2">
-                  <Label htmlFor="tou_type">TOU Type</Label>
-                  <Select name="tou_type" required>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select TOU type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="nightsave">Nightsave (Urban Large/Small, Rural)</SelectItem>
-                      <SelectItem value="megaflex">Megaflex/Miniflex/Homeflex</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    Define time periods after creating the tariff
-                  </p>
-                </div>
-              )}
-
-              <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? "Creating..." : "Create Tariff"}
-              </Button>
-            </form>
+            <TariffStructureForm onSubmit={handleSubmit} isLoading={isLoading} />
           </DialogContent>
         </Dialog>
         </div>
