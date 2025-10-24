@@ -504,13 +504,60 @@ export default function MunicipalityExtractionDialog({
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || "Extraction failed");
       
-      const newData = data.tariffData || {
+      // Transform the AI response to match UI expectations
+      const rawData = data.tariffData || {
         municipalityName: data.municipality?.name || "",
         nersaIncrease: data.municipality?.nersaIncrease || 0,
-        tariffStructures: [],
-        blocks: [],
-        charges: [],
-        touPeriods: []
+        tariffStructures: []
+      };
+      
+      // Map the tariff structures to the format expected by the UI
+      const transformedTariffStructures = (rawData.tariffStructures || []).map((tariff: any) => {
+        const transformed: any = {
+          tariffName: tariff.tariffName || tariff.name || "",
+          blocks: tariff.blocks || []
+        };
+        
+        // Process charges array and categorize them
+        const charges = tariff.charges || [];
+        transformed.fixedEnergy = [];
+        transformed.seasonalEnergy = [];
+        transformed.touPeriods = [];
+        transformed.demandCharges = [];
+        
+        charges.forEach((charge: any) => {
+          const chargeType = charge.chargeType?.toLowerCase() || '';
+          
+          if (chargeType.includes('basic') || chargeType.includes('monthly')) {
+            // Basic charge (only one)
+            transformed.basicCharge = {
+              amount: charge.chargeAmount || 0,
+              unit: charge.unit || 'R/month'
+            };
+          } else if (chargeType.includes('demand')) {
+            // Demand charges (seasonal)
+            transformed.demandCharges.push({
+              season: charge.season || 'All Year',
+              rate: charge.chargeAmount || 0,
+              unit: charge.unit || 'R/kVA'
+            });
+          } else if (chargeType.includes('energy') || chargeType.includes('fixed')) {
+            // Fixed energy charges
+            transformed.fixedEnergy.push({
+              description: charge.description || 'Energy Charge',
+              rate: charge.chargeAmount || 0,
+              unit: charge.unit || 'c/kWh'
+            });
+          }
+        });
+        
+        return transformed;
+      });
+      
+      const newData = {
+        municipalityName: rawData.municipalityName || "",
+        nersaIncrease: rawData.nersaIncrease || 0,
+        tariffStructures: transformedTariffStructures
       };
       
       // If in append mode, merge the tariff structures
