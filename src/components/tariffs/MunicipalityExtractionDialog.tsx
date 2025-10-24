@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, Trash2, Eye, Plus, ZoomIn, ZoomOut, RotateCcw, ChevronLeft, ChevronRight, RotateCw, GripVertical } from "lucide-react";
+import { Loader2, Trash2, Eye, Plus, ZoomIn, ZoomOut, RotateCcw, ChevronLeft, ChevronRight, RotateCw, GripVertical, Sparkles } from "lucide-react";
 import { pdfjs } from 'react-pdf';
 import { toast } from "sonner";
 import { Canvas as FabricCanvas, Rect as FabricRect, FabricImage, Circle } from "fabric";
@@ -1557,13 +1557,22 @@ export default function MunicipalityExtractionDialog({
                         handleStartSelection(true);
                       }
                     }}
-                    variant="outline"
+                    variant={appendSelectionDrawn ? "default" : "outline"}
                     size="sm"
                     disabled={isExtracting || (selectionMode && !appendSelectionDrawn)}
                     className="flex-1"
                   >
-                    <Plus className="h-4 w-4 mr-1" />
-                    {appendSelectionDrawn ? 'Extract' : 'Append'}
+                    {appendSelectionDrawn ? (
+                      <>
+                        <Sparkles className="h-4 w-4 mr-1" />
+                        Extract
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="h-4 w-4 mr-1" />
+                        Append
+                      </>
+                    )}
                   </Button>
                   <Button
                     onClick={() => {
