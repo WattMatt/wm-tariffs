@@ -65,7 +65,7 @@ export default function TariffDetailsDialog({ tariffId, tariffName, onClose }: T
         .eq("tariff_structure_id", tariffId)
         .order("season", { ascending: true });
 
-      setTariffData({
+      const formattedData = {
         tariffName: tariff.name,
         tariffType: tariff.tariff_type,
         meterConfiguration: tariff.meter_configuration || "prepaid",
@@ -74,7 +74,16 @@ export default function TariffDetailsDialog({ tariffId, tariffName, onClose }: T
         blocks: blocks || [],
         charges: charges || [],
         touPeriods: touPeriods || []
+      };
+
+      console.log('TariffDetailsDialog - Fetched data:', {
+        blocks: formattedData.blocks.length,
+        charges: formattedData.charges.length,
+        touPeriods: formattedData.touPeriods.length,
+        chargesData: formattedData.charges
       });
+
+      setTariffData(formattedData);
     } catch (error: any) {
       toast.error(`Failed to load tariff: ${error.message}`);
       onClose();
@@ -99,6 +108,11 @@ export default function TariffDetailsDialog({ tariffId, tariffName, onClose }: T
           </div>
         ) : tariffData ? (
           <div className="space-y-6">
+            {/* Debug Info */}
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded text-sm">
+              <strong>Debug:</strong> Blocks: {tariffData.blocks.length}, Charges: {tariffData.charges.length}, TOU: {tariffData.touPeriods.length}
+            </div>
+            
             {/* Basic Information */}
             <div className="space-y-4">
               <div>
@@ -119,7 +133,7 @@ export default function TariffDetailsDialog({ tariffId, tariffName, onClose }: T
 
               <div>
                 <Label>Description</Label>
-                <Input value={tariffData.description} disabled className="mt-1" />
+                <Input value={tariffData.description || "No description"} disabled className="mt-1" />
               </div>
 
               <div>
