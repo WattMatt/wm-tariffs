@@ -584,6 +584,9 @@ export default function MunicipalityExtractionDialog({
       // If in append mode, merge the tariff structures
       if (appendMode && existingData) {
         console.log("APPENDING - Merging tariff structures");
+        console.log("Existing tariff structures count:", existingData.tariffStructures?.length);
+        console.log("New tariff structures count:", newData.tariffStructures?.length);
+        
         const mergedData = {
           ...existingData,
           // Keep existing municipality name and NERSA increase if they exist
@@ -597,7 +600,14 @@ export default function MunicipalityExtractionDialog({
           // Keep custom fields if they exist
           customFields: existingData.customFields || []
         };
+        
+        console.log("Merged tariff structures count:", mergedData.tariffStructures?.length);
+        console.log("Merged data:", JSON.stringify(mergedData, null, 2));
+        console.log("About to call setExtractedData with merged data");
+        
         setExtractedData(mergedData);
+        
+        console.log("After setExtractedData call");
         toast.success(`Added ${newData.tariffStructures?.length || 0} new tariff structure(s)!`);
       } else {
         setExtractedData(newData);
