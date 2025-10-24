@@ -49,6 +49,7 @@ export default function MunicipalityExtractionDialog({
   const [isExtracting, setIsExtracting] = useState(false);
   const [extractedData, setExtractedData] = useState<any | null>(null);
   const [acceptedMunicipalities, setAcceptedMunicipalities] = useState<AcceptedMunicipality[]>(initialMunicipalities);
+  const [editingMunicipalityId, setEditingMunicipalityId] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawStartPointRef = useRef<{ x: number; y: number } | null>(null);
   const selectionRectRef = useRef<FabricRect | null>(null);
@@ -594,6 +595,7 @@ export default function MunicipalityExtractionDialog({
     drawStartPointRef.current = null;
     setSelectionMode(false);
     selectionModeRef.current = false;
+    setEditingMunicipalityId(null);
   };
 
   const handleZoomIn = () => {
@@ -625,13 +627,27 @@ export default function MunicipalityExtractionDialog({
   const handleAcceptExtraction = () => {
     if (!extractedData) return;
     
-    const newMunicipality: AcceptedMunicipality = {
+    const municipalityData: AcceptedMunicipality = {
       name: extractedData.municipalityName || extractedData.name || "",
       nersaIncrease: extractedData.nersaIncrease || 0,
-      id: `${Date.now()}-${Math.random()}`
+      tariffStructures: extractedData.tariffStructures || [],
+      id: editingMunicipalityId || `${Date.now()}-${Math.random()}`
     };
     
-    setAcceptedMunicipalities(prev => [...prev, newMunicipality]);
+    if (editingMunicipalityId) {
+      // Update existing municipality
+      setAcceptedMunicipalities(prev => 
+        prev.map(m => m.id === editingMunicipalityId ? municipalityData : m)
+      );
+      setEditingMunicipalityId(null);
+      toast.success(`${municipalityData.name} updated!`);
+    } else {
+      // Add new municipality
+      setAcceptedMunicipalities(prev => [...prev, municipalityData]);
+      const tariffCount = (extractedData.tariffStructures || []).length;
+      toast.success(`${municipalityData.name} added with ${tariffCount} tariff${tariffCount !== 1 ? 's' : ''}!`);
+    }
+    
     setExtractedData(null);
     
     if (fabricCanvas && selectionRectRef.current) {
@@ -639,15 +655,18 @@ export default function MunicipalityExtractionDialog({
       selectionRectRef.current = null;
       fabricCanvas.renderAll();
     }
-    
-    toast.success(`${extractedData.name} added to list!`);
   };
 
   const handleViewMunicipality = (municipality: AcceptedMunicipality) => {
+    setEditingMunicipalityId(municipality.id);
     setExtractedData({
       name: municipality.name,
-      nersaIncrease: municipality.nersaIncrease
+      municipalityName: municipality.name,
+      nersaIncrease: municipality.nersaIncrease,
+      tariffStructures: municipality.tariffStructures || [],
+      customFields: []
     });
+    toast.info(`Editing ${municipality.name} - click "Add Municipality" to save changes`);
   };
 
   const handleDeleteMunicipality = (id: string) => {
@@ -1088,7 +1107,7 @@ export default function MunicipalityExtractionDialog({
                         size="sm"
                         className="flex-1"
                       >
-                        Add Municipality
+                        {editingMunicipalityId ? 'Update Municipality' : 'Add Municipality'}
                       </Button>
                     </div>
                   </div>
