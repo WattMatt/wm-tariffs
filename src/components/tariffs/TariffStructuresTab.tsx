@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, FileText, Eye, Trash2, Pencil, Clock } from "lucide-react";
+import { Plus, FileText, Eye, Trash2, Pencil, Clock, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
 import TariffEditDialog from "./TariffEditDialog";
@@ -320,6 +320,14 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
             <TariffStructureForm onSubmit={handleSubmit} isLoading={isLoading} />
           </DialogContent>
         </Dialog>
+          <Button
+            variant="outline"
+            className="gap-2"
+            onClick={fetchStructures}
+          >
+            <RefreshCw className="w-4 h-4" />
+            Refresh
+          </Button>
         </div>
       </div>
 
