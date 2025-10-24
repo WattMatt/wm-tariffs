@@ -190,6 +190,7 @@ export default function PdfImportDialog() {
       const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
       
       let municipalityFound = false;
+      let municipalityData: Partial<MunicipalityProgress> = {};
       
       // Look for municipality header in first 10 rows
       for (let i = 0; i < Math.min(10, jsonData.length); i++) {
@@ -202,7 +203,7 @@ export default function PdfImportDialog() {
           const name = match[1].trim();
           const nersaIncrease = parseFloat(match[2].replace(',', '.'));
           
-          foundMunicipalities.push({
+          municipalityData = {
             name,
             nersaIncrease,
             province: file!.name.includes('Eastern') ? 'Eastern Cape' : 
@@ -214,8 +215,8 @@ export default function PdfImportDialog() {
                      file!.name.includes('Limpopo') ? 'Limpopo' :
                      file!.name.includes('Mpumalanga') ? 'Mpumalanga' :
                      file!.name.includes('North West') || file!.name.includes('NorthWest') ? 'North West' : 'Unknown',
-            status: 'pending'
-          });
+            status: 'extracting' as const
+          };
           municipalityFound = true;
           break;
         }
@@ -226,7 +227,7 @@ export default function PdfImportDialog() {
           const name = nameWithPercent[1].trim();
           const nersaIncrease = parseFloat(nameWithPercent[2].replace(',', '.'));
           
-          foundMunicipalities.push({
+          municipalityData = {
             name,
             nersaIncrease,
             province: file!.name.includes('Eastern') ? 'Eastern Cape' : 
@@ -238,8 +239,8 @@ export default function PdfImportDialog() {
                      file!.name.includes('Limpopo') ? 'Limpopo' :
                      file!.name.includes('Mpumalanga') ? 'Mpumalanga' :
                      file!.name.includes('North West') || file!.name.includes('NorthWest') ? 'North West' : 'Unknown',
-            status: 'pending'
-          });
+            status: 'extracting' as const
+          };
           municipalityFound = true;
           break;
         }
@@ -268,7 +269,7 @@ export default function PdfImportDialog() {
             }
             
             if (municipalityName && !foundMunicipalities.some(m => m.name === municipalityName)) {
-              foundMunicipalities.push({
+              municipalityData = {
                 name: municipalityName,
                 nersaIncrease: parseFloat(percentMatch[1].replace(',', '.')),
                 province: file!.name.includes('Eastern') ? 'Eastern Cape' : 
@@ -280,8 +281,8 @@ export default function PdfImportDialog() {
                          file!.name.includes('Limpopo') ? 'Limpopo' :
                          file!.name.includes('Mpumalanga') ? 'Mpumalanga' :
                          file!.name.includes('North West') || file!.name.includes('NorthWest') ? 'North West' : 'Unknown',
-                status: 'pending'
-              });
+                status: 'extracting' as const
+              };
               municipalityFound = true;
               break;
             }
@@ -293,13 +294,57 @@ export default function PdfImportDialog() {
       
       // If still no pattern found, use sheet name as municipality
       if (!municipalityFound && sheetName && !sheetName.match(/^Sheet\d+$/i)) {
-        foundMunicipalities.push({
+        municipalityData = {
           name: sheetName,
           nersaIncrease: 0,
           province: file!.name.includes('Eastern') ? 'Eastern Cape' : 
                    file!.name.includes('Free') ? 'Free State' : 'Unknown',
-          status: 'pending'
-        });
+          status: 'extracting' as const
+        };
+        municipalityFound = true;
+      }
+      
+      // If municipality found, extract tariff data immediately
+      if (municipalityFound && municipalityData.name) {
+        foundMunicipalities.push(municipalityData as MunicipalityProgress);
+        
+        // Update state to show extraction in progress
+        setMunicipalities([...foundMunicipalities]);
+        
+        try {
+          // Extract tariff data using AI
+          const { data: aiResult, error: aiError } = await supabase.functions.invoke('extract-tariff-ai', {
+            body: {
+              sheetData: jsonData,
+              municipalityName: municipalityData.name
+            }
+          });
+
+          if (aiError) throw aiError;
+          if (!aiResult?.success) throw new Error(aiResult?.error || 'AI extraction failed');
+
+          const aiData = aiResult.data;
+          
+          const extractedData: ExtractedTariffData = {
+            supplyAuthority: {
+              name: municipalityData.name,
+              region: municipalityData.province || 'Unknown',
+              nersaIncreasePercentage: aiData.nersaIncrease || municipalityData.nersaIncrease || 0
+            },
+            tariffStructures: aiData.tariffStructures || []
+          };
+          
+          // Update municipality with extracted data
+          foundMunicipalities[foundMunicipalities.length - 1].data = extractedData;
+          foundMunicipalities[foundMunicipalities.length - 1].status = 'pending';
+          setMunicipalities([...foundMunicipalities]);
+          
+        } catch (error: any) {
+          console.error(`Error extracting ${municipalityData.name}:`, error);
+          foundMunicipalities[foundMunicipalities.length - 1].status = 'error';
+          foundMunicipalities[foundMunicipalities.length - 1].error = error.message;
+          setMunicipalities([...foundMunicipalities]);
+        }
       }
     }
     
@@ -307,8 +352,14 @@ export default function PdfImportDialog() {
       throw new Error("No municipalities found in Excel file. Please ensure each sheet contains municipality data.");
     }
     
-    setMunicipalities(foundMunicipalities);
-    toast.success(`Found ${foundMunicipalities.length} municipality/municipalities in Excel. Ready to extract!`);
+    const successCount = foundMunicipalities.filter(m => m.status === 'pending').length;
+    const errorCount = foundMunicipalities.filter(m => m.status === 'error').length;
+    
+    if (successCount > 0) {
+      toast.success(`Extracted ${successCount} of ${foundMunicipalities.length} municipalities. ${errorCount > 0 ? `${errorCount} failed.` : ''}`);
+    } else {
+      toast.error(`Failed to extract data for all municipalities.`);
+    }
   };
 
   const handlePdfIdentification = async () => {
