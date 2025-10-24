@@ -365,6 +365,7 @@ export default function TariffStructureForm({ onSubmit, isLoading, initialData, 
                   <Select
                     value={charge.season}
                     onValueChange={(value) => updateSeasonalCharge(index, 'season', value)}
+                    disabled={readOnly}
                   >
                     <SelectTrigger className="h-8 mt-1">
                       <SelectValue />
@@ -383,6 +384,7 @@ export default function TariffStructureForm({ onSubmit, isLoading, initialData, 
                       step="0.01"
                       value={charge.rate}
                       onChange={(e) => updateSeasonalCharge(index, 'rate', parseFloat(e.target.value) || 0)}
+                      disabled={readOnly}
                       className="h-8"
                     />
                   </div>
@@ -391,20 +393,23 @@ export default function TariffStructureForm({ onSubmit, isLoading, initialData, 
                     <Input
                       value={charge.unit}
                       onChange={(e) => updateSeasonalCharge(index, 'unit', e.target.value)}
+                      disabled={readOnly}
                       className="h-8"
                     />
                   </div>
                 </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => removeSeasonalCharge(index)}
-                  className="h-6 text-xs text-destructive hover:text-destructive w-full"
-                >
-                  <Trash2 className="h-3 w-3 mr-1" />
-                  Remove Charge
-                </Button>
+                {!readOnly && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => removeSeasonalCharge(index)}
+                    className="h-6 text-xs text-destructive hover:text-destructive w-full"
+                  >
+                    <Trash2 className="h-3 w-3 mr-1" />
+                    Remove Charge
+                  </Button>
+                )}
               </div>
             ))}
           </div>
@@ -419,16 +424,18 @@ export default function TariffStructureForm({ onSubmit, isLoading, initialData, 
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <Label className="text-xs font-medium">Time-of-Use Energy</Label>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={addTouSeason}
-            className="h-7 text-xs"
-          >
-            <Plus className="h-3 w-3 mr-1" />
-            Add TOU Season
-          </Button>
+          {!readOnly && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={addTouSeason}
+              className="h-7 text-xs"
+            >
+              <Plus className="h-3 w-3 mr-1" />
+              Add TOU Season
+            </Button>
+          )}
         </div>
         {tariffData.touSeasons.length > 0 ? (
           <div className="space-y-2">
@@ -439,6 +446,7 @@ export default function TariffStructureForm({ onSubmit, isLoading, initialData, 
                   <Select
                     value={season.season}
                     onValueChange={(value) => updateTouSeason(index, 'season', value)}
+                    disabled={readOnly}
                   >
                     <SelectTrigger className="h-8 mt-1">
                       <SelectValue />
@@ -457,6 +465,7 @@ export default function TariffStructureForm({ onSubmit, isLoading, initialData, 
                       step="0.01"
                       value={season.peak}
                       onChange={(e) => updateTouSeason(index, 'peak', parseFloat(e.target.value) || 0)}
+                      disabled={readOnly}
                       className="h-8"
                     />
                   </div>
@@ -467,6 +476,7 @@ export default function TariffStructureForm({ onSubmit, isLoading, initialData, 
                       step="0.01"
                       value={season.standard}
                       onChange={(e) => updateTouSeason(index, 'standard', parseFloat(e.target.value) || 0)}
+                      disabled={readOnly}
                       className="h-8"
                     />
                   </div>
@@ -477,20 +487,23 @@ export default function TariffStructureForm({ onSubmit, isLoading, initialData, 
                       step="0.01"
                       value={season.offPeak}
                       onChange={(e) => updateTouSeason(index, 'offPeak', parseFloat(e.target.value) || 0)}
+                      disabled={readOnly}
                       className="h-8"
                     />
                   </div>
                 </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => removeTouSeason(index)}
-                  className="h-6 text-xs text-destructive hover:text-destructive w-full"
-                >
-                  <Trash2 className="h-3 w-3 mr-1" />
-                  Remove TOU Season
-                </Button>
+                {!readOnly && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => removeTouSeason(index)}
+                    className="h-6 text-xs text-destructive hover:text-destructive w-full"
+                  >
+                    <Trash2 className="h-3 w-3 mr-1" />
+                    Remove TOU Season
+                  </Button>
+                )}
               </div>
             ))}
           </div>
@@ -505,7 +518,7 @@ export default function TariffStructureForm({ onSubmit, isLoading, initialData, 
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <Label className="text-xs font-medium">Basic Charge (Fixed Monthly)</Label>
-          {!tariffData.basicCharge && (
+          {!readOnly && !tariffData.basicCharge && (
             <Button
               type="button"
               size="sm"
@@ -528,6 +541,7 @@ export default function TariffStructureForm({ onSubmit, isLoading, initialData, 
                   step="0.01"
                   value={tariffData.basicCharge.amount}
                   onChange={(e) => updateBasicCharge('amount', parseFloat(e.target.value) || 0)}
+                  disabled={readOnly}
                   className="h-8"
                 />
               </div>
@@ -536,20 +550,23 @@ export default function TariffStructureForm({ onSubmit, isLoading, initialData, 
                 <Input
                   value={tariffData.basicCharge.unit}
                   onChange={(e) => updateBasicCharge('unit', e.target.value)}
+                  disabled={readOnly}
                   className="h-8"
                 />
               </div>
             </div>
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              onClick={removeBasicCharge}
-              className="h-6 text-xs text-destructive hover:text-destructive w-full"
-            >
-              <Trash2 className="h-3 w-3 mr-1" />
-              Remove Basic Charge
-            </Button>
+            {!readOnly && (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={removeBasicCharge}
+                className="h-6 text-xs text-destructive hover:text-destructive w-full"
+              >
+                <Trash2 className="h-3 w-3 mr-1" />
+                Remove Basic Charge
+              </Button>
+            )}
           </div>
         ) : (
           <p className="text-xs text-muted-foreground p-2 bg-muted/20 rounded">
@@ -562,16 +579,18 @@ export default function TariffStructureForm({ onSubmit, isLoading, initialData, 
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <Label className="text-xs font-medium">Demand Charges (Seasonal)</Label>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={addDemandCharge}
-            className="h-7 text-xs"
-          >
-            <Plus className="h-3 w-3 mr-1" />
-            Add Demand Charge
-          </Button>
+          {!readOnly && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={addDemandCharge}
+              className="h-7 text-xs"
+            >
+              <Plus className="h-3 w-3 mr-1" />
+              Add Demand Charge
+            </Button>
+          )}
         </div>
         {tariffData.demandCharges.length > 0 ? (
           <div className="space-y-2">
@@ -582,6 +601,7 @@ export default function TariffStructureForm({ onSubmit, isLoading, initialData, 
                   <Select
                     value={charge.season}
                     onValueChange={(value) => updateDemandCharge(index, 'season', value)}
+                    disabled={readOnly}
                   >
                     <SelectTrigger className="h-8 mt-1">
                       <SelectValue />
@@ -600,6 +620,7 @@ export default function TariffStructureForm({ onSubmit, isLoading, initialData, 
                       step="0.01"
                       value={charge.rate}
                       onChange={(e) => updateDemandCharge(index, 'rate', parseFloat(e.target.value) || 0)}
+                      disabled={readOnly}
                       className="h-8"
                     />
                   </div>
@@ -608,20 +629,23 @@ export default function TariffStructureForm({ onSubmit, isLoading, initialData, 
                     <Input
                       value={charge.unit}
                       onChange={(e) => updateDemandCharge(index, 'unit', e.target.value)}
+                      disabled={readOnly}
                       className="h-8"
                     />
                   </div>
                 </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => removeDemandCharge(index)}
-                  className="h-6 text-xs text-destructive hover:text-destructive w-full"
-                >
-                  <Trash2 className="h-3 w-3 mr-1" />
-                  Remove Demand Charge
-                </Button>
+                {!readOnly && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => removeDemandCharge(index)}
+                    className="h-6 text-xs text-destructive hover:text-destructive w-full"
+                  >
+                    <Trash2 className="h-3 w-3 mr-1" />
+                    Remove Demand Charge
+                  </Button>
+                )}
               </div>
             ))}
           </div>
