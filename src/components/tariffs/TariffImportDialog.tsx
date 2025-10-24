@@ -388,7 +388,8 @@ export default function PdfImportDialog() {
       const initialMunicipalities = extractedMunicipalities.map((m: any, index: number) => ({
         id: `pre-${index}`,
         name: m.name || "Unknown Municipality",
-        nersaIncrease: m.nersaIncrease || 0
+        nersaIncrease: m.nersaIncrease || 0,
+        tariffStructures: m.tariffStructures || []
       }));
       
       setInitialMunicipalitiesForDialog(initialMunicipalities);

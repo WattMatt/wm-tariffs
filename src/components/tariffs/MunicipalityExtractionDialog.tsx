@@ -21,6 +21,7 @@ interface MunicipalityData {
 
 interface AcceptedMunicipality extends MunicipalityData {
   id: string;
+  tariffStructures?: any[];
 }
 
 interface MunicipalityExtractionDialogProps {
@@ -1147,6 +1148,9 @@ export default function MunicipalityExtractionDialog({
                           <div className="font-medium text-sm">{municipality.name}</div>
                           <div className="text-xs text-muted-foreground">
                             NERSA Increase: {municipality.nersaIncrease}%
+                            {municipality.tariffStructures && municipality.tariffStructures.length > 0 && (
+                              <span className="ml-2">• {municipality.tariffStructures.length} tariff{municipality.tariffStructures.length !== 1 ? 's' : ''}</span>
+                            )}
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
