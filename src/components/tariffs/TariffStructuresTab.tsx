@@ -8,7 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Plus, FileText, Eye, Trash2, Pencil, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
-import TariffDetailsDialog from "./TariffDetailsDialog";
+import TariffEditDialog from "./TariffEditDialog";
 import TariffStructureForm from "./TariffStructureForm";
 
 interface TariffStructure {
@@ -46,7 +46,7 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [selectedTariffForDetails, setSelectedTariffForDetails] = useState<{ id: string; name: string } | null>(null);
+  const [selectedTariffForEdit, setSelectedTariffForEdit] = useState<{ id: string; name: string; mode: "view" | "edit" } | null>(null);
 
   useEffect(() => {
     if (supplyAuthorityId) {
@@ -407,17 +407,14 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
                         <Button
                           variant="outline"
                           size="icon"
-                          onClick={() => setSelectedTariffForDetails({ id: structure.id, name: structure.name })}
+                          onClick={() => setSelectedTariffForEdit({ id: structure.id, name: structure.name, mode: "view" })}
                         >
                           <Eye className="w-4 h-4" />
                         </Button>
                         <Button
                           variant="outline"
                           size="icon"
-                          onClick={() => {
-                            // TODO: Open edit dialog with pre-filled data
-                            toast.info("Edit functionality coming soon");
-                          }}
+                          onClick={() => setSelectedTariffForEdit({ id: structure.id, name: structure.name, mode: "edit" })}
                         >
                           <Pencil className="w-4 h-4" />
                         </Button>
@@ -431,11 +428,14 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
         </Card>
       )}
 
-      {selectedTariffForDetails && (
-        <TariffDetailsDialog
-          tariffId={selectedTariffForDetails.id}
-          tariffName={selectedTariffForDetails.name}
-          onClose={() => setSelectedTariffForDetails(null)}
+      {selectedTariffForEdit && (
+        <TariffEditDialog
+          tariffId={selectedTariffForEdit.id}
+          tariffName={selectedTariffForEdit.name}
+          mode={selectedTariffForEdit.mode}
+          supplyAuthorityId={supplyAuthorityId}
+          onClose={() => setSelectedTariffForEdit(null)}
+          onSave={fetchStructures}
         />
       )}
     </div>

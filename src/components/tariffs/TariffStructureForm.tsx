@@ -52,10 +52,12 @@ interface TariffData {
 interface TariffStructureFormProps {
   onSubmit: (data: TariffData) => void;
   isLoading: boolean;
+  initialData?: TariffData;
+  readOnly?: boolean;
 }
 
-export default function TariffStructureForm({ onSubmit, isLoading }: TariffStructureFormProps) {
-  const [tariffData, setTariffData] = useState<TariffData>({
+export default function TariffStructureForm({ onSubmit, isLoading, initialData, readOnly = false }: TariffStructureFormProps) {
+  const [tariffData, setTariffData] = useState<TariffData>(initialData || {
     tariffName: "",
     tariffType: "domestic",
     meterConfiguration: "prepaid",
@@ -192,7 +194,7 @@ export default function TariffStructureForm({ onSubmit, isLoading }: TariffStruc
       {/* Header Section */}
       <div className="space-y-3 sticky top-0 bg-background z-10 pb-3 border-b">
         <div className="flex items-start gap-2">
-          <GripVertical className="h-5 w-5 text-muted-foreground mt-6" />
+          {!readOnly && <GripVertical className="h-5 w-5 text-muted-foreground mt-6" />}
           <div className="flex-1 space-y-3">
             <div>
               <Label className="text-xs">Tariff Name</Label>
@@ -200,6 +202,7 @@ export default function TariffStructureForm({ onSubmit, isLoading }: TariffStruc
                 value={tariffData.tariffName}
                 onChange={(e) => setTariffData({ ...tariffData, tariffName: e.target.value })}
                 required
+                disabled={readOnly}
                 placeholder="e.g., Domestic Prepaid"
                 className="h-9 mt-1"
               />
@@ -208,7 +211,11 @@ export default function TariffStructureForm({ onSubmit, isLoading }: TariffStruc
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs">Tariff Type</Label>
-                <Select value={tariffData.tariffType} onValueChange={(value) => setTariffData({ ...tariffData, tariffType: value })}>
+                <Select 
+                  value={tariffData.tariffType} 
+                  onValueChange={(value) => setTariffData({ ...tariffData, tariffType: value })}
+                  disabled={readOnly}
+                >
                   <SelectTrigger className="h-9 mt-1">
                     <SelectValue />
                   </SelectTrigger>
@@ -223,7 +230,11 @@ export default function TariffStructureForm({ onSubmit, isLoading }: TariffStruc
               
               <div>
                 <Label className="text-xs">Meter Config</Label>
-                <Select value={tariffData.meterConfiguration} onValueChange={(value) => setTariffData({ ...tariffData, meterConfiguration: value })}>
+                <Select 
+                  value={tariffData.meterConfiguration} 
+                  onValueChange={(value) => setTariffData({ ...tariffData, meterConfiguration: value })}
+                  disabled={readOnly}
+                >
                   <SelectTrigger className="h-9 mt-1">
                     <SelectValue />
                   </SelectTrigger>
@@ -243,6 +254,7 @@ export default function TariffStructureForm({ onSubmit, isLoading }: TariffStruc
                 value={tariffData.effectiveFrom}
                 onChange={(e) => setTariffData({ ...tariffData, effectiveFrom: e.target.value })}
                 required
+                disabled={readOnly}
                 className="h-9 mt-1"
               />
             </div>
@@ -254,16 +266,18 @@ export default function TariffStructureForm({ onSubmit, isLoading }: TariffStruc
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <Label className="text-xs font-medium">Energy Blocks</Label>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={addBlock}
-            className="h-7 text-xs"
-          >
-            <Plus className="h-3 w-3 mr-1" />
-            Add Block
-          </Button>
+          {!readOnly && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={addBlock}
+              className="h-7 text-xs"
+            >
+              <Plus className="h-3 w-3 mr-1" />
+              Add Block
+            </Button>
+          )}
         </div>
         {tariffData.blocks.length > 0 ? (
           <div className="space-y-2">
@@ -276,6 +290,7 @@ export default function TariffStructureForm({ onSubmit, isLoading }: TariffStruc
                       type="number"
                       value={block.kwhFrom}
                       onChange={(e) => updateBlock(index, 'kwhFrom', parseInt(e.target.value) || 0)}
+                      disabled={readOnly}
                       className="h-8"
                     />
                   </div>
@@ -286,6 +301,7 @@ export default function TariffStructureForm({ onSubmit, isLoading }: TariffStruc
                       value={block.kwhTo || ''}
                       onChange={(e) => updateBlock(index, 'kwhTo', e.target.value ? parseInt(e.target.value) : null)}
                       placeholder="Unlimited"
+                      disabled={readOnly}
                       className="h-8"
                     />
                   </div>
@@ -296,20 +312,23 @@ export default function TariffStructureForm({ onSubmit, isLoading }: TariffStruc
                       step="0.01"
                       value={block.energyChargeCents}
                       onChange={(e) => updateBlock(index, 'energyChargeCents', parseFloat(e.target.value) || 0)}
+                      disabled={readOnly}
                       className="h-8"
                     />
                   </div>
                 </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => removeBlock(index)}
-                  className="h-6 text-xs text-destructive hover:text-destructive w-full"
-                >
-                  <Trash2 className="h-3 w-3 mr-1" />
-                  Remove Block
-                </Button>
+                {!readOnly && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => removeBlock(index)}
+                    className="h-6 text-xs text-destructive hover:text-destructive w-full"
+                  >
+                    <Trash2 className="h-3 w-3 mr-1" />
+                    Remove Block
+                  </Button>
+                )}
               </div>
             ))}
           </div>
@@ -324,16 +343,18 @@ export default function TariffStructureForm({ onSubmit, isLoading }: TariffStruc
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <Label className="text-xs font-medium">Seasonal Energy</Label>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={addSeasonalCharge}
-            className="h-7 text-xs"
-          >
-            <Plus className="h-3 w-3 mr-1" />
-            Add Seasonal Charge
-          </Button>
+          {!readOnly && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={addSeasonalCharge}
+              className="h-7 text-xs"
+            >
+              <Plus className="h-3 w-3 mr-1" />
+              Add Seasonal Charge
+            </Button>
+          )}
         </div>
         {tariffData.seasonalEnergy.length > 0 ? (
           <div className="space-y-2">
@@ -612,11 +633,13 @@ export default function TariffStructureForm({ onSubmit, isLoading }: TariffStruc
       </div>
 
       {/* Submit Button */}
-      <div className="sticky bottom-0 bg-background pt-3 border-t">
-        <Button type="submit" className="w-full" disabled={isLoading || !tariffData.tariffName}>
-          {isLoading ? "Creating Tariff..." : "Create Tariff"}
-        </Button>
-      </div>
+      {!readOnly && (
+        <div className="sticky bottom-0 bg-background pt-3 border-t">
+          <Button type="submit" className="w-full" disabled={isLoading || !tariffData.tariffName}>
+            {isLoading ? "Creating Tariff..." : "Create Tariff"}
+          </Button>
+        </div>
+      )}
     </form>
   );
 }
