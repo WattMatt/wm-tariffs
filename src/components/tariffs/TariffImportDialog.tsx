@@ -385,12 +385,73 @@ export default function PdfImportDialog() {
       
       // Convert extracted data to initial municipalities format
       const extractedMunicipalities = data.municipalities || [];
-      const initialMunicipalities = extractedMunicipalities.map((m: any, index: number) => ({
-        id: `pre-${index}`,
-        name: m.name || "Unknown Municipality",
-        nersaIncrease: m.nersaIncrease || 0,
-        tariffStructures: m.tariffStructures || []
-      }));
+      const initialMunicipalities = extractedMunicipalities.map((m: any, index: number) => {
+        // Transform tariff structures to match UI format
+        const transformedTariffStructures = (m.tariffStructures || []).map((tariff: any) => {
+          const transformed: any = {
+            tariffName: tariff.name || tariff.tariffName || "",
+            blocks: (tariff.blocks || []).map((block: any) => ({
+              ...block,
+              energyChargeCents: block.energyChargeCents || 0
+            }))
+          };
+          
+          // Process charges array and categorize them
+          const charges = tariff.charges || [];
+          transformed.fixedEnergy = [];
+          transformed.seasonalEnergy = [];
+          transformed.touPeriods = tariff.touPeriods || [];
+          transformed.demandCharges = [];
+          
+          charges.forEach((charge: any) => {
+            const chargeType = charge.chargeType?.toLowerCase() || '';
+            
+            if (chargeType.includes('basic') || chargeType.includes('monthly')) {
+              // Basic charge (only one)
+              transformed.basicCharge = {
+                amount: charge.chargeAmount || 0,
+                unit: charge.unit || 'R/month'
+              };
+            } else if (chargeType.includes('demand')) {
+              // Demand charges (seasonal)
+              const season = chargeType.includes('high') ? 'High Season' : 
+                           chargeType.includes('low') ? 'Low Season' : 'All Year';
+              transformed.demandCharges.push({
+                season,
+                rate: charge.chargeAmount || 0,
+                unit: charge.unit || 'R/kVA'
+              });
+            } else if (chargeType.includes('energy')) {
+              // Check if it's seasonal
+              if (chargeType.includes('season') || chargeType.includes('high') || chargeType.includes('low')) {
+                const season = chargeType.includes('high') ? 'High Season' : 
+                             chargeType.includes('low') ? 'Low Season' : 'All Year';
+                transformed.seasonalEnergy.push({
+                  season,
+                  rate: charge.chargeAmount || 0,
+                  unit: charge.unit || 'c/kWh'
+                });
+              } else {
+                // Fixed energy charges
+                transformed.fixedEnergy.push({
+                  description: charge.description || 'Energy Charge',
+                  rate: charge.chargeAmount || 0,
+                  unit: charge.unit || 'c/kWh'
+                });
+              }
+            }
+          });
+          
+          return transformed;
+        });
+        
+        return {
+          id: `pre-${index}`,
+          name: m.name || "Unknown Municipality",
+          nersaIncrease: m.nersaIncrease || 0,
+          tariffStructures: transformedTariffStructures
+        };
+      });
       
       setInitialMunicipalitiesForDialog(initialMunicipalities);
       toast.success(`Found ${initialMunicipalities.length} municipalities. Opening extraction dialog...`);
