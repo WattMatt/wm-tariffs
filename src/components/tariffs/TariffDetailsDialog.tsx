@@ -153,7 +153,7 @@ export default function TariffDetailsDialog({ tariffId, tariffName, onClose }: T
 
   return (
     <Dialog open={true} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>View Tariff Structure</DialogTitle>
           <DialogDescription>
