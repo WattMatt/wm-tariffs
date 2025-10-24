@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -554,7 +555,7 @@ export default function MunicipalityExtractionDialog({
         const charges = tariff.charges || [];
         transformed.fixedEnergy = [];
         transformed.seasonalEnergy = [];
-        transformed.touPeriods = tariff.touPeriods || [];
+        transformed.touSeasons = tariff.touSeasons || [];
         transformed.demandCharges = [];
         
         charges.forEach((charge: any) => {
@@ -569,7 +570,7 @@ export default function MunicipalityExtractionDialog({
           } else if (chargeType.includes('demand')) {
             // Demand charges (seasonal)
             transformed.demandCharges.push({
-              season: charge.season || 'All Year',
+              season: charge.season || 'Low Season',
               rate: charge.chargeAmount || 0,
               unit: charge.unit || 'R/kVA'
             });
@@ -629,6 +630,13 @@ export default function MunicipalityExtractionDialog({
       } else {
         setExtractedData(newData);
         toast.success("Municipality data extracted!");
+      }
+      
+      // Clear the rectangle after successful extraction
+      if (fabricCanvas && selectionRectRef.current) {
+        fabricCanvas.remove(selectionRectRef.current);
+        selectionRectRef.current = null;
+        fabricCanvas.renderAll();
       }
     } catch (error: any) {
       console.error("Extraction failed:", error);
@@ -1304,75 +1312,83 @@ export default function MunicipalityExtractionDialog({
                                     variant="outline"
                                     onClick={() => {
                                       const updated = [...extractedData.tariffStructures];
-                                      if (!updated[tariffIdx].touPeriods) {
-                                        updated[tariffIdx].touPeriods = [];
+                                      if (!updated[tariffIdx].touSeasons) {
+                                        updated[tariffIdx].touSeasons = [];
                                       }
-                                      updated[tariffIdx].touPeriods.push({
-                                        periodName: "",
-                                        rate: 0,
-                                        timeStart: "",
-                                        timeEnd: ""
+                                      updated[tariffIdx].touSeasons.push({
+                                        season: "Low Season",
+                                        peak: 0,
+                                        standard: 0,
+                                        offPeak: 0
                                       });
                                       setExtractedData({ ...extractedData, tariffStructures: updated });
                                     }}
                                     className="h-7 text-xs"
                                   >
                                     <Plus className="h-3 w-3 mr-1" />
-                                    Add TOU Period
+                                    Add TOU Season
                                   </Button>
                                 </div>
-                                {tariff.touPeriods && tariff.touPeriods.length > 0 ? (
-                                  tariff.touPeriods.map((period: any, periodIdx: number) => (
-                                    <div key={periodIdx} className="p-2 bg-background rounded border space-y-2">
+                                {tariff.touSeasons && tariff.touSeasons.length > 0 ? (
+                                  tariff.touSeasons.map((touSeason: any, seasonIdx: number) => (
+                                    <div key={seasonIdx} className="p-2 bg-background rounded border space-y-2">
                                       <div>
-                                        <Label className="text-xs">Period Name</Label>
-                                        <Input
-                                          value={period.periodName || ""}
-                                          onChange={(e) => {
+                                        <Label className="text-xs">Season</Label>
+                                        <Select
+                                          value={touSeason.season || "Low Season"}
+                                          onValueChange={(value) => {
                                             const updated = [...extractedData.tariffStructures];
-                                            updated[tariffIdx].touPeriods[periodIdx].periodName = e.target.value;
+                                            updated[tariffIdx].touSeasons[seasonIdx].season = value;
                                             setExtractedData({ ...extractedData, tariffStructures: updated });
                                           }}
-                                          className="h-8 mt-1"
-                                          placeholder="e.g., Peak, Off-Peak"
-                                        />
+                                        >
+                                          <SelectTrigger className="h-8 mt-1">
+                                            <SelectValue />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="Low Season">Low Season</SelectItem>
+                                            <SelectItem value="High Season">High Season</SelectItem>
+                                          </SelectContent>
+                                        </Select>
                                       </div>
                                       <div className="grid grid-cols-3 gap-2">
                                         <div>
-                                          <Label className="text-xs">Rate (c/kWh)</Label>
+                                          <Label className="text-xs">Peak (c/kWh)</Label>
                                           <Input
                                             type="number"
                                             step="0.01"
-                                            value={period.rate || 0}
+                                            value={touSeason.peak || 0}
                                             onChange={(e) => {
                                               const updated = [...extractedData.tariffStructures];
-                                              updated[tariffIdx].touPeriods[periodIdx].rate = parseFloat(e.target.value) || 0;
+                                              updated[tariffIdx].touSeasons[seasonIdx].peak = parseFloat(e.target.value) || 0;
                                               setExtractedData({ ...extractedData, tariffStructures: updated });
                                             }}
                                             className="h-8"
                                           />
                                         </div>
                                         <div>
-                                          <Label className="text-xs">Start Time</Label>
+                                          <Label className="text-xs">Standard (c/kWh)</Label>
                                           <Input
-                                            type="time"
-                                            value={period.timeStart || ""}
+                                            type="number"
+                                            step="0.01"
+                                            value={touSeason.standard || 0}
                                             onChange={(e) => {
                                               const updated = [...extractedData.tariffStructures];
-                                              updated[tariffIdx].touPeriods[periodIdx].timeStart = e.target.value;
+                                              updated[tariffIdx].touSeasons[seasonIdx].standard = parseFloat(e.target.value) || 0;
                                               setExtractedData({ ...extractedData, tariffStructures: updated });
                                             }}
                                             className="h-8"
                                           />
                                         </div>
                                         <div>
-                                          <Label className="text-xs">End Time</Label>
+                                          <Label className="text-xs">Off-Peak (c/kWh)</Label>
                                           <Input
-                                            type="time"
-                                            value={period.timeEnd || ""}
+                                            type="number"
+                                            step="0.01"
+                                            value={touSeason.offPeak || 0}
                                             onChange={(e) => {
                                               const updated = [...extractedData.tariffStructures];
-                                              updated[tariffIdx].touPeriods[periodIdx].timeEnd = e.target.value;
+                                              updated[tariffIdx].touSeasons[seasonIdx].offPeak = parseFloat(e.target.value) || 0;
                                               setExtractedData({ ...extractedData, tariffStructures: updated });
                                             }}
                                             className="h-8"
@@ -1384,13 +1400,13 @@ export default function MunicipalityExtractionDialog({
                                         variant="ghost"
                                         onClick={() => {
                                           const updated = [...extractedData.tariffStructures];
-                                          updated[tariffIdx].touPeriods.splice(periodIdx, 1);
+                                          updated[tariffIdx].touSeasons.splice(seasonIdx, 1);
                                           setExtractedData({ ...extractedData, tariffStructures: updated });
                                         }}
                                         className="h-6 text-xs text-destructive hover:text-destructive w-full"
                                       >
                                         <Trash2 className="h-3 w-3 mr-1" />
-                                        Remove TOU Period
+                                        Remove TOU Season
                                       </Button>
                                     </div>
                                   ))
@@ -1491,7 +1507,7 @@ export default function MunicipalityExtractionDialog({
                                         updated[tariffIdx].demandCharges = [];
                                       }
                                       updated[tariffIdx].demandCharges.push({
-                                        season: "",
+                                        season: "Low Season",
                                         rate: 0,
                                         unit: "R/kVA"
                                       });
@@ -1508,16 +1524,22 @@ export default function MunicipalityExtractionDialog({
                                     <div key={chargeIdx} className="p-2 bg-background rounded border space-y-2">
                                       <div>
                                         <Label className="text-xs">Season</Label>
-                                        <Input
-                                          value={charge.season || ""}
-                                          onChange={(e) => {
+                                        <Select
+                                          value={charge.season || "Low Season"}
+                                          onValueChange={(value) => {
                                             const updated = [...extractedData.tariffStructures];
-                                            updated[tariffIdx].demandCharges[chargeIdx].season = e.target.value;
+                                            updated[tariffIdx].demandCharges[chargeIdx].season = value;
                                             setExtractedData({ ...extractedData, tariffStructures: updated });
                                           }}
-                                          className="h-8 mt-1"
-                                          placeholder="e.g., Summer, Winter"
-                                        />
+                                        >
+                                          <SelectTrigger className="h-8 mt-1">
+                                            <SelectValue />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="Low Season">Low Season</SelectItem>
+                                            <SelectItem value="High Season">High Season</SelectItem>
+                                          </SelectContent>
+                                        </Select>
                                       </div>
                                       <div className="grid grid-cols-2 gap-2">
                                         <div>
@@ -1612,7 +1634,7 @@ export default function MunicipalityExtractionDialog({
                         blocks: [],
                         fixedEnergy: [],
                         seasonalEnergy: [],
-                        touPeriods: [],
+                        touSeasons: [],
                         demandCharges: []
                       });
                       setExtractedData({ ...extractedData, tariffStructures: updated });
