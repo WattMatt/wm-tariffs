@@ -553,7 +553,6 @@ export default function MunicipalityExtractionDialog({
         
         // Process charges array and categorize them
         const charges = tariff.charges || [];
-        transformed.fixedEnergy = [];
         transformed.seasonalEnergy = [];
         transformed.touSeasons = tariff.touSeasons || [];
         transformed.demandCharges = [];
@@ -575,9 +574,9 @@ export default function MunicipalityExtractionDialog({
               unit: charge.unit || 'R/kVA'
             });
           } else if (chargeType.includes('energy') || chargeType.includes('fixed')) {
-            // Fixed energy charges
-            transformed.fixedEnergy.push({
-              description: charge.description || 'Energy Charge',
+            // Seasonal energy charges
+            transformed.seasonalEnergy.push({
+              season: charge.season || 'Low Season',
               rate: charge.chargeAmount || 0,
               unit: charge.unit || 'c/kWh'
             });
@@ -1173,83 +1172,6 @@ export default function MunicipalityExtractionDialog({
                                 )}
                               </div>
 
-                              {/* Fixed Energy Charges Section */}
-                              <div className="space-y-2">
-                                <div className="flex items-center justify-between">
-                                  <Label className="text-xs font-medium">Fixed Energy</Label>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => {
-                                      const updated = [...extractedData.tariffStructures];
-                                      if (!updated[tariffIdx].fixedEnergy) {
-                                        updated[tariffIdx].fixedEnergy = [];
-                                      }
-                                      updated[tariffIdx].fixedEnergy.push({
-                                        amount: 0,
-                                        unit: "c/kWh"
-                                      });
-                                      setExtractedData({ ...extractedData, tariffStructures: updated });
-                                    }}
-                                    className="h-7 text-xs"
-                                  >
-                                    <Plus className="h-3 w-3 mr-1" />
-                                    Add Charge
-                                  </Button>
-                                </div>
-                                {tariff.fixedEnergy && tariff.fixedEnergy.length > 0 ? (
-                                  tariff.fixedEnergy.map((charge: any, chargeIdx: number) => (
-                                    <div key={chargeIdx} className="p-2 bg-background rounded border space-y-2">
-                                      <div className="grid grid-cols-2 gap-2">
-                                        <div>
-                                          <Label className="text-xs">Amount</Label>
-                                          <Input
-                                            type="number"
-                                            step="0.01"
-                                            value={charge.amount || 0}
-                                            onChange={(e) => {
-                                              const updated = [...extractedData.tariffStructures];
-                                              updated[tariffIdx].fixedEnergy[chargeIdx].amount = parseFloat(e.target.value) || 0;
-                                              setExtractedData({ ...extractedData, tariffStructures: updated });
-                                            }}
-                                            className="h-8"
-                                          />
-                                        </div>
-                                        <div>
-                                          <Label className="text-xs">Unit</Label>
-                                          <Input
-                                            value={charge.unit || ""}
-                                            onChange={(e) => {
-                                              const updated = [...extractedData.tariffStructures];
-                                              updated[tariffIdx].fixedEnergy[chargeIdx].unit = e.target.value;
-                                              setExtractedData({ ...extractedData, tariffStructures: updated });
-                                            }}
-                                            className="h-8"
-                                          />
-                                        </div>
-                                      </div>
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        onClick={() => {
-                                          const updated = [...extractedData.tariffStructures];
-                                          updated[tariffIdx].fixedEnergy.splice(chargeIdx, 1);
-                                          setExtractedData({ ...extractedData, tariffStructures: updated });
-                                        }}
-                                        className="h-6 text-xs text-destructive hover:text-destructive w-full"
-                                      >
-                                        <Trash2 className="h-3 w-3 mr-1" />
-                                        Remove Charge
-                                      </Button>
-                                    </div>
-                                  ))
-                                ) : (
-                                  <p className="text-xs text-muted-foreground p-2 bg-muted/20 rounded">
-                                    No fixed energy charges.
-                                  </p>
-                                )}
-                              </div>
-
                               {/* Seasonal Energy Charges Section */}
                               <div className="space-y-2">
                                 <div className="flex items-center justify-between">
@@ -1263,7 +1185,7 @@ export default function MunicipalityExtractionDialog({
                                         updated[tariffIdx].seasonalEnergy = [];
                                       }
                                       updated[tariffIdx].seasonalEnergy.push({
-                                        season: "",
+                                        season: "Low Season",
                                         rate: 0,
                                         unit: "c/kWh"
                                       });
@@ -1280,16 +1202,22 @@ export default function MunicipalityExtractionDialog({
                                     <div key={chargeIdx} className="p-2 bg-background rounded border space-y-2">
                                       <div>
                                         <Label className="text-xs">Season</Label>
-                                        <Input
-                                          value={charge.season || ""}
-                                          onChange={(e) => {
+                                        <Select
+                                          value={charge.season || "Low Season"}
+                                          onValueChange={(value) => {
                                             const updated = [...extractedData.tariffStructures];
-                                            updated[tariffIdx].seasonalEnergy[chargeIdx].season = e.target.value;
+                                            updated[tariffIdx].seasonalEnergy[chargeIdx].season = value;
                                             setExtractedData({ ...extractedData, tariffStructures: updated });
                                           }}
-                                          className="h-8 mt-1"
-                                          placeholder="e.g., Summer, Winter"
-                                        />
+                                        >
+                                          <SelectTrigger className="h-8 mt-1">
+                                            <SelectValue />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="Low Season">Low Season</SelectItem>
+                                            <SelectItem value="High Season">High Season</SelectItem>
+                                          </SelectContent>
+                                        </Select>
                                       </div>
                                       <div className="grid grid-cols-2 gap-2">
                                         <div>
@@ -1670,7 +1598,6 @@ export default function MunicipalityExtractionDialog({
                       updated.push({
                         tariffName: "",
                         blocks: [],
-                        fixedEnergy: [],
                         seasonalEnergy: [],
                         touSeasons: [],
                         demandCharges: []
