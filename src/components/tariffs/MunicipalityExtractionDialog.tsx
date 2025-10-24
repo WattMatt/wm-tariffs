@@ -919,7 +919,9 @@ export default function MunicipalityExtractionDialog({
       console.log(`Saving tariff structure: ${structure.tariffName || structure.name}`);
       
       const tariffName = structure.tariffName || structure.name;
-      const effectiveFrom = new Date().toISOString().split('T')[0];
+      const effectiveFrom = structure.effectiveFrom || new Date().toISOString().split('T')[0];
+      const tariffType = structure.tariffType || 'commercial';
+      const meterConfiguration = structure.meterConfiguration || null;
       
       // Check if tariff already exists (including effective date)
       const { data: existingTariff } = await supabase
@@ -949,7 +951,8 @@ export default function MunicipalityExtractionDialog({
           .insert({
             supply_authority_id: authorityId,
             name: tariffName,
-            tariff_type: structure.tariffType || 'commercial',
+            tariff_type: tariffType,
+            meter_configuration: meterConfiguration,
             uses_tou: structure.usesTou || false,
             effective_from: effectiveFrom,
             active: true
@@ -1256,17 +1259,78 @@ export default function MunicipalityExtractionDialog({
                                   >
                                     <GripVertical className="h-5 w-5 text-muted-foreground mt-6" />
                                   </div>
-                                  <div className="flex-1">
-                                    <Label className="text-xs">Tariff Name</Label>
-                                    <Input
-                                      value={tariff.tariffName || ""}
-                                      onChange={(e) => {
-                                        const updated = [...extractedData.tariffStructures];
-                                        updated[tariffIdx].tariffName = e.target.value;
-                                        setExtractedData({ ...extractedData, tariffStructures: updated });
-                                      }}
-                                      className="h-9 mt-1"
-                                    />
+                                  <div className="flex-1 space-y-3">
+                                    <div>
+                                      <Label className="text-xs">Tariff Name</Label>
+                                      <Input
+                                        value={tariff.tariffName || ""}
+                                        onChange={(e) => {
+                                          const updated = [...extractedData.tariffStructures];
+                                          updated[tariffIdx].tariffName = e.target.value;
+                                          setExtractedData({ ...extractedData, tariffStructures: updated });
+                                        }}
+                                        className="h-9 mt-1"
+                                      />
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-2 gap-3">
+                                      <div>
+                                        <Label className="text-xs">Tariff Type</Label>
+                                        <Select
+                                          value={tariff.tariffType || "commercial"}
+                                          onValueChange={(value) => {
+                                            const updated = [...extractedData.tariffStructures];
+                                            updated[tariffIdx].tariffType = value;
+                                            setExtractedData({ ...extractedData, tariffStructures: updated });
+                                          }}
+                                        >
+                                          <SelectTrigger className="h-9 mt-1">
+                                            <SelectValue />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="commercial">Commercial</SelectItem>
+                                            <SelectItem value="residential">Residential</SelectItem>
+                                            <SelectItem value="industrial">Industrial</SelectItem>
+                                            <SelectItem value="agricultural">Agricultural</SelectItem>
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
+                                      
+                                      <div>
+                                        <Label className="text-xs">Meter Config</Label>
+                                        <Select
+                                          value={tariff.meterConfiguration || "prepaid"}
+                                          onValueChange={(value) => {
+                                            const updated = [...extractedData.tariffStructures];
+                                            updated[tariffIdx].meterConfiguration = value;
+                                            setExtractedData({ ...extractedData, tariffStructures: updated });
+                                          }}
+                                        >
+                                          <SelectTrigger className="h-9 mt-1">
+                                            <SelectValue />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="prepaid">Prepaid</SelectItem>
+                                            <SelectItem value="postpaid">Postpaid</SelectItem>
+                                            <SelectItem value="both">Both</SelectItem>
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
+                                    </div>
+                                    
+                                    <div>
+                                      <Label className="text-xs">Effective From</Label>
+                                      <Input
+                                        type="date"
+                                        value={tariff.effectiveFrom || new Date().toISOString().split('T')[0]}
+                                        onChange={(e) => {
+                                          const updated = [...extractedData.tariffStructures];
+                                          updated[tariffIdx].effectiveFrom = e.target.value;
+                                          setExtractedData({ ...extractedData, tariffStructures: updated });
+                                        }}
+                                        className="h-9 mt-1"
+                                      />
+                                    </div>
                                   </div>
                                   <CollapsibleTrigger asChild>
                                     <Button
