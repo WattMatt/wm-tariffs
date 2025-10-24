@@ -577,9 +577,13 @@ export default function MunicipalityExtractionDialog({
       };
       
       console.log("Final transformed data:", JSON.stringify(newData, null, 2));
+      console.log("Append mode:", appendMode);
+      console.log("Existing data:", JSON.stringify(existingData, null, 2));
+      console.log("ExtractedData state:", JSON.stringify(extractedData, null, 2));
       
       // If in append mode, merge the tariff structures
       if (appendMode && existingData) {
+        console.log("APPENDING - Merging tariff structures");
         const mergedData = {
           ...existingData,
           // Keep existing municipality name and NERSA increase if they exist
