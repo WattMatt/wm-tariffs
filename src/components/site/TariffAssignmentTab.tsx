@@ -163,6 +163,12 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
     return { assigned, total, unassigned: total - assigned };
   };
 
+  const hasUnsavedChanges = (meterId: string) => {
+    const meter = meters.find(m => m.id === meterId);
+    if (!meter) return false;
+    return selectedTariffs[meterId] !== meter.tariff;
+  };
+
   const stats = getAssignmentStats();
 
   if (!site?.supply_authority_id) {
@@ -294,7 +300,12 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
                             <Badge variant="outline">{meter.meter_type}</Badge>
                           </TableCell>
                           <TableCell>
-                            {hasAssignment ? (
+                            {hasUnsavedChanges(meter.id) ? (
+                              <Badge variant="outline" className="gap-1 border-warning text-warning">
+                                <AlertCircle className="w-3 h-3" />
+                                Pending Save
+                              </Badge>
+                            ) : hasAssignment ? (
                               <Badge variant="default" className="gap-1">
                                 <CheckCircle2 className="w-3 h-3" />
                                 Assigned
