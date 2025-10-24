@@ -112,8 +112,19 @@ export default function TariffEditDialog({
           }))
       };
 
+      console.log("TariffEditDialog - Loaded data:", {
+        blocks: formData.blocks.length,
+        seasonalEnergy: formData.seasonalEnergy.length,
+        touSeasons: formData.touSeasons.length,
+        basicCharge: !!formData.basicCharge,
+        demandCharges: formData.demandCharges.length,
+        mode,
+        fullData: formData
+      });
+
       setTariffData(formData);
     } catch (error: any) {
+      console.error("TariffEditDialog - Error:", error);
       toast.error(`Failed to load tariff: ${error.message}`);
       onClose();
     } finally {
