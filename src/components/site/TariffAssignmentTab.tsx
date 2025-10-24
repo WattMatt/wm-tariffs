@@ -273,6 +273,7 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
                       <TableHead>Type</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Assigned Tariff Structure</TableHead>
+                      <TableHead className="w-[80px]">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -326,6 +327,17 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
                                 ))}
                               </SelectContent>
                             </Select>
+                          </TableCell>
+                          <TableCell>
+                            {currentTariffId && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setViewingTariffId(currentTariffId)}
+                              >
+                                <Eye className="w-4 h-4" />
+                              </Button>
+                            )}
                           </TableCell>
                         </TableRow>
                       );
