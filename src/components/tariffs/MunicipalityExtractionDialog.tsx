@@ -1286,7 +1286,24 @@ export default function MunicipalityExtractionDialog({
 
                               {/* Basic Charge Section */}
                               <div className="space-y-2">
-                                <Label className="text-xs font-medium">Basic Charge (Fixed Monthly)</Label>
+                                <div className="flex items-center justify-between">
+                                  <Label className="text-xs font-medium">Basic Charge (Fixed Monthly)</Label>
+                                  {!tariff.basicCharge && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => {
+                                        const updated = [...extractedData.tariffStructures];
+                                        updated[tariffIdx].basicCharge = { amount: 0, unit: "R/month" };
+                                        setExtractedData({ ...extractedData, tariffStructures: updated });
+                                      }}
+                                      className="h-7 text-xs"
+                                    >
+                                      <Plus className="h-3 w-3 mr-1" />
+                                      Add Basic Charge
+                                    </Button>
+                                  )}
+                                </div>
                                 {tariff.basicCharge ? (
                                   <div className="p-2 bg-background rounded border space-y-2">
                                     <div className="grid grid-cols-2 gap-2">
