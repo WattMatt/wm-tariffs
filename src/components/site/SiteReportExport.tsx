@@ -2,12 +2,14 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { FileText, Loader2, Download } from "lucide-react";
+import { FileText, Loader2, Download, CalendarIcon } from "lucide-react";
 import { format } from "date-fns";
 import jsPDF from "jspdf";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 
 interface SiteReportExportProps {
   siteId: string;
@@ -16,8 +18,10 @@ interface SiteReportExportProps {
 
 export default function SiteReportExport({ siteId, siteName }: SiteReportExportProps) {
   const [isGenerating, setIsGenerating] = useState(false);
-  const [periodStart, setPeriodStart] = useState("");
-  const [periodEnd, setPeriodEnd] = useState("");
+  const [periodStart, setPeriodStart] = useState<Date>();
+  const [periodEnd, setPeriodEnd] = useState<Date>();
+  const [isStartOpen, setIsStartOpen] = useState(false);
+  const [isEndOpen, setIsEndOpen] = useState(false);
 
   // Helper to combine date and time and format as naive timestamp string
   const getFullDateTime = (dateStr: string, time: string = "00:00"): string => {
@@ -70,8 +74,8 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
       if (metersError) throw metersError;
 
       // 2. Set up date range with full day coverage
-      const fullDateTimeFrom = getFullDateTime(periodStart, "00:00");
-      const fullDateTimeTo = getFullDateTime(periodEnd, "23:59");
+      const fullDateTimeFrom = getFullDateTime(format(periodStart, "yyyy-MM-dd"), "00:00");
+      const fullDateTimeTo = getFullDateTime(format(periodEnd, "yyyy-MM-dd"), "23:59");
 
       // 3. Fetch readings for each meter with pagination and deduplication
       const meterData = await Promise.all(
@@ -247,7 +251,7 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
         councilBulkCount: councilBulk.length,
         solarCount: solarMeters.length,
         distributionCount: distribution.length,
-        readingsPeriod: `${format(new Date(periodStart), "dd MMM yyyy")} - ${format(new Date(periodEnd), "dd MMM yyyy")}`
+        readingsPeriod: `${format(periodStart, "dd MMM yyyy")} - ${format(periodEnd, "dd MMM yyyy")}`
       };
 
       // 7. Prepare detailed meter breakdown
@@ -293,8 +297,8 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
         {
           body: {
             siteName,
-            auditPeriodStart: format(new Date(periodStart), "dd MMMM yyyy"),
-            auditPeriodEnd: format(new Date(periodEnd), "dd MMMM yyyy"),
+            auditPeriodStart: format(periodStart, "dd MMMM yyyy"),
+            auditPeriodEnd: format(periodEnd, "dd MMMM yyyy"),
             meterHierarchy,
             meterBreakdown,
             reconciliationData,
@@ -342,7 +346,7 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
       
       pdf.setFontSize(12);
       pdf.text(
-        `Audit Period: ${format(new Date(periodStart), "dd MMM yyyy")} - ${format(new Date(periodEnd), "dd MMM yyyy")}`,
+        `Audit Period: ${format(periodStart, "dd MMM yyyy")} - ${format(periodEnd, "dd MMM yyyy")}`,
         pageWidth / 2,
         100,
         { align: "center" }
@@ -481,22 +485,62 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
       <CardContent className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <Label htmlFor="period-start">Audit Period Start</Label>
-            <Input
-              id="period-start"
-              type="date"
-              value={periodStart}
-              onChange={(e) => setPeriodStart(e.target.value)}
-            />
+            <Label>Audit Period Start</Label>
+            <Popover open={isStartOpen} onOpenChange={setIsStartOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-full justify-start text-left font-normal",
+                    !periodStart && "text-muted-foreground"
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {periodStart ? format(periodStart, "dd MMM yyyy") : "Select start date"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={periodStart}
+                  onSelect={(date) => {
+                    setPeriodStart(date);
+                    setIsStartOpen(false);
+                  }}
+                  initialFocus
+                  className="pointer-events-auto"
+                />
+              </PopoverContent>
+            </Popover>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="period-end">Audit Period End</Label>
-            <Input
-              id="period-end"
-              type="date"
-              value={periodEnd}
-              onChange={(e) => setPeriodEnd(e.target.value)}
-            />
+            <Label>Audit Period End</Label>
+            <Popover open={isEndOpen} onOpenChange={setIsEndOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-full justify-start text-left font-normal",
+                    !periodEnd && "text-muted-foreground"
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {periodEnd ? format(periodEnd, "dd MMM yyyy") : "Select end date"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={periodEnd}
+                  onSelect={(date) => {
+                    setPeriodEnd(date);
+                    setIsEndOpen(false);
+                  }}
+                  initialFocus
+                  className="pointer-events-auto"
+                />
+              </PopoverContent>
+            </Popover>
           </div>
         </div>
 
