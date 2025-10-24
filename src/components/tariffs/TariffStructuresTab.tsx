@@ -406,22 +406,20 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
                       <div className="flex gap-2">
                         <Button
                           variant="outline"
-                          size="sm"
+                          size="icon"
                           onClick={() => setSelectedTariffForDetails({ id: structure.id, name: structure.name })}
                         >
-                          <Eye className="w-4 h-4 mr-2" />
-                          View
+                          <Eye className="w-4 h-4" />
                         </Button>
                         <Button
                           variant="outline"
-                          size="sm"
+                          size="icon"
                           onClick={() => {
                             // TODO: Open edit dialog with pre-filled data
                             toast.info("Edit functionality coming soon");
                           }}
                         >
-                          <Pencil className="w-4 h-4 mr-2" />
-                          Edit
+                          <Pencil className="w-4 h-4" />
                         </Button>
                       </div>
                     </TableCell>
