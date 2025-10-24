@@ -303,7 +303,7 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
             disabled={selectedTariffs.size === 0 || isDeleting}
           >
             <Trash2 className="w-4 h-4" />
-            Delete Selected {selectedTariffs.size > 0 && `(${selectedTariffs.size})`}
+            Delete {selectedTariffs.size > 0 && `(${selectedTariffs.size})`}
           </Button>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
