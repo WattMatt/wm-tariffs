@@ -1,15 +1,16 @@
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, Trash2, Eye, Plus, ZoomIn, ZoomOut, RotateCcw, ChevronLeft, ChevronRight, RotateCw, GripVertical, Sparkles } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Loader2, Plus, ZoomIn, ZoomOut, RotateCcw, Trash2, RotateCw, Eye, Sparkles, GripVertical, ChevronDown, ChevronUp, ChevronLeft, ChevronRight } from "lucide-react";
 import { pdfjs } from 'react-pdf';
 import { toast } from "sonner";
-import { Canvas as FabricCanvas, Rect as FabricRect, FabricImage, Circle } from "fabric";
 import { supabase } from "@/integrations/supabase/client";
+import { Canvas as FabricCanvas, Rect as FabricRect, Image as FabricImage, Circle, util } from "fabric";
 
 // Set up PDF.js worker
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
@@ -58,6 +59,7 @@ export default function MunicipalityExtractionDialog({
   const currentImageRef = useRef<FabricImage | null>(null);
   const [isAcceptedPanelCollapsed, setIsAcceptedPanelCollapsed] = useState(false);
   const [draggedTariffIndex, setDraggedTariffIndex] = useState<number | null>(null);
+  const [collapsedTariffs, setCollapsedTariffs] = useState<Set<number>>(new Set());
 
   // Convert PDF to individual page images
   const convertPdfToImages = async (pdfFile: File): Promise<string[]> => {
@@ -913,55 +915,89 @@ export default function MunicipalityExtractionDialog({
                         {extractedData.tariffStructures.map((tariff: any, tariffIdx: number) => (
                           <Card 
                             key={tariffIdx} 
-                            className="p-4 bg-muted/20 border-2 cursor-move"
-                            draggable
-                            onDragStart={() => setDraggedTariffIndex(tariffIdx)}
-                            onDragOver={(e) => {
-                              e.preventDefault();
-                              if (draggedTariffIndex === null || draggedTariffIndex === tariffIdx) return;
-                              
-                              const updated = [...extractedData.tariffStructures];
-                              const draggedItem = updated[draggedTariffIndex];
-                              updated.splice(draggedTariffIndex, 1);
-                              updated.splice(tariffIdx, 0, draggedItem);
-                              
-                              setExtractedData({ ...extractedData, tariffStructures: updated });
-                              setDraggedTariffIndex(tariffIdx);
-                            }}
-                            onDragEnd={() => setDraggedTariffIndex(null)}
-                            style={{
-                              opacity: draggedTariffIndex === tariffIdx ? 0.5 : 1,
-                            }}
+                            className="bg-muted/20 border-2"
                           >
-                            <div className="space-y-3">
-                              <div className="flex items-start gap-2">
-                                <GripVertical className="h-5 w-5 text-muted-foreground mt-6 flex-shrink-0" />
-                                <div className="flex-1">
-                                  <Label className="text-xs">Tariff Name</Label>
-                                  <Input
-                                    value={tariff.tariffName || ""}
-                                    onChange={(e) => {
+                            <Collapsible
+                              open={!collapsedTariffs.has(tariffIdx)}
+                              onOpenChange={(open) => {
+                                setCollapsedTariffs(prev => {
+                                  const newSet = new Set(prev);
+                                  if (open) {
+                                    newSet.delete(tariffIdx);
+                                  } else {
+                                    newSet.add(tariffIdx);
+                                  }
+                                  return newSet;
+                                });
+                              }}
+                            >
+                              <div className="p-4 space-y-3">
+                                <div className="flex items-start gap-2">
+                                  <div
+                                    className="cursor-move"
+                                    draggable
+                                    onDragStart={() => setDraggedTariffIndex(tariffIdx)}
+                                    onDragOver={(e) => {
+                                      e.preventDefault();
+                                      if (draggedTariffIndex === null || draggedTariffIndex === tariffIdx) return;
+                                      
                                       const updated = [...extractedData.tariffStructures];
-                                      updated[tariffIdx].tariffName = e.target.value;
+                                      const draggedItem = updated[draggedTariffIndex];
+                                      updated.splice(draggedTariffIndex, 1);
+                                      updated.splice(tariffIdx, 0, draggedItem);
+                                      
                                       setExtractedData({ ...extractedData, tariffStructures: updated });
+                                      setDraggedTariffIndex(tariffIdx);
                                     }}
-                                    className="h-9 mt-1"
-                                  />
+                                    onDragEnd={() => setDraggedTariffIndex(null)}
+                                    style={{
+                                      opacity: draggedTariffIndex === tariffIdx ? 0.5 : 1,
+                                    }}
+                                  >
+                                    <GripVertical className="h-5 w-5 text-muted-foreground mt-6" />
+                                  </div>
+                                  <div className="flex-1">
+                                    <Label className="text-xs">Tariff Name</Label>
+                                    <Input
+                                      value={tariff.tariffName || ""}
+                                      onChange={(e) => {
+                                        const updated = [...extractedData.tariffStructures];
+                                        updated[tariffIdx].tariffName = e.target.value;
+                                        setExtractedData({ ...extractedData, tariffStructures: updated });
+                                      }}
+                                      className="h-9 mt-1"
+                                    />
+                                  </div>
+                                  <CollapsibleTrigger asChild>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="mt-5"
+                                    >
+                                      {collapsedTariffs.has(tariffIdx) ? (
+                                        <ChevronDown className="h-4 w-4" />
+                                      ) : (
+                                        <ChevronUp className="h-4 w-4" />
+                                      )}
+                                    </Button>
+                                  </CollapsibleTrigger>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => {
+                                      const updated = [...extractedData.tariffStructures];
+                                      updated.splice(tariffIdx, 1);
+                                      setExtractedData({ ...extractedData, tariffStructures: updated });
+                                      toast.success("Tariff removed");
+                                    }}
+                                    className="mt-5 text-destructive hover:text-destructive"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
                                 </div>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => {
-                                    const updated = [...extractedData.tariffStructures];
-                                    updated.splice(tariffIdx, 1);
-                                    setExtractedData({ ...extractedData, tariffStructures: updated });
-                                    toast.success("Tariff removed");
-                                  }}
-                                  className="mt-5 text-destructive hover:text-destructive"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
+                              
+                              <CollapsibleContent>
+                                <div className="space-y-3 mt-3">
                               
                               {/* Energy Blocks Section */}
                               <div className="space-y-2">
@@ -1511,7 +1547,10 @@ export default function MunicipalityExtractionDialog({
                                   </p>
                                 )}
                               </div>
-                            </div>
+                                </div>
+                              </CollapsibleContent>
+                              </div>
+                            </Collapsible>
                           </Card>
                         ))}
                       </div>
