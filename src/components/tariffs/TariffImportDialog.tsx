@@ -485,9 +485,9 @@ export default function PdfImportDialog() {
     }));
 
     setMunicipalities(foundMunicipalities);
-    toast.info(`Extracting tariff data for ${foundMunicipalities.length} municipalities...`);
+    toast.info(`Extracting and saving ${foundMunicipalities.length} municipalities...`);
     
-    // Extract tariff data for each municipality
+    // Extract and save tariff data for each municipality
     for (let i = 0; i < foundMunicipalities.length; i++) {
       const municipality = foundMunicipalities[i];
       
@@ -507,24 +507,38 @@ export default function PdfImportDialog() {
         
         // Update with extracted data
         foundMunicipalities[i].data = extractedData;
-        foundMunicipalities[i].status = 'pending';
+        foundMunicipalities[i].status = 'saving';
+        setMunicipalities([...foundMunicipalities]);
+        
+        // Automatically save to database
+        toast.info(`Saving ${municipality.name} to database...`);
+        await saveTariffData(extractedData);
+        
+        foundMunicipalities[i].status = 'complete';
         setMunicipalities([...foundMunicipalities]);
         
       } catch (error: any) {
-        console.error(`Error extracting ${municipality.name}:`, error);
+        console.error(`Error processing ${municipality.name}:`, error);
         foundMunicipalities[i].status = 'error';
         foundMunicipalities[i].error = error.message;
         setMunicipalities([...foundMunicipalities]);
       }
     }
     
-    const successCount = foundMunicipalities.filter(m => m.status === 'pending').length;
+    const successCount = foundMunicipalities.filter(m => m.status === 'complete').length;
     const errorCount = foundMunicipalities.filter(m => m.status === 'error').length;
     
     if (successCount > 0) {
-      toast.success(`Extracted ${successCount} of ${foundMunicipalities.length} municipalities. ${errorCount > 0 ? `${errorCount} failed.` : ''}`);
+      toast.success(`Successfully saved ${successCount} of ${foundMunicipalities.length} municipalities to database!`);
+      // Close the dialog after successful save
+      setTimeout(() => {
+        setIsOpen(false);
+        setFile(null);
+        setMunicipalities([]);
+        setMunicipalityExtractionOpen(false);
+      }, 2000);
     } else {
-      toast.error(`Failed to extract data for all municipalities.`);
+      toast.error(`Failed to save data for all municipalities.`);
     }
   };
 
