@@ -3,9 +3,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
+import TariffStructureForm from "./TariffStructureForm";
 
 interface TariffDetailsDialogProps {
   tariffId: string;
@@ -13,23 +11,33 @@ interface TariffDetailsDialogProps {
   onClose: () => void;
 }
 
+interface TariffData {
+  tariffName: string;
+  tariffType: string;
+  meterConfiguration: string;
+  description: string;
+  effectiveFrom: string;
+  blocks: any[];
+  seasonalEnergy: any[];
+  touSeasons: any[];
+  basicCharge?: any;
+  demandCharges: any[];
+}
+
 export default function TariffDetailsDialog({ tariffId, tariffName, onClose }: TariffDetailsDialogProps) {
   const [isLoading, setIsLoading] = useState(true);
-  const [tariff, setTariff] = useState<any>(null);
-  const [blocks, setBlocks] = useState<any[]>([]);
-  const [charges, setCharges] = useState<any[]>([]);
-  const [touPeriods, setTouPeriods] = useState<any[]>([]);
+  const [tariffData, setTariffData] = useState<TariffData | null>(null);
 
   useEffect(() => {
-    fetchData();
+    fetchTariffData();
   }, [tariffId]);
 
-  const fetchData = async () => {
-    try {
-      setIsLoading(true);
+  const fetchTariffData = async () => {
+    setIsLoading(true);
 
-      // Fetch tariff
-      const { data: tariffData, error: tariffError } = await supabase
+    try {
+      // Fetch tariff structure
+      const { data: tariff, error: tariffError } = await supabase
         .from("tariff_structures")
         .select("*")
         .eq("id", tariffId)
@@ -38,37 +46,77 @@ export default function TariffDetailsDialog({ tariffId, tariffName, onClose }: T
       if (tariffError) throw tariffError;
 
       // Fetch blocks
-      const { data: blocksData } = await supabase
+      const { data: blocks } = await supabase
         .from("tariff_blocks")
         .select("*")
         .eq("tariff_structure_id", tariffId)
         .order("block_number", { ascending: true });
 
       // Fetch charges
-      const { data: chargesData } = await supabase
+      const { data: charges } = await supabase
         .from("tariff_charges")
         .select("*")
         .eq("tariff_structure_id", tariffId);
 
       // Fetch TOU periods
-      const { data: touData } = await supabase
+      const { data: touPeriods } = await supabase
         .from("tariff_time_periods")
         .select("*")
         .eq("tariff_structure_id", tariffId)
         .order("season", { ascending: true });
 
-      setTariff(tariffData);
-      setBlocks(blocksData || []);
-      setCharges(chargesData || []);
-      setTouPeriods(touData || []);
+      // Transform data to match form structure
+      const basicChargeData = (charges || []).find(c => 
+        c.charge_type === 'basic_monthly' || c.charge_type === 'basic_charge'
+      );
+      
+      const formData: TariffData = {
+        tariffName: tariff.name,
+        tariffType: tariff.tariff_type,
+        meterConfiguration: tariff.meter_configuration || "prepaid",
+        description: tariff.description || "",
+        effectiveFrom: tariff.effective_from,
+        blocks: (blocks || []).map(block => ({
+          blockNumber: block.block_number,
+          kwhFrom: block.kwh_from,
+          kwhTo: block.kwh_to,
+          energyChargeCents: block.energy_charge_cents
+        })),
+        seasonalEnergy: (charges || [])
+          .filter(c => c.charge_type.startsWith('energy_') && !c.charge_type.includes('tou'))
+          .map(c => {
+            // Extract season from charge_type (e.g., "energy_high_season" -> "High Season")
+            const seasonPart = c.charge_type.replace('energy_', '').replace('_', ' ');
+            const season = seasonPart.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+            return {
+              season: season,
+              rate: c.charge_amount,
+              unit: c.unit
+            };
+          }),
+        touSeasons: groupTouPeriods(touPeriods || []),
+        basicCharge: basicChargeData
+          ? {
+              amount: basicChargeData.charge_amount,
+              unit: basicChargeData.unit
+            }
+          : undefined,
+        demandCharges: (charges || [])
+          .filter(c => c.charge_type.startsWith('demand_'))
+          .map(c => {
+            // Extract season from charge_type (e.g., "demand_high_season" -> "High Season")
+            const seasonPart = c.charge_type.replace('demand_', '').replace('_', ' ');
+            const season = seasonPart.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+            return {
+              season: season,
+              rate: c.charge_amount,
+              unit: c.unit
+            };
+          })
+      };
 
-      console.log("Loaded:", {
-        blocks: blocksData?.length || 0,
-        charges: chargesData?.length || 0,
-        tou: touData?.length || 0
-      });
+      setTariffData(formData);
     } catch (error: any) {
-      console.error("Error loading tariff:", error);
       toast.error(`Failed to load tariff: ${error.message}`);
       onClose();
     } finally {
@@ -76,181 +124,59 @@ export default function TariffDetailsDialog({ tariffId, tariffName, onClose }: T
     }
   };
 
-  if (isLoading) {
-    return (
-      <Dialog open={true} onOpenChange={onClose}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>View Tariff Structure</DialogTitle>
-            <DialogDescription>Loading tariff details...</DialogDescription>
-          </DialogHeader>
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          </div>
-        </DialogContent>
-      </Dialog>
-    );
-  }
+  const groupTouPeriods = (periods: any[]) => {
+    const grouped = new Map<string, any>();
 
-  if (!tariff) {
-    return (
-      <Dialog open={true} onOpenChange={onClose}>
-        <DialogContent className="max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>View Tariff Structure</DialogTitle>
-          </DialogHeader>
-          <div className="text-center py-8 text-destructive">
-            Failed to load tariff data
-          </div>
-        </DialogContent>
-      </Dialog>
-    );
-  }
+    periods.forEach(period => {
+      const key = period.season;
+      if (!grouped.has(key)) {
+        grouped.set(key, {
+          season: period.season,
+          peak: 0,
+          standard: 0,
+          offPeak: 0
+        });
+      }
+
+      const seasonData = grouped.get(key);
+      if (period.period_type === "peak") {
+        seasonData.peak = period.energy_charge_cents;
+      } else if (period.period_type === "standard") {
+        seasonData.standard = period.energy_charge_cents;
+      } else if (period.period_type === "off_peak") {
+        seasonData.offPeak = period.energy_charge_cents;
+      }
+    });
+
+    return Array.from(grouped.values());
+  };
 
   return (
     <Dialog open={true} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>View Tariff Structure</DialogTitle>
-          <DialogDescription>Viewing details for {tariffName}</DialogDescription>
+          <DialogDescription>
+            Viewing details for {tariffName}
+          </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6">
-          {/* Basic Info */}
-          <div className="space-y-4">
-            <div>
-              <Label>Tariff Name</Label>
-              <Input value={tariff.name} disabled className="mt-1" />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Tariff Type</Label>
-                <Input value={tariff.tariff_type} disabled className="mt-1" />
-              </div>
-              <div>
-                <Label>Meter Configuration</Label>
-                <Input value={tariff.meter_configuration || "N/A"} disabled className="mt-1" />
-              </div>
-            </div>
-
-            <div>
-              <Label>Description</Label>
-              <Input value={tariff.description || "No description"} disabled className="mt-1" />
-            </div>
-
-            <div>
-              <Label>Effective From</Label>
-              <Input value={tariff.effective_from} disabled className="mt-1" />
-            </div>
+        {isLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
           </div>
-
-          {/* Blocks */}
-          {blocks.length > 0 && (
-            <>
-              <Separator />
-              <div>
-                <h3 className="text-lg font-semibold mb-3">Energy Blocks ({blocks.length})</h3>
-                <div className="space-y-2">
-                  {blocks.map((block) => (
-                    <div key={block.id} className="grid grid-cols-4 gap-3 p-3 bg-muted/50 rounded-lg">
-                      <div>
-                        <Label className="text-xs text-muted-foreground">Block</Label>
-                        <div className="font-medium">{block.block_number}</div>
-                      </div>
-                      <div>
-                        <Label className="text-xs text-muted-foreground">From (kWh)</Label>
-                        <div className="font-medium">{block.kwh_from}</div>
-                      </div>
-                      <div>
-                        <Label className="text-xs text-muted-foreground">To (kWh)</Label>
-                        <div className="font-medium">{block.kwh_to || "∞"}</div>
-                      </div>
-                      <div>
-                        <Label className="text-xs text-muted-foreground">Rate</Label>
-                        <div className="font-medium">{block.energy_charge_cents} c/kWh</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
-
-          {/* Charges */}
-          {charges.length > 0 && (
-            <>
-              <Separator />
-              <div>
-                <h3 className="text-lg font-semibold mb-3">Tariff Charges ({charges.length})</h3>
-                <div className="space-y-2">
-                  {charges.map((charge) => (
-                    <div key={charge.id} className="p-3 bg-muted/50 rounded-lg">
-                      <div className="grid grid-cols-3 gap-3">
-                        <div>
-                          <Label className="text-xs text-muted-foreground">Charge Type</Label>
-                          <div className="font-medium">{charge.charge_type.replace(/_/g, ' ').toUpperCase()}</div>
-                        </div>
-                        <div>
-                          <Label className="text-xs text-muted-foreground">Amount</Label>
-                          <div className="font-medium">{charge.charge_amount} {charge.unit}</div>
-                        </div>
-                        <div>
-                          <Label className="text-xs text-muted-foreground">Description</Label>
-                          <div className="font-medium">{charge.description || "N/A"}</div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
-
-          {/* TOU Periods */}
-          {touPeriods.length > 0 && (
-            <>
-              <Separator />
-              <div>
-                <h3 className="text-lg font-semibold mb-3">Time-of-Use Periods ({touPeriods.length})</h3>
-                <div className="space-y-2">
-                  {touPeriods.map((period) => (
-                    <div key={period.id} className="p-3 bg-muted/50 rounded-lg">
-                      <div className="grid grid-cols-5 gap-3">
-                        <div>
-                          <Label className="text-xs text-muted-foreground">Season</Label>
-                          <div className="font-medium">{period.season}</div>
-                        </div>
-                        <div>
-                          <Label className="text-xs text-muted-foreground">Period Type</Label>
-                          <div className="font-medium">{period.period_type.replace(/_/g, ' ')}</div>
-                        </div>
-                        <div>
-                          <Label className="text-xs text-muted-foreground">Day Type</Label>
-                          <div className="font-medium">{period.day_type}</div>
-                        </div>
-                        <div>
-                          <Label className="text-xs text-muted-foreground">Hours</Label>
-                          <div className="font-medium">{period.start_hour}:00 - {period.end_hour}:00</div>
-                        </div>
-                        <div>
-                          <Label className="text-xs text-muted-foreground">Rate</Label>
-                          <div className="font-medium">{period.energy_charge_cents} c/kWh</div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
-
-          {blocks.length === 0 && charges.length === 0 && touPeriods.length === 0 && (
-            <div className="text-center py-8 text-muted-foreground">
-              No detailed tariff structure data available for this tariff.
-            </div>
-          )}
-        </div>
+        ) : tariffData ? (
+          <TariffStructureForm 
+            onSubmit={() => {}}
+            isLoading={false}
+            initialData={tariffData}
+            readOnly={true}
+          />
+        ) : (
+          <div className="text-center py-8 text-muted-foreground">
+            Failed to load tariff data
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
