@@ -367,7 +367,7 @@ export default function PdfImportDialog() {
     setMunicipalityExtractionOpen(true);
   };
 
-  const handleMunicipalityExtractionComplete = (municipalities: MunicipalityInfo[]) => {
+  const handleMunicipalityExtractionComplete = async (municipalities: MunicipalityInfo[]) => {
     const foundMunicipalities: MunicipalityProgress[] = municipalities.map((m) => ({
       name: m.name,
       nersaIncrease: m.nersaIncrease,
@@ -380,11 +380,51 @@ export default function PdfImportDialog() {
                file!.name.includes('Limpopo') ? 'Limpopo' :
                file!.name.includes('Mpumalanga') ? 'Mpumalanga' :
                file!.name.includes('North West') || file!.name.includes('NorthWest') ? 'North West' : 'Unknown',
-      status: 'pending' as const
+      status: 'extracting' as const
     }));
 
     setMunicipalities(foundMunicipalities);
-    toast.success(`Added ${foundMunicipalities.length} municipality/municipalities. Click each to extract and save.`);
+    toast.info(`Extracting tariff data for ${foundMunicipalities.length} municipalities...`);
+    
+    // Extract tariff data for each municipality
+    for (let i = 0; i < foundMunicipalities.length; i++) {
+      const municipality = foundMunicipalities[i];
+      
+      try {
+        toast.info(`Extracting ${municipality.name}...`);
+        const documentContent = await extractTextFromAllPdfPages(file!);
+        const { data, error } = await supabase.functions.invoke("extract-tariff-data", {
+          body: { documentContent, phase: "extract", municipalityName: municipality.name }
+        });
+
+        if (error) throw error;
+        if (!data.success || !data.data) {
+          throw new Error("Failed to extract tariff data");
+        }
+        
+        const extractedData: ExtractedTariffData = data.data;
+        
+        // Update with extracted data
+        foundMunicipalities[i].data = extractedData;
+        foundMunicipalities[i].status = 'pending';
+        setMunicipalities([...foundMunicipalities]);
+        
+      } catch (error: any) {
+        console.error(`Error extracting ${municipality.name}:`, error);
+        foundMunicipalities[i].status = 'error';
+        foundMunicipalities[i].error = error.message;
+        setMunicipalities([...foundMunicipalities]);
+      }
+    }
+    
+    const successCount = foundMunicipalities.filter(m => m.status === 'pending').length;
+    const errorCount = foundMunicipalities.filter(m => m.status === 'error').length;
+    
+    if (successCount > 0) {
+      toast.success(`Extracted ${successCount} of ${foundMunicipalities.length} municipalities. ${errorCount > 0 ? `${errorCount} failed.` : ''}`);
+    } else {
+      toast.error(`Failed to extract data for all municipalities.`);
+    }
   };
 
   const processSingleMunicipality = async (municipalityName: string, index: number) => {
