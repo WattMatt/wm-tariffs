@@ -469,6 +469,9 @@ export default function PdfImportDialog() {
   };
 
   const handleMunicipalityExtractionComplete = async (municipalities: MunicipalityInfo[]) => {
+    // Close the extraction dialog immediately
+    setMunicipalityExtractionOpen(false);
+    
     const foundMunicipalities: MunicipalityProgress[] = municipalities.map((m) => ({
       name: m.name,
       nersaIncrease: m.nersaIncrease,
@@ -485,6 +488,7 @@ export default function PdfImportDialog() {
     }));
 
     setMunicipalities(foundMunicipalities);
+    setIsProcessing(true);
     toast.info(`Extracting and saving ${foundMunicipalities.length} municipalities...`);
     
     // Extract and save tariff data for each municipality
@@ -528,14 +532,15 @@ export default function PdfImportDialog() {
     const successCount = foundMunicipalities.filter(m => m.status === 'complete').length;
     const errorCount = foundMunicipalities.filter(m => m.status === 'error').length;
     
+    setIsProcessing(false);
+    
     if (successCount > 0) {
       toast.success(`Successfully saved ${successCount} of ${foundMunicipalities.length} municipalities to database!`);
-      // Close the dialog after successful save
+      // Close the entire import dialog after successful save
       setTimeout(() => {
         setIsOpen(false);
         setFile(null);
         setMunicipalities([]);
-        setMunicipalityExtractionOpen(false);
       }, 2000);
     } else {
       toast.error(`Failed to save data for all municipalities.`);
