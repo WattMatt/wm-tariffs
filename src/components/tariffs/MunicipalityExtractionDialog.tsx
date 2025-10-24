@@ -823,7 +823,31 @@ export default function MunicipalityExtractionDialog({
                               
                               {tariff.blocks && tariff.blocks.length > 0 && (
                                 <div className="space-y-2">
-                                  <Label className="text-xs font-medium">Energy Blocks</Label>
+                                  <div className="flex items-center justify-between">
+                                    <Label className="text-xs font-medium">Energy Blocks</Label>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => {
+                                        const updated = [...extractedData.tariffStructures];
+                                        if (!updated[tariffIdx].blocks) {
+                                          updated[tariffIdx].blocks = [];
+                                        }
+                                        updated[tariffIdx].blocks.push({
+                                          blockNumber: (updated[tariffIdx].blocks.length || 0) + 1,
+                                          kwhFrom: 0,
+                                          kwhTo: 0,
+                                          energyChargeCents: 0,
+                                          description: `Block ${(updated[tariffIdx].blocks.length || 0) + 1}`
+                                        });
+                                        setExtractedData({ ...extractedData, tariffStructures: updated });
+                                      }}
+                                      className="h-7 text-xs"
+                                    >
+                                      <Plus className="h-3 w-3 mr-1" />
+                                      Add Block
+                                    </Button>
+                                  </div>
                                   {tariff.blocks.map((block: any, blockIdx: number) => (
                                     <div key={blockIdx} className="p-2 bg-background rounded border space-y-2">
                                       <div className="grid grid-cols-3 gap-2">
@@ -868,8 +892,49 @@ export default function MunicipalityExtractionDialog({
                                           />
                                         </div>
                                       </div>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => {
+                                          const updated = [...extractedData.tariffStructures];
+                                          updated[tariffIdx].blocks.splice(blockIdx, 1);
+                                          setExtractedData({ ...extractedData, tariffStructures: updated });
+                                        }}
+                                        className="h-6 text-xs text-destructive hover:text-destructive w-full"
+                                      >
+                                        <Trash2 className="h-3 w-3 mr-1" />
+                                        Remove Block
+                                      </Button>
                                     </div>
                                   ))}
+                                </div>
+                              )}
+                              
+                              {(!tariff.blocks || tariff.blocks.length === 0) && (
+                                <div className="space-y-2">
+                                  <Label className="text-xs font-medium">Energy Blocks</Label>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      const updated = [...extractedData.tariffStructures];
+                                      if (!updated[tariffIdx].blocks) {
+                                        updated[tariffIdx].blocks = [];
+                                      }
+                                      updated[tariffIdx].blocks.push({
+                                        blockNumber: 1,
+                                        kwhFrom: 0,
+                                        kwhTo: 0,
+                                        energyChargeCents: 0,
+                                        description: "Block 1"
+                                      });
+                                      setExtractedData({ ...extractedData, tariffStructures: updated });
+                                    }}
+                                    className="w-full"
+                                  >
+                                    <Plus className="h-4 w-4 mr-1" />
+                                    Add First Block
+                                  </Button>
                                 </div>
                               )}
                               

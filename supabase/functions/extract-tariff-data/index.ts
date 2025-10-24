@@ -328,63 +328,78 @@ async function extractMunicipalityFromImage(imageUrl: string) {
 
   console.log("Extracting municipality data from image:", imageUrl);
 
-  const prompt = `You are analyzing a South African electricity tariff document image. Extract ALL visible tariff information.
+  const prompt = `You are analyzing a South African electricity tariff document image. Extract EVERY SINGLE piece of tariff information visible.
 
-WHAT TO LOOK FOR:
-1. Municipality name (usually at the top with percentage, e.g., "BA-PHALABORWA - 12.92%")
-2. NERSA increase percentage (the percentage next to municipality name)
-3. Tariff category names (e.g., "Domestic Prepaid & Conventional", "Commercial Conventional")
-4. Block-based pricing tables with:
-   - Block number
-   - kWh ranges (e.g., "Block 1 (0 - 50 kWh)")
-   - Energy charges in c/kWh (e.g., "175.08 c/kWh")
-5. Fixed charges:
-   - Service charges (R/month or R/day)
-   - Basic charges
-   - Energy charges (last row often shows this)
-6. Any other charges visible
+CRITICAL INSTRUCTIONS:
+1. SCAN THE ENTIRE IMAGE from top to bottom
+2. Extract EVERY tariff category you see (Domestic, Commercial, Industrial, etc.)
+3. For EACH tariff category, extract EVERY SINGLE BLOCK and CHARGE
+4. DO NOT STOP after finding one category - continue scanning for more
+5. Count the rows carefully - if you see 4 blocks, extract all 4 blocks
 
-EXTRACTION RULES:
-- If you see "175.08 c/kWh", extract 175.08
-- If you see "1.75 R/kWh", multiply by 100 → extract 175.00
-- For blocks, extract the kWh range (e.g., "0-50" means kwhFrom: 0, kwhTo: 50)
-- Look for rows with block descriptions and corresponding charge values
-- Extract EVERYTHING you can see - multiple tariff categories if present
+WHAT TO EXTRACT (for EACH tariff category):
+1. Municipality name from header (e.g., "BA-PHALABORWA - 12.92%")
+2. NERSA increase percentage (the number with %)
+3. Tariff category name (full text like "Domestic Prepaid & Conventional")
+4. EVERY block row with:
+   - Block number (Block 1, Block 2, etc.)
+   - kWh range (e.g., "0 - 50 kWh" → kwhFrom: 0, kwhTo: 50)
+   - Energy charge (e.g., "175.08 c/kWh" → 175.08)
+   - IMPORTANT: Read ALL rows until the table ends
+5. ALL fixed charges rows:
+   - Basic charge / Service charge / Energy charge
+   - Amount in R/month or R/day
+   - Extract even if it's the last row of a table
 
-IMPORTANT: Extract ALL tariff categories visible in the image, not just one.
+CONVERSION RULES:
+- "175.08 c/kWh" → energyChargeCents: 175.08
+- "1.75 R/kWh" → energyChargeCents: 175.00 (multiply by 100)
+- "R292.66 /month" → chargeAmount: 292.66, unit: "R/month"
+- "0 - 50 kWh" → kwhFrom: 0, kwhTo: 50
+- ">600 kWh" → kwhFrom: 601, kwhTo: null
 
-Return a JSON object with this EXACT structure:
+CRITICAL: If you see multiple tariff tables in the image (e.g., "Domestic Prepaid", "Domestic conventional", "Commercial"), extract ALL of them. Do not stop after the first one.
+
+EXAMPLE for an image with 2 tariff categories:
 {
-  "municipalityName": "Municipality name from header or empty string",
-  "nersaIncrease": 12.92 or 0,
+  "municipalityName": "BA-PHALABORWA",
+  "nersaIncrease": 12.92,
   "tariffStructures": [
     {
-      "tariffName": "Full name e.g., Domestic Prepaid & Conventional",
+      "tariffName": "Domestic Prepaid & Conventional",
       "tariffType": "domestic",
       "meterConfiguration": "both",
       "blocks": [
-        {
-          "blockNumber": 1,
-          "kwhFrom": 0,
-          "kwhTo": 50,
-          "energyChargeCents": 175.08,
-          "description": "Block 1 (0-50 kWh)"
-        }
+        {"blockNumber": 1, "kwhFrom": 0, "kwhTo": 50, "energyChargeCents": 175.08, "description": "Block 1 (0-50 kWh)"},
+        {"blockNumber": 2, "kwhFrom": 51, "kwhTo": 350, "energyChargeCents": 223.84, "description": "Block 2 (51-350 kWh)"},
+        {"blockNumber": 3, "kwhFrom": 351, "kwhTo": 600, "energyChargeCents": 303.40, "description": "Block 3 (351-600 kWh)"},
+        {"blockNumber": 4, "kwhFrom": 601, "kwhTo": null, "energyChargeCents": 366.19, "description": "Block 4 (>600 kWh)"}
+      ],
+      "charges": []
+    },
+    {
+      "tariffName": "Domestic conventional",
+      "tariffType": "domestic",
+      "meterConfiguration": "conventional",
+      "blocks": [
+        {"blockNumber": 1, "kwhFrom": 0, "kwhTo": 50, "energyChargeCents": 175.46, "description": "Block 1 (0-50 kWh)"},
+        {"blockNumber": 2, "kwhFrom": 51, "kwhTo": 350, "energyChargeCents": 224.65, "description": "Block 2 (51-350 kWh)"},
+        {"blockNumber": 3, "kwhFrom": 351, "kwhTo": 600, "energyChargeCents": 318.05, "description": "Block 3 (351-600 kWh)"},
+        {"blockNumber": 4, "kwhFrom": 601, "kwhTo": null, "energyChargeCents": 374.56, "description": "Block 4 (>600 kWh)"}
       ],
       "charges": [
-        {
-          "chargeType": "service_charge",
-          "chargeAmount": 246.19,
-          "unit": "R/month",
-          "description": "Basic Charge" 
-        }
+        {"chargeType": "basic_monthly", "chargeAmount": 292.66, "unit": "R/month", "description": "Basic charge"}
       ]
     }
   ]
 }
 
-Extract EVERY tariff category you can see. If you see 5 categories, return 5 objects in tariffStructures array.
-Return ONLY valid JSON, no markdown.`;
+FINAL CHECK: Before returning, count:
+- How many tariff tables are visible in the image?
+- How many blocks does each table have?
+- Have you extracted ALL of them?
+
+Return ONLY valid JSON, no markdown, no explanations.`;
 
   const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
