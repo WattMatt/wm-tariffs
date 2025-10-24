@@ -11,8 +11,9 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, FileText, Clock, Eye } from "lucide-react";
+import { Plus, FileText, Clock, Eye, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { Checkbox } from "@/components/ui/checkbox";
 import TouPeriodsDialog from "./TouPeriodsDialog";
 import TariffDetailsDialog from "./TariffDetailsDialog";
 
@@ -47,8 +48,10 @@ interface TariffStructuresTabProps {
 
 export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthorityName }: TariffStructuresTabProps) {
   const [structures, setStructures] = useState<TariffStructure[]>([]);
+  const [selectedTariffs, setSelectedTariffs] = useState<Set<string>>(new Set());
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [usesTou, setUsesTou] = useState(false);
   const [selectedTariffForTou, setSelectedTariffForTou] = useState<string | null>(null);
   const [selectedTariffForDetails, setSelectedTariffForDetails] = useState<{ id: string; name: string } | null>(null);
@@ -70,6 +73,76 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
       toast.error("Failed to fetch tariff structures");
     } else {
       setStructures(data || []);
+      setSelectedTariffs(new Set()); // Clear selection when refreshing
+    }
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedTariffs(new Set(structures.map(s => s.id)));
+    } else {
+      setSelectedTariffs(new Set());
+    }
+  };
+
+  const handleSelectTariff = (tariffId: string, checked: boolean) => {
+    const newSelection = new Set(selectedTariffs);
+    if (checked) {
+      newSelection.add(tariffId);
+    } else {
+      newSelection.delete(tariffId);
+    }
+    setSelectedTariffs(newSelection);
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedTariffs.size === 0) return;
+
+    setIsDeleting(true);
+    
+    try {
+      // Delete associated data first (blocks, charges, periods)
+      const tariffIds = Array.from(selectedTariffs);
+      
+      // Delete tariff blocks
+      const { error: blocksError } = await supabase
+        .from("tariff_blocks")
+        .delete()
+        .in("tariff_structure_id", tariffIds);
+      
+      if (blocksError) throw blocksError;
+      
+      // Delete tariff charges
+      const { error: chargesError } = await supabase
+        .from("tariff_charges")
+        .delete()
+        .in("tariff_structure_id", tariffIds);
+      
+      if (chargesError) throw chargesError;
+      
+      // Delete tariff time periods
+      const { error: periodsError } = await supabase
+        .from("tariff_time_periods")
+        .delete()
+        .in("tariff_structure_id", tariffIds);
+      
+      if (periodsError) throw periodsError;
+      
+      // Finally delete the tariff structures themselves
+      const { error: structuresError } = await supabase
+        .from("tariff_structures")
+        .delete()
+        .in("id", tariffIds);
+      
+      if (structuresError) throw structuresError;
+      
+      toast.success(`Deleted ${selectedTariffs.size} tariff${selectedTariffs.size > 1 ? 's' : ''}`);
+      setSelectedTariffs(new Set());
+      fetchStructures();
+    } catch (error: any) {
+      toast.error(`Failed to delete tariffs: ${error.message}`);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -120,13 +193,23 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
           <h2 className="text-2xl font-bold">Tariff Structures</h2>
           <p className="text-muted-foreground">for {supplyAuthorityName}</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2">
-              <Plus className="w-4 h-4" />
-              Add Tariff
-            </Button>
-          </DialogTrigger>
+        <div className="flex gap-2">
+          <Button
+            variant="destructive"
+            className="gap-2"
+            onClick={handleDeleteSelected}
+            disabled={selectedTariffs.size === 0 || isDeleting}
+          >
+            <Trash2 className="w-4 h-4" />
+            Delete Selected {selectedTariffs.size > 0 && `(${selectedTariffs.size})`}
+          </Button>
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="gap-2">
+                <Plus className="w-4 h-4" />
+                Add Tariff
+              </Button>
+            </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Add Tariff Structure</DialogTitle>
@@ -222,6 +305,7 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
             </form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {structures.length === 0 ? (
@@ -250,6 +334,13 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-12">
+                    <Checkbox
+                      checked={selectedTariffs.size === structures.length && structures.length > 0}
+                      onCheckedChange={handleSelectAll}
+                      aria-label="Select all tariffs"
+                    />
+                  </TableHead>
                   <TableHead>Name</TableHead>
                   <TableHead>Authority</TableHead>
                   <TableHead>Type</TableHead>
@@ -262,6 +353,13 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
               <TableBody>
                 {structures.map((structure) => (
                   <TableRow key={structure.id}>
+                    <TableCell>
+                      <Checkbox
+                        checked={selectedTariffs.has(structure.id)}
+                        onCheckedChange={(checked) => handleSelectTariff(structure.id, checked as boolean)}
+                        aria-label={`Select ${structure.name}`}
+                      />
+                    </TableCell>
                     <TableCell className="font-medium">{structure.name}</TableCell>
                     <TableCell>{structure.supply_authorities?.name || "—"}</TableCell>
                     <TableCell>
