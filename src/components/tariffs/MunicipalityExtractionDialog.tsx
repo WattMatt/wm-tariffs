@@ -903,34 +903,35 @@ export default function MunicipalityExtractionDialog({
                                 </Button>
                               </div>
                               
-                              {tariff.blocks && tariff.blocks.length > 0 && (
-                                <div className="space-y-2">
-                                  <div className="flex items-center justify-between">
-                                    <Label className="text-xs font-medium">Energy Blocks</Label>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() => {
-                                        const updated = [...extractedData.tariffStructures];
-                                        if (!updated[tariffIdx].blocks) {
-                                          updated[tariffIdx].blocks = [];
-                                        }
-                                        updated[tariffIdx].blocks.push({
-                                          blockNumber: (updated[tariffIdx].blocks.length || 0) + 1,
-                                          kwhFrom: 0,
-                                          kwhTo: 0,
-                                          energyChargeCents: 0,
-                                          description: `Block ${(updated[tariffIdx].blocks.length || 0) + 1}`
-                                        });
-                                        setExtractedData({ ...extractedData, tariffStructures: updated });
-                                      }}
-                                      className="h-7 text-xs"
-                                    >
-                                      <Plus className="h-3 w-3 mr-1" />
-                                      Add Block
-                                    </Button>
-                                  </div>
-                                  {tariff.blocks.map((block: any, blockIdx: number) => (
+                              {/* Energy Blocks Section */}
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <Label className="text-xs font-medium">Energy Blocks</Label>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      const updated = [...extractedData.tariffStructures];
+                                      if (!updated[tariffIdx].blocks) {
+                                        updated[tariffIdx].blocks = [];
+                                      }
+                                      updated[tariffIdx].blocks.push({
+                                        blockNumber: (updated[tariffIdx].blocks?.length || 0) + 1,
+                                        kwhFrom: 0,
+                                        kwhTo: 0,
+                                        energyChargeCents: 0,
+                                        description: `Block ${(updated[tariffIdx].blocks?.length || 0) + 1}`
+                                      });
+                                      setExtractedData({ ...extractedData, tariffStructures: updated });
+                                    }}
+                                    className="h-7 text-xs"
+                                  >
+                                    <Plus className="h-3 w-3 mr-1" />
+                                    Add Block
+                                  </Button>
+                                </div>
+                                {tariff.blocks && tariff.blocks.length > 0 ? (
+                                  tariff.blocks.map((block: any, blockIdx: number) => (
                                     <div key={blockIdx} className="p-2 bg-background rounded border space-y-2">
                                       <div className="grid grid-cols-3 gap-2">
                                         <div>
@@ -988,52 +989,29 @@ export default function MunicipalityExtractionDialog({
                                         Remove Block
                                       </Button>
                                     </div>
-                                  ))}
-                                </div>
-                              )}
-                              
-                              {(!tariff.blocks || tariff.blocks.length === 0) && (
-                                <div className="space-y-2">
-                                  <Label className="text-xs font-medium">Energy Blocks</Label>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => {
-                                      const updated = [...extractedData.tariffStructures];
-                                      if (!updated[tariffIdx].blocks) {
-                                        updated[tariffIdx].blocks = [];
-                                      }
-                                      updated[tariffIdx].blocks.push({
-                                        blockNumber: 1,
-                                        kwhFrom: 0,
-                                        kwhTo: 0,
-                                        energyChargeCents: 0,
-                                        description: "Block 1"
-                                      });
-                                      setExtractedData({ ...extractedData, tariffStructures: updated });
-                                    }}
-                                    className="w-full"
-                                  >
-                                    <Plus className="h-4 w-4 mr-1" />
-                                    Add First Block
-                                  </Button>
-                                </div>
-                              )}
-                              
+                                  ))
+                                ) : (
+                                  <p className="text-xs text-muted-foreground p-2 bg-muted/20 rounded">
+                                    No energy blocks. Click "Add Block" to create one.
+                                  </p>
+                                )}
+                              </div>
+
+                              {/* Fixed Energy Charges Section */}
                               <div className="space-y-2">
                                 <div className="flex items-center justify-between">
-                                  <Label className="text-xs font-medium">Fixed Charges</Label>
+                                  <Label className="text-xs font-medium">Fixed Energy</Label>
                                   <Button
                                     size="sm"
                                     variant="outline"
                                     onClick={() => {
                                       const updated = [...extractedData.tariffStructures];
-                                      if (!updated[tariffIdx].charges) {
-                                        updated[tariffIdx].charges = [];
+                                      if (!updated[tariffIdx].fixedEnergy) {
+                                        updated[tariffIdx].fixedEnergy = [];
                                       }
-                                      updated[tariffIdx].charges.push({
-                                        chargeType: "",
-                                        chargeAmount: 0,
+                                      updated[tariffIdx].fixedEnergy.push({
+                                        chargeType: "Energy Charge",
+                                        amount: 0,
                                         unit: "c/kWh"
                                       });
                                       setExtractedData({ ...extractedData, tariffStructures: updated });
@@ -1044,72 +1022,166 @@ export default function MunicipalityExtractionDialog({
                                     Add Charge
                                   </Button>
                                 </div>
-                                {tariff.charges && tariff.charges.length > 0 && (
-                                  <>
-                                    {tariff.charges.map((charge: any, chargeIdx: number) => (
-                                      <div key={chargeIdx} className="p-2 bg-background rounded border space-y-2">
-                                        <div>
-                                          <Label className="text-xs">Charge Type</Label>
-                                          <Input
-                                            value={charge.chargeType || charge.description || ""}
-                                            onChange={(e) => {
-                                              const updated = [...extractedData.tariffStructures];
-                                              updated[tariffIdx].charges[chargeIdx].chargeType = e.target.value;
-                                              setExtractedData({ ...extractedData, tariffStructures: updated });
-                                            }}
-                                            className="h-8 mt-1"
-                                          />
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-2">
-                                          <div>
-                                            <Label className="text-xs">Amount</Label>
-                                            <Input
-                                              type="number"
-                                              step="0.01"
-                                              value={charge.chargeAmount || 0}
-                                              onChange={(e) => {
-                                                const updated = [...extractedData.tariffStructures];
-                                                updated[tariffIdx].charges[chargeIdx].chargeAmount = parseFloat(e.target.value) || 0;
-                                                setExtractedData({ ...extractedData, tariffStructures: updated });
-                                              }}
-                                              className="h-8"
-                                            />
-                                          </div>
-                                          <div>
-                                            <Label className="text-xs">Unit</Label>
-                                            <Input
-                                              value={charge.unit || ""}
-                                              onChange={(e) => {
-                                                const updated = [...extractedData.tariffStructures];
-                                                updated[tariffIdx].charges[chargeIdx].unit = e.target.value;
-                                                setExtractedData({ ...extractedData, tariffStructures: updated });
-                                              }}
-                                              className="h-8"
-                                            />
-                                          </div>
-                                        </div>
-                                        <Button
-                                          size="sm"
-                                          variant="ghost"
-                                          onClick={() => {
+                                {tariff.fixedEnergy && tariff.fixedEnergy.length > 0 ? (
+                                  tariff.fixedEnergy.map((charge: any, chargeIdx: number) => (
+                                    <div key={chargeIdx} className="p-2 bg-background rounded border space-y-2">
+                                      <div>
+                                        <Label className="text-xs">Charge Type</Label>
+                                        <Input
+                                          value={charge.chargeType || ""}
+                                          onChange={(e) => {
                                             const updated = [...extractedData.tariffStructures];
-                                            updated[tariffIdx].charges.splice(chargeIdx, 1);
+                                            updated[tariffIdx].fixedEnergy[chargeIdx].chargeType = e.target.value;
                                             setExtractedData({ ...extractedData, tariffStructures: updated });
                                           }}
-                                          className="h-6 text-xs text-destructive hover:text-destructive w-full"
-                                        >
-                                          <Trash2 className="h-3 w-3 mr-1" />
-                                          Remove Charge
-                                        </Button>
+                                          className="h-8 mt-1"
+                                        />
                                       </div>
-                                    ))}
-                                  </>
+                                      <div className="grid grid-cols-2 gap-2">
+                                        <div>
+                                          <Label className="text-xs">Amount</Label>
+                                          <Input
+                                            type="number"
+                                            step="0.01"
+                                            value={charge.amount || 0}
+                                            onChange={(e) => {
+                                              const updated = [...extractedData.tariffStructures];
+                                              updated[tariffIdx].fixedEnergy[chargeIdx].amount = parseFloat(e.target.value) || 0;
+                                              setExtractedData({ ...extractedData, tariffStructures: updated });
+                                            }}
+                                            className="h-8"
+                                          />
+                                        </div>
+                                        <div>
+                                          <Label className="text-xs">Unit</Label>
+                                          <Input
+                                            value={charge.unit || ""}
+                                            onChange={(e) => {
+                                              const updated = [...extractedData.tariffStructures];
+                                              updated[tariffIdx].fixedEnergy[chargeIdx].unit = e.target.value;
+                                              setExtractedData({ ...extractedData, tariffStructures: updated });
+                                            }}
+                                            className="h-8"
+                                          />
+                                        </div>
+                                      </div>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => {
+                                          const updated = [...extractedData.tariffStructures];
+                                          updated[tariffIdx].fixedEnergy.splice(chargeIdx, 1);
+                                          setExtractedData({ ...extractedData, tariffStructures: updated });
+                                        }}
+                                        className="h-6 text-xs text-destructive hover:text-destructive w-full"
+                                      >
+                                        <Trash2 className="h-3 w-3 mr-1" />
+                                        Remove Charge
+                                      </Button>
+                                    </div>
+                                  ))
+                                ) : (
+                                  <p className="text-xs text-muted-foreground p-2 bg-muted/20 rounded">
+                                    No fixed energy charges.
+                                  </p>
                                 )}
                               </div>
-                              
+
+                              {/* Seasonal Energy Charges Section */}
                               <div className="space-y-2">
                                 <div className="flex items-center justify-between">
-                                  <Label className="text-xs font-medium">Time-of-Use Periods</Label>
+                                  <Label className="text-xs font-medium">Seasonal Energy</Label>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      const updated = [...extractedData.tariffStructures];
+                                      if (!updated[tariffIdx].seasonalEnergy) {
+                                        updated[tariffIdx].seasonalEnergy = [];
+                                      }
+                                      updated[tariffIdx].seasonalEnergy.push({
+                                        season: "",
+                                        rate: 0,
+                                        unit: "c/kWh"
+                                      });
+                                      setExtractedData({ ...extractedData, tariffStructures: updated });
+                                    }}
+                                    className="h-7 text-xs"
+                                  >
+                                    <Plus className="h-3 w-3 mr-1" />
+                                    Add Seasonal Charge
+                                  </Button>
+                                </div>
+                                {tariff.seasonalEnergy && tariff.seasonalEnergy.length > 0 ? (
+                                  tariff.seasonalEnergy.map((charge: any, chargeIdx: number) => (
+                                    <div key={chargeIdx} className="p-2 bg-background rounded border space-y-2">
+                                      <div>
+                                        <Label className="text-xs">Season</Label>
+                                        <Input
+                                          value={charge.season || ""}
+                                          onChange={(e) => {
+                                            const updated = [...extractedData.tariffStructures];
+                                            updated[tariffIdx].seasonalEnergy[chargeIdx].season = e.target.value;
+                                            setExtractedData({ ...extractedData, tariffStructures: updated });
+                                          }}
+                                          className="h-8 mt-1"
+                                          placeholder="e.g., Summer, Winter"
+                                        />
+                                      </div>
+                                      <div className="grid grid-cols-2 gap-2">
+                                        <div>
+                                          <Label className="text-xs">Rate</Label>
+                                          <Input
+                                            type="number"
+                                            step="0.01"
+                                            value={charge.rate || 0}
+                                            onChange={(e) => {
+                                              const updated = [...extractedData.tariffStructures];
+                                              updated[tariffIdx].seasonalEnergy[chargeIdx].rate = parseFloat(e.target.value) || 0;
+                                              setExtractedData({ ...extractedData, tariffStructures: updated });
+                                            }}
+                                            className="h-8"
+                                          />
+                                        </div>
+                                        <div>
+                                          <Label className="text-xs">Unit</Label>
+                                          <Input
+                                            value={charge.unit || ""}
+                                            onChange={(e) => {
+                                              const updated = [...extractedData.tariffStructures];
+                                              updated[tariffIdx].seasonalEnergy[chargeIdx].unit = e.target.value;
+                                              setExtractedData({ ...extractedData, tariffStructures: updated });
+                                            }}
+                                            className="h-8"
+                                          />
+                                        </div>
+                                      </div>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => {
+                                          const updated = [...extractedData.tariffStructures];
+                                          updated[tariffIdx].seasonalEnergy.splice(chargeIdx, 1);
+                                          setExtractedData({ ...extractedData, tariffStructures: updated });
+                                        }}
+                                        className="h-6 text-xs text-destructive hover:text-destructive w-full"
+                                      >
+                                        <Trash2 className="h-3 w-3 mr-1" />
+                                        Remove Charge
+                                      </Button>
+                                    </div>
+                                  ))
+                                ) : (
+                                  <p className="text-xs text-muted-foreground p-2 bg-muted/20 rounded">
+                                    No seasonal energy charges.
+                                  </p>
+                                )}
+                              </div>
+
+                              {/* Time-of-Use Energy Section */}
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <Label className="text-xs font-medium">Time-of-Use Energy</Label>
                                   <Button
                                     size="sm"
                                     variant="outline"
@@ -1132,81 +1204,215 @@ export default function MunicipalityExtractionDialog({
                                     Add TOU Period
                                   </Button>
                                 </div>
-                                {tariff.touPeriods && tariff.touPeriods.length > 0 && (
-                                  <>
-                                    {tariff.touPeriods.map((period: any, periodIdx: number) => (
-                                      <div key={periodIdx} className="p-2 bg-background rounded border space-y-2">
-                                        <div>
-                                          <Label className="text-xs">Period Name</Label>
-                                          <Input
-                                            value={period.periodName || ""}
-                                            onChange={(e) => {
-                                              const updated = [...extractedData.tariffStructures];
-                                              updated[tariffIdx].touPeriods[periodIdx].periodName = e.target.value;
-                                              setExtractedData({ ...extractedData, tariffStructures: updated });
-                                            }}
-                                            className="h-8 mt-1"
-                                            placeholder="e.g., Peak, Off-Peak"
-                                          />
-                                        </div>
-                                        <div className="grid grid-cols-3 gap-2">
-                                          <div>
-                                            <Label className="text-xs">Rate (c/kWh)</Label>
-                                            <Input
-                                              type="number"
-                                              step="0.01"
-                                              value={period.rate || 0}
-                                              onChange={(e) => {
-                                                const updated = [...extractedData.tariffStructures];
-                                                updated[tariffIdx].touPeriods[periodIdx].rate = parseFloat(e.target.value) || 0;
-                                                setExtractedData({ ...extractedData, tariffStructures: updated });
-                                              }}
-                                              className="h-8"
-                                            />
-                                          </div>
-                                          <div>
-                                            <Label className="text-xs">Start Time</Label>
-                                            <Input
-                                              type="time"
-                                              value={period.timeStart || ""}
-                                              onChange={(e) => {
-                                                const updated = [...extractedData.tariffStructures];
-                                                updated[tariffIdx].touPeriods[periodIdx].timeStart = e.target.value;
-                                                setExtractedData({ ...extractedData, tariffStructures: updated });
-                                              }}
-                                              className="h-8"
-                                            />
-                                          </div>
-                                          <div>
-                                            <Label className="text-xs">End Time</Label>
-                                            <Input
-                                              type="time"
-                                              value={period.timeEnd || ""}
-                                              onChange={(e) => {
-                                                const updated = [...extractedData.tariffStructures];
-                                                updated[tariffIdx].touPeriods[periodIdx].timeEnd = e.target.value;
-                                                setExtractedData({ ...extractedData, tariffStructures: updated });
-                                              }}
-                                              className="h-8"
-                                            />
-                                          </div>
-                                        </div>
-                                        <Button
-                                          size="sm"
-                                          variant="ghost"
-                                          onClick={() => {
+                                {tariff.touPeriods && tariff.touPeriods.length > 0 ? (
+                                  tariff.touPeriods.map((period: any, periodIdx: number) => (
+                                    <div key={periodIdx} className="p-2 bg-background rounded border space-y-2">
+                                      <div>
+                                        <Label className="text-xs">Period Name</Label>
+                                        <Input
+                                          value={period.periodName || ""}
+                                          onChange={(e) => {
                                             const updated = [...extractedData.tariffStructures];
-                                            updated[tariffIdx].touPeriods.splice(periodIdx, 1);
+                                            updated[tariffIdx].touPeriods[periodIdx].periodName = e.target.value;
                                             setExtractedData({ ...extractedData, tariffStructures: updated });
                                           }}
-                                          className="h-6 text-xs text-destructive hover:text-destructive w-full"
-                                        >
-                                          <Trash2 className="h-3 w-3 mr-1" />
-                                          Remove TOU Period
-                                        </Button>
+                                          className="h-8 mt-1"
+                                          placeholder="e.g., Peak, Off-Peak"
+                                        />
                                       </div>
-                                    ))}
-                                  </>
+                                      <div className="grid grid-cols-3 gap-2">
+                                        <div>
+                                          <Label className="text-xs">Rate (c/kWh)</Label>
+                                          <Input
+                                            type="number"
+                                            step="0.01"
+                                            value={period.rate || 0}
+                                            onChange={(e) => {
+                                              const updated = [...extractedData.tariffStructures];
+                                              updated[tariffIdx].touPeriods[periodIdx].rate = parseFloat(e.target.value) || 0;
+                                              setExtractedData({ ...extractedData, tariffStructures: updated });
+                                            }}
+                                            className="h-8"
+                                          />
+                                        </div>
+                                        <div>
+                                          <Label className="text-xs">Start Time</Label>
+                                          <Input
+                                            type="time"
+                                            value={period.timeStart || ""}
+                                            onChange={(e) => {
+                                              const updated = [...extractedData.tariffStructures];
+                                              updated[tariffIdx].touPeriods[periodIdx].timeStart = e.target.value;
+                                              setExtractedData({ ...extractedData, tariffStructures: updated });
+                                            }}
+                                            className="h-8"
+                                          />
+                                        </div>
+                                        <div>
+                                          <Label className="text-xs">End Time</Label>
+                                          <Input
+                                            type="time"
+                                            value={period.timeEnd || ""}
+                                            onChange={(e) => {
+                                              const updated = [...extractedData.tariffStructures];
+                                              updated[tariffIdx].touPeriods[periodIdx].timeEnd = e.target.value;
+                                              setExtractedData({ ...extractedData, tariffStructures: updated });
+                                            }}
+                                            className="h-8"
+                                          />
+                                        </div>
+                                      </div>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => {
+                                          const updated = [...extractedData.tariffStructures];
+                                          updated[tariffIdx].touPeriods.splice(periodIdx, 1);
+                                          setExtractedData({ ...extractedData, tariffStructures: updated });
+                                        }}
+                                        className="h-6 text-xs text-destructive hover:text-destructive w-full"
+                                      >
+                                        <Trash2 className="h-3 w-3 mr-1" />
+                                        Remove TOU Period
+                                      </Button>
+                                    </div>
+                                  ))
+                                ) : (
+                                  <p className="text-xs text-muted-foreground p-2 bg-muted/20 rounded">
+                                    No time-of-use periods.
+                                  </p>
+                                )}
+                              </div>
+
+                              {/* Basic Charge Section */}
+                              <div className="space-y-2">
+                                <Label className="text-xs font-medium">Basic Charge (Fixed Monthly)</Label>
+                                <div className="p-2 bg-background rounded border space-y-2">
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <div>
+                                      <Label className="text-xs">Amount</Label>
+                                      <Input
+                                        type="number"
+                                        step="0.01"
+                                        value={tariff.basicCharge?.amount || 0}
+                                        onChange={(e) => {
+                                          const updated = [...extractedData.tariffStructures];
+                                          if (!updated[tariffIdx].basicCharge) {
+                                            updated[tariffIdx].basicCharge = { amount: 0, unit: "R/month" };
+                                          }
+                                          updated[tariffIdx].basicCharge.amount = parseFloat(e.target.value) || 0;
+                                          setExtractedData({ ...extractedData, tariffStructures: updated });
+                                        }}
+                                        className="h-8"
+                                      />
+                                    </div>
+                                    <div>
+                                      <Label className="text-xs">Unit</Label>
+                                      <Input
+                                        value={tariff.basicCharge?.unit || "R/month"}
+                                        onChange={(e) => {
+                                          const updated = [...extractedData.tariffStructures];
+                                          if (!updated[tariffIdx].basicCharge) {
+                                            updated[tariffIdx].basicCharge = { amount: 0, unit: "R/month" };
+                                          }
+                                          updated[tariffIdx].basicCharge.unit = e.target.value;
+                                          setExtractedData({ ...extractedData, tariffStructures: updated });
+                                        }}
+                                        className="h-8"
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Demand Charges Section */}
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <Label className="text-xs font-medium">Demand Charges (Seasonal)</Label>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      const updated = [...extractedData.tariffStructures];
+                                      if (!updated[tariffIdx].demandCharges) {
+                                        updated[tariffIdx].demandCharges = [];
+                                      }
+                                      updated[tariffIdx].demandCharges.push({
+                                        season: "",
+                                        rate: 0,
+                                        unit: "R/kVA"
+                                      });
+                                      setExtractedData({ ...extractedData, tariffStructures: updated });
+                                    }}
+                                    className="h-7 text-xs"
+                                  >
+                                    <Plus className="h-3 w-3 mr-1" />
+                                    Add Demand Charge
+                                  </Button>
+                                </div>
+                                {tariff.demandCharges && tariff.demandCharges.length > 0 ? (
+                                  tariff.demandCharges.map((charge: any, chargeIdx: number) => (
+                                    <div key={chargeIdx} className="p-2 bg-background rounded border space-y-2">
+                                      <div>
+                                        <Label className="text-xs">Season</Label>
+                                        <Input
+                                          value={charge.season || ""}
+                                          onChange={(e) => {
+                                            const updated = [...extractedData.tariffStructures];
+                                            updated[tariffIdx].demandCharges[chargeIdx].season = e.target.value;
+                                            setExtractedData({ ...extractedData, tariffStructures: updated });
+                                          }}
+                                          className="h-8 mt-1"
+                                          placeholder="e.g., Summer, Winter"
+                                        />
+                                      </div>
+                                      <div className="grid grid-cols-2 gap-2">
+                                        <div>
+                                          <Label className="text-xs">Rate</Label>
+                                          <Input
+                                            type="number"
+                                            step="0.01"
+                                            value={charge.rate || 0}
+                                            onChange={(e) => {
+                                              const updated = [...extractedData.tariffStructures];
+                                              updated[tariffIdx].demandCharges[chargeIdx].rate = parseFloat(e.target.value) || 0;
+                                              setExtractedData({ ...extractedData, tariffStructures: updated });
+                                            }}
+                                            className="h-8"
+                                          />
+                                        </div>
+                                        <div>
+                                          <Label className="text-xs">Unit</Label>
+                                          <Input
+                                            value={charge.unit || ""}
+                                            onChange={(e) => {
+                                              const updated = [...extractedData.tariffStructures];
+                                              updated[tariffIdx].demandCharges[chargeIdx].unit = e.target.value;
+                                              setExtractedData({ ...extractedData, tariffStructures: updated });
+                                            }}
+                                            className="h-8"
+                                          />
+                                        </div>
+                                      </div>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => {
+                                          const updated = [...extractedData.tariffStructures];
+                                          updated[tariffIdx].demandCharges.splice(chargeIdx, 1);
+                                          setExtractedData({ ...extractedData, tariffStructures: updated });
+                                        }}
+                                        className="h-6 text-xs text-destructive hover:text-destructive w-full"
+                                      >
+                                        <Trash2 className="h-3 w-3 mr-1" />
+                                        Remove Charge
+                                      </Button>
+                                    </div>
+                                  ))
+                                ) : (
+                                  <p className="text-xs text-muted-foreground p-2 bg-muted/20 rounded">
+                                    No demand charges.
+                                  </p>
                                 )}
                               </div>
                             </div>
