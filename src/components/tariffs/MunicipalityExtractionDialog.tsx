@@ -748,6 +748,7 @@ export default function MunicipalityExtractionDialog({
                     size="sm"
                     onClick={() => {
                       if (fabricCanvas && selectionRectRef.current) {
+                        setExtractedData(null);
                         handleExtractFromRegion(fabricCanvas, selectionRectRef.current);
                       }
                     }}
