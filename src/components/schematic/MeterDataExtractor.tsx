@@ -22,6 +22,11 @@ interface ExtractedMeterData {
   tariff?: string;
   status?: 'pending' | 'approved' | 'rejected';
   position?: { x: number; y: number };
+  phase?: string;
+  mccb_size?: number;
+  ct_ratio?: string;
+  supply_level?: string;
+  supply_description?: string;
 }
 
 interface MeterDataExtractorProps {
@@ -128,6 +133,11 @@ export const MeterDataExtractor = ({
         meter_type: meter.meter_type,
         location: meter.location,
         tariff: meter.tariff,
+        phase: meter.phase,
+        mccb_size: meter.mccb_size,
+        ct_ratio: meter.ct_ratio,
+        supply_level: meter.supply_level,
+        supply_description: meter.supply_description,
       }));
 
       const { data: insertedMeters, error: meterError } = await supabase
@@ -292,6 +302,45 @@ export const MeterDataExtractor = ({
                   </SelectContent>
                 </Select>
               </div>
+              <div>
+                <Label>Phase</Label>
+                <Select
+                  value={editedMeter?.phase || ""}
+                  onValueChange={(value) => setEditedMeter(prev => prev ? { ...prev, phase: value } : null)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select phase" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">Single Phase</SelectItem>
+                    <SelectItem value="3">Three Phase</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>MCCB Size (A)</Label>
+                <Input
+                  type="number"
+                  value={editedMeter?.mccb_size || ""}
+                  onChange={(e) => setEditedMeter(prev => prev ? { ...prev, mccb_size: e.target.value ? parseInt(e.target.value) : undefined } : null)}
+                />
+              </div>
+              <div>
+                <Label>CT Ratio</Label>
+                <Input
+                  value={editedMeter?.ct_ratio || ""}
+                  onChange={(e) => setEditedMeter(prev => prev ? { ...prev, ct_ratio: e.target.value } : null)}
+                  placeholder="e.g., 200/5 or DOL"
+                />
+              </div>
+              <div>
+                <Label>Supply Level</Label>
+                <Input
+                  value={editedMeter?.supply_level || ""}
+                  onChange={(e) => setEditedMeter(prev => prev ? { ...prev, supply_level: e.target.value } : null)}
+                  placeholder="e.g., MDB-1"
+                />
+              </div>
               <div className="col-span-2 flex gap-2">
                 <Button onClick={handleSaveEdit} size="sm" className="gap-2">
                   <Check className="h-4 w-4" />
@@ -314,6 +363,18 @@ export const MeterDataExtractor = ({
               <div className="col-span-2"><span className="font-medium">Cable:</span> {extractedMeters[selectedMeterIndex].cable_specification}</div>
               <div><span className="font-medium">Serial:</span> {extractedMeters[selectedMeterIndex].serial_number}</div>
               <div><span className="font-medium">CT:</span> {extractedMeters[selectedMeterIndex].ct_type}</div>
+              {extractedMeters[selectedMeterIndex].phase && (
+                <div><span className="font-medium">Phase:</span> {extractedMeters[selectedMeterIndex].phase}Φ</div>
+              )}
+              {extractedMeters[selectedMeterIndex].mccb_size && (
+                <div><span className="font-medium">MCCB:</span> {extractedMeters[selectedMeterIndex].mccb_size}A</div>
+              )}
+              {extractedMeters[selectedMeterIndex].ct_ratio && (
+                <div><span className="font-medium">CT Ratio:</span> {extractedMeters[selectedMeterIndex].ct_ratio}</div>
+              )}
+              {extractedMeters[selectedMeterIndex].supply_level && (
+                <div><span className="font-medium">Supply Level:</span> {extractedMeters[selectedMeterIndex].supply_level}</div>
+              )}
             </div>
           )}
         </CardContent>

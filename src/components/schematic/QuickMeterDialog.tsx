@@ -43,6 +43,11 @@ export const QuickMeterDialog = ({
     cable_specification: "",
     serial_number: "",
     ct_type: "",
+    phase: "",
+    mccb_size: "",
+    ct_ratio: "",
+    supply_level: "",
+    supply_description: "",
   });
 
   useEffect(() => {
@@ -140,6 +145,11 @@ export const QuickMeterDialog = ({
           cable_specification: newMeter.cable_specification || null,
           serial_number: newMeter.serial_number || null,
           ct_type: newMeter.ct_type || null,
+          phase: newMeter.phase || null,
+          mccb_size: newMeter.mccb_size ? parseInt(newMeter.mccb_size) : null,
+          ct_ratio: newMeter.ct_ratio || null,
+          supply_level: newMeter.supply_level || null,
+          supply_description: newMeter.supply_description || null,
         })
         .select()
         .single();
@@ -181,6 +191,11 @@ export const QuickMeterDialog = ({
       cable_specification: "",
       serial_number: "",
       ct_type: "",
+      phase: "",
+      mccb_size: "",
+      ct_ratio: "",
+      supply_level: "",
+      supply_description: "",
     });
     setActiveTab("existing");
     onClose();
@@ -332,6 +347,61 @@ export const QuickMeterDialog = ({
                       placeholder="e.g., 150/5A"
                     />
                   </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Phase</Label>
+                    <Select
+                      value={newMeter.phase}
+                      onValueChange={(value) => setNewMeter({ ...newMeter, phase: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select phase" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1">Single Phase (1)</SelectItem>
+                        <SelectItem value="3">Three Phase (3)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>MCCB Size (A)</Label>
+                    <Input
+                      type="number"
+                      value={newMeter.mccb_size}
+                      onChange={(e) => setNewMeter({ ...newMeter, mccb_size: e.target.value })}
+                      placeholder="e.g., 200"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>CT Ratio</Label>
+                    <Input
+                      value={newMeter.ct_ratio}
+                      onChange={(e) => setNewMeter({ ...newMeter, ct_ratio: e.target.value })}
+                      placeholder="e.g., 200/5 or DOL"
+                    />
+                  </div>
+                  <div>
+                    <Label>Supply Level</Label>
+                    <Input
+                      value={newMeter.supply_level}
+                      onChange={(e) => setNewMeter({ ...newMeter, supply_level: e.target.value })}
+                      placeholder="e.g., MDB-1"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <Label>Supply Description</Label>
+                  <Input
+                    value={newMeter.supply_description}
+                    onChange={(e) => setNewMeter({ ...newMeter, supply_description: e.target.value })}
+                    placeholder="Additional description"
+                  />
                 </div>
 
                 <Button

@@ -359,16 +359,21 @@ export type Database = {
           area: number | null
           cable_specification: string | null
           created_at: string | null
+          ct_ratio: string | null
           ct_type: string | null
           id: string
           is_revenue_critical: boolean | null
           location: string | null
+          mccb_size: number | null
           meter_number: string
           meter_type: string
           name: string | null
+          phase: string | null
           rating: string | null
           serial_number: string | null
           site_id: string
+          supply_description: string | null
+          supply_level: string | null
           tariff: string | null
           updated_at: string | null
         }
@@ -376,16 +381,21 @@ export type Database = {
           area?: number | null
           cable_specification?: string | null
           created_at?: string | null
+          ct_ratio?: string | null
           ct_type?: string | null
           id?: string
           is_revenue_critical?: boolean | null
           location?: string | null
+          mccb_size?: number | null
           meter_number: string
           meter_type: string
           name?: string | null
+          phase?: string | null
           rating?: string | null
           serial_number?: string | null
           site_id: string
+          supply_description?: string | null
+          supply_level?: string | null
           tariff?: string | null
           updated_at?: string | null
         }
@@ -393,16 +403,21 @@ export type Database = {
           area?: number | null
           cable_specification?: string | null
           created_at?: string | null
+          ct_ratio?: string | null
           ct_type?: string | null
           id?: string
           is_revenue_critical?: boolean | null
           location?: string | null
+          mccb_size?: number | null
           meter_number?: string
           meter_type?: string
           name?: string | null
+          phase?: string | null
           rating?: string | null
           serial_number?: string | null
           site_id?: string
+          supply_description?: string | null
+          supply_level?: string | null
           tariff?: string | null
           updated_at?: string | null
         }

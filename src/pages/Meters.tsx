@@ -23,6 +23,11 @@ interface Meter {
   created_at: string;
   sites: { name: string; clients: { name: string } | null } | null;
   has_readings?: boolean;
+  phase: string | null;
+  mccb_size: number | null;
+  ct_ratio: string | null;
+  supply_level: string | null;
+  supply_description: string | null;
 }
 
 interface Site {
@@ -92,6 +97,11 @@ export default function Meters() {
       location: formData.get("location") as string,
       tariff: formData.get("tariff") as string,
       is_revenue_critical: isRevenueCritical,
+      phase: formData.get("phase") as string | null,
+      mccb_size: formData.get("mccb_size") ? parseInt(formData.get("mccb_size") as string) : null,
+      ct_ratio: formData.get("ct_ratio") as string | null,
+      supply_level: formData.get("supply_level") as string | null,
+      supply_description: formData.get("supply_description") as string | null,
     });
 
     setIsLoading(false);
@@ -198,6 +208,42 @@ export default function Meters() {
                   <Label htmlFor="tariff">Tariff</Label>
                   <Input id="tariff" name="tariff" placeholder="Business Standard" />
                 </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="phase">Phase</Label>
+                    <Select name="phase">
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select phase" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1">Single Phase (1)</SelectItem>
+                        <SelectItem value="3">Three Phase (3)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="mccb_size">MCCB Size (A)</Label>
+                    <Input id="mccb_size" name="mccb_size" type="number" placeholder="e.g., 200" />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="ct_ratio">CT Ratio</Label>
+                    <Input id="ct_ratio" name="ct_ratio" placeholder="e.g., 200/5 or DOL" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="supply_level">Supply Level</Label>
+                    <Input id="supply_level" name="supply_level" placeholder="e.g., MDB-1, KIOSK-1" />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="supply_description">Supply Description</Label>
+                  <Input id="supply_description" name="supply_description" placeholder="Additional description" />
+                </div>
+
                 <div className="flex items-center space-x-2">
                   <Checkbox 
                     id="revenue_critical" 
@@ -245,7 +291,9 @@ export default function Meters() {
                     <TableHead>Type</TableHead>
                     <TableHead>Site</TableHead>
                     <TableHead>Location</TableHead>
-                    <TableHead>Tariff</TableHead>
+                    <TableHead>Phase</TableHead>
+                    <TableHead>MCCB</TableHead>
+                    <TableHead>CT Ratio</TableHead>
                     <TableHead>Status</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -269,7 +317,13 @@ export default function Meters() {
                         </div>
                       </TableCell>
                       <TableCell>{meter.location || "—"}</TableCell>
-                      <TableCell>{meter.tariff || "—"}</TableCell>
+                      <TableCell>
+                        {meter.phase ? `${meter.phase}Φ` : "—"}
+                      </TableCell>
+                      <TableCell>
+                        {meter.mccb_size ? `${meter.mccb_size}A` : "—"}
+                      </TableCell>
+                      <TableCell>{meter.ct_ratio || "—"}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           {meter.is_revenue_critical && (
