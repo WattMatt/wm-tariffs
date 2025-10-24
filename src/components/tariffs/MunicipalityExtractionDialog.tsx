@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, Plus, ZoomIn, ZoomOut, RotateCcw, Trash2, RotateCw, Eye, Sparkles, GripVertical, ChevronDown, ChevronUp, ChevronLeft, ChevronRight } from "lucide-react";
 import { pdfjs } from 'react-pdf';
 import { toast } from "sonner";
@@ -61,6 +62,7 @@ export default function MunicipalityExtractionDialog({
   const [isAcceptedPanelCollapsed, setIsAcceptedPanelCollapsed] = useState(false);
   const [draggedTariffIndex, setDraggedTariffIndex] = useState<number | null>(null);
   const [collapsedTariffs, setCollapsedTariffs] = useState<Set<number>>(new Set());
+  const [visibleSections, setVisibleSections] = useState<{ [tariffIdx: number]: { blocks: boolean; seasonalEnergy: boolean; touEnergy: boolean; basicCharge: boolean; demandCharges: boolean } }>({});
 
   // Convert PDF to individual page images
   const convertPdfToImages = async (pdfFile: File): Promise<string[]> => {
@@ -1332,6 +1334,89 @@ export default function MunicipalityExtractionDialog({
                                       />
                                     </div>
                                   </div>
+                                  
+                                  {/* Section Visibility Checkboxes */}
+                                  <div className="space-y-2 p-3 border rounded-lg bg-muted/10 mt-3">
+                                    <Label className="text-xs font-medium">Select Charge Types to Display</Label>
+                                    <div className="grid grid-cols-2 gap-2">
+                                      <div className="flex items-center space-x-2">
+                                        <Checkbox
+                                          id={`show-blocks-${tariffIdx}`}
+                                          checked={visibleSections[tariffIdx]?.blocks ?? true}
+                                          onCheckedChange={(checked) => 
+                                            setVisibleSections(prev => ({
+                                              ...prev,
+                                              [tariffIdx]: { ...prev[tariffIdx], blocks: checked === true }
+                                            }))
+                                          }
+                                        />
+                                        <Label htmlFor={`show-blocks-${tariffIdx}`} className="text-xs font-normal cursor-pointer">
+                                          Energy Blocks
+                                        </Label>
+                                      </div>
+                                      <div className="flex items-center space-x-2">
+                                        <Checkbox
+                                          id={`show-seasonal-${tariffIdx}`}
+                                          checked={visibleSections[tariffIdx]?.seasonalEnergy ?? true}
+                                          onCheckedChange={(checked) => 
+                                            setVisibleSections(prev => ({
+                                              ...prev,
+                                              [tariffIdx]: { ...prev[tariffIdx], seasonalEnergy: checked === true }
+                                            }))
+                                          }
+                                        />
+                                        <Label htmlFor={`show-seasonal-${tariffIdx}`} className="text-xs font-normal cursor-pointer">
+                                          Seasonal Energy
+                                        </Label>
+                                      </div>
+                                      <div className="flex items-center space-x-2">
+                                        <Checkbox
+                                          id={`show-tou-${tariffIdx}`}
+                                          checked={visibleSections[tariffIdx]?.touEnergy ?? true}
+                                          onCheckedChange={(checked) => 
+                                            setVisibleSections(prev => ({
+                                              ...prev,
+                                              [tariffIdx]: { ...prev[tariffIdx], touEnergy: checked === true }
+                                            }))
+                                          }
+                                        />
+                                        <Label htmlFor={`show-tou-${tariffIdx}`} className="text-xs font-normal cursor-pointer">
+                                          Time-of-Use Energy
+                                        </Label>
+                                      </div>
+                                      <div className="flex items-center space-x-2">
+                                        <Checkbox
+                                          id={`show-basic-${tariffIdx}`}
+                                          checked={visibleSections[tariffIdx]?.basicCharge ?? true}
+                                          onCheckedChange={(checked) => 
+                                            setVisibleSections(prev => ({
+                                              ...prev,
+                                              [tariffIdx]: { ...prev[tariffIdx], basicCharge: checked === true }
+                                            }))
+                                          }
+                                        />
+                                        <Label htmlFor={`show-basic-${tariffIdx}`} className="text-xs font-normal cursor-pointer">
+                                          Basic Charge (Fixed Monthly)
+                                        </Label>
+                                      </div>
+                                      <div className="flex items-center space-x-2">
+                                        <Checkbox
+                                          id={`show-demand-${tariffIdx}`}
+                                          checked={visibleSections[tariffIdx]?.demandCharges ?? true}
+                                          onCheckedChange={(checked) => 
+                                            setVisibleSections(prev => ({
+                                              ...prev,
+                                              [tariffIdx]: { ...prev[tariffIdx], demandCharges: checked === true }
+                                            }))
+                                          }
+                                        />
+                                        <Label htmlFor={`show-demand-${tariffIdx}`} className="text-xs font-normal cursor-pointer">
+                                          Demand Charges (Seasonal)
+                                        </Label>
+                                      </div>
+                                    </div>
+                                  </div>
+
                                   <CollapsibleTrigger asChild>
                                     <Button
                                       size="sm"
@@ -1364,6 +1449,7 @@ export default function MunicipalityExtractionDialog({
                                 <div className="space-y-3 mt-3">
                               
                               {/* Energy Blocks Section */}
+                              {visibleSections[tariffIdx]?.blocks !== false && (
                               <div className="space-y-2">
                                 <div className="flex items-center justify-between">
                                   <Label className="text-xs font-medium">Energy Blocks</Label>
@@ -1456,8 +1542,10 @@ export default function MunicipalityExtractionDialog({
                                   </p>
                                 )}
                               </div>
+                              )}
 
                               {/* Seasonal Energy Charges Section */}
+                              {visibleSections[tariffIdx]?.seasonalEnergy !== false && (
                               <div className="space-y-2">
                                 <div className="flex items-center justify-between">
                                   <Label className="text-xs font-medium">Seasonal Energy</Label>
@@ -1553,8 +1641,10 @@ export default function MunicipalityExtractionDialog({
                                   </p>
                                 )}
                               </div>
+                              )}
 
                               {/* Time-of-Use Energy Section */}
+                              {visibleSections[tariffIdx]?.touEnergy !== false && (
                               <div className="space-y-2">
                                 <div className="flex items-center justify-between">
                                   <Label className="text-xs font-medium">Time-of-Use Energy</Label>
@@ -1667,8 +1757,10 @@ export default function MunicipalityExtractionDialog({
                                   </p>
                                 )}
                               </div>
+                              )}
 
                               {/* Basic Charge Section */}
+                              {visibleSections[tariffIdx]?.basicCharge !== false && (
                               <div className="space-y-2">
                                 <div className="flex items-center justify-between">
                                   <Label className="text-xs font-medium">Basic Charge (Fixed Monthly)</Label>
@@ -1744,8 +1836,10 @@ export default function MunicipalityExtractionDialog({
                                   </p>
                                 )}
                               </div>
+                              )}
 
                               {/* Demand Charges Section */}
+                              {visibleSections[tariffIdx]?.demandCharges !== false && (
                               <div className="space-y-2">
                                 <div className="flex items-center justify-between">
                                   <Label className="text-xs font-medium">Demand Charges (Seasonal)</Label>
@@ -1841,6 +1935,7 @@ export default function MunicipalityExtractionDialog({
                                   </p>
                                 )}
                               </div>
+                              )}
                                 </div>
                               </CollapsibleContent>
                               </div>
