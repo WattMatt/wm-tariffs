@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { pdfjs } from 'react-pdf';
 import { toast } from "sonner";
 import { Canvas as FabricCanvas, Rect as FabricRect } from "fabric";
@@ -611,9 +611,9 @@ export default function TariffExtractionDialog({
                                     className="h-8 w-8 p-0"
                                   >
                                     {expandedTariffs[tariffIdx] !== false ? (
-                                      <ChevronUp className="h-4 w-4" />
-                                    ) : (
                                       <ChevronDown className="h-4 w-4" />
+                                    ) : (
+                                      <ChevronRight className="h-4 w-4" />
                                     )}
                                   </Button>
                                 </CollapsibleTrigger>
@@ -631,8 +631,8 @@ export default function TariffExtractionDialog({
                             </CardHeader>
                             <CollapsibleContent>
                               <CardContent className="space-y-4">
-                            {/* Metadata Fields */}
-                            <div className="grid grid-cols-2 gap-3 p-3 bg-muted/30 rounded-lg">
+                                {/* Metadata Fields */}
+                                <div className="grid grid-cols-2 gap-3 p-3 bg-muted/30 rounded-lg">
                               <div>
                                 <Label className="text-xs">Tariff Type</Label>
                                 <Select
