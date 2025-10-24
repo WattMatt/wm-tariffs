@@ -1,13 +1,9 @@
 import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, FileImage } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import TariffStructureForm from "./TariffStructureForm";
 
 interface TariffDetailsDialogProps {
   tariffId: string;
@@ -15,313 +11,156 @@ interface TariffDetailsDialogProps {
   onClose: () => void;
 }
 
-interface TariffBlock {
-  id: string;
-  block_number: number;
-  kwh_from: number;
-  kwh_to: number | null;
-  energy_charge_cents: number;
-}
-
-interface TariffCharge {
-  id: string;
-  charge_type: string;
-  charge_amount: number;
+interface TariffData {
+  tariffName: string;
+  tariffType: string;
+  meterConfiguration: string;
   description: string;
-  unit: string;
-}
-
-interface TouPeriod {
-  id: string;
-  period_type: string;
-  season: string;
-  day_type: string;
-  start_hour: number;
-  end_hour: number;
-  energy_charge_cents: number;
+  effectiveFrom: string;
+  blocks: any[];
+  seasonalEnergy: any[];
+  touSeasons: any[];
+  basicCharge?: any;
+  demandCharges: any[];
 }
 
 export default function TariffDetailsDialog({ tariffId, tariffName, onClose }: TariffDetailsDialogProps) {
-  const [blocks, setBlocks] = useState<TariffBlock[]>([]);
-  const [charges, setCharges] = useState<TariffCharge[]>([]);
-  const [touPeriods, setTouPeriods] = useState<TouPeriod[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [sourceImageUrl, setSourceImageUrl] = useState<string | null>(null);
-  const [hasSourceDocument, setHasSourceDocument] = useState(false);
+  const [tariffData, setTariffData] = useState<TariffData | null>(null);
 
   useEffect(() => {
-    fetchTariffDetails();
+    fetchTariffData();
   }, [tariffId]);
 
-  const fetchTariffDetails = async () => {
+  const fetchTariffData = async () => {
     setIsLoading(true);
 
-    // First, get the tariff structure to find source document
-    const { data: tariffData } = await supabase
-      .from("tariff_structures")
-      .select("source_document_id, site_documents(file_path, converted_image_path)")
-      .eq("id", tariffId)
-      .single();
+    try {
+      // Fetch tariff structure
+      const { data: tariff, error: tariffError } = await supabase
+        .from("tariff_structures")
+        .select("*")
+        .eq("id", tariffId)
+        .single();
 
-    if (tariffData?.source_document_id && tariffData.site_documents) {
-      setHasSourceDocument(true);
-      const doc = tariffData.site_documents as any;
-      const imagePath = doc.converted_image_path || doc.file_path;
-      
-      if (imagePath) {
-        const { data: urlData } = await supabase.storage
-          .from("site_documents")
-          .createSignedUrl(imagePath, 3600);
-        
-        if (urlData?.signedUrl) {
-          setSourceImageUrl(urlData.signedUrl);
-        }
-      }
-    }
+      if (tariffError) throw tariffError;
 
-    const [blocksResult, chargesResult, touResult] = await Promise.all([
-      supabase
+      // Fetch blocks
+      const { data: blocks } = await supabase
         .from("tariff_blocks")
         .select("*")
         .eq("tariff_structure_id", tariffId)
-        .order("block_number", { ascending: true }),
-      supabase
+        .order("block_number", { ascending: true });
+
+      // Fetch charges
+      const { data: charges } = await supabase
         .from("tariff_charges")
         .select("*")
-        .eq("tariff_structure_id", tariffId),
-      supabase
+        .eq("tariff_structure_id", tariffId);
+
+      // Fetch TOU periods
+      const { data: touPeriods } = await supabase
         .from("tariff_time_periods")
         .select("*")
         .eq("tariff_structure_id", tariffId)
-        .order("season", { ascending: true })
-        .order("period_type", { ascending: true }),
-    ]);
+        .order("season", { ascending: true });
 
-    if (blocksResult.error) toast.error("Failed to fetch blocks");
-    if (chargesResult.error) toast.error("Failed to fetch charges");
-    if (touResult.error) toast.error("Failed to fetch TOU periods");
+      // Transform data to match form structure
+      const formData: TariffData = {
+        tariffName: tariff.name,
+        tariffType: tariff.tariff_type,
+        meterConfiguration: tariff.meter_configuration || "prepaid",
+        description: tariff.description || "",
+        effectiveFrom: tariff.effective_from,
+        blocks: (blocks || []).map(block => ({
+          blockNumber: block.block_number,
+          kwhFrom: block.kwh_from,
+          kwhTo: block.kwh_to,
+          energyChargeCents: block.energy_charge_cents
+        })),
+        seasonalEnergy: (charges || [])
+          .filter(c => c.charge_type.includes('energy'))
+          .map(c => ({
+            season: c.description.replace(' Energy Charge', ''),
+            rate: c.charge_amount,
+            unit: c.unit
+          })),
+        touSeasons: groupTouPeriods(touPeriods || []),
+        basicCharge: (charges || []).find(c => c.charge_type === 'basic_monthly' || c.charge_type === 'basic_charge')
+          ? {
+              amount: charges.find(c => c.charge_type === 'basic_monthly' || c.charge_type === 'basic_charge')!.charge_amount,
+              unit: charges.find(c => c.charge_type === 'basic_monthly' || c.charge_type === 'basic_charge')!.unit
+            }
+          : undefined,
+        demandCharges: (charges || [])
+          .filter(c => c.charge_type.includes('demand'))
+          .map(c => ({
+            season: c.description.replace(' Demand Charge', ''),
+            rate: c.charge_amount,
+            unit: c.unit
+          }))
+      };
 
-    setBlocks(blocksResult.data || []);
-    setCharges(chargesResult.data || []);
-    setTouPeriods(touResult.data || []);
-    setIsLoading(false);
-  };
-
-  const formatCharge = (amount: number, unit: string) => {
-    // Check if unit contains "c/" (cents) - display as cents
-    if (unit.toLowerCase().includes('c/')) {
-      return `${amount.toFixed(2)}c`;
+      setTariffData(formData);
+    } catch (error: any) {
+      toast.error(`Failed to load tariff: ${error.message}`);
+      onClose();
+    } finally {
+      setIsLoading(false);
     }
-    // Otherwise it's Rands - display as Rands
-    return `R${amount.toFixed(2)}`;
   };
 
-  const formatCents = (cents: number) => {
-    return `${cents.toFixed(2)}c`;
+  const groupTouPeriods = (periods: any[]) => {
+    const grouped = new Map<string, any>();
+
+    periods.forEach(period => {
+      const key = period.season;
+      if (!grouped.has(key)) {
+        grouped.set(key, {
+          season: period.season,
+          peak: 0,
+          standard: 0,
+          offPeak: 0
+        });
+      }
+
+      const seasonData = grouped.get(key);
+      if (period.period_type === "peak") {
+        seasonData.peak = period.energy_charge_cents;
+      } else if (period.period_type === "standard") {
+        seasonData.standard = period.energy_charge_cents;
+      } else if (period.period_type === "off_peak") {
+        seasonData.offPeak = period.energy_charge_cents;
+      }
+    });
+
+    return Array.from(grouped.values());
   };
 
   return (
     <Dialog open={true} onOpenChange={onClose}>
-      <DialogContent className="max-w-7xl max-h-[85vh] overflow-hidden">
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{tariffName}</DialogTitle>
-          <DialogDescription>Complete tariff structure details</DialogDescription>
+          <DialogTitle>View Tariff Structure</DialogTitle>
+          <DialogDescription>
+            Viewing details for {tariffName}
+          </DialogDescription>
         </DialogHeader>
 
         {isLoading ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="w-8 h-8 animate-spin text-primary" />
           </div>
+        ) : tariffData ? (
+          <TariffStructureForm 
+            onSubmit={() => {}}
+            isLoading={false}
+            initialData={tariffData}
+            readOnly={true}
+          />
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 overflow-y-auto max-h-[calc(85vh-120px)]">
-            {/* Left Column - Source Document */}
-            <div className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <FileImage className="w-5 h-5" />
-                    Source Document
-                  </CardTitle>
-                  <CardDescription>
-                    Original document used for data extraction
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {sourceImageUrl ? (
-                    <div className="border rounded-lg overflow-hidden bg-muted/50">
-                      <img 
-                        src={sourceImageUrl} 
-                        alt="Source tariff document" 
-                        className="w-full h-auto"
-                      />
-                    </div>
-                  ) : (
-                    <Alert>
-                      <FileImage className="h-4 w-4" />
-                      <AlertDescription>
-                        {hasSourceDocument 
-                          ? "Source document image not available" 
-                          : "No source document linked to this tariff"}
-                      </AlertDescription>
-                    </Alert>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Right Column - Extracted Data */}
-            <div className="space-y-4">
-              <Tabs defaultValue="blocks" className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="blocks">
-                Blocks ({blocks.length})
-              </TabsTrigger>
-              <TabsTrigger value="charges">
-                Charges ({charges.length})
-              </TabsTrigger>
-              <TabsTrigger value="tou">
-                TOU Periods ({touPeriods.length})
-              </TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="blocks" className="space-y-4">
-              {blocks.length === 0 ? (
-                <Card>
-                  <CardContent className="py-8 text-center text-muted-foreground">
-                    No tariff blocks configured
-                  </CardContent>
-                </Card>
-              ) : (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Energy Blocks</CardTitle>
-                    <CardDescription>Stepped tariff pricing by consumption</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-24">Block</TableHead>
-                          <TableHead>kWh From</TableHead>
-                          <TableHead>kWh To</TableHead>
-                          <TableHead className="text-right">Rate (c/kWh)</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {blocks.map((block) => (
-                          <TableRow key={block.id}>
-                            <TableCell>
-                              <Badge variant="outline">Block {block.block_number}</Badge>
-                            </TableCell>
-                            <TableCell className="font-mono">{block.kwh_from}</TableCell>
-                            <TableCell className="font-mono">
-                              {block.kwh_to === null ? "Unlimited" : block.kwh_to}
-                            </TableCell>
-                            <TableCell className="text-right font-semibold">
-                              {formatCents(block.energy_charge_cents)}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </CardContent>
-                </Card>
-              )}
-            </TabsContent>
-
-            <TabsContent value="charges" className="space-y-4">
-              {charges.length === 0 ? (
-                <Card>
-                  <CardContent className="py-8 text-center text-muted-foreground">
-                    No additional charges configured
-                  </CardContent>
-                </Card>
-              ) : (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Additional Charges</CardTitle>
-                    <CardDescription>Fixed and demand-based charges</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Charge Type</TableHead>
-                          <TableHead>Description</TableHead>
-                          <TableHead className="text-right">Amount</TableHead>
-                          <TableHead>Unit</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {charges.map((charge) => (
-                          <TableRow key={charge.id}>
-                            <TableCell>
-                              <Badge variant="secondary" className="capitalize">
-                                {charge.charge_type.replace(/_/g, " ")}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>{charge.description}</TableCell>
-                            <TableCell className="text-right font-semibold">
-                              {formatCharge(charge.charge_amount, charge.unit)}
-                            </TableCell>
-                            <TableCell className="text-muted-foreground">{charge.unit}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </CardContent>
-                </Card>
-              )}
-            </TabsContent>
-
-            <TabsContent value="tou" className="space-y-4">
-              {touPeriods.length === 0 ? (
-                <Card>
-                  <CardContent className="py-8 text-center text-muted-foreground">
-                    No Time-of-Use periods configured
-                  </CardContent>
-                </Card>
-              ) : (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Time-of-Use Periods</CardTitle>
-                    <CardDescription>Variable pricing by time and season</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Period</TableHead>
-                          <TableHead>Season</TableHead>
-                          <TableHead>Day Type</TableHead>
-                          <TableHead>Hours</TableHead>
-                          <TableHead className="text-right">Rate (c/kWh)</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {touPeriods.map((period) => (
-                          <TableRow key={period.id}>
-                            <TableCell>
-                              <Badge className="capitalize">{period.period_type}</Badge>
-                            </TableCell>
-                            <TableCell className="capitalize">{period.season}</TableCell>
-                            <TableCell className="capitalize">{period.day_type}</TableCell>
-                            <TableCell className="font-mono">
-                              {String(period.start_hour).padStart(2, "0")}:00 - {String(period.end_hour).padStart(2, "0")}:00
-                            </TableCell>
-                            <TableCell className="text-right font-semibold">
-                              {formatCents(period.energy_charge_cents)}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </CardContent>
-                </Card>
-              )}
-            </TabsContent>
-          </Tabs>
-            </div>
+          <div className="text-center py-8 text-muted-foreground">
+            Failed to load tariff data
           </div>
         )}
       </DialogContent>
