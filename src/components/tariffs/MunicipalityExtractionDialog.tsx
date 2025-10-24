@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, Trash2, Eye, Plus, ZoomIn, ZoomOut, RotateCcw, ChevronLeft, ChevronRight } from "lucide-react";
+import { Loader2, Trash2, Eye, Plus, ZoomIn, ZoomOut, RotateCcw, ChevronLeft, ChevronRight, RotateCw } from "lucide-react";
 import { pdfjs } from 'react-pdf';
 import { toast } from "sonner";
 import { Canvas as FabricCanvas, Rect as FabricRect, FabricImage, Circle } from "fabric";
@@ -789,26 +789,65 @@ export default function MunicipalityExtractionDialog({
                           <Card key={tariffIdx} className="p-4 bg-muted/20 border-2">
                             <div className="space-y-3">
                               <div>
-                                <Label className="text-xs font-semibold">{tariff.tariffName || `Tariff ${tariffIdx + 1}`}</Label>
-                                {tariff.tariffType && (
-                                  <p className="text-xs text-muted-foreground capitalize">{tariff.tariffType}</p>
-                                )}
+                                <Label className="text-xs">Tariff Name</Label>
+                                <Input
+                                  value={tariff.tariffName || ""}
+                                  onChange={(e) => {
+                                    const updated = [...extractedData.tariffStructures];
+                                    updated[tariffIdx].tariffName = e.target.value;
+                                    setExtractedData({ ...extractedData, tariffStructures: updated });
+                                  }}
+                                  className="h-9 mt-1"
+                                />
                               </div>
                               
                               {tariff.blocks && tariff.blocks.length > 0 && (
                                 <div className="space-y-2">
                                   <Label className="text-xs font-medium">Energy Blocks</Label>
-                                  {tariff.blocks.map((block: any, idx: number) => (
-                                    <div key={idx} className="p-2 bg-background rounded border">
-                                      <p className="text-xs font-medium">
-                                        Block {block.blockNumber}: {block.kwhFrom}-{block.kwhTo} kWh
-                                      </p>
-                                      <p className="text-sm font-semibold">
-                                        {block.energyChargeCents} c/kWh
-                                      </p>
-                                      {block.description && (
-                                        <p className="text-xs text-muted-foreground">{block.description}</p>
-                                      )}
+                                  {tariff.blocks.map((block: any, blockIdx: number) => (
+                                    <div key={blockIdx} className="p-2 bg-background rounded border space-y-2">
+                                      <div className="grid grid-cols-3 gap-2">
+                                        <div>
+                                          <Label className="text-xs">From (kWh)</Label>
+                                          <Input
+                                            type="number"
+                                            value={block.kwhFrom || 0}
+                                            onChange={(e) => {
+                                              const updated = [...extractedData.tariffStructures];
+                                              updated[tariffIdx].blocks[blockIdx].kwhFrom = parseInt(e.target.value) || 0;
+                                              setExtractedData({ ...extractedData, tariffStructures: updated });
+                                            }}
+                                            className="h-8"
+                                          />
+                                        </div>
+                                        <div>
+                                          <Label className="text-xs">To (kWh)</Label>
+                                          <Input
+                                            type="number"
+                                            value={block.kwhTo || 0}
+                                            onChange={(e) => {
+                                              const updated = [...extractedData.tariffStructures];
+                                              updated[tariffIdx].blocks[blockIdx].kwhTo = parseInt(e.target.value) || 0;
+                                              setExtractedData({ ...extractedData, tariffStructures: updated });
+                                            }}
+                                            className="h-8"
+                                          />
+                                        </div>
+                                        <div>
+                                          <Label className="text-xs">c/kWh</Label>
+                                          <Input
+                                            type="number"
+                                            step="0.01"
+                                            value={block.energyChargeCents || 0}
+                                            onChange={(e) => {
+                                              const updated = [...extractedData.tariffStructures];
+                                              updated[tariffIdx].blocks[blockIdx].energyChargeCents = parseFloat(e.target.value) || 0;
+                                              setExtractedData({ ...extractedData, tariffStructures: updated });
+                                            }}
+                                            className="h-8"
+                                          />
+                                        </div>
+                                      </div>
                                     </div>
                                   ))}
                                 </div>
@@ -817,14 +856,48 @@ export default function MunicipalityExtractionDialog({
                               {tariff.charges && tariff.charges.length > 0 && (
                                 <div className="space-y-2">
                                   <Label className="text-xs font-medium">Fixed Charges</Label>
-                                  {tariff.charges.map((charge: any, idx: number) => (
-                                    <div key={idx} className="p-2 bg-background rounded border">
-                                      <p className="text-xs font-medium capitalize">
-                                        {charge.chargeType?.replace(/_/g, ' ') || charge.description}
-                                      </p>
-                                      <p className="text-sm font-semibold">
-                                        {charge.chargeAmount} {charge.unit}
-                                      </p>
+                                  {tariff.charges.map((charge: any, chargeIdx: number) => (
+                                    <div key={chargeIdx} className="p-2 bg-background rounded border space-y-2">
+                                      <div>
+                                        <Label className="text-xs">Charge Type</Label>
+                                        <Input
+                                          value={charge.chargeType || charge.description || ""}
+                                          onChange={(e) => {
+                                            const updated = [...extractedData.tariffStructures];
+                                            updated[tariffIdx].charges[chargeIdx].chargeType = e.target.value;
+                                            setExtractedData({ ...extractedData, tariffStructures: updated });
+                                          }}
+                                          className="h-8 mt-1"
+                                        />
+                                      </div>
+                                      <div className="grid grid-cols-2 gap-2">
+                                        <div>
+                                          <Label className="text-xs">Amount</Label>
+                                          <Input
+                                            type="number"
+                                            step="0.01"
+                                            value={charge.chargeAmount || 0}
+                                            onChange={(e) => {
+                                              const updated = [...extractedData.tariffStructures];
+                                              updated[tariffIdx].charges[chargeIdx].chargeAmount = parseFloat(e.target.value) || 0;
+                                              setExtractedData({ ...extractedData, tariffStructures: updated });
+                                            }}
+                                            className="h-8"
+                                          />
+                                        </div>
+                                        <div>
+                                          <Label className="text-xs">Unit</Label>
+                                          <Input
+                                            value={charge.unit || ""}
+                                            onChange={(e) => {
+                                              const updated = [...extractedData.tariffStructures];
+                                              updated[tariffIdx].charges[chargeIdx].unit = e.target.value;
+                                              setExtractedData({ ...extractedData, tariffStructures: updated });
+                                            }}
+                                            className="h-8"
+                                          />
+                                        </div>
+                                      </div>
                                     </div>
                                   ))}
                                 </div>
@@ -835,12 +908,76 @@ export default function MunicipalityExtractionDialog({
                       </div>
                     )}
                     
-                    <Button
-                      onClick={handleAcceptExtraction}
-                      className="w-full"
-                    >
-                      Accept & Add to List
-                    </Button>
+                    {/* Custom fields */}
+                    {extractedData.customFields && extractedData.customFields.length > 0 && (
+                      <div className="space-y-2 mt-4">
+                        <Label className="text-xs font-semibold">Custom Fields</Label>
+                        {extractedData.customFields.map((field: any, idx: number) => (
+                          <div key={idx} className="grid grid-cols-2 gap-2">
+                            <Input
+                              placeholder="Field name"
+                              value={field.name || ""}
+                              onChange={(e) => {
+                                const updated = [...extractedData.customFields];
+                                updated[idx].name = e.target.value;
+                                setExtractedData({ ...extractedData, customFields: updated });
+                              }}
+                              className="h-9"
+                            />
+                            <Input
+                              placeholder="Field value"
+                              value={field.value || ""}
+                              onChange={(e) => {
+                                const updated = [...extractedData.customFields];
+                                updated[idx].value = e.target.value;
+                                setExtractedData({ ...extractedData, customFields: updated });
+                              }}
+                              className="h-9"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {/* Three action buttons */}
+                    <div className="flex gap-2 mt-4">
+                      <Button
+                        onClick={() => {
+                          if (fabricCanvas && selectionRectRef.current) {
+                            handleExtractFromRegion(fabricCanvas, selectionRectRef.current);
+                          }
+                        }}
+                        variant="outline"
+                        size="sm"
+                        disabled={!fabricCanvas || !selectionRectRef.current || isExtracting}
+                        className="flex-1"
+                      >
+                        <RotateCw className="h-4 w-4 mr-1" />
+                        Rescan
+                      </Button>
+                      <Button
+                        onClick={() => {
+                          const customFields = extractedData.customFields || [];
+                          setExtractedData({
+                            ...extractedData,
+                            customFields: [...customFields, { name: "", value: "" }]
+                          });
+                        }}
+                        variant="outline"
+                        size="sm"
+                        className="flex-1"
+                      >
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add Field
+                      </Button>
+                      <Button
+                        onClick={handleAcceptExtraction}
+                        size="sm"
+                        className="flex-1"
+                      >
+                        Add Municipality
+                      </Button>
+                    </div>
                   </div>
                 </ScrollArea>
               ) : selectionRectRef.current ? (
