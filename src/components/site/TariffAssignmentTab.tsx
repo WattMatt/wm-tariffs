@@ -10,7 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { FileCheck2, AlertCircle, CheckCircle2, DollarSign, Eye } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import TariffEditDialog from "@/components/tariffs/TariffEditDialog";
+import TariffDetailsDialog from "@/components/tariffs/TariffDetailsDialog";
 
 interface TariffAssignmentTabProps {
   siteId: string;
@@ -56,7 +56,6 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
   const [isSaving, setIsSaving] = useState(false);
   const [viewingTariffId, setViewingTariffId] = useState<string | null>(null);
   const [viewingTariffName, setViewingTariffName] = useState<string>("");
-  const [viewingSupplyAuthorityId, setViewingSupplyAuthorityId] = useState<string>("");
 
   useEffect(() => {
     fetchSiteData();
@@ -341,7 +340,6 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
                                   if (tariffStructure) {
                                     setViewingTariffId(currentTariffId);
                                     setViewingTariffName(tariffStructure.name);
-                                    setViewingSupplyAuthorityId(tariffStructure.supply_authority_id);
                                   }
                                 }}
                               >
@@ -404,7 +402,6 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
                             onClick={() => {
                               setViewingTariffId(tariff.id);
                               setViewingTariffName(tariff.name);
-                              setViewingSupplyAuthorityId(tariff.supply_authority_id);
                             }}
                             className="shrink-0"
                           >
@@ -425,15 +422,12 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
       )}
 
       {viewingTariffId && (
-        <TariffEditDialog
+        <TariffDetailsDialog
           tariffId={viewingTariffId}
           tariffName={viewingTariffName}
-          mode="view"
-          supplyAuthorityId={viewingSupplyAuthorityId}
           onClose={() => {
             setViewingTariffId(null);
             setViewingTariffName("");
-            setViewingSupplyAuthorityId("");
           }}
         />
       )}
