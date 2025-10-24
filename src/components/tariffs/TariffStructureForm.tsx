@@ -83,15 +83,23 @@ export default function TariffStructureForm({ onSubmit, isLoading, initialData, 
   useEffect(() => {
     if (initialData) {
       setTariffData(initialData);
+      // In read-only mode, show all sections that have data
+      // In edit mode, only show sections that were previously visible
+      const hasBlocks = initialData.blocks && initialData.blocks.length > 0;
+      const hasSeasonalEnergy = initialData.seasonalEnergy && initialData.seasonalEnergy.length > 0;
+      const hasTouSeasons = initialData.touSeasons && initialData.touSeasons.length > 0;
+      const hasBasicCharge = !!initialData.basicCharge;
+      const hasDemandCharges = initialData.demandCharges && initialData.demandCharges.length > 0;
+      
       setVisibleSections({
-        blocks: initialData.blocks && initialData.blocks.length > 0,
-        seasonalEnergy: initialData.seasonalEnergy && initialData.seasonalEnergy.length > 0,
-        touEnergy: initialData.touSeasons && initialData.touSeasons.length > 0,
-        basicCharge: !!initialData.basicCharge,
-        demandCharges: initialData.demandCharges && initialData.demandCharges.length > 0
+        blocks: hasBlocks,
+        seasonalEnergy: hasSeasonalEnergy,
+        touEnergy: hasTouSeasons,
+        basicCharge: hasBasicCharge,
+        demandCharges: hasDemandCharges
       });
     }
-  }, [initialData]);
+  }, [initialData, readOnly]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
