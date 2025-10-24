@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -78,6 +78,20 @@ export default function TariffStructureForm({ onSubmit, isLoading, initialData, 
     basicCharge: !!initialData?.basicCharge,
     demandCharges: initialData?.demandCharges && initialData.demandCharges.length > 0
   });
+
+  // Update tariffData and visibleSections when initialData changes
+  useEffect(() => {
+    if (initialData) {
+      setTariffData(initialData);
+      setVisibleSections({
+        blocks: initialData.blocks && initialData.blocks.length > 0,
+        seasonalEnergy: initialData.seasonalEnergy && initialData.seasonalEnergy.length > 0,
+        touEnergy: initialData.touSeasons && initialData.touSeasons.length > 0,
+        basicCharge: !!initialData.basicCharge,
+        demandCharges: initialData.demandCharges && initialData.demandCharges.length > 0
+      });
+    }
+  }, [initialData]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
