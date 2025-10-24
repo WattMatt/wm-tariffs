@@ -626,10 +626,25 @@ export default function MunicipalityExtractionDialog({
         setExtractedData({...mergedData});
         toast.success(`Added ${newData.tariffStructures?.length || 0} new tariff structure(s)! Total: ${mergedData.tariffStructures?.length}`);
         
-        // Clear the rectangle after successful append
-        if (fabricCanvas && selectionRectRef.current) {
-          fabricCanvas.remove(selectionRectRef.current);
-          selectionRectRef.current = null;
+        // Clear all selection artifacts after successful append
+        if (fabricCanvas) {
+          // Remove selection rectangle
+          if (selectionRectRef.current) {
+            fabricCanvas.remove(selectionRectRef.current);
+            selectionRectRef.current = null;
+          }
+          // Remove start marker
+          if (startMarkerRef.current) {
+            fabricCanvas.remove(startMarkerRef.current);
+            startMarkerRef.current = null;
+          }
+          // Remove any preview rectangles
+          const objects = fabricCanvas.getObjects();
+          objects.forEach(obj => {
+            if ((obj as any).isPreview) {
+              fabricCanvas.remove(obj);
+            }
+          });
           fabricCanvas.renderAll();
         }
         
@@ -640,10 +655,25 @@ export default function MunicipalityExtractionDialog({
         toast.success("Municipality data extracted!");
       }
       
-      // Clear the rectangle after successful extraction
-      if (fabricCanvas && selectionRectRef.current) {
-        fabricCanvas.remove(selectionRectRef.current);
-        selectionRectRef.current = null;
+      // Clear all selection artifacts after successful extraction
+      if (fabricCanvas) {
+        // Remove selection rectangle
+        if (selectionRectRef.current) {
+          fabricCanvas.remove(selectionRectRef.current);
+          selectionRectRef.current = null;
+        }
+        // Remove start marker
+        if (startMarkerRef.current) {
+          fabricCanvas.remove(startMarkerRef.current);
+          startMarkerRef.current = null;
+        }
+        // Remove any preview rectangles
+        const objects = fabricCanvas.getObjects();
+        objects.forEach(obj => {
+          if ((obj as any).isPreview) {
+            fabricCanvas.remove(obj);
+          }
+        });
         fabricCanvas.renderAll();
       }
     } catch (error: any) {
