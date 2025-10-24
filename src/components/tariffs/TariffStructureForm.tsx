@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Trash2, GripVertical } from "lucide-react";
 
 interface EnergyBlock {
@@ -68,6 +69,14 @@ export default function TariffStructureForm({ onSubmit, isLoading, initialData, 
     touSeasons: [],
     basicCharge: undefined,
     demandCharges: []
+  });
+
+  const [visibleSections, setVisibleSections] = useState({
+    blocks: initialData?.blocks && initialData.blocks.length > 0,
+    seasonalEnergy: initialData?.seasonalEnergy && initialData.seasonalEnergy.length > 0,
+    touEnergy: initialData?.touSeasons && initialData.touSeasons.length > 0,
+    basicCharge: !!initialData?.basicCharge,
+    demandCharges: initialData?.demandCharges && initialData.demandCharges.length > 0
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -262,7 +271,77 @@ export default function TariffStructureForm({ onSubmit, isLoading, initialData, 
         </div>
       </div>
 
+      {/* Section Visibility Checkboxes */}
+      {!readOnly && (
+        <div className="space-y-2 p-3 border rounded-lg bg-muted/10">
+          <Label className="text-xs font-medium">Select Charge Types to Include</Label>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="show-blocks"
+                checked={visibleSections.blocks}
+                onCheckedChange={(checked) => 
+                  setVisibleSections({ ...visibleSections, blocks: checked === true })
+                }
+              />
+              <Label htmlFor="show-blocks" className="text-xs font-normal cursor-pointer">
+                Energy Blocks
+              </Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="show-seasonal"
+                checked={visibleSections.seasonalEnergy}
+                onCheckedChange={(checked) => 
+                  setVisibleSections({ ...visibleSections, seasonalEnergy: checked === true })
+                }
+              />
+              <Label htmlFor="show-seasonal" className="text-xs font-normal cursor-pointer">
+                Seasonal Energy
+              </Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="show-tou"
+                checked={visibleSections.touEnergy}
+                onCheckedChange={(checked) => 
+                  setVisibleSections({ ...visibleSections, touEnergy: checked === true })
+                }
+              />
+              <Label htmlFor="show-tou" className="text-xs font-normal cursor-pointer">
+                Time-of-Use Energy
+              </Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="show-basic"
+                checked={visibleSections.basicCharge}
+                onCheckedChange={(checked) => 
+                  setVisibleSections({ ...visibleSections, basicCharge: checked === true })
+                }
+              />
+              <Label htmlFor="show-basic" className="text-xs font-normal cursor-pointer">
+                Basic Charge (Fixed Monthly)
+              </Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="show-demand"
+                checked={visibleSections.demandCharges}
+                onCheckedChange={(checked) => 
+                  setVisibleSections({ ...visibleSections, demandCharges: checked === true })
+                }
+              />
+              <Label htmlFor="show-demand" className="text-xs font-normal cursor-pointer">
+                Demand Charges (Seasonal)
+              </Label>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Energy Blocks Section */}
+      {visibleSections.blocks && (
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <Label className="text-xs font-medium">Energy Blocks</Label>
@@ -338,8 +417,10 @@ export default function TariffStructureForm({ onSubmit, isLoading, initialData, 
           </p>
         )}
       </div>
+      )}
 
       {/* Seasonal Energy Charges Section */}
+      {visibleSections.seasonalEnergy && (
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <Label className="text-xs font-medium">Seasonal Energy</Label>
@@ -419,8 +500,10 @@ export default function TariffStructureForm({ onSubmit, isLoading, initialData, 
           </p>
         )}
       </div>
+      )}
 
       {/* Time-of-Use Energy Section */}
+      {visibleSections.touEnergy && (
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <Label className="text-xs font-medium">Time-of-Use Energy</Label>
@@ -513,8 +596,10 @@ export default function TariffStructureForm({ onSubmit, isLoading, initialData, 
           </p>
         )}
       </div>
+      )}
 
       {/* Basic Charge Section */}
+      {visibleSections.basicCharge && (
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <Label className="text-xs font-medium">Basic Charge (Fixed Monthly)</Label>
@@ -574,8 +659,10 @@ export default function TariffStructureForm({ onSubmit, isLoading, initialData, 
           </p>
         )}
       </div>
+      )}
 
       {/* Demand Charges Section */}
+      {visibleSections.demandCharges && (
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <Label className="text-xs font-medium">Demand Charges (Seasonal)</Label>
@@ -655,6 +742,7 @@ export default function TariffStructureForm({ onSubmit, isLoading, initialData, 
           </p>
         )}
       </div>
+      )}
 
       {/* Submit Button */}
       {!readOnly && (

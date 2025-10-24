@@ -7,7 +7,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, CheckCircle2, X, Trash2, Plus } from "lucide-react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -93,6 +92,7 @@ export default function TariffExtractionDialog({
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const [expandedTariffs, setExpandedTariffs] = useState<{ [key: number]: boolean }>({});
+  const [visibleSections, setVisibleSections] = useState<{ [tariffIdx: number]: { blocks: boolean; charges: boolean; tou: boolean } }>({});
 
   // Convert PDF to image for display (all pages stitched vertically)
   const convertPdfToImage = async (pdfFile: File): Promise<string> => {
@@ -311,6 +311,18 @@ export default function TariffExtractionDialog({
     try {
       const data = await onExtract(cropRegion || undefined);
       setExtractedData(data);
+      
+      // Initialize visible sections based on extracted data
+      const initialVisibleSections: { [tariffIdx: number]: { blocks: boolean; charges: boolean; tou: boolean } } = {};
+      data.tariffStructures.forEach((tariff, idx) => {
+        initialVisibleSections[idx] = {
+          blocks: tariff.blocks.length > 0,
+          charges: tariff.charges.length > 0,
+          tou: (tariff.touPeriods?.length || 0) > 0
+        };
+      });
+      setVisibleSections(initialVisibleSections);
+      
       setExtractionStep("review");
     } catch (error: any) {
       console.error("Extraction failed:", error);
@@ -745,14 +757,74 @@ export default function TariffExtractionDialog({
                               )}
                             </div>
 
-                            <Tabs defaultValue="blocks" className="w-full">
-                              <TabsList className="grid w-full grid-cols-3">
-                                <TabsTrigger value="blocks">Blocks</TabsTrigger>
-                                <TabsTrigger value="charges">Charges</TabsTrigger>
-                                <TabsTrigger value="tou">TOU</TabsTrigger>
-                              </TabsList>
+                            {/* Section Visibility Checkboxes */}
+                            <div className="space-y-2 p-3 border rounded-lg bg-muted/10">
+                              <Label className="text-xs font-medium">Select Charge Types to Display</Label>
+                              <div className="flex flex-wrap gap-4">
+                                <div className="flex items-center space-x-2">
+                                  <Checkbox
+                                    id={`show-blocks-${tariffIdx}`}
+                                    checked={visibleSections[tariffIdx]?.blocks ?? false}
+                                    onCheckedChange={(checked) => 
+                                      setVisibleSections(prev => ({
+                                        ...prev,
+                                        [tariffIdx]: { ...prev[tariffIdx], blocks: checked === true }
+                                      }))
+                                    }
+                                  />
+                                  <Label htmlFor={`show-blocks-${tariffIdx}`} className="text-xs font-normal cursor-pointer">
+                                    Energy Blocks
+                                  </Label>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <Checkbox
+                                    id={`show-charges-${tariffIdx}`}
+                                    checked={visibleSections[tariffIdx]?.charges ?? false}
+                                    onCheckedChange={(checked) => 
+                                      setVisibleSections(prev => ({
+                                        ...prev,
+                                        [tariffIdx]: { ...prev[tariffIdx], charges: checked === true }
+                                      }))
+                                    }
+                                  />
+                                  <Label htmlFor={`show-charges-${tariffIdx}`} className="text-xs font-normal cursor-pointer">
+                                    Charges
+                                  </Label>
+                                </div>
+                                {tariff.usesTou && (
+                                  <div className="flex items-center space-x-2">
+                                    <Checkbox
+                                      id={`show-tou-${tariffIdx}`}
+                                      checked={visibleSections[tariffIdx]?.tou ?? false}
+                                      onCheckedChange={(checked) => 
+                                        setVisibleSections(prev => ({
+                                          ...prev,
+                                          [tariffIdx]: { ...prev[tariffIdx], tou: checked === true }
+                                        }))
+                                      }
+                                    />
+                                    <Label htmlFor={`show-tou-${tariffIdx}`} className="text-xs font-normal cursor-pointer">
+                                      TOU Periods
+                                    </Label>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
 
-                              <TabsContent value="blocks" className="space-y-2 mt-4">
+                            {/* Energy Blocks Section */}
+                            {visibleSections[tariffIdx]?.blocks && (
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <Label className="text-sm font-medium">Energy Blocks</Label>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => addBlock(tariffIdx)}
+                                  >
+                                    <Plus className="w-4 h-4 mr-2" />
+                                    Add Block
+                                  </Button>
+                                </div>
                                 {tariff.blocks.map((block, blockIdx) => (
                                   <div key={blockIdx} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-end">
                                     <div>
@@ -820,9 +892,23 @@ export default function TariffExtractionDialog({
                                   <Plus className="w-4 h-4 mr-2" />
                                   Add Block
                                 </Button>
-                              </TabsContent>
+                              </div>
+                            )}
 
-                              <TabsContent value="charges" className="space-y-2 mt-4">
+                            {/* Charges Section */}
+                            {visibleSections[tariffIdx]?.charges && (
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <Label className="text-sm font-medium">Charges</Label>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => addCharge(tariffIdx)}
+                                  >
+                                    <Plus className="w-4 h-4 mr-2" />
+                                    Add Charge
+                                  </Button>
+                                </div>
                                 {tariff.charges.map((charge, chargeIdx) => (
                                   <div key={chargeIdx} className="grid grid-cols-[2fr_1fr_auto] gap-2 items-end">
                                     <div>
@@ -875,9 +961,23 @@ export default function TariffExtractionDialog({
                                   <Plus className="w-4 h-4 mr-2" />
                                   Add Charge
                                 </Button>
-                              </TabsContent>
+                              </div>
+                            )}
 
-                              <TabsContent value="tou" className="space-y-2 mt-4">
+                            {/* TOU Periods Section */}
+                            {visibleSections[tariffIdx]?.tou && (
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <Label className="text-sm font-medium">TOU Periods</Label>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => addTouPeriod(tariffIdx)}
+                                  >
+                                    <Plus className="w-4 h-4 mr-2" />
+                                    Add TOU Period
+                                  </Button>
+                                </div>
                                 {tariff.touPeriods && tariff.touPeriods.length > 0 ? (
                                   tariff.touPeriods.map((period, periodIdx) => (
                                     <div key={periodIdx} className="grid grid-cols-[1fr_1fr_1fr_1fr_auto] gap-2 items-end">
@@ -959,8 +1059,8 @@ export default function TariffExtractionDialog({
                                   <Plus className="w-4 h-4 mr-2" />
                                   Add TOU Period
                                 </Button>
-                              </TabsContent>
-                            </Tabs>
+                              </div>
+                            )}
                           </CardContent>
                         </CollapsibleContent>
                       </Card>
