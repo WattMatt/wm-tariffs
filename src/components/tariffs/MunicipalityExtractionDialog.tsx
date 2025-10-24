@@ -437,40 +437,57 @@ export default function MunicipalityExtractionDialog({
       
       if (!imageObj) throw new Error('Image not found on canvas');
       
-      // Get the current bounding rect to capture any transformations (move/resize)
-      const boundingRect = rect.getBoundingRect();
+      // Get the image element's original dimensions
+      const imgElement = (imageObj as any)._element;
+      if (!imgElement) throw new Error('Image element not found');
       
-      // Calculate coordinates in original image space
-      const zoom = canvas.getZoom();
-      const vpt = canvas.viewportTransform || [1, 0, 0, 1, 0, 0];
+      const originalWidth = imgElement.naturalWidth || imgElement.width;
+      const originalHeight = imgElement.naturalHeight || imgElement.height;
       
-      const imgScaleX = imageObj.scaleX || 1;
-      const imgScaleY = imageObj.scaleY || 1;
+      // Get rect's absolute coordinates in canvas space
+      const rectLeft = rect.left || 0;
+      const rectTop = rect.top || 0;
+      const rectWidth = rect.width! * (rect.scaleX || 1);
+      const rectHeight = rect.height! * (rect.scaleY || 1);
+      
+      // Get image's position and scale in canvas
       const imgLeft = imageObj.left || 0;
       const imgTop = imageObj.top || 0;
+      const imgScaleX = imageObj.scaleX || 1;
+      const imgScaleY = imageObj.scaleY || 1;
+      const imgWidth = originalWidth * imgScaleX;
+      const imgHeight = originalHeight * imgScaleY;
       
-      // Convert rect coordinates to image coordinates using the bounding rect
-      const rectLeft = (boundingRect.left - imgLeft) / (imgScaleX * zoom);
-      const rectTop = (boundingRect.top - imgTop) / (imgScaleY * zoom);
-      const rectWidth = boundingRect.width / (imgScaleX * zoom);
-      const rectHeight = boundingRect.height / (imgScaleY * zoom);
+      // Convert rect coordinates from canvas space to original image space
+      // First get rect position relative to image
+      const relativeLeft = rectLeft - imgLeft;
+      const relativeTop = rectTop - imgTop;
       
-      // Crop the current page image
+      // Then scale to original image coordinates
+      const cropX = (relativeLeft / imgWidth) * originalWidth;
+      const cropY = (relativeTop / imgHeight) * originalHeight;
+      const cropWidth = (rectWidth / imgWidth) * originalWidth;
+      const cropHeight = (rectHeight / imgHeight) * originalHeight;
+      
+      console.log('Crop coordinates:', { cropX, cropY, cropWidth, cropHeight, originalWidth, originalHeight });
+      
+      // Crop the current page image using calculated coordinates
       const img = new Image();
       img.src = pdfPageImages[currentPage];
       await new Promise((resolve) => { img.onload = resolve; });
       
       const croppedCanvas = document.createElement('canvas');
-      croppedCanvas.width = rectWidth;
-      croppedCanvas.height = rectHeight;
+      croppedCanvas.width = Math.max(1, Math.floor(cropWidth));
+      croppedCanvas.height = Math.max(1, Math.floor(cropHeight));
       const ctx = croppedCanvas.getContext('2d');
       
       if (!ctx) throw new Error('Could not get canvas context');
       
+      // Draw the cropped region from the original image
       ctx.drawImage(
         img,
-        rectLeft, rectTop, rectWidth, rectHeight,
-        0, 0, rectWidth, rectHeight
+        Math.max(0, cropX), Math.max(0, cropY), cropWidth, cropHeight,
+        0, 0, cropWidth, cropHeight
       );
       
       const croppedImageUrl = croppedCanvas.toDataURL('image/png');
