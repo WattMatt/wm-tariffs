@@ -704,6 +704,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                       />
                     </TableHead>
                     <TableHead>File Name</TableHead>
+                    <TableHead>Shop Number</TableHead>
                     <TableHead>Type</TableHead>
                     <TableHead>Upload Date</TableHead>
                     <TableHead>Status</TableHead>
@@ -722,6 +723,13 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                         />
                       </TableCell>
                       <TableCell className="font-medium">{doc.file_name}</TableCell>
+                      <TableCell>
+                        {doc.document_extractions?.[0]?.extracted_data?.shop_number ? (
+                          <span className="text-sm">{doc.document_extractions[0].extracted_data.shop_number}</span>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">-</span>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <Badge variant="outline">
                           {doc.document_type.replace('_', ' ')}
