@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, Trash2, Eye, Plus, ZoomIn, ZoomOut, RotateCcw, ChevronLeft, ChevronRight, RotateCw } from "lucide-react";
+import { Loader2, Trash2, Eye, Plus, ZoomIn, ZoomOut, RotateCcw, ChevronLeft, ChevronRight, RotateCw, GripVertical } from "lucide-react";
 import { pdfjs } from 'react-pdf';
 import { toast } from "sonner";
 import { Canvas as FabricCanvas, Rect as FabricRect, FabricImage, Circle } from "fabric";
@@ -57,6 +57,8 @@ export default function MunicipalityExtractionDialog({
   const [zoom, setZoom] = useState(1);
   const currentImageRef = useRef<FabricImage | null>(null);
   const [isAcceptedPanelCollapsed, setIsAcceptedPanelCollapsed] = useState(false);
+  const [draggedTariffIndex, setDraggedTariffIndex] = useState<number | null>(null);
+  const [isAppendMode, setIsAppendMode] = useState(false);
 
   // Convert PDF to individual page images
   const convertPdfToImages = async (pdfFile: File): Promise<string[]> => {
@@ -283,8 +285,14 @@ export default function MunicipalityExtractionDialog({
         selectionModeRef.current = false;
         drawStartPointRef.current = null;
         
-        // Don't automatically extract - wait for user to click Extract button
-        toast.success('Region selected! Click "Extract Data" to process.');
+        // In append mode, automatically extract
+        if (isAppendMode) {
+          handleExtractFromRegion(canvas, rect, true);
+          setIsAppendMode(false);
+        } else {
+          // Don't automatically extract - wait for user to click Extract button
+          toast.success('Region selected! Click "Extract Data" to process.');
+        }
         
         evt.preventDefault();
         evt.stopPropagation();
@@ -602,7 +610,7 @@ export default function MunicipalityExtractionDialog({
     }
   };
 
-  const handleStartSelection = () => {
+  const handleStartSelection = (appendMode: boolean = false) => {
     if (fabricCanvas) {
       // Remove any existing selection rectangle
       if (selectionRectRef.current) {
@@ -624,13 +632,16 @@ export default function MunicipalityExtractionDialog({
       fabricCanvas.renderAll();
     }
     
-    console.log('handleStartSelection called');
+    console.log('handleStartSelection called, appendMode:', appendMode);
     drawStartPointRef.current = null;
-    setExtractedData(null);
+    if (!appendMode) {
+      setExtractedData(null);
+    }
+    setIsAppendMode(appendMode);
     setSelectionMode(true);
     selectionModeRef.current = true;
     console.log('Selection mode activated, ref is now:', selectionModeRef.current);
-    toast.info("Click once to start, then click again to complete the selection");
+    toast.info(appendMode ? "Select region to append more data" : "Click once to start, then click again to complete the selection");
   };
 
   const handleCancelSelection = () => {
@@ -843,7 +854,7 @@ export default function MunicipalityExtractionDialog({
                 <div className="flex gap-2">
                   <Button
                     size="sm"
-                    onClick={handleStartSelection}
+                    onClick={() => handleStartSelection(false)}
                     disabled={pdfPageImages.length === 0 || isExtracting}
                     className="flex-1"
                   >
@@ -911,11 +922,33 @@ export default function MunicipalityExtractionDialog({
                       
                       {extractedData.tariffStructures && extractedData.tariffStructures.length > 0 && (
                         <div className="space-y-4 mt-4">
-                          <Label className="text-xs font-semibold">Extracted Tariff Structures ({extractedData.tariffStructures.length})</Label>
+                         <Label className="text-xs font-semibold">Extracted Tariff Structures ({extractedData.tariffStructures.length})</Label>
                         {extractedData.tariffStructures.map((tariff: any, tariffIdx: number) => (
-                          <Card key={tariffIdx} className="p-4 bg-muted/20 border-2">
+                          <Card 
+                            key={tariffIdx} 
+                            className="p-4 bg-muted/20 border-2 cursor-move"
+                            draggable
+                            onDragStart={() => setDraggedTariffIndex(tariffIdx)}
+                            onDragOver={(e) => {
+                              e.preventDefault();
+                              if (draggedTariffIndex === null || draggedTariffIndex === tariffIdx) return;
+                              
+                              const updated = [...extractedData.tariffStructures];
+                              const draggedItem = updated[draggedTariffIndex];
+                              updated.splice(draggedTariffIndex, 1);
+                              updated.splice(tariffIdx, 0, draggedItem);
+                              
+                              setExtractedData({ ...extractedData, tariffStructures: updated });
+                              setDraggedTariffIndex(tariffIdx);
+                            }}
+                            onDragEnd={() => setDraggedTariffIndex(null)}
+                            style={{
+                              opacity: draggedTariffIndex === tariffIdx ? 0.5 : 1,
+                            }}
+                          >
                             <div className="space-y-3">
                               <div className="flex items-start gap-2">
+                                <GripVertical className="h-5 w-5 text-muted-foreground mt-6 flex-shrink-0" />
                                 <div className="flex-1">
                                   <Label className="text-xs">Tariff Name</Label>
                                   <Input
@@ -1511,17 +1544,13 @@ export default function MunicipalityExtractionDialog({
                 {/* Action buttons - Always visible at bottom */}
                 <div className="flex gap-2 p-4 border-t bg-background">
                   <Button
-                    onClick={() => {
-                      if (fabricCanvas && selectionRectRef.current) {
-                        handleExtractFromRegion(fabricCanvas, selectionRectRef.current, true);
-                      }
-                    }}
+                    onClick={() => handleStartSelection(true)}
                     variant="outline"
                     size="sm"
-                    disabled={!fabricCanvas || !selectionRectRef.current || isExtracting}
+                    disabled={isExtracting || selectionMode}
                     className="flex-1"
                   >
-                    <RotateCw className="h-4 w-4 mr-1" />
+                    <Plus className="h-4 w-4 mr-1" />
                     Append
                   </Button>
                   <Button
