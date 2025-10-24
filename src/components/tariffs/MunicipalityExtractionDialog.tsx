@@ -642,8 +642,8 @@ export default function MunicipalityExtractionDialog({
         </DialogHeader>
 
         <div className="flex-1 overflow-hidden flex px-6 gap-4">
-          {/* Left: Source Document - Full Height */}
-          <Card className="overflow-hidden flex flex-col w-[400px] flex-shrink-0">
+          {/* Left: Source Document - Half Width */}
+          <Card className="overflow-hidden flex flex-col w-1/2 flex-shrink-0">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm">
@@ -782,72 +782,53 @@ export default function MunicipalityExtractionDialog({
                       />
                     </div>
                     
-                    {extractedData.tariffName && (
-                      <div>
-                        <Label className="text-xs">Tariff Name</Label>
-                        <Input
-                          value={extractedData.tariffName}
-                          onChange={(e) => setExtractedData({ ...extractedData, tariffName: e.target.value })}
-                          className="h-9 mt-1"
-                        />
-                      </div>
-                    )}
-                    
-                    {extractedData.blocks && extractedData.blocks.length > 0 && (
-                      <div className="space-y-2">
-                        <Label className="text-xs font-semibold">Blocks</Label>
-                        {extractedData.blocks.map((block: any, idx: number) => (
-                          <Card key={idx} className="p-3 bg-muted/30">
-                            <div className="space-y-2">
-                              <p className="text-xs font-medium">
-                                Block {block.blockNumber}: {block.kwhFrom}-{block.kwhTo} kWh
-                              </p>
-                              <p className="text-sm">
-                                <span className="font-semibold">{block.energyChargeCents}</span> c/kWh
-                              </p>
-                              {block.description && (
-                                <p className="text-xs text-muted-foreground">{block.description}</p>
+                    {extractedData.tariffStructures && extractedData.tariffStructures.length > 0 && (
+                      <div className="space-y-4 mt-4">
+                        <Label className="text-xs font-semibold">Extracted Tariff Structures ({extractedData.tariffStructures.length})</Label>
+                        {extractedData.tariffStructures.map((tariff: any, tariffIdx: number) => (
+                          <Card key={tariffIdx} className="p-4 bg-muted/20 border-2">
+                            <div className="space-y-3">
+                              <div>
+                                <Label className="text-xs font-semibold">{tariff.tariffName || `Tariff ${tariffIdx + 1}`}</Label>
+                                {tariff.tariffType && (
+                                  <p className="text-xs text-muted-foreground capitalize">{tariff.tariffType}</p>
+                                )}
+                              </div>
+                              
+                              {tariff.blocks && tariff.blocks.length > 0 && (
+                                <div className="space-y-2">
+                                  <Label className="text-xs font-medium">Energy Blocks</Label>
+                                  {tariff.blocks.map((block: any, idx: number) => (
+                                    <div key={idx} className="p-2 bg-background rounded border">
+                                      <p className="text-xs font-medium">
+                                        Block {block.blockNumber}: {block.kwhFrom}-{block.kwhTo} kWh
+                                      </p>
+                                      <p className="text-sm font-semibold">
+                                        {block.energyChargeCents} c/kWh
+                                      </p>
+                                      {block.description && (
+                                        <p className="text-xs text-muted-foreground">{block.description}</p>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
                               )}
-                            </div>
-                          </Card>
-                        ))}
-                      </div>
-                    )}
-                    
-                    {extractedData.charges && extractedData.charges.length > 0 && (
-                      <div className="space-y-2">
-                        <Label className="text-xs font-semibold">Charges</Label>
-                        {extractedData.charges.map((charge: any, idx: number) => (
-                          <Card key={idx} className="p-3 bg-muted/30">
-                            <div className="space-y-1">
-                              <p className="text-xs font-medium capitalize">
-                                {charge.chargeType.replace(/_/g, ' ')}
-                              </p>
-                              <p className="text-sm">
-                                <span className="font-semibold">{charge.chargeAmount}</span> {charge.unit}
-                              </p>
-                              {charge.description && (
-                                <p className="text-xs text-muted-foreground">{charge.description}</p>
+                              
+                              {tariff.charges && tariff.charges.length > 0 && (
+                                <div className="space-y-2">
+                                  <Label className="text-xs font-medium">Fixed Charges</Label>
+                                  {tariff.charges.map((charge: any, idx: number) => (
+                                    <div key={idx} className="p-2 bg-background rounded border">
+                                      <p className="text-xs font-medium capitalize">
+                                        {charge.chargeType?.replace(/_/g, ' ') || charge.description}
+                                      </p>
+                                      <p className="text-sm font-semibold">
+                                        {charge.chargeAmount} {charge.unit}
+                                      </p>
+                                    </div>
+                                  ))}
+                                </div>
                               )}
-                            </div>
-                          </Card>
-                        ))}
-                      </div>
-                    )}
-                    
-                    {extractedData.touPeriods && extractedData.touPeriods.length > 0 && (
-                      <div className="space-y-2">
-                        <Label className="text-xs font-semibold">TOU Periods</Label>
-                        {extractedData.touPeriods.map((period: any, idx: number) => (
-                          <Card key={idx} className="p-3 bg-muted/30">
-                            <div className="space-y-1">
-                              <p className="text-xs font-medium">{period.periodName}</p>
-                              {period.timeRange && (
-                                <p className="text-xs text-muted-foreground">{period.timeRange}</p>
-                              )}
-                              <p className="text-sm">
-                                <span className="font-semibold">{period.energyChargeCents}</span> c/kWh
-                              </p>
                             </div>
                           </Card>
                         ))}

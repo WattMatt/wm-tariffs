@@ -326,79 +326,65 @@ async function extractMunicipalityFromImage(imageUrl: string) {
     throw new Error("LOVABLE_API_KEY is not configured");
   }
 
-  console.log("Extracting tariff data from selected image region:", imageUrl);
+  console.log("Extracting municipality data from image:", imageUrl);
 
-  const prompt = `Analyze this image and extract ALL tariff information visible in it.
+  const prompt = `You are analyzing a South African electricity tariff document image. Extract ALL visible tariff information.
 
-CRITICAL INSTRUCTIONS:
-1. Extract EVERYTHING you can see in this image
-2. Look for tariff blocks (e.g., "Block 1 (0 - 50 kWh): 175.08 c/kWh")
-3. Look for charge types (energy charges, service charges, capacity charges)
-4. Look for tariff categories (Domestic, Commercial, Industrial, etc.)
-5. Look for TOU periods (Peak, Standard, Off-peak with times if shown)
-6. Extract the tariff name (e.g., "Domestic Prepaid & Conventional")
-7. Look for any header information (municipality name, voltage level, meter type)
+WHAT TO LOOK FOR:
+1. Municipality name (usually at the top with percentage, e.g., "BA-PHALABORWA - 12.92%")
+2. NERSA increase percentage (the percentage next to municipality name)
+3. Tariff category names (e.g., "Domestic Prepaid & Conventional", "Commercial Conventional")
+4. Block-based pricing tables with:
+   - Block number
+   - kWh ranges (e.g., "Block 1 (0 - 50 kWh)")
+   - Energy charges in c/kWh (e.g., "175.08 c/kWh")
+5. Fixed charges:
+   - Service charges (R/month or R/day)
+   - Basic charges
+   - Energy charges (last row often shows this)
+6. Any other charges visible
 
-TARIFF STRUCTURE TO EXTRACT:
-- Tariff name and category
-- Voltage level (if shown)
-- Meter configuration (prepaid/conventional/both)
-- All blocks with kWh ranges and charges in c/kWh
-- All fixed charges (service/basic monthly in R/month or R/day)
-- Capacity charges (R/kVA if shown)
-- TOU periods with times and charges (if shown)
+EXTRACTION RULES:
+- If you see "175.08 c/kWh", extract 175.08
+- If you see "1.75 R/kWh", multiply by 100 → extract 175.00
+- For blocks, extract the kWh range (e.g., "0-50" means kwhFrom: 0, kwhTo: 50)
+- Look for rows with block descriptions and corresponding charge values
+- Extract EVERYTHING you can see - multiple tariff categories if present
 
-CRITICAL VALUE EXTRACTION:
-1. Energy charges:
-   - If shown as "c/kWh" or "cents/kWh" → extract as-is
-   - If shown as "R/kWh" → MULTIPLY BY 100 to convert to c/kWh
-   - Examples: "175.08 c/kWh" → 175.08, "1.75 R/kWh" → 175.00
-2. Fixed charges:
-   - If shown as "R/month" or "R/day" → extract as-is (no multiplication)
-   - Examples: "246.19 R/month" → 246.19
-3. Capacity charges:
-   - If shown as "R/kVA" → extract as-is
-   - Example: "243.73 R/kVA" → 243.73
+IMPORTANT: Extract ALL tariff categories visible in the image, not just one.
 
-Return ONLY a JSON object in this exact format:
+Return a JSON object with this EXACT structure:
 {
-  "municipalityName": "Name if shown in header, or empty string",
-  "nersaIncrease": number or 0 if not shown,
-  "tariffName": "Full tariff name as shown",
-  "tariffType": "domestic|commercial|industrial|agricultural|other",
-  "voltageLevel": "voltage if shown, or null",
-  "meterConfiguration": "prepaid|conventional|both|null",
-  "description": "Brief description of tariff",
-  "blocks": [
+  "municipalityName": "Municipality name from header or empty string",
+  "nersaIncrease": 12.92 or 0,
+  "tariffStructures": [
     {
-      "blockNumber": 1,
-      "kwhFrom": 0,
-      "kwhTo": 50,
-      "energyChargeCents": 175.08,
-      "description": "Block description if shown"
-    }
-  ],
-  "charges": [
-    {
-      "chargeType": "service_charge|basic_monthly|capacity_charge|demand_kva",
-      "chargeAmount": 246.19,
-      "description": "Charge description",
-      "unit": "R/month|R/day|R/kVA"
-    }
-  ],
-  "touPeriods": [
-    {
-      "periodName": "Peak|Standard|Off-peak",
-      "timeRange": "06:00-09:00" or null if not shown,
-      "energyChargeCents": 250.00,
-      "season": "Summer|Winter|All" or null
+      "tariffName": "Full name e.g., Domestic Prepaid & Conventional",
+      "tariffType": "domestic",
+      "meterConfiguration": "both",
+      "blocks": [
+        {
+          "blockNumber": 1,
+          "kwhFrom": 0,
+          "kwhTo": 50,
+          "energyChargeCents": 175.08,
+          "description": "Block 1 (0-50 kWh)"
+        }
+      ],
+      "charges": [
+        {
+          "chargeType": "service_charge",
+          "chargeAmount": 246.19,
+          "unit": "R/month",
+          "description": "Basic Charge" 
+        }
+      ]
     }
   ]
 }
 
-If no tariff data is visible, return minimal structure with empty arrays.
-
-Return ONLY valid JSON, no markdown, no explanations.`;
+Extract EVERY tariff category you can see. If you see 5 categories, return 5 objects in tariffStructures array.
+Return ONLY valid JSON, no markdown.`;
 
   const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
@@ -447,19 +433,33 @@ Return ONLY valid JSON, no markdown, no explanations.`;
 
   try {
     const cleanedText = extractedText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    const tariffData = JSON.parse(cleanedText);
+    const extractedData = JSON.parse(cleanedText);
     
-    console.log("Extracted tariff data from image:", JSON.stringify(tariffData, null, 2));
+    console.log("Extracted municipality:", {
+      name: extractedData.municipalityName,
+      nersaIncrease: extractedData.nersaIncrease,
+      tariffCount: extractedData.tariffStructures?.length || 0
+    });
+    
+    // Log first tariff structure for debugging
+    if (extractedData.tariffStructures && extractedData.tariffStructures.length > 0) {
+      const firstTariff = extractedData.tariffStructures[0];
+      console.log("First tariff:", {
+        name: firstTariff.tariffName,
+        blockCount: firstTariff.blocks?.length || 0,
+        chargeCount: firstTariff.charges?.length || 0
+      });
+    }
     
     // Return in format compatible with frontend
     return new Response(
       JSON.stringify({ 
         success: true, 
-        municipality: {
-          name: tariffData.municipalityName || "",
-          nersaIncrease: tariffData.nersaIncrease || 0
-        },
-        tariffData: tariffData
+        tariffData: {
+          municipalityName: extractedData.municipalityName || "",
+          nersaIncrease: extractedData.nersaIncrease || 0,
+          tariffStructures: extractedData.tariffStructures || []
+        }
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
