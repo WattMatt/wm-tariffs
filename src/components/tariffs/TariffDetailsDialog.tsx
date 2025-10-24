@@ -116,11 +116,6 @@ export default function TariffDetailsDialog({ tariffId, tariffName, onClose }: T
         </DialogHeader>
 
         <div className="space-y-6">
-          {/* Data Counter */}
-          <div className="p-3 bg-primary/10 border border-primary/20 rounded-lg text-sm">
-            <strong>Data loaded:</strong> {blocks.length} blocks, {charges.length} charges, {touPeriods.length} TOU periods
-          </div>
-
           {/* Basic Info */}
           <div className="space-y-4">
             <div>
