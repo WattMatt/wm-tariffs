@@ -416,10 +416,14 @@ export default function MunicipalityExtractionDialog({
     });
   }, [currentPage, fabricCanvas]);
 
-  const handleExtractFromRegion = async (canvas: FabricCanvas, rect: FabricRect) => {
+  const handleExtractFromRegion = async (canvas: FabricCanvas, rect: FabricRect, appendMode = false) => {
     if (pdfPageImages.length === 0) return;
 
     setIsExtracting(true);
+    
+    // Store existing data if in append mode
+    const existingData = appendMode ? extractedData : null;
+    
     try {
       // Get the image object from canvas
       const objects = canvas.getObjects();
@@ -496,15 +500,36 @@ export default function MunicipalityExtractionDialog({
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || "Extraction failed");
       
-      setExtractedData(data.tariffData || {
+      const newData = data.tariffData || {
         municipalityName: data.municipality?.name || "",
         nersaIncrease: data.municipality?.nersaIncrease || 0,
+        tariffStructures: [],
         blocks: [],
         charges: [],
         touPeriods: []
-      });
+      };
       
-      toast.success("Municipality data extracted!");
+      // If in append mode, merge the tariff structures
+      if (appendMode && existingData) {
+        const mergedData = {
+          ...existingData,
+          // Keep existing municipality name and NERSA increase if they exist
+          municipalityName: existingData.municipalityName || newData.municipalityName,
+          nersaIncrease: existingData.nersaIncrease || newData.nersaIncrease,
+          // Append new tariff structures to existing ones
+          tariffStructures: [
+            ...(existingData.tariffStructures || []),
+            ...(newData.tariffStructures || [])
+          ],
+          // Keep custom fields if they exist
+          customFields: existingData.customFields || []
+        };
+        setExtractedData(mergedData);
+        toast.success(`Added ${newData.tariffStructures?.length || 0} new tariff structure(s)!`);
+      } else {
+        setExtractedData(newData);
+        toast.success("Municipality data extracted!");
+      }
     } catch (error: any) {
       console.error("Extraction failed:", error);
       toast.error(error.message || "Failed to extract municipality data");
@@ -1029,7 +1054,7 @@ export default function MunicipalityExtractionDialog({
                       <Button
                         onClick={() => {
                           if (fabricCanvas && selectionRectRef.current) {
-                            handleExtractFromRegion(fabricCanvas, selectionRectRef.current);
+                            handleExtractFromRegion(fabricCanvas, selectionRectRef.current, true);
                           }
                         }}
                         variant="outline"
