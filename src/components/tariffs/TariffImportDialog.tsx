@@ -469,82 +469,15 @@ export default function PdfImportDialog() {
   };
 
   const handleMunicipalityExtractionComplete = async (municipalities: MunicipalityInfo[]) => {
-    // Close the extraction dialog immediately
+    // Close the extraction dialog - data has already been saved
     setMunicipalityExtractionOpen(false);
     
-    const foundMunicipalities: MunicipalityProgress[] = municipalities.map((m) => ({
-      name: m.name,
-      nersaIncrease: m.nersaIncrease,
-      province: file!.name.includes('Eastern') ? 'Eastern Cape' : 
-               file!.name.includes('Free') ? 'Free State' : 
-               file!.name.includes('Western') ? 'Western Cape' :
-               file!.name.includes('Northern') ? 'Northern Cape' :
-               file!.name.includes('Gauteng') ? 'Gauteng' :
-               file!.name.includes('KwaZulu') || file!.name.includes('KZN') ? 'KwaZulu-Natal' :
-               file!.name.includes('Limpopo') ? 'Limpopo' :
-               file!.name.includes('Mpumalanga') ? 'Mpumalanga' :
-               file!.name.includes('North West') || file!.name.includes('NorthWest') ? 'North West' : 'Unknown',
-      status: 'extracting' as const
-    }));
-
-    setMunicipalities(foundMunicipalities);
-    setIsProcessing(true);
-    toast.info(`Extracting and saving ${foundMunicipalities.length} municipalities...`);
-    
-    // Extract and save tariff data for each municipality
-    for (let i = 0; i < foundMunicipalities.length; i++) {
-      const municipality = foundMunicipalities[i];
-      
-      try {
-        toast.info(`Extracting ${municipality.name}...`);
-        const documentContent = await extractTextFromAllPdfPages(file!);
-        const { data, error } = await supabase.functions.invoke("extract-tariff-data", {
-          body: { documentContent, phase: "extract", municipalityName: municipality.name }
-        });
-
-        if (error) throw error;
-        if (!data.success || !data.data) {
-          throw new Error("Failed to extract tariff data");
-        }
-        
-        const extractedData: ExtractedTariffData = data.data;
-        
-        // Update with extracted data
-        foundMunicipalities[i].data = extractedData;
-        foundMunicipalities[i].status = 'saving';
-        setMunicipalities([...foundMunicipalities]);
-        
-        // Automatically save to database
-        toast.info(`Saving ${municipality.name} to database...`);
-        await saveTariffData(extractedData);
-        
-        foundMunicipalities[i].status = 'complete';
-        setMunicipalities([...foundMunicipalities]);
-        
-      } catch (error: any) {
-        console.error(`Error processing ${municipality.name}:`, error);
-        foundMunicipalities[i].status = 'error';
-        foundMunicipalities[i].error = error.message;
-        setMunicipalities([...foundMunicipalities]);
-      }
-    }
-    
-    const successCount = foundMunicipalities.filter(m => m.status === 'complete').length;
-    const errorCount = foundMunicipalities.filter(m => m.status === 'error').length;
-    
+    // Close the main import dialog and reset
+    toast.success(`Successfully processed ${municipalities.length} municipalities!`);
+    setIsOpen(false);
+    setFile(null);
+    setMunicipalities([]);
     setIsProcessing(false);
-    
-    if (successCount > 0) {
-      toast.success(`Successfully saved ${successCount} of ${foundMunicipalities.length} municipalities to database!`);
-      // Close the entire import dialog after successful save
-      setTimeout(() => {
-        setIsOpen(false);
-        setFile(null);
-        setMunicipalities([]);
-      }, 2000);
-    } else {
-      toast.error(`Failed to save data for all municipalities.`);
-    }
   };
 
   const processSingleMunicipality = async (municipalityName: string, index: number) => {

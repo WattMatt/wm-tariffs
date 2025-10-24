@@ -813,14 +813,234 @@ export default function MunicipalityExtractionDialog({
     toast.success("Municipality removed");
   };
 
-  const handleComplete = () => {
+  const handleComplete = async () => {
     if (acceptedMunicipalities.length === 0) {
       toast.error("Please add at least one municipality");
       return;
     }
     
-    onComplete(acceptedMunicipalities);
-    onClose();
+    // Save directly to database
+    toast.info(`Saving ${acceptedMunicipalities.length} municipalities to database...`);
+    
+    let successCount = 0;
+    let errorCount = 0;
+    
+    for (const municipality of acceptedMunicipalities) {
+      try {
+        toast.info(`Saving ${municipality.name}...`);
+        
+        // Transform the municipality data into the expected format
+        const extractedData = {
+          supplyAuthority: {
+            name: municipality.name,
+            region: pdfFile.name.includes('Eastern') ? 'Eastern Cape' : 
+                   pdfFile.name.includes('Free') ? 'Free State' : 
+                   pdfFile.name.includes('Western') ? 'Western Cape' :
+                   pdfFile.name.includes('Northern') ? 'Northern Cape' :
+                   pdfFile.name.includes('Gauteng') ? 'Gauteng' :
+                   pdfFile.name.includes('KwaZulu') || pdfFile.name.includes('KZN') ? 'KwaZulu-Natal' :
+                   pdfFile.name.includes('Limpopo') ? 'Limpopo' :
+                   pdfFile.name.includes('Mpumalanga') ? 'Mpumalanga' :
+                   pdfFile.name.includes('North West') || pdfFile.name.includes('NorthWest') ? 'North West' : 'Unknown',
+            nersaIncreasePercentage: municipality.nersaIncrease
+          },
+          tariffStructures: municipality.tariffStructures || []
+        };
+        
+        // Save to database
+        await saveMunicipalityData(extractedData);
+        successCount++;
+        toast.success(`Successfully saved ${municipality.name}`);
+        
+      } catch (error: any) {
+        console.error(`Error saving ${municipality.name}:`, error);
+        toast.error(`Failed to save ${municipality.name}: ${error.message}`);
+        errorCount++;
+      }
+    }
+    
+    if (successCount > 0) {
+      toast.success(`Successfully saved ${successCount} of ${acceptedMunicipalities.length} municipalities!`);
+    }
+    
+    if (errorCount === 0) {
+      // Close the dialog after successful save
+      onClose();
+    }
+  };
+
+  const saveMunicipalityData = async (extractedData: any) => {
+    console.log("Saving municipality data:", extractedData);
+    
+    // Check if supply authority already exists
+    const { data: existingAuthority } = await supabase
+      .from("supply_authorities")
+      .select("id")
+      .eq("name", extractedData.supplyAuthority.name)
+      .maybeSingle();
+
+    let authorityId: string;
+
+    if (existingAuthority) {
+      console.log("Updating existing supply authority:", existingAuthority.id);
+      
+      const { error: updateError } = await supabase
+        .from("supply_authorities")
+        .update({
+          region: extractedData.supplyAuthority.region,
+          nersa_increase_percentage: extractedData.supplyAuthority.nersaIncreasePercentage
+        })
+        .eq("id", existingAuthority.id);
+      
+      if (updateError) {
+        console.error("Failed to update supply authority:", updateError);
+      }
+      
+      authorityId = existingAuthority.id;
+    } else {
+      const { data: newAuthority, error: authorityError } = await supabase
+        .from("supply_authorities")
+        .insert({
+          name: extractedData.supplyAuthority.name,
+          region: extractedData.supplyAuthority.region,
+          nersa_increase_percentage: extractedData.supplyAuthority.nersaIncreasePercentage,
+          active: true
+        })
+        .select()
+        .single();
+
+      if (authorityError) throw new Error(`Failed to create supply authority: ${authorityError.message}`);
+      console.log("Created new supply authority:", newAuthority.id);
+      authorityId = newAuthority.id;
+    }
+
+    // Insert tariff structures
+    for (const structure of extractedData.tariffStructures) {
+      console.log(`Saving tariff structure: ${structure.tariffName || structure.name}`);
+      
+      const tariffName = structure.tariffName || structure.name;
+      const effectiveFrom = new Date().toISOString().split('T')[0];
+      
+      // Check if tariff already exists
+      const { data: existingTariff } = await supabase
+        .from("tariff_structures")
+        .select("id")
+        .eq("supply_authority_id", authorityId)
+        .eq("name", tariffName)
+        .maybeSingle();
+
+      let tariffId: string;
+      
+      if (existingTariff) {
+        console.log(`Tariff "${tariffName}" already exists, updating...`);
+        
+        // Delete existing blocks, charges, and periods
+        await Promise.all([
+          supabase.from('tariff_blocks').delete().eq('tariff_structure_id', existingTariff.id),
+          supabase.from('tariff_charges').delete().eq('tariff_structure_id', existingTariff.id),
+          supabase.from('tariff_time_periods').delete().eq('tariff_structure_id', existingTariff.id)
+        ]);
+        
+        tariffId = existingTariff.id;
+      } else {
+        const { data: newTariff, error: tariffError } = await supabase
+          .from("tariff_structures")
+          .insert({
+            supply_authority_id: authorityId,
+            name: tariffName,
+            tariff_type: structure.tariffType || 'commercial',
+            uses_tou: structure.usesTou || false,
+            effective_from: effectiveFrom,
+            active: true
+          })
+          .select()
+          .single();
+
+        if (tariffError) throw new Error(`Failed to create tariff "${tariffName}": ${tariffError.message}`);
+        tariffId = newTariff.id;
+      }
+
+      // Save blocks
+      if (structure.blocks && structure.blocks.length > 0) {
+        const blocksToInsert = structure.blocks.map((block: any, index: number) => ({
+          tariff_structure_id: tariffId,
+          block_number: block.blockNumber || index + 1,
+          kwh_from: block.kwhFrom || 0,
+          kwh_to: block.kwhTo,
+          energy_charge_cents: block.energyChargeCents || 0
+        }));
+        
+        const { error: blocksError } = await supabase
+          .from('tariff_blocks')
+          .insert(blocksToInsert);
+        if (blocksError) throw new Error(`Failed to save blocks: ${blocksError.message}`);
+      }
+
+      // Save charges - handle different formats
+      const charges: any[] = [];
+      
+      // Basic charge
+      if (structure.basicCharge) {
+        charges.push({
+          tariff_structure_id: tariffId,
+          charge_type: 'basic_monthly',
+          description: 'Basic Monthly Charge',
+          charge_amount: structure.basicCharge.amount || structure.basicCharge,
+          unit: structure.basicCharge.unit || 'R/month'
+        });
+      }
+      
+      // Seasonal energy charges
+      if (structure.seasonalEnergy && structure.seasonalEnergy.length > 0) {
+        structure.seasonalEnergy.forEach((charge: any) => {
+          charges.push({
+            tariff_structure_id: tariffId,
+            charge_type: `energy_${charge.season.toLowerCase().replace(' ', '_')}`,
+            description: `${charge.season} Energy Charge`,
+            charge_amount: charge.rate,
+            unit: charge.unit || 'c/kWh'
+          });
+        });
+      }
+      
+      // Demand charges
+      if (structure.demandCharges && structure.demandCharges.length > 0) {
+        structure.demandCharges.forEach((charge: any) => {
+          charges.push({
+            tariff_structure_id: tariffId,
+            charge_type: `demand_${charge.season.toLowerCase().replace(' ', '_')}`,
+            description: `${charge.season} Demand Charge`,
+            charge_amount: charge.rate,
+            unit: charge.unit || 'R/kVA'
+          });
+        });
+      }
+      
+      if (charges.length > 0) {
+        const { error: chargesError } = await supabase
+          .from('tariff_charges')
+          .insert(charges);
+        if (chargesError) throw new Error(`Failed to save charges: ${chargesError.message}`);
+      }
+
+      // Save TOU periods
+      if (structure.touPeriods && structure.touPeriods.length > 0) {
+        const periodsToInsert = structure.touPeriods.map((period: any) => ({
+          tariff_structure_id: tariffId,
+          period_type: period.periodType || period.type,
+          season: period.season,
+          day_type: period.dayType || 'weekday',
+          start_hour: period.startHour || 0,
+          end_hour: period.endHour || 24,
+          energy_charge_cents: period.energyChargeCents || period.rate || 0
+        }));
+        
+        const { error: periodsError } = await supabase
+          .from('tariff_time_periods')
+          .insert(periodsToInsert);
+        if (periodsError) throw new Error(`Failed to save TOU periods: ${periodsError.message}`);
+      }
+    }
   };
 
   return (
