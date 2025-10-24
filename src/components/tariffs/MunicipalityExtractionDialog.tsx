@@ -602,15 +602,12 @@ export default function MunicipalityExtractionDialog({
         };
         
         console.log("Merged tariff structures count:", mergedData.tariffStructures?.length);
-        console.log("About to call setExtractedData");
+        console.log("Setting merged data now");
         
-        // Force a new state update
-        setExtractedData(null);
-        setTimeout(() => {
-          setExtractedData(mergedData);
-          toast.success(`Added ${newData.tariffStructures?.length || 0} new tariff structure(s)! Total: ${mergedData.tariffStructures?.length}`);
-        }, 50);
-        
+        // Set the merged data - spread to create new reference
+        setExtractedData({...mergedData});
+        toast.success(`Added ${newData.tariffStructures?.length || 0} new tariff structure(s)! Total: ${mergedData.tariffStructures?.length}`);
+        setIsExtracting(false);
         return;
       } else {
         setExtractedData(newData);
