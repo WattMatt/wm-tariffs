@@ -184,7 +184,7 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
       if (tariffData.seasonalEnergy.length > 0) {
         const chargesToInsert = tariffData.seasonalEnergy.map((charge: any) => ({
           tariff_structure_id: tariffId,
-          charge_type: "seasonal_energy",
+          charge_type: "network_charge",
           description: charge.season,
           charge_amount: charge.rate,
           unit: charge.unit,
@@ -242,7 +242,7 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
           .from("tariff_charges")
           .insert({
             tariff_structure_id: tariffId,
-            charge_type: "basic_charge",
+            charge_type: "basic_monthly",
             description: "Monthly Basic Charge",
             charge_amount: tariffData.basicCharge.amount,
             unit: tariffData.basicCharge.unit,
@@ -255,7 +255,7 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
       if (tariffData.demandCharges.length > 0) {
         const demandChargesToInsert = tariffData.demandCharges.map((charge: any) => ({
           tariff_structure_id: tariffId,
-          charge_type: "demand_charge",
+          charge_type: "demand_kva",
           description: charge.season,
           charge_amount: charge.rate,
           unit: charge.unit,

@@ -90,21 +90,21 @@ export default function TariffEditDialog({
           energyChargeCents: block.energy_charge_cents
         })),
         seasonalEnergy: (charges || [])
-          .filter(c => c.charge_type === "seasonal_energy")
+          .filter(c => c.charge_type === "network_charge")
           .map(c => ({
             season: c.description,
             rate: c.charge_amount,
             unit: c.unit
           })),
         touSeasons: groupTouPeriods(touPeriods || []),
-        basicCharge: (charges || []).find(c => c.charge_type === "basic_charge")
+        basicCharge: (charges || []).find(c => c.charge_type === "basic_monthly")
           ? {
-              amount: charges.find(c => c.charge_type === "basic_charge")!.charge_amount,
-              unit: charges.find(c => c.charge_type === "basic_charge")!.unit
+              amount: charges.find(c => c.charge_type === "basic_monthly")!.charge_amount,
+              unit: charges.find(c => c.charge_type === "basic_monthly")!.unit
             }
           : undefined,
         demandCharges: (charges || [])
-          .filter(c => c.charge_type === "demand_charge")
+          .filter(c => c.charge_type === "demand_kva")
           .map(c => ({
             season: c.description,
             rate: c.charge_amount,
@@ -196,7 +196,7 @@ export default function TariffEditDialog({
       if (data.seasonalEnergy.length > 0) {
         const chargesToInsert = data.seasonalEnergy.map(charge => ({
           tariff_structure_id: tariffId,
-          charge_type: "seasonal_energy",
+          charge_type: "network_charge",
           description: charge.season,
           charge_amount: charge.rate,
           unit: charge.unit
@@ -254,7 +254,7 @@ export default function TariffEditDialog({
           .from("tariff_charges")
           .insert({
             tariff_structure_id: tariffId,
-            charge_type: "basic_charge",
+            charge_type: "basic_monthly",
             description: "Monthly Basic Charge",
             charge_amount: data.basicCharge.amount,
             unit: data.basicCharge.unit
@@ -267,7 +267,7 @@ export default function TariffEditDialog({
       if (data.demandCharges.length > 0) {
         const demandChargesToInsert = data.demandCharges.map(charge => ({
           tariff_structure_id: tariffId,
-          charge_type: "demand_charge",
+          charge_type: "demand_kva",
           description: charge.season,
           charge_amount: charge.rate,
           unit: charge.unit
