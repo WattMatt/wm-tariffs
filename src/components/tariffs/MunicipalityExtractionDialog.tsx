@@ -723,10 +723,9 @@ export default function MunicipalityExtractionDialog({
       name: municipality.name,
       municipalityName: municipality.name,
       nersaIncrease: municipality.nersaIncrease,
-      tariffStructures: municipality.tariffStructures || [],
-      customFields: []
+      tariffStructures: municipality.tariffStructures || []
     });
-    toast.info(`Editing ${municipality.name} - click "Add Municipality" to save changes`);
+    toast.info(`Editing ${municipality.name} - click "Update Municipality" to save changes`);
   };
 
   const handleDeleteMunicipality = (id: string) => {
@@ -878,7 +877,7 @@ export default function MunicipalityExtractionDialog({
             <CardHeader className="pb-3">
               <CardTitle className="text-sm">Extracted Data</CardTitle>
             </CardHeader>
-            <CardContent className="flex-1 overflow-y-auto">
+            <CardContent className="flex-1 overflow-y-auto flex flex-col">
               {isExtracting ? (
                 <div className="flex flex-col items-center justify-center h-full p-6">
                   <Loader2 className="w-12 h-12 animate-spin text-primary mb-4" />
@@ -888,50 +887,31 @@ export default function MunicipalityExtractionDialog({
                   </p>
                 </div>
               ) : extractedData ? (
-                <ScrollArea className="h-full">
-                  <div className="space-y-4 p-1">
-                    <div>
-                      <Label className="text-xs">Municipality Name</Label>
-                      <Input
-                        value={extractedData.municipalityName || ""}
-                        onChange={(e) => setExtractedData({ ...extractedData, municipalityName: e.target.value })}
-                        className="h-9 mt-1"
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-xs">NERSA Increase (%)</Label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        value={extractedData.nersaIncrease || 0}
-                        onChange={(e) => setExtractedData({ ...extractedData, nersaIncrease: parseFloat(e.target.value) || 0 })}
-                        className="h-9 mt-1"
-                      />
-                    </div>
-                    
-                    {extractedData.tariffStructures && extractedData.tariffStructures.length > 0 && (
-                      <div className="space-y-4 mt-4">
-                        <div className="flex items-center justify-between">
+                <>
+                  <ScrollArea className="flex-1">
+                    <div className="space-y-4 p-1">
+                      <div>
+                        <Label className="text-xs">Municipality Name</Label>
+                        <Input
+                          value={extractedData.municipalityName || ""}
+                          onChange={(e) => setExtractedData({ ...extractedData, municipalityName: e.target.value })}
+                          className="h-9 mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">NERSA Increase (%)</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={extractedData.nersaIncrease || 0}
+                          onChange={(e) => setExtractedData({ ...extractedData, nersaIncrease: parseFloat(e.target.value) || 0 })}
+                          className="h-9 mt-1"
+                        />
+                      </div>
+                      
+                      {extractedData.tariffStructures && extractedData.tariffStructures.length > 0 && (
+                        <div className="space-y-4 mt-4">
                           <Label className="text-xs font-semibold">Extracted Tariff Structures ({extractedData.tariffStructures.length})</Label>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              const updated = [...(extractedData.tariffStructures || [])];
-                              updated.push({
-                                tariffName: "",
-                                blocks: [],
-                                charges: [],
-                                touPeriods: []
-                              });
-                              setExtractedData({ ...extractedData, tariffStructures: updated });
-                            }}
-                            className="h-7 text-xs"
-                          >
-                            <Plus className="h-3 w-3 mr-1" />
-                            Add Tariff
-                          </Button>
-                        </div>
                         {extractedData.tariffStructures.map((tariff: any, tariffIdx: number) => (
                           <Card key={tariffIdx} className="p-4 bg-muted/20 border-2">
                             <div className="space-y-3">
@@ -1520,101 +1500,60 @@ export default function MunicipalityExtractionDialog({
                     {/* Add tariff button when no tariffs exist */}
                     {(!extractedData.tariffStructures || extractedData.tariffStructures.length === 0) && (
                       <div className="mt-4">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            setExtractedData({
-                              ...extractedData,
-                              tariffStructures: [{
-                                tariffName: "",
-                                blocks: [],
-                                charges: [],
-                                touPeriods: []
-                              }]
-                            });
-                          }}
-                          className="w-full"
-                        >
-                          <Plus className="h-4 w-4 mr-1" />
-                          Add First Tariff Structure
-                        </Button>
+                        <p className="text-xs text-muted-foreground p-2 bg-muted/20 rounded">
+                          No tariff structures. Click the button below to add one.
+                        </p>
                       </div>
                     )}
-                    
-                    {/* Custom fields */}
-                    {extractedData.customFields && extractedData.customFields.length > 0 && (
-                      <div className="space-y-2 mt-4">
-                        <Label className="text-xs font-semibold">Custom Fields</Label>
-                        {extractedData.customFields.map((field: any, idx: number) => (
-                          <div key={idx} className="grid grid-cols-2 gap-2">
-                            <Input
-                              placeholder="Field name"
-                              value={field.name || ""}
-                              onChange={(e) => {
-                                const updated = [...extractedData.customFields];
-                                updated[idx].name = e.target.value;
-                                setExtractedData({ ...extractedData, customFields: updated });
-                              }}
-                              className="h-9"
-                            />
-                            <Input
-                              placeholder="Field value"
-                              value={field.value || ""}
-                              onChange={(e) => {
-                                const updated = [...extractedData.customFields];
-                                updated[idx].value = e.target.value;
-                                setExtractedData({ ...extractedData, customFields: updated });
-                              }}
-                              className="h-9"
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    
-                    {/* Three action buttons */}
-                    <div className="flex gap-2 mt-4">
-                      <Button
-                        onClick={() => {
-                          if (fabricCanvas && selectionRectRef.current) {
-                            handleExtractFromRegion(fabricCanvas, selectionRectRef.current, true);
-                          }
-                        }}
-                        variant="outline"
-                        size="sm"
-                        disabled={!fabricCanvas || !selectionRectRef.current || isExtracting}
-                        className="flex-1"
-                      >
-                        <RotateCw className="h-4 w-4 mr-1" />
-                        Append
-                      </Button>
-                      <Button
-                        onClick={() => {
-                          const customFields = extractedData.customFields || [];
-                          setExtractedData({
-                            ...extractedData,
-                            customFields: [...customFields, { name: "", value: "" }]
-                          });
-                        }}
-                        variant="outline"
-                        size="sm"
-                        className="flex-1"
-                      >
-                        <Plus className="h-4 w-4 mr-1" />
-                        Add Field
-                      </Button>
-                      <Button
-                        onClick={handleAcceptExtraction}
-                        size="sm"
-                        className="flex-1"
-                      >
-                        {editingMunicipalityId ? 'Update Municipality' : 'Add Municipality'}
-                      </Button>
-                    </div>
                   </div>
                 </ScrollArea>
-              ) : selectionRectRef.current ? (
+                
+                {/* Action buttons - Always visible at bottom */}
+                <div className="flex gap-2 p-4 border-t bg-background">
+                  <Button
+                    onClick={() => {
+                      if (fabricCanvas && selectionRectRef.current) {
+                        handleExtractFromRegion(fabricCanvas, selectionRectRef.current, true);
+                      }
+                    }}
+                    variant="outline"
+                    size="sm"
+                    disabled={!fabricCanvas || !selectionRectRef.current || isExtracting}
+                    className="flex-1"
+                  >
+                    <RotateCw className="h-4 w-4 mr-1" />
+                    Append
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      const updated = [...(extractedData.tariffStructures || [])];
+                      updated.push({
+                        tariffName: "",
+                        blocks: [],
+                        fixedEnergy: [],
+                        seasonalEnergy: [],
+                        touPeriods: [],
+                        demandCharges: []
+                      });
+                      setExtractedData({ ...extractedData, tariffStructures: updated });
+                    }}
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add Tariff
+                  </Button>
+                  <Button
+                    onClick={handleAcceptExtraction}
+                    size="sm"
+                    className="flex-1"
+                  >
+                    {editingMunicipalityId ? 'Update Municipality' : 'Add Municipality'}
+                  </Button>
+                </div>
+              </>
+            ) : selectionRectRef.current ? (
                 <div className="flex flex-col items-center justify-center h-full p-6 gap-4">
                   <p className="text-sm text-muted-foreground text-center">
                     Region selected. Click the button below to extract municipality data.
