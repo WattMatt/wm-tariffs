@@ -467,14 +467,15 @@ NOW: EXTRACT ALL TARIFF DATA FROM THE PROVIDED IMAGE
 ═══════════════════════════════════════════════════════
 Return ONLY valid JSON. No markdown. No explanations. No code blocks.`;
 
-  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+  // Try with gemini-2.5-flash first (more stable for images)
+  let response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${LOVABLE_API_KEY}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "google/gemini-2.5-pro",
+      model: "google/gemini-2.5-flash",
       messages: [
         { 
           role: "user", 
@@ -484,8 +485,36 @@ Return ONLY valid JSON. No markdown. No explanations. No code blocks.`;
           ]
         }
       ],
+      max_tokens: 4000,
     }),
   });
+
+  // If flash fails, retry with pro model
+  if (!response.ok && response.status === 500) {
+    console.log("Flash model failed with 500, retrying with Pro model...");
+    await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+    
+    response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-pro",
+        messages: [
+          { 
+            role: "user", 
+            content: [
+              { type: "text", text: prompt },
+              { type: "image_url", image_url: { url: imageUrl } }
+            ]
+          }
+        ],
+        max_tokens: 4000,
+      }),
+    });
+  }
 
   if (!response.ok) {
     if (response.status === 429) {
@@ -501,8 +530,14 @@ Return ONLY valid JSON. No markdown. No explanations. No code blocks.`;
       );
     }
     const errorText = await response.text();
-    console.error("AI gateway error:", response.status, errorText);
-    throw new Error(`AI processing failed: ${response.status}`);
+    console.error("AI gateway error:", response.status, errorText.slice(0, 500));
+    return new Response(
+      JSON.stringify({ 
+        error: `AI extraction failed. Please try selecting a smaller region or try again.`, 
+        success: false 
+      }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   }
 
   const aiResponse = await response.json();
