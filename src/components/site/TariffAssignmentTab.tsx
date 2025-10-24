@@ -301,9 +301,9 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
                           </TableCell>
                           <TableCell>
                             {hasUnsavedChanges(meter.id) ? (
-                              <Badge variant="outline" className="gap-1 border-warning text-warning">
+                              <Badge className="gap-1 bg-warning text-warning-foreground">
                                 <AlertCircle className="w-3 h-3" />
-                                Pending Save
+                                Pending
                               </Badge>
                             ) : hasAssignment ? (
                               <Badge variant="default" className="gap-1">
