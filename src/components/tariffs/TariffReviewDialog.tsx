@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import { RefreshCw, RotateCcw, X, Loader2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -415,15 +416,23 @@ export default function TariffReviewDialog({
                                       </div>
                                       <div>
                                         <Label className="text-xs">Season</Label>
-                                        <Input
+                                        <Select
                                           value={period.season}
-                                          onChange={(e) =>
+                                          onValueChange={(value) =>
                                             updateTouPeriod(tariffIdx, periodIdx, {
-                                              season: e.target.value
+                                              season: value
                                             })
                                           }
-                                          className="h-8 text-sm"
-                                        />
+                                        >
+                                          <SelectTrigger className="h-8 text-sm">
+                                            <SelectValue placeholder="Select season" />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="Low Season">Low Season</SelectItem>
+                                            <SelectItem value="High Season">High Season</SelectItem>
+                                            <SelectItem value="Both Seasons">Both Seasons</SelectItem>
+                                          </SelectContent>
+                                        </Select>
                                       </div>
                                       <div>
                                         <Label className="text-xs">Hours</Label>
