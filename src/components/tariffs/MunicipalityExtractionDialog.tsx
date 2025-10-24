@@ -1274,149 +1274,8 @@ export default function MunicipalityExtractionDialog({
                                         className="h-9 mt-1"
                                       />
                                     </div>
-                                    
-                                    <div className="grid grid-cols-2 gap-3">
-                                      <div>
-                                        <Label className="text-xs">Tariff Type</Label>
-                                        <Select
-                                          value={tariff.tariffType || "commercial"}
-                                          onValueChange={(value) => {
-                                            const updated = [...extractedData.tariffStructures];
-                                            updated[tariffIdx].tariffType = value;
-                                            setExtractedData({ ...extractedData, tariffStructures: updated });
-                                          }}
-                                        >
-                                          <SelectTrigger className="h-9 mt-1">
-                                            <SelectValue />
-                                          </SelectTrigger>
-                                          <SelectContent>
-                                            <SelectItem value="commercial">Commercial</SelectItem>
-                                            <SelectItem value="residential">Residential</SelectItem>
-                                            <SelectItem value="industrial">Industrial</SelectItem>
-                                            <SelectItem value="agricultural">Agricultural</SelectItem>
-                                          </SelectContent>
-                                        </Select>
-                                      </div>
-                                      
-                                      <div>
-                                        <Label className="text-xs">Meter Config</Label>
-                                        <Select
-                                          value={tariff.meterConfiguration || "prepaid"}
-                                          onValueChange={(value) => {
-                                            const updated = [...extractedData.tariffStructures];
-                                            updated[tariffIdx].meterConfiguration = value;
-                                            setExtractedData({ ...extractedData, tariffStructures: updated });
-                                          }}
-                                        >
-                                          <SelectTrigger className="h-9 mt-1">
-                                            <SelectValue />
-                                          </SelectTrigger>
-                                          <SelectContent>
-                                            <SelectItem value="prepaid">Prepaid</SelectItem>
-                                            <SelectItem value="postpaid">Postpaid</SelectItem>
-                                            <SelectItem value="both">Both</SelectItem>
-                                          </SelectContent>
-                                        </Select>
-                                      </div>
-                                    </div>
-                                    
-                                    <div>
-                                      <Label className="text-xs">Effective From</Label>
-                                      <Input
-                                        type="date"
-                                        value={tariff.effectiveFrom || new Date().toISOString().split('T')[0]}
-                                        onChange={(e) => {
-                                          const updated = [...extractedData.tariffStructures];
-                                          updated[tariffIdx].effectiveFrom = e.target.value;
-                                          setExtractedData({ ...extractedData, tariffStructures: updated });
-                                        }}
-                                        className="h-9 mt-1"
-                                      />
-                                    </div>
                                   </div>
                                   
-                                  {/* Section Visibility Checkboxes */}
-                                  <div className="space-y-2 p-3 border rounded-lg bg-muted/10 mt-3">
-                                    <Label className="text-xs font-medium">Select Charge Types to Display</Label>
-                                    <div className="grid grid-cols-2 gap-2">
-                                      <div className="flex items-center space-x-2">
-                                        <Checkbox
-                                          id={`show-blocks-${tariffIdx}`}
-                                          checked={visibleSections[tariffIdx]?.blocks ?? true}
-                                          onCheckedChange={(checked) => 
-                                            setVisibleSections(prev => ({
-                                              ...prev,
-                                              [tariffIdx]: { ...prev[tariffIdx], blocks: checked === true }
-                                            }))
-                                          }
-                                        />
-                                        <Label htmlFor={`show-blocks-${tariffIdx}`} className="text-xs font-normal cursor-pointer">
-                                          Energy Blocks
-                                        </Label>
-                                      </div>
-                                      <div className="flex items-center space-x-2">
-                                        <Checkbox
-                                          id={`show-seasonal-${tariffIdx}`}
-                                          checked={visibleSections[tariffIdx]?.seasonalEnergy ?? true}
-                                          onCheckedChange={(checked) => 
-                                            setVisibleSections(prev => ({
-                                              ...prev,
-                                              [tariffIdx]: { ...prev[tariffIdx], seasonalEnergy: checked === true }
-                                            }))
-                                          }
-                                        />
-                                        <Label htmlFor={`show-seasonal-${tariffIdx}`} className="text-xs font-normal cursor-pointer">
-                                          Seasonal Energy
-                                        </Label>
-                                      </div>
-                                      <div className="flex items-center space-x-2">
-                                        <Checkbox
-                                          id={`show-tou-${tariffIdx}`}
-                                          checked={visibleSections[tariffIdx]?.touEnergy ?? true}
-                                          onCheckedChange={(checked) => 
-                                            setVisibleSections(prev => ({
-                                              ...prev,
-                                              [tariffIdx]: { ...prev[tariffIdx], touEnergy: checked === true }
-                                            }))
-                                          }
-                                        />
-                                        <Label htmlFor={`show-tou-${tariffIdx}`} className="text-xs font-normal cursor-pointer">
-                                          Time-of-Use Energy
-                                        </Label>
-                                      </div>
-                                      <div className="flex items-center space-x-2">
-                                        <Checkbox
-                                          id={`show-basic-${tariffIdx}`}
-                                          checked={visibleSections[tariffIdx]?.basicCharge ?? true}
-                                          onCheckedChange={(checked) => 
-                                            setVisibleSections(prev => ({
-                                              ...prev,
-                                              [tariffIdx]: { ...prev[tariffIdx], basicCharge: checked === true }
-                                            }))
-                                          }
-                                        />
-                                        <Label htmlFor={`show-basic-${tariffIdx}`} className="text-xs font-normal cursor-pointer">
-                                          Basic Charge (Fixed Monthly)
-                                        </Label>
-                                      </div>
-                                      <div className="flex items-center space-x-2">
-                                        <Checkbox
-                                          id={`show-demand-${tariffIdx}`}
-                                          checked={visibleSections[tariffIdx]?.demandCharges ?? true}
-                                          onCheckedChange={(checked) => 
-                                            setVisibleSections(prev => ({
-                                              ...prev,
-                                              [tariffIdx]: { ...prev[tariffIdx], demandCharges: checked === true }
-                                            }))
-                                          }
-                                        />
-                                        <Label htmlFor={`show-demand-${tariffIdx}`} className="text-xs font-normal cursor-pointer">
-                                          Demand Charges (Seasonal)
-                                        </Label>
-                                      </div>
-                                    </div>
-                                  </div>
-
                                   <CollapsibleTrigger asChild>
                                     <Button
                                       size="sm"
@@ -1447,6 +1306,148 @@ export default function MunicipalityExtractionDialog({
                               
                               <CollapsibleContent>
                                 <div className="space-y-3 mt-3">
+                                
+                                {/* Tariff Metadata Fields */}
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div>
+                                    <Label className="text-xs">Tariff Type</Label>
+                                    <Select
+                                      value={tariff.tariffType || "commercial"}
+                                      onValueChange={(value) => {
+                                        const updated = [...extractedData.tariffStructures];
+                                        updated[tariffIdx].tariffType = value;
+                                        setExtractedData({ ...extractedData, tariffStructures: updated });
+                                      }}
+                                    >
+                                      <SelectTrigger className="h-9 mt-1">
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="commercial">Commercial</SelectItem>
+                                        <SelectItem value="residential">Residential</SelectItem>
+                                        <SelectItem value="industrial">Industrial</SelectItem>
+                                        <SelectItem value="agricultural">Agricultural</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                  
+                                  <div>
+                                    <Label className="text-xs">Meter Config</Label>
+                                    <Select
+                                      value={tariff.meterConfiguration || "prepaid"}
+                                      onValueChange={(value) => {
+                                        const updated = [...extractedData.tariffStructures];
+                                        updated[tariffIdx].meterConfiguration = value;
+                                        setExtractedData({ ...extractedData, tariffStructures: updated });
+                                      }}
+                                    >
+                                      <SelectTrigger className="h-9 mt-1">
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="prepaid">Prepaid</SelectItem>
+                                        <SelectItem value="postpaid">Postpaid</SelectItem>
+                                        <SelectItem value="both">Both</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                </div>
+                                
+                                <div>
+                                  <Label className="text-xs">Effective From</Label>
+                                  <Input
+                                    type="date"
+                                    value={tariff.effectiveFrom || new Date().toISOString().split('T')[0]}
+                                    onChange={(e) => {
+                                      const updated = [...extractedData.tariffStructures];
+                                      updated[tariffIdx].effectiveFrom = e.target.value;
+                                      setExtractedData({ ...extractedData, tariffStructures: updated });
+                                    }}
+                                    className="h-9 mt-1"
+                                  />
+                                </div>
+                                
+                                {/* Section Visibility Checkboxes */}
+                                <div className="space-y-2 p-3 border rounded-lg bg-muted/10">
+                                  <Label className="text-xs font-medium">Select Charge Types to Display</Label>
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <div className="flex items-center space-x-2">
+                                      <Checkbox
+                                        id={`show-blocks-${tariffIdx}`}
+                                        checked={visibleSections[tariffIdx]?.blocks ?? true}
+                                        onCheckedChange={(checked) => 
+                                          setVisibleSections(prev => ({
+                                            ...prev,
+                                            [tariffIdx]: { ...prev[tariffIdx], blocks: checked === true }
+                                          }))
+                                        }
+                                      />
+                                      <Label htmlFor={`show-blocks-${tariffIdx}`} className="text-xs font-normal cursor-pointer">
+                                        Energy Blocks
+                                      </Label>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                      <Checkbox
+                                        id={`show-seasonal-${tariffIdx}`}
+                                        checked={visibleSections[tariffIdx]?.seasonalEnergy ?? true}
+                                        onCheckedChange={(checked) => 
+                                          setVisibleSections(prev => ({
+                                            ...prev,
+                                            [tariffIdx]: { ...prev[tariffIdx], seasonalEnergy: checked === true }
+                                          }))
+                                        }
+                                      />
+                                      <Label htmlFor={`show-seasonal-${tariffIdx}`} className="text-xs font-normal cursor-pointer">
+                                        Seasonal Energy
+                                      </Label>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                      <Checkbox
+                                        id={`show-tou-${tariffIdx}`}
+                                        checked={visibleSections[tariffIdx]?.touEnergy ?? true}
+                                        onCheckedChange={(checked) => 
+                                          setVisibleSections(prev => ({
+                                            ...prev,
+                                            [tariffIdx]: { ...prev[tariffIdx], touEnergy: checked === true }
+                                          }))
+                                        }
+                                      />
+                                      <Label htmlFor={`show-tou-${tariffIdx}`} className="text-xs font-normal cursor-pointer">
+                                        Time-of-Use Energy
+                                      </Label>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                      <Checkbox
+                                        id={`show-basic-${tariffIdx}`}
+                                        checked={visibleSections[tariffIdx]?.basicCharge ?? true}
+                                        onCheckedChange={(checked) => 
+                                          setVisibleSections(prev => ({
+                                            ...prev,
+                                            [tariffIdx]: { ...prev[tariffIdx], basicCharge: checked === true }
+                                          }))
+                                        }
+                                      />
+                                      <Label htmlFor={`show-basic-${tariffIdx}`} className="text-xs font-normal cursor-pointer">
+                                        Basic Charge (Fixed Monthly)
+                                      </Label>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                      <Checkbox
+                                        id={`show-demand-${tariffIdx}`}
+                                        checked={visibleSections[tariffIdx]?.demandCharges ?? true}
+                                        onCheckedChange={(checked) => 
+                                          setVisibleSections(prev => ({
+                                            ...prev,
+                                            [tariffIdx]: { ...prev[tariffIdx], demandCharges: checked === true }
+                                          }))
+                                        }
+                                      />
+                                      <Label htmlFor={`show-demand-${tariffIdx}`} className="text-xs font-normal cursor-pointer">
+                                        Demand Charges (Seasonal)
+                                      </Label>
+                                    </div>
+                                  </div>
+                                </div>
                               
                               {/* Energy Blocks Section */}
                               {visibleSections[tariffIdx]?.blocks !== false && (
