@@ -10,7 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { FileCheck2, AlertCircle, CheckCircle2, DollarSign, Eye } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import TariffDetailsDialog from "@/components/tariffs/TariffDetailsDialog";
+import TariffEditDialog from "@/components/tariffs/TariffEditDialog";
 
 interface TariffAssignmentTabProps {
   siteId: string;
@@ -36,6 +36,7 @@ interface TariffStructure {
   effective_to: string | null;
   description: string | null;
   uses_tou: boolean;
+  supply_authority_id: string;
 }
 
 interface Meter {
@@ -54,6 +55,8 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [viewingTariffId, setViewingTariffId] = useState<string | null>(null);
+  const [viewingTariffName, setViewingTariffName] = useState<string>("");
+  const [viewingSupplyAuthorityId, setViewingSupplyAuthorityId] = useState<string>("");
 
   useEffect(() => {
     fetchSiteData();
@@ -333,7 +336,14 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                onClick={() => setViewingTariffId(currentTariffId)}
+                                onClick={() => {
+                                  const tariffStructure = tariffStructures.find(t => t.id === currentTariffId);
+                                  if (tariffStructure) {
+                                    setViewingTariffId(currentTariffId);
+                                    setViewingTariffName(tariffStructure.name);
+                                    setViewingSupplyAuthorityId(tariffStructure.supply_authority_id);
+                                  }
+                                }}
                               >
                                 <Eye className="w-4 h-4" />
                               </Button>
@@ -391,7 +401,11 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
                           <Button
                             variant="outline"
                             size="icon"
-                            onClick={() => setViewingTariffId(tariff.id)}
+                            onClick={() => {
+                              setViewingTariffId(tariff.id);
+                              setViewingTariffName(tariff.name);
+                              setViewingSupplyAuthorityId(tariff.supply_authority_id);
+                            }}
                             className="shrink-0"
                           >
                             <Eye className="w-4 h-4" />
@@ -411,10 +425,16 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
       )}
 
       {viewingTariffId && (
-        <TariffDetailsDialog
+        <TariffEditDialog
           tariffId={viewingTariffId}
-          tariffName={tariffStructures.find(t => t.id === viewingTariffId)?.name || "Tariff Details"}
-          onClose={() => setViewingTariffId(null)}
+          tariffName={viewingTariffName}
+          mode="view"
+          supplyAuthorityId={viewingSupplyAuthorityId}
+          onClose={() => {
+            setViewingTariffId(null);
+            setViewingTariffName("");
+            setViewingSupplyAuthorityId("");
+          }}
         />
       )}
     </div>
