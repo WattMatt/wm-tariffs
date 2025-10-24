@@ -4,12 +4,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, FileText, Clock, Eye, Trash2 } from "lucide-react";
+import { Plus, FileText, Eye, Trash2, Pencil, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
-import TouPeriodsDialog from "./TouPeriodsDialog";
 import TariffDetailsDialog from "./TariffDetailsDialog";
 import TariffStructureForm from "./TariffStructureForm";
 
@@ -48,7 +46,6 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [selectedTariffForTou, setSelectedTariffForTou] = useState<string | null>(null);
   const [selectedTariffForDetails, setSelectedTariffForDetails] = useState<{ id: string; name: string } | null>(null);
 
   useEffect(() => {
@@ -407,32 +404,25 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-2">
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="outline"
-                                size="icon"
-                                onClick={() => setSelectedTariffForDetails({ id: structure.id, name: structure.name })}
-                              >
-                                <Eye className="w-4 h-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>View Details</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                        {structure.uses_tou && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setSelectedTariffForTou(structure.id)}
-                          >
-                            <Clock className="w-4 h-4 mr-2" />
-                            TOU Periods
-                          </Button>
-                        )}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setSelectedTariffForDetails({ id: structure.id, name: structure.name })}
+                        >
+                          <Eye className="w-4 h-4 mr-2" />
+                          View
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            // TODO: Open edit dialog with pre-filled data
+                            toast.info("Edit functionality coming soon");
+                          }}
+                        >
+                          <Pencil className="w-4 h-4 mr-2" />
+                          Edit
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -441,13 +431,6 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
             </Table>
           </CardContent>
         </Card>
-      )}
-
-      {selectedTariffForTou && (
-        <TouPeriodsDialog
-          tariffId={selectedTariffForTou}
-          onClose={() => setSelectedTariffForTou(null)}
-        />
       )}
 
       {selectedTariffForDetails && (
