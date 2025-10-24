@@ -3,7 +3,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import TariffStructureForm from "./TariffStructureForm";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
 
 interface TariffDetailsDialogProps {
   tariffId: string;
@@ -18,10 +20,8 @@ interface TariffData {
   description: string;
   effectiveFrom: string;
   blocks: any[];
-  seasonalEnergy: any[];
-  touSeasons: any[];
-  basicCharge?: any;
-  demandCharges: any[];
+  charges: any[];
+  touPeriods: any[];
 }
 
 export default function TariffDetailsDialog({ tariffId, tariffName, onClose }: TariffDetailsDialogProps) {
@@ -65,68 +65,16 @@ export default function TariffDetailsDialog({ tariffId, tariffName, onClose }: T
         .eq("tariff_structure_id", tariffId)
         .order("season", { ascending: true });
 
-      // Transform data to match form structure
-      const basicChargeData = (charges || []).find(c => c.charge_type === 'basic_monthly' || c.charge_type === 'basic_charge');
-      
-      const formData: TariffData = {
+      setTariffData({
         tariffName: tariff.name,
         tariffType: tariff.tariff_type,
         meterConfiguration: tariff.meter_configuration || "prepaid",
         description: tariff.description || "",
         effectiveFrom: tariff.effective_from,
-        blocks: (blocks || []).map(block => ({
-          blockNumber: block.block_number,
-          kwhFrom: block.kwh_from,
-          kwhTo: block.kwh_to,
-          energyChargeCents: block.energy_charge_cents
-        })),
-        seasonalEnergy: (charges || [])
-          .filter(c => c.charge_type.includes('energy') && c.charge_type !== 'tou_energy')
-          .map(c => {
-            // Extract season from charge_type (e.g., "energy_high_season" -> "High Season")
-            const seasonMatch = c.charge_type.match(/energy_(.+)_season/);
-            const season = seasonMatch 
-              ? seasonMatch[1].split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
-              : c.description || 'Standard';
-            return {
-              season: season,
-              rate: c.charge_amount,
-              unit: c.unit
-            };
-          }),
-        touSeasons: groupTouPeriods(touPeriods || []),
-        basicCharge: basicChargeData
-          ? {
-              amount: basicChargeData.charge_amount,
-              unit: basicChargeData.unit
-            }
-          : undefined,
-        demandCharges: (charges || [])
-          .filter(c => c.charge_type.includes('demand'))
-          .map(c => {
-            // Extract season from charge_type (e.g., "demand_high_season" -> "High Season")
-            const seasonMatch = c.charge_type.match(/demand_(.+)_season/);
-            const season = seasonMatch 
-              ? seasonMatch[1].split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
-              : c.description || 'Standard';
-            return {
-              season: season,
-              rate: c.charge_amount,
-              unit: c.unit
-            };
-          })
-      };
-
-      console.log('TariffDetailsDialog - Transformed data:', {
-        blocks: formData.blocks.length,
-        seasonalEnergy: formData.seasonalEnergy.length,
-        touSeasons: formData.touSeasons.length,
-        hasBasicCharge: !!formData.basicCharge,
-        demandCharges: formData.demandCharges.length,
-        fullData: formData
+        blocks: blocks || [],
+        charges: charges || [],
+        touPeriods: touPeriods || []
       });
-
-      setTariffData(formData);
     } catch (error: any) {
       toast.error(`Failed to load tariff: ${error.message}`);
       onClose();
@@ -135,36 +83,9 @@ export default function TariffDetailsDialog({ tariffId, tariffName, onClose }: T
     }
   };
 
-  const groupTouPeriods = (periods: any[]) => {
-    const grouped = new Map<string, any>();
-
-    periods.forEach(period => {
-      const key = period.season;
-      if (!grouped.has(key)) {
-        grouped.set(key, {
-          season: period.season,
-          peak: 0,
-          standard: 0,
-          offPeak: 0
-        });
-      }
-
-      const seasonData = grouped.get(key);
-      if (period.period_type === "peak") {
-        seasonData.peak = period.energy_charge_cents;
-      } else if (period.period_type === "standard") {
-        seasonData.standard = period.energy_charge_cents;
-      } else if (period.period_type === "off_peak") {
-        seasonData.offPeak = period.energy_charge_cents;
-      }
-    });
-
-    return Array.from(grouped.values());
-  };
-
   return (
     <Dialog open={true} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>View Tariff Structure</DialogTitle>
           <DialogDescription>
@@ -177,12 +98,143 @@ export default function TariffDetailsDialog({ tariffId, tariffName, onClose }: T
             <Loader2 className="w-8 h-8 animate-spin text-primary" />
           </div>
         ) : tariffData ? (
-          <TariffStructureForm 
-            onSubmit={() => {}}
-            isLoading={false}
-            initialData={tariffData}
-            readOnly={true}
-          />
+          <div className="space-y-6">
+            {/* Basic Information */}
+            <div className="space-y-4">
+              <div>
+                <Label>Tariff Name</Label>
+                <Input value={tariffData.tariffName} disabled className="mt-1" />
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Tariff Type</Label>
+                  <Input value={tariffData.tariffType} disabled className="mt-1" />
+                </div>
+                <div>
+                  <Label>Meter Configuration</Label>
+                  <Input value={tariffData.meterConfiguration} disabled className="mt-1" />
+                </div>
+              </div>
+
+              <div>
+                <Label>Description</Label>
+                <Input value={tariffData.description} disabled className="mt-1" />
+              </div>
+
+              <div>
+                <Label>Effective From</Label>
+                <Input value={tariffData.effectiveFrom} disabled className="mt-1" />
+              </div>
+            </div>
+
+            {/* Energy Blocks */}
+            {tariffData.blocks.length > 0 && (
+              <>
+                <Separator />
+                <div>
+                  <h3 className="text-lg font-semibold mb-4">Energy Blocks</h3>
+                  <div className="space-y-3">
+                    {tariffData.blocks.map((block, index) => (
+                      <div key={index} className="grid grid-cols-4 gap-2 p-3 bg-muted/50 rounded-lg">
+                        <div>
+                          <Label className="text-xs">Block {block.block_number}</Label>
+                        </div>
+                        <div>
+                          <Label className="text-xs">From (kWh)</Label>
+                          <Input value={block.kwh_from} disabled className="mt-1" />
+                        </div>
+                        <div>
+                          <Label className="text-xs">To (kWh)</Label>
+                          <Input value={block.kwh_to || "∞"} disabled className="mt-1" />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Rate (c/kWh)</Label>
+                          <Input value={block.energy_charge_cents} disabled className="mt-1" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Charges */}
+            {tariffData.charges.length > 0 && (
+              <>
+                <Separator />
+                <div>
+                  <h3 className="text-lg font-semibold mb-4">Charges</h3>
+                  <div className="space-y-3">
+                    {tariffData.charges.map((charge, index) => (
+                      <div key={index} className="grid grid-cols-4 gap-2 p-3 bg-muted/50 rounded-lg">
+                        <div className="col-span-2">
+                          <Label className="text-xs">Type</Label>
+                          <Input value={charge.charge_type.replace(/_/g, ' ').toUpperCase()} disabled className="mt-1" />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Amount</Label>
+                          <Input value={charge.charge_amount} disabled className="mt-1" />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Unit</Label>
+                          <Input value={charge.unit} disabled className="mt-1" />
+                        </div>
+                        {charge.description && (
+                          <div className="col-span-4">
+                            <Label className="text-xs">Description</Label>
+                            <Input value={charge.description} disabled className="mt-1" />
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* TOU Periods */}
+            {tariffData.touPeriods.length > 0 && (
+              <>
+                <Separator />
+                <div>
+                  <h3 className="text-lg font-semibold mb-4">Time-of-Use Periods</h3>
+                  <div className="space-y-3">
+                    {tariffData.touPeriods.map((period, index) => (
+                      <div key={index} className="grid grid-cols-5 gap-2 p-3 bg-muted/50 rounded-lg">
+                        <div>
+                          <Label className="text-xs">Season</Label>
+                          <Input value={period.season} disabled className="mt-1" />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Period</Label>
+                          <Input value={period.period_type.replace(/_/g, ' ')} disabled className="mt-1" />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Day Type</Label>
+                          <Input value={period.day_type} disabled className="mt-1" />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Hours</Label>
+                          <Input value={`${period.start_hour}:00 - ${period.end_hour}:00`} disabled className="mt-1" />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Rate (c/kWh)</Label>
+                          <Input value={period.energy_charge_cents} disabled className="mt-1" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {tariffData.blocks.length === 0 && tariffData.charges.length === 0 && tariffData.touPeriods.length === 0 && (
+              <div className="text-center py-8 text-muted-foreground">
+                No tariff data available
+              </div>
+            )}
+          </div>
         ) : (
           <div className="text-center py-8 text-muted-foreground">
             Failed to load tariff data
