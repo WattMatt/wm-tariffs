@@ -984,7 +984,7 @@ export default function MunicipalityExtractionDialog({
       if (structure.basicCharge) {
         charges.push({
           tariff_structure_id: tariffId,
-          charge_type: 'basic_monthly',
+          charge_type: 'basic_charge',
           description: 'Basic Monthly Charge',
           charge_amount: structure.basicCharge.amount || structure.basicCharge,
           unit: structure.basicCharge.unit || 'R/month'
@@ -996,7 +996,7 @@ export default function MunicipalityExtractionDialog({
         structure.seasonalEnergy.forEach((charge: any) => {
           charges.push({
             tariff_structure_id: tariffId,
-            charge_type: `energy_${charge.season.toLowerCase().replace(' ', '_')}`,
+            charge_type: 'seasonal_energy',
             description: `${charge.season} Energy Charge`,
             charge_amount: charge.rate,
             unit: charge.unit || 'c/kWh'
@@ -1009,7 +1009,7 @@ export default function MunicipalityExtractionDialog({
         structure.demandCharges.forEach((charge: any) => {
           charges.push({
             tariff_structure_id: tariffId,
-            charge_type: `demand_${charge.season.toLowerCase().replace(' ', '_')}`,
+            charge_type: 'demand_charge',
             description: `${charge.season} Demand Charge`,
             charge_amount: charge.rate,
             unit: charge.unit || 'R/kVA'
