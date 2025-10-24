@@ -360,41 +360,40 @@ async function extractMunicipalityFromImage(imageUrl: string) {
 
   console.log("Extracting municipality data from image:", imageUrl);
 
-  const prompt = `You are a precise data extraction specialist for South African electricity tariff documents. This document ALWAYS contains tariff names with associated charges and costs. Your task is to extract ALL data with 100% accuracy.
+  const prompt = `You are a data extraction specialist for South African electricity tariff documents. Extract ALL tariff data visible in this image, even if some fields are missing.
 
 ═══════════════════════════════════════════════════════
-STEP 1: UNDERSTAND THE DOCUMENT STRUCTURE
+IMPORTANT: EXTRACT VISIBLE DATA ONLY
 ═══════════════════════════════════════════════════════
-Every tariff document contains:
-✓ Municipality name (at top)
-✓ NERSA increase percentage (next to municipality name)
-✓ Multiple tariff categories (Domestic, Commercial, Industrial, etc.)
-✓ Each tariff has blocks (energy tiers) AND/OR fixed charges
-✓ Each block has: kWh range + rate (c/kWh or R/kWh)
-✓ Each charge has: type + amount + unit (R/month, R/kVA, etc.)
+This image may show:
+• A complete tariff document (with municipality name, NERSA %, tariffs)
+• OR just a portion/region showing only tariff blocks and charges
+• Extract WHATEVER is visible - missing fields are OK!
+
+IF VISIBLE: Extract municipality name and NERSA increase percentage
+IF NOT VISIBLE: Use empty string "" for municipality name and 0 for NERSA increase
 
 ═══════════════════════════════════════════════════════
-STEP 2: EXTRACTION PROCESS (DO THIS IN ORDER)
+EXTRACTION PROCESS
 ═══════════════════════════════════════════════════════
-1. Read municipality name from header
-2. Extract NERSA increase percentage (the XX.XX% number)
-3. Scan ENTIRE image for ALL tariff category headers
-4. For EACH tariff category found:
+1. Check if municipality name is visible → extract if present, use "" if not
+2. Check if NERSA increase % is visible → extract if present, use 0 if not  
+3. Scan image for ALL tariff categories (Domestic, Commercial, Industrial, etc.)
+4. For EACH tariff found:
    a. Extract exact tariff name
-   b. Look for "Tariff blocks" table
-   c. Count total number of block rows
-   d. Extract EVERY block row (do not skip any)
-   e. Look for fixed charges section
-   f. Extract ALL charges (basic, energy, demand, etc.)
+   b. Look for block tables with kWh ranges and rates
+   c. Extract EVERY block row you see
+   d. Look for charges (basic, energy, demand)
+   e. Extract ALL charges you see
 
 ═══════════════════════════════════════════════════════
-STEP 3: CRITICAL EXTRACTION RULES
+CRITICAL RULES
 ═══════════════════════════════════════════════════════
-✓ READ EVERY ROW in each table - NEVER skip rows
-✓ If table shows 4 blocks → extract all 4 blocks
-✓ If table shows 1 energy charge → extract that 1 charge
-✓ NEVER return 0 for charges unless document explicitly shows "0"
-✓ For blocks: use 0 for first block start, use 999999 for unlimited upper bound
+✓ Extract ALL tariffs visible in the image
+✓ READ EVERY ROW in tables - NEVER skip rows
+✓ If you see 4 blocks → extract all 4 blocks
+✓ If you see 1 charge → extract that 1 charge
+✓ Missing data is OK - just extract what's there
 ✓ For unlimited blocks (e.g., ">600 kWh"): kwhFrom = 601, kwhTo = null
 
 ═══════════════════════════════════════════════════════
@@ -417,23 +416,21 @@ CONVERSION RULES:
 • R/kW → keep value as-is (store without R)
 
 ═══════════════════════════════════════════════════════
-STEP 5: VALIDATION CHECKLIST (Before returning JSON)
+VALIDATION CHECKLIST (Before returning JSON)
 ═══════════════════════════════════════════════════════
-□ Did I count ALL tariff categories in the image?
-□ Did I extract ALL categories I counted?
-□ For each category with blocks - did I count the rows?
-□ For each category - did I extract EVERY block row?
-□ For each category - did I extract ALL charges?
-□ Are all energyChargeCents values non-zero?
-□ Are all chargeAmount values non-zero?
+□ Did I extract ALL tariff categories visible in the image?
+□ For each tariff with blocks - did I extract EVERY block row?
+□ For each tariff - did I extract ALL charges shown?
 □ Did I apply correct conversions (R to cents where needed)?
+□ If municipality name not visible, did I use ""?
+□ If NERSA % not visible, did I use 0?
 
 ═══════════════════════════════════════════════════════
-EXPECTED OUTPUT FORMAT
+OUTPUT FORMAT (municipalityName and nersaIncrease are OPTIONAL)
 ═══════════════════════════════════════════════════════
 {
-  "municipalityName": "BA-PHALABORWA",
-  "nersaIncrease": 16.98,
+  "municipalityName": "BA-PHALABORWA" OR "" if not visible,
+  "nersaIncrease": 16.98 OR 0 if not visible,
   "tariffStructures": [
     {
       "tariffName": "Domestic conventional",
