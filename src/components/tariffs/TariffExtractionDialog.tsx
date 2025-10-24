@@ -10,6 +10,8 @@ import { Loader2, CheckCircle2, X, Trash2, Plus } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { pdfjs } from 'react-pdf';
 import { toast } from "sonner";
 import { Canvas as FabricCanvas, Rect as FabricRect } from "fabric";
@@ -90,6 +92,7 @@ export default function TariffExtractionDialog({
   const [cropRegion, setCropRegion] = useState<{ x: number; y: number; width: number; height: number; imageWidth: number; imageHeight: number } | null>(null);
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
+  const [expandedTariffs, setExpandedTariffs] = useState<{ [key: number]: boolean }>({});
 
   // Convert PDF to image for display (all pages stitched vertically)
   const convertPdfToImage = async (pdfFile: File): Promise<string> => {
@@ -591,20 +594,43 @@ export default function TariffExtractionDialog({
 
                       {/* Tariff Structures */}
                       {extractedData.tariffStructures.map((tariff, tariffIdx) => (
-                        <Card key={tariffIdx} className="border-2">
-                          <CardHeader className="pb-3">
-                            <div>
-                              <Label className="text-xs">Tariff Name</Label>
-                              <Input
-                                value={tariff.name}
-                                onChange={(e) =>
-                                  updateTariffStructure(tariffIdx, { name: e.target.value })
-                                }
-                                className="h-8 text-sm font-semibold mt-1"
-                              />
-                            </div>
-                          </CardHeader>
-                          <CardContent className="space-y-4">
+                        <Collapsible
+                          key={tariffIdx}
+                          open={expandedTariffs[tariffIdx] !== false}
+                          onOpenChange={(open) => 
+                            setExpandedTariffs(prev => ({ ...prev, [tariffIdx]: open }))
+                          }
+                        >
+                          <Card className="border-2">
+                            <CardHeader className="pb-3">
+                              <div className="flex items-start gap-2">
+                                <CollapsibleTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 w-8 p-0"
+                                  >
+                                    {expandedTariffs[tariffIdx] !== false ? (
+                                      <ChevronUp className="h-4 w-4" />
+                                    ) : (
+                                      <ChevronDown className="h-4 w-4" />
+                                    )}
+                                  </Button>
+                                </CollapsibleTrigger>
+                                <div className="flex-1">
+                                  <Label className="text-xs">Tariff Name</Label>
+                                  <Input
+                                    value={tariff.name}
+                                    onChange={(e) =>
+                                      updateTariffStructure(tariffIdx, { name: e.target.value })
+                                    }
+                                    className="h-8 text-sm font-semibold mt-1"
+                                  />
+                                </div>
+                              </div>
+                            </CardHeader>
+                            <CollapsibleContent>
+                              <CardContent className="space-y-4">
                             {/* Metadata Fields */}
                             <div className="grid grid-cols-2 gap-3 p-3 bg-muted/30 rounded-lg">
                               <div>
@@ -936,8 +962,10 @@ export default function TariffExtractionDialog({
                               </TabsContent>
                             </Tabs>
                           </CardContent>
-                        </Card>
-                      ))}
+                        </CollapsibleContent>
+                      </Card>
+                    </Collapsible>
+                  ))}
 
                       {extractedData.tariffStructures.length === 0 && (
                         <p className="text-sm text-muted-foreground text-center py-8">
