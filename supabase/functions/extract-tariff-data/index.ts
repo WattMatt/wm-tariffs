@@ -328,55 +328,81 @@ async function extractMunicipalityFromImage(imageUrl: string) {
 
   console.log("Extracting municipality data from image:", imageUrl);
 
-  const prompt = `You are analyzing a South African electricity tariff document image. Extract EVERY SINGLE piece of tariff information visible.
+  const prompt = `You are a precise data extraction specialist for South African electricity tariff documents. This document ALWAYS contains tariff names with associated charges and costs. Your task is to extract ALL data with 100% accuracy.
 
-CRITICAL INSTRUCTIONS:
-1. SCAN THE ENTIRE IMAGE from top to bottom
-2. Extract EVERY tariff category you see (Domestic, Commercial, Industrial, etc.)
-3. For EACH tariff category, extract EVERY SINGLE BLOCK and CHARGE
-4. DO NOT STOP after finding one category - continue scanning for more
-5. Count the rows carefully - if you see 4 blocks, extract all 4 blocks
+═══════════════════════════════════════════════════════
+STEP 1: UNDERSTAND THE DOCUMENT STRUCTURE
+═══════════════════════════════════════════════════════
+Every tariff document contains:
+✓ Municipality name (at top)
+✓ NERSA increase percentage (next to municipality name)
+✓ Multiple tariff categories (Domestic, Commercial, Industrial, etc.)
+✓ Each tariff has blocks (energy tiers) AND/OR fixed charges
+✓ Each block has: kWh range + rate (c/kWh or R/kWh)
+✓ Each charge has: type + amount + unit (R/month, R/kVA, etc.)
 
-WHAT TO EXTRACT (for EACH tariff category):
-1. Municipality name from header (e.g., "BA-PHALABORWA - 12.92%")
-2. NERSA increase percentage (the number with %)
-3. Tariff category name (full text like "Domestic Prepaid & Conventional")
-4. EVERY block row with:
-   - Block number (Block 1, Block 2, etc.)
-   - kWh range (e.g., "0 - 50 kWh" → kwhFrom: 0, kwhTo: 50)
-   - Energy charge (e.g., "175.08 c/kWh" → 175.08)
-   - IMPORTANT: Read ALL rows until the table ends
-5. ALL fixed charges rows:
-   - Basic charge / Service charge / Energy charge
-   - Amount in R/month or R/day
-   - Extract even if it's the last row of a table
+═══════════════════════════════════════════════════════
+STEP 2: EXTRACTION PROCESS (DO THIS IN ORDER)
+═══════════════════════════════════════════════════════
+1. Read municipality name from header
+2. Extract NERSA increase percentage (the XX.XX% number)
+3. Scan ENTIRE image for ALL tariff category headers
+4. For EACH tariff category found:
+   a. Extract exact tariff name
+   b. Look for "Tariff blocks" table
+   c. Count total number of block rows
+   d. Extract EVERY block row (do not skip any)
+   e. Look for fixed charges section
+   f. Extract ALL charges (basic, energy, demand, etc.)
+
+═══════════════════════════════════════════════════════
+STEP 3: CRITICAL EXTRACTION RULES
+═══════════════════════════════════════════════════════
+✓ READ EVERY ROW in each table - NEVER skip rows
+✓ If table shows 4 blocks → extract all 4 blocks
+✓ If table shows 1 energy charge → extract that 1 charge
+✓ NEVER return 0 for charges unless document explicitly shows "0"
+✓ For blocks: use 0 for first block start, use 999999 for unlimited upper bound
+✓ For unlimited blocks (e.g., ">600 kWh"): kwhFrom = 601, kwhTo = null
+
+═══════════════════════════════════════════════════════
+STEP 4: UNIT CONVERSION TABLE
+═══════════════════════════════════════════════════════
+SOURCE FORMAT          → EXTRACT AS (energyChargeCents or chargeAmount)
+"175.46 c/kWh"        → 175.46 (already in cents)
+"1.7546 R/kWh"        → 175.46 (multiply by 100)
+"R292.66 /month"      → 292.66 (store without R symbol)
+"R351.69 /month"      → 351.69 (store without R symbol)
+"R441.77 /kVA"        → 441.77 (store without R symbol)
+"193.93 c/kWh"        → 193.93 (already in cents)
+"347.13 c/kWh"        → 347.13 (already in cents)
 
 CONVERSION RULES:
-- "175.08 c/kWh" → energyChargeCents: 175.08
-- "1.75 R/kWh" → energyChargeCents: 175.00 (multiply by 100)
-- "R292.66 /month" → chargeAmount: 292.66, unit: "R/month"
-- "0 - 50 kWh" → kwhFrom: 0, kwhTo: 50
-- ">600 kWh" → kwhFrom: 601, kwhTo: null
+• c/kWh → keep value as-is (already in cents)
+• R/kWh → multiply by 100 to convert to cents
+• R/month → keep value as-is (store without R)
+• R/kVA → keep value as-is (store without R)
+• R/kW → keep value as-is (store without R)
 
-CRITICAL: If you see multiple tariff tables in the image (e.g., "Domestic Prepaid", "Domestic conventional", "Commercial"), extract ALL of them. Do not stop after the first one.
+═══════════════════════════════════════════════════════
+STEP 5: VALIDATION CHECKLIST (Before returning JSON)
+═══════════════════════════════════════════════════════
+□ Did I count ALL tariff categories in the image?
+□ Did I extract ALL categories I counted?
+□ For each category with blocks - did I count the rows?
+□ For each category - did I extract EVERY block row?
+□ For each category - did I extract ALL charges?
+□ Are all energyChargeCents values non-zero?
+□ Are all chargeAmount values non-zero?
+□ Did I apply correct conversions (R to cents where needed)?
 
-EXAMPLE for an image with 2 tariff categories:
+═══════════════════════════════════════════════════════
+EXPECTED OUTPUT FORMAT
+═══════════════════════════════════════════════════════
 {
   "municipalityName": "BA-PHALABORWA",
-  "nersaIncrease": 12.92,
+  "nersaIncrease": 16.98,
   "tariffStructures": [
-    {
-      "tariffName": "Domestic Prepaid & Conventional",
-      "tariffType": "domestic",
-      "meterConfiguration": "both",
-      "blocks": [
-        {"blockNumber": 1, "kwhFrom": 0, "kwhTo": 50, "energyChargeCents": 175.08, "description": "Block 1 (0-50 kWh)"},
-        {"blockNumber": 2, "kwhFrom": 51, "kwhTo": 350, "energyChargeCents": 223.84, "description": "Block 2 (51-350 kWh)"},
-        {"blockNumber": 3, "kwhFrom": 351, "kwhTo": 600, "energyChargeCents": 303.40, "description": "Block 3 (351-600 kWh)"},
-        {"blockNumber": 4, "kwhFrom": 601, "kwhTo": null, "energyChargeCents": 366.19, "description": "Block 4 (>600 kWh)"}
-      ],
-      "charges": []
-    },
     {
       "tariffName": "Domestic conventional",
       "tariffType": "domestic",
@@ -390,16 +416,24 @@ EXAMPLE for an image with 2 tariff categories:
       "charges": [
         {"chargeType": "basic_monthly", "chargeAmount": 292.66, "unit": "R/month", "description": "Basic charge"}
       ]
+    },
+    {
+      "tariffName": "Commercial Conventional",
+      "tariffType": "commercial",
+      "meterConfiguration": "conventional",
+      "blocks": [],
+      "charges": [
+        {"chargeType": "basic_monthly", "chargeAmount": 3515.69, "unit": "R/month", "description": "Basic Charge"},
+        {"chargeType": "energy", "chargeAmount": 347.13, "unit": "c/kWh", "description": "Energy charge"}
+      ]
     }
   ]
 }
 
-FINAL CHECK: Before returning, count:
-- How many tariff tables are visible in the image?
-- How many blocks does each table have?
-- Have you extracted ALL of them?
-
-Return ONLY valid JSON, no markdown, no explanations.`;
+═══════════════════════════════════════════════════════
+NOW: EXTRACT ALL TARIFF DATA FROM THE PROVIDED IMAGE
+═══════════════════════════════════════════════════════
+Return ONLY valid JSON. No markdown. No explanations. No code blocks.`;
 
   const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
