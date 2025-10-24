@@ -81,6 +81,7 @@ export default function TariffStructureForm({ onSubmit, isLoading, initialData, 
 
   // Update tariffData and visibleSections when initialData changes
   useEffect(() => {
+    console.log('TariffStructureForm - initialData changed:', initialData);
     if (initialData) {
       setTariffData(initialData);
       // In read-only mode, show all sections that have data
@@ -90,6 +91,15 @@ export default function TariffStructureForm({ onSubmit, isLoading, initialData, 
       const hasTouSeasons = initialData.touSeasons && initialData.touSeasons.length > 0;
       const hasBasicCharge = !!initialData.basicCharge;
       const hasDemandCharges = initialData.demandCharges && initialData.demandCharges.length > 0;
+      
+      console.log('TariffStructureForm - Section visibility:', {
+        hasBlocks,
+        hasSeasonalEnergy,
+        hasTouSeasons,
+        hasBasicCharge,
+        hasDemandCharges,
+        readOnly
+      });
       
       setVisibleSections({
         blocks: hasBlocks,

@@ -101,6 +101,15 @@ export default function TariffDetailsDialog({ tariffId, tariffName, onClose }: T
           }))
       };
 
+      console.log('TariffDetailsDialog - Transformed data:', {
+        blocks: formData.blocks.length,
+        seasonalEnergy: formData.seasonalEnergy.length,
+        touSeasons: formData.touSeasons.length,
+        hasBasicCharge: !!formData.basicCharge,
+        demandCharges: formData.demandCharges.length,
+        fullData: formData
+      });
+
       setTariffData(formData);
     } catch (error: any) {
       toast.error(`Failed to load tariff: ${error.message}`);
