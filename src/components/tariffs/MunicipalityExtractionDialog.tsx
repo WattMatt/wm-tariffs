@@ -504,6 +504,8 @@ export default function MunicipalityExtractionDialog({
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || "Extraction failed");
       
+      console.log("Raw AI response:", JSON.stringify(data, null, 2));
+      
       // Transform the AI response to match UI expectations
       const rawData = data.tariffData || {
         municipalityName: data.municipality?.name || "",
@@ -511,8 +513,16 @@ export default function MunicipalityExtractionDialog({
         tariffStructures: []
       };
       
+      console.log("Raw tariff structures count:", rawData.tariffStructures?.length);
+      
       // Map the tariff structures to the format expected by the UI
-      const transformedTariffStructures = (rawData.tariffStructures || []).map((tariff: any) => {
+      const transformedTariffStructures = (rawData.tariffStructures || []).map((tariff: any, index: number) => {
+        console.log(`Processing tariff ${index}:`, {
+          name: tariff.tariffName || tariff.name,
+          blocksCount: tariff.blocks?.length,
+          chargesCount: tariff.charges?.length
+        });
+        
         const transformed: any = {
           tariffName: tariff.tariffName || tariff.name || "",
           blocks: tariff.blocks || []
@@ -522,7 +532,7 @@ export default function MunicipalityExtractionDialog({
         const charges = tariff.charges || [];
         transformed.fixedEnergy = [];
         transformed.seasonalEnergy = [];
-        transformed.touPeriods = [];
+        transformed.touPeriods = tariff.touPeriods || [];
         transformed.demandCharges = [];
         
         charges.forEach((charge: any) => {
@@ -551,6 +561,7 @@ export default function MunicipalityExtractionDialog({
           }
         });
         
+        console.log(`Transformed tariff ${index}:`, transformed);
         return transformed;
       });
       
@@ -559,6 +570,8 @@ export default function MunicipalityExtractionDialog({
         nersaIncrease: rawData.nersaIncrease || 0,
         tariffStructures: transformedTariffStructures
       };
+      
+      console.log("Final transformed data:", JSON.stringify(newData, null, 2));
       
       // If in append mode, merge the tariff structures
       if (appendMode && existingData) {
