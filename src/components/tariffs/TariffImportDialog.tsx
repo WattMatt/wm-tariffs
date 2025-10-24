@@ -79,6 +79,7 @@ export default function PdfImportDialog() {
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
   const [reviewMunicipalityIndex, setReviewMunicipalityIndex] = useState<number | null>(null);
   const [municipalityExtractionOpen, setMunicipalityExtractionOpen] = useState(false);
+  const [initialMunicipalitiesForDialog, setInitialMunicipalitiesForDialog] = useState<any[]>([]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -363,7 +364,45 @@ export default function PdfImportDialog() {
   };
 
   const handlePdfIdentification = async () => {
-    // Open the municipality extraction dialog for region-based extraction
+    // Extract municipality data from entire PDF first
+    setIsProcessing(true);
+    toast.info("Analyzing PDF and extracting municipality data...");
+    
+    try {
+      const documentContent = await extractTextFromAllPdfPages(file!);
+      
+      // Call edge function to extract all municipalities from the full PDF
+      const { data, error } = await supabase.functions.invoke("extract-tariff-data", {
+        body: { 
+          documentContent, 
+          phase: "identify",
+          extractAll: true
+        }
+      });
+
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error || "Failed to extract municipalities");
+      
+      // Convert extracted data to initial municipalities format
+      const extractedMunicipalities = data.municipalities || [];
+      const initialMunicipalities = extractedMunicipalities.map((m: any, index: number) => ({
+        id: `pre-${index}`,
+        name: m.name || "Unknown Municipality",
+        nersaIncrease: m.nersaIncrease || 0
+      }));
+      
+      setInitialMunicipalitiesForDialog(initialMunicipalities);
+      toast.success(`Found ${initialMunicipalities.length} municipalities. Opening extraction dialog...`);
+      
+    } catch (error: any) {
+      console.error("Error extracting municipalities:", error);
+      toast.error("Failed to extract municipalities: " + error.message);
+      setInitialMunicipalitiesForDialog([]);
+    } finally {
+      setIsProcessing(false);
+    }
+    
+    // Open the municipality extraction dialog with pre-populated data
     setMunicipalityExtractionOpen(true);
   };
 
@@ -1859,9 +1898,13 @@ export default function PdfImportDialog() {
     {municipalityExtractionOpen && file && (
       <MunicipalityExtractionDialog
         open={municipalityExtractionOpen}
-        onClose={() => setMunicipalityExtractionOpen(false)}
+        onClose={() => {
+          setMunicipalityExtractionOpen(false);
+          setInitialMunicipalitiesForDialog([]);
+        }}
         pdfFile={file}
         onComplete={handleMunicipalityExtractionComplete}
+        initialMunicipalities={initialMunicipalitiesForDialog}
       />
     )}
     </>

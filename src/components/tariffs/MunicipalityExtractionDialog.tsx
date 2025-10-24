@@ -28,13 +28,15 @@ interface MunicipalityExtractionDialogProps {
   onClose: () => void;
   pdfFile: File;
   onComplete: (municipalities: MunicipalityData[]) => void;
+  initialMunicipalities?: AcceptedMunicipality[];
 }
 
 export default function MunicipalityExtractionDialog({
   open,
   onClose,
   pdfFile,
-  onComplete
+  onComplete,
+  initialMunicipalities = []
 }: MunicipalityExtractionDialogProps) {
   const [pdfPageImages, setPdfPageImages] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(0);
@@ -45,7 +47,7 @@ export default function MunicipalityExtractionDialog({
   const [fabricCanvas, setFabricCanvas] = useState<FabricCanvas | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
   const [extractedData, setExtractedData] = useState<any | null>(null);
-  const [acceptedMunicipalities, setAcceptedMunicipalities] = useState<AcceptedMunicipality[]>([]);
+  const [acceptedMunicipalities, setAcceptedMunicipalities] = useState<AcceptedMunicipality[]>(initialMunicipalities);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawStartPointRef = useRef<{ x: number; y: number } | null>(null);
   const selectionRectRef = useRef<FabricRect | null>(null);

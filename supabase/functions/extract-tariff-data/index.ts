@@ -11,7 +11,7 @@ serve(async (req) => {
   }
 
   try {
-    const { documentContent, phase, municipalityName, cropRegion, imageUrl } = await req.json();
+    const { documentContent, phase, municipalityName, cropRegion, imageUrl, extractAll } = await req.json();
     
     // Phase for extracting municipality from image
     if (phase === "extractMunicipality" && imageUrl) {
@@ -29,7 +29,7 @@ serve(async (req) => {
 
     // Phase 1: Identify province/municipality structure
     if (phase === "identify") {
-      return await identifyStructure(documentContent);
+      return await identifyStructure(documentContent, extractAll);
     }
     
     // Phase 2: Extract specific municipality tariffs
@@ -54,7 +54,7 @@ serve(async (req) => {
   }
 });
 
-async function identifyStructure(documentContent: string) {
+async function identifyStructure(documentContent: string, extractAll = false) {
   const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
   if (!LOVABLE_API_KEY) {
     throw new Error("LOVABLE_API_KEY is not configured");
@@ -62,7 +62,7 @@ async function identifyStructure(documentContent: string) {
 
   console.log("Phase 1: Identifying province/municipality structure from text");
 
-  const identifyPrompt = `You are analyzing extracted text from a South African electricity tariff document. Your task is to identify ONLY the municipalities that are present in this specific document text.
+  const identifyPrompt = `You are analyzing extracted text from a South African electricity tariff document. Your task is to identify ${extractAll ? 'ALL municipalities with their tariff structures' : 'ONLY the municipalities'} that are present in this specific document text.
 
 CRITICAL RULES:
 1. Extract ONLY municipality names that you can find in the provided text
@@ -76,16 +76,47 @@ SEARCH PATTERN:
 - Format typically: "BA-PHALABORWA - 12.92%"
 - Look for NERSA increase percentages next to municipality names
 - Province name may be mentioned at the start of the document
+${extractAll ? `
+- For each municipality, extract ALL tariff structures with:
+  * Tariff name (e.g., "Domestic Prepaid", "Commercial Conventional")
+  * Energy blocks with kWh ranges and costs in c/kWh
+  * Fixed charges (Basic charge, Demand charge) with amounts and units
+  * All cost values should be extracted as shown (convert c/kWh to cents, R/month stay as rands)
+` : ''}
 
 TASK: 
-Scan through the provided document text and extract ONLY the municipality names that you can FIND in the text, along with their NERSA increase percentages.
+Scan through the provided document text and extract ${extractAll ? 'ALL municipalities with their complete tariff data' : 'ONLY the municipality names'} that you can FIND in the text.
 
-Return ONLY a JSON array of objects for municipalities you can CONFIRM are in the text:
+Return ONLY a JSON array of objects:
 [
   {
     "name": "EXACT_NAME_AS_SHOWN",
     "nersaIncrease": XX.XX,
-    "province": "Province name if found in text"
+    "province": "Province name if found in text"${extractAll ? `,
+    "tariffStructures": [
+      {
+        "name": "Tariff name",
+        "tariffType": "domestic/commercial/industrial",
+        "effectiveFrom": "2024-07-01",
+        "usesTou": false,
+        "blocks": [
+          {
+            "blockNumber": 1,
+            "kwhFrom": 0,
+            "kwhTo": 600,
+            "energyChargeCents": 175.48
+          }
+        ],
+        "charges": [
+          {
+            "chargeType": "basic_charge",
+            "chargeAmount": 702.64,
+            "description": "Basic charge",
+            "unit": "R/month"
+          }
+        ]
+      }
+    ]` : ''}
   }
 ]
 
@@ -93,6 +124,7 @@ IMPORTANT:
 - Only return municipalities that are CLEARLY PRESENT in the provided text
 - Do not pad the results with municipalities from your training data
 - The province MUST match what's written in the document text
+${extractAll ? '- Extract ALL tariff blocks and charges you can find for each municipality' : ''}
 
 Return ONLY valid JSON, no markdown, no explanations.`;
 
