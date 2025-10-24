@@ -921,12 +921,13 @@ export default function MunicipalityExtractionDialog({
       const tariffName = structure.tariffName || structure.name;
       const effectiveFrom = new Date().toISOString().split('T')[0];
       
-      // Check if tariff already exists
+      // Check if tariff already exists (including effective date)
       const { data: existingTariff } = await supabase
         .from("tariff_structures")
         .select("id")
         .eq("supply_authority_id", authorityId)
         .eq("name", tariffName)
+        .eq("effective_from", effectiveFrom)
         .maybeSingle();
 
       let tariffId: string;
