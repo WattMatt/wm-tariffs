@@ -642,8 +642,8 @@ export default function MunicipalityExtractionDialog({
         </DialogHeader>
 
         <div className="flex-1 overflow-hidden flex px-6 gap-4">
-          {/* Left: PDF Preview - Full Height */}
-          <Card className="overflow-hidden flex flex-col flex-1">
+          {/* Left: Source Document - Full Height */}
+          <Card className="overflow-hidden flex flex-col w-[400px] flex-shrink-0">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm">
@@ -744,8 +744,10 @@ export default function MunicipalityExtractionDialog({
             </div>
           </Card>
 
-          {/* Middle: Extracted Data - Full Height */}
-          <Card className="overflow-hidden flex flex-col flex-1">
+          {/* Right Column: Stacked Extracted Data (top) and Accepted Municipalities (bottom) */}
+          <div className="flex-1 flex flex-col gap-4 overflow-hidden">
+            {/* Top: Extracted Data */}
+            <Card className="overflow-hidden flex flex-col flex-1">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm">Extracted Data</CardTitle>
             </CardHeader>
@@ -887,21 +889,21 @@ export default function MunicipalityExtractionDialog({
             </CardContent>
           </Card>
 
-          {/* Right: Accepted Municipalities - Full Height, Collapsible */}
-          <Card className={`overflow-hidden flex flex-col transition-all duration-300 ${isAcceptedPanelCollapsed ? 'w-12' : 'flex-1'}`}>
-            <CardHeader className="pb-3 flex flex-row items-center justify-between">
-              {!isAcceptedPanelCollapsed && (
-                <CardTitle className="text-sm">Accepted Municipalities ({acceptedMunicipalities.length})</CardTitle>
-              )}
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={() => setIsAcceptedPanelCollapsed(!isAcceptedPanelCollapsed)}
-                className="h-8 w-8 ml-auto"
-              >
-                {isAcceptedPanelCollapsed ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-              </Button>
-            </CardHeader>
+            {/* Bottom: Accepted Municipalities - Collapsible */}
+            <Card className={`overflow-hidden flex flex-col transition-all duration-300 ${isAcceptedPanelCollapsed ? 'h-12' : 'flex-1'}`}>
+              <CardHeader className="pb-3 flex flex-row items-center justify-between">
+                {!isAcceptedPanelCollapsed && (
+                  <CardTitle className="text-sm">Accepted Municipalities ({acceptedMunicipalities.length})</CardTitle>
+                )}
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => setIsAcceptedPanelCollapsed(!isAcceptedPanelCollapsed)}
+                  className="h-8 w-8 ml-auto"
+                >
+                  {isAcceptedPanelCollapsed ? <ChevronLeft className="h-4 w-4 -rotate-90" /> : <ChevronRight className="h-4 w-4 -rotate-90" />}
+                </Button>
+              </CardHeader>
             {!isAcceptedPanelCollapsed && (
               <CardContent className="flex-1 overflow-y-auto p-0">
                 <ScrollArea className="h-full">
@@ -946,7 +948,8 @@ export default function MunicipalityExtractionDialog({
                 </ScrollArea>
               </CardContent>
             )}
-          </Card>
+            </Card>
+          </div>
         </div>
 
         <div className="flex justify-between gap-3 p-6 pt-4 border-t">
