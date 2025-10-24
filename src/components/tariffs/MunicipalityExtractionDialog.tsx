@@ -587,28 +587,31 @@ export default function MunicipalityExtractionDialog({
         console.log("Existing tariff structures count:", existingData.tariffStructures?.length);
         console.log("New tariff structures count:", newData.tariffStructures?.length);
         
+        // Create completely new arrays to ensure React detects the change
+        const mergedTariffStructures = [
+          ...JSON.parse(JSON.stringify(existingData.tariffStructures || [])),
+          ...JSON.parse(JSON.stringify(newData.tariffStructures || []))
+        ];
+        
         const mergedData = {
-          ...existingData,
-          // Keep existing municipality name and NERSA increase if they exist
+          name: existingData.name || existingData.municipalityName || newData.municipalityName,
           municipalityName: existingData.municipalityName || newData.municipalityName,
           nersaIncrease: existingData.nersaIncrease || newData.nersaIncrease,
-          // Append new tariff structures to existing ones
-          tariffStructures: [
-            ...(existingData.tariffStructures || []),
-            ...(newData.tariffStructures || [])
-          ],
-          // Keep custom fields if they exist
+          tariffStructures: mergedTariffStructures,
           customFields: existingData.customFields || []
         };
         
         console.log("Merged tariff structures count:", mergedData.tariffStructures?.length);
-        console.log("Merged data:", JSON.stringify(mergedData, null, 2));
-        console.log("About to call setExtractedData with merged data");
+        console.log("About to call setExtractedData");
         
-        setExtractedData(mergedData);
+        // Force a new state update
+        setExtractedData(null);
+        setTimeout(() => {
+          setExtractedData(mergedData);
+          toast.success(`Added ${newData.tariffStructures?.length || 0} new tariff structure(s)! Total: ${mergedData.tariffStructures?.length}`);
+        }, 50);
         
-        console.log("After setExtractedData call");
-        toast.success(`Added ${newData.tariffStructures?.length || 0} new tariff structure(s)!`);
+        return;
       } else {
         setExtractedData(newData);
         toast.success("Municipality data extracted!");
