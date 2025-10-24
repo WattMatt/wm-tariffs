@@ -1287,42 +1287,61 @@ export default function MunicipalityExtractionDialog({
                               {/* Basic Charge Section */}
                               <div className="space-y-2">
                                 <Label className="text-xs font-medium">Basic Charge (Fixed Monthly)</Label>
-                                <div className="p-2 bg-background rounded border space-y-2">
-                                  <div className="grid grid-cols-2 gap-2">
-                                    <div>
-                                      <Label className="text-xs">Amount</Label>
-                                      <Input
-                                        type="number"
-                                        step="0.01"
-                                        value={tariff.basicCharge?.amount || 0}
-                                        onChange={(e) => {
-                                          const updated = [...extractedData.tariffStructures];
-                                          if (!updated[tariffIdx].basicCharge) {
-                                            updated[tariffIdx].basicCharge = { amount: 0, unit: "R/month" };
-                                          }
-                                          updated[tariffIdx].basicCharge.amount = parseFloat(e.target.value) || 0;
-                                          setExtractedData({ ...extractedData, tariffStructures: updated });
-                                        }}
-                                        className="h-8"
-                                      />
+                                {tariff.basicCharge ? (
+                                  <div className="p-2 bg-background rounded border space-y-2">
+                                    <div className="grid grid-cols-2 gap-2">
+                                      <div>
+                                        <Label className="text-xs">Amount</Label>
+                                        <Input
+                                          type="number"
+                                          step="0.01"
+                                          value={tariff.basicCharge?.amount || 0}
+                                          onChange={(e) => {
+                                            const updated = [...extractedData.tariffStructures];
+                                            if (!updated[tariffIdx].basicCharge) {
+                                              updated[tariffIdx].basicCharge = { amount: 0, unit: "R/month" };
+                                            }
+                                            updated[tariffIdx].basicCharge.amount = parseFloat(e.target.value) || 0;
+                                            setExtractedData({ ...extractedData, tariffStructures: updated });
+                                          }}
+                                          className="h-8"
+                                        />
+                                      </div>
+                                      <div>
+                                        <Label className="text-xs">Unit</Label>
+                                        <Input
+                                          value={tariff.basicCharge?.unit || "R/month"}
+                                          onChange={(e) => {
+                                            const updated = [...extractedData.tariffStructures];
+                                            if (!updated[tariffIdx].basicCharge) {
+                                              updated[tariffIdx].basicCharge = { amount: 0, unit: "R/month" };
+                                            }
+                                            updated[tariffIdx].basicCharge.unit = e.target.value;
+                                            setExtractedData({ ...extractedData, tariffStructures: updated });
+                                          }}
+                                          className="h-8"
+                                        />
+                                      </div>
                                     </div>
-                                    <div>
-                                      <Label className="text-xs">Unit</Label>
-                                      <Input
-                                        value={tariff.basicCharge?.unit || "R/month"}
-                                        onChange={(e) => {
-                                          const updated = [...extractedData.tariffStructures];
-                                          if (!updated[tariffIdx].basicCharge) {
-                                            updated[tariffIdx].basicCharge = { amount: 0, unit: "R/month" };
-                                          }
-                                          updated[tariffIdx].basicCharge.unit = e.target.value;
-                                          setExtractedData({ ...extractedData, tariffStructures: updated });
-                                        }}
-                                        className="h-8"
-                                      />
-                                    </div>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => {
+                                        const updated = [...extractedData.tariffStructures];
+                                        updated[tariffIdx].basicCharge = undefined;
+                                        setExtractedData({ ...extractedData, tariffStructures: updated });
+                                      }}
+                                      className="h-6 text-xs text-destructive hover:text-destructive w-full"
+                                    >
+                                      <Trash2 className="h-3 w-3 mr-1" />
+                                      Remove Basic Charge
+                                    </Button>
                                   </div>
-                                </div>
+                                ) : (
+                                  <p className="text-xs text-muted-foreground p-2 bg-muted/20 rounded">
+                                    No basic charge.
+                                  </p>
+                                )}
                               </div>
 
                               {/* Demand Charges Section */}
