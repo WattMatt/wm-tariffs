@@ -1152,7 +1152,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
       </Card>
 
       <Dialog open={!!viewingDocument} onOpenChange={handleCloseDialog}>
-        <DialogContent className="max-w-7xl max-h-[90vh] overflow-hidden flex flex-col">
+        <DialogContent className="max-w-7xl h-[85vh] flex flex-col">
           <DialogHeader className="flex-shrink-0">
             <DialogTitle>Document Extraction</DialogTitle>
             <DialogDescription>
@@ -1160,74 +1160,75 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
             </DialogDescription>
           </DialogHeader>
           {viewingDocument && editedData && (
-            <div className="grid grid-cols-2 gap-6 flex-1 min-h-0">
-              {/* Left side - Document Image with Fabric.js Canvas */}
-              <div className="border rounded-lg bg-muted/30 relative flex flex-col h-full">
-                {/* Controls */}
-                <div className="p-2 border-b bg-background/80 flex items-center justify-end gap-2 flex-shrink-0">
-                  <div className="text-sm text-muted-foreground">
-                    Zoom: {Math.round(zoom * 100)}%
+            <>
+              <div className="grid grid-cols-2 gap-6 flex-1 overflow-hidden">
+                {/* Left side - Document Image with Fabric.js Canvas */}
+                <div className="border rounded-lg bg-muted/30 flex flex-col overflow-hidden">
+                  {/* Top Controls */}
+                  <div className="p-2 border-b bg-background/80 flex items-center justify-end gap-2 flex-shrink-0">
+                    <div className="text-sm text-muted-foreground">
+                      Zoom: {Math.round(zoom * 100)}%
+                    </div>
+                  </div>
+                  
+                  {/* Canvas */}
+                  <div className="flex-1 flex items-center justify-center p-4 overflow-auto">
+                    {documentImageUrl ? (
+                      <canvas ref={canvasRef} />
+                    ) : (
+                      <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                        <Loader2 className="w-8 h-8 animate-spin" />
+                        <p>Loading document...</p>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Bottom controls for selection */}
+                  <div className="p-2 border-t bg-background/80 flex items-center justify-center gap-2 flex-shrink-0">
+                    {!selectionMode ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleStartSelection}
+                      >
+                        <Square className="w-4 h-4 mr-2" />
+                        Select Region
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleCancelSelection}
+                      >
+                        <XCircle className="w-4 h-4 mr-2" />
+                        Cancel Selection
+                      </Button>
+                    )}
+                    {selectionRectRef.current && (
+                      <Button
+                        size="sm"
+                        variant="default"
+                        onClick={handleRescanRegion}
+                        disabled={isExtracting}
+                      >
+                        {isExtracting ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Rescanning...
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-4 h-4 mr-2" />
+                            Rescan Region
+                          </>
+                        )}
+                      </Button>
+                    )}
                   </div>
                 </div>
-                
-                {/* Canvas */}
-                <div className="flex-1 flex items-center justify-center p-4 overflow-auto min-h-0">
-                  {documentImageUrl ? (
-                    <canvas ref={canvasRef} />
-                  ) : (
-                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                      <Loader2 className="w-8 h-8 animate-spin" />
-                      <p>Loading document...</p>
-                    </div>
-                  )}
-                </div>
-                
-                {/* Bottom controls for selection */}
-                <div className="p-2 border-t bg-background/80 flex items-center justify-center gap-2 flex-shrink-0">
-                  {!selectionMode ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={handleStartSelection}
-                    >
-                      <Square className="w-4 h-4 mr-2" />
-                      Select Region
-                    </Button>
-                  ) : (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={handleCancelSelection}
-                    >
-                      <XCircle className="w-4 h-4 mr-2" />
-                      Cancel Selection
-                    </Button>
-                  )}
-                  {selectionRectRef.current && (
-                    <Button
-                      size="sm"
-                      variant="default"
-                      onClick={handleRescanRegion}
-                      disabled={isExtracting}
-                    >
-                      {isExtracting ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Rescanning...
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="w-4 h-4 mr-2" />
-                          Rescan Region
-                        </>
-                      )}
-                    </Button>
-                  )}
-                </div>
-              </div>
 
-              {/* Right side - Editable Data */}
-              <div className="overflow-y-auto space-y-4 pr-2 pb-4">
+                {/* Right side - Editable Data */}
+                <div className="overflow-y-auto space-y-4 pr-2">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Period Start</Label>
@@ -1465,29 +1466,32 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                 )}
               </div>
             </div>
+          </>
           )}
           
-          <div className="flex justify-end gap-2 pt-4 border-t flex-shrink-0 mt-4">
-            <Button 
-              variant="outline" 
-              onClick={() => setIsEditing(!isEditing)}
-            >
-              {isEditing ? 'Lock' : 'Edit'}
-            </Button>
-            <Button variant="outline" onClick={handleReset} disabled={!isEditing}>
-              Reset
-            </Button>
-            <Button onClick={handleSave} disabled={isSaving || !isEditing}>
-              {isSaving ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                'Save'
-              )}
-            </Button>
-          </div>
+          {viewingDocument && editedData && (
+            <div className="flex justify-end gap-2 pt-4 border-t flex-shrink-0">
+              <Button 
+                variant="outline" 
+                onClick={() => setIsEditing(!isEditing)}
+              >
+                {isEditing ? 'Lock' : 'Edit'}
+              </Button>
+              <Button variant="outline" onClick={handleReset} disabled={!isEditing}>
+                Reset
+              </Button>
+              <Button onClick={handleSave} disabled={isSaving || !isEditing}>
+                {isSaving ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  'Save'
+                )}
+              </Button>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </>
