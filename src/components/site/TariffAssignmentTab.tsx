@@ -184,17 +184,28 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
   };
 
   const getMatchingShopNumbers = (meter: Meter): DocumentShopNumber[] => {
-    const searchTerms = [
-      meter.meter_number.toLowerCase(),
-      meter.name?.toLowerCase() || '',
-    ].filter(Boolean);
-
-    return documentShopNumbers.filter(doc => 
-      searchTerms.some(term => 
-        doc.shopNumber.toLowerCase().includes(term) ||
-        term.includes(doc.shopNumber.toLowerCase())
-      )
-    );
+    // Extract just the number part from meter_number (e.g., "DB-11" → "11")
+    const meterNumberParts = meter.meter_number.match(/\d+[A-Z]?$/i);
+    const cleanMeterNumber = meterNumberParts ? meterNumberParts[0] : meter.meter_number;
+    
+    return documentShopNumbers.filter(doc => {
+      const shopNum = doc.shopNumber.toLowerCase();
+      const meterNum = cleanMeterNumber.toLowerCase();
+      const fullMeterNum = meter.meter_number.toLowerCase();
+      const meterName = (meter.name || '').toLowerCase();
+      
+      // Exact match is preferred
+      if (shopNum === meterNum || shopNum === fullMeterNum) {
+        return true;
+      }
+      
+      // Match if shop number is found in meter name
+      if (meterName && shopNum === meterName) {
+        return true;
+      }
+      
+      return false;
+    });
   };
 
   const handleTariffChange = (meterId: string, tariffId: string) => {
