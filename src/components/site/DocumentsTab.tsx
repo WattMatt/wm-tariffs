@@ -10,7 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { FileText, Upload, Loader2, Download, Trash2, Eye, ZoomIn, ZoomOut, Maximize2, GripVertical, Plus, X, Sparkles, RefreshCw } from "lucide-react";
+import { FileText, Upload, Loader2, Download, Trash2, Eye, ZoomIn, ZoomOut, Maximize2, GripVertical, Plus, X, Sparkles, RefreshCw, Zap } from "lucide-react";
 import { format } from "date-fns";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { pdfjs } from 'react-pdf';
@@ -57,6 +57,8 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
   const [isBulkExtracting, setIsBulkExtracting] = useState(false);
+  const [viewingTariff, setViewingTariff] = useState<any>(null);
+  const [isLoadingTariff, setIsLoadingTariff] = useState(false);
 
   useEffect(() => {
     fetchDocuments();
@@ -468,6 +470,66 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
     setEditedData(null);
   };
 
+  const handleViewTariff = async (shopNumber: string) => {
+    setIsLoadingTariff(true);
+    setViewingTariff(null);
+    
+    try {
+      // First, try to find a meter that matches the shop number
+      const { data: meters, error: meterError } = await supabase
+        .from('meters')
+        .select('*')
+        .eq('site_id', siteId)
+        .or(`meter_number.ilike.%${shopNumber}%,name.ilike.%${shopNumber}%,location.ilike.%${shopNumber}%`);
+
+      if (meterError) throw meterError;
+
+      if (!meters || meters.length === 0) {
+        toast.error(`No meter found matching shop number "${shopNumber}"`);
+        return;
+      }
+
+      // Use the first matching meter
+      const meter = meters[0];
+      
+      // Try to fetch tariff structure if the tariff field contains a UUID
+      let tariffStructure = null;
+      if (meter.tariff && meter.tariff.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+        const { data: tariff } = await supabase
+          .from('tariff_structures')
+          .select(`
+            id,
+            name,
+            tariff_type,
+            effective_from,
+            effective_to,
+            uses_tou,
+            supply_authorities (
+              name
+            )
+          `)
+          .eq('id', meter.tariff)
+          .single();
+        
+        tariffStructure = tariff;
+      }
+      
+      setViewingTariff({
+        shopNumber,
+        meterNumber: meter.meter_number,
+        meterName: meter.name,
+        location: meter.location,
+        tariffStructure: tariffStructure,
+        legacyTariff: tariffStructure ? null : meter.tariff
+      });
+    } catch (error) {
+      console.error("Error fetching tariff:", error);
+      toast.error("Failed to load tariff information");
+    } finally {
+      setIsLoadingTariff(false);
+    }
+  };
+
   const handleReset = () => {
     if (viewingExtraction) {
       setEditedData({ ...viewingExtraction });
@@ -758,56 +820,73 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                           <span className="text-muted-foreground">-</span>
                         )}
                       </TableCell>
-                      <TableCell className="text-right">
-                        <TooltipProvider>
-                          <div className="flex justify-end gap-2">
-                            {doc.document_extractions?.[0] && (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleViewDocument(doc)}
-                                >
-                                  <Eye className="w-4 h-4" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>View data</p>
-                              </TooltipContent>
-                              </Tooltip>
-                            )}
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleDownload(doc.file_path, doc.file_name)}
-                                >
-                                  <Download className="w-4 h-4" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Download document</p>
-                              </TooltipContent>
-                            </Tooltip>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleDelete(doc.id, doc.file_path)}
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Delete document</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </div>
-                        </TooltipProvider>
-                      </TableCell>
+                       <TableCell className="text-right">
+                         <TooltipProvider>
+                           <div className="flex justify-end gap-2">
+                             {doc.document_extractions?.[0]?.extracted_data?.shop_number && (
+                               <Tooltip>
+                                 <TooltipTrigger asChild>
+                                   <Button
+                                     variant="ghost"
+                                     size="sm"
+                                     onClick={() => handleViewTariff(doc.document_extractions[0].extracted_data.shop_number)}
+                                     disabled={isLoadingTariff}
+                                   >
+                                     <Zap className="w-4 h-4" />
+                                   </Button>
+                                 </TooltipTrigger>
+                                 <TooltipContent>
+                                   <p>View assigned tariff</p>
+                                 </TooltipContent>
+                               </Tooltip>
+                             )}
+                             {doc.document_extractions?.[0] && (
+                               <Tooltip>
+                                 <TooltipTrigger asChild>
+                                 <Button
+                                   variant="ghost"
+                                   size="sm"
+                                   onClick={() => handleViewDocument(doc)}
+                                 >
+                                   <Eye className="w-4 h-4" />
+                                 </Button>
+                               </TooltipTrigger>
+                               <TooltipContent>
+                                 <p>View data</p>
+                               </TooltipContent>
+                               </Tooltip>
+                             )}
+                             <Tooltip>
+                               <TooltipTrigger asChild>
+                                 <Button
+                                   variant="ghost"
+                                   size="sm"
+                                   onClick={() => handleDownload(doc.file_path, doc.file_name)}
+                                 >
+                                   <Download className="w-4 h-4" />
+                                 </Button>
+                               </TooltipTrigger>
+                               <TooltipContent>
+                                 <p>Download document</p>
+                               </TooltipContent>
+                             </Tooltip>
+                             <Tooltip>
+                               <TooltipTrigger asChild>
+                                 <Button
+                                   variant="ghost"
+                                   size="sm"
+                                   onClick={() => handleDelete(doc.id, doc.file_path)}
+                                 >
+                                   <Trash2 className="w-4 h-4" />
+                                 </Button>
+                               </TooltipTrigger>
+                               <TooltipContent>
+                                 <p>Delete document</p>
+                               </TooltipContent>
+                             </Tooltip>
+                           </div>
+                         </TooltipProvider>
+                       </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -1152,6 +1231,99 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Tariff Assignment Dialog */}
+      <Dialog open={!!viewingTariff} onOpenChange={() => setViewingTariff(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Tariff Assignment</DialogTitle>
+            <DialogDescription>
+              View the tariff assigned to shop "{viewingTariff?.shopNumber}"
+            </DialogDescription>
+          </DialogHeader>
+          
+          {viewingTariff && (
+            <div className="space-y-6">
+              {/* Meter Information */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-semibold text-muted-foreground">Meter Information</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Meter Number</Label>
+                    <p className="text-sm font-medium">{viewingTariff.meterNumber}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Meter Name</Label>
+                    <p className="text-sm font-medium">{viewingTariff.meterName || '-'}</p>
+                  </div>
+                  <div className="col-span-2">
+                    <Label className="text-xs text-muted-foreground">Location</Label>
+                    <p className="text-sm font-medium">{viewingTariff.location || '-'}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Tariff Structure Information */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-semibold text-muted-foreground">Assigned Tariff Structure</h3>
+                {viewingTariff.tariffStructure ? (
+                  <div className="space-y-3 p-4 border rounded-lg bg-muted/30">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <p className="font-semibold text-base">{viewingTariff.tariffStructure.name}</p>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {viewingTariff.tariffStructure.supply_authorities?.name}
+                        </p>
+                      </div>
+                      <Badge className="ml-2">
+                        {viewingTariff.tariffStructure.uses_tou ? 'TOU' : 'Standard'}
+                      </Badge>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4 pt-3 border-t">
+                      <div>
+                        <Label className="text-xs text-muted-foreground">Tariff Type</Label>
+                        <p className="text-sm font-medium capitalize">
+                          {viewingTariff.tariffStructure.tariff_type.replace('_', ' ')}
+                        </p>
+                      </div>
+                      <div>
+                        <Label className="text-xs text-muted-foreground">Effective From</Label>
+                        <p className="text-sm font-medium">
+                          {format(new Date(viewingTariff.tariffStructure.effective_from), 'dd MMM yyyy')}
+                        </p>
+                      </div>
+                      {viewingTariff.tariffStructure.effective_to && (
+                        <div className="col-span-2">
+                          <Label className="text-xs text-muted-foreground">Effective To</Label>
+                          <p className="text-sm font-medium">
+                            {format(new Date(viewingTariff.tariffStructure.effective_to), 'dd MMM yyyy')}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : viewingTariff.legacyTariff ? (
+                  <div className="p-4 border rounded-lg bg-muted/30">
+                    <Label className="text-xs text-muted-foreground">Legacy Tariff</Label>
+                    <p className="text-sm font-medium mt-1">{viewingTariff.legacyTariff}</p>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Note: This is a legacy tariff field. Consider assigning a proper tariff structure for better cost calculations.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="p-4 border rounded-lg bg-muted/30 text-center">
+                    <p className="text-sm text-muted-foreground">No tariff structure assigned to this meter</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Go to the Tariff Assignment tab to assign a tariff structure
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </>
