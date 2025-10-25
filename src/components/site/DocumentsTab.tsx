@@ -1162,16 +1162,16 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
           {viewingDocument && editedData && (
             <div className="grid grid-cols-2 gap-6 h-[70vh]">
               {/* Left side - Document Image with Fabric.js Canvas */}
-              <div className="border rounded-lg overflow-hidden bg-muted/30 relative flex flex-col">
+              <div className="border rounded-lg bg-muted/30 relative flex flex-col h-full">
                 {/* Controls */}
-                <div className="p-2 border-b bg-background/80 flex items-center justify-end gap-2">
+                <div className="p-2 border-b bg-background/80 flex items-center justify-end gap-2 flex-shrink-0">
                   <div className="text-sm text-muted-foreground">
                     Zoom: {Math.round(zoom * 100)}%
                   </div>
                 </div>
                 
                 {/* Canvas */}
-                <div className="flex-1 flex items-center justify-center p-4">
+                <div className="flex-1 flex items-center justify-center p-4 overflow-auto min-h-0">
                   {documentImageUrl ? (
                     <canvas ref={canvasRef} />
                   ) : (
@@ -1183,7 +1183,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                 </div>
                 
                 {/* Bottom controls for selection */}
-                <div className="p-2 border-t bg-background/80 flex items-center justify-center gap-2">
+                <div className="p-2 border-t bg-background/80 flex items-center justify-center gap-2 flex-shrink-0">
                   {!selectionMode ? (
                     <Button
                       size="sm"
