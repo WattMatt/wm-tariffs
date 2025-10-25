@@ -1182,49 +1182,6 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                       </div>
                     )}
                   </div>
-                  
-                  {/* Bottom controls for selection */}
-                  <div className="p-2 border-t bg-background/80 flex items-center justify-center gap-2 flex-shrink-0">
-                    {!selectionMode ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={handleStartSelection}
-                      >
-                        <Square className="w-4 h-4 mr-2" />
-                        Select Region
-                      </Button>
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={handleCancelSelection}
-                      >
-                        <XCircle className="w-4 h-4 mr-2" />
-                        Cancel Selection
-                      </Button>
-                    )}
-                    {selectionRectRef.current && (
-                      <Button
-                        size="sm"
-                        variant="default"
-                        onClick={handleRescanRegion}
-                        disabled={isExtracting}
-                      >
-                        {isExtracting ? (
-                          <>
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            Rescanning...
-                          </>
-                        ) : (
-                          <>
-                            <Sparkles className="w-4 h-4 mr-2" />
-                            Rescan Region
-                          </>
-                        )}
-                      </Button>
-                    )}
-                  </div>
                 </div>
 
                 {/* Right side - Editable Data */}
@@ -1470,26 +1427,72 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
           )}
           
           {viewingDocument && editedData && (
-            <div className="flex justify-end gap-2 pt-4 border-t flex-shrink-0">
-              <Button 
-                variant="outline" 
-                onClick={() => setIsEditing(!isEditing)}
-              >
-                {isEditing ? 'Lock' : 'Edit'}
-              </Button>
-              <Button variant="outline" onClick={handleReset} disabled={!isEditing}>
-                Reset
-              </Button>
-              <Button onClick={handleSave} disabled={isSaving || !isEditing}>
-                {isSaving ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Saving...
-                  </>
+            <div className="grid grid-cols-2 gap-6 pt-4 border-t flex-shrink-0">
+              {/* Left side buttons - Selection controls */}
+              <div className="flex items-center justify-center gap-2">
+                {!selectionMode ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleStartSelection}
+                  >
+                    <Square className="w-4 h-4 mr-2" />
+                    Select Region
+                  </Button>
                 ) : (
-                  'Save'
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleCancelSelection}
+                  >
+                    <XCircle className="w-4 h-4 mr-2" />
+                    Cancel Selection
+                  </Button>
                 )}
-              </Button>
+                {selectionRectRef.current && (
+                  <Button
+                    size="sm"
+                    variant="default"
+                    onClick={handleRescanRegion}
+                    disabled={isExtracting}
+                  >
+                    {isExtracting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Rescanning...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4 mr-2" />
+                        Rescan Region
+                      </>
+                    )}
+                  </Button>
+                )}
+              </div>
+              
+              {/* Right side buttons - Edit controls */}
+              <div className="flex justify-end gap-2">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setIsEditing(!isEditing)}
+                >
+                  {isEditing ? 'Lock' : 'Edit'}
+                </Button>
+                <Button variant="outline" onClick={handleReset} disabled={!isEditing}>
+                  Reset
+                </Button>
+                <Button onClick={handleSave} disabled={isSaving || !isEditing}>
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    'Save'
+                  )}
+                </Button>
+              </div>
             </div>
           )}
         </DialogContent>
