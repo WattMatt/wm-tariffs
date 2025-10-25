@@ -1152,15 +1152,15 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
       </Card>
 
       <Dialog open={!!viewingDocument} onOpenChange={handleCloseDialog}>
-        <DialogContent className="max-w-7xl max-h-[90vh] overflow-hidden">
-          <DialogHeader>
+        <DialogContent className="max-w-7xl max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader className="flex-shrink-0">
             <DialogTitle>Document Extraction</DialogTitle>
             <DialogDescription>
               Review and edit the AI-extracted information
             </DialogDescription>
           </DialogHeader>
           {viewingDocument && editedData && (
-            <div className="grid grid-cols-2 gap-6 h-[70vh]">
+            <div className="grid grid-cols-2 gap-6 flex-1 min-h-0">
               {/* Left side - Document Image with Fabric.js Canvas */}
               <div className="border rounded-lg bg-muted/30 relative flex flex-col h-full">
                 {/* Controls */}
@@ -1227,7 +1227,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
               </div>
 
               {/* Right side - Editable Data */}
-              <div className="overflow-y-auto space-y-4 pr-2">
+              <div className="overflow-y-auto space-y-4 pr-2 pb-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Period Start</Label>
@@ -1467,7 +1467,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
             </div>
           )}
           
-          <div className="flex justify-end gap-2 pt-4 border-t">
+          <div className="flex justify-end gap-2 pt-4 border-t flex-shrink-0 mt-4">
             <Button 
               variant="outline" 
               onClick={() => setIsEditing(!isEditing)}
