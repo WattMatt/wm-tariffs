@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,11 +10,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { FileText, Upload, Loader2, Download, Trash2, Eye, ZoomIn, ZoomOut, Maximize2, GripVertical, Plus, X, Sparkles, RefreshCw } from "lucide-react";
+import { FileText, Upload, Loader2, Download, Trash2, Eye, ZoomIn, ZoomOut, Maximize2, GripVertical, Plus, X, Sparkles, RefreshCw, Square, XCircle } from "lucide-react";
 import { format } from "date-fns";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { pdfjs } from 'react-pdf';
-import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
+import { Canvas as FabricCanvas, Image as FabricImage, Rect as FabricRect, Circle } from "fabric";
 
 // Set up PDF.js worker
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
@@ -57,6 +57,17 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
   const [isBulkExtracting, setIsBulkExtracting] = useState(false);
+  
+  // Fabric.js canvas state
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [fabricCanvas, setFabricCanvas] = useState<FabricCanvas | null>(null);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [zoom, setZoom] = useState(1);
+  const selectionModeRef = useRef(false);
+  const drawStartPointRef = useRef<{ x: number; y: number } | null>(null);
+  const selectionRectRef = useRef<FabricRect | null>(null);
+  const startMarkerRef = useRef<Circle | null>(null);
+  const currentImageRef = useRef<FabricImage | null>(null);
 
   useEffect(() => {
     fetchDocuments();
@@ -466,6 +477,12 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
     setViewingExtraction(null);
     setDocumentImageUrl(null);
     setEditedData(null);
+    setSelectionMode(false);
+    selectionModeRef.current = false;
+    if (fabricCanvas) {
+      fabricCanvas.dispose();
+      setFabricCanvas(null);
+    }
   };
 
   const handleReset = () => {
@@ -554,6 +571,365 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
       toast.error("Failed to save changes");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  // Initialize Fabric canvas when document image is loaded
+  useEffect(() => {
+    if (!canvasRef.current || !documentImageUrl) return;
+
+    const canvas = new FabricCanvas(canvasRef.current, {
+      width: 800,
+      height: 600,
+      backgroundColor: "#f8f9fa",
+    });
+
+    // Load the document image
+    FabricImage.fromURL(documentImageUrl).then((img) => {
+      const scale = Math.min(
+        canvas.width! / img.width!,
+        canvas.height! / img.height!
+      );
+      
+      img.scale(scale * 0.9);
+      img.set({
+        left: (canvas.width! - img.width! * img.scaleX!) / 2,
+        top: (canvas.height! - img.height! * img.scaleY!) / 2,
+        selectable: false,
+        evented: false,
+      });
+      
+      currentImageRef.current = img;
+      canvas.add(img);
+      canvas.sendObjectToBack(img);
+      canvas.renderAll();
+    });
+
+    // Mouse wheel zoom
+    canvas.on('mouse:wheel', (opt) => {
+      let newZoom = canvas.getZoom();
+      newZoom *= 0.999 ** opt.e.deltaY;
+      if (newZoom > 30) newZoom = 30;
+      if (newZoom < 0.3) newZoom = 0.3;
+      
+      const pointer = canvas.getPointer(opt.e);
+      canvas.zoomToPoint(pointer, newZoom);
+      setZoom(newZoom);
+      opt.e.preventDefault();
+      opt.e.stopPropagation();
+    });
+
+    // Panning variables
+    let isPanningLocal = false;
+    let lastX = 0;
+    let lastY = 0;
+
+    // Mouse down - handle selection drawing (two-click approach) and panning
+    canvas.on('mouse:down', (opt) => {
+      const evt = opt.e as MouseEvent;
+      const target = opt.target;
+      
+      const isInSelectionMode = selectionModeRef.current;
+      
+      // SELECTION MODE: Handle two-click region drawing
+      if (isInSelectionMode && evt.button === 0) {
+        const isInteractiveObject = target && target.type !== 'image';
+        if (isInteractiveObject) return;
+        
+        const pointer = canvas.getPointer(opt.e);
+        
+        // First click - set start point
+        if (!drawStartPointRef.current) {
+          drawStartPointRef.current = { x: pointer.x, y: pointer.y };
+          
+          // Show a marker at start point
+          const marker = new Circle({
+            left: pointer.x,
+            top: pointer.y,
+            radius: 5,
+            fill: '#3b82f6',
+            stroke: '#ffffff',
+            strokeWidth: 2,
+            selectable: false,
+            evented: false,
+            originX: 'center',
+            originY: 'center',
+          });
+          
+          canvas.add(marker);
+          startMarkerRef.current = marker;
+          canvas.renderAll();
+          toast.info('Click again to set the end point');
+          evt.preventDefault();
+          evt.stopPropagation();
+          return;
+        }
+        
+        // Second click - create rectangle
+        const startPoint = drawStartPointRef.current;
+        
+        const left = Math.min(startPoint.x, pointer.x);
+        const top = Math.min(startPoint.y, pointer.y);
+        const width = Math.abs(pointer.x - startPoint.x);
+        const height = Math.abs(pointer.y - startPoint.y);
+        
+        if (width < 10 || height < 10) {
+          toast.error('Selection too small');
+          if (startMarkerRef.current) {
+            canvas.remove(startMarkerRef.current);
+            startMarkerRef.current = null;
+          }
+          drawStartPointRef.current = null;
+          return;
+        }
+        
+        const rect = new FabricRect({
+          left,
+          top,
+          width,
+          height,
+          fill: 'rgba(59, 130, 246, 0.2)',
+          stroke: '#3b82f6',
+          strokeWidth: 2,
+          selectable: true,
+          evented: true,
+        });
+        
+        canvas.add(rect);
+        selectionRectRef.current = rect;
+        canvas.renderAll();
+        
+        // Clean up marker
+        if (startMarkerRef.current) {
+          canvas.remove(startMarkerRef.current);
+          startMarkerRef.current = null;
+        }
+        
+        // Exit selection mode
+        setSelectionMode(false);
+        selectionModeRef.current = false;
+        drawStartPointRef.current = null;
+        
+        toast.success('Region selected! Click "Rescan Region" to extract data from this area.');
+        
+        evt.preventDefault();
+        evt.stopPropagation();
+        return;
+      }
+      
+      // PANNING: Only allow when NOT in selection mode
+      if (!selectionModeRef.current && !target) {
+        if (evt.button === 0 || evt.button === 1 || evt.button === 2) {
+          isPanningLocal = true;
+          lastX = evt.clientX;
+          lastY = evt.clientY;
+          canvas.selection = false;
+        }
+      }
+    });
+
+    // Mouse move - show preview rectangle and handle panning
+    canvas.on('mouse:move', (opt) => {
+      // SELECTION MODE: Show preview rectangle
+      if (selectionModeRef.current && drawStartPointRef.current && !selectionRectRef.current) {
+        const pointer = canvas.getPointer(opt.e);
+        const startPoint = drawStartPointRef.current;
+        
+        // Remove old preview
+        const objects = canvas.getObjects();
+        const oldPreview = objects.find(obj => (obj as any).isPreview);
+        if (oldPreview) {
+          canvas.remove(oldPreview);
+        }
+        
+        // Create preview rectangle
+        const left = Math.min(startPoint.x, pointer.x);
+        const top = Math.min(startPoint.y, pointer.y);
+        const width = Math.abs(pointer.x - startPoint.x);
+        const height = Math.abs(pointer.y - startPoint.y);
+        
+        const preview = new FabricRect({
+          left,
+          top,
+          width,
+          height,
+          fill: 'rgba(59, 130, 246, 0.1)',
+          stroke: '#3b82f6',
+          strokeWidth: 1,
+          strokeDashArray: [5, 5],
+          selectable: false,
+          evented: false,
+        });
+        
+        (preview as any).isPreview = true;
+        canvas.add(preview);
+        canvas.renderAll();
+        return;
+      }
+      
+      // PANNING: Only when not in selection mode
+      if (isPanningLocal && !selectionModeRef.current) {
+        const evt = opt.e as MouseEvent;
+        const vpt = canvas.viewportTransform;
+        if (vpt) {
+          vpt[4] += evt.clientX - lastX;
+          vpt[5] += evt.clientY - lastY;
+          canvas.requestRenderAll();
+          lastX = evt.clientX;
+          lastY = evt.clientY;
+        }
+      }
+    });
+
+    // Mouse up - clean up panning state
+    canvas.on('mouse:up', () => {
+      if (isPanningLocal) {
+        isPanningLocal = false;
+        canvas.selection = true;
+      }
+    });
+
+    setFabricCanvas(canvas);
+
+    return () => {
+      canvas.dispose();
+    };
+  }, [documentImageUrl]);
+
+  // Update selectionModeRef when selectionMode changes
+  useEffect(() => {
+    selectionModeRef.current = selectionMode;
+  }, [selectionMode]);
+
+  const handleStartSelection = () => {
+    setSelectionMode(true);
+    selectionModeRef.current = true;
+    toast.info('Click on the document to mark the first corner of your selection');
+  };
+
+  const handleCancelSelection = () => {
+    setSelectionMode(false);
+    selectionModeRef.current = false;
+    drawStartPointRef.current = null;
+    
+    if (fabricCanvas) {
+      if (startMarkerRef.current) {
+        fabricCanvas.remove(startMarkerRef.current);
+        startMarkerRef.current = null;
+      }
+      if (selectionRectRef.current) {
+        fabricCanvas.remove(selectionRectRef.current);
+        selectionRectRef.current = null;
+      }
+      // Remove preview rectangles
+      const objects = fabricCanvas.getObjects();
+      const previews = objects.filter(obj => (obj as any).isPreview);
+      previews.forEach(preview => fabricCanvas.remove(preview));
+      fabricCanvas.renderAll();
+    }
+    
+    toast.info('Selection cancelled');
+  };
+
+  const handleRescanRegion = async () => {
+    if (!fabricCanvas || !selectionRectRef.current || !viewingDocument) {
+      toast.error('Please select a region first');
+      return;
+    }
+
+    setIsExtracting(true);
+    try {
+      const rect = selectionRectRef.current;
+      const imageObj = currentImageRef.current;
+      
+      if (!imageObj) throw new Error('Image not found on canvas');
+      
+      // Get the image element's original dimensions
+      const imgElement = (imageObj as any)._element;
+      if (!imgElement) throw new Error('Image element not found');
+      
+      const originalWidth = imgElement.naturalWidth || imgElement.width;
+      const originalHeight = imgElement.naturalHeight || imgElement.height;
+      
+      // Calculate selection coordinates relative to the original image
+      const imgLeft = imageObj.left! - (imageObj.width! * imageObj.scaleX!) / 2;
+      const imgTop = imageObj.top! - (imageObj.height! * imageObj.scaleY!) / 2;
+      
+      const relX = (rect.left! - imgLeft) / imageObj.scaleX!;
+      const relY = (rect.top! - imgTop) / imageObj.scaleY!;
+      const relWidth = rect.width! / imageObj.scaleX!;
+      const relHeight = rect.height! / imageObj.scaleY!;
+      
+      // Create a canvas for cropping
+      const cropCanvas = document.createElement('canvas');
+      cropCanvas.width = relWidth;
+      cropCanvas.height = relHeight;
+      const ctx = cropCanvas.getContext('2d');
+      
+      if (!ctx) throw new Error('Could not get canvas context');
+      
+      // Draw the cropped region
+      ctx.drawImage(
+        imgElement,
+        relX, relY, relWidth, relHeight,
+        0, 0, relWidth, relHeight
+      );
+      
+      // Convert to blob
+      const croppedBlob = await new Promise<Blob>((resolve, reject) => {
+        cropCanvas.toBlob((blob) => {
+          if (blob) resolve(blob);
+          else reject(new Error('Failed to create blob'));
+        }, 'image/png');
+      });
+      
+      // Upload cropped image
+      const fileName = `${siteId}/region-${Date.now()}.png`;
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('site-documents')
+        .upload(fileName, croppedBlob);
+      
+      if (uploadError) throw uploadError;
+      
+      // Get signed URL
+      const { data: urlData } = await supabase.storage
+        .from('site-documents')
+        .createSignedUrl(uploadData.path, 3600);
+      
+      if (!urlData?.signedUrl) throw new Error('Failed to get signed URL');
+      
+      // Call AI extraction on the cropped region
+      const { data: extractionResult, error: extractionError } = await supabase.functions.invoke("extract-document-data", {
+        body: {
+          documentId: viewingDocument.id,
+          fileUrl: urlData.signedUrl,
+          documentType: viewingDocument.document_type
+        }
+      });
+      
+      if (extractionError) throw extractionError;
+      
+      // Update the edited data with new extraction
+      if (extractionResult?.extractedData) {
+        const newData = {
+          period_start: extractionResult.extractedData.period_start,
+          period_end: extractionResult.extractedData.period_end,
+          total_amount: extractionResult.extractedData.total_amount,
+          currency: extractionResult.extractedData.currency || 'ZAR',
+          extracted_data: extractionResult.extractedData
+        };
+        setEditedData(newData);
+        toast.success("Region re-extracted successfully");
+      }
+      
+      // Clean up the uploaded cropped image
+      await supabase.storage.from('site-documents').remove([uploadData.path]);
+      
+    } catch (error) {
+      console.error("Error rescanning region:", error);
+      toast.error("Failed to rescan region");
+    } finally {
+      setIsExtracting(false);
     }
   };
 
@@ -827,58 +1203,60 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
           </DialogHeader>
           {viewingDocument && editedData && (
             <div className="grid grid-cols-2 gap-6 h-[70vh]">
-              {/* Left side - Document Image */}
-              <div className="border rounded-lg overflow-hidden bg-muted/30 relative">
-                <div className="h-full flex items-center justify-center">
+              {/* Left side - Document Image with Fabric.js Canvas */}
+              <div className="border rounded-lg overflow-hidden bg-muted/30 relative flex flex-col">
+                {/* Controls */}
+                <div className="p-2 border-b bg-background/80 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    {!selectionMode ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleStartSelection}
+                      >
+                        <Square className="w-4 h-4 mr-2" />
+                        Select Region
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleCancelSelection}
+                      >
+                        <XCircle className="w-4 h-4 mr-2" />
+                        Cancel Selection
+                      </Button>
+                    )}
+                    {selectionRectRef.current && (
+                      <Button
+                        size="sm"
+                        variant="default"
+                        onClick={handleRescanRegion}
+                        disabled={isExtracting}
+                      >
+                        {isExtracting ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Rescanning...
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-4 h-4 mr-2" />
+                            Rescan Region
+                          </>
+                        )}
+                      </Button>
+                    )}
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    Zoom: {Math.round(zoom * 100)}%
+                  </div>
+                </div>
+                
+                {/* Canvas */}
+                <div className="flex-1 flex items-center justify-center p-4">
                   {documentImageUrl ? (
-                    <TransformWrapper
-                      initialScale={1}
-                      minScale={0.5}
-                      maxScale={4}
-                      centerOnInit
-                    >
-                      {({ zoomIn, zoomOut, resetTransform }) => (
-                        <>
-                          <div className="absolute top-4 right-4 z-10 flex flex-col gap-2">
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              onClick={() => zoomIn()}
-                              className="shadow-lg"
-                            >
-                              <ZoomIn className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              onClick={() => zoomOut()}
-                              className="shadow-lg"
-                            >
-                              <ZoomOut className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              onClick={() => resetTransform()}
-                              className="shadow-lg"
-                            >
-                              <Maximize2 className="w-4 h-4" />
-                            </Button>
-                          </div>
-                          <TransformComponent
-                            wrapperClass="!w-full !h-full"
-                            contentClass="!w-full !h-full flex items-center justify-center"
-                          >
-                            <img 
-                              src={documentImageUrl} 
-                              alt={viewingDocument.file_name}
-                              className="max-w-full max-h-full object-contain"
-                              draggable={false}
-                            />
-                          </TransformComponent>
-                        </>
-                      )}
-                    </TransformWrapper>
+                    <canvas ref={canvasRef} />
                   ) : (
                     <div className="flex flex-col items-center gap-2 text-muted-foreground">
                       <Loader2 className="w-8 h-8 animate-spin" />
