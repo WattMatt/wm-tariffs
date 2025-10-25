@@ -137,6 +137,29 @@ Return the data in a structured format.`;
     }
 
     const extractedData = JSON.parse(toolCall.function.arguments);
+    
+    // Format shop number with DB- prefix and proper digit formatting
+    if (extractedData.shop_number) {
+      let shopNum = extractedData.shop_number.toString().trim();
+      
+      // Remove any existing DB- prefix
+      shopNum = shopNum.replace(/^DB-/i, '');
+      
+      // Check if it's purely numeric or has a letter suffix
+      const match = shopNum.match(/^(\d+)([A-Z])?$/i);
+      if (match) {
+        const number = match[1];
+        const suffix = match[2] ? match[2].toUpperCase() : '';
+        
+        // Format with two digits
+        const paddedNumber = number.padStart(2, '0');
+        extractedData.shop_number = `DB-${paddedNumber}${suffix}`;
+      } else {
+        // If it doesn't match expected pattern, just add DB- prefix
+        extractedData.shop_number = `DB-${shopNum}`;
+      }
+    }
+    
     console.log("Extracted data:", extractedData);
 
     // Store the extraction in the database

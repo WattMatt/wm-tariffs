@@ -10,7 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { FileText, Upload, Loader2, Download, Trash2, Eye, ZoomIn, ZoomOut, Maximize2, GripVertical, Plus, X, Sparkles, RefreshCw, Square, XCircle } from "lucide-react";
+import { FileText, Upload, Loader2, Download, Trash2, Eye, GripVertical, Plus, X, Sparkles, RefreshCw, Square, XCircle } from "lucide-react";
 import { format } from "date-fns";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { pdfjs } from 'react-pdf';
@@ -57,6 +57,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
   const [isBulkExtracting, setIsBulkExtracting] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   
   // Fabric.js canvas state
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -478,6 +479,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
     setDocumentImageUrl(null);
     setEditedData(null);
     setSelectionMode(false);
+    setIsEditing(false);
     selectionModeRef.current = false;
     if (fabricCanvas) {
       fabricCanvas.dispose();
@@ -488,55 +490,11 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
   const handleReset = () => {
     if (viewingExtraction) {
       setEditedData({ ...viewingExtraction });
+      setIsEditing(false);
       toast.info("Changes reset");
     }
   };
 
-  const handleExtract = async () => {
-    if (!viewingDocument) return;
-
-    setIsExtracting(true);
-    try {
-      // Get signed URL for the document
-      const pathToProcess = viewingDocument.converted_image_path || viewingDocument.file_path;
-      const { data: urlData } = await supabase.storage
-        .from("site-documents")
-        .createSignedUrl(pathToProcess, 3600);
-
-      if (!urlData?.signedUrl) {
-        throw new Error("Failed to get document URL");
-      }
-
-      // Call AI extraction
-      const { data: extractionResult, error: extractionError } = await supabase.functions.invoke("extract-document-data", {
-        body: {
-          documentId: viewingDocument.id,
-          fileUrl: urlData.signedUrl,
-          documentType: viewingDocument.document_type
-        }
-      });
-
-      if (extractionError) throw extractionError;
-
-      // Update the edited data with new extraction
-      if (extractionResult?.extractedData) {
-        const newData = {
-          period_start: extractionResult.extractedData.period_start,
-          period_end: extractionResult.extractedData.period_end,
-          total_amount: extractionResult.extractedData.total_amount,
-          currency: extractionResult.extractedData.currency || 'ZAR',
-          extracted_data: extractionResult.extractedData
-        };
-        setEditedData(newData);
-        toast.success("Document re-extracted successfully");
-      }
-    } catch (error) {
-      console.error("Error extracting document:", error);
-      toast.error("Failed to extract document");
-    } finally {
-      setIsExtracting(false);
-    }
-  };
 
   const handleSave = async () => {
     if (!editedData || !viewingDocument) return;
@@ -1206,48 +1164,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
               {/* Left side - Document Image with Fabric.js Canvas */}
               <div className="border rounded-lg overflow-hidden bg-muted/30 relative flex flex-col">
                 {/* Controls */}
-                <div className="p-2 border-b bg-background/80 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    {!selectionMode ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={handleStartSelection}
-                      >
-                        <Square className="w-4 h-4 mr-2" />
-                        Select Region
-                      </Button>
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={handleCancelSelection}
-                      >
-                        <XCircle className="w-4 h-4 mr-2" />
-                        Cancel Selection
-                      </Button>
-                    )}
-                    {selectionRectRef.current && (
-                      <Button
-                        size="sm"
-                        variant="default"
-                        onClick={handleRescanRegion}
-                        disabled={isExtracting}
-                      >
-                        {isExtracting ? (
-                          <>
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            Rescanning...
-                          </>
-                        ) : (
-                          <>
-                            <Sparkles className="w-4 h-4 mr-2" />
-                            Rescan Region
-                          </>
-                        )}
-                      </Button>
-                    )}
-                  </div>
+                <div className="p-2 border-b bg-background/80 flex items-center justify-end gap-2">
                   <div className="text-sm text-muted-foreground">
                     Zoom: {Math.round(zoom * 100)}%
                   </div>
@@ -1264,6 +1181,49 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                     </div>
                   )}
                 </div>
+                
+                {/* Bottom controls for selection */}
+                <div className="p-2 border-t bg-background/80 flex items-center justify-center gap-2">
+                  {!selectionMode ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleStartSelection}
+                    >
+                      <Square className="w-4 h-4 mr-2" />
+                      Select Region
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleCancelSelection}
+                    >
+                      <XCircle className="w-4 h-4 mr-2" />
+                      Cancel Selection
+                    </Button>
+                  )}
+                  {selectionRectRef.current && (
+                    <Button
+                      size="sm"
+                      variant="default"
+                      onClick={handleRescanRegion}
+                      disabled={isExtracting}
+                    >
+                      {isExtracting ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Rescanning...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-4 h-4 mr-2" />
+                          Rescan Region
+                        </>
+                      )}
+                    </Button>
+                  )}
+                </div>
               </div>
 
               {/* Right side - Editable Data */}
@@ -1273,6 +1233,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                     <Label>Period Start</Label>
                     <Input
                       type="text"
+                      disabled={!isEditing}
                       value={editedData.period_start ? format(new Date(editedData.period_start), 'dd MMM yyyy') : ''}
                       onChange={(e) => {
                         const date = new Date(e.target.value);
@@ -1286,6 +1247,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                     <Label>Period End</Label>
                     <Input
                       type="text"
+                      disabled={!isEditing}
                       value={editedData.period_end ? format(new Date(editedData.period_end), 'dd MMM yyyy') : ''}
                       onChange={(e) => {
                         const date = new Date(e.target.value);
@@ -1301,6 +1263,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                   <div className="space-y-2">
                     <Label>Currency</Label>
                     <Input
+                      disabled={!isEditing}
                       value={editedData.currency || ''}
                       onChange={(e) => setEditedData({ ...editedData, currency: e.target.value })}
                     />
@@ -1310,6 +1273,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                     <Input
                       type="number"
                       step="0.01"
+                      disabled={!isEditing}
                       value={editedData.total_amount || ''}
                       onChange={(e) => setEditedData({ ...editedData, total_amount: parseFloat(e.target.value) })}
                     />
@@ -1324,6 +1288,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                       <div className="space-y-2">
                         <Label>Shop Number</Label>
                         <Input
+                          disabled={!isEditing}
                           value={editedData.extracted_data.shop_number || ''}
                           onChange={(e) => setEditedData({
                             ...editedData,
@@ -1337,6 +1302,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                       <div className="space-y-2">
                         <Label>Tenant Name</Label>
                         <Input
+                          disabled={!isEditing}
                           value={editedData.extracted_data.tenant_name || ''}
                           onChange={(e) => setEditedData({
                             ...editedData,
@@ -1350,6 +1316,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                       <div className="space-y-2">
                         <Label>Account Reference</Label>
                         <Input
+                          disabled={!isEditing}
                           value={editedData.extracted_data.account_reference || ''}
                           onChange={(e) => setEditedData({
                             ...editedData,
@@ -1366,6 +1333,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                           <Button
                             size="sm"
                             variant="outline"
+                            disabled={!isEditing}
                             onClick={() => {
                               const readings = Array.isArray(editedData.extracted_data.meter_readings)
                                 ? editedData.extracted_data.meter_readings
@@ -1433,9 +1401,10 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                                 className="flex gap-3 items-center p-3 border rounded-lg bg-muted/30 hover:bg-muted/50 cursor-move transition-colors"
                               >
                                 <GripVertical className="w-5 h-5 text-muted-foreground flex-shrink-0" />
-                                <div className="flex-1 grid grid-cols-2 gap-3">
+                                 <div className="flex-1 grid grid-cols-2 gap-3">
                                   <Input
                                     placeholder="Name"
+                                    disabled={!isEditing}
                                     value={reading.name || ''}
                                     onChange={(e) => {
                                       const newReadings = [...readings];
@@ -1453,6 +1422,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                                     type="number"
                                     step="0.01"
                                     placeholder="Value"
+                                    disabled={!isEditing}
                                     value={reading.value || ''}
                                     onChange={(e) => {
                                       const newReadings = [...readings];
@@ -1471,6 +1441,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                                   size="sm"
                                   variant="ghost"
                                   className="flex-shrink-0"
+                                  disabled={!isEditing}
                                   onClick={() => {
                                     const newReadings = readings.filter((_: any, i: number) => i !== index);
                                     setEditedData({
@@ -1496,39 +1467,26 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
             </div>
           )}
           
-          <div className="flex justify-between pt-4 border-t">
+          <div className="flex justify-end gap-2 pt-4 border-t">
             <Button 
               variant="outline" 
-              onClick={handleExtract}
-              disabled={isExtracting}
+              onClick={() => setIsEditing(!isEditing)}
             >
-              {isExtracting ? (
+              {isEditing ? 'Lock' : 'Edit'}
+            </Button>
+            <Button variant="outline" onClick={handleReset} disabled={!isEditing}>
+              Reset
+            </Button>
+            <Button onClick={handleSave} disabled={isSaving || !isEditing}>
+              {isSaving ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Extracting...
+                  Saving...
                 </>
               ) : (
-                <>
-                  <Sparkles className="w-4 h-4 mr-2" />
-                  Extract
-                </>
+                'Save'
               )}
             </Button>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={handleReset}>
-                Reset
-              </Button>
-              <Button onClick={handleSave} disabled={isSaving}>
-                {isSaving ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  'Save'
-                )}
-              </Button>
-            </div>
           </div>
         </DialogContent>
       </Dialog>
