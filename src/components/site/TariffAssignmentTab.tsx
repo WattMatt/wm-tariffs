@@ -8,9 +8,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { FileCheck2, AlertCircle, CheckCircle2, DollarSign, Eye } from "lucide-react";
+import { FileCheck2, AlertCircle, CheckCircle2, DollarSign, Eye, FileText } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import TariffDetailsDialog from "@/components/tariffs/TariffDetailsDialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 interface TariffAssignmentTabProps {
   siteId: string;
@@ -47,6 +48,16 @@ interface Meter {
   meter_type: string;
 }
 
+interface DocumentShopNumber {
+  documentId: string;
+  fileName: string;
+  shopNumber: string;
+  periodStart: string;
+  periodEnd: string;
+  totalAmount: number;
+  currency: string;
+}
+
 export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps) {
   const [site, setSite] = useState<Site | null>(null);
   const [tariffStructures, setTariffStructures] = useState<TariffStructure[]>([]);
@@ -56,10 +67,13 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
   const [isSaving, setIsSaving] = useState(false);
   const [viewingTariffId, setViewingTariffId] = useState<string | null>(null);
   const [viewingTariffName, setViewingTariffName] = useState<string>("");
+  const [documentShopNumbers, setDocumentShopNumbers] = useState<DocumentShopNumber[]>([]);
+  const [viewingShopDoc, setViewingShopDoc] = useState<DocumentShopNumber | null>(null);
 
   useEffect(() => {
     fetchSiteData();
     fetchMeters();
+    fetchDocumentShopNumbers();
   }, [siteId]);
 
   useEffect(() => {
@@ -126,6 +140,61 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
       }
     });
     setSelectedTariffs(tariffMap);
+  };
+
+  const fetchDocumentShopNumbers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("site_documents")
+        .select(`
+          id,
+          file_name,
+          document_extractions (
+            extracted_data
+          )
+        `)
+        .eq("site_id", siteId)
+        .eq("extraction_status", "completed");
+
+      if (error) throw error;
+
+      const shopNumbers: DocumentShopNumber[] = [];
+      data?.forEach((doc) => {
+        const extraction = doc.document_extractions?.[0];
+        if (extraction?.extracted_data) {
+          const extractedData = extraction.extracted_data as any;
+          if (extractedData?.shop_number) {
+            shopNumbers.push({
+              documentId: doc.id,
+              fileName: doc.file_name,
+              shopNumber: extractedData.shop_number,
+              periodStart: extractedData.period_start || '',
+              periodEnd: extractedData.period_end || '',
+              totalAmount: extractedData.total_amount || 0,
+              currency: extractedData.currency || 'ZAR'
+            });
+          }
+        }
+      });
+
+      setDocumentShopNumbers(shopNumbers);
+    } catch (error) {
+      console.error("Error fetching document shop numbers:", error);
+    }
+  };
+
+  const getMatchingShopNumbers = (meter: Meter): DocumentShopNumber[] => {
+    const searchTerms = [
+      meter.meter_number.toLowerCase(),
+      meter.name?.toLowerCase() || '',
+    ].filter(Boolean);
+
+    return documentShopNumbers.filter(doc => 
+      searchTerms.some(term => 
+        doc.shopNumber.toLowerCase().includes(term) ||
+        term.includes(doc.shopNumber.toLowerCase())
+      )
+    );
   };
 
   const handleTariffChange = (meterId: string, tariffId: string) => {
@@ -287,6 +356,7 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
                       <TableHead>Meter Number</TableHead>
                       <TableHead>Name</TableHead>
                       <TableHead>Type</TableHead>
+                      <TableHead>Shop Numbers</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Assigned Tariff Structure</TableHead>
                       <TableHead className="w-[80px]">Actions</TableHead>
@@ -297,6 +367,7 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
                       const currentTariffId = selectedTariffs[meter.id];
                       const currentTariff = tariffStructures.find((t) => t.id === currentTariffId);
                       const hasAssignment = !!currentTariffId;
+                      const matchingShops = getMatchingShopNumbers(meter);
 
                       return (
                         <TableRow key={meter.id}>
@@ -306,6 +377,34 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
                           <TableCell>{meter.name || "—"}</TableCell>
                           <TableCell>
                             <Badge variant="outline">{meter.meter_type}</Badge>
+                          </TableCell>
+                          <TableCell>
+                            {matchingShops.length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {matchingShops.map((shop, idx) => (
+                                  <TooltipProvider key={idx}>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="h-6 text-xs"
+                                          onClick={() => setViewingShopDoc(shop)}
+                                        >
+                                          <FileText className="w-3 h-3 mr-1" />
+                                          {shop.shopNumber}
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p>View document details</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground text-sm">—</span>
+                            )}
                           </TableCell>
                           <TableCell>
                             {hasUnsavedChanges(meter.id) ? (
@@ -450,6 +549,50 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
           }}
         />
       )}
+
+      {/* Shop Document Details Dialog */}
+      <Dialog open={!!viewingShopDoc} onOpenChange={() => setViewingShopDoc(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Document Details</DialogTitle>
+            <DialogDescription>
+              Shop number from uploaded document
+            </DialogDescription>
+          </DialogHeader>
+          
+          {viewingShopDoc && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Shop Number</Label>
+                <p className="text-lg font-semibold">{viewingShopDoc.shopNumber}</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Document</Label>
+                <p className="text-sm">{viewingShopDoc.fileName}</p>
+              </div>
+
+              {viewingShopDoc.periodStart && viewingShopDoc.periodEnd && (
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Period</Label>
+                  <p className="text-sm">
+                    {new Date(viewingShopDoc.periodStart).toLocaleDateString()} - {new Date(viewingShopDoc.periodEnd).toLocaleDateString()}
+                  </p>
+                </div>
+              )}
+
+              {viewingShopDoc.totalAmount > 0 && (
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Total Amount</Label>
+                  <p className="text-sm font-medium">
+                    {viewingShopDoc.currency} {viewingShopDoc.totalAmount.toLocaleString()}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
