@@ -790,7 +790,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
   };
 
   const handleRescanRegion = async () => {
-    if (!fabricCanvas || !selectionRectRef.current || !viewingDocument) {
+    if (!fabricCanvas || !selectionRectRef.current || !viewingDocument || !documentImageUrl) {
       toast.error('Please select a region first');
       return;
     }
@@ -802,44 +802,65 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
       
       if (!imageObj) throw new Error('Image not found on canvas');
       
-      // Get the image element's original dimensions
-      const imgElement = (imageObj as any)._element;
-      if (!imgElement) throw new Error('Image element not found');
+      // Get rect's position and dimensions
+      const rectLeft = rect.left || 0;
+      const rectTop = rect.top || 0;
+      const rectWidth = rect.width! * (rect.scaleX || 1);
+      const rectHeight = rect.height! * (rect.scaleY || 1);
       
-      const originalWidth = imgElement.naturalWidth || imgElement.width;
-      const originalHeight = imgElement.naturalHeight || imgElement.height;
+      // Get image's position and scale in canvas
+      const imgLeft = imageObj.left || 0;
+      const imgTop = imageObj.top || 0;
+      const imgScaleX = imageObj.scaleX || 1;
+      const imgScaleY = imageObj.scaleY || 1;
       
-      // Calculate selection coordinates relative to the original image
-      const imgLeft = imageObj.left! - (imageObj.width! * imageObj.scaleX!) / 2;
-      const imgTop = imageObj.top! - (imageObj.height! * imageObj.scaleY!) / 2;
+      // Load fresh image from URL to avoid CORS issues
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.src = documentImageUrl;
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+      });
       
-      const relX = (rect.left! - imgLeft) / imageObj.scaleX!;
-      const relY = (rect.top! - imgTop) / imageObj.scaleY!;
-      const relWidth = rect.width! / imageObj.scaleX!;
-      const relHeight = rect.height! / imageObj.scaleY!;
+      const originalWidth = img.naturalWidth || img.width;
+      const originalHeight = img.naturalHeight || img.height;
+      const imgWidth = originalWidth * imgScaleX;
+      const imgHeight = originalHeight * imgScaleY;
+      
+      // Convert rect coordinates from canvas space to original image space
+      const relativeLeft = rectLeft - imgLeft;
+      const relativeTop = rectTop - imgTop;
+      
+      // Scale to original image coordinates
+      const cropX = (relativeLeft / imgWidth) * originalWidth;
+      const cropY = (relativeTop / imgHeight) * originalHeight;
+      const cropWidth = (rectWidth / imgWidth) * originalWidth;
+      const cropHeight = (rectHeight / imgHeight) * originalHeight;
+      
+      console.log('Crop coordinates:', { cropX, cropY, cropWidth, cropHeight, originalWidth, originalHeight });
       
       // Create a canvas for cropping
       const cropCanvas = document.createElement('canvas');
-      cropCanvas.width = relWidth;
-      cropCanvas.height = relHeight;
+      cropCanvas.width = Math.max(1, Math.floor(cropWidth));
+      cropCanvas.height = Math.max(1, Math.floor(cropHeight));
       const ctx = cropCanvas.getContext('2d');
       
       if (!ctx) throw new Error('Could not get canvas context');
       
-      // Draw the cropped region
+      // Draw the cropped region from the fresh image
       ctx.drawImage(
-        imgElement,
-        relX, relY, relWidth, relHeight,
-        0, 0, relWidth, relHeight
+        img,
+        Math.max(0, cropX), Math.max(0, cropY), cropWidth, cropHeight,
+        0, 0, cropWidth, cropHeight
       );
       
-      // Convert to blob
-      const croppedBlob = await new Promise<Blob>((resolve, reject) => {
-        cropCanvas.toBlob((blob) => {
-          if (blob) resolve(blob);
-          else reject(new Error('Failed to create blob'));
-        }, 'image/png');
-      });
+      // Convert to data URL first
+      const croppedImageUrl = cropCanvas.toDataURL('image/png');
+      
+      // Then convert to blob
+      const response = await fetch(croppedImageUrl);
+      const croppedBlob = await response.blob();
       
       // Upload cropped image
       const fileName = `${siteId}/region-${Date.now()}.png`;
