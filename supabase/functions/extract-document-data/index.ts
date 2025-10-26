@@ -203,6 +203,17 @@ Return the data in a structured format with all line items in an array.`;
     
     console.log("Extracted data:", extractedData);
 
+    // Delete any existing extractions for this document before creating a new one
+    const { error: deleteError } = await supabase
+      .from("document_extractions")
+      .delete()
+      .eq("document_id", documentId);
+    
+    if (deleteError) {
+      console.error("Error deleting old extractions:", deleteError);
+      // Continue anyway - it might be the first extraction
+    }
+
     // Store the extraction in the database
     const { data: extraction, error: extractionError } = await supabase
       .from("document_extractions")
