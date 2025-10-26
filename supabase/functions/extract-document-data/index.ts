@@ -43,7 +43,7 @@ Extract the following information:
 - Total amount (sum of all line items)
 - Tenant name (NOTE: The tenant name appears BEFORE the account reference number. Extract only the tenant name, not the account reference)
 - Account reference number (This appears AFTER the tenant name. Extract only the reference number)
-- Shop number (CRITICAL: The shop number is ALWAYS located BELOW the tenant name and account reference. Look for it in the lower section of the document)
+- Shop number (CRITICAL: Extract ONLY the raw shop number WITHOUT any "DB-" prefix. The system will add the prefix automatically. The shop number is usually located BELOW the tenant name and account reference)
 - Line items array: For EACH row in the billing table, extract:
   * Description (e.g., "Electrical", "Water", "Misc")
   * Meter number (if shown in the table)
@@ -181,22 +181,24 @@ Return the data in a structured format with all line items in an array.`;
     if (extractedData.shop_number) {
       let shopNum = extractedData.shop_number.toString().trim();
       
-      // Remove any existing DB- prefix
-      shopNum = shopNum.replace(/^DB-/i, '');
+      // Remove any existing DB- prefix (case insensitive)
+      shopNum = shopNum.replace(/^DB-?/i, '');
       
-      // Check if it's purely numeric or has a letter suffix
+      // Check if it's purely numeric or has a letter suffix (e.g., "13", "1A", "622")
       const match = shopNum.match(/^(\d+)([A-Z])?$/i);
       if (match) {
         const number = match[1];
         const suffix = match[2] ? match[2].toUpperCase() : '';
         
-        // Format with two digits
-        const paddedNumber = number.padStart(2, '0');
+        // For numbers, pad to 2 digits (unless it's a special case like "622" or "ATM 2")
+        const paddedNumber = number.length <= 2 ? number.padStart(2, '0') : number;
         extractedData.shop_number = `DB-${paddedNumber}${suffix}`;
       } else {
-        // If it doesn't match expected pattern, just add DB- prefix
-        extractedData.shop_number = `DB-${shopNum}`;
+        // For non-standard patterns (e.g., "ATM 2", "CW"), just add DB- prefix
+        extractedData.shop_number = `DB-${shopNum.toUpperCase()}`;
       }
+      
+      console.log(`Formatted shop number: ${extractedData.shop_number}`);
     }
     
     console.log("Extracted data:", extractedData);
