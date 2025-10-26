@@ -15,6 +15,7 @@ import { format } from "date-fns";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { pdfjs } from 'react-pdf';
 import { Canvas as FabricCanvas, Image as FabricImage, Rect as FabricRect, Circle } from "fabric";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
 // Set up PDF.js worker
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
@@ -499,6 +500,16 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
   const handleSave = async () => {
     if (!editedData || !viewingDocument) return;
 
+    // Validate line items if they exist
+    if (editedData.extracted_data?.line_items && Array.isArray(editedData.extracted_data.line_items)) {
+      for (const item of editedData.extracted_data.line_items) {
+        if (item.current_reading && item.previous_reading && item.current_reading < item.previous_reading) {
+          toast.error(`Line item "${item.description}": Current reading cannot be less than previous reading`);
+          return;
+        }
+      }
+    }
+
     setIsSaving(true);
     try {
       const extraction = viewingDocument.document_extractions?.[0];
@@ -507,13 +518,19 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
         return;
       }
 
+      // Calculate total from line items if they exist
+      let totalAmount = editedData.total_amount;
+      if (editedData.extracted_data?.line_items && Array.isArray(editedData.extracted_data.line_items)) {
+        totalAmount = editedData.extracted_data.line_items.reduce((sum, item) => sum + (item.amount || 0), 0);
+      }
+
       // Update the extraction in the database
       const { error } = await supabase
         .from("document_extractions")
         .update({
           period_start: editedData.period_start,
           period_end: editedData.period_end,
-          total_amount: editedData.total_amount,
+          total_amount: totalAmount,
           currency: editedData.currency,
           extracted_data: editedData.extracted_data,
         })
@@ -1252,9 +1269,13 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                     <Input
                       type="number"
                       step="0.01"
-                      disabled={!isEditing}
-                      value={editedData.total_amount || ''}
-                      onChange={(e) => setEditedData({ ...editedData, total_amount: parseFloat(e.target.value) })}
+                      disabled
+                      className="bg-muted"
+                      value={
+                        editedData.extracted_data?.line_items && Array.isArray(editedData.extracted_data.line_items)
+                          ? editedData.extracted_data.line_items.reduce((sum, item) => sum + (item.amount || 0), 0).toFixed(2)
+                          : editedData.total_amount || ''
+                      }
                     />
                   </div>
                 </div>
@@ -1305,141 +1326,217 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                       </div>
                     )}
 
-                    {editedData.extracted_data.meter_readings && (
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <Label className="text-sm font-medium">Meter Readings</Label>
+                    {/* Line Items Section */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm font-medium">Line Items</Label>
+                        {isEditing && (
                           <Button
                             size="sm"
                             variant="outline"
-                            disabled={!isEditing}
                             onClick={() => {
-                              const readings = Array.isArray(editedData.extracted_data.meter_readings)
-                                ? editedData.extracted_data.meter_readings
-                                : [
-                                    { name: 'Previous', value: editedData.extracted_data.meter_readings.previous || 0 },
-                                    { name: 'Current', value: editedData.extracted_data.meter_readings.current || 0 },
-                                    { name: 'Consumption (kWh)', value: editedData.extracted_data.meter_readings.consumption_kwh || 0 }
-                                  ];
-                              
                               setEditedData({
                                 ...editedData,
                                 extracted_data: {
                                   ...editedData.extracted_data,
-                                  meter_readings: [...readings, { name: '', value: 0 }]
+                                  line_items: [
+                                    ...(editedData.extracted_data?.line_items || []),
+                                    {
+                                      description: '',
+                                      meter_number: '',
+                                      previous_reading: 0,
+                                      current_reading: 0,
+                                      consumption: 0,
+                                      rate: 0,
+                                      amount: 0
+                                    }
+                                  ]
                                 }
                               });
                             }}
                           >
                             <Plus className="w-4 h-4 mr-1" />
-                            Add Row
+                            Add Line Item
                           </Button>
-                        </div>
-                        <div className="space-y-2">
-                          {(() => {
-                            // Convert to name-value array if it's an object
-                            const readings = Array.isArray(editedData.extracted_data.meter_readings)
-                              ? editedData.extracted_data.meter_readings
-                              : [
-                                  { name: 'Previous', value: editedData.extracted_data.meter_readings.previous || 0 },
-                                  { name: 'Current', value: editedData.extracted_data.meter_readings.current || 0 },
-                                  { name: 'Consumption (kWh)', value: editedData.extracted_data.meter_readings.consumption_kwh || 0 }
-                                ];
-
-                            return readings.map((reading: any, index: number) => (
-                              <div
-                                key={index}
-                                draggable
-                                onDragStart={(e) => {
-                                  e.dataTransfer.effectAllowed = 'move';
-                                  e.dataTransfer.setData('text/plain', index.toString());
-                                }}
-                                onDragOver={(e) => {
-                                  e.preventDefault();
-                                  e.dataTransfer.dropEffect = 'move';
-                                }}
-                                onDrop={(e) => {
-                                  e.preventDefault();
-                                  const fromIndex = parseInt(e.dataTransfer.getData('text/plain'));
-                                  const toIndex = index;
-                                  
-                                  if (fromIndex !== toIndex) {
-                                    const newReadings = [...readings];
-                                    const [movedItem] = newReadings.splice(fromIndex, 1);
-                                    newReadings.splice(toIndex, 0, movedItem);
-                                    
-                                    setEditedData({
-                                      ...editedData,
-                                      extracted_data: {
-                                        ...editedData.extracted_data,
-                                        meter_readings: newReadings
-                                      }
-                                    });
-                                  }
-                                }}
-                                className="flex gap-3 items-center p-3 border rounded-lg bg-muted/30 hover:bg-muted/50 cursor-move transition-colors"
-                              >
-                                <GripVertical className="w-5 h-5 text-muted-foreground flex-shrink-0" />
-                                 <div className="flex-1 grid grid-cols-2 gap-3">
-                                  <Input
-                                    placeholder="Name"
-                                    disabled={!isEditing}
-                                    value={reading.name || ''}
-                                    onChange={(e) => {
-                                      const newReadings = [...readings];
-                                      newReadings[index] = { ...reading, name: e.target.value };
-                                      setEditedData({
-                                        ...editedData,
-                                        extracted_data: {
-                                          ...editedData.extracted_data,
-                                          meter_readings: newReadings
-                                        }
-                                      });
-                                    }}
-                                  />
-                                  <Input
-                                    type="number"
-                                    step="0.01"
-                                    placeholder="Value"
-                                    disabled={!isEditing}
-                                    value={reading.value || ''}
-                                    onChange={(e) => {
-                                      const newReadings = [...readings];
-                                      newReadings[index] = { ...reading, value: parseFloat(e.target.value) || 0 };
-                                      setEditedData({
-                                        ...editedData,
-                                        extracted_data: {
-                                          ...editedData.extracted_data,
-                                          meter_readings: newReadings
-                                        }
-                                      });
-                                    }}
-                                  />
-                                </div>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="flex-shrink-0"
-                                  disabled={!isEditing}
-                                  onClick={() => {
-                                    const newReadings = readings.filter((_: any, i: number) => i !== index);
-                                    setEditedData({
-                                      ...editedData,
-                                      extracted_data: {
-                                        ...editedData.extracted_data,
-                                        meter_readings: newReadings.length > 0 ? newReadings : [{ name: '', value: 0 }]
-                                      }
-                                    });
-                                  }}
-                                >
-                                  <X className="w-4 h-4" />
-                                </Button>
-                              </div>
-                            ));
-                          })()}
-                        </div>
+                        )}
                       </div>
-                    )}
+                      
+                      {editedData.extracted_data?.line_items && Array.isArray(editedData.extracted_data.line_items) && editedData.extracted_data.line_items.length > 0 ? (
+                        <Accordion type="single" collapsible className="w-full">
+                          {editedData.extracted_data.line_items.map((item: any, index: number) => (
+                            <AccordionItem key={index} value={`item-${index}`}>
+                              <AccordionTrigger className="hover:no-underline">
+                                <div className="flex items-center justify-between w-full pr-4">
+                                  <span className="font-medium">{item.description || `Line Item ${index + 1}`}</span>
+                                  <span className="text-sm text-muted-foreground">
+                                    {editedData.currency} {(item.amount || 0).toFixed(2)}
+                                  </span>
+                                </div>
+                              </AccordionTrigger>
+                              <AccordionContent>
+                                <div className="space-y-3 pt-2">
+                                  <div className="flex justify-end">
+                                    {isEditing && (
+                                      <Button
+                                        size="sm"
+                                        variant="destructive"
+                                        onClick={() => {
+                                          setEditedData({
+                                            ...editedData,
+                                            extracted_data: {
+                                              ...editedData.extracted_data,
+                                              line_items: editedData.extracted_data.line_items.filter((_: any, i: number) => i !== index)
+                                            }
+                                          });
+                                        }}
+                                      >
+                                        <Trash2 className="w-4 h-4 mr-1" />
+                                        Delete
+                                      </Button>
+                                    )}
+                                  </div>
+                                  
+                                  <div>
+                                    <Label className="text-sm">Description</Label>
+                                    <Input
+                                      value={item.description || ''}
+                                      onChange={(e) => {
+                                        const newItems = [...editedData.extracted_data.line_items];
+                                        newItems[index] = { ...newItems[index], description: e.target.value };
+                                        setEditedData({
+                                          ...editedData,
+                                          extracted_data: { ...editedData.extracted_data, line_items: newItems }
+                                        });
+                                      }}
+                                      disabled={!isEditing}
+                                    />
+                                  </div>
+                                  
+                                  <div>
+                                    <Label className="text-sm">Meter Number</Label>
+                                    <Input
+                                      value={item.meter_number || ''}
+                                      onChange={(e) => {
+                                        const newItems = [...editedData.extracted_data.line_items];
+                                        newItems[index] = { ...newItems[index], meter_number: e.target.value };
+                                        setEditedData({
+                                          ...editedData,
+                                          extracted_data: { ...editedData.extracted_data, line_items: newItems }
+                                        });
+                                      }}
+                                      disabled={!isEditing}
+                                    />
+                                  </div>
+                                  
+                                  <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                      <Label className="text-sm">Previous Reading</Label>
+                                      <Input
+                                        type="number"
+                                        step="0.01"
+                                        value={item.previous_reading || ''}
+                                        onChange={(e) => {
+                                          const value = parseFloat(e.target.value) || 0;
+                                          const newItems = [...editedData.extracted_data.line_items];
+                                          const current = newItems[index].current_reading || 0;
+                                          const consumption = current - value;
+                                          const rate = newItems[index].rate || 0;
+                                          newItems[index] = { 
+                                            ...newItems[index], 
+                                            previous_reading: value,
+                                            consumption: consumption,
+                                            amount: consumption * rate
+                                          };
+                                          setEditedData({
+                                            ...editedData,
+                                            extracted_data: { ...editedData.extracted_data, line_items: newItems }
+                                          });
+                                        }}
+                                        disabled={!isEditing}
+                                      />
+                                    </div>
+                                    <div>
+                                      <Label className="text-sm">Current Reading</Label>
+                                      <Input
+                                        type="number"
+                                        step="0.01"
+                                        value={item.current_reading || ''}
+                                        onChange={(e) => {
+                                          const value = parseFloat(e.target.value) || 0;
+                                          const newItems = [...editedData.extracted_data.line_items];
+                                          const previous = newItems[index].previous_reading || 0;
+                                          const consumption = value - previous;
+                                          const rate = newItems[index].rate || 0;
+                                          newItems[index] = { 
+                                            ...newItems[index], 
+                                            current_reading: value,
+                                            consumption: consumption,
+                                            amount: consumption * rate
+                                          };
+                                          setEditedData({
+                                            ...editedData,
+                                            extracted_data: { ...editedData.extracted_data, line_items: newItems }
+                                          });
+                                        }}
+                                        disabled={!isEditing}
+                                      />
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="grid grid-cols-3 gap-3">
+                                    <div>
+                                      <Label className="text-sm">Consumption</Label>
+                                      <Input
+                                        type="number"
+                                        step="0.01"
+                                        value={(item.consumption || 0).toFixed(2)}
+                                        disabled
+                                        className="bg-muted"
+                                      />
+                                    </div>
+                                    <div>
+                                      <Label className="text-sm">Rate</Label>
+                                      <Input
+                                        type="number"
+                                        step="0.01"
+                                        value={item.rate || ''}
+                                        onChange={(e) => {
+                                          const value = parseFloat(e.target.value) || 0;
+                                          const newItems = [...editedData.extracted_data.line_items];
+                                          const consumption = newItems[index].consumption || 0;
+                                          newItems[index] = { 
+                                            ...newItems[index], 
+                                            rate: value,
+                                            amount: consumption * value
+                                          };
+                                          setEditedData({
+                                            ...editedData,
+                                            extracted_data: { ...editedData.extracted_data, line_items: newItems }
+                                          });
+                                        }}
+                                        disabled={!isEditing}
+                                      />
+                                    </div>
+                                    <div>
+                                      <Label className="text-sm">Amount</Label>
+                                      <Input
+                                        type="number"
+                                        step="0.01"
+                                        value={(item.amount || 0).toFixed(2)}
+                                        disabled
+                                        className="bg-muted"
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+                              </AccordionContent>
+                            </AccordionItem>
+                          ))}
+                        </Accordion>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">No line items extracted</p>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

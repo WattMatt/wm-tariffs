@@ -34,16 +34,26 @@ serve(async (req) => {
 - Account reference numbers
 - Supply authority/municipality name
 Return the data in a structured format.`
-      : `You are an expert at extracting data from tenant electricity bills. Extract the following information:
+      : `You are an expert at extracting data from tenant electricity bills. 
+
+CRITICAL: Extract ALL line items from the billing table in the document. Each row in the table represents a separate charge and should become a line item.
+
+Extract the following information:
 - Billing period (start and end dates)
-- Total amount
-- Meter readings if available
-- Consumption in kWh
+- Total amount (sum of all line items)
 - Tenant name (NOTE: The tenant name appears BEFORE the account reference number. Extract only the tenant name, not the account reference)
 - Account reference number (This appears AFTER the tenant name. Extract only the reference number)
 - Shop number (CRITICAL: The shop number is ALWAYS located BELOW the tenant name and account reference. Look for it in the lower section of the document)
-- Tenant information
-Return the data in a structured format.`;
+- Line items array: For EACH row in the billing table, extract:
+  * Description (e.g., "Electrical", "Water", "Misc")
+  * Meter number (if shown in the table)
+  * Previous reading (the starting meter value)
+  * Current reading (the ending meter value)
+  * Consumption (units used, should be current - previous)
+  * Rate (price per unit, in cents or rands)
+  * Amount (line item total, should be consumption × rate)
+
+Return the data in a structured format with all line items in an array.`;
 
     // Call Lovable AI for document extraction
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -88,13 +98,42 @@ Return the data in a structured format.`;
                   type: "string",
                   description: "Currency code (e.g., ZAR)"
                 },
-                meter_readings: {
-                  type: "object",
-                  description: "Meter readings if available",
-                  properties: {
-                    previous: { type: "number" },
-                    current: { type: "number" },
-                    consumption_kwh: { type: "number" }
+                line_items: {
+                  type: "array",
+                  description: "Array of billing line items from the document table. Extract ALL rows from the billing table.",
+                  items: {
+                    type: "object",
+                    properties: {
+                      description: { 
+                        type: "string", 
+                        description: "Description of the charge (e.g., 'Electrical', 'Water', 'Misc')" 
+                      },
+                      meter_number: { 
+                        type: "string", 
+                        description: "Meter number if shown in the table row" 
+                      },
+                      previous_reading: { 
+                        type: "number", 
+                        description: "Previous meter reading value" 
+                      },
+                      current_reading: { 
+                        type: "number", 
+                        description: "Current meter reading value" 
+                      },
+                      consumption: { 
+                        type: "number", 
+                        description: "Consumption/units used (should equal current - previous)" 
+                      },
+                      rate: { 
+                        type: "number", 
+                        description: "Rate/tariff per unit in rands or cents" 
+                      },
+                      amount: { 
+                        type: "number", 
+                        description: "Line item total amount (should equal consumption × rate)" 
+                      }
+                    },
+                    required: ["description"]
                   }
                 },
                 account_reference: {
