@@ -91,38 +91,76 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
 
       setIsLoadingColumns(true);
       try {
-        // Fetch a larger sample of readings from selected meters to get all column names
-        const { data: sampleReadings, error } = await supabase
-          .from("meter_readings")
-          .select("metadata")
+        // Fetch column mappings from CSV files (same approach as Reconciliation tab)
+        const { data: csvFiles, error } = await supabase
+          .from("meter_csv_files")
+          .select("column_mapping, meter_id")
           .in("meter_id", Array.from(selectedMeterIds))
-          .not("metadata", "is", null)
-          .limit(1000);
+          .not("column_mapping", "is", null)
+          .order("parsed_at", { ascending: false });
 
         if (error) throw error;
 
-        // Extract unique column names from metadata.imported_fields
+        // Extract unique column names from column_mapping.renamedHeaders
         const columnsSet = new Set<string>();
-        sampleReadings?.forEach(reading => {
-          const importedFields = (reading.metadata as any)?.imported_fields || {};
-          Object.keys(importedFields).forEach(key => {
-            // More precise filtering: exclude columns that are clearly date/time fields
-            const lowerKey = key.toLowerCase();
-            const isDateTimeColumn = 
-              lowerKey === 'time' || 
-              lowerKey === 'date' || 
-              lowerKey === 'datetime' || 
-              lowerKey === 'timestamp' || 
-              lowerKey.startsWith('time_') ||
-              lowerKey.startsWith('date_') ||
-              lowerKey.endsWith('_time') ||
-              lowerKey.endsWith('_date');
+        
+        // First try to get columns from column_mapping (most reliable)
+        csvFiles?.forEach((csvFile) => {
+          const columnMapping = csvFile.column_mapping as any;
+          if (columnMapping?.renamedHeaders) {
+            Object.values(columnMapping.renamedHeaders).forEach((headerName: any) => {
+              if (headerName && typeof headerName === 'string') {
+                // More precise filtering: exclude columns that are clearly date/time fields
+                const lowerKey = headerName.toLowerCase();
+                const isDateTimeColumn = 
+                  lowerKey === 'time' || 
+                  lowerKey === 'date' || 
+                  lowerKey === 'datetime' || 
+                  lowerKey === 'timestamp' || 
+                  lowerKey.startsWith('time_') ||
+                  lowerKey.startsWith('date_') ||
+                  lowerKey.endsWith('_time') ||
+                  lowerKey.endsWith('_date');
 
-            if (!isDateTimeColumn) {
-              columnsSet.add(key);
+                if (!isDateTimeColumn) {
+                  columnsSet.add(headerName);
+                }
+              }
+            });
+          }
+        });
+
+        // Fallback: If no column mappings found, sample readings
+        if (columnsSet.size === 0) {
+          const { data: sampleReadings } = await supabase
+            .from("meter_readings")
+            .select("metadata")
+            .in("meter_id", Array.from(selectedMeterIds))
+            .not("metadata", "is", null)
+            .limit(100);
+
+          sampleReadings?.forEach((reading) => {
+            const metadata = reading.metadata as any;
+            if (metadata?.imported_fields) {
+              Object.keys(metadata.imported_fields).forEach((key) => {
+                const lowerKey = key.toLowerCase();
+                const isDateTimeColumn = 
+                  lowerKey === 'time' || 
+                  lowerKey === 'date' || 
+                  lowerKey === 'datetime' || 
+                  lowerKey === 'timestamp' || 
+                  lowerKey.startsWith('time_') ||
+                  lowerKey.startsWith('date_') ||
+                  lowerKey.endsWith('_time') ||
+                  lowerKey.endsWith('_date');
+
+                if (!isDateTimeColumn) {
+                  columnsSet.add(key);
+                }
+              });
             }
           });
-        });
+        }
 
         const columns = Array.from(columnsSet).sort();
         setAvailableColumns(columns);
