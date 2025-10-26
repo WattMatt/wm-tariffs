@@ -165,61 +165,114 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
         ? ((discrepancy / totalSupply) * 100).toFixed(2)
         : "0";
 
-      // 5. Detect anomalies
+      // 5. Prepare reconciliation data with enhanced categorization
+      const reconciliationData = {
+        councilBulkMeters: councilBulk.map(m => `${m.meter_number} (${m.name})`).join(", ") || "N/A",
+        councilTotal: councilTotal.toFixed(2),
+        solarTotal: solarTotal.toFixed(2),
+        totalSupply: totalSupply.toFixed(2),
+        distributionTotal: distributionTotal.toFixed(2),
+        variance: discrepancy.toFixed(2),
+        variancePercentage,
+        recoveryRate: recoveryRate.toFixed(2),
+        meterCount: meterData.length,
+        councilBulkCount: councilBulk.length,
+        solarCount: solarMeters.length,
+        distributionCount: distribution.length,
+        checkMeterCount: checkMeters.length,
+        readingsPeriod: `${format(periodStart, "dd MMM yyyy")} - ${format(periodEnd, "dd MMM yyyy")}`,
+        documentsAnalyzed: 0 // Will be updated after fetching documents
+      };
+
+      // 6. Detect anomalies with severity categorization
       const anomalies: any[] = [];
 
-      // Missing readings
-      meterData.forEach(m => {
+      // Critical: No readings on bulk meters
+      councilBulk.forEach(m => {
         if (m.readingsCount === 0) {
           anomalies.push({
-            type: "no_readings",
+            type: "no_readings_bulk",
             meter: m.meter_number,
-            description: "No readings available for the period",
-            severity: "critical"
-          });
-        } else if (m.readingsCount < 10) {
-          anomalies.push({
-            type: "insufficient_readings",
-            meter: m.meter_number,
-            description: `Only ${m.readingsCount} reading(s) available for the period`,
-            severity: "high"
+            name: m.name,
+            description: `Council bulk meter ${m.meter_number} has no readings for the audit period`,
+            severity: "CRITICAL"
           });
         }
       });
 
-      // Negative consumption
+      // Critical: Negative consumption
       meterData.forEach(m => {
         if (m.totalKwh < 0) {
           anomalies.push({
             type: "negative_consumption",
             meter: m.meter_number,
+            name: m.name,
             consumption: m.totalKwh.toFixed(2),
-            description: "Negative consumption detected - possible meter rollback or tampering",
-            severity: "critical"
+            description: `Meter ${m.meter_number} (${m.name}) shows negative consumption of ${m.totalKwh.toFixed(2)} kWh - possible meter rollback or tampering`,
+            severity: "CRITICAL"
           });
         }
       });
 
-      // High variance
+      // High: Insufficient readings (< 10)
+      meterData.forEach(m => {
+        if (m.readingsCount > 0 && m.readingsCount < 10) {
+          anomalies.push({
+            type: "insufficient_readings",
+            meter: m.meter_number,
+            name: m.name,
+            readingsCount: m.readingsCount,
+            description: `Meter ${m.meter_number} (${m.name}) has only ${m.readingsCount} reading(s) - insufficient for accurate reconciliation`,
+            severity: "HIGH"
+          });
+        }
+      });
+
+      // High: Excessive variance (> 10%)
       if (Math.abs(parseFloat(variancePercentage)) > 10) {
         anomalies.push({
           type: "high_variance",
           variance: discrepancy.toFixed(2),
           variancePercentage,
-          description: `Variance of ${variancePercentage}% between supply and distribution exceeds acceptable threshold`,
-          severity: "high"
+          description: `Variance of ${variancePercentage}% (${discrepancy.toFixed(2)} kWh) between supply and distribution exceeds acceptable threshold of 5-7%`,
+          severity: "HIGH"
         });
       }
 
-      // Low recovery rate
+      // High: Low recovery rate (< 90%)
       if (recoveryRate < 90) {
         anomalies.push({
           type: "low_recovery",
           recoveryRate: recoveryRate.toFixed(2),
-          description: `Recovery rate of ${recoveryRate.toFixed(2)}% is below acceptable threshold of 90%`,
-          severity: "high"
+          lostRevenue: (totalSupply - distributionTotal) * 2.5, // Estimate at R2.50/kWh
+          description: `Recovery rate of ${recoveryRate.toFixed(2)}% is below acceptable threshold of 90-95% - estimated revenue loss: R${((totalSupply - distributionTotal) * 2.5).toFixed(2)}`,
+          severity: "HIGH"
         });
       }
+
+      // Medium: Moderate variance (5-10%)
+      if (Math.abs(parseFloat(variancePercentage)) > 5 && Math.abs(parseFloat(variancePercentage)) <= 10) {
+        anomalies.push({
+          type: "moderate_variance",
+          variance: discrepancy.toFixed(2),
+          variancePercentage,
+          description: `Variance of ${variancePercentage}% (${discrepancy.toFixed(2)} kWh) between supply and distribution is above optimal range of 2-5%`,
+          severity: "MEDIUM"
+        });
+      }
+
+      // Low: No readings on distribution meters (non-critical)
+      distribution.forEach(m => {
+        if (m.readingsCount === 0) {
+          anomalies.push({
+            type: "no_readings_distribution",
+            meter: m.meter_number,
+            name: m.name,
+            description: `Distribution meter ${m.meter_number} (${m.name}) has no readings - may be inactive or require investigation`,
+            severity: "LOW"
+          });
+        }
+      });
 
       // 8. Fetch document extractions
       const { data: documents, error: docsError } = await supabase
@@ -239,25 +292,23 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
         extraction: doc.document_extractions?.[0]
       })).filter(d => d.extraction) || [];
 
-      // 6. Prepare reconciliation data
-      const reconciliationData = {
-        councilBulkMeters: councilBulk.map(m => m.meter_number).join(", ") || "N/A",
-        councilTotal: councilTotal.toFixed(2),
-        solarTotal: solarTotal.toFixed(2),
-        totalSupply: totalSupply.toFixed(2),
-        distributionTotal: distributionTotal.toFixed(2),
-        variance: discrepancy.toFixed(2),
-        variancePercentage,
-        recoveryRate: recoveryRate.toFixed(2),
-        meterCount: meterData.length,
-        councilBulkCount: councilBulk.length,
-        solarCount: solarMeters.length,
-        distributionCount: distribution.length,
-        readingsPeriod: `${format(periodStart, "dd MMM yyyy")} - ${format(periodEnd, "dd MMM yyyy")}`
+      // Update reconciliation data with documents count
+      reconciliationData.documentsAnalyzed = documentExtractions.length;
+
+      // 8. Prepare detailed meter breakdown with sorting
+      const sortMetersByType = (meters: any[]) => {
+        return meters.sort((a, b) => {
+          // Sort by type priority: council_bulk > solar > check_meter > distribution
+          const typeOrder = { council_bulk: 1, solar: 2, check_meter: 3, distribution: 4 };
+          const aOrder = typeOrder[a.meter_type as keyof typeof typeOrder] || 5;
+          const bOrder = typeOrder[b.meter_type as keyof typeof typeOrder] || 5;
+          if (aOrder !== bOrder) return aOrder - bOrder;
+          // Then by meter number
+          return (a.meter_number || "").localeCompare(b.meter_number || "");
+        });
       };
 
-      // 7. Prepare detailed meter breakdown
-      const meterBreakdown = meterData.map(m => ({
+      const meterBreakdown = sortMetersByType(meterData).map(m => ({
         meterNumber: m.meter_number,
         name: m.name,
         type: m.meter_type,
@@ -272,7 +323,7 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
         ) || []
       }));
 
-      // 8. Prepare meter hierarchy
+      // 9. Prepare meter hierarchy
       const meterHierarchy = meters?.map(meter => {
         const meterInfo = meterData.find(m => m.id === meter.id);
         return {
@@ -291,7 +342,7 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
         };
       }) || [];
 
-      // 9. Generate AI narrative sections
+      // 10. Generate AI narrative sections
       toast.info("Generating report sections with AI...");
 
       const { data: reportData, error: aiError } = await supabase.functions.invoke(
@@ -312,7 +363,7 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
 
       if (aiError) throw aiError;
 
-      // 12. Generate PDF
+      // 11. Generate PDF with enhanced formatting
       toast.info("Generating PDF...");
       const pdf = new jsPDF();
       const pageWidth = pdf.internal.pageSize.getWidth();
@@ -321,143 +372,300 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
       let yPos = margin;
 
       // Helper function to add text with wrapping
-      const addText = (text: string, fontSize: number = 10, isBold: boolean = false) => {
+      const addText = (text: string, fontSize: number = 10, isBold: boolean = false, indent: number = 0) => {
         pdf.setFontSize(fontSize);
         pdf.setFont("helvetica", isBold ? "bold" : "normal");
-        const lines = pdf.splitTextToSize(text, pageWidth - 2 * margin);
+        const maxWidth = pageWidth - 2 * margin - indent;
+        const lines = pdf.splitTextToSize(text, maxWidth);
         
         lines.forEach((line: string) => {
-          if (yPos > pageHeight - margin) {
+          if (yPos > pageHeight - margin - 10) {
             pdf.addPage();
             yPos = margin;
           }
-          pdf.text(line, margin, yPos);
+          pdf.text(line, margin + indent, yPos);
           yPos += fontSize * 0.5;
         });
-        yPos += 5;
+        yPos += 3;
       };
 
-      // Title Page
-      pdf.setFontSize(24);
+      const addSectionHeading = (text: string, fontSize: number = 14) => {
+        yPos += 5;
+        if (yPos > pageHeight - margin - 20) {
+          pdf.addPage();
+          yPos = margin;
+        }
+        pdf.setFontSize(fontSize);
+        pdf.setFont("helvetica", "bold");
+        pdf.text(text, margin, yPos);
+        yPos += fontSize * 0.6;
+        yPos += 3;
+      };
+
+      const addSubsectionHeading = (text: string) => {
+        yPos += 3;
+        addText(text, 11, true);
+      };
+
+      const addSpacer = (height: number = 5) => {
+        yPos += height;
+      };
+
+      // Title Page with enhanced styling
+      pdf.setFontSize(28);
       pdf.setFont("helvetica", "bold");
-      pdf.text("METERING AUDIT REPORT", pageWidth / 2, 60, { align: "center" });
+      pdf.text("METERING AUDIT REPORT", pageWidth / 2, 70, { align: "center" });
       
-      pdf.setFontSize(16);
-      pdf.setFont("helvetica", "normal");
-      pdf.text(siteName, pageWidth / 2, 80, { align: "center" });
+      pdf.setFontSize(18);
+      pdf.setFont("helvetica", "bold");
+      pdf.text(siteName, pageWidth / 2, 95, { align: "center" });
       
       pdf.setFontSize(12);
+      pdf.setFont("helvetica", "normal");
       pdf.text(
-        `Audit Period: ${format(periodStart, "dd MMM yyyy")} - ${format(periodEnd, "dd MMM yyyy")}`,
+        `Audit Period: ${format(periodStart, "dd MMMM yyyy")} - ${format(periodEnd, "dd MMMM yyyy")}`,
         pageWidth / 2,
-        100,
+        115,
         { align: "center" }
       );
 
-      pdf.text(`Generated: ${format(new Date(), "dd MMM yyyy HH:mm")}`, pageWidth / 2, 115, { align: "center" });
+      pdf.setFontSize(10);
+      pdf.text(`Report Generated: ${format(new Date(), "dd MMMM yyyy HH:mm")}`, pageWidth / 2, 130, { align: "center" });
 
       // New page for content
       pdf.addPage();
       yPos = margin;
 
-      // 1. Executive Summary
-      addText("1. EXECUTIVE SUMMARY", 16, true);
+      // Section 1: Executive Summary
+      addSectionHeading("1. EXECUTIVE SUMMARY", 16);
       addText(reportData.sections.executiveSummary);
+      addSpacer(8);
 
-      // 2. Metering Hierarchy Overview
-      addText("2. METERING HIERARCHY OVERVIEW", 16, true);
+      // Section 2: Metering Hierarchy Overview
+      addSectionHeading("2. METERING HIERARCHY OVERVIEW", 16);
       addText(reportData.sections.hierarchyOverview);
+      addSpacer(8);
 
-      // 3. Data Sources and Period
-      addText("3. DATA SOURCES AND AUDIT PERIOD", 16, true);
-      addText(`Audit Period: ${reconciliationData.readingsPeriod}`, 10, true);
-      addText(`Council Bulk Meters: ${reconciliationData.councilBulkMeters}`);
-      addText(`Total Meters: ${reconciliationData.meterCount} (${reconciliationData.councilBulkCount} council, ${reconciliationData.solarCount} solar, ${reconciliationData.distributionCount} distribution)`);
-      addText(`Documents Analyzed: ${documentExtractions.length}`);
-
-      // 4. Metering Reconciliation
-      addText("4. METERING RECONCILIATION", 16, true);
-      addText("Supply Summary:", 12, true);
-      addText(`Council Bulk Supply: ${reconciliationData.councilTotal} kWh`);
-      if (parseFloat(reconciliationData.solarTotal) > 0) {
-        addText(`Solar Generation: ${reconciliationData.solarTotal} kWh`);
+      // Section 3: Data Sources and Audit Period
+      addSectionHeading("3. DATA SOURCES AND AUDIT PERIOD", 16);
+      addSubsectionHeading("Audit Period");
+      addText(`${format(periodStart, "dd MMMM yyyy")} to ${format(periodEnd, "dd MMMM yyyy")}`);
+      addSpacer(3);
+      
+      addSubsectionHeading("Council Bulk Supply Meters");
+      addText(reconciliationData.councilBulkMeters);
+      addSpacer(3);
+      
+      addSubsectionHeading("Metering Infrastructure");
+      addText(`Total Meters Analyzed: ${reconciliationData.meterCount}`);
+      addText(`  • Council Bulk Meters: ${reconciliationData.councilBulkCount}`, 10, false, 5);
+      if (reconciliationData.solarCount > 0) {
+        addText(`  • Solar/Generation Meters: ${reconciliationData.solarCount}`, 10, false, 5);
       }
-      addText(`Total Supply: ${reconciliationData.totalSupply} kWh`);
-      addText("");
-      addText("Distribution Summary:", 12, true);
-      addText(`Total Distribution Consumption: ${reconciliationData.distributionTotal} kWh`);
-      addText(`Recovery Rate: ${reconciliationData.recoveryRate}%`);
-      addText(`Discrepancy: ${reconciliationData.variance} kWh (${reconciliationData.variancePercentage}%)`);
+      addText(`  • Distribution Meters: ${reconciliationData.distributionCount}`, 10, false, 5);
+      addText(`  • Check Meters: ${reconciliationData.checkMeterCount}`, 10, false, 5);
+      addSpacer(3);
+      
+      addSubsectionHeading("Documents Analyzed");
+      addText(`${reconciliationData.documentsAnalyzed} billing documents processed and validated`);
+      addSpacer(8);
 
-      // Meter details table
-      yPos += 5;
-      addText("Individual Meter Consumption:", 12, true);
+      // Section 4: Metering Reconciliation
+      addSectionHeading("4. METERING RECONCILIATION", 16);
+      
+      addSubsectionHeading("4.1 Supply Summary");
+      addText(`Council Bulk Supply: ${reconciliationData.councilTotal} kWh`, 10, true);
+      if (parseFloat(reconciliationData.solarTotal) > 0) {
+        addText(`Solar Generation: ${reconciliationData.solarTotal} kWh`, 10, true);
+      }
+      addText(`Total Supply: ${reconciliationData.totalSupply} kWh`, 10, true);
+      addSpacer(5);
+      
+      addSubsectionHeading("4.2 Distribution Summary");
+      addText(`Total Distribution Consumption: ${reconciliationData.distributionTotal} kWh`, 10, true);
+      addText(`Recovery Rate: ${reconciliationData.recoveryRate}%`, 10, true);
+      const varianceSign = parseFloat(reconciliationData.variancePercentage) > 0 ? "+" : "";
+      addText(`Discrepancy: ${varianceSign}${reconciliationData.variance} kWh (${varianceSign}${reconciliationData.variancePercentage}%)`, 10, true);
+      addSpacer(5);
+
+      addSubsectionHeading("4.3 Individual Meter Consumption");
+      addSpacer(2);
       
       if (councilBulk.length > 0) {
-        addText("Council Bulk Meters:", 11, true);
+        addText("Council Bulk Meters", 10, true);
         councilBulk.forEach(m => {
-          addText(`  ${m.meter_number} (${m.name}): ${m.totalKwh.toFixed(2)} kWh - ${m.readingsCount} readings`);
+          addText(`${m.meter_number} - ${m.name || "N/A"}`, 10, true, 3);
+          addText(`${m.totalKwh.toFixed(2)} kWh (${m.readingsCount} readings)`, 9, false, 6);
         });
+        addSpacer(3);
       }
       
       if (solarMeters.length > 0) {
-        addText("Solar Meters:", 11, true);
+        addText("Solar Generation Meters", 10, true);
         solarMeters.forEach(m => {
-          addText(`  ${m.meter_number} (${m.name}): ${m.totalKwh.toFixed(2)} kWh - ${m.readingsCount} readings`);
+          addText(`${m.meter_number} - ${m.name || "N/A"}`, 10, true, 3);
+          addText(`${m.totalKwh.toFixed(2)} kWh (${m.readingsCount} readings)`, 9, false, 6);
         });
+        addSpacer(3);
       }
       
       if (distribution.length > 0) {
-        addText("Distribution Meters:", 11, true);
+        addText("Distribution Meters", 10, true);
         distribution.forEach(m => {
-          addText(`  ${m.meter_number} (${m.name}): ${m.totalKwh.toFixed(2)} kWh - ${m.readingsCount} readings`);
+          addText(`${m.meter_number} - ${m.name || m.location || "N/A"}`, 10, true, 3);
+          addText(`${m.totalKwh.toFixed(2)} kWh (${m.readingsCount} readings)`, 9, false, 6);
         });
+        addSpacer(3);
       }
       
       if (checkMeters.length > 0) {
-        addText("Check Meters:", 11, true);
+        addText("Check Meters", 10, true);
         checkMeters.forEach(m => {
-          addText(`  ${m.meter_number} (${m.name}): ${m.totalKwh.toFixed(2)} kWh - ${m.readingsCount} readings`);
+          const status = m.readingsCount === 0 ? " [INACTIVE]" : "";
+          addText(`${m.meter_number} - ${m.name || "N/A"}${status}`, 10, true, 3);
+          addText(`${m.totalKwh.toFixed(2)} kWh (${m.readingsCount} readings)`, 9, false, 6);
         });
+        addSpacer(3);
       }
+      addSpacer(8);
 
-      // 5. Billing Validation
+      // Section 5: Billing Validation (if documents available)
       if (reportData.sections.billingValidation) {
-        addText("5. BILLING VALIDATION", 16, true);
+        addSectionHeading("5. BILLING VALIDATION", 16);
         addText(reportData.sections.billingValidation);
+        addSpacer(8);
       }
 
-      // 6. Observations and Anomalies
-      addText("6. OBSERVATIONS AND ANOMALIES", 16, true);
+      // Section 6: Observations and Anomalies
+      const obsSection = reportData.sections.billingValidation ? "6" : "5";
+      addSectionHeading(`${obsSection}. OBSERVATIONS AND ANOMALIES`, 16);
       addText(reportData.sections.observations);
+      addSpacer(5);
       
       if (anomalies.length > 0) {
-        addText("Detected Anomalies:", 12, true);
-        anomalies.forEach((anomaly, index) => {
-          addText(`${index + 1}. [${anomaly.severity.toUpperCase()}] ${anomaly.description}`);
-          if (anomaly.meter) addText(`   Meter: ${anomaly.meter}`);
-        });
+        addSubsectionHeading(`${obsSection}.6 Detected Anomalies`);
+        
+        // Group by severity
+        const criticalAnomalies = anomalies.filter(a => a.severity === "CRITICAL");
+        const highAnomalies = anomalies.filter(a => a.severity === "HIGH");
+        const mediumAnomalies = anomalies.filter(a => a.severity === "MEDIUM");
+        const lowAnomalies = anomalies.filter(a => a.severity === "LOW");
+        
+        let anomalyIndex = 1;
+        
+        if (criticalAnomalies.length > 0) {
+          addText("Critical Issues:", 10, true);
+          criticalAnomalies.forEach(anomaly => {
+            addText(`${anomalyIndex}. [CRITICAL] ${anomaly.description}`, 9, false, 3);
+            if (anomaly.meter) addText(`   Meter: ${anomaly.meter} (${anomaly.name || "N/A"})`, 8, false, 6);
+            anomalyIndex++;
+          });
+          addSpacer(3);
+        }
+        
+        if (highAnomalies.length > 0) {
+          addText("High Priority Issues:", 10, true);
+          highAnomalies.forEach(anomaly => {
+            addText(`${anomalyIndex}. [HIGH] ${anomaly.description}`, 9, false, 3);
+            if (anomaly.meter) addText(`   Meter: ${anomaly.meter} (${anomaly.name || "N/A"})`, 8, false, 6);
+            anomalyIndex++;
+          });
+          addSpacer(3);
+        }
+        
+        if (mediumAnomalies.length > 0) {
+          addText("Medium Priority Issues:", 10, true);
+          mediumAnomalies.forEach(anomaly => {
+            addText(`${anomalyIndex}. [MEDIUM] ${anomaly.description}`, 9, false, 3);
+            if (anomaly.meter) addText(`   Meter: ${anomaly.meter} (${anomaly.name || "N/A"})`, 8, false, 6);
+            anomalyIndex++;
+          });
+          addSpacer(3);
+        }
+        
+        if (lowAnomalies.length > 0) {
+          addText("Low Priority Issues:", 10, true);
+          lowAnomalies.forEach(anomaly => {
+            addText(`${anomalyIndex}. [LOW] ${anomaly.description}`, 9, false, 3);
+            if (anomaly.meter) addText(`   Meter: ${anomaly.meter} (${anomaly.name || "N/A"})`, 8, false, 6);
+            anomalyIndex++;
+          });
+        }
       }
+      addSpacer(8);
 
-      // 7. Recommendations
-      addText("7. RECOMMENDATIONS", 16, true);
+      // Section 7: Recommendations
+      const recSection = reportData.sections.billingValidation ? "7" : "6";
+      addSectionHeading(`${recSection}. RECOMMENDATIONS`, 16);
       addText(reportData.sections.recommendations);
+      addSpacer(8);
 
-      // 8. Appendices
+      // Section 8: Appendices
       pdf.addPage();
       yPos = margin;
-      addText("8. APPENDICES", 16, true);
+      const appSection = reportData.sections.billingValidation ? "8" : "7";
+      addSectionHeading(`${appSection}. APPENDICES`, 16);
       
-      addText("Appendix A: Meter Hierarchy", 12, true);
-      meterHierarchy.forEach(meter => {
-        addText(`${meter.meterNumber} - ${meter.name} (${meter.type})`, 10, true);
-        if (meter.parentMeters.length > 0) {
-          addText(`  Parent(s): ${meter.parentMeters.join(", ")}`);
-        }
-        if (meter.childMeters.length > 0) {
-          addText(`  Children: ${meter.childMeters.join(", ")}`);
-        }
-      });
+      addSubsectionHeading(`Appendix A: Complete Meter Hierarchy`);
+      addSpacer(2);
+      
+      // Group meters by type for appendix
+      const metersByType = {
+        council_bulk: meterHierarchy.filter(m => m.type === "council_bulk"),
+        solar: meterHierarchy.filter(m => m.type === "solar"),
+        check_meter: meterHierarchy.filter(m => m.type === "check_meter"),
+        distribution: meterHierarchy.filter(m => m.type === "distribution")
+      };
+      
+      if (metersByType.council_bulk.length > 0) {
+        addText("Council Bulk Supply Meters", 10, true);
+        metersByType.council_bulk.forEach(meter => {
+          addText(`${meter.meterNumber} - ${meter.name || "N/A"}`, 9, true, 3);
+          addText(`Type: ${meter.type} | Location: ${meter.location || "N/A"}`, 8, false, 6);
+          addText(`Consumption: ${meter.consumption} kWh | Readings: ${meter.readingsCount}`, 8, false, 6);
+          if (meter.childMeters.length > 0) {
+            addText(`Supplies: ${meter.childMeters.join(", ")}`, 8, false, 6);
+          }
+          addSpacer(2);
+        });
+      }
+      
+      if (metersByType.solar.length > 0) {
+        addText("Solar/Generation Meters", 10, true);
+        metersByType.solar.forEach(meter => {
+          addText(`${meter.meterNumber} - ${meter.name || "N/A"}`, 9, true, 3);
+          addText(`Type: ${meter.type} | Location: ${meter.location || "N/A"}`, 8, false, 6);
+          addText(`Generation: ${meter.consumption} kWh | Readings: ${meter.readingsCount}`, 8, false, 6);
+          addSpacer(2);
+        });
+      }
+      
+      if (metersByType.check_meter.length > 0) {
+        addText("Check Meters", 10, true);
+        metersByType.check_meter.forEach(meter => {
+          const status = meter.readingsCount === 0 ? " [INACTIVE]" : "";
+          addText(`${meter.meterNumber} - ${meter.name || "N/A"}${status}`, 9, true, 3);
+          addText(`Type: ${meter.type} | Location: ${meter.location || "N/A"}`, 8, false, 6);
+          addText(`Consumption: ${meter.consumption} kWh | Readings: ${meter.readingsCount}`, 8, false, 6);
+          if (meter.parentMeters.length > 0) {
+            addText(`Fed by: ${meter.parentMeters.join(", ")}`, 8, false, 6);
+          }
+          addSpacer(2);
+        });
+      }
+      
+      if (metersByType.distribution.length > 0) {
+        addText("Distribution Meters", 10, true);
+        metersByType.distribution.forEach(meter => {
+          addText(`${meter.meterNumber} - ${meter.name || meter.location || "N/A"}`, 9, true, 3);
+          addText(`Type: ${meter.type} | Location: ${meter.location || "N/A"}`, 8, false, 6);
+          addText(`Consumption: ${meter.consumption} kWh | Readings: ${meter.readingsCount}`, 8, false, 6);
+          if (meter.parentMeters.length > 0) {
+            addText(`Fed by: ${meter.parentMeters.join(", ")}`, 8, false, 6);
+          }
+          addSpacer(2);
+        });
+      }
 
       // Save PDF
       const fileName = `${siteName.replace(/\s+/g, "_")}_Audit_Report_${format(new Date(), "yyyyMMdd")}.pdf`;
