@@ -9,6 +9,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { FileCheck2, AlertCircle, CheckCircle2, DollarSign, Eye, FileText } from "lucide-react";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import TariffDetailsDialog from "@/components/tariffs/TariffDetailsDialog";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -56,6 +57,17 @@ interface DocumentShopNumber {
   periodEnd: string;
   totalAmount: number;
   currency: string;
+  tenantName?: string;
+  accountReference?: string;
+  lineItems?: Array<{
+    description: string;
+    meter_number?: string;
+    previous_reading?: number;
+    current_reading?: number;
+    consumption?: number;
+    rate?: number;
+    amount: number;
+  }>;
 }
 
 export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps) {
@@ -171,7 +183,10 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
               periodStart: extractedData.period_start || '',
               periodEnd: extractedData.period_end || '',
               totalAmount: extractedData.total_amount || 0,
-              currency: extractedData.currency || 'ZAR'
+              currency: extractedData.currency || 'ZAR',
+              tenantName: extractedData.tenant_name,
+              accountReference: extractedData.account_reference,
+              lineItems: extractedData.line_items
             });
           }
         }
@@ -563,43 +578,132 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
 
       {/* Shop Document Details Dialog */}
       <Dialog open={!!viewingShopDoc} onOpenChange={() => setViewingShopDoc(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Document Details</DialogTitle>
             <DialogDescription>
-              Shop number from uploaded document
+              Extracted information from uploaded document
             </DialogDescription>
           </DialogHeader>
           
           {viewingShopDoc && (
             <div className="space-y-4">
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground">Shop Number</Label>
-                <p className="text-lg font-semibold">{viewingShopDoc.shopNumber}</p>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground">Document</Label>
-                <p className="text-sm">{viewingShopDoc.fileName}</p>
-              </div>
-
-              {viewingShopDoc.periodStart && viewingShopDoc.periodEnd && (
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label className="text-xs text-muted-foreground">Period</Label>
+                  <Label className="text-xs text-muted-foreground">Period Start</Label>
                   <p className="text-sm">
-                    {new Date(viewingShopDoc.periodStart).toLocaleDateString()} - {new Date(viewingShopDoc.periodEnd).toLocaleDateString()}
+                    {viewingShopDoc.periodStart ? new Date(viewingShopDoc.periodStart).toLocaleDateString() : '—'}
                   </p>
                 </div>
-              )}
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Period End</Label>
+                  <p className="text-sm">
+                    {viewingShopDoc.periodEnd ? new Date(viewingShopDoc.periodEnd).toLocaleDateString() : '—'}
+                  </p>
+                </div>
+              </div>
 
-              {viewingShopDoc.totalAmount > 0 && (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Currency</Label>
+                  <p className="text-sm">{viewingShopDoc.currency}</p>
+                </div>
                 <div className="space-y-2">
                   <Label className="text-xs text-muted-foreground">Total Amount</Label>
                   <p className="text-sm font-medium">
-                    {viewingShopDoc.currency} {viewingShopDoc.totalAmount.toLocaleString()}
+                    {viewingShopDoc.totalAmount.toLocaleString()}
                   </p>
                 </div>
-              )}
+              </div>
+
+              <div className="space-y-4 p-4 border rounded-lg">
+                <Label className="text-base font-semibold">Additional Details</Label>
+                
+                <div className="space-y-2">
+                  <Label>Shop Number</Label>
+                  <p className="text-sm">{viewingShopDoc.shopNumber}</p>
+                </div>
+
+                {viewingShopDoc.tenantName && (
+                  <div className="space-y-2">
+                    <Label>Tenant Name</Label>
+                    <p className="text-sm">{viewingShopDoc.tenantName}</p>
+                  </div>
+                )}
+
+                {viewingShopDoc.accountReference && (
+                  <div className="space-y-2">
+                    <Label>Account Reference</Label>
+                    <p className="text-sm">{viewingShopDoc.accountReference}</p>
+                  </div>
+                )}
+
+                {/* Line Items Section */}
+                {viewingShopDoc.lineItems && viewingShopDoc.lineItems.length > 0 && (
+                  <div className="space-y-3">
+                    <Label className="text-sm font-medium">Line Items</Label>
+                    <Accordion type="single" collapsible className="w-full">
+                      {viewingShopDoc.lineItems.map((item, index) => (
+                        <AccordionItem key={index} value={`item-${index}`}>
+                          <AccordionTrigger className="hover:no-underline">
+                            <div className="flex items-center justify-between w-full pr-4">
+                              <span className="font-medium">{item.description || `Line Item ${index + 1}`}</span>
+                              <span className="text-sm text-muted-foreground">
+                                {viewingShopDoc.currency} {(item.amount || 0).toFixed(2)}
+                              </span>
+                            </div>
+                          </AccordionTrigger>
+                          <AccordionContent>
+                            <div className="space-y-3 pt-2 text-sm">
+                              {item.meter_number && (
+                                <div>
+                                  <Label className="text-xs text-muted-foreground">Meter Number</Label>
+                                  <p>{item.meter_number}</p>
+                                </div>
+                              )}
+                              
+                              <div className="grid grid-cols-2 gap-3">
+                                {item.previous_reading !== undefined && (
+                                  <div>
+                                    <Label className="text-xs text-muted-foreground">Previous Reading</Label>
+                                    <p>{item.previous_reading}</p>
+                                  </div>
+                                )}
+                                {item.current_reading !== undefined && (
+                                  <div>
+                                    <Label className="text-xs text-muted-foreground">Current Reading</Label>
+                                    <p>{item.current_reading}</p>
+                                  </div>
+                                )}
+                              </div>
+                              
+                              <div className="grid grid-cols-2 gap-3">
+                                {item.consumption !== undefined && (
+                                  <div>
+                                    <Label className="text-xs text-muted-foreground">Consumption</Label>
+                                    <p>{item.consumption} kWh</p>
+                                  </div>
+                                )}
+                                {item.rate !== undefined && (
+                                  <div>
+                                    <Label className="text-xs text-muted-foreground">Rate</Label>
+                                    <p>{item.rate.toFixed(4)} per kWh</p>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </AccordionContent>
+                        </AccordionItem>
+                      ))}
+                    </Accordion>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2 pt-2 border-t">
+                <Label className="text-xs text-muted-foreground">Document File</Label>
+                <p className="text-sm">{viewingShopDoc.fileName}</p>
+              </div>
             </div>
           )}
         </DialogContent>
