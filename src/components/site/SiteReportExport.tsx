@@ -3,6 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { FileText, Loader2, Download, CalendarIcon } from "lucide-react";
@@ -26,6 +28,13 @@ interface MeterOption {
   location?: string;
 }
 
+interface ColumnConfig {
+  columnName: string;
+  aggregation: 'sum' | 'max';
+  multiplier: number;
+  selected: boolean;
+}
+
 export default function SiteReportExport({ siteId, siteName }: SiteReportExportProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [periodStart, setPeriodStart] = useState<Date>();
@@ -37,6 +46,9 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
   const [availableMeters, setAvailableMeters] = useState<MeterOption[]>([]);
   const [selectedMeterIds, setSelectedMeterIds] = useState<Set<string>>(new Set());
   const [isLoadingMeters, setIsLoadingMeters] = useState(true);
+  const [availableColumns, setAvailableColumns] = useState<string[]>([]);
+  const [columnConfigs, setColumnConfigs] = useState<Record<string, ColumnConfig>>({});
+  const [isLoadingColumns, setIsLoadingColumns] = useState(false);
 
   // Fetch available meters on mount
   useEffect(() => {
@@ -67,6 +79,66 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
 
     fetchMeters();
   }, [siteId]);
+
+  // Fetch available CSV columns when meters are selected
+  useEffect(() => {
+    const fetchAvailableColumns = async () => {
+      if (selectedMeterIds.size === 0) {
+        setAvailableColumns([]);
+        setColumnConfigs({});
+        return;
+      }
+
+      setIsLoadingColumns(true);
+      try {
+        // Fetch a sample of readings from selected meters to get column names
+        const { data: sampleReadings, error } = await supabase
+          .from("meter_readings")
+          .select("metadata")
+          .in("meter_id", Array.from(selectedMeterIds))
+          .not("metadata", "is", null)
+          .limit(100);
+
+        if (error) throw error;
+
+        // Extract unique column names from metadata.imported_fields
+        const columnsSet = new Set<string>();
+        sampleReadings?.forEach(reading => {
+          const importedFields = (reading.metadata as any)?.imported_fields || {};
+          Object.keys(importedFields).forEach(key => {
+            // Exclude date/time columns
+            if (!key.toLowerCase().includes('time') && !key.toLowerCase().includes('date')) {
+              columnsSet.add(key);
+            }
+          });
+        });
+
+        const columns = Array.from(columnsSet).sort();
+        setAvailableColumns(columns);
+
+        // Initialize column configs with defaults
+        const configs: Record<string, ColumnConfig> = {};
+        columns.forEach(col => {
+          const isKVA = col.toLowerCase().includes('kva');
+          configs[col] = {
+            columnName: col,
+            aggregation: isKVA ? 'max' : 'sum',
+            multiplier: 1,
+            selected: true // Select all by default
+          };
+        });
+        setColumnConfigs(configs);
+
+      } catch (error) {
+        console.error("Error fetching columns:", error);
+        toast.error("Failed to load CSV columns");
+      } finally {
+        setIsLoadingColumns(false);
+      }
+    };
+
+    fetchAvailableColumns();
+  }, [selectedMeterIds]);
 
   // Helper to combine date and time and format as naive timestamp string
   const getFullDateTime = (dateStr: string, time: string = "00:00"): string => {
@@ -810,87 +882,203 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
           </div>
         </div>
 
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <Label className="text-base">Select Meters to Include</Label>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setSelectedMeterIds(new Set(availableMeters.map(m => m.id)))}
-                disabled={isLoadingMeters}
-              >
-                Select All
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setSelectedMeterIds(new Set())}
-                disabled={isLoadingMeters}
-              >
-                Deselect All
-              </Button>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Left Pane: Meter Selection */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label className="text-base">Select Meters to Include</Label>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSelectedMeterIds(new Set(availableMeters.map(m => m.id)))}
+                  disabled={isLoadingMeters}
+                >
+                  Select All
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSelectedMeterIds(new Set())}
+                  disabled={isLoadingMeters}
+                >
+                  Deselect All
+                </Button>
+              </div>
             </div>
+
+            {isLoadingMeters ? (
+              <div className="flex items-center justify-center p-8">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <ScrollArea className="h-[400px] border rounded-lg p-4">
+                <div className="space-y-4">
+                  {["council_bulk", "solar", "distribution", "check_meter"].map((meterType) => {
+                    const metersOfType = availableMeters.filter(m => m.meter_type === meterType);
+                    if (metersOfType.length === 0) return null;
+
+                    const typeLabel = {
+                      council_bulk: "Council Bulk Supply",
+                      solar: "Solar/Generation",
+                      distribution: "Distribution",
+                      check_meter: "Check Meters"
+                    }[meterType];
+
+                    return (
+                      <div key={meterType} className="space-y-2">
+                        <h4 className="text-sm font-semibold text-muted-foreground">{typeLabel}</h4>
+                        <div className="space-y-2 pl-2">
+                          {metersOfType.map((meter) => (
+                            <div key={meter.id} className="flex items-center space-x-2">
+                              <Checkbox
+                                id={meter.id}
+                                checked={selectedMeterIds.has(meter.id)}
+                                onCheckedChange={(checked) => {
+                                  const newSet = new Set(selectedMeterIds);
+                                  if (checked) {
+                                    newSet.add(meter.id);
+                                  } else {
+                                    newSet.delete(meter.id);
+                                  }
+                                  setSelectedMeterIds(newSet);
+                                }}
+                              />
+                              <label
+                                htmlFor={meter.id}
+                                className="text-sm cursor-pointer flex-1"
+                              >
+                                <span className="font-medium">{meter.meter_number}</span>
+                                {meter.name && <span className="text-muted-foreground"> - {meter.name}</span>}
+                                {meter.location && <span className="text-xs text-muted-foreground ml-2">({meter.location})</span>}
+                              </label>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </ScrollArea>
+            )}
+
+            <p className="text-xs text-muted-foreground">
+              {selectedMeterIds.size} of {availableMeters.length} meters selected
+            </p>
           </div>
 
-          {isLoadingMeters ? (
-            <div className="flex items-center justify-center p-8">
-              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : (
-            <ScrollArea className="h-[300px] border rounded-lg p-4">
-              <div className="space-y-4">
-                {["council_bulk", "solar", "distribution", "check_meter"].map((meterType) => {
-                  const metersOfType = availableMeters.filter(m => m.meter_type === meterType);
-                  if (metersOfType.length === 0) return null;
-
-                  const typeLabel = {
-                    council_bulk: "Council Bulk Supply",
-                    solar: "Solar/Generation",
-                    distribution: "Distribution",
-                    check_meter: "Check Meters"
-                  }[meterType];
-
-                  return (
-                    <div key={meterType} className="space-y-2">
-                      <h4 className="text-sm font-semibold text-muted-foreground">{typeLabel}</h4>
-                      <div className="space-y-2 pl-2">
-                        {metersOfType.map((meter) => (
-                          <div key={meter.id} className="flex items-center space-x-2">
-                            <Checkbox
-                              id={meter.id}
-                              checked={selectedMeterIds.has(meter.id)}
-                              onCheckedChange={(checked) => {
-                                const newSet = new Set(selectedMeterIds);
-                                if (checked) {
-                                  newSet.add(meter.id);
-                                } else {
-                                  newSet.delete(meter.id);
-                                }
-                                setSelectedMeterIds(newSet);
-                              }}
-                            />
-                            <label
-                              htmlFor={meter.id}
-                              className="text-sm cursor-pointer flex-1"
-                            >
-                              <span className="font-medium">{meter.meter_number}</span>
-                              {meter.name && <span className="text-muted-foreground"> - {meter.name}</span>}
-                              {meter.location && <span className="text-xs text-muted-foreground ml-2">({meter.location})</span>}
-                            </label>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
+          {/* Right Pane: CSV Column Selection */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label className="text-base">Available CSV Columns</Label>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const updated = { ...columnConfigs };
+                    Object.keys(updated).forEach(key => {
+                      updated[key] = { ...updated[key], selected: true };
+                    });
+                    setColumnConfigs(updated);
+                  }}
+                  disabled={isLoadingColumns || availableColumns.length === 0}
+                >
+                  Select All
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const updated = { ...columnConfigs };
+                    Object.keys(updated).forEach(key => {
+                      updated[key] = { ...updated[key], selected: false };
+                    });
+                    setColumnConfigs(updated);
+                  }}
+                  disabled={isLoadingColumns || availableColumns.length === 0}
+                >
+                  Deselect All
+                </Button>
               </div>
-            </ScrollArea>
-          )}
+            </div>
 
-          <p className="text-xs text-muted-foreground">
-            {selectedMeterIds.size} of {availableMeters.length} meters selected
-          </p>
+            {isLoadingColumns ? (
+              <div className="flex items-center justify-center p-8">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : availableColumns.length === 0 ? (
+              <div className="h-[400px] border rounded-lg p-4 flex items-center justify-center">
+                <p className="text-sm text-muted-foreground text-center">
+                  {selectedMeterIds.size === 0 
+                    ? "Select meters to view available CSV columns"
+                    : "No CSV data found for selected meters"}
+                </p>
+              </div>
+            ) : (
+              <ScrollArea className="h-[400px] border rounded-lg p-4">
+                <div className="space-y-3">
+                  {availableColumns.map((column) => {
+                    const config = columnConfigs[column];
+                    if (!config) return null;
+
+                    return (
+                      <div key={column} className="flex items-center gap-3 p-2 rounded-md hover:bg-muted/50">
+                        <Checkbox
+                          id={`col-${column}`}
+                          checked={config.selected}
+                          onCheckedChange={(checked) => {
+                            setColumnConfigs({
+                              ...columnConfigs,
+                              [column]: { ...config, selected: checked as boolean }
+                            });
+                          }}
+                        />
+                        <label
+                          htmlFor={`col-${column}`}
+                          className="text-sm font-medium flex-1 cursor-pointer"
+                        >
+                          {column}
+                        </label>
+                        <select
+                          value={config.aggregation}
+                          onChange={(e) => {
+                            setColumnConfigs({
+                              ...columnConfigs,
+                              [column]: { ...config, aggregation: e.target.value as 'sum' | 'max' }
+                            });
+                          }}
+                          className="text-xs border rounded px-2 py-1 bg-background"
+                          disabled={!config.selected}
+                        >
+                          <option value="sum">Sum</option>
+                          <option value="max">Max</option>
+                        </select>
+                        <input
+                          type="number"
+                          value={config.multiplier}
+                          onChange={(e) => {
+                            setColumnConfigs({
+                              ...columnConfigs,
+                              [column]: { ...config, multiplier: parseFloat(e.target.value) || 1 }
+                            });
+                          }}
+                          className="text-xs border rounded px-2 py-1 w-16 bg-background"
+                          step="0.1"
+                          min="0"
+                          disabled={!config.selected}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </ScrollArea>
+            )}
+
+            <p className="text-xs text-muted-foreground">
+              {Object.values(columnConfigs).filter(c => c.selected).length} of {availableColumns.length} columns selected
+            </p>
+          </div>
         </div>
 
         <div className="p-4 border rounded-lg bg-muted/30 space-y-2">
