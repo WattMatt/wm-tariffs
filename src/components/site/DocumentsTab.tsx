@@ -59,6 +59,8 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
   const [isExtracting, setIsExtracting] = useState(false);
   const [isBulkExtracting, setIsBulkExtracting] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [bulkEditQueue, setBulkEditQueue] = useState<string[]>([]);
+  const [currentBulkEditIndex, setCurrentBulkEditIndex] = useState(0);
   
   // Fabric.js canvas state
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -481,6 +483,8 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
     setEditedData(null);
     setSelectionMode(false);
     setIsEditing(false);
+    setBulkEditQueue([]);
+    setCurrentBulkEditIndex(0);
     selectionModeRef.current = false;
     if (fabricCanvas) {
       fabricCanvas.dispose();
@@ -539,8 +543,22 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
       if (error) throw error;
 
       toast.success("Changes saved successfully");
-      fetchDocuments();
-      handleCloseDialog();
+      await fetchDocuments();
+      
+      // Check if we're in bulk edit mode
+      if (bulkEditQueue.length > 0 && currentBulkEditIndex < bulkEditQueue.length - 1) {
+        // Move to next document in queue
+        const nextIndex = currentBulkEditIndex + 1;
+        setCurrentBulkEditIndex(nextIndex);
+        const nextDocId = bulkEditQueue[nextIndex];
+        const nextDoc = documents.find(d => d.id === nextDocId);
+        if (nextDoc) {
+          await handleViewDocument(nextDoc);
+        }
+      } else {
+        // No more documents or not in bulk edit mode
+        handleCloseDialog();
+      }
     } catch (error) {
       console.error("Error saving changes:", error);
       toast.error("Failed to save changes");
@@ -806,6 +824,36 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
     toast.info('Selection cancelled');
   };
 
+  const handleBulkEdit = async () => {
+    if (selectedDocuments.size === 0) return;
+    
+    // Set up the bulk edit queue
+    const queue = Array.from(selectedDocuments);
+    setBulkEditQueue(queue);
+    setCurrentBulkEditIndex(0);
+    
+    // Open the first document
+    const firstDoc = documents.find(d => d.id === queue[0]);
+    if (firstDoc) {
+      await handleViewDocument(firstDoc);
+    }
+  };
+
+  const handleSkipToNext = async () => {
+    if (bulkEditQueue.length === 0 || currentBulkEditIndex >= bulkEditQueue.length - 1) {
+      handleCloseDialog();
+      return;
+    }
+
+    const nextIndex = currentBulkEditIndex + 1;
+    setCurrentBulkEditIndex(nextIndex);
+    const nextDocId = bulkEditQueue[nextIndex];
+    const nextDoc = documents.find(d => d.id === nextDocId);
+    if (nextDoc) {
+      await handleViewDocument(nextDoc);
+    }
+  };
+
   const handleRescanRegion = async () => {
     if (!fabricCanvas || !selectionRectRef.current || !viewingDocument || !documentImageUrl) {
       toast.error('Please select a region first');
@@ -1035,6 +1083,15 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                 <Button
                   variant="outline"
                   size="sm"
+                  onClick={handleBulkEdit}
+                  disabled={isBulkExtracting}
+                >
+                  <Eye className="w-4 h-4 mr-2" />
+                  Bulk Edit
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={handleBulkDownload}
                   disabled={isBulkExtracting}
                 >
@@ -1192,10 +1249,19 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
       <Dialog open={!!viewingDocument} onOpenChange={handleCloseDialog}>
         <DialogContent className="max-w-7xl h-[85vh] flex flex-col">
           <DialogHeader className="flex-shrink-0">
-            <DialogTitle>Document Extraction</DialogTitle>
-            <DialogDescription>
-              Review and edit the AI-extracted information
-            </DialogDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <DialogTitle>Document Extraction</DialogTitle>
+                <DialogDescription>
+                  Review and edit the AI-extracted information
+                </DialogDescription>
+              </div>
+              {bulkEditQueue.length > 0 && (
+                <Badge variant="secondary" className="text-sm">
+                  Document {currentBulkEditIndex + 1} of {bulkEditQueue.length}
+                </Badge>
+              )}
+            </div>
           </DialogHeader>
           {viewingDocument && editedData && (
             <>
@@ -1591,6 +1657,15 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
               
               {/* Right side buttons - Edit controls */}
               <div className="flex justify-end gap-2">
+                {bulkEditQueue.length > 0 && (
+                  <Button 
+                    variant="outline" 
+                    onClick={handleSkipToNext}
+                    disabled={currentBulkEditIndex >= bulkEditQueue.length - 1 || isSaving}
+                  >
+                    Skip to Next
+                  </Button>
+                )}
                 <Button 
                   variant="outline" 
                   onClick={() => setIsEditing(!isEditing)}
@@ -1604,10 +1679,12 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                   {isSaving ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Saving...
+                      {bulkEditQueue.length > 0 && currentBulkEditIndex < bulkEditQueue.length - 1 ? 'Saving & Next...' : 'Saving...'}
                     </>
                   ) : (
-                    'Save'
+                    <>
+                      {bulkEditQueue.length > 0 && currentBulkEditIndex < bulkEditQueue.length - 1 ? 'Save & Next' : 'Save'}
+                    </>
                   )}
                 </Button>
               </div>
