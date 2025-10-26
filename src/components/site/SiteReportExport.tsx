@@ -22,6 +22,8 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
   const [periodEnd, setPeriodEnd] = useState<Date>();
   const [isStartOpen, setIsStartOpen] = useState(false);
   const [isEndOpen, setIsEndOpen] = useState(false);
+  const [startTime, setStartTime] = useState("00:00");
+  const [endTime, setEndTime] = useState("23:59");
 
   // Helper to combine date and time and format as naive timestamp string
   const getFullDateTime = (dateStr: string, time: string = "00:00"): string => {
@@ -73,9 +75,9 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
 
       if (metersError) throw metersError;
 
-      // 2. Set up date range with full day coverage
-      const fullDateTimeFrom = getFullDateTime(format(periodStart, "yyyy-MM-dd"), "00:00");
-      const fullDateTimeTo = getFullDateTime(format(periodEnd, "yyyy-MM-dd"), "23:59");
+      // 2. Set up date range with selected times
+      const fullDateTimeFrom = getFullDateTime(format(periodStart, "yyyy-MM-dd"), startTime);
+      const fullDateTimeTo = getFullDateTime(format(periodEnd, "yyyy-MM-dd"), endTime);
 
       // 3. Fetch readings for each meter with pagination and deduplication
       const meterData = await Promise.all(
@@ -496,7 +498,7 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
                   )}
                 >
                   <CalendarIcon className="mr-2 h-4 w-4" />
-                  {periodStart ? format(periodStart, "dd MMM yyyy") : "Select start date"}
+                  {periodStart ? `${format(periodStart, "dd MMM yyyy")} ${startTime}` : "Select start date"}
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="start">
@@ -507,6 +509,9 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
                     setPeriodStart(date);
                     setIsStartOpen(false);
                   }}
+                  showTime={true}
+                  onTimeChange={setStartTime}
+                  defaultTime={startTime}
                   initialFocus
                   className="pointer-events-auto"
                 />
@@ -525,7 +530,7 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
                   )}
                 >
                   <CalendarIcon className="mr-2 h-4 w-4" />
-                  {periodEnd ? format(periodEnd, "dd MMM yyyy") : "Select end date"}
+                  {periodEnd ? `${format(periodEnd, "dd MMM yyyy")} ${endTime}` : "Select end date"}
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="start">
@@ -536,6 +541,9 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
                     setPeriodEnd(date);
                     setIsEndOpen(false);
                   }}
+                  showTime={true}
+                  onTimeChange={setEndTime}
+                  defaultTime={endTime}
                   initialFocus
                   className="pointer-events-auto"
                 />
