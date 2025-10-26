@@ -494,7 +494,7 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
         ) || []
       }));
 
-      // 9. Prepare meter hierarchy
+      // 9. Prepare meter hierarchy with CSV column data
       const meterHierarchy = meters?.map(meter => {
         const meterInfo = meterData.find(m => m.id === meter.id);
         return {
@@ -504,6 +504,8 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
           location: meter.location,
           consumption: meterInfo?.totalKwh.toFixed(2) || "0.00",
           readingsCount: meterInfo?.readingsCount || 0,
+          columnTotals: meterInfo?.columnTotals || {},
+          columnMaxValues: meterInfo?.columnMaxValues || {},
           parentMeters: meter.parent_connections?.map((pc: any) => 
             pc.parent_meter?.meter_number
           ) || [],
@@ -512,6 +514,15 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
           ) || []
         };
       }) || [];
+
+      // Prepare selected CSV columns configuration
+      const selectedCsvColumns = Object.entries(columnConfigs)
+        .filter(([_, config]) => config.selected)
+        .map(([columnName, config]) => ({
+          columnName,
+          aggregation: config.aggregation,
+          multiplier: config.multiplier
+        }));
 
       // 10. Generate AI narrative sections
       toast.info("Generating report sections with AI...");
@@ -527,7 +538,8 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
             meterBreakdown,
             reconciliationData,
             documentExtractions,
-            anomalies
+            anomalies,
+            selectedCsvColumns
           }
         }
       );
