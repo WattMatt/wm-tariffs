@@ -106,8 +106,19 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
         sampleReadings?.forEach(reading => {
           const importedFields = (reading.metadata as any)?.imported_fields || {};
           Object.keys(importedFields).forEach(key => {
-            // Exclude date/time columns
-            if (!key.toLowerCase().includes('time') && !key.toLowerCase().includes('date')) {
+            // More precise filtering: exclude columns that are clearly date/time fields
+            const lowerKey = key.toLowerCase();
+            const isDateTimeColumn = 
+              lowerKey === 'time' || 
+              lowerKey === 'date' || 
+              lowerKey === 'datetime' || 
+              lowerKey === 'timestamp' || 
+              lowerKey.startsWith('time_') ||
+              lowerKey.startsWith('date_') ||
+              lowerKey.endsWith('_time') ||
+              lowerKey.endsWith('_date');
+
+            if (!isDateTimeColumn) {
               columnsSet.add(key);
             }
           });
