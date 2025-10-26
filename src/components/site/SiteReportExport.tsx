@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { FileText, Loader2, Download, CalendarIcon } from "lucide-react";
@@ -10,10 +11,19 @@ import jsPDF from "jspdf";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface SiteReportExportProps {
   siteId: string;
   siteName: string;
+}
+
+interface MeterOption {
+  id: string;
+  meter_number: string;
+  name: string;
+  meter_type: string;
+  location?: string;
 }
 
 export default function SiteReportExport({ siteId, siteName }: SiteReportExportProps) {
@@ -24,6 +34,39 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
   const [isEndOpen, setIsEndOpen] = useState(false);
   const [startTime, setStartTime] = useState("00:00");
   const [endTime, setEndTime] = useState("23:59");
+  const [availableMeters, setAvailableMeters] = useState<MeterOption[]>([]);
+  const [selectedMeterIds, setSelectedMeterIds] = useState<Set<string>>(new Set());
+  const [isLoadingMeters, setIsLoadingMeters] = useState(true);
+
+  // Fetch available meters on mount
+  useEffect(() => {
+    const fetchMeters = async () => {
+      setIsLoadingMeters(true);
+      try {
+        const { data: meters, error } = await supabase
+          .from("meters")
+          .select("id, meter_number, name, meter_type, location")
+          .eq("site_id", siteId)
+          .order("meter_type", { ascending: true })
+          .order("meter_number", { ascending: true });
+
+        if (error) throw error;
+
+        if (meters) {
+          setAvailableMeters(meters);
+          // Select all meters by default
+          setSelectedMeterIds(new Set(meters.map(m => m.id)));
+        }
+      } catch (error) {
+        console.error("Error fetching meters:", error);
+        toast.error("Failed to load meters");
+      } finally {
+        setIsLoadingMeters(false);
+      }
+    };
+
+    fetchMeters();
+  }, [siteId]);
 
   // Helper to combine date and time and format as naive timestamp string
   const getFullDateTime = (dateStr: string, time: string = "00:00"): string => {
@@ -49,7 +92,13 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
     try {
       toast.info("Running reconciliation for selected period...");
 
-      // 1. Fetch all meters for this site
+      // 1. Fetch all meters for this site (only selected ones)
+      if (selectedMeterIds.size === 0) {
+        toast.error("Please select at least one meter");
+        setIsGenerating(false);
+        return;
+      }
+
       const { data: meters, error: metersError } = await supabase
         .from("meters")
         .select(`
@@ -71,7 +120,8 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
             )
           )
         `)
-        .eq("site_id", siteId);
+        .eq("site_id", siteId)
+        .in("id", Array.from(selectedMeterIds));
 
       if (metersError) throw metersError;
 
@@ -760,6 +810,89 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
           </div>
         </div>
 
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <Label className="text-base">Select Meters to Include</Label>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSelectedMeterIds(new Set(availableMeters.map(m => m.id)))}
+                disabled={isLoadingMeters}
+              >
+                Select All
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSelectedMeterIds(new Set())}
+                disabled={isLoadingMeters}
+              >
+                Deselect All
+              </Button>
+            </div>
+          </div>
+
+          {isLoadingMeters ? (
+            <div className="flex items-center justify-center p-8">
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <ScrollArea className="h-[300px] border rounded-lg p-4">
+              <div className="space-y-4">
+                {["council_bulk", "solar", "distribution", "check_meter"].map((meterType) => {
+                  const metersOfType = availableMeters.filter(m => m.meter_type === meterType);
+                  if (metersOfType.length === 0) return null;
+
+                  const typeLabel = {
+                    council_bulk: "Council Bulk Supply",
+                    solar: "Solar/Generation",
+                    distribution: "Distribution",
+                    check_meter: "Check Meters"
+                  }[meterType];
+
+                  return (
+                    <div key={meterType} className="space-y-2">
+                      <h4 className="text-sm font-semibold text-muted-foreground">{typeLabel}</h4>
+                      <div className="space-y-2 pl-2">
+                        {metersOfType.map((meter) => (
+                          <div key={meter.id} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={meter.id}
+                              checked={selectedMeterIds.has(meter.id)}
+                              onCheckedChange={(checked) => {
+                                const newSet = new Set(selectedMeterIds);
+                                if (checked) {
+                                  newSet.add(meter.id);
+                                } else {
+                                  newSet.delete(meter.id);
+                                }
+                                setSelectedMeterIds(newSet);
+                              }}
+                            />
+                            <label
+                              htmlFor={meter.id}
+                              className="text-sm cursor-pointer flex-1"
+                            >
+                              <span className="font-medium">{meter.meter_number}</span>
+                              {meter.name && <span className="text-muted-foreground"> - {meter.name}</span>}
+                              {meter.location && <span className="text-xs text-muted-foreground ml-2">({meter.location})</span>}
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </ScrollArea>
+          )}
+
+          <p className="text-xs text-muted-foreground">
+            {selectedMeterIds.size} of {availableMeters.length} meters selected
+          </p>
+        </div>
+
         <div className="p-4 border rounded-lg bg-muted/30 space-y-2">
           <p className="text-sm font-medium">Report will include:</p>
           <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
@@ -775,7 +908,7 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
 
         <Button
           onClick={generateReport}
-          disabled={isGenerating || !periodStart || !periodEnd}
+          disabled={isGenerating || !periodStart || !periodEnd || selectedMeterIds.size === 0 || isLoadingMeters}
           className="w-full"
           size="lg"
         >
