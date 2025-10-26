@@ -91,13 +91,13 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
 
       setIsLoadingColumns(true);
       try {
-        // Fetch a sample of readings from selected meters to get column names
+        // Fetch a larger sample of readings from selected meters to get all column names
         const { data: sampleReadings, error } = await supabase
           .from("meter_readings")
           .select("metadata")
           .in("meter_id", Array.from(selectedMeterIds))
           .not("metadata", "is", null)
-          .limit(100);
+          .limit(1000);
 
         if (error) throw error;
 
