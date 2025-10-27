@@ -420,18 +420,48 @@ export default function SchematicEditor({
       const width = rect.width || 0;
       const height = rect.height || 0;
       
-      console.log('Extracting from region:', { left, top, width, height });
+      console.log('Canvas coordinates:', { left, top, width, height });
       
       // Only extract if region is large enough (at least 20x20 pixels)
       if (width > 20 && height > 20) {
+        // Get original image dimensions and scale from canvas
+        const originalImageWidth = (canvas as any).originalImageWidth || canvasWidth;
+        const originalImageHeight = (canvas as any).originalImageHeight || canvasHeight;
+        const displayScale = (canvas as any).displayScale || 1;
+        
+        console.log('🖼️ Image info:', {
+          originalSize: { w: originalImageWidth, h: originalImageHeight },
+          canvasSize: { w: canvasWidth, h: canvasHeight },
+          displayScale
+        });
+        
+        // Convert from canvas display coordinates to original image pixel coordinates
+        const imageLeft = left / displayScale;
+        const imageTop = top / displayScale;
+        const imageWidth = width / displayScale;
+        const imageHeight = height / displayScale;
+        
+        console.log('📐 Original image coordinates (pixels):', {
+          x: Math.round(imageLeft),
+          y: Math.round(imageTop),
+          width: Math.round(imageWidth),
+          height: Math.round(imageHeight)
+        });
+        
+        // Now convert to percentages of the original image
         const region = {
-          x: (left / canvasWidth) * 100,
-          y: (top / canvasHeight) * 100,
-          width: (width / canvasWidth) * 100,
-          height: (height / canvasHeight) * 100
+          x: (imageLeft / originalImageWidth) * 100,
+          y: (imageTop / originalImageHeight) * 100,
+          width: (imageWidth / originalImageWidth) * 100,
+          height: (imageHeight / originalImageHeight) * 100
         };
         
-        console.log('Region percentages:', region);
+        console.log('✅ Region percentages (should be 0-100):', {
+          x: region.x.toFixed(2),
+          y: region.y.toFixed(2),
+          width: region.width.toFixed(2),
+          height: region.height.toFixed(2)
+        });
         
         // Extract meter data from this region
         try {
