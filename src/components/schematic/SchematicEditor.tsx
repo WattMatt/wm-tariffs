@@ -326,10 +326,12 @@ export default function SchematicEditor({
             hasControls: true,
             hasBorders: true,
             cornerColor: '#f59e0b',
-            cornerSize: 10,
+            cornerSize: 12,
             transparentCorners: false,
             lockRotation: true,
             lockScalingFlip: true,
+            borderColor: '#f59e0b',
+            cornerStyle: 'circle',
           });
           
           // Store region ID on the rect for later updates
@@ -1710,10 +1712,14 @@ export default function SchematicEditor({
           toast.success(`Extracted ${successCount} meters from ${drawnRegions.length} regions`);
           // Clear regions after successful extraction
           handleClearRegions();
+          // Deactivate drawing mode after successful scan
+          setActiveTool("select");
         } else if (successCount > 0 && errorCount > 0) {
           toast.warning(`Extracted ${successCount} meters, ${errorCount} regions failed`);
           // Clear regions after extraction (even with some errors)
           handleClearRegions();
+          // Deactivate drawing mode after scan
+          setActiveTool("select");
         } else {
           toast.error(`Failed to extract meters from all regions`);
         }
