@@ -52,7 +52,14 @@ export default function SchematicEditor({
   const [activeTool, setActiveTool] = useState<"select" | "meter" | "connection" | "move" | "draw">("select");
   const activeToolRef = useRef<"select" | "meter" | "connection" | "move" | "draw">("select");
   const [isDrawingMode, setIsDrawingMode] = useState(false);
-  const [drawnRegions, setDrawnRegions] = useState<any[]>([]);
+  const [drawnRegions, setDrawnRegions] = useState<Array<{
+    id: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    fabricRect: Rect;
+  }>>([]);
   const [meterPositions, setMeterPositions] = useState<MeterPosition[]>([]);
   const drawingRectRef = useRef<any>(null);
   const drawStartPointRef = useRef<{ x: number; y: number } | null>(null);
@@ -167,7 +174,7 @@ export default function SchematicEditor({
               left: pointer.x,
               top: pointer.y,
               radius: 5,
-              fill: '#3b82f6',
+              fill: '#f59e0b',
               stroke: '#ffffff',
               strokeWidth: 2,
               selectable: false,
@@ -185,7 +192,7 @@ export default function SchematicEditor({
             return;
           }
           
-          // Second click - set end point and create region
+          // Second click - set end point and create persistent region
           console.log('Setting end point:', pointer);
           const startPoint = drawStartPointRef.current;
           
@@ -195,24 +202,83 @@ export default function SchematicEditor({
           const width = Math.abs(pointer.x - startPoint.x);
           const height = Math.abs(pointer.y - startPoint.y);
           
+          // Check if region is large enough
+          if (width < 20 || height < 20) {
+            toast.error('Region too small - draw a larger area');
+            // Clean up
+            if (startMarkerRef.current) {
+              canvas.remove(startMarkerRef.current);
+              startMarkerRef.current = null;
+            }
+            drawStartPointRef.current = null;
+            canvas.renderAll();
+            evt.preventDefault();
+            evt.stopPropagation();
+            return;
+          }
+          
+          const canvasWidth = canvas.getWidth();
+          const canvasHeight = canvas.getHeight();
+          
+          // Create persistent rectangle with distinct styling
           const rect = new Rect({
             left,
             top,
             width,
             height,
-            fill: 'rgba(59, 130, 246, 0.2)',
-            stroke: '#3b82f6',
+            fill: 'rgba(245, 158, 11, 0.15)', // Orange with low opacity
+            stroke: '#f59e0b', // Orange border
             strokeWidth: 2,
             selectable: false,
             evented: false,
           });
           
           canvas.add(rect);
-          drawingRectRef.current = rect;
+          
+          // Add region number label
+          const regionNumber = drawnRegions.length + 1;
+          const label = new Text(`${regionNumber}`, {
+            left: left + 8,
+            top: top + 8,
+            fontSize: 16,
+            fill: '#f59e0b',
+            fontWeight: 'bold',
+            selectable: false,
+            evented: false,
+          });
+          
+          canvas.add(label);
           canvas.renderAll();
           
-          // Trigger extraction
-          handleExtractFromRegion(canvas, rect);
+          // Store region in state with percentage coordinates
+          const newRegion = {
+            id: `region-${Date.now()}-${regionNumber}`,
+            x: (left / canvasWidth) * 100,
+            y: (top / canvasHeight) * 100,
+            width: (width / canvasWidth) * 100,
+            height: (height / canvasHeight) * 100,
+            fabricRect: rect,
+            fabricLabel: label
+          };
+          
+          setDrawnRegions(prev => [...prev, newRegion]);
+          toast.success(`Region ${regionNumber} added`);
+          
+          // Clean up drawing markers
+          if (startMarkerRef.current) {
+            canvas.remove(startMarkerRef.current);
+            startMarkerRef.current = null;
+          }
+          // Remove preview rectangles
+          const objects = canvas.getObjects();
+          objects.forEach(obj => {
+            if ((obj as any).isPreview) {
+              canvas.remove(obj);
+            }
+          });
+          
+          drawStartPointRef.current = null;
+          canvas.renderAll();
           
           evt.preventDefault();
           evt.stopPropagation();
@@ -257,8 +323,8 @@ export default function SchematicEditor({
           top,
           width,
           height,
-          fill: 'rgba(59, 130, 246, 0.1)',
-          stroke: '#3b82f6',
+          fill: 'rgba(245, 158, 11, 0.1)',
+          stroke: '#f59e0b',
           strokeWidth: 1,
           strokeDashArray: [5, 5],
           selectable: false,
@@ -1255,27 +1321,125 @@ export default function SchematicEditor({
   const handleScanAll = async () => {
     if (!schematicUrl) return;
     setIsSaving(true);
+    
     try {
-      const { data, error } = await supabase.functions.invoke('extract-schematic-meters', {
-        body: { imageUrl: schematicUrl, mode: 'full-extraction' }
-      });
-      if (error) throw error;
-      if (data?.meters) {
-        const scanned = data.meters.map((m: any) => ({
-          ...m,
-          status: 'pending',
-          position: m.position || { x: 50, y: 50 },
-          scale_x: m.scale_x || 1,
-          scale_y: m.scale_y || 1
-        }));
-        onExtractedMetersUpdate?.([...extractedMeters, ...scanned]);
-        toast.success(`Scanned ${scanned.length} meters`);
+      // Case A: No regions drawn - scan entire PDF
+      if (drawnRegions.length === 0) {
+        const { data, error } = await supabase.functions.invoke('extract-schematic-meters', {
+          body: { imageUrl: schematicUrl, mode: 'full-extraction' }
+        });
+        if (error) throw error;
+        if (data?.meters) {
+          const scanned = data.meters.map((m: any) => ({
+            ...m,
+            status: 'pending',
+            position: m.position || { x: 50, y: 50 },
+            scale_x: m.scale_x || 1,
+            scale_y: m.scale_y || 1
+          }));
+          onExtractedMetersUpdate?.([...extractedMeters, ...scanned]);
+          toast.success(`Scanned ${scanned.length} meters`);
+        }
+      } 
+      // Case B: Regions drawn - scan each region
+      else {
+        let allExtractedMeters: any[] = [];
+        let successCount = 0;
+        let errorCount = 0;
+        
+        for (let i = 0; i < drawnRegions.length; i++) {
+          const region = drawnRegions[i];
+          toast.info(`Scanning region ${i + 1} of ${drawnRegions.length}...`);
+          
+          try {
+            const { data, error } = await supabase.functions.invoke('extract-schematic-meters', {
+              body: { 
+                imageUrl: schematicUrl,
+                filePath: filePath || null,
+                mode: 'extract-region',
+                region: {
+                  x: region.x,
+                  y: region.y,
+                  width: region.width,
+                  height: region.height
+                }
+              }
+            });
+            
+            if (error) {
+              console.error(`Error scanning region ${i + 1}:`, error);
+              errorCount++;
+              continue;
+            }
+            
+            if (data && data.meter) {
+              const newMeter = {
+                ...data.meter,
+                status: 'pending' as const,
+                position: {
+                  x: region.x + (region.width / 2),
+                  y: region.y + (region.height / 2)
+                },
+                extractedRegion: region,
+                scale_x: 1,
+                scale_y: 1
+              };
+              allExtractedMeters.push(newMeter);
+              successCount++;
+            }
+          } catch (err) {
+            console.error(`Failed to scan region ${i + 1}:`, err);
+            errorCount++;
+          }
+        }
+        
+        // Add all extracted meters to state
+        if (allExtractedMeters.length > 0) {
+          const updatedMeters = [...extractedMeters, ...allExtractedMeters];
+          setExtractedMeters(updatedMeters);
+          if (onExtractedMetersUpdate) {
+            onExtractedMetersUpdate(updatedMeters);
+          }
+        }
+        
+        // Show result toast
+        if (successCount > 0 && errorCount === 0) {
+          toast.success(`Extracted ${successCount} meters from ${drawnRegions.length} regions`);
+        } else if (successCount > 0 && errorCount > 0) {
+          toast.warning(`Extracted ${successCount} meters, ${errorCount} regions failed`);
+        } else {
+          toast.error(`Failed to extract meters from all regions`);
+        }
       }
     } catch (e) {
+      console.error('Scan failed:', e);
       toast.error('Scan failed');
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleClearRegions = () => {
+    if (drawnRegions.length === 0) {
+      toast.info('No regions to clear');
+      return;
+    }
+    
+    // Remove all region rectangles and labels from canvas
+    if (fabricCanvas) {
+      drawnRegions.forEach(region => {
+        if (region.fabricRect) {
+          fabricCanvas.remove(region.fabricRect);
+        }
+        if ((region as any).fabricLabel) {
+          fabricCanvas.remove((region as any).fabricLabel);
+        }
+      });
+      fabricCanvas.renderAll();
+    }
+    
+    setDrawnRegions([]);
+    toast.success('All regions cleared');
   };
 
   return (
@@ -1286,7 +1450,7 @@ export default function SchematicEditor({
       <div className="flex gap-2 items-center flex-wrap">
         <Button onClick={handleScanAll} disabled={isSaving} variant="default">
           <Scan className="w-4 h-4 mr-2" />
-          {isSaving ? 'Scanning...' : 'Scan All Meters'}
+          {isSaving ? 'Scanning...' : (drawnRegions.length > 0 ? 'Scan All Regions' : 'Scan All Meters')}
         </Button>
         <Button
           variant={activeTool === "draw" ? "default" : "outline"}
@@ -1298,8 +1462,19 @@ export default function SchematicEditor({
           className="gap-2"
         >
           <Scan className="w-4 h-4" />
-          Scan PDF Region
+          Select Regions {drawnRegions.length > 0 && `(${drawnRegions.length})`}
         </Button>
+        {drawnRegions.length > 0 && (
+          <Button
+            variant="destructive"
+            onClick={handleClearRegions}
+            size="sm"
+            className="gap-2"
+          >
+            <Trash2 className="w-4 h-4" />
+            Clear Regions
+          </Button>
+        )}
         <Button
           variant={activeTool === "meter" ? "default" : "outline"}
           onClick={() => setActiveTool("meter")}
