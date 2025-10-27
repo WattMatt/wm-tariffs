@@ -1663,24 +1663,6 @@ export default function SchematicEditor({
             <div className="w-3 h-3 rounded-full bg-[#3b82f6] mr-2" />
             Other
           </Badge>
-          
-          <div className="flex-1" />
-          
-          {/* PDF Controls */}
-          <div className="flex gap-2 items-center">
-            <Button variant="outline" size="sm" onClick={handleZoomOut}>
-              <ZoomOut className="w-4 h-4" />
-            </Button>
-            <Badge variant="outline" className="px-3">
-              {Math.round(zoom * 100)}%
-            </Badge>
-            <Button variant="outline" size="sm" onClick={handleZoomIn}>
-              <ZoomIn className="w-4 h-4" />
-            </Button>
-            <Button variant="outline" size="sm" onClick={handleResetZoom}>
-              <Maximize2 className="w-4 h-4" />
-            </Button>
-          </div>
         </div>
         
         {/* Bottom row - Extracted Meters Status */}
@@ -1701,6 +1683,24 @@ export default function SchematicEditor({
             </Badge>
           </div>
         )}
+      </div>
+
+      {/* PDF Zoom Controls - Always above PDF viewer on right side */}
+      <div className="flex justify-end mb-2">
+        <div className="flex gap-2 items-center bg-muted/50 px-3 py-2 rounded-md">
+          <Button variant="outline" size="sm" onClick={handleZoomOut}>
+            <ZoomOut className="w-4 h-4" />
+          </Button>
+          <Badge variant="outline" className="px-3">
+            {Math.round(zoom * 100)}%
+          </Badge>
+          <Button variant="outline" size="sm" onClick={handleZoomIn}>
+            <ZoomIn className="w-4 h-4" />
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleResetZoom}>
+            <Maximize2 className="w-4 h-4" />
+          </Button>
+        </div>
       </div>
 
       <div className="border border-border rounded-lg overflow-hidden shadow-lg">
