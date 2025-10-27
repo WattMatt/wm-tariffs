@@ -39,10 +39,17 @@ interface Meter {
   serial_number: string | null;
   ct_type: string | null;
   tariff: string | null;
+  tariff_structure_id: string | null;
   is_revenue_critical: boolean;
   created_at: string;
   has_raw_csv?: boolean;
   has_parsed?: boolean;
+}
+
+interface TariffStructure {
+  id: string;
+  name: string;
+  tariff_type: string;
 }
 
 interface MetersTabProps {
@@ -51,6 +58,7 @@ interface MetersTabProps {
 
 export default function MetersTab({ siteId }: MetersTabProps) {
   const [meters, setMeters] = useState<Meter[]>([]);
+  const [tariffStructures, setTariffStructures] = useState<TariffStructure[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isRevenueCritical, setIsRevenueCritical] = useState(false);
@@ -73,6 +81,7 @@ export default function MetersTab({ siteId }: MetersTabProps) {
 
   useEffect(() => {
     fetchMeters();
+    fetchTariffStructures();
     
     // Set up realtime subscription for live meter and CSV file updates
     const metersChannel = supabase
@@ -114,6 +123,34 @@ export default function MetersTab({ siteId }: MetersTabProps) {
       supabase.removeChannel(csvFilesChannel);
     };
   }, [siteId]);
+
+  const fetchTariffStructures = async () => {
+    // Fetch site to get supply_authority_id
+    const { data: site } = await supabase
+      .from('sites')
+      .select('supply_authority_id')
+      .eq('id', siteId)
+      .single();
+
+    if (!site?.supply_authority_id) {
+      return;
+    }
+
+    // Fetch tariff structures for the supply authority
+    const { data, error } = await supabase
+      .from('tariff_structures')
+      .select('id, name, tariff_type')
+      .eq('supply_authority_id', site.supply_authority_id)
+      .eq('active', true)
+      .order('name');
+
+    if (error) {
+      console.error('Error fetching tariff structures:', error);
+      return;
+    }
+
+    setTariffStructures(data || []);
+  };
 
   const fetchMeters = async () => {
     console.log("Fetching meters for siteId:", siteId);
@@ -164,6 +201,7 @@ export default function MetersTab({ siteId }: MetersTabProps) {
     setIsLoading(true);
 
     const formData = new FormData(e.currentTarget);
+    const tariffStructureId = formData.get("tariff_structure_id") as string;
     const meterData = {
       meter_number: formData.get("meter_number") as string,
       meter_type: formData.get("meter_type") as string,
@@ -175,6 +213,7 @@ export default function MetersTab({ siteId }: MetersTabProps) {
       serial_number: formData.get("serial_number") as string,
       ct_type: formData.get("ct_type") as string,
       tariff: formData.get("tariff") as string,
+      tariff_structure_id: tariffStructureId || null,
       is_revenue_critical: isRevenueCritical,
     };
 
@@ -538,6 +577,26 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                 </div>
 
                 <div className="space-y-2 col-span-2">
+                  <Label htmlFor="tariff_structure_id">Tariff Structure</Label>
+                  <Select name="tariff_structure_id" defaultValue={editingMeter?.tariff_structure_id || undefined}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select tariff structure (optional)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">None</SelectItem>
+                      {tariffStructures.map((tariff) => (
+                        <SelectItem key={tariff.id} value={tariff.id}>
+                          {tariff.name} ({tariff.tariff_type})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Or use Tariff Assignment tab for bulk assignment
+                  </p>
+                </div>
+
+                <div className="space-y-2 col-span-2">
                   <Label htmlFor="tariff">Tariff Notes (Optional)</Label>
                   <Input 
                     id="tariff" 
@@ -545,9 +604,6 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                     placeholder="e.g. Special rate, Legacy tariff, etc."
                     defaultValue={editingMeter?.tariff || ""}
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Formal tariff assignment is done in the Tariff Assignment tab
-                  </p>
                 </div>
               </div>
 

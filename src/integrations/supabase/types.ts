@@ -375,6 +375,7 @@ export type Database = {
           supply_description: string | null
           supply_level: string | null
           tariff: string | null
+          tariff_structure_id: string | null
           updated_at: string | null
         }
         Insert: {
@@ -397,6 +398,7 @@ export type Database = {
           supply_description?: string | null
           supply_level?: string | null
           tariff?: string | null
+          tariff_structure_id?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -419,6 +421,7 @@ export type Database = {
           supply_description?: string | null
           supply_level?: string | null
           tariff?: string | null
+          tariff_structure_id?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -427,6 +430,13 @@ export type Database = {
             columns: ["site_id"]
             isOneToOne: false
             referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meters_tariff_structure_id_fkey"
+            columns: ["tariff_structure_id"]
+            isOneToOne: false
+            referencedRelation: "tariff_structures"
             referencedColumns: ["id"]
           },
         ]
