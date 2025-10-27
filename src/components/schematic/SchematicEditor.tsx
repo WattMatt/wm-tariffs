@@ -83,6 +83,8 @@ async function cropRegionAndUpload(
         try {
           // Upload to Supabase Storage
           const fileName = `${schematicId}_${Date.now()}_${Math.round(x)}_${Math.round(y)}.png`;
+          console.log('📤 Uploading cropped image to storage:', fileName);
+          
           const { data, error } = await supabase.storage
             .from('meter-snippets')
             .upload(fileName, blob, {
@@ -91,6 +93,7 @@ async function cropRegionAndUpload(
             });
           
           if (error) {
+            console.error('❌ Upload error:', error);
             reject(error);
             return;
           }
@@ -100,8 +103,10 @@ async function cropRegionAndUpload(
             .from('meter-snippets')
             .getPublicUrl(fileName);
           
+          console.log('✅ Upload successful, public URL:', publicUrl);
           resolve(publicUrl);
         } catch (err) {
+          console.error('❌ Upload failed:', err);
           reject(err);
         }
       }, 'image/png');
@@ -1672,6 +1677,7 @@ export default function SchematicEditor({
             }
             
             if (data && data.meter) {
+              console.log('📸 Scanned image URL:', croppedImageUrl);
               const newMeter = {
                 ...data.meter,
                 status: 'pending' as const,
@@ -2288,12 +2294,17 @@ export default function SchematicEditor({
             <div className="grid grid-cols-2 gap-6">
               <div className="space-y-2">
                 <Label className="text-base font-semibold">Scanned Area from PDF</Label>
-                <div className="border-2 border-primary rounded-lg overflow-hidden bg-white">
+                <div className="border-2 border-primary rounded-lg overflow-hidden bg-white min-h-[300px] flex items-center justify-center">
                   {extractedMeters[selectedMeterIndex].scannedImageSnippet ? (
                     <img 
                       src={extractedMeters[selectedMeterIndex].scannedImageSnippet} 
                       alt="Scanned meter region" 
-                      className="w-full h-auto"
+                      className="w-full h-auto max-h-[600px] object-contain"
+                      onLoad={() => console.log('✅ Image loaded:', extractedMeters[selectedMeterIndex].scannedImageSnippet)}
+                      onError={(e) => {
+                        console.error('❌ Image failed to load:', extractedMeters[selectedMeterIndex].scannedImageSnippet);
+                        toast.error('Failed to load scanned image snippet');
+                      }}
                     />
                   ) : extractedMeters[selectedMeterIndex].extractedRegion ? (
                     <div 
@@ -2314,7 +2325,7 @@ export default function SchematicEditor({
                     </div>
                   )}
                 </div>
-                <p className="text-xs text-muted-foreground text-center">
+                <p className="text-xs text-muted-foreground text-center italic">
                   This is the exact area you drew on the PDF - verify all fields match this region
                 </p>
               </div>
