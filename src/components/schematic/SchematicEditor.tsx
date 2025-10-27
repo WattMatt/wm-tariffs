@@ -2017,8 +2017,11 @@ export default function SchematicEditor({
                       style={{
                         height: '600px',
                         backgroundImage: `url(${schematicUrl})`,
-                        backgroundSize: `${100 / (extractedMeters[selectedMeterIndex].extractedRegion.width / 100)}% auto`,
-                        backgroundPosition: `-${extractedMeters[selectedMeterIndex].extractedRegion.x / (extractedMeters[selectedMeterIndex].extractedRegion.width / 100)}% -${extractedMeters[selectedMeterIndex].extractedRegion.y / (extractedMeters[selectedMeterIndex].extractedRegion.height / 100)}%`,
+                        // Scale image so region fills container: if region is 5% wide, scale to 100/5 = 2000%
+                        backgroundSize: `${(100 / extractedMeters[selectedMeterIndex].extractedRegion.width) * 100}% auto`,
+                        // Position so region's top-left is at container's top-left
+                        // If region starts at x=20%, we need to shift left by 20% of the scaled image
+                        backgroundPosition: `${-extractedMeters[selectedMeterIndex].extractedRegion.x * (100 / extractedMeters[selectedMeterIndex].extractedRegion.width)}% ${-extractedMeters[selectedMeterIndex].extractedRegion.y * (100 / extractedMeters[selectedMeterIndex].extractedRegion.width)}%`,
                         backgroundRepeat: 'no-repeat',
                       }}
                     >
