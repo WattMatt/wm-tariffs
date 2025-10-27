@@ -300,6 +300,24 @@ export default function SchematicEditor({
           
           if (!drawStartPointRef.current) {
             drawStartPointRef.current = { x: pointer.x, y: pointer.y };
+            
+            // Show a marker at start point
+            const marker = new Circle({
+              left: pointer.x,
+              top: pointer.y,
+              radius: 5,
+              fill: 'hsl(210, 100%, 45%)', // Primary blue
+              stroke: '#ffffff',
+              strokeWidth: 2,
+              selectable: false,
+              evented: false,
+              originX: 'center',
+              originY: 'center',
+            });
+            
+            canvas.add(marker);
+            startMarkerRef.current = marker;
+            canvas.renderAll();
             toast.info('Click again to set the end point');
             evt.preventDefault();
             evt.stopPropagation();
