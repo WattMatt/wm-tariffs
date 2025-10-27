@@ -17,6 +17,7 @@ import Schematics from "./pages/Schematics";
 import SchematicViewer from "./pages/SchematicViewer";
 import Tariffs from "./pages/Tariffs";
 import LoadProfile from "./pages/LoadProfile";
+import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -42,6 +43,7 @@ const App = () => (
           <Route path="/schematics/:id" element={<SchematicViewer />} />
           <Route path="/tariffs" element={<Tariffs />} />
           <Route path="/load-profile" element={<LoadProfile />} />
+          <Route path="/settings" element={<Settings />} />
           <Route path="/users" element={<Users />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />

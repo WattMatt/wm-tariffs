@@ -571,6 +571,30 @@ export type Database = {
           },
         ]
       }
+      settings: {
+        Row: {
+          app_name: string
+          created_at: string
+          id: string
+          logo_url: string | null
+          updated_at: string
+        }
+        Insert: {
+          app_name?: string
+          created_at?: string
+          id?: string
+          logo_url?: string | null
+          updated_at?: string
+        }
+        Update: {
+          app_name?: string
+          created_at?: string
+          id?: string
+          logo_url?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       site_documents: {
         Row: {
           converted_image_path: string | null
