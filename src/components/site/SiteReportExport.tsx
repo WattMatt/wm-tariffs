@@ -554,6 +554,8 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
       const margin = 20;
       let yPos = margin;
       let pageNumber = 1;
+      const sectionPages: { title: string; page: number }[] = [];
+      const indexTerms: { term: string; page: number }[] = [];
 
       // Helper function to add page number
       const addPageNumber = () => {
@@ -674,6 +676,14 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
           pdf.addPage();
           yPos = margin;
         }
+        
+        // Track section page for TOC
+        sectionPages.push({ title: text, page: pageNumber });
+        
+        // Add to index
+        const cleanTitle = text.replace(/^\d+\.\s*/, ''); // Remove numbering
+        indexTerms.push({ term: cleanTitle, page: pageNumber });
+        
         pdf.setFillColor(50, 50, 50);
         pdf.rect(margin - 2, yPos - 5, pageWidth - 2 * margin + 4, fontSize + 2, "F");
         
@@ -692,6 +702,10 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
           pdf.addPage();
           yPos = margin;
         }
+        
+        // Add subsection to index
+        indexTerms.push({ term: text, page: pageNumber });
+        
         pdf.setFontSize(11);
         pdf.setFont("helvetica", "bold");
         pdf.setTextColor(50, 50, 50);
@@ -744,46 +758,11 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
       pdf.setTextColor(100, 100, 100);
       pdf.text("Confidential - For Internal Use Only", pageWidth / 2, pageHeight - 15, { align: "center" });
 
-      // TABLE OF CONTENTS PAGE
+      // TABLE OF CONTENTS PAGE - Placeholder
+      // We'll come back and fill this in after we know all page numbers
+      const tocPageIndex = pdf.internal.pages.length;
       pdf.addPage();
-      yPos = margin;
-      
-      pdf.setTextColor(0, 0, 0);
-      pdf.setFontSize(20);
-      pdf.setFont("helvetica", "bold");
-      pdf.text("TABLE OF CONTENTS", margin, yPos);
-      yPos += 15;
-      
-      pdf.setDrawColor(41, 128, 185);
-      pdf.setLineWidth(0.5);
-      pdf.line(margin, yPos, pageWidth - margin, yPos);
-      yPos += 10;
-      
-      const tocItems = [
-        { title: "1. Executive Summary", page: 3 },
-        { title: "2. Metering Hierarchy Overview", page: 3 },
-        { title: "3. Data Sources and Audit Period", page: 4 },
-        { title: "4. Metering Reconciliation", page: 4 },
-        { title: "5. Observations and Anomalies", page: 5 },
-        { title: "6. Recommendations", page: 6 },
-        { title: "7. Detailed Meter Breakdown", page: 7 },
-        { title: "Appendix A: Meter Hierarchy", page: 8 }
-      ];
-      
-      pdf.setFontSize(11);
-      tocItems.forEach(item => {
-        pdf.setFont("helvetica", "normal");
-        pdf.text(item.title, margin + 5, yPos);
-        pdf.text(`${item.page}`, pageWidth - margin - 10, yPos, { align: "right" });
-        
-        // Dotted line
-        pdf.setFontSize(8);
-        const dots = ".".repeat(60);
-        pdf.text(dots, margin + 5 + pdf.getTextWidth(item.title) + 3, yPos);
-        
-        yPos += 10;
-        pdf.setFontSize(11);
-      });
+      const tocYStart = margin;
 
       // Start main content
       pdf.addPage();
@@ -1076,6 +1055,103 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
         addSpacer(5);
       }
 
+      // Add Document Index at the end
+      pdf.addPage();
+      yPos = margin;
+      
+      addSectionHeading("DOCUMENT INDEX", 16);
+      addText("This index provides quick reference to key topics, meters, and sections within this audit report.");
+      addSpacer(5);
+      
+      // Group index terms alphabetically
+      const uniqueTerms = Array.from(new Set(indexTerms.map(t => t.term)));
+      const sortedTerms = uniqueTerms.sort((a, b) => a.localeCompare(b));
+      
+      // Add meter numbers to index
+      meterData.forEach(meter => {
+        indexTerms.push({ 
+          term: `Meter ${meter.meter_number}`, 
+          page: sectionPages.find(s => s.title.includes("RECONCILIATION"))?.page || 4 
+        });
+      });
+      
+      // Add anomaly types to index
+      const anomalyTypes = [...new Set(anomalies.map(a => a.type))];
+      anomalyTypes.forEach(type => {
+        const displayType = type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        indexTerms.push({ 
+          term: displayType, 
+          page: sectionPages.find(s => s.title.includes("ANOMALIES"))?.page || 5 
+        });
+      });
+      
+      // Sort all index terms
+      const allIndexTerms = indexTerms.sort((a, b) => a.term.localeCompare(b.term));
+      
+      // Create index table
+      const indexRows: string[][] = [];
+      let currentLetter = '';
+      
+      allIndexTerms.forEach(item => {
+        const firstLetter = item.term.charAt(0).toUpperCase();
+        if (firstLetter !== currentLetter) {
+          currentLetter = firstLetter;
+          // Add letter divider
+          indexRows.push([`--- ${currentLetter} ---`, '']);
+        }
+        indexRows.push([item.term, item.page.toString()]);
+      });
+      
+      addTable(["Topic", "Page"], indexRows, [140, 30]);
+      
+      // Now go back and fill in the TOC with actual page numbers
+      pdf.setPage(tocPageIndex);
+      yPos = tocYStart;
+      
+      pdf.setTextColor(0, 0, 0);
+      pdf.setFontSize(20);
+      pdf.setFont("helvetica", "bold");
+      pdf.text("TABLE OF CONTENTS", margin, yPos);
+      yPos += 15;
+      
+      pdf.setDrawColor(41, 128, 185);
+      pdf.setLineWidth(0.5);
+      pdf.line(margin, yPos, pageWidth - margin, yPos);
+      yPos += 10;
+      
+      pdf.setFontSize(11);
+      sectionPages.forEach((section, idx) => {
+        if (yPos > pageHeight - margin - 15) {
+          pdf.addPage();
+          yPos = margin + 20;
+        }
+        
+        pdf.setFont("helvetica", idx === 0 || section.title.match(/^\d+\./) ? "bold" : "normal");
+        const indent = section.title.match(/^\d+\.\d+/) ? 10 : 0;
+        
+        pdf.text(section.title, margin + 5 + indent, yPos);
+        pdf.text(`${section.page}`, pageWidth - margin - 10, yPos, { align: "right" });
+        
+        // Dotted line
+        const titleWidth = pdf.getTextWidth(section.title);
+        const pageNumWidth = pdf.getTextWidth(`${section.page}`);
+        const dotSpace = pageWidth - 2 * margin - titleWidth - pageNumWidth - 20 - indent;
+        const numDots = Math.floor(dotSpace / 2);
+        
+        pdf.setFontSize(8);
+        const dots = ".".repeat(Math.max(0, numDots));
+        pdf.text(dots, margin + 5 + indent + titleWidth + 3, yPos);
+        
+        yPos += 8;
+        pdf.setFontSize(11);
+      });
+      
+      // Add index reference to TOC
+      yPos += 5;
+      pdf.setFont("helvetica", "bold");
+      pdf.text("Document Index", margin + 5, yPos);
+      pdf.text(`${pageNumber}`, pageWidth - margin - 10, yPos, { align: "right" });
+      
       // Save PDF
       const fileName = `${siteName.replace(/\s+/g, "_")}_Audit_Report_${format(new Date(), "yyyyMMdd")}.pdf`;
       pdf.save(fileName);
