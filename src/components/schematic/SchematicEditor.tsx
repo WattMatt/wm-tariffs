@@ -1420,8 +1420,12 @@ export default function SchematicEditor({
         // Show result toast
         if (successCount > 0 && errorCount === 0) {
           toast.success(`Extracted ${successCount} meters from ${drawnRegions.length} regions`);
+          // Clear regions after successful extraction
+          handleClearRegions();
         } else if (successCount > 0 && errorCount > 0) {
           toast.warning(`Extracted ${successCount} meters, ${errorCount} regions failed`);
+          // Clear regions after extraction (even with some errors)
+          handleClearRegions();
         } else {
           toast.error(`Failed to extract meters from all regions`);
         }
