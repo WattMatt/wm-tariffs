@@ -835,10 +835,14 @@ export default function SchematicEditor({
   useEffect(() => {
     if (!fabricCanvas) return;
     
-    // Clear existing objects (except background)
+    // Clear existing objects (except the background schematic image)
     const objects = fabricCanvas.getObjects();
     objects.forEach(obj => {
-      if (obj.type !== 'image') {
+      // Keep only the background image (first image added), remove everything else
+      const isBackgroundImage = obj.type === 'image' && 
+        obj === fabricCanvas.getObjects().find(o => o.type === 'image');
+      
+      if (!isBackgroundImage) {
         fabricCanvas.remove(obj);
       }
     });
