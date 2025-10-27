@@ -15,7 +15,8 @@ import {
   FileText,
   ChevronLeft,
   ChevronRight,
-  LineChart
+  LineChart,
+  Settings
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -84,6 +85,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     { icon: LineChart, label: "Load Profile", path: "/load-profile" },
     { icon: FileText, label: "Tariffs", path: "/tariffs" },
     { icon: Users, label: "Users", path: "/users" },
+    { icon: Settings, label: "Settings", path: "/settings" },
   ];
 
   return (
