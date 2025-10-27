@@ -899,7 +899,15 @@ export default function SchematicEditor({
 
       background.on('mousedblclick', () => {
         const objectData = background.get('data') as any;
-        setSelectedMeterIndex(objectData.index);
+        const meterIndex = objectData.index;
+        const meter = extractedMeters[meterIndex];
+        console.log('🔍 Opening dialog for meter:', {
+          index: meterIndex,
+          hasScannedSnippet: !!meter?.scannedImageSnippet,
+          snippetUrl: meter?.scannedImageSnippet,
+          fullMeter: meter
+        });
+        setSelectedMeterIndex(meterIndex);
         setIsConfirmMeterDialogOpen(true);
       });
 
@@ -2294,37 +2302,50 @@ export default function SchematicEditor({
             <div className="grid grid-cols-2 gap-6">
               <div className="space-y-2">
                 <Label className="text-base font-semibold">Scanned Area from PDF</Label>
-                <div className="border-2 border-primary rounded-lg overflow-hidden bg-white min-h-[300px] flex items-center justify-center">
-                  {extractedMeters[selectedMeterIndex].scannedImageSnippet ? (
-                    <img 
-                      src={extractedMeters[selectedMeterIndex].scannedImageSnippet} 
-                      alt="Scanned meter region" 
-                      className="w-full h-auto max-h-[600px] object-contain"
-                      onLoad={() => console.log('✅ Image loaded:', extractedMeters[selectedMeterIndex].scannedImageSnippet)}
-                      onError={(e) => {
-                        console.error('❌ Image failed to load:', extractedMeters[selectedMeterIndex].scannedImageSnippet);
-                        toast.error('Failed to load scanned image snippet');
-                      }}
-                    />
-                  ) : extractedMeters[selectedMeterIndex].extractedRegion ? (
-                    <div 
-                      className="relative w-full" 
-                      style={{
-                        height: '600px',
-                        backgroundImage: `url(${schematicUrl})`,
-                        backgroundSize: `${(100 / extractedMeters[selectedMeterIndex].extractedRegion.width) * 100}% auto`,
-                        backgroundPosition: `${-extractedMeters[selectedMeterIndex].extractedRegion.x * (100 / extractedMeters[selectedMeterIndex].extractedRegion.width)}% ${-extractedMeters[selectedMeterIndex].extractedRegion.y * (100 / extractedMeters[selectedMeterIndex].extractedRegion.width)}%`,
-                        backgroundRepeat: 'no-repeat',
-                      }}
-                    >
-                      <div className="absolute inset-2 border-2 border-green-500 pointer-events-none"></div>
+                {(() => {
+                  const meter = extractedMeters[selectedMeterIndex];
+                  console.log('🖼️ Rendering snippet section:', {
+                    hasSnippet: !!meter.scannedImageSnippet,
+                    snippetUrl: meter.scannedImageSnippet,
+                    hasRegion: !!meter.extractedRegion
+                  });
+                  return (
+                    <div className="border-2 border-primary rounded-lg overflow-hidden bg-white min-h-[300px] flex items-center justify-center">
+                      {meter.scannedImageSnippet ? (
+                        <img 
+                          src={meter.scannedImageSnippet} 
+                          alt="Scanned meter region" 
+                          className="w-full h-auto max-h-[600px] object-contain"
+                          onLoad={() => console.log('✅ Image loaded:', meter.scannedImageSnippet)}
+                          onError={(e) => {
+                            console.error('❌ Image failed to load:', meter.scannedImageSnippet);
+                            toast.error('Failed to load scanned image snippet');
+                          }}
+                        />
+                      ) : meter.extractedRegion ? (
+                        <div 
+                          className="relative w-full" 
+                          style={{
+                            height: '600px',
+                            backgroundImage: `url(${schematicUrl})`,
+                            backgroundSize: `${(100 / meter.extractedRegion.width) * 100}% auto`,
+                            backgroundPosition: `${-meter.extractedRegion.x * (100 / meter.extractedRegion.width)}% ${-meter.extractedRegion.y * (100 / meter.extractedRegion.width)}%`,
+                            backgroundRepeat: 'no-repeat',
+                          }}
+                        >
+                          <div className="absolute inset-2 border-2 border-green-500 pointer-events-none"></div>
+                        </div>
+                      ) : (
+                        <div className="relative w-full h-[600px] flex items-center justify-center text-muted-foreground">
+                          <div className="text-center">
+                            <p className="font-semibold">No region data available</p>
+                            <p className="text-xs mt-2">Debug: Check console for details</p>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  ) : (
-                    <div className="relative w-full h-[600px] flex items-center justify-center text-muted-foreground">
-                      No region data available
-                    </div>
-                  )}
-                </div>
+                  );
+                })()}
                 <p className="text-xs text-muted-foreground text-center italic">
                   This is the exact area you drew on the PDF - verify all fields match this region
                 </p>
