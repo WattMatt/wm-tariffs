@@ -118,7 +118,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
                   variant="ghost"
                   className={cn(
                     "w-full text-secondary-foreground/70 hover:text-secondary-foreground hover:bg-secondary-foreground/10",
-                    collapsed ? "justify-center px-0" : "justify-start",
+                    collapsed ? "justify-center px-0 h-12" : "justify-start",
                     isActive && "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground"
                   )}
                 >
@@ -141,7 +141,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
             variant="ghost"
             className={cn(
               "w-full text-secondary-foreground/70 hover:text-destructive",
-              collapsed ? "justify-center px-0" : "justify-start"
+              collapsed ? "justify-center px-0 h-12" : "justify-start"
             )}
             onClick={handleSignOut}
           >
