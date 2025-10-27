@@ -156,18 +156,14 @@ export default function SchematicEditor({
       const target = opt.target;
       const currentTool = activeToolRef.current;
       
-      console.log('🖱️ Mouse down:', { button: evt.button, tool: currentTool, hasTarget: !!target });
-      
-      // PRIORITY: Middle mouse button ALWAYS triggers panning in any mode
       if (evt.button === 1) {
-        console.log('🖱️ Middle button detected - starting pan');
         isPanningLocal = true;
         lastX = evt.clientX;
         lastY = evt.clientY;
         canvas.selection = false;
         evt.preventDefault();
         evt.stopPropagation();
-        return; // Exit early - nothing else should happen
+        return;
       }
       
       // DRAWING TOOL: Left-click for drawing regions (double-click approach)
@@ -189,9 +185,7 @@ export default function SchematicEditor({
         if (!isInteractiveObject) {
           const pointer = canvas.getPointer(opt.e);
           
-          // First click - set start point
           if (!drawStartPointRef.current) {
-            console.log('Setting start point:', pointer);
             drawStartPointRef.current = { x: pointer.x, y: pointer.y };
             
             // Show a marker at start point
@@ -218,10 +212,8 @@ export default function SchematicEditor({
           }
           
           // Second click - set end point and create persistent region
-          console.log('Setting end point:', pointer);
           const startPoint = drawStartPointRef.current;
           
-          // Create rectangle for the region
           const left = Math.min(startPoint.x, pointer.x);
           const top = Math.min(startPoint.y, pointer.y);
           const width = Math.abs(pointer.x - startPoint.x);
@@ -327,19 +319,6 @@ export default function SchematicEditor({
             fabricLabel: label
           };
           
-          console.log('🎯 Region coordinates:', {
-            viewport: { left, top, width, height },
-            canvas: { x: canvasX, y: canvasY, width: canvasRegionWidth, height: canvasRegionHeight },
-            original: {
-              x: Math.round(newRegion.x),
-              y: Math.round(newRegion.y),
-              width: Math.round(newRegion.width),
-              height: Math.round(newRegion.height)
-            },
-            imageSize: { w: originalImageWidth, h: originalImageHeight },
-            vpt: vpt
-          });
-          
           setDrawnRegions(prev => [...prev, newRegion]);
           toast.success(`Region ${regionNumber} added`);
           
@@ -379,15 +358,9 @@ export default function SchematicEditor({
     canvas.on('mouse:move', (opt) => {
       const currentTool = activeToolRef.current;
       
-      // PANNING: Handle panning first, before any other logic
       if (isPanningLocal) {
         const evt = opt.e as MouseEvent;
         const vpt = canvas.viewportTransform;
-        console.log('🖱️ Panning:', { 
-          deltaX: evt.clientX - lastX, 
-          deltaY: evt.clientY - lastY,
-          vpt: vpt 
-        });
         if (vpt) {
           vpt[4] += evt.clientX - lastX;
           vpt[5] += evt.clientY - lastY;
@@ -395,7 +368,7 @@ export default function SchematicEditor({
           lastX = evt.clientX;
           lastY = evt.clientY;
         }
-        return; // Don't process other mouse movements while panning
+        return;
       }
       
       // DRAWING MODE: Show preview rectangle from start point to current mouse position
@@ -437,9 +410,7 @@ export default function SchematicEditor({
     });
 
     canvas.on('mouse:up', async () => {
-      // Clean up panning state
       if (isPanningLocal) {
-        console.log('🖱️ Panning ended');
         isPanningLocal = false;
         canvas.selection = true;
       }
@@ -491,12 +462,11 @@ export default function SchematicEditor({
             };
           }
           return region;
-        }));
-        
-        canvas.renderAll();
-        console.log('📐 Region resized:', { regionId, left, top, width, height });
-      }
-    });
+          }));
+          
+          canvas.renderAll();
+        }
+      });
     
     // Update label position when rectangle is moving
     canvas.on('object:moving', (e) => {
@@ -526,20 +496,11 @@ export default function SchematicEditor({
       const width = rect.width || 0;
       const height = rect.height || 0;
       
-      console.log('Canvas coordinates:', { left, top, width, height });
-      
-      // Only extract if region is large enough (at least 20x20 pixels)
       if (width > 20 && height > 20) {
         // Get original image dimensions and scale from canvas
         const originalImageWidth = (canvas as any).originalImageWidth || canvasWidth;
         const originalImageHeight = (canvas as any).originalImageHeight || canvasHeight;
         const displayScale = (canvas as any).displayScale || 1;
-        
-        console.log('🖼️ Image info:', {
-          originalSize: { w: originalImageWidth, h: originalImageHeight },
-          canvasSize: { w: canvasWidth, h: canvasHeight },
-          displayScale
-        });
         
         // Convert from canvas display coordinates to original image pixel coordinates
         const imageLeft = left / displayScale;
@@ -547,15 +508,6 @@ export default function SchematicEditor({
         const imageWidth = width / displayScale;
         const imageHeight = height / displayScale;
         
-        console.log('📐 Original image coordinates (absolute pixels):', {
-          x: Math.round(imageLeft),
-          y: Math.round(imageTop),
-          width: Math.round(imageWidth),
-          height: Math.round(imageHeight),
-          imageSize: { w: originalImageWidth, h: originalImageHeight }
-        });
-        
-        // Extract meter data from this region using ABSOLUTE PIXEL coordinates
         try {
           toast.info('Extracting meter data from selected region...');
           
@@ -579,8 +531,6 @@ export default function SchematicEditor({
             console.error('Edge function error:', error);
             throw error;
           }
-          
-          console.log('Extraction response:', data);
           
           if (data && data.meter) {
             // Store position as percentages for consistent rendering
@@ -650,22 +600,13 @@ export default function SchematicEditor({
       e.preventDefault();
     });
 
-    // Middle button panning using DOM events (bypassing Fabric.js event system)
+    // Middle button panning using DOM events
     let isPanning = false;
     let lastPanX = 0;
     let lastPanY = 0;
     
-    // Log ALL mousedown events to debug
     canvas.getElement().addEventListener('mousedown', (e) => {
-      console.log('🖱️ ANY mousedown detected:', { 
-        button: e.button, 
-        buttons: e.buttons,
-        which: e.which,
-        type: e.type 
-      });
-      
-      if (e.button === 1) { // Middle mouse button
-        console.log('🖱️ Middle button DOM mousedown detected - STARTING PAN');
+      if (e.button === 1) {
         e.preventDefault();
         e.stopPropagation();
         isPanning = true;
@@ -674,11 +615,10 @@ export default function SchematicEditor({
         canvas.selection = false;
         return false;
       }
-    }, true); // Use capture phase
+    }, true);
     
     canvas.getElement().addEventListener('mousemove', (e) => {
       if (isPanning) {
-        console.log('🖱️ Panning via DOM events');
         e.preventDefault();
         e.stopPropagation();
         const vpt = canvas.viewportTransform;
@@ -694,9 +634,7 @@ export default function SchematicEditor({
     }, true);
     
     canvas.getElement().addEventListener('mouseup', (e) => {
-      console.log('🖱️ mouseup:', { button: e.button, isPanning });
       if (e.button === 1 && isPanning) {
-        console.log('🖱️ Middle button panning ended');
         e.preventDefault();
         e.stopPropagation();
         isPanning = false;
@@ -705,9 +643,7 @@ export default function SchematicEditor({
       }
     }, true);
     
-    // Also prevent auxclick to stop browser navigation
     canvas.getElement().addEventListener('auxclick', (e) => {
-      console.log('🖱️ auxclick:', { button: e.button });
       if (e.button === 1) {
         e.preventDefault();
         e.stopPropagation();
@@ -730,13 +666,6 @@ export default function SchematicEditor({
       const scale = Math.min(maxWidth / imgWidth, maxHeight / imgHeight);
       const canvasWidth = imgWidth * scale;
       const canvasHeight = imgHeight * scale;
-      
-      console.log('📐 Image loaded and canvas resized:', {
-        imageSize: { w: imgWidth, h: imgHeight },
-        canvasSize: { w: Math.round(canvasWidth), h: Math.round(canvasHeight) },
-        scale: scale.toFixed(3),
-        aspectRatio: (canvasWidth / canvasHeight).toFixed(2)
-      });
       
       // Store original image dimensions for region coordinate conversion
       (canvas as any).originalImageWidth = imgWidth;
@@ -793,7 +722,6 @@ export default function SchematicEditor({
     // Render extracted meters (from AI extraction)
     extractedMeters.forEach((meter, meterIndex) => {
       if (!meter.position) {
-        console.log(`⚠️ Meter ${meterIndex} has no position, skipping`);
         return;
       }
       
@@ -809,16 +737,8 @@ export default function SchematicEditor({
       
       const scaleX = meter.scale_x || 1.0;
       const scaleY = meter.scale_y || 1.0;
-
-      console.log(`🎨 Rendering meter ${capturedIndex} "${meter.meter_number}":`, {
-        percentPos: meter.position,
-        pixelPos: { x: Math.round(x), y: Math.round(y) },
-        scale: { x: scaleX.toFixed(2), y: scaleY.toFixed(2) },
-        canvas: { w: canvasWidth, h: canvasHeight }
-      });
       
-      // Color based on status and data quality
-      let borderColor = '#dc2626'; // RED for pending/unconfirmed
+      let borderColor = '#dc2626';
       let fillColor = '#ffffff';
       
       // Check for fields that need verification
@@ -898,13 +818,7 @@ export default function SchematicEditor({
       });
 
       background.on('mousedblclick', () => {
-        // Double-click to open dialog (works in any mode)
         const objectData = background.get('data') as any;
-        console.log(`🎯 Double-clicked meter:`, {
-          index: objectData.index,
-          meterNumber: objectData.meterNumber,
-          capturedIndex
-        });
         setSelectedMeterIndex(objectData.index);
         setIsConfirmMeterDialogOpen(true);
       });
@@ -1690,18 +1604,9 @@ export default function SchematicEditor({
           const imageWidth = region.imageWidth || (fabricCanvas as any)?.originalImageWidth || 2000;
           const imageHeight = region.imageHeight || (fabricCanvas as any)?.originalImageHeight || 2000;
           
-          console.log(`🔍 Scanning region ${i + 1}:`, {
-            pixels: {
-              x: Math.round(region.x),
-              y: Math.round(region.y),
-              width: Math.round(region.width),
-              height: Math.round(region.height)
-            },
-            imageSize: { w: imageWidth, h: imageHeight }
-          });
           toast.info(`Scanning region ${i + 1} of ${drawnRegions.length}...`);
           
-            try {
+          try {
               const { data, error } = await supabase.functions.invoke('extract-schematic-meters', {
                 body: { 
                   imageUrl: schematicUrl,
