@@ -346,19 +346,31 @@ export default function SchematicEditor({
         canvas.zoomToPoint(pointer, zoom);
         setZoom(zoom);
       } else {
-        // Use absolutePan like zoom uses zoomToPoint - built-in method handles everything
+        // Deselect active object before panning to prevent control drift
+        const activeObj = canvas.getActiveObject();
+        if (activeObj) {
+          canvas.discardActiveObject();
+        }
+        
+        // Pan the viewport
         const vpt = canvas.viewportTransform;
         if (vpt) {
-          const currentPoint = new Point(-vpt[4], -vpt[5]);
           if (e.shiftKey) {
             // SHIFT+Scroll: Pan horizontally
-            currentPoint.x += e.deltaY;
+            vpt[4] -= e.deltaY;
           } else {
             // Regular Scroll: Pan vertically
-            currentPoint.y += e.deltaY;
+            vpt[5] -= e.deltaY;
           }
-          canvas.absolutePan(currentPoint);
+          canvas.setViewportTransform(vpt);
         }
+        
+        // Reselect the object after panning to force control update
+        if (activeObj) {
+          canvas.setActiveObject(activeObj);
+        }
+        
+        canvas.requestRenderAll();
       }
     });
 
@@ -580,14 +592,26 @@ export default function SchematicEditor({
         const deltaX = evt.clientX - lastX;
         const deltaY = evt.clientY - lastY;
         
-        // Use absolutePan like zoom uses zoomToPoint - built-in method handles everything
+        // Deselect active object before panning to prevent control drift
+        const activeObj = canvas.getActiveObject();
+        if (activeObj) {
+          canvas.discardActiveObject();
+        }
+        
+        // Pan the viewport
         const vpt = canvas.viewportTransform;
         if (vpt) {
-          const currentPoint = new Point(-vpt[4], -vpt[5]);
-          currentPoint.x -= deltaX;
-          currentPoint.y -= deltaY;
-          canvas.absolutePan(currentPoint);
+          vpt[4] += deltaX;
+          vpt[5] += deltaY;
+          canvas.setViewportTransform(vpt);
         }
+        
+        // Reselect the object after panning to force control update
+        if (activeObj) {
+          canvas.setActiveObject(activeObj);
+        }
+        
+        canvas.requestRenderAll();
         
         lastX = evt.clientX;
         lastY = evt.clientY;
