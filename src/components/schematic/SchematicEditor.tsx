@@ -645,29 +645,61 @@ export default function SchematicEditor({
       canvas.renderAll();
     };
 
-    // Set default cursor based on active tool (will be updated when tool changes)
-    canvas.defaultCursor = 'grab';
-    canvas.hoverCursor = 'grab';
-
     // Prevent context menu on right click
     canvas.getElement().addEventListener('contextmenu', (e) => {
       e.preventDefault();
     });
 
-    // Prevent default middle-click behavior (auto-scroll, etc.) to allow panning
-    canvas.getElement().addEventListener('auxclick', (e) => {
+    // Middle button panning using DOM events (bypassing Fabric.js event system)
+    let isPanning = false;
+    let lastPanX = 0;
+    let lastPanY = 0;
+    
+    canvas.getElement().addEventListener('mousedown', (e) => {
       if (e.button === 1) { // Middle mouse button
+        console.log('🖱️ Middle button DOM mousedown detected');
+        e.preventDefault();
+        e.stopPropagation();
+        isPanning = true;
+        lastPanX = e.clientX;
+        lastPanY = e.clientY;
+        canvas.selection = false;
+      }
+    }, true); // Use capture phase
+    
+    canvas.getElement().addEventListener('mousemove', (e) => {
+      if (isPanning) {
+        console.log('🖱️ Panning via DOM events');
+        e.preventDefault();
+        e.stopPropagation();
+        const vpt = canvas.viewportTransform;
+        if (vpt) {
+          vpt[4] += e.clientX - lastPanX;
+          vpt[5] += e.clientY - lastPanY;
+          canvas.requestRenderAll();
+          lastPanX = e.clientX;
+          lastPanY = e.clientY;
+        }
+      }
+    }, true);
+    
+    canvas.getElement().addEventListener('mouseup', (e) => {
+      if (e.button === 1 && isPanning) {
+        console.log('🖱️ Middle button panning ended');
+        e.preventDefault();
+        e.stopPropagation();
+        isPanning = false;
+        canvas.selection = true;
+      }
+    }, true);
+    
+    // Also prevent auxclick to stop browser navigation
+    canvas.getElement().addEventListener('auxclick', (e) => {
+      if (e.button === 1) {
         e.preventDefault();
         e.stopPropagation();
       }
-    });
-    
-    // Also prevent mousedown default for middle button
-    canvas.getElement().addEventListener('mousedown', (e) => {
-      if (e.button === 1) { // Middle mouse button
-        e.preventDefault();
-      }
-    });
+    }, true);
 
     setFabricCanvas(canvas);
 
