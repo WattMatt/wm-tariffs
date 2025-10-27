@@ -725,7 +725,7 @@ export default function SchematicEditor({
 
       // Create table-like card
       const cardWidth = 200;
-      const cardHeight = 140;
+      const cardHeight = zone ? 160 : 140; // Increase height if zone is present
       const rowHeight = 20;
       
       // Background rectangle with scaling enabled
@@ -769,6 +769,12 @@ export default function SchematicEditor({
         { label: 'SERIAL:', value: meter?.serial_number || 'N/A' },
         { label: 'CT:', value: meter?.ct_type || 'N/A' }
       ];
+
+      // Add zone field if present
+      if (zone) {
+        const zoneName = zone === 'main_board' ? 'MAIN BOARD' : zone === 'mini_sub' ? 'MINI SUB' : zone;
+        fields.splice(2, 0, { label: 'ZONE:', value: zoneName });
+      }
 
       const textElements: Text[] = [];
       const savedScaleX = (pos as any).scale_x ? Number((pos as any).scale_x) : 1.0;
