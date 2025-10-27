@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Canvas as FabricCanvas, Circle, Line, Text, FabricImage, Rect } from "fabric";
+import { Canvas as FabricCanvas, Circle, Line, Text, FabricImage, Rect, util } from "fabric";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -329,7 +329,21 @@ export default function SchematicEditor({
           const originalImageHeight = (canvas as any).originalImageHeight || canvasHeight;
           const displayScale = (canvas as any).displayScale || 1;
           
-          // Convert from canvas display coordinates to original image pixel coordinates
+          // First, inverse transform from viewport space to image space (accounts for pan/zoom)
+          const vpt = canvas.viewportTransform!;
+          const inverted = util.invertTransform(vpt);
+          
+          // Transform the four corners of the rectangle
+          const topLeft = util.transformPoint({ x: left, y: top }, inverted);
+          const bottomRight = util.transformPoint({ x: left + width, y: top + height }, inverted);
+          
+          // Calculate dimensions in image space
+          const imageSpaceX = topLeft.x;
+          const imageSpaceY = topLeft.y;
+          const imageSpaceWidth = bottomRight.x - topLeft.x;
+          const imageSpaceHeight = bottomRight.y - topLeft.y;
+          
+          // Now convert from canvas display size to original image pixel coordinates
           const scaleX = originalImageWidth / canvasWidth;
           const scaleY = originalImageHeight / canvasHeight;
           
@@ -337,10 +351,10 @@ export default function SchematicEditor({
           const newRegion = {
             id: regionId,
             // Store as absolute pixels in original image space
-            x: left * scaleX,
-            y: top * scaleY,
-            width: width * scaleX,
-            height: height * scaleY,
+            x: imageSpaceX * scaleX,
+            y: imageSpaceY * scaleY,
+            width: imageSpaceWidth * scaleX,
+            height: imageSpaceHeight * scaleY,
             imageWidth: originalImageWidth,
             imageHeight: originalImageHeight,
             // Also store display coordinates for canvas rendering
