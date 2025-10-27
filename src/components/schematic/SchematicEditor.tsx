@@ -321,6 +321,8 @@ export default function SchematicEditor({
       height: 900,
       backgroundColor: "#f8f9fa",
       selection: true, // Enable selection by default
+      renderOnAddRemove: true, // Ensure immediate rendering
+      enableRetinaScaling: true, // Better control rendering on high-DPI displays
     });
 
     // Mouse wheel: CTRL+scroll=zoom, SHIFT+scroll=horizontal, scroll=vertical
@@ -482,6 +484,7 @@ export default function SchematicEditor({
             lockScalingFlip: true,
             borderColor: 'hsl(210, 100%, 45%)',
             cornerStyle: 'circle',
+            objectCaching: false, // Disable caching to prevent control positioning issues
           });
           
           // Hide rotation control
