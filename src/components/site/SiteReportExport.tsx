@@ -716,7 +716,7 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
       const bottomMargin = 20;
       
       // Template blue color (from the template)
-      const templateBlue = [0, 102, 179]; // RGB for #0066B3
+      const templateBlue = [23, 109, 177]; // RGB for #176DB1
       
       let yPos = topMargin;
       let pageNumber = 1;
