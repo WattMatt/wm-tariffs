@@ -974,147 +974,97 @@ export default function SchematicEditor({
         { label: 'CT:', value: meter.ct_type || 'N/A' }
       ];
 
-      const textElements: Text[] = [];
-      // Calculate font size based on card height - larger for readability
-      const fontSize = Math.max(10, Math.min(14, rowHeight * 0.6));
-      
-      // Label column width
-      const labelColumnWidth = Math.max(45, cardWidth * 0.3);
-      const padding = 4;
-      
-      fields.forEach((field, i) => {
-        // Label text (left column)
-        const labelText = new Text(field.label, {
-          left: x + padding,
-          top: y + padding + i * rowHeight,
-          fontSize: fontSize,
-          fill: '#000',
-          fontWeight: 'bold',
-          fontFamily: 'Arial',
-          selectable: false,
-          evented: false,
-        });
-        textElements.push(labelText);
+      // Generate meter card image
+      createMeterCardImage(fields, borderColor, cardWidth, cardHeight).then(imageDataUrl => {
+        // Load image from data URL
+        const imgElement = document.createElement('img');
+        imgElement.src = imageDataUrl;
+        
+        imgElement.onload = () => {
+          // Create fabric image with border overlay
+          const img = new FabricImage(imgElement, {
+            left: x,
+            top: y,
+            originX: 'left',
+            originY: 'top',
+            hasControls: isEditMode,
+            selectable: isEditMode,
+            hoverCursor: isEditMode ? 'move' : 'pointer',
+            lockRotation: true,
+            lockScalingX: true,
+            lockScalingY: true,
+          });
+          
+          // Store the actual meter data
+          img.set('data', { 
+            type: 'extracted', 
+            index: capturedIndex,
+            meterNumber: meter.meter_number,
+            meterData: meter 
+          });
+          
+          // Add selection handler
+          img.on('mousedown', (e) => {
+            if (e.e.shiftKey) {
+              handleToggleSelectMeter(capturedIndex);
+              e.e.stopPropagation();
+              e.e.preventDefault();
+            }
+          });
 
-        // Value text (right column)
-        const maxValueLength = Math.floor((cardWidth - labelColumnWidth - padding * 3) / (fontSize * 0.6));
-        const valueDisplay = field.value.length > maxValueLength ? field.value.substring(0, maxValueLength) + '...' : field.value;
-        const valueText = new Text(valueDisplay, {
-          left: x + labelColumnWidth + padding,
-          top: y + padding + i * rowHeight,
-          fontSize: fontSize,
-          fill: '#000',
-          fontFamily: 'Arial',
-          selectable: false,
-          evented: false,
-        });
-        textElements.push(valueText);
+          img.on('mousedblclick', () => {
+            const objectData = img.get('data') as any;
+            const meterIndex = objectData.index;
+            const meter = extractedMeters[meterIndex];
+            console.log('🔍 Opening dialog for meter:', {
+              index: meterIndex,
+              hasScannedSnippet: !!meter?.scannedImageSnippet,
+              snippetUrl: meter?.scannedImageSnippet,
+              fullMeter: meter
+            });
+            setSelectedMeterIndex(meterIndex);
+            setIsConfirmMeterDialogOpen(true);
+          });
 
-        // Horizontal separator line
-        if (i < fields.length - 1) {
-          const separatorY = y + (i + 1) * rowHeight;
-          const separator = new Line(
-            [x, separatorY, x + cardWidth, separatorY],
-            {
+          img.on('modified', () => {
+            // Update position in extracted meters state
+            const newX = ((img.left || 0) / canvasWidth) * 100;
+            const newY = ((img.top || 0) / canvasHeight) * 100;
+            
+            const updatedMeters = [...extractedMeters];
+            updatedMeters[capturedIndex] = {
+              ...updatedMeters[capturedIndex],
+              position: { x: newX, y: newY },
+            };
+            setExtractedMeters(updatedMeters);
+            if (onExtractedMetersUpdate) {
+              onExtractedMetersUpdate(updatedMeters);
+            }
+            toast.success('Meter position updated');
+          });
+
+          // Add border overlay if selected
+          if (isSelected) {
+            const border = new Rect({
+              left: x,
+              top: y,
+              width: cardWidth,
+              height: cardHeight,
+              fill: 'transparent',
               stroke: borderColor,
-              strokeWidth: 1,
+              strokeWidth: strokeWidth,
               selectable: false,
               evented: false,
-            }
-          );
-          textElements.push(separator as any);
-        }
-      });
-
-      // Vertical separator between label and value columns
-      const vertX = x + labelColumnWidth;
-      const vertY1 = y;
-      const vertY2 = y + cardHeight;
-      
-      const verticalSeparator = new Line(
-        [vertX, vertY1, vertX, vertY2],
-        {
-          stroke: borderColor,
-          strokeWidth: 1,
-          selectable: false,
-          evented: false,
-        }
-      );
-      
-      
-      // Handle dragging for extracted meters - simple position update
-      const updateTextPositions = () => {
-        const newLeft = background.left || x;
-        const newTop = background.top || y;
-        
-        // Move all text elements with the background (no scaling)
-        textElements.forEach((text, i) => {
-          const fieldIndex = Math.floor(i / 2);
-          const isLabel = i % 2 === 0;
-          const isSeparator = text instanceof Line;
-          
-          if (!isSeparator) {
-            text.set({
-              left: newLeft + (isLabel ? padding : labelColumnWidth + padding),
-              top: newTop + padding + fieldIndex * rowHeight,
+              originX: 'left',
+              originY: 'top',
             });
-          } else {
-            // Update line positions
-            if (i === textElements.length - 1) {
-              // Vertical separator
-              text.set({
-                x1: newLeft + labelColumnWidth,
-                y1: newTop,
-                x2: newLeft + labelColumnWidth,
-                y2: newTop + cardHeight,
-              });
-            } else {
-              // Horizontal separators
-              const separatorFieldIndex = Math.floor((i - 1) / 3);
-              const separatorY = newTop + (separatorFieldIndex + 1) * rowHeight;
-              text.set({
-                x1: newLeft,
-                y1: separatorY,
-                x2: newLeft + cardWidth,
-                y2: separatorY,
-              });
-            }
+            fabricCanvas.add(border);
           }
-        });
-        
-        // Update vertical separator
-        verticalSeparator.set({
-          x1: newLeft + labelColumnWidth,
-          y1: newTop,
-          x2: newLeft + labelColumnWidth,
-          y2: newTop + cardHeight,
-        });
-        
-        fabricCanvas.renderAll();
-      };
 
-      background.on('moving', updateTextPositions);
-
-      background.on('modified', () => {
-        // Update position in extracted meters state (no scaling anymore)
-        const newX = ((background.left || 0) / canvasWidth) * 100;
-        const newY = ((background.top || 0) / canvasHeight) * 100;
-        
-        const updatedMeters = [...extractedMeters];
-        updatedMeters[capturedIndex] = {
-          ...updatedMeters[capturedIndex],
-          position: { x: newX, y: newY },
+          fabricCanvas.add(img);
+          fabricCanvas.renderAll();
         };
-        setExtractedMeters(updatedMeters);
-        if (onExtractedMetersUpdate) {
-          onExtractedMetersUpdate(updatedMeters);
-        }
-        toast.success('Meter position updated');
       });
-
-      fabricCanvas.add(background);
-      textElements.forEach(el => fabricCanvas.add(el));
-      fabricCanvas.add(verticalSeparator);
     });
 
     // Render saved meter positions
