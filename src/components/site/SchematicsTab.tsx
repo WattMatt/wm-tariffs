@@ -412,11 +412,10 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
                       <div className="flex items-center gap-2">
                         <Button
                           variant="outline"
-                          size="sm"
+                          size="icon"
                           onClick={() => navigate(`/schematics/${schematic.id}`)}
                         >
-                          <Eye className="w-4 h-4 mr-2" />
-                          View
+                          <Eye className="w-4 h-4" />
                         </Button>
                         <Button
                           variant="outline"
