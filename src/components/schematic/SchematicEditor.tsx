@@ -1365,6 +1365,11 @@ export default function SchematicEditor({
           <Trash2 className="w-4 h-4 mr-2" />
           Clear Lines
         </Button>
+        <div className="flex-1" />
+        <Button onClick={handleSave} disabled={isSaving} size="sm">
+          <Save className="w-4 h-4 mr-2" />
+          Save
+        </Button>
         <Button
           variant={activeTool === "select" ? "default" : "outline"}
           onClick={() => setActiveTool("select")}
@@ -1372,10 +1377,6 @@ export default function SchematicEditor({
         >
           <Zap className="w-4 h-4 mr-2" />
           Edit
-        </Button>
-        <Button onClick={handleSave} disabled={isSaving} size="sm">
-          <Save className="w-4 h-4 mr-2" />
-          Save
         </Button>
       </div>
 
