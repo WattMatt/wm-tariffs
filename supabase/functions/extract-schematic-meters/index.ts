@@ -155,6 +155,14 @@ EXTRACT these fields with EXACT formatting:
     * Zone label typically at top-right (e.g., "MAIN BOARD 3")
     * Multiple meters may be contained within this zone
   - If not in a main board zone, set to null
+  
+  - MINI SUB zones are identified by:
+    * A rectangular border/frame
+    * TWO OVERLAPPING CIRCLES in the center (this is the transformer symbol - key identifier)
+    * Text label "MINI SUB X" with power rating (e.g., "MINI SUB 1 800kVA")
+    * Electrical connection lines/symbols at top and bottom
+    * NO thick horizontal bus bar (unlike main boards)
+  - If meter is within a Mini Sub zone, set zone to "MINI SUB X" where X is the number
 
 Return ONLY a valid JSON object with these exact keys.
 NO markdown, NO explanations.
@@ -255,6 +263,14 @@ CRITICAL DATA FIELDS (Zero error tolerance):
      * Multiple meters/meter blocks positioned within this zone
    - If meter is within such a zone, set zone to the zone label (e.g., "MAIN BOARD 3")
    - If meter is standalone/not in a main board zone, set zone to null
+
+   - MINI SUB zones have these distinct visual features:
+     * Rectangular border/frame (similar to main boards but no thick bus bar)
+     * Contains TWO OVERLAPPING CIRCLES (transformer symbol) in the center/lower area
+     * Text label showing "MINI SUB X" and power rating (e.g., "MINI SUB 1 800kVA")
+     * Electrical connection lines at top and bottom (incoming/outgoing connections)
+     * May contain meters connected to this mini sub
+   - If meter is within a Mini Sub zone, set zone to the label (e.g., "MINI SUB 1")
 
 POSITIONING (CRITICAL - This determines visual overlay accuracy):
 - position.x: Percentage from LEFT edge to meter box CENTER (0.0 = left edge, 100.0 = right edge)
