@@ -13,7 +13,7 @@ serve(async (req) => {
 
   try {
     const requestBody = await req.json();
-    let { imageUrl, mode, rectangleId, rectangleBounds, region, meterType } = requestBody;
+    let { imageUrl, mode, rectangleId, rectangleBounds, region } = requestBody;
     
     if (!imageUrl) {
       return new Response(
@@ -116,17 +116,6 @@ Example: {"meter_number":"DB-01A","name":"VACANT","area":"187m²","rating":"150A
       const topPixel = Math.round(region.y);
       const bottomPixel = Math.round(region.y + region.height);
       
-      // Map meter type to expected values
-      const meterTypeHint = meterType ? (() => {
-        switch(meterType) {
-          case 'bulk_meter': return 'bulk meter or council bulk supply';
-          case 'check_meter': return 'check meter';
-          case 'tenant_meter': return 'tenant meter or submeter';
-          case 'other': return 'distribution or other meter type';
-          default: return '';
-        }
-      })() : '';
-      
       promptText = `CRITICAL: EXTRACT DATA ONLY FROM THE SPECIFIED COORDINATES
 
 IMAGE DIMENSIONS: ${region.imageWidth} x ${region.imageHeight} pixels
@@ -139,7 +128,6 @@ TOP BOUNDARY:    Y = ${topPixel}px (${yPercent.toFixed(1)}% from top)
 BOTTOM BOUNDARY: Y = ${bottomPixel}px (${(yPercent + heightPercent).toFixed(1)}% from top)
 ==================================================================
 
-${meterTypeHint ? `\nEXPECTED METER TYPE: This region contains a ${meterTypeHint}.\n` : ''}
 ABSOLUTE RESTRICTIONS:
 - Do NOT read any text with X-coordinate < ${leftPixel} or > ${rightPixel}
 - Do NOT read any text with Y-coordinate < ${topPixel} or > ${bottomPixel}
@@ -149,8 +137,14 @@ ABSOLUTE RESTRICTIONS:
 Extract these fields from ONLY the selected region:
 - meter_number, name, area (with m2), rating, cable_specification, serial_number, ct_type, meter_type, zone
 
+IMPORTANT: Infer the meter_type based on the meter_number and name:
+- If name contains "BULK", "COUNCIL", "INCOMING", or "MAIN" -> meter_type should be "bulk"
+- If name contains "CHECK" -> meter_type should be "check_meter"
+- If name contains tenant/business names -> meter_type should be "submeter" or "tenant"
+- Otherwise -> meter_type can be "distribution" or null
+
 Return ONLY valid JSON.
-Example: {"meter_number":"DB-11","name":"CHICKEN LICKEN","area":"104m2","rating":"80A TP","cable_specification":"2 x 4C x 50mm2 ALU ECC CABLES","serial_number":"35777111","ct_type":"100/5A","meter_type":"distribution","zone":"MINI SUB 1"}`;
+Example: {"meter_number":"DB-11","name":"CHICKEN LICKEN","area":"104m2","rating":"80A TP","cable_specification":"2 x 4C x 50mm2 ALU ECC CABLES","serial_number":"35777111","ct_type":"100/5A","meter_type":"submeter","zone":"MINI SUB 1"}`;
     } else {
       // Full extraction mode - MAXIMUM ACCURACY REQUIRED
       promptText = `You are an expert electrical engineer performing CRITICAL DATA EXTRACTION from an electrical schematic. This data will be used for financial calculations and legal compliance - 100% accuracy is MANDATORY.
