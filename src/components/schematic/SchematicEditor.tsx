@@ -655,15 +655,24 @@ export default function SchematicEditor({
     let lastPanX = 0;
     let lastPanY = 0;
     
+    // Log ALL mousedown events to debug
     canvas.getElement().addEventListener('mousedown', (e) => {
+      console.log('🖱️ ANY mousedown detected:', { 
+        button: e.button, 
+        buttons: e.buttons,
+        which: e.which,
+        type: e.type 
+      });
+      
       if (e.button === 1) { // Middle mouse button
-        console.log('🖱️ Middle button DOM mousedown detected');
+        console.log('🖱️ Middle button DOM mousedown detected - STARTING PAN');
         e.preventDefault();
         e.stopPropagation();
         isPanning = true;
         lastPanX = e.clientX;
         lastPanY = e.clientY;
         canvas.selection = false;
+        return false;
       }
     }, true); // Use capture phase
     
@@ -680,24 +689,29 @@ export default function SchematicEditor({
           lastPanX = e.clientX;
           lastPanY = e.clientY;
         }
+        return false;
       }
     }, true);
     
     canvas.getElement().addEventListener('mouseup', (e) => {
+      console.log('🖱️ mouseup:', { button: e.button, isPanning });
       if (e.button === 1 && isPanning) {
         console.log('🖱️ Middle button panning ended');
         e.preventDefault();
         e.stopPropagation();
         isPanning = false;
         canvas.selection = true;
+        return false;
       }
     }, true);
     
     // Also prevent auxclick to stop browser navigation
     canvas.getElement().addEventListener('auxclick', (e) => {
+      console.log('🖱️ auxclick:', { button: e.button });
       if (e.button === 1) {
         e.preventDefault();
         e.stopPropagation();
+        return false;
       }
     }, true);
 
