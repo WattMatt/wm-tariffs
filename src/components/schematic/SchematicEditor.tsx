@@ -146,48 +146,7 @@ export default function SchematicEditor({
       setZoom(newZoom);
     });
 
-    // Middle mouse button panning
-    let isPanning = false;
-    let lastPosX = 0;
-    let lastPosY = 0;
-
-    canvas.on('mouse:down', (opt) => {
-      const e = opt.e;
-      if ('button' in e && e.button === 1) { // Middle mouse button
-        isPanning = true;
-        lastPosX = e.clientX;
-        lastPosY = e.clientY;
-        canvas.selection = false;
-        e.preventDefault();
-      }
-    });
-
-    canvas.on('mouse:move', (opt) => {
-      if (isPanning) {
-        const e = opt.e;
-        if ('clientX' in e && 'clientY' in e) {
-          const vpt = canvas.viewportTransform;
-          if (vpt) {
-            vpt[4] += e.clientX - lastPosX;
-            vpt[5] += e.clientY - lastPosY;
-            canvas.requestRenderAll();
-            lastPosX = e.clientX;
-            lastPosY = e.clientY;
-          }
-          e.preventDefault();
-        }
-      }
-    });
-
-    canvas.on('mouse:up', (opt) => {
-      const e = opt.e;
-      if ('button' in e && e.button === 1) {
-        isPanning = false;
-        canvas.selection = true;
-      }
-    });
-
-    // Enable panning with click + drag (when not clicking on objects or in select mode)
+    // Panning variables (consolidated single implementation)
     let isPanningLocal = false;
     let lastX = 0;
     let lastY = 0;
