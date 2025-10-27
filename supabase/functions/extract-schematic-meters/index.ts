@@ -156,22 +156,45 @@ Example: {"meter_number":"DB-01A","name":"VACANT","area":"187m²","rating":"150A
 
 ⚠️ CRITICAL IMPORTANCE: Meter serial numbers and specifications are legally binding and financially significant. Any errors could result in serious consequences.
 
-DOCUMENTATION STANDARD:
-This schematic follows a standard meter block format where each meter is represented by a rectangular box containing labeled fields. Each meter block contains structured data fields arranged in a consistent format with clear labels (NO:, NAME:, AREA:, RATING:, CABLE:, SERIAL:, CT:).
+METER BLOCK FORMAT - EXACT STANDARD:
+Each meter on this schematic is represented by a RECTANGULAR TABLE BOX with the following exact structure:
+
+┌──────────┬─────────────────────────────────┐
+│ NO:      │ DB-01A                          │
+├──────────┼─────────────────────────────────┤
+│ NAME:    │ VACANT                          │
+├──────────┼─────────────────────────────────┤
+│ AREA:    │ 187m²                           │
+├──────────┼─────────────────────────────────┤
+│ RATING:  │ 150A TP                         │
+├──────────┼─────────────────────────────────┤
+│ CABLE:   │ 4C x 95mm² ALU ECC CABLE       │
+├──────────┼─────────────────────────────────┤
+│ SERIAL:  │ 35779383                        │
+├──────────┼─────────────────────────────────┤
+│ CT:      │ 150/5A                          │
+└──────────┴─────────────────────────────────┘
+
+CRITICAL RECOGNITION RULES:
+- Each meter is a BORDERED TABLE with 7 rows (NO, NAME, AREA, RATING, CABLE, SERIAL, CT)
+- Left column contains LABELS ending with colon (:)
+- Right column contains VALUES
+- This is a STANDARDIZED template - every meter follows this exact format
+- Extract the VALUE from each row, preserving exact formatting
 
 ACCURACY REQUIREMENTS:
 - Extract data with ZERO tolerance for errors
-- Look for rectangular meter blocks with labeled fields
-- Each meter block is a standardized template with consistent field labels
+- Look for rectangular table boxes with this exact 7-row structure
+- Each meter block uses this standardized template with consistent field labels
 - If ANY field is unclear or ambiguous, mark it with "VERIFY:" prefix
 - If a field is genuinely not visible, use "NOT_VISIBLE" not "*" or null
 - Double-check every serial number character-by-character
-- Preserve exact spacing, capitalization, and punctuation
+- Preserve exact spacing, capitalization, and punctuation from the VALUE column
 
 SCANNING PROTOCOL:
-1. Identify all rectangular meter blocks following the standard documentation format
+1. Identify all rectangular table boxes following this exact 7-row format
 2. Systematically scan ENTIRE schematic from top-left to bottom-right
-3. Count all meter boxes first, then extract data from each
+3. Count all meter table boxes first, then extract data from each
 4. For partially visible or unclear text: mark field with "VERIFY:" prefix
 5. For completely missing fields: use "NOT_VISIBLE"
 6. Re-read serial numbers twice to ensure accuracy
