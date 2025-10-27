@@ -1347,20 +1347,6 @@ export default function SchematicEditor({
           onDrawnRegionsUpdate={setDrawnRegions}
         />
         <div className="flex-1" />
-        <div className="flex gap-2 items-center">
-          <Button variant="outline" size="sm" onClick={handleZoomOut}>
-            <ZoomOut className="w-4 h-4" />
-          </Button>
-          <Badge variant="outline" className="px-3">
-            {Math.round(zoom * 100)}%
-          </Badge>
-          <Button variant="outline" size="sm" onClick={handleZoomIn}>
-            <ZoomIn className="w-4 h-4" />
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleResetZoom}>
-            <Maximize2 className="w-4 h-4" />
-          </Button>
-        </div>
         <Button onClick={handleClearLines} variant="destructive" size="sm">
           <Trash2 className="w-4 h-4 mr-2" />
           Clear Lines
@@ -1460,6 +1446,24 @@ export default function SchematicEditor({
             </Badge>
           </>
         )}
+        
+        <div className="flex-1" />
+        
+        {/* PDF Controls */}
+        <div className="flex gap-2 items-center">
+          <Button variant="outline" size="sm" onClick={handleZoomOut}>
+            <ZoomOut className="w-4 h-4" />
+          </Button>
+          <Badge variant="outline" className="px-3">
+            {Math.round(zoom * 100)}%
+          </Badge>
+          <Button variant="outline" size="sm" onClick={handleZoomIn}>
+            <ZoomIn className="w-4 h-4" />
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleResetZoom}>
+            <Maximize2 className="w-4 h-4" />
+          </Button>
+        </div>
       </div>
 
       <div className="border border-border rounded-lg overflow-hidden shadow-lg">
