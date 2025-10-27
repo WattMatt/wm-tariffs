@@ -355,7 +355,12 @@ export default function SchematicEditor({
         canvas.relativePan(delta);
       }
       
-      // Force full render after viewport change
+      // Update control positions for active object after viewport change
+      const activeObject = canvas.getActiveObject();
+      if (activeObject) {
+        activeObject.setCoords();
+      }
+      
       canvas.renderAll();
     });
 
@@ -579,7 +584,14 @@ export default function SchematicEditor({
         
         const delta = new Point(deltaX, deltaY);
         canvas.relativePan(delta);
-        canvas.renderAll(); // Force full render
+        
+        // Update control positions for active object after panning
+        const activeObject = canvas.getActiveObject();
+        if (activeObject) {
+          activeObject.setCoords();
+        }
+        
+        canvas.renderAll();
         
         lastX = evt.clientX;
         lastY = evt.clientY;
