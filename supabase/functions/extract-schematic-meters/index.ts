@@ -156,19 +156,25 @@ Example: {"meter_number":"DB-01A","name":"VACANT","area":"187m²","rating":"150A
 
 ⚠️ CRITICAL IMPORTANCE: Meter serial numbers and specifications are legally binding and financially significant. Any errors could result in serious consequences.
 
+DOCUMENTATION STANDARD:
+This schematic follows a standard meter block format where each meter is represented by a rectangular box containing labeled fields. Each meter block contains structured data fields arranged in a consistent format with clear labels (NO:, NAME:, AREA:, RATING:, CABLE:, SERIAL:, CT:).
+
 ACCURACY REQUIREMENTS:
 - Extract data with ZERO tolerance for errors
+- Look for rectangular meter blocks with labeled fields
+- Each meter block is a standardized template with consistent field labels
 - If ANY field is unclear or ambiguous, mark it with "VERIFY:" prefix
 - If a field is genuinely not visible, use "NOT_VISIBLE" not "*" or null
 - Double-check every serial number character-by-character
 - Preserve exact spacing, capitalization, and punctuation
 
 SCANNING PROTOCOL:
-1. Systematically scan ENTIRE schematic from top-left to bottom-right
-2. Identify EVERY meter box - count them first, then extract
-3. For partially visible or unclear text: mark field with "VERIFY:" prefix
-4. For completely missing fields: use "NOT_VISIBLE"
-5. Re-read serial numbers twice to ensure accuracy
+1. Identify all rectangular meter blocks following the standard documentation format
+2. Systematically scan ENTIRE schematic from top-left to bottom-right
+3. Count all meter boxes first, then extract data from each
+4. For partially visible or unclear text: mark field with "VERIFY:" prefix
+5. For completely missing fields: use "NOT_VISIBLE"
+6. Re-read serial numbers twice to ensure accuracy
 
 CRITICAL DATA FIELDS (Zero error tolerance):
 
