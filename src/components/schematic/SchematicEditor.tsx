@@ -818,10 +818,11 @@ export default function SchematicEditor({
       
       // Add selection handler
       background.on('mousedown', (e) => {
-        if (isEditMode && activeTool === 'select' && e.e.ctrlKey) {
-          // Ctrl+click for multi-select (only in edit mode)
+        if (e.e.ctrlKey) {
+          // Ctrl+click for multi-select (works anytime)
           handleToggleSelectMeter(capturedIndex);
           e.e.stopPropagation();
+          e.e.preventDefault();
         }
         // Regular click no longer opens dialog - only double-click does
       });
