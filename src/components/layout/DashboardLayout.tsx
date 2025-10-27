@@ -3,6 +3,7 @@ import { useNavigate, Link, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { User } from "@supabase/supabase-js";
+import { useAppSettings } from "@/hooks/use-app-settings";
 import { 
   LayoutDashboard, 
   Building2, 
@@ -29,6 +30,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const location = useLocation();
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<{ full_name: string } | null>(null);
+  const { settings } = useAppSettings();
   const [collapsed, setCollapsed] = useState(() => {
     // Persist collapsed state in localStorage
     const saved = localStorage.getItem('sidebar-collapsed');
@@ -107,12 +109,24 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
 
         <div className={cn("border-b border-border/50", collapsed ? "p-4" : "p-6")}>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center shrink-0">
-              <Zap className="w-6 h-6 text-white" />
-            </div>
+            {settings?.logo_url ? (
+              <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0 bg-muted flex items-center justify-center">
+                <img 
+                  src={settings.logo_url} 
+                  alt={settings.app_name}
+                  className="w-full h-full object-contain"
+                />
+              </div>
+            ) : (
+              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center shrink-0">
+                <Zap className="w-6 h-6 text-white" />
+              </div>
+            )}
             {!collapsed && (
               <div>
-                <h1 className="text-lg font-bold text-secondary-foreground">Energy Recovery</h1>
+                <h1 className="text-lg font-bold text-secondary-foreground">
+                  {settings?.app_name || "Energy Recovery"}
+                </h1>
                 <p className="text-xs text-muted-foreground">Utility Platform</p>
               </div>
             )}

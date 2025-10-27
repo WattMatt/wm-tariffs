@@ -8,10 +8,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Zap } from "lucide-react";
+import { useAppSettings } from "@/hooks/use-app-settings";
 
 const Auth = () => {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
+  const { settings } = useAppSettings();
   
   useEffect(() => {
     // Check if user is already logged in
@@ -81,10 +83,22 @@ const Auth = () => {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-secondary via-background to-primary/10 p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-r from-primary to-accent mb-4">
-            <Zap className="w-8 h-8 text-white" />
-          </div>
-          <h1 className="text-3xl font-bold text-foreground mb-2">Energy Recovery</h1>
+          {settings?.logo_url ? (
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-lg overflow-hidden bg-muted mb-4">
+              <img 
+                src={settings.logo_url} 
+                alt={settings.app_name}
+                className="w-full h-full object-contain"
+              />
+            </div>
+          ) : (
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-r from-primary to-accent mb-4">
+              <Zap className="w-8 h-8 text-white" />
+            </div>
+          )}
+          <h1 className="text-3xl font-bold text-foreground mb-2">
+            {settings?.app_name || "Energy Recovery"}
+          </h1>
           <p className="text-muted-foreground">Utility tracking & reconciliation platform</p>
         </div>
 
