@@ -797,19 +797,35 @@ export default function SchematicEditor({
 
     // Render extracted meters (from AI extraction)
     extractedMeters.forEach((meter, meterIndex) => {
-      if (!meter.position) {
+      if (!meter.position && !meter.extractedRegion) {
         return;
       }
       
-      // Capture the index in a constant to avoid closure issues
       const capturedIndex = meterIndex;
       
       const canvasWidth = fabricCanvas.getWidth();
       const canvasHeight = fabricCanvas.getHeight();
       
-      // Convert percentage position to pixel position
-      const x = (meter.position.x / 100) * canvasWidth;
-      const y = (meter.position.y / 100) * canvasHeight;
+      let x, y, cardWidth, cardHeight, useTopLeftOrigin;
+      
+      // Use extractedRegion for absolute positioning if available
+      if (meter.extractedRegion) {
+        // Convert percentage to absolute pixels
+        x = (meter.extractedRegion.x / 100) * canvasWidth;
+        y = (meter.extractedRegion.y / 100) * canvasHeight;
+        cardWidth = (meter.extractedRegion.width / 100) * canvasWidth;
+        cardHeight = (meter.extractedRegion.height / 100) * canvasHeight;
+        useTopLeftOrigin = true;
+      } else if (meter.position) {
+        // Fallback to position if no region data
+        x = (meter.position.x / 100) * canvasWidth;
+        y = (meter.position.y / 100) * canvasHeight;
+        cardWidth = 200;
+        cardHeight = 140;
+        useTopLeftOrigin = false;
+      } else {
+        return;
+      }
       
       const scaleX = meter.scale_x || 1.0;
       const scaleY = meter.scale_y || 1.0;
@@ -838,22 +854,7 @@ export default function SchematicEditor({
       
       const strokeWidth = isSelected ? 4 : 3;
       
-      // Calculate card size based on extracted region if available
-      let cardWidth = 200; // default
-      let cardHeight = 140; // default
-      let useTopLeftOrigin = false;
-      
-      if (meter.extractedRegion) {
-        // Use the region dimensions to size the card
-        cardWidth = (meter.extractedRegion.width / 100) * canvasWidth;
-        cardHeight = (meter.extractedRegion.height / 100) * canvasHeight;
-        
-        // Don't enforce minimum size - use actual region size
-        // This ensures the card matches the drawn rectangle exactly
-        useTopLeftOrigin = true; // Position from top-left to match drawn rectangle
-      }
-      
-      const rowHeight = cardHeight / 7; // 7 rows of data
+      const rowHeight = cardHeight / 7;
       
       // Background rectangle with scaling enabled - Only moveable in edit mode
       const background = new Rect({
@@ -911,12 +912,11 @@ export default function SchematicEditor({
       ];
 
       const textElements: Text[] = [];
-      // Calculate font size based on card height for better scaling
-      // Further reduce font size for smaller rectangles
-      const fontSize = Math.max(5, Math.min(8, rowHeight * 0.3));
+      // Calculate font size based on card height - make it larger for readability
+      const fontSize = Math.max(8, Math.min(16, rowHeight * 0.5));
       
       // Make first column narrower - just enough for labels
-      const labelColumnWidth = 35; // Reduced from 50 to 35
+      const labelColumnWidth = Math.max(40, cardWidth * 0.25);
       
       // Calculate base positions based on origin type
       const baseLeftOffset = useTopLeftOrigin ? 3 * scaleX : (-(cardWidth * scaleX) / 2 + 3 * scaleX);
