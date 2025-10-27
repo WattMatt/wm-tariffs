@@ -224,7 +224,12 @@ export default function SchematicEditor({
     activeToolRef.current = activeTool;
     const newDrawingMode = activeTool === 'draw';
     setIsDrawingMode(newDrawingMode);
-  }, [activeTool]);
+    
+    // Ensure canvas selection is enabled in draw mode to allow editing rectangles
+    if (fabricCanvas && activeTool === 'draw') {
+      fabricCanvas.selection = true;
+    }
+  }, [activeTool, fabricCanvas]);
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -416,6 +421,11 @@ export default function SchematicEditor({
           
           setDrawnRegions(prev => [...prev, newRegion]);
           toast.success(`Region ${regionNumber} added`);
+          
+          // Enable canvas selection and select the new rectangle so it can be edited immediately
+          canvas.selection = true;
+          canvas.setActiveObject(rect);
+          canvas.renderAll();
           
           // Clean up drawing markers
           if (startMarkerRef.current) {
