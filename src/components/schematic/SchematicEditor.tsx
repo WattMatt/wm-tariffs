@@ -1241,12 +1241,6 @@ export default function SchematicEditor({
   return (
     <div className="space-y-4">
       <div className="flex gap-2 items-center flex-wrap">
-        <div className="flex items-center gap-2 p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg">
-          <Scan className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-          <div className="text-sm">
-            <p className="font-semibold text-blue-900 dark:text-blue-100">Workflow: Click "Scan PDF Region" → Draw a box around a meter → AI extracts data → Verify & approve</p>
-          </div>
-        </div>
       </div>
       
       <div className="flex gap-2 items-center flex-wrap">
