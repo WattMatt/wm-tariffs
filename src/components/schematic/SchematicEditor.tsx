@@ -126,6 +126,7 @@ export default function SchematicEditor({
       width: 1400,
       height: 900,
       backgroundColor: "#f8f9fa",
+      selection: true, // Enable selection by default
     });
 
     // Mouse wheel: Zoom in non-draw modes, Pan in draw mode
@@ -182,6 +183,15 @@ export default function SchematicEditor({
       
       // DRAWING TOOL: Left-click for drawing regions (double-click approach)
       if (currentTool === 'draw' && evt.button === 0) {
+        // Check if clicking on an existing region rectangle for resizing/moving
+        const isRegionRect = target && target.type === 'rect' && (target as any).regionId;
+        
+        if (isRegionRect) {
+          // Allow selecting and manipulating existing rectangles in draw mode
+          canvas.selection = true;
+          return; // Let Fabric.js handle the selection
+        }
+        
         const isInteractiveObject = target && target.type !== 'image';
         if (!isInteractiveObject) {
           const pointer = canvas.getPointer(opt.e);
