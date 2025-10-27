@@ -524,9 +524,22 @@ export default function SchematicEditor({
         }
       }
       
-      // PANNING in non-draw modes: Allow with left, middle, or right button when no target
-      if (currentTool !== 'draw' && !target) {
-        if (evt.button === 0 || evt.button === 1 || evt.button === 2) {
+      // PANNING: Allow with middle button in ANY mode, or with left/right button in non-draw modes
+      if (!target) {
+        if (evt.button === 1) {
+          // Middle button always pans, even in draw mode
+          isPanningLocal = true;
+          lastX = evt.clientX;
+          lastY = evt.clientY;
+          canvas.selection = false;
+        } else if (currentTool !== 'draw' && (evt.button === 0 || evt.button === 2)) {
+          // Left/right button pans only in non-draw modes
+          isPanningLocal = true;
+          lastX = evt.clientX;
+          lastY = evt.clientY;
+          canvas.selection = false;
+        } else if (currentTool === 'draw' && (evt.button === 0 || evt.button === 2) && (evt.shiftKey || evt.ctrlKey)) {
+          // In draw mode, allow panning with Shift+Click or Ctrl+Click
           isPanningLocal = true;
           lastX = evt.clientX;
           lastY = evt.clientY;
@@ -1988,10 +2001,11 @@ export default function SchematicEditor({
             </Badge>
           </div>
           
-          {/* Help text for multi-select */}
+          {/* Help text for multi-select and panning */}
           {extractedMeters.length > 0 && (
-            <div className="text-xs text-muted-foreground italic">
-              💡 Tip: Shift+Click extracted meters to select multiple for bulk operations
+            <div className="text-xs text-muted-foreground italic space-y-1">
+              <div>💡 Tip: Shift+Click extracted meters to select multiple for bulk operations</div>
+              <div>🖱️ Pan: Middle-click drag, or Shift/Ctrl+Drag in draw mode</div>
             </div>
           )}
         </div>
