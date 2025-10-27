@@ -46,9 +46,9 @@ async function createMeterCardImage(
   targetWidth: number = 200,
   targetHeight: number = 140
 ): Promise<string> {
-  // Create at 2.5x size for better text clarity (matching reference dimensions)
-  const baseWidth = 500;
-  const baseHeight = 175;
+  // Create at higher resolution for better text clarity
+  const baseWidth = 600;  // Increased width to prevent text cropping
+  const baseHeight = 210; // Increased height proportionally
   
   const canvas = document.createElement('canvas');
   canvas.width = baseWidth;
@@ -58,7 +58,7 @@ async function createMeterCardImage(
   if (!ctx) return '';
   
   const rowHeight = baseHeight / fields.length;
-  const labelColumnWidth = 175; // Proportional to base width
+  const labelColumnWidth = 180; // Proportional to base width
   
   // Background
   ctx.fillStyle = '#ffffff';
@@ -93,17 +93,29 @@ async function createMeterCardImage(
     
     // Label text (left column) - bold
     ctx.fillStyle = '#000000';
-    ctx.font = 'bold 14px Arial, sans-serif';
+    ctx.font = 'bold 16px Arial, sans-serif';
     ctx.textBaseline = 'middle';
-    ctx.fillText(field.label, 10, y + rowHeight / 2);
+    ctx.fillText(field.label, 12, y + rowHeight / 2);
     
-    // Value text (right column) - normal weight
-    ctx.font = 'normal 14px Arial, sans-serif';
-    const maxValueLength = 40;
-    const valueDisplay = field.value.length > maxValueLength 
-      ? field.value.substring(0, maxValueLength) + '...' 
-      : field.value;
-    ctx.fillText(valueDisplay, labelColumnWidth + 10, y + rowHeight / 2);
+    // Value text (right column) - normal weight with adequate padding
+    ctx.font = 'normal 16px Arial, sans-serif';
+    const valueX = labelColumnWidth + 12;
+    const maxValueWidth = baseWidth - valueX - 12; // Leave padding on right
+    
+    // Measure and truncate if needed
+    let valueDisplay = field.value;
+    let textWidth = ctx.measureText(valueDisplay).width;
+    
+    if (textWidth > maxValueWidth) {
+      // Truncate with ellipsis
+      while (textWidth > maxValueWidth && valueDisplay.length > 0) {
+        valueDisplay = valueDisplay.slice(0, -1);
+        textWidth = ctx.measureText(valueDisplay + '...').width;
+      }
+      valueDisplay += '...';
+    }
+    
+    ctx.fillText(valueDisplay, valueX, y + rowHeight / 2);
   });
   
   return canvas.toDataURL();
