@@ -93,83 +93,47 @@ Return ONLY a valid JSON object with these exact keys.
 NO markdown, NO explanations.
 Example: {"meter_number":"DB-01A","name":"VACANT","area":"187m²","rating":"150A TP","cable_specification":"4C x 95mm² ALU ECC CABLE","serial_number":"35779383","ct_type":"150/5A"}`;
     } else if (mode === 'extract-region') {
-      // For region extraction, we MUST crop the image server-side
-      // Vision models cannot be restricted to specific coordinates via prompting
-      
-      console.log('🎯 Extract-region mode - will crop image server-side:', {
-        pixels: { 
-          x: Math.round(region.x), 
-          y: Math.round(region.y), 
-          width: Math.round(region.width), 
-          height: Math.round(region.height) 
-        },
-        imageSize: { w: region.imageWidth, h: region.imageHeight }
+      // Use full image with percentage-based region hints (like tariff extraction)
+      console.log('🎯 Extract-region mode - analyzing region:', {
+        percentages: { 
+          x: region.x.toFixed(1), 
+          y: region.y.toFixed(1), 
+          width: region.width.toFixed(1), 
+          height: region.height.toFixed(1) 
+        }
       });
       
-      try {
-        // Download the full image
-        console.log('📥 Downloading image for cropping...');
-        const imageResponse = await fetch(imageUrl);
-        if (!imageResponse.ok) {
-          throw new Error(`Failed to download image: ${imageResponse.status}`);
-        }
-        
-        const imageArrayBuffer = await imageResponse.arrayBuffer();
-        const imageBuffer = new Uint8Array(imageArrayBuffer);
-        
-        console.log(`📊 Image downloaded: ${imageBuffer.length} bytes`);
-        
-        // Use jimp for image processing (more memory efficient than imagescript)
-        const Jimp = (await import('https://esm.sh/jimp@0.22.10')).default;
-        
-        console.log('🔄 Loading image with Jimp...');
-        const image = await Jimp.read(imageBuffer.buffer);
-        
-        console.log(`📐 Original image size: ${image.bitmap.width}x${image.bitmap.height}`);
-        
-        // Crop to the exact region
-        const cropX = Math.max(0, Math.floor(region.x));
-        const cropY = Math.max(0, Math.floor(region.y));
-        const cropWidth = Math.min(Math.ceil(region.width), image.bitmap.width - cropX);
-        const cropHeight = Math.min(Math.ceil(region.height), image.bitmap.height - cropY);
-        
-        console.log('✂️ Cropping region:', { x: cropX, y: cropY, width: cropWidth, height: cropHeight });
-        
-        image.crop(cropX, cropY, cropWidth, cropHeight);
-        
-        console.log(`✅ Cropped to: ${image.bitmap.width}x${image.bitmap.height}`);
-        
-        // Convert to base64 PNG
-        const base64Image = await image.getBase64Async(Jimp.MIME_PNG);
-        
-        console.log('📤 Converted to base64, sending to AI...');
-        
-        // Now send ONLY the cropped image to AI
-        promptText = `You are analyzing a cropped section from an electrical schematic diagram.
+      promptText = `You are an expert electrical engineer analyzing a full electrical schematic diagram.
 
-This image shows ONLY the meter information box that was selected. There is no other content.
+⚠️ FOCUS REGION: Extract meter data ONLY from the rectangular area at these coordinates:
+- Position: x: ${region.x.toFixed(1)}% from left edge, y: ${region.y.toFixed(1)}% from top edge
+- Size: width: ${region.width.toFixed(1)}%, height: ${region.height.toFixed(1)}%
 
-Extract ALL visible meter information from this cropped image:
-- meter_number (e.g., "DB-03")
-- name (tenant/business name or "VACANT")
-- area (in square meters with m² or m2 unit)
-- rating (e.g., "80A TP", "100A TP")
-- cable_specification (full cable description with units)
-- serial_number (meter serial number)
-- ct_type (current transformer specification)
-- meter_type (infer from name: "bulk" for council/main, "check_meter" for check, "submeter" for tenants)
-- zone (if visible, e.g., "MAIN BOARD 1", "MINI SUB 1")
+This focus region contains a single meter information box. IGNORE all other parts of the image outside this region.
 
-Return ONLY valid JSON with these exact fields. Use null for any fields not visible.
+METER DATA TO EXTRACT (from within the focus region only):
+
+1. meter_number (NO): Extract exactly as shown (e.g., "DB-01A", "MB-03", "INCOMING-01")
+2. name (NAME): Business/tenant name or "VACANT"
+3. area (AREA): Include unit "m²" (e.g., "187m²", "406m²")
+4. rating (RATING): Include full units (e.g., "150A TP", "100A TP")
+5. cable_specification (CABLE): Full spec with units (e.g., "4C x 95mm² ALU ECC CABLE")
+6. serial_number (SERIAL): Exact number (e.g., "35779383")
+7. ct_type (CT): Format/ratio (e.g., "150/5A", "DOL")
+
+METER TYPE INFERENCE (automatic classification):
+- If meter_number contains "INCOMING", "COUNCIL", or "BULK" → meter_type: "bulk"
+- If meter_number contains "CHECK" → meter_type: "check_meter"
+- Otherwise → meter_type: "submeter"
+
+ZONE EXTRACTION:
+- If the meter is within a labeled zone boundary (e.g., "MAIN BOARD 1", "MINI SUB 2"), extract the zone label
+- Otherwise set zone to null
+
+Return ONLY valid JSON with these exact fields. Use null for fields not visible.
+NO markdown, NO explanations.
+
 Example: {"meter_number":"DB-03","name":"ACKERMANS","area":"434m²","rating":"100A TP","cable_specification":"4C x 35mm² ALU ECC CABLE","serial_number":"35777225","ct_type":"DOL","meter_type":"submeter","zone":null}`;
-        
-        // Replace imageUrl with the cropped base64 image
-        imageUrl = base64Image;
-        
-      } catch (cropError: any) {
-        console.error('❌ Image cropping failed:', cropError);
-        throw new Error(`Failed to crop image: ${cropError?.message || String(cropError)}`);
-      }
     } else {
       // Full extraction mode - MAXIMUM ACCURACY REQUIRED
       promptText = `You are an expert electrical engineer performing CRITICAL DATA EXTRACTION from an electrical schematic. This data will be used for financial calculations and legal compliance - 100% accuracy is MANDATORY.
