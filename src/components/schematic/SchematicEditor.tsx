@@ -59,7 +59,14 @@ export default function SchematicEditor({
     y: number;
     width: number;
     height: number;
-    fabricRect: Rect;
+    imageWidth?: number;
+    imageHeight?: number;
+    displayLeft?: number;
+    displayTop?: number;
+    displayWidth?: number;
+    displayHeight?: number;
+    fabricRect: any;
+    fabricLabel?: any;
   }>>([]);
   const [meterPositions, setMeterPositions] = useState<MeterPosition[]>([]);
   const drawingRectRef = useRef<any>(null);
@@ -252,27 +259,44 @@ export default function SchematicEditor({
           canvas.add(label);
           canvas.renderAll();
           
-          // Store region in state with percentage coordinates
-          // These percentages are relative to the canvas, which matches the image aspect ratio
-          // The AI will receive these percentages and apply them to the full-resolution image
+          // Calculate region in ABSOLUTE pixels of the original image
+          // This matches how tariff extraction does it - convert from displayed canvas coordinates
+          // to original image pixel coordinates
+          const originalImageWidth = (canvas as any).originalImageWidth || canvasWidth;
+          const originalImageHeight = (canvas as any).originalImageHeight || canvasHeight;
+          const displayScale = (canvas as any).displayScale || 1;
+          
+          // Convert from canvas display coordinates to original image pixel coordinates
+          const scaleX = originalImageWidth / canvasWidth;
+          const scaleY = originalImageHeight / canvasHeight;
+          
           const newRegion = {
             id: `region-${Date.now()}-${regionNumber}`,
-            x: (left / canvasWidth) * 100,
-            y: (top / canvasHeight) * 100,
-            width: (width / canvasWidth) * 100,
-            height: (height / canvasHeight) * 100,
+            // Store as absolute pixels in original image space
+            x: left * scaleX,
+            y: top * scaleY,
+            width: width * scaleX,
+            height: height * scaleY,
+            imageWidth: originalImageWidth,
+            imageHeight: originalImageHeight,
+            // Also store display coordinates for canvas rendering
+            displayLeft: left,
+            displayTop: top,
+            displayWidth: width,
+            displayHeight: height,
             fabricRect: rect,
             fabricLabel: label
           };
           
           console.log('🎯 Region coordinates:', {
-            canvas: { left, top, width, height },
-            percentages: {
-              x: newRegion.x.toFixed(2) + '%',
-              y: newRegion.y.toFixed(2) + '%',
-              width: newRegion.width.toFixed(2) + '%',
-              height: newRegion.height.toFixed(2) + '%'
-            }
+            display: { left, top, width, height },
+            original: {
+              x: Math.round(newRegion.x),
+              y: Math.round(newRegion.y),
+              width: Math.round(newRegion.width),
+              height: Math.round(newRegion.height)
+            },
+            imageSize: { w: originalImageWidth, h: originalImageHeight }
           });
           
           setDrawnRegions(prev => [...prev, newRegion]);
@@ -1394,11 +1418,19 @@ export default function SchematicEditor({
         
         for (let i = 0; i < drawnRegions.length; i++) {
           const region = drawnRegions[i];
+          
+          // Ensure imageWidth and imageHeight are present (they might be missing from old regions)
+          const imageWidth = region.imageWidth || (fabricCanvas as any)?.originalImageWidth || 2000;
+          const imageHeight = region.imageHeight || (fabricCanvas as any)?.originalImageHeight || 2000;
+          
           console.log(`🔍 Scanning region ${i + 1}:`, {
-            x: region.x.toFixed(2) + '%',
-            y: region.y.toFixed(2) + '%',
-            width: region.width.toFixed(2) + '%',
-            height: region.height.toFixed(2) + '%'
+            pixels: {
+              x: Math.round(region.x),
+              y: Math.round(region.y),
+              width: Math.round(region.width),
+              height: Math.round(region.height)
+            },
+            imageSize: { w: imageWidth, h: imageHeight }
           });
           toast.info(`Scanning region ${i + 1} of ${drawnRegions.length}...`);
           
@@ -1412,7 +1444,9 @@ export default function SchematicEditor({
                   x: region.x,
                   y: region.y,
                   width: region.width,
-                  height: region.height
+                  height: region.height,
+                  imageWidth: imageWidth,
+                  imageHeight: imageHeight
                 }
               }
             });
