@@ -14,7 +14,8 @@ import {
   Users,
   FileText,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  LineChart
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -71,6 +72,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const navItems = [
     { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
     { icon: Building2, label: "Clients", path: "/clients" },
+    { icon: LineChart, label: "Load Profile", path: "/load-profile" },
     { icon: FileText, label: "Tariffs", path: "/tariffs" },
     { icon: Users, label: "Users", path: "/users" },
   ];
