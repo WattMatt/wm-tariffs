@@ -90,6 +90,7 @@ export default function SchematicEditor({
     check_meter: true,
     main_board_zone: true,
     mini_sub_zone: true,
+    council_connection_zone: true,
     submeter: true,
     other: true
   });
@@ -1561,6 +1562,15 @@ export default function SchematicEditor({
         >
           <div className="w-3 h-3 rounded-full bg-[#9333ea] mr-2" />
           Main Board
+        </Badge>
+        
+        <Badge 
+          variant="outline" 
+          className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.council_connection_zone ? 'opacity-40' : ''}`}
+          onClick={() => setLegendVisibility(prev => ({ ...prev, council_connection_zone: !prev.council_connection_zone }))}
+        >
+          <div className="w-3 h-3 rounded-full bg-[#ec4899] mr-2" />
+          Council Connection
         </Badge>
         
         {/* Vertical separator */}
