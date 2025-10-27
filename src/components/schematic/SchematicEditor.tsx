@@ -1578,13 +1578,15 @@ export default function SchematicEditor({
                 setActiveTool("select");
                 toast.success("Edit mode enabled");
               } else {
-                toast.info("Edit mode disabled");
+                // Cancel edit mode and reset active tool
+                setActiveTool("select");
+                toast.info("Edit mode cancelled - unsaved changes discarded");
               }
             }}
             size="sm"
           >
             <Zap className="w-4 h-4 mr-2" />
-            Edit
+            {isEditMode ? "Cancel" : "Edit"}
           </Button>
         </div>
       </div>
