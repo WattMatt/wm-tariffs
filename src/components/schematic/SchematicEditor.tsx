@@ -711,6 +711,8 @@ export default function SchematicEditor({
       let borderColor = '#3b82f6'; // default blue
       if (meterType.includes('bulk')) borderColor = '#ef4444'; // red
       else if (meterType.includes('check')) borderColor = '#f59e0b'; // orange
+      else if (meterType.includes('main_board')) borderColor = '#9333ea'; // purple
+      else if (meterType.includes('mini_sub')) borderColor = '#06b6d4'; // cyan
       else if (meterType.includes('sub')) borderColor = '#10b981'; // green
 
       // Convert percentage positions to pixel positions for canvas
@@ -1367,6 +1369,14 @@ export default function SchematicEditor({
           Check Meter
         </Badge>
         <Badge variant="outline">
+          <div className="w-3 h-3 rounded-full bg-[#9333ea] mr-2" />
+          Main Board
+        </Badge>
+        <Badge variant="outline">
+          <div className="w-3 h-3 rounded-full bg-[#06b6d4] mr-2" />
+          Mini Sub
+        </Badge>
+        <Badge variant="outline">
           <div className="w-3 h-3 rounded-full bg-[#10b981] mr-2" />
           Submeter
         </Badge>
@@ -1496,6 +1506,8 @@ export default function SchematicEditor({
                   <SelectContent className="bg-background z-50">
                     <SelectItem value="council_bulk">Council Bulk Supply</SelectItem>
                     <SelectItem value="check_meter">Check Meter</SelectItem>
+                    <SelectItem value="main_board">Main Board</SelectItem>
+                    <SelectItem value="mini_sub">Mini Sub</SelectItem>
                     <SelectItem value="solar">Solar Generation</SelectItem>
                     <SelectItem value="distribution">Distribution Meter</SelectItem>
                   </SelectContent>
@@ -1693,6 +1705,8 @@ export default function SchematicEditor({
                       <SelectContent className="bg-background z-50">
                         <SelectItem value="council_bulk">Council Bulk Supply (Main Incoming)</SelectItem>
                         <SelectItem value="check_meter">Check Meter (Verification)</SelectItem>
+                        <SelectItem value="main_board">Main Board</SelectItem>
+                        <SelectItem value="mini_sub">Mini Sub</SelectItem>
                         <SelectItem value="distribution">Distribution Meter</SelectItem>
                         <SelectItem value="solar">Solar Generation</SelectItem>
                       </SelectContent>
@@ -1837,6 +1851,8 @@ export default function SchematicEditor({
                     <SelectContent className="bg-background z-50">
                       <SelectItem value="council_bulk">Council Bulk Supply</SelectItem>
                       <SelectItem value="check_meter">Check Meter</SelectItem>
+                      <SelectItem value="main_board">Main Board</SelectItem>
+                      <SelectItem value="mini_sub">Mini Sub</SelectItem>
                       <SelectItem value="solar">Solar Generation</SelectItem>
                       <SelectItem value="distribution">Distribution Meter</SelectItem>
                     </SelectContent>
