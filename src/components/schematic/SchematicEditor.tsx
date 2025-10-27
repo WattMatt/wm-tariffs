@@ -1560,9 +1560,27 @@ export default function SchematicEditor({
             variant={activeTool === "draw" ? "default" : "outline"}
             onClick={() => {
               if (activeTool === "draw") {
-                // If already in draw mode, toggle it off back to select mode
+                // If already in draw mode, toggle it off and clear all regions
                 setActiveTool("select");
-                toast.info("Region selection disabled");
+                
+                // Clear regions silently if there are any
+                if (drawnRegions.length > 0) {
+                  if (fabricCanvas) {
+                    drawnRegions.forEach(region => {
+                      if (region.fabricRect) {
+                        fabricCanvas.remove(region.fabricRect);
+                      }
+                      if ((region as any).fabricLabel) {
+                        fabricCanvas.remove((region as any).fabricLabel);
+                      }
+                    });
+                    fabricCanvas.renderAll();
+                  }
+                  setDrawnRegions([]);
+                  toast.info("Region selection disabled - all regions cleared");
+                } else {
+                  toast.info("Region selection disabled");
+                }
               } else {
                 // Enable draw mode
                 setActiveTool("draw");
