@@ -55,9 +55,34 @@ async function cropRegionAndUpload(
     img.crossOrigin = 'anonymous';
     
     img.onload = async () => {
+      // Use the ACTUAL loaded image dimensions, not the passed sourceWidth/sourceHeight
+      const actualWidth = img.naturalWidth;
+      const actualHeight = img.naturalHeight;
+      
+      console.log('🖼️ Image dimensions:', {
+        passed: { width: sourceWidth, height: sourceHeight },
+        actual: { width: actualWidth, height: actualHeight },
+        cropRegion: { x, y, width, height }
+      });
+      
+      // Scale the crop coordinates if the passed dimensions don't match actual dimensions
+      const scaleX = actualWidth / sourceWidth;
+      const scaleY = actualHeight / sourceHeight;
+      
+      const scaledX = x * scaleX;
+      const scaledY = y * scaleY;
+      const scaledWidth = width * scaleX;
+      const scaledHeight = height * scaleY;
+      
+      console.log('✂️ Scaled crop region:', {
+        original: { x, y, width, height },
+        scaled: { x: scaledX, y: scaledY, width: scaledWidth, height: scaledHeight },
+        scaleFactors: { x: scaleX, y: scaleY }
+      });
+      
       const cropCanvas = document.createElement('canvas');
-      cropCanvas.width = width;
-      cropCanvas.height = height;
+      cropCanvas.width = scaledWidth;
+      cropCanvas.height = scaledHeight;
       const ctx = cropCanvas.getContext('2d');
       
       if (!ctx) {
@@ -65,12 +90,13 @@ async function cropRegionAndUpload(
         return;
       }
       
+      // Crop from the source image using scaled coordinates
       ctx.drawImage(
         img,
-        x, y,
-        width, height,
+        scaledX, scaledY,
+        scaledWidth, scaledHeight,
         0, 0,
-        width, height
+        scaledWidth, scaledHeight
       );
       
       // Convert to blob for upload
