@@ -538,13 +538,16 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                 </div>
 
                 <div className="space-y-2 col-span-2">
-                  <Label htmlFor="tariff">Tariff</Label>
+                  <Label htmlFor="tariff">Tariff Notes (Optional)</Label>
                   <Input 
                     id="tariff" 
                     name="tariff" 
-                    placeholder="Business Standard"
+                    placeholder="e.g. Special rate, Legacy tariff, etc."
                     defaultValue={editingMeter?.tariff || ""}
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Formal tariff assignment is done in the Tariff Assignment tab
+                  </p>
                 </div>
               </div>
 
