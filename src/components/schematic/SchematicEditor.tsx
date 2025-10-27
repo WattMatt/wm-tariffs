@@ -237,23 +237,23 @@ export default function SchematicEditor({
           const canvasWidth = canvas.getWidth();
           const canvasHeight = canvas.getHeight();
           
-          // Create persistent rectangle with distinct styling
           const rect = new Rect({
             left,
             top,
             width,
             height,
-            fill: 'rgba(245, 158, 11, 0.15)', // Orange with low opacity
-            stroke: '#f59e0b', // Orange border
+            fill: 'rgba(245, 158, 11, 0.15)',
+            stroke: '#f59e0b',
             strokeWidth: 2,
             selectable: true,
             evented: true,
             hasControls: true,
             hasBorders: true,
             cornerColor: '#f59e0b',
-            cornerSize: 8,
+            cornerSize: 10,
             transparentCorners: false,
-            lockRotation: true, // Prevent rotation
+            lockRotation: true,
+            lockScalingFlip: true,
           });
           
           // Store region ID on the rect for later updates
