@@ -129,32 +129,61 @@ export default function SchematicEditor({
       selection: true, // Enable selection by default
     });
 
-    // Mouse wheel: Zoom by default, Pan with Shift key
+    // Mouse wheel: Zoom only
     canvas.on('mouse:wheel', (opt) => {
-      const currentTool = activeToolRef.current;
       const delta = opt.e.deltaY;
-      const isShiftKey = opt.e.shiftKey;
       
       opt.e.preventDefault();
       opt.e.stopPropagation();
       
-      if (isShiftKey) {
-        // Shift + Wheel: Pan vertically
-        const vpt = canvas.viewportTransform;
-        if (vpt) {
-          vpt[5] -= delta;
-          canvas.requestRenderAll();
+      let newZoom = canvas.getZoom();
+      newZoom *= 0.999 ** delta;
+      if (newZoom > 10) newZoom = 10;
+      if (newZoom < 0.5) newZoom = 0.5;
+      
+      const pointer = canvas.getPointer(opt.e);
+      canvas.zoomToPoint(pointer, newZoom);
+      setZoom(newZoom);
+    });
+
+    // Middle mouse button panning
+    let isPanning = false;
+    let lastPosX = 0;
+    let lastPosY = 0;
+
+    canvas.on('mouse:down', (opt) => {
+      const e = opt.e;
+      if ('button' in e && e.button === 1) { // Middle mouse button
+        isPanning = true;
+        lastPosX = e.clientX;
+        lastPosY = e.clientY;
+        canvas.selection = false;
+        e.preventDefault();
+      }
+    });
+
+    canvas.on('mouse:move', (opt) => {
+      if (isPanning) {
+        const e = opt.e;
+        if ('clientX' in e && 'clientY' in e) {
+          const vpt = canvas.viewportTransform;
+          if (vpt) {
+            vpt[4] += e.clientX - lastPosX;
+            vpt[5] += e.clientY - lastPosY;
+            canvas.requestRenderAll();
+            lastPosX = e.clientX;
+            lastPosY = e.clientY;
+          }
+          e.preventDefault();
         }
-      } else {
-        // Default: Zoom
-        let newZoom = canvas.getZoom();
-        newZoom *= 0.999 ** delta;
-        if (newZoom > 10) newZoom = 10;
-        if (newZoom < 0.5) newZoom = 0.5;
-        
-        const pointer = canvas.getPointer(opt.e);
-        canvas.zoomToPoint(pointer, newZoom);
-        setZoom(newZoom);
+      }
+    });
+
+    canvas.on('mouse:up', (opt) => {
+      const e = opt.e;
+      if ('button' in e && e.button === 1) {
+        isPanning = false;
+        canvas.selection = true;
       }
     });
 
