@@ -803,13 +803,18 @@ export default function SchematicEditor({
       const updateTextPositions = () => {
         const newLeft = background.left || x;
         const newTop = background.top || y;
-        const scaleX = background.scaleX || 1;
-        const scaleY = background.scaleY || 1;
+        const newScaleX = background.scaleX || 1;
+        const newScaleY = background.scaleY || 1;
         
-        // Calculate offsets based on origin type
-        const newBaseLeftOffset = useTopLeftOrigin ? 3 * scaleX : (-(cardWidth * scaleX) / 2 + 3 * scaleX);
-        const newBaseTopOffset = useTopLeftOrigin ? 2 * scaleY : (-(cardHeight * scaleY) / 2 + 2 * scaleY);
-        const newValueLeftOffset = useTopLeftOrigin ? (labelColumnWidth + 3) * scaleX : (-(cardWidth * scaleX) / 2 + (labelColumnWidth + 3) * scaleX);
+        // Calculate scaled dimensions
+        const scaledWidth = cardWidth * newScaleX;
+        const scaledHeight = cardHeight * newScaleY;
+        const scaledRowHeight = rowHeight * newScaleY;
+        
+        // Calculate offsets based on origin type with NEW scaled dimensions
+        const newBaseLeftOffset = useTopLeftOrigin ? 3 * newScaleX : (-scaledWidth / 2 + 3 * newScaleX);
+        const newBaseTopOffset = useTopLeftOrigin ? 2 * newScaleY : (-scaledHeight / 2 + 2 * newScaleY);
+        const newValueLeftOffset = useTopLeftOrigin ? (labelColumnWidth + 3) * newScaleX : (-scaledWidth / 2 + (labelColumnWidth + 3) * newScaleX);
         
         // Move and scale all text elements with the background
         textElements.forEach((text, i) => {
@@ -820,17 +825,17 @@ export default function SchematicEditor({
           if (!isSeparator) {
             text.set({
               left: newLeft + (isLabel ? newBaseLeftOffset : newValueLeftOffset),
-              top: newTop + newBaseTopOffset + fieldIndex * rowHeight * scaleY,
-              scaleX: scaleX,
-              scaleY: scaleY,
+              top: newTop + newBaseTopOffset + fieldIndex * scaledRowHeight,
+              scaleX: newScaleX,
+              scaleY: newScaleY,
             });
           } else {
             // Update line positions with scale
             if (i === textElements.length - 1) {
               // Vertical separator
-              const vertX = useTopLeftOrigin ? newLeft + labelColumnWidth * scaleX : newLeft - (cardWidth * scaleX) / 2 + labelColumnWidth * scaleX;
-              const vertY1 = useTopLeftOrigin ? newTop : newTop - (cardHeight * scaleY) / 2;
-              const vertY2 = useTopLeftOrigin ? newTop + cardHeight * scaleY : newTop + (cardHeight * scaleY) / 2;
+              const vertX = useTopLeftOrigin ? newLeft + labelColumnWidth * newScaleX : newLeft - scaledWidth / 2 + labelColumnWidth * newScaleX;
+              const vertY1 = useTopLeftOrigin ? newTop : newTop - scaledHeight / 2;
+              const vertY2 = useTopLeftOrigin ? newTop + scaledHeight : newTop + scaledHeight / 2;
               text.set({
                 x1: vertX,
                 y1: vertY1,
@@ -841,10 +846,10 @@ export default function SchematicEditor({
               // Horizontal separators
               const separatorFieldIndex = Math.floor((i - 1) / 3);
               const separatorY = useTopLeftOrigin 
-                ? newTop + (separatorFieldIndex + 1) * rowHeight * scaleY
-                : newTop - (cardHeight * scaleY) / 2 + (separatorFieldIndex + 1) * rowHeight * scaleY;
-              const separatorX1 = useTopLeftOrigin ? newLeft : newLeft - (cardWidth * scaleX) / 2;
-              const separatorX2 = useTopLeftOrigin ? newLeft + cardWidth * scaleX : newLeft + (cardWidth * scaleX) / 2;
+                ? newTop + (separatorFieldIndex + 1) * scaledRowHeight
+                : newTop - scaledHeight / 2 + (separatorFieldIndex + 1) * scaledRowHeight;
+              const separatorX1 = useTopLeftOrigin ? newLeft : newLeft - scaledWidth / 2;
+              const separatorX2 = useTopLeftOrigin ? newLeft + scaledWidth : newLeft + scaledWidth / 2;
               text.set({
                 x1: separatorX1,
                 y1: separatorY,
@@ -856,9 +861,9 @@ export default function SchematicEditor({
         });
         
         // Update vertical separator
-        const newVertX = useTopLeftOrigin ? newLeft + labelColumnWidth * scaleX : newLeft - (cardWidth * scaleX) / 2 + labelColumnWidth * scaleX;
-        const newVertY1 = useTopLeftOrigin ? newTop : newTop - (cardHeight * scaleY) / 2;
-        const newVertY2 = useTopLeftOrigin ? newTop + cardHeight * scaleY : newTop + (cardHeight * scaleY) / 2;
+        const newVertX = useTopLeftOrigin ? newLeft + labelColumnWidth * newScaleX : newLeft - scaledWidth / 2 + labelColumnWidth * newScaleX;
+        const newVertY1 = useTopLeftOrigin ? newTop : newTop - scaledHeight / 2;
+        const newVertY2 = useTopLeftOrigin ? newTop + scaledHeight : newTop + scaledHeight / 2;
         
         verticalSeparator.set({
           x1: newVertX,
