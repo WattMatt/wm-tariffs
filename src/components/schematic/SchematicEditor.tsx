@@ -1594,7 +1594,7 @@ export default function SchematicEditor({
       {/* Legend and PDF Controls in two panes */}
       <div className="flex gap-4 mb-2">
         {/* Left pane - Legends */}
-        <div className="flex-1 space-y-3 p-4 bg-muted/50 rounded-lg border border-border">
+        <div className="flex-1 space-y-3 p-2">
           {/* Top row - Zones */}
           <div className="flex gap-3 flex-wrap items-center">
             <div className="text-xs font-medium text-muted-foreground mr-2 flex items-center">Zones:</div>
@@ -1687,8 +1687,8 @@ export default function SchematicEditor({
         </div>
 
         {/* Right pane - PDF Zoom Controls */}
-        <div className="flex items-center">
-          <div className="flex gap-2 items-center bg-muted/50 px-4 py-2 rounded-lg border border-border h-fit">
+        <div className="flex items-end pb-2">
+          <div className="flex gap-2 items-center">
             <Button variant="outline" size="sm" onClick={handleZoomOut}>
               <ZoomOut className="w-4 h-4" />
             </Button>
