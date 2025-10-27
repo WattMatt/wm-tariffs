@@ -355,13 +355,12 @@ export default function SchematicEditor({
         canvas.relativePan(delta);
       }
       
-      // Update control positions for active object after viewport change
-      const activeObject = canvas.getActiveObject();
-      if (activeObject) {
-        activeObject.setCoords();
-      }
+      // Critical: Update coordinates for ALL objects to sync controls with viewport
+      canvas.getObjects().forEach(obj => {
+        obj.setCoords();
+      });
       
-      canvas.renderAll();
+      canvas.requestRenderAll();
     });
 
     // Panning variables (consolidated single implementation)
@@ -585,13 +584,12 @@ export default function SchematicEditor({
         const delta = new Point(deltaX, deltaY);
         canvas.relativePan(delta);
         
-        // Update control positions for active object after panning
-        const activeObject = canvas.getActiveObject();
-        if (activeObject) {
-          activeObject.setCoords();
-        }
+        // Critical: Update coordinates for ALL objects to sync controls with viewport
+        canvas.getObjects().forEach(obj => {
+          obj.setCoords();
+        });
         
-        canvas.renderAll();
+        canvas.requestRenderAll();
         
         lastX = evt.clientX;
         lastY = evt.clientY;
