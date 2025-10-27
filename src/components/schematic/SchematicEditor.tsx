@@ -360,6 +360,7 @@ export default function SchematicEditor({
           const activeObj = canvas.getActiveObject();
           if (activeObj) {
             activeObj.setCoords();
+            canvas.requestRenderAll();
           }
         });
       }
@@ -591,6 +592,7 @@ export default function SchematicEditor({
           const activeObj = canvas.getActiveObject();
           if (activeObj) {
             activeObj.setCoords();
+            canvas.requestRenderAll();
           }
         });
         
