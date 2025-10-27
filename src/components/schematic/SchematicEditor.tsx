@@ -810,9 +810,14 @@ export default function SchematicEditor({
       canvas.setDimensions({ width: canvasWidth, height: canvasHeight });
       
       img.scale(scale);
-      img.set({ left: 0, top: 0 });
-      img.selectable = false;
-      img.evented = false;
+      img.set({ 
+        left: 0, 
+        top: 0,
+        selectable: false,
+        evented: false,
+      });
+      // Mark as background image
+      (img as any).isBackgroundImage = true;
       canvas.add(img);
       canvas.sendObjectToBack(img);
       canvas.renderAll();
@@ -835,14 +840,11 @@ export default function SchematicEditor({
   useEffect(() => {
     if (!fabricCanvas) return;
     
-    // Clear existing objects (except the background schematic image)
+    // Clear all objects except the background schematic image
     const objects = fabricCanvas.getObjects();
     objects.forEach(obj => {
-      // Keep only the background image (first image added), remove everything else
-      const isBackgroundImage = obj.type === 'image' && 
-        obj === fabricCanvas.getObjects().find(o => o.type === 'image');
-      
-      if (!isBackgroundImage) {
+      // Keep only the marked background image
+      if (!(obj as any).isBackgroundImage) {
         fabricCanvas.remove(obj);
       }
     });
