@@ -719,7 +719,8 @@ export default function SchematicEditor({
 
       const textElements: Text[] = [];
       // Calculate font size based on card height for better scaling
-      const fontSize = Math.max(8, Math.min(12, rowHeight * 0.5));
+      // Reduce font size to fit smaller rectangles better
+      const fontSize = Math.max(6, Math.min(10, rowHeight * 0.35));
       
       // Calculate base positions based on origin type
       const baseLeftOffset = useTopLeftOrigin ? 5 * scaleX : (-(cardWidth * scaleX) / 2 + 5 * scaleX);
