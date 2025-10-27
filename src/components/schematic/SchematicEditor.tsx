@@ -258,6 +258,7 @@ export default function SchematicEditor({
     fabricLabel?: any;
   }>>([]);
   const [selectedExtractedMeterIds, setSelectedExtractedMeterIds] = useState<string[]>([]);
+  const [selectedRegionIndices, setSelectedRegionIndices] = useState<number[]>([]);
   const [meterPositions, setMeterPositions] = useState<MeterPosition[]>([]);
   const drawingRectRef = useRef<any>(null);
   const drawStartPointRef = useRef<{ x: number; y: number } | null>(null);
@@ -1861,9 +1862,9 @@ export default function SchematicEditor({
                     fabricCanvas.renderAll();
                   }
                   setDrawnRegions([]);
-                  toast.info("Region selection disabled - all regions cleared");
+                  toast.info("Region drawing disabled - all regions cleared");
                 } else {
-                  toast.info("Region selection disabled");
+                  toast.info("Region drawing disabled");
                 }
               } else {
                 // Enable draw mode
@@ -1876,7 +1877,24 @@ export default function SchematicEditor({
             className="gap-2"
           >
             <Scan className="w-4 h-4" />
-            Select Regions {drawnRegions.length > 0 && `(${drawnRegions.length})`}
+            Draw Regions {drawnRegions.length > 0 && `(${drawnRegions.length})`}
+          </Button>
+          <Button
+            variant={selectedRegionIndices.length > 0 ? "default" : "outline"}
+            onClick={() => {
+              if (selectedRegionIndices.length > 0) {
+                setSelectedRegionIndices([]);
+                toast.info("Region selection cleared");
+              } else {
+                toast.info("Shift+click on regions to select them", { duration: 4000 });
+              }
+            }}
+            disabled={!isEditMode || drawnRegions.length === 0}
+            size="sm"
+            className="gap-2"
+          >
+            <Scan className="w-4 h-4" />
+            Select Regions {selectedRegionIndices.length > 0 && `(${selectedRegionIndices.length})`}
           </Button>
           <MeterDataExtractor
             siteId={siteId}
