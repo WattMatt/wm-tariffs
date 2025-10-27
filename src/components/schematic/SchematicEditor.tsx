@@ -516,6 +516,21 @@ export default function SchematicEditor({
       e.preventDefault();
     });
 
+    // Prevent default middle-click behavior (auto-scroll, etc.) to allow panning
+    canvas.getElement().addEventListener('auxclick', (e) => {
+      if (e.button === 1) { // Middle mouse button
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    });
+    
+    // Also prevent mousedown default for middle button
+    canvas.getElement().addEventListener('mousedown', (e) => {
+      if (e.button === 1) { // Middle mouse button
+        e.preventDefault();
+      }
+    });
+
     setFabricCanvas(canvas);
 
     // Load background image
