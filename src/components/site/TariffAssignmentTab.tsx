@@ -47,6 +47,7 @@ interface Meter {
   name: string;
   tariff: string | null;
   meter_type: string;
+  mccb_size: number | null;
 }
 
 interface DocumentShopNumber {
@@ -133,7 +134,7 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
   const fetchMeters = async () => {
     const { data, error } = await supabase
       .from("meters")
-      .select("id, meter_number, name, tariff, meter_type")
+      .select("id, meter_number, name, tariff, meter_type, mccb_size")
       .eq("site_id", siteId)
       .order("meter_number");
 
@@ -393,6 +394,7 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
                       <TableHead>Meter Number</TableHead>
                       <TableHead>Name</TableHead>
                       <TableHead>Type</TableHead>
+                      <TableHead>Breaker Size (A)</TableHead>
                       <TableHead>Shop Numbers</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Assigned Tariff Structure</TableHead>
@@ -414,6 +416,13 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
                           <TableCell>{meter.name || "—"}</TableCell>
                           <TableCell>
                             <Badge variant="outline">{meter.meter_type}</Badge>
+                          </TableCell>
+                          <TableCell>
+                            {meter.mccb_size ? (
+                              <span className="font-medium">{meter.mccb_size}A</span>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
                           </TableCell>
                           <TableCell>
                             {matchingShops.length > 0 ? (
