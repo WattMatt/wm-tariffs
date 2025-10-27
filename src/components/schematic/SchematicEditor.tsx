@@ -189,6 +189,10 @@ export default function SchematicEditor({
         if (isRegionRect) {
           // Allow selecting and manipulating existing rectangles in draw mode
           canvas.selection = true;
+          canvas.setActiveObject(target);
+          canvas.renderAll();
+          evt.preventDefault();
+          evt.stopPropagation();
           return; // Let Fabric.js handle the selection
         }
         
