@@ -346,12 +346,6 @@ export default function SchematicEditor({
         canvas.zoomToPoint(pointer, zoom);
         setZoom(zoom);
       } else {
-        // Deselect active object before panning to prevent control drift
-        const activeObj = canvas.getActiveObject();
-        if (activeObj) {
-          canvas.discardActiveObject();
-        }
-        
         // Pan the viewport
         const vpt = canvas.viewportTransform;
         if (vpt) {
@@ -365,12 +359,13 @@ export default function SchematicEditor({
           canvas.setViewportTransform(vpt);
         }
         
-        // Reselect the object after panning to force control update
-        if (activeObj) {
-          canvas.setActiveObject(activeObj);
-        }
-        
         canvas.requestRenderAll();
+        
+        // Force control update by triggering viewport-changed event
+        const activeObj = canvas.getActiveObject();
+        if (activeObj) {
+          canvas.fire('selection:updated', { selected: [activeObj], deselected: [] });
+        }
       }
     });
 
@@ -592,12 +587,6 @@ export default function SchematicEditor({
         const deltaX = evt.clientX - lastX;
         const deltaY = evt.clientY - lastY;
         
-        // Deselect active object before panning to prevent control drift
-        const activeObj = canvas.getActiveObject();
-        if (activeObj) {
-          canvas.discardActiveObject();
-        }
-        
         // Pan the viewport
         const vpt = canvas.viewportTransform;
         if (vpt) {
@@ -606,12 +595,13 @@ export default function SchematicEditor({
           canvas.setViewportTransform(vpt);
         }
         
-        // Reselect the object after panning to force control update
-        if (activeObj) {
-          canvas.setActiveObject(activeObj);
-        }
-        
         canvas.requestRenderAll();
+        
+        // Force control update by triggering viewport-changed event
+        const activeObj = canvas.getActiveObject();
+        if (activeObj) {
+          canvas.fire('selection:updated', { selected: [activeObj], deselected: [] });
+        }
         
         lastX = evt.clientX;
         lastY = evt.clientY;
