@@ -1181,8 +1181,12 @@ export default function SchematicEditor({
       
       // Generate meter card image
       createMeterCardImage(fields, borderColor, cardWidth, cardHeight).then(imageDataUrl => {
-        FabricImage.fromURL(imageDataUrl).then(img => {
-          img.set({
+        // Load image from data URL
+        const imgElement = document.createElement('img');
+        imgElement.src = imageDataUrl;
+        
+        imgElement.onload = () => {
+          const img = new FabricImage(imgElement, {
             left: x,
             top: y,
             originX: 'center',
@@ -1240,7 +1244,7 @@ export default function SchematicEditor({
 
           fabricCanvas.add(img);
           fabricCanvas.renderAll();
-        });
+        };
       });
     });
 
