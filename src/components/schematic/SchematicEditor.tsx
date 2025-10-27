@@ -1460,7 +1460,7 @@ export default function SchematicEditor({
       </div>
       
       <div className="flex gap-2 items-center flex-wrap">
-        <Button onClick={handleScanAll} disabled={isSaving} variant="default">
+        <Button onClick={handleScanAll} disabled={isSaving || activeTool !== "select"} variant="default">
           <Scan className="w-4 h-4 mr-2" />
           {isSaving ? 'Scanning...' : (drawnRegions.length > 0 ? 'Scan All Regions' : 'Scan All Meters')}
         </Button>
@@ -1470,6 +1470,7 @@ export default function SchematicEditor({
             setActiveTool("draw");
             toast.info("Left-click to draw regions. Hold middle mouse + drag to pan.", { duration: 4000 });
           }}
+          disabled={activeTool !== "select" && activeTool !== "draw"}
           size="sm"
           className="gap-2"
         >
@@ -1480,6 +1481,7 @@ export default function SchematicEditor({
           <Button
             variant="destructive"
             onClick={handleClearRegions}
+            disabled={activeTool !== "select" && activeTool !== "draw"}
             size="sm"
             className="gap-2"
           >
@@ -1490,6 +1492,7 @@ export default function SchematicEditor({
         <Button
           variant={activeTool === "meter" ? "default" : "outline"}
           onClick={() => setActiveTool("meter")}
+          disabled={activeTool !== "select" && activeTool !== "meter"}
           size="sm"
         >
           <Plus className="w-4 h-4 mr-2" />
@@ -1498,6 +1501,7 @@ export default function SchematicEditor({
         <Button
           variant={activeTool === "move" ? "default" : "outline"}
           onClick={() => setActiveTool("move")}
+          disabled={activeTool !== "select" && activeTool !== "move"}
           size="sm"
         >
           <Move className="w-4 h-4 mr-2" />
@@ -1506,6 +1510,7 @@ export default function SchematicEditor({
         <Button
           variant={activeTool === "connection" ? "default" : "outline"}
           onClick={() => setActiveTool("connection")}
+          disabled={activeTool !== "select" && activeTool !== "connection"}
           size="sm"
         >
           <Link2 className="w-4 h-4 mr-2" />
@@ -1534,12 +1539,12 @@ export default function SchematicEditor({
           onDrawnRegionsUpdate={setDrawnRegions}
         />
         <div className="flex-1" />
-        <Button onClick={handleClearLines} variant="destructive" size="sm">
+        <Button onClick={handleClearLines} variant="destructive" size="sm" disabled={activeTool !== "select"}>
           <Trash2 className="w-4 h-4 mr-2" />
           Clear Lines
         </Button>
         <div className="flex-1" />
-        <Button onClick={handleSave} disabled={isSaving} size="sm">
+        <Button onClick={handleSave} disabled={isSaving || activeTool !== "select"} size="sm">
           <Save className="w-4 h-4 mr-2" />
           Save
         </Button>
