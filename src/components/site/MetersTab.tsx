@@ -509,7 +509,7 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="rating">RATING *</Label>
+                  <Label htmlFor="rating">BREAKER SIZE (RATING) *</Label>
                   <Input 
                     id="rating" 
                     name="rating" 
