@@ -129,24 +129,24 @@ export default function SchematicEditor({
       selection: true, // Enable selection by default
     });
 
-    // Mouse wheel: Zoom in non-draw modes, Pan in draw mode
+    // Mouse wheel: Zoom by default, Pan with Shift key
     canvas.on('mouse:wheel', (opt) => {
       const currentTool = activeToolRef.current;
       const delta = opt.e.deltaY;
+      const isShiftKey = opt.e.shiftKey;
       
-      if (currentTool === 'draw') {
-        // In draw mode: use wheel to pan vertically
-        opt.e.preventDefault();
-        opt.e.stopPropagation();
-        
+      opt.e.preventDefault();
+      opt.e.stopPropagation();
+      
+      if (isShiftKey) {
+        // Shift + Wheel: Pan vertically
         const vpt = canvas.viewportTransform;
         if (vpt) {
-          // Pan vertically with wheel
           vpt[5] -= delta;
           canvas.requestRenderAll();
         }
       } else {
-        // In other modes: use wheel to zoom
+        // Default: Zoom
         let newZoom = canvas.getZoom();
         newZoom *= 0.999 ** delta;
         if (newZoom > 10) newZoom = 10;
@@ -155,8 +155,6 @@ export default function SchematicEditor({
         const pointer = canvas.getPointer(opt.e);
         canvas.zoomToPoint(pointer, newZoom);
         setZoom(newZoom);
-        opt.e.preventDefault();
-        opt.e.stopPropagation();
       }
     });
 
