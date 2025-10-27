@@ -593,10 +593,21 @@ export default function SchematicEditor({
         fillColor = '#fff7ed';
       }
       
-      // Create table-like card
-      const cardWidth = 200;
-      const cardHeight = 140;
-      const rowHeight = 20;
+      // Calculate card size based on extracted region if available
+      let cardWidth = 200; // default
+      let cardHeight = 140; // default
+      
+      if (meter.extractedRegion) {
+        // Use the region dimensions to size the card
+        cardWidth = (meter.extractedRegion.width / 100) * canvasWidth;
+        cardHeight = (meter.extractedRegion.height / 100) * canvasHeight;
+        
+        // Ensure minimum size for readability
+        cardWidth = Math.max(cardWidth, 150);
+        cardHeight = Math.max(cardHeight, 100);
+      }
+      
+      const rowHeight = cardHeight / 7; // 7 rows of data
       
       // Background rectangle with scaling enabled - ALWAYS moveable
       const background = new Rect({
@@ -649,14 +660,15 @@ export default function SchematicEditor({
       ];
 
       const textElements: Text[] = [];
-      // Use the scaleX/scaleY already defined above
+      // Calculate font size based on card height for better scaling
+      const fontSize = Math.max(8, Math.min(12, rowHeight * 0.5));
       
       fields.forEach((field, i) => {
         // Label text (left column)
         const labelText = new Text(field.label, {
           left: x - (cardWidth * scaleX) / 2 + 5 * scaleX,
           top: y - (cardHeight * scaleY) / 2 + i * rowHeight * scaleY + 3 * scaleY,
-          fontSize: 9,
+          fontSize: fontSize,
           fill: '#000',
           fontWeight: 'bold',
           fontFamily: 'Arial',
@@ -667,12 +679,13 @@ export default function SchematicEditor({
         });
         textElements.push(labelText);
 
-        // Value text (right column) - truncate if too long
-        const valueDisplay = field.value.length > 20 ? field.value.substring(0, 20) + '...' : field.value;
+        // Value text (right column) - adjust truncation based on card width
+        const maxValueLength = Math.floor(cardWidth / 8);
+        const valueDisplay = field.value.length > maxValueLength ? field.value.substring(0, maxValueLength) + '...' : field.value;
         const valueText = new Text(valueDisplay, {
           left: x - (cardWidth * scaleX) / 2 + 55 * scaleX,
           top: y - (cardHeight * scaleY) / 2 + i * rowHeight * scaleY + 3 * scaleY,
-          fontSize: 9,
+          fontSize: fontSize,
           fill: '#000',
           fontFamily: 'Arial',
           selectable: false,
