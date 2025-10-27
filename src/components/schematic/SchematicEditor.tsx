@@ -1549,6 +1549,15 @@ export default function SchematicEditor({
           
           <Badge 
             variant="outline" 
+            className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.council_connection_zone ? 'opacity-40' : ''}`}
+            onClick={() => setLegendVisibility(prev => ({ ...prev, council_connection_zone: !prev.council_connection_zone }))}
+          >
+            <div className="w-3 h-3 rounded-full bg-[#ec4899] mr-2" />
+            Council Connection
+          </Badge>
+          
+          <Badge 
+            variant="outline" 
             className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.mini_sub_zone ? 'opacity-40' : ''}`}
             onClick={() => setLegendVisibility(prev => ({ ...prev, mini_sub_zone: !prev.mini_sub_zone }))}
           >
@@ -1564,33 +1573,6 @@ export default function SchematicEditor({
             <div className="w-3 h-3 rounded-full bg-[#9333ea] mr-2" />
             Main Board
           </Badge>
-          
-          <Badge 
-            variant="outline" 
-            className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.council_connection_zone ? 'opacity-40' : ''}`}
-            onClick={() => setLegendVisibility(prev => ({ ...prev, council_connection_zone: !prev.council_connection_zone }))}
-          >
-            <div className="w-3 h-3 rounded-full bg-[#ec4899] mr-2" />
-            Council Connection
-          </Badge>
-          
-          <div className="flex-1" />
-          
-          {/* PDF Controls */}
-          <div className="flex gap-2 items-center">
-            <Button variant="outline" size="sm" onClick={handleZoomOut}>
-              <ZoomOut className="w-4 h-4" />
-            </Button>
-            <Badge variant="outline" className="px-3">
-              {Math.round(zoom * 100)}%
-            </Badge>
-            <Button variant="outline" size="sm" onClick={handleZoomIn}>
-              <ZoomIn className="w-4 h-4" />
-            </Button>
-            <Button variant="outline" size="sm" onClick={handleResetZoom}>
-              <Maximize2 className="w-4 h-4" />
-            </Button>
-          </div>
         </div>
         
         {/* Bottom row - Meters */}
@@ -1651,6 +1633,24 @@ export default function SchematicEditor({
               </Badge>
             </>
           )}
+          
+          <div className="flex-1" />
+          
+          {/* PDF Controls */}
+          <div className="flex gap-2 items-center">
+            <Button variant="outline" size="sm" onClick={handleZoomOut}>
+              <ZoomOut className="w-4 h-4" />
+            </Button>
+            <Badge variant="outline" className="px-3">
+              {Math.round(zoom * 100)}%
+            </Badge>
+            <Button variant="outline" size="sm" onClick={handleZoomIn}>
+              <ZoomIn className="w-4 h-4" />
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleResetZoom}>
+              <Maximize2 className="w-4 h-4" />
+            </Button>
+          </div>
         </div>
       </div>
 
