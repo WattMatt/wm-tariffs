@@ -910,58 +910,6 @@ export default function SchematicEditor({
       const strokeWidth = isSelected ? 4 : 3;
       
       const rowHeight = cardHeight / 7;
-      
-      // Background rectangle - simple top-left positioning, NO SCALING
-      const background = new Rect({
-        left: x,
-        top: y,
-        width: cardWidth,
-        height: cardHeight,
-        fill: fillColor,
-        stroke: borderColor,
-        strokeWidth: strokeWidth,
-        hasControls: isEditMode,
-        selectable: isEditMode,
-        hoverCursor: isEditMode ? 'move' : 'pointer',
-        originX: 'left',  // Always use top-left origin
-        originY: 'top',
-        lockRotation: true,
-        lockScalingX: true,  // Prevent scaling
-        lockScalingY: true,
-      });
-
-      // Store the actual meter data and index directly in the fabric object
-      background.set('data', { 
-        type: 'extracted', 
-        index: capturedIndex,
-        meterNumber: meter.meter_number,
-        meterData: meter 
-      });
-      
-      // Add selection handler
-      background.on('mousedown', (e) => {
-        if (e.e.shiftKey) {
-          // Shift+click for multi-select (works anytime)
-          handleToggleSelectMeter(capturedIndex);
-          e.e.stopPropagation();
-          e.e.preventDefault();
-        }
-        // Regular click no longer opens dialog - only double-click does
-      });
-
-      background.on('mousedblclick', () => {
-        const objectData = background.get('data') as any;
-        const meterIndex = objectData.index;
-        const meter = extractedMeters[meterIndex];
-        console.log('🔍 Opening dialog for meter:', {
-          index: meterIndex,
-          hasScannedSnippet: !!meter?.scannedImageSnippet,
-          snippetUrl: meter?.scannedImageSnippet,
-          fullMeter: meter
-        });
-        setSelectedMeterIndex(meterIndex);
-        setIsConfirmMeterDialogOpen(true);
-      });
 
       // Create table rows with labels and values
       const fields = [
