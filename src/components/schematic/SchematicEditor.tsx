@@ -305,7 +305,7 @@ export default function SchematicEditor({
               left: pointer.x,
               top: pointer.y,
               radius: 5,
-              fill: '#f59e0b',
+              fill: 'hsl(210, 100%, 45%)', // Primary blue
               stroke: '#ffffff',
               strokeWidth: 2,
               selectable: false,
@@ -354,19 +354,21 @@ export default function SchematicEditor({
             top,
             width,
             height,
-            fill: 'rgba(245, 158, 11, 0.15)',
-            stroke: '#f59e0b',
+            fill: 'rgba(14, 116, 221, 0.1)', // Primary blue with transparency
+            stroke: 'hsl(210, 100%, 45%)', // Primary blue
             strokeWidth: 2,
             selectable: true,
             evented: true,
             hasControls: true,
             hasBorders: true,
-            cornerColor: '#f59e0b',
+            lockMovementX: false,
+            lockMovementY: false,
+            cornerColor: 'hsl(210, 100%, 45%)',
             cornerSize: 12,
             transparentCorners: false,
             lockRotation: true,
             lockScalingFlip: true,
-            borderColor: '#f59e0b',
+            borderColor: 'hsl(210, 100%, 45%)',
             cornerStyle: 'circle',
           });
           
@@ -381,7 +383,7 @@ export default function SchematicEditor({
             left: left + 8,
             top: top + 8,
             fontSize: 16,
-            fill: '#f59e0b',
+            fill: 'hsl(210, 100%, 45%)', // Primary blue
             fontWeight: 'bold',
             selectable: false,
             evented: false,
@@ -427,7 +429,7 @@ export default function SchematicEditor({
           canvas.setActiveObject(rect);
           canvas.renderAll();
           
-          // Clean up drawing markers
+          // Clean up drawing markers - MUST remove all markers
           if (startMarkerRef.current) {
             canvas.remove(startMarkerRef.current);
             startMarkerRef.current = null;
@@ -500,8 +502,8 @@ export default function SchematicEditor({
           top,
           width,
           height,
-          fill: 'rgba(245, 158, 11, 0.1)',
-          stroke: '#f59e0b',
+          fill: 'rgba(14, 116, 221, 0.1)', // Primary blue with transparency
+          stroke: 'hsl(210, 100%, 45%)', // Primary blue
           strokeWidth: 1,
           strokeDashArray: [5, 5],
           selectable: false,
