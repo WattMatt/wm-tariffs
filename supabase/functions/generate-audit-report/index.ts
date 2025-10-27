@@ -32,12 +32,35 @@ serve(async (req) => {
 
     const sections: any = {};
 
-    // Prepare CSV columns summary for AI context
-    const csvColumnsSummary = selectedCsvColumns && selectedCsvColumns.length > 0
-      ? `\nSelected CSV Columns for Analysis:\n${selectedCsvColumns.map((col: any) => 
-          `- ${col.columnName} (${col.aggregation}, multiplier: ${col.multiplier})`
-        ).join('\n')}`
-      : '';
+    // Prepare CSV columns summary for AI context with actual data
+    let csvColumnsSummary = '';
+    if (selectedCsvColumns && selectedCsvColumns.length > 0) {
+      csvColumnsSummary = `\n\n=== CRITICAL: CSV COLUMNS DATA ANALYSIS ===\nThe following CSV columns have been selected and MUST be analyzed in detail:\n${selectedCsvColumns.map((col: any) => 
+        `- ${col.columnName} (aggregation: ${col.aggregation}, multiplier: ${col.multiplier})`
+      ).join('\n')}`;
+      
+      // Add actual values for each meter
+      csvColumnsSummary += '\n\nMeter-by-Meter CSV Data:\n';
+      meterHierarchy.forEach((meter: any) => {
+        csvColumnsSummary += `\n${meter.meterNumber} (${meter.name}):\n`;
+        
+        // Add totals
+        if (meter.columnTotals && Object.keys(meter.columnTotals).length > 0) {
+          csvColumnsSummary += '  Totals:\n';
+          Object.entries(meter.columnTotals).forEach(([key, value]) => {
+            csvColumnsSummary += `    - ${key}: ${value}\n`;
+          });
+        }
+        
+        // Add max values
+        if (meter.columnMaxValues && Object.keys(meter.columnMaxValues).length > 0) {
+          csvColumnsSummary += '  Maximum Values:\n';
+          Object.entries(meter.columnMaxValues).forEach(([key, value]) => {
+            csvColumnsSummary += `    - ${key}: ${value}\n`;
+          });
+        }
+      });
+    }
 
     // Generate Executive Summary
     const executiveSummaryPrompt = `Generate a professional executive summary for a metering audit report for ${siteName}.
@@ -143,12 +166,7 @@ ${JSON.stringify(reconciliationData, null, 2)}
 
 Meter Breakdown:
 ${JSON.stringify(meterBreakdown, null, 2)}
-
-Selected CSV Columns Analysis:
-${selectedCsvColumns && selectedCsvColumns.length > 0 ? JSON.stringify(selectedCsvColumns, null, 2) : 'No CSV columns selected'}
-
-Detailed Meter CSV Data:
-${JSON.stringify(meterHierarchy, null, 2)}
+${csvColumnsSummary}
 
 Structure as numbered subsections (3.1, 3.2, 3.3, etc.):
 
@@ -157,12 +175,34 @@ Structure as numbered subsections (3.1, 3.2, 3.3, etc.):
 - Specify meter numbers and reading counts
 - Discuss implications for reconciliation accuracy
 
-3.2 CSV Data Analysis${selectedCsvColumns && selectedCsvColumns.length > 0 ? `
-- Analyze the selected CSV columns: ${selectedCsvColumns.map((c: any) => c.columnName).join(', ')}
-- For each meter, review the columnTotals and columnMaxValues from the detailed meter data
-- Identify patterns, outliers, or anomalies in P1/P2 (kWh), kVA, kvarh values
-- Compare values across meters to identify inconsistencies
-- Note any meters with unusual readings or missing CSV data` : ''}
+${selectedCsvColumns && selectedCsvColumns.length > 0 ? `3.2 CSV Data Analysis - MANDATORY SECTION
+THIS SECTION IS CRITICAL AND MUST BE INCLUDED.
+
+You MUST analyze the CSV column data provided above. For each selected column (${selectedCsvColumns.map((c: any) => c.columnName).join(', ')}):
+
+a) Present the data in a clear table format showing:
+   - Meter number and name
+   - Values for each selected CSV column
+   - Units and aggregation method used
+
+b) Analyze patterns and anomalies:
+   - Compare P1 (kWh) and P2 (kWh) values across meters if present
+   - Identify meters with unusually high or low kVA maximum demand
+   - Note any missing data or zero values that seem unusual
+   - Compare reactive power (kvarh) to active power (kWh) ratios
+
+c) Highlight specific concerns:
+   - Any meter where CSV data is missing
+   - Unusual power factor implications
+   - Demand charges that may be incorrectly billed
+
+Example format:
+"Analysis of P1 (kWh), P2 (kWh), and S (kVA) readings:
+- Meter 12345: P1=1500 kWh, P2=800 kWh, S=45 kVA max demand
+- Meter 67890: P1=3200 kWh, P2=1100 kWh, S=78 kVA max demand
+Notable observations: Meter 12345 shows unusually low P2 consumption..."
+
+` : ''}
 
 3.3 Excessive Variance Between Supply and Distribution
 - Analyze the ${reconciliationData.variancePercentage}% variance
