@@ -1125,10 +1125,10 @@ export default function SchematicEditor({
       const x = (pos.x_position / 100) * canvasWidth;
       const y = (pos.y_position / 100) * canvasHeight;
 
-      // Create table-like card
+      // Create table-like card matching PDF style
       const cardWidth = 200;
-      const cardHeight = zone ? 160 : 140; // Increase height if zone is present
-      const rowHeight = 20;
+      const cardHeight = zone ? 160 : 140;
+      const rowHeight = 18; // Slightly reduced for tighter layout like PDF
       
       // Background rectangle with scaling enabled
       const background = new Rect({
@@ -1138,7 +1138,7 @@ export default function SchematicEditor({
         height: cardHeight,
         fill: '#ffffff',
         stroke: borderColor,
-        strokeWidth: 1,
+        strokeWidth: 0.75, // Thinner border like PDF
         hasControls: activeTool === 'move',
         selectable: activeTool === 'move',
         hoverCursor: activeTool === 'move' ? 'move' : (activeTool === 'connection' ? 'pointer' : 'default'),
@@ -1183,44 +1183,47 @@ export default function SchematicEditor({
       const savedScaleY = (pos as any).scale_y ? Number((pos as any).scale_y) : 1.0;
       
       fields.forEach((field, i) => {
-        // Label text (left column)
+        // Label text (left column) - cleaner rendering like PDF
         const labelText = new Text(field.label, {
-          left: x - (cardWidth * savedScaleX) / 2 + 5 * savedScaleX,
-          top: y - (cardHeight * savedScaleY) / 2 + i * rowHeight * savedScaleY + 3 * savedScaleY,
-          fontSize: 12,
-          fill: '#000',
-          fontWeight: 'bold',
-          fontFamily: 'Arial',
+          left: x - (cardWidth * savedScaleX) / 2 + 4 * savedScaleX,
+          top: y - (cardHeight * savedScaleY) / 2 + i * rowHeight * savedScaleY + 2 * savedScaleY,
+          fontSize: 10.5,
+          fill: '#000000',
+          fontWeight: '600',
+          fontFamily: 'system-ui, -apple-system, sans-serif',
           selectable: false,
           evented: false,
           scaleX: savedScaleX,
           scaleY: savedScaleY,
+          strokeWidth: 0,
         });
         textElements.push(labelText);
 
-        // Value text (right column) - truncate if too long
-        const valueDisplay = field.value.length > 20 ? field.value.substring(0, 20) + '...' : field.value;
+        // Value text (right column) - cleaner rendering
+        const valueDisplay = field.value.length > 22 ? field.value.substring(0, 22) + '...' : field.value;
         const valueText = new Text(valueDisplay, {
-          left: x - (cardWidth * savedScaleX) / 2 + 55 * savedScaleX,
-          top: y - (cardHeight * savedScaleY) / 2 + i * rowHeight * savedScaleY + 3 * savedScaleY,
-          fontSize: 12,
-          fill: '#000',
-          fontFamily: 'Arial',
+          left: x - (cardWidth * savedScaleX) / 2 + 60 * savedScaleX,
+          top: y - (cardHeight * savedScaleY) / 2 + i * rowHeight * savedScaleY + 2 * savedScaleY,
+          fontSize: 10.5,
+          fill: '#000000',
+          fontWeight: 'normal',
+          fontFamily: 'system-ui, -apple-system, sans-serif',
           selectable: false,
           evented: false,
           scaleX: savedScaleX,
           scaleY: savedScaleY,
+          strokeWidth: 0,
         });
         textElements.push(valueText);
 
-        // Horizontal separator line
+        // Horizontal separator line - thinner like PDF
         if (i < fields.length - 1) {
           const separator = new Line(
             [x - (cardWidth * savedScaleX) / 2, y - (cardHeight * savedScaleY) / 2 + (i + 1) * rowHeight * savedScaleY, 
              x + (cardWidth * savedScaleX) / 2, y - (cardHeight * savedScaleY) / 2 + (i + 1) * rowHeight * savedScaleY],
             {
-              stroke: borderColor,
-              strokeWidth: 1,
+              stroke: '#cccccc',
+              strokeWidth: 0.5,
               selectable: false,
               evented: false,
             }
