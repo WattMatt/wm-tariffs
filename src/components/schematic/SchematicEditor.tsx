@@ -347,9 +347,9 @@ export default function SchematicEditor({
         }
       }
       
-      // PANNING in non-draw modes: Allow with any button when no target
+      // PANNING in non-draw modes: Allow with left, middle, or right button when no target
       if (currentTool !== 'draw' && !target) {
-        if (evt.button === 0 || evt.button === 2) {
+        if (evt.button === 0 || evt.button === 1 || evt.button === 2) {
           isPanningLocal = true;
           lastX = evt.clientX;
           lastY = evt.clientY;
@@ -818,8 +818,8 @@ export default function SchematicEditor({
       
       // Add selection handler
       background.on('mousedown', (e) => {
-        if (e.e.ctrlKey) {
-          // Ctrl+click for multi-select (works anytime)
+        if (e.e.shiftKey) {
+          // Shift+click for multi-select (works anytime)
           handleToggleSelectMeter(capturedIndex);
           e.e.stopPropagation();
           e.e.preventDefault();
@@ -2080,7 +2080,7 @@ export default function SchematicEditor({
           {/* Help text for multi-select */}
           {extractedMeters.length > 0 && (
             <div className="text-xs text-muted-foreground italic">
-              💡 Tip: Ctrl+Click extracted meters to select multiple for bulk operations
+              💡 Tip: Shift+Click extracted meters to select multiple for bulk operations
             </div>
           )}
         </div>
