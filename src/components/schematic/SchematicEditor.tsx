@@ -39,14 +39,13 @@ interface SchematicLine {
   stroke_width: number;
 }
 
-// Helper function to create meter card as an image
+// Helper function to create meter card as an image matching reference format
 async function createMeterCardImage(
   fields: Array<{ label: string; value: string }>,
   borderColor: string,
   cardWidth: number = 200,
   cardHeight: number = 140
 ): Promise<string> {
-  const rowHeight = 18;
   const canvas = document.createElement('canvas');
   canvas.width = cardWidth;
   canvas.height = cardHeight;
@@ -54,47 +53,53 @@ async function createMeterCardImage(
   
   if (!ctx) return '';
   
+  const rowHeight = cardHeight / fields.length;
+  const labelColumnWidth = 70; // Wider label column for better readability
+  
   // Background
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, cardWidth, cardHeight);
   
-  // Border
-  ctx.strokeStyle = borderColor;
-  ctx.lineWidth = 0.75;
+  // Main outer border
+  ctx.strokeStyle = '#000000';
+  ctx.lineWidth = 1.5;
   ctx.strokeRect(0, 0, cardWidth, cardHeight);
-  
-  // Vertical separator between label and value columns
-  ctx.strokeStyle = '#d1d5db';
-  ctx.lineWidth = 0.5;
-  ctx.beginPath();
-  ctx.moveTo(50, 0);
-  ctx.lineTo(50, cardHeight);
-  ctx.stroke();
   
   // Draw each row
   fields.forEach((field, i) => {
     const y = i * rowHeight;
     
-    // Label text (left column)
-    ctx.fillStyle = '#000000';
-    ctx.font = '600 8px Arial, sans-serif';
-    ctx.textBaseline = 'top';
-    ctx.fillText(field.label, 4, y + 2);
+    // Vertical separator between label and value columns
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(labelColumnWidth, y);
+    ctx.lineTo(labelColumnWidth, y + rowHeight);
+    ctx.stroke();
     
-    // Value text (right column)
-    ctx.font = 'normal 8px Arial, sans-serif';
-    const valueDisplay = field.value.length > 22 ? field.value.substring(0, 22) + '...' : field.value;
-    ctx.fillText(valueDisplay, 54, y + 2);
-    
-    // Horizontal separator line
+    // Horizontal separator line (except after last row)
     if (i < fields.length - 1) {
-      ctx.strokeStyle = '#d1d5db';
-      ctx.lineWidth = 0.5;
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.moveTo(0, (i + 1) * rowHeight);
-      ctx.lineTo(cardWidth, (i + 1) * rowHeight);
+      ctx.moveTo(0, y + rowHeight);
+      ctx.lineTo(cardWidth, y + rowHeight);
       ctx.stroke();
     }
+    
+    // Label text (left column) - bold
+    ctx.fillStyle = '#000000';
+    ctx.font = 'bold 10px Arial, sans-serif';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(field.label, 6, y + rowHeight / 2);
+    
+    // Value text (right column) - normal weight
+    ctx.font = 'normal 10px Arial, sans-serif';
+    const maxValueLength = 26;
+    const valueDisplay = field.value.length > maxValueLength 
+      ? field.value.substring(0, maxValueLength) + '...' 
+      : field.value;
+    ctx.fillText(valueDisplay, labelColumnWidth + 6, y + rowHeight / 2);
   });
   
   return canvas.toDataURL();
