@@ -1,10 +1,48 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import { Image } from "https://deno.land/x/imagescript@1.2.15/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+// Helper function to crop image to specific region
+async function cropImageToRegion(imageUrl: string, region: { x: number, y: number, width: number, height: number, imageWidth: number, imageHeight: number }): Promise<string> {
+  console.log('🔪 Cropping image to region:', region);
+  
+  try {
+    // Download the image
+    const imageResponse = await fetch(imageUrl);
+    if (!imageResponse.ok) {
+      throw new Error(`Failed to download image: ${imageResponse.status}`);
+    }
+    
+    const imageBuffer = await imageResponse.arrayBuffer();
+    const image = await Image.decode(new Uint8Array(imageBuffer));
+    
+    console.log(`📐 Original image dimensions: ${image.width}x${image.height}`);
+    
+    // Crop the image to the specified region (coordinates are in pixels)
+    const croppedImage = image.crop(
+      Math.round(region.x),
+      Math.round(region.y),
+      Math.round(region.width),
+      Math.round(region.height)
+    );
+    
+    console.log(`✂️ Cropped to: ${croppedImage.width}x${croppedImage.height}`);
+    
+    // Encode to PNG and convert to base64
+    const pngBuffer = await croppedImage.encode();
+    const base64 = btoa(String.fromCharCode(...new Uint8Array(pngBuffer)));
+    
+    return `data:image/png;base64,${base64}`;
+  } catch (error) {
+    console.error('❌ Image cropping failed:', error);
+    throw error;
+  }
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -13,7 +51,7 @@ serve(async (req) => {
 
   try {
     const requestBody = await req.json();
-    const { imageUrl, mode, rectangleId, rectangleBounds, region } = requestBody;
+    let { imageUrl, mode, rectangleId, rectangleBounds, region } = requestBody;
     
     if (!imageUrl) {
       return new Response(
@@ -110,8 +148,16 @@ Example: {"meter_number":"DB-01A","name":"VACANT","area":"187m²","rating":"150A
         }
       });
       
-      promptText = `🚨 CRITICAL BOUNDARY RESTRICTION 🚨
-You are STRICTLY FORBIDDEN from looking at ANY part of the image outside the specified rectangular region.
+      // Crop the image to the exact region before sending to AI
+      const croppedImageUrl = await cropImageToRegion(imageUrl, region);
+      console.log('✅ Image cropped - sending only the selected region to AI');
+      
+      // Replace imageUrl with cropped version for this request
+      imageUrl = croppedImageUrl;
+      
+      promptText = `You are an expert electrical engineer extracting meter label information from a cropped meter box image.
+
+⚠️ IMPORTANT: This image shows ONLY the meter box region that was selected. Analyze the entire visible image.
 
 ═══════════════════════════════════════════════════════════════════════════
 ⛔ ABSOLUTE BOUNDARY ENFORCEMENT ⛔
