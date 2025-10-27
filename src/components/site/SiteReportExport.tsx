@@ -66,6 +66,7 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
   const [columnConfigs, setColumnConfigs] = useState<Record<string, ColumnConfig>>({});
   const [isLoadingColumns, setIsLoadingColumns] = useState(false);
   const [previewData, setPreviewData] = useState<PreviewData | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Fetch available meters on mount
   useEffect(() => {
@@ -636,6 +637,8 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
         schematicImageBase64,
         csvColumnAggregations
       } as any);
+      
+      setCurrentPage(1); // Reset to first page
 
       toast.success("Preview generated successfully!");
 
@@ -1688,180 +1691,253 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
             <Separator className="my-6" />
             
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Report Preview</h3>
-              
-              <ScrollArea className="h-[600px] border rounded-lg p-6 bg-background">
-                <div className="space-y-6 max-w-4xl">
-                  {/* Cover Information */}
-                  <div className="text-center space-y-4 p-8 border rounded-lg bg-primary/5">
-                    <h1 className="text-3xl font-bold text-primary">METERING AUDIT REPORT</h1>
-                    <h2 className="text-2xl font-semibold">{previewData.siteName}</h2>
-                    <div className="space-y-1">
-                      <p className="text-sm font-medium">Audit Period</p>
-                      <p className="text-lg font-semibold">
-                        {format(previewData.periodStart, "dd MMMM yyyy")} - {format(previewData.periodEnd, "dd MMMM yyyy")}
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold">Report Preview</h3>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    Previous
+                  </Button>
+                  <span className="text-sm text-muted-foreground px-3">
+                    Page {currentPage} of {(() => {
+                      let totalPages = 1; // Cover page
+                      totalPages += 1; // Executive Summary
+                      totalPages += 1; // Metering Hierarchy
+                      if ((previewData as any).schematicImageBase64) totalPages += 1; // Schematic
+                      totalPages += 1; // Key Metrics
+                      totalPages += 1; // Observations
+                      totalPages += 1; // Recommendations
+                      if (previewData.reportData.sections.billingValidation) totalPages += 1;
+                      return totalPages;
+                    })()}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const maxPages = (() => {
+                        let totalPages = 1;
+                        totalPages += 1;
+                        totalPages += 1;
+                        if ((previewData as any).schematicImageBase64) totalPages += 1;
+                        totalPages += 1;
+                        totalPages += 1;
+                        totalPages += 1;
+                        if (previewData.reportData.sections.billingValidation) totalPages += 1;
+                        return totalPages;
+                      })();
+                      setCurrentPage(Math.min(maxPages, currentPage + 1));
+                    }}
+                    disabled={currentPage >= (() => {
+                      let totalPages = 1;
+                      totalPages += 1;
+                      totalPages += 1;
+                      if ((previewData as any).schematicImageBase64) totalPages += 1;
+                      totalPages += 1;
+                      totalPages += 1;
+                      totalPages += 1;
+                      if (previewData.reportData.sections.billingValidation) totalPages += 1;
+                      return totalPages;
+                    })()}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+
+              {/* Page Container with A4-like aspect ratio */}
+              <div className="border rounded-lg shadow-lg bg-white overflow-hidden" style={{ aspectRatio: '210/297' }}>
+                <div className="h-full w-full p-8 overflow-auto">
+                  {/* Page 1: Cover */}
+                  {currentPage === 1 && (
+                    <div className="h-full flex flex-col items-center justify-center text-center space-y-6">
+                      <div className="w-full bg-primary text-primary-foreground p-8 rounded-lg">
+                        <h1 className="text-4xl font-bold mb-2">METERING AUDIT REPORT</h1>
+                      </div>
+                      <div className="space-y-4 p-8 border rounded-lg bg-muted/30 w-full">
+                        <h2 className="text-3xl font-bold">{previewData.siteName}</h2>
+                        <div className="space-y-2">
+                          <p className="text-sm font-medium text-muted-foreground">Audit Period</p>
+                          <p className="text-xl font-semibold">
+                            {format(previewData.periodStart, "dd MMMM yyyy")} - {format(previewData.periodEnd, "dd MMMM yyyy")}
+                          </p>
+                        </div>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        Report Generated: {format(new Date(), "dd MMMM yyyy 'at' HH:mm")}
                       </p>
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      Report Generated: {format(new Date(), "dd MMMM yyyy 'at' HH:mm")}
-                    </p>
-                  </div>
+                  )}
 
-                  {/* Executive Summary */}
-                  <div className="space-y-3">
-                    <h3 className="text-xl font-bold bg-primary text-primary-foreground p-3 rounded">
-                      1. EXECUTIVE SUMMARY
-                    </h3>
-                    <div className="prose prose-sm max-w-none text-sm whitespace-pre-wrap">
-                      {previewData.reportData.sections.executiveSummary}
+                  {/* Page 2: Executive Summary */}
+                  {currentPage === 2 && (
+                    <div className="space-y-4">
+                      <div className="bg-primary text-primary-foreground p-4 rounded">
+                        <h3 className="text-2xl font-bold">1. EXECUTIVE SUMMARY</h3>
+                      </div>
+                      <div className="prose prose-sm max-w-none text-sm whitespace-pre-wrap">
+                        {previewData.reportData.sections.executiveSummary}
+                      </div>
                     </div>
-                  </div>
+                  )}
 
-                  {/* Metering Hierarchy Overview */}
-                  <div className="space-y-3">
-                    <h3 className="text-xl font-bold bg-primary text-primary-foreground p-3 rounded">
-                      2. METERING HIERARCHY OVERVIEW
-                    </h3>
-                    <div className="prose prose-sm max-w-none text-sm whitespace-pre-wrap">
-                      {previewData.reportData.sections.hierarchyOverview}
+                  {/* Page 3: Metering Hierarchy */}
+                  {currentPage === 3 && (
+                    <div className="space-y-4">
+                      <div className="bg-primary text-primary-foreground p-4 rounded">
+                        <h3 className="text-2xl font-bold">2. METERING HIERARCHY OVERVIEW</h3>
+                      </div>
+                      <div className="prose prose-sm max-w-none text-sm whitespace-pre-wrap">
+                        {previewData.reportData.sections.hierarchyOverview}
+                      </div>
                     </div>
-                  </div>
+                  )}
 
-                  {/* Schematic */}
-                  {(previewData as any).schematicImageBase64 && (
-                    <div className="space-y-3">
-                      <h4 className="text-sm font-semibold">Site Schematic Diagram</h4>
-                      <div className="border rounded-lg p-4 bg-muted/30">
+                  {/* Page 4: Schematic (if available) */}
+                  {(previewData as any).schematicImageBase64 && currentPage === 4 && (
+                    <div className="space-y-4">
+                      <div className="bg-primary text-primary-foreground p-4 rounded">
+                        <h3 className="text-2xl font-bold">SITE SCHEMATIC DIAGRAM</h3>
+                      </div>
+                      <div className="flex flex-col items-center justify-center space-y-2">
                         <img 
                           src={(previewData as any).schematicImageBase64} 
                           alt="Site Metering Schematic" 
-                          className="w-full h-auto"
+                          className="max-w-full h-auto rounded-lg border"
                         />
-                        <p className="text-xs text-muted-foreground text-center mt-2">
+                        <p className="text-xs text-muted-foreground">
                           Figure 1: Site Metering Schematic Diagram
                         </p>
                       </div>
                     </div>
                   )}
 
-                  {/* Key Metrics */}
-                  <div className="space-y-3">
-                    <h3 className="text-xl font-bold bg-primary text-primary-foreground p-3 rounded">
-                      3. KEY METRICS
-                    </h3>
-                    
+                  {/* Page 5 (or 4 if no schematic): Key Metrics */}
+                  {currentPage === ((previewData as any).schematicImageBase64 ? 5 : 4) && (
                     <div className="space-y-4">
-                      <div>
-                        <h4 className="text-sm font-semibold mb-3">Basic Reconciliation Metrics</h4>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="border rounded-lg p-4 space-y-1">
-                            <p className="text-xs text-muted-foreground">Total Supply</p>
-                            <p className="text-2xl font-bold">{previewData.reconciliationData.totalSupply} kWh</p>
-                          </div>
-                          <div className="border rounded-lg p-4 space-y-1">
-                            <p className="text-xs text-muted-foreground">Distribution Total</p>
-                            <p className="text-2xl font-bold">{previewData.reconciliationData.distributionTotal} kWh</p>
-                          </div>
-                          <div className="border rounded-lg p-4 space-y-1">
-                            <p className="text-xs text-muted-foreground">Recovery Rate</p>
-                            <p className="text-2xl font-bold">{previewData.reconciliationData.recoveryRate}%</p>
-                          </div>
-                          <div className="border rounded-lg p-4 space-y-1">
-                            <p className="text-xs text-muted-foreground">Variance</p>
-                            <p className="text-2xl font-bold">
-                              {previewData.reconciliationData.variance} kWh ({previewData.reconciliationData.variancePercentage}%)
-                            </p>
+                      <div className="bg-primary text-primary-foreground p-4 rounded">
+                        <h3 className="text-2xl font-bold">3. KEY METRICS</h3>
+                      </div>
+                      <div className="space-y-4">
+                        <div>
+                          <h4 className="text-sm font-semibold mb-3">Basic Reconciliation Metrics</h4>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="border rounded-lg p-3 space-y-1 bg-muted/30">
+                              <p className="text-xs text-muted-foreground">Total Supply</p>
+                              <p className="text-xl font-bold">{previewData.reconciliationData.totalSupply} kWh</p>
+                            </div>
+                            <div className="border rounded-lg p-3 space-y-1 bg-muted/30">
+                              <p className="text-xs text-muted-foreground">Distribution Total</p>
+                              <p className="text-xl font-bold">{previewData.reconciliationData.distributionTotal} kWh</p>
+                            </div>
+                            <div className="border rounded-lg p-3 space-y-1 bg-muted/30">
+                              <p className="text-xs text-muted-foreground">Recovery Rate</p>
+                              <p className="text-xl font-bold">{previewData.reconciliationData.recoveryRate}%</p>
+                            </div>
+                            <div className="border rounded-lg p-3 space-y-1 bg-muted/30">
+                              <p className="text-xs text-muted-foreground">Variance</p>
+                              <p className="text-xl font-bold">
+                                {previewData.reconciliationData.variance} kWh ({previewData.reconciliationData.variancePercentage}%)
+                              </p>
+                            </div>
                           </div>
                         </div>
-                      </div>
 
-                      {/* CSV Column Aggregations */}
-                      {(previewData as any).csvColumnAggregations && Object.keys((previewData as any).csvColumnAggregations).length > 0 && (
-                        <div>
-                          <h4 className="text-sm font-semibold mb-3">CSV Column Aggregations</h4>
-                          <div className="border rounded-lg overflow-hidden">
-                            <table className="w-full text-sm">
-                              <thead className="bg-primary text-primary-foreground">
-                                <tr>
-                                  <th className="text-left p-2">Column</th>
-                                  <th className="text-right p-2">Value</th>
-                                  <th className="text-center p-2">Unit</th>
-                                  <th className="text-center p-2">Aggregation</th>
-                                  <th className="text-center p-2">Multiplier</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {Object.entries((previewData as any).csvColumnAggregations).map(([columnName, data]: [string, any]) => (
-                                  <tr key={columnName} className="border-t">
-                                    <td className="p-2 font-medium">{columnName}</td>
-                                    <td className="p-2 text-right">{data.value.toFixed(2)}</td>
-                                    <td className="p-2 text-center">{data.aggregation === 'sum' ? 'kWh' : 'kVA'}</td>
-                                    <td className="p-2 text-center uppercase text-xs">{data.aggregation}</td>
-                                    <td className="p-2 text-center">{data.multiplier !== 1 ? `×${data.multiplier}` : '-'}</td>
+                        {(previewData as any).csvColumnAggregations && Object.keys((previewData as any).csvColumnAggregations).length > 0 && (
+                          <div>
+                            <h4 className="text-sm font-semibold mb-3">CSV Column Aggregations</h4>
+                            <div className="border rounded-lg overflow-hidden">
+                              <table className="w-full text-xs">
+                                <thead className="bg-primary text-primary-foreground">
+                                  <tr>
+                                    <th className="text-left p-2">Column</th>
+                                    <th className="text-right p-2">Value</th>
+                                    <th className="text-center p-2">Unit</th>
+                                    <th className="text-center p-2">Agg</th>
+                                    <th className="text-center p-2">Mult</th>
                                   </tr>
-                                ))}
-                              </tbody>
-                            </table>
+                                </thead>
+                                <tbody>
+                                  {Object.entries((previewData as any).csvColumnAggregations).map(([columnName, data]: [string, any]) => (
+                                    <tr key={columnName} className="border-t">
+                                      <td className="p-2 font-medium">{columnName}</td>
+                                      <td className="p-2 text-right">{data.value.toFixed(2)}</td>
+                                      <td className="p-2 text-center">{data.aggregation === 'sum' ? 'kWh' : 'kVA'}</td>
+                                      <td className="p-2 text-center uppercase">{data.aggregation}</td>
+                                      <td className="p-2 text-center">{data.multiplier !== 1 ? `×${data.multiplier}` : '-'}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
                           </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Page 6 (or 5): Observations */}
+                  {currentPage === ((previewData as any).schematicImageBase64 ? 6 : 5) && (
+                    <div className="space-y-4">
+                      <div className="bg-primary text-primary-foreground p-4 rounded">
+                        <h3 className="text-2xl font-bold">4. OBSERVATIONS AND ANOMALIES</h3>
+                      </div>
+                      <div className="prose prose-sm max-w-none text-xs whitespace-pre-wrap">
+                        {previewData.reportData.sections.observations}
+                      </div>
+                      {previewData.anomalies.length > 0 && (
+                        <div className="space-y-2 mt-4">
+                          <h4 className="font-semibold text-sm">Detected Anomalies</h4>
+                          {previewData.anomalies.slice(0, 5).map((anomaly: any, idx: number) => (
+                            <div key={idx} className="border-l-4 border-destructive pl-3 py-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-xs font-semibold px-2 py-0.5 bg-destructive/10 text-destructive rounded">
+                                  {anomaly.severity}
+                                </span>
+                                {anomaly.meter && (
+                                  <span className="text-xs text-muted-foreground">
+                                    Meter: {anomaly.meter}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs">{anomaly.description}</p>
+                            </div>
+                          ))}
                         </div>
                       )}
                     </div>
-                  </div>
+                  )}
 
-                  {/* Observations and Anomalies */}
-                  <div className="space-y-3">
-                    <h3 className="text-xl font-bold bg-primary text-primary-foreground p-3 rounded">
-                      4. OBSERVATIONS AND ANOMALIES
-                    </h3>
-                    <div className="prose prose-sm max-w-none text-sm whitespace-pre-wrap">
-                      {previewData.reportData.sections.observations}
-                    </div>
-                    
-                    {previewData.anomalies.length > 0 && (
-                      <div className="space-y-2 mt-4">
-                        <h4 className="font-semibold text-sm">Detected Anomalies</h4>
-                        {previewData.anomalies.map((anomaly: any, idx: number) => (
-                          <div key={idx} className="border-l-4 border-destructive pl-4 py-2">
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="text-xs font-semibold px-2 py-1 bg-destructive/10 text-destructive rounded">
-                                {anomaly.severity}
-                              </span>
-                              {anomaly.meter && (
-                                <span className="text-xs text-muted-foreground">
-                                  Meter: {anomaly.meter}
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-sm">{anomaly.description}</p>
-                          </div>
-                        ))}
+                  {/* Page 7 (or 6): Recommendations */}
+                  {currentPage === ((previewData as any).schematicImageBase64 ? 7 : 6) && (
+                    <div className="space-y-4">
+                      <div className="bg-primary text-primary-foreground p-4 rounded">
+                        <h3 className="text-2xl font-bold">5. RECOMMENDATIONS</h3>
                       </div>
-                    )}
-                  </div>
-
-                  {/* Recommendations */}
-                  <div className="space-y-3">
-                    <h3 className="text-xl font-bold bg-primary text-primary-foreground p-3 rounded">
-                      5. RECOMMENDATIONS
-                    </h3>
-                    <div className="prose prose-sm max-w-none text-sm whitespace-pre-wrap">
-                      {previewData.reportData.sections.recommendations}
+                      <div className="prose prose-sm max-w-none text-xs whitespace-pre-wrap">
+                        {previewData.reportData.sections.recommendations}
+                      </div>
                     </div>
-                  </div>
+                  )}
 
-                  {/* Billing Validation */}
-                  {previewData.reportData.sections.billingValidation && (
-                    <div className="space-y-3">
-                      <h3 className="text-xl font-bold bg-primary text-primary-foreground p-3 rounded">
-                        6. BILLING VALIDATION
-                      </h3>
-                      <div className="prose prose-sm max-w-none text-sm whitespace-pre-wrap">
+                  {/* Page 8 (or 7): Billing Validation (if exists) */}
+                  {previewData.reportData.sections.billingValidation && 
+                   currentPage === ((previewData as any).schematicImageBase64 ? 8 : 7) && (
+                    <div className="space-y-4">
+                      <div className="bg-primary text-primary-foreground p-4 rounded">
+                        <h3 className="text-2xl font-bold">6. BILLING VALIDATION</h3>
+                      </div>
+                      <div className="prose prose-sm max-w-none text-xs whitespace-pre-wrap">
                         {previewData.reportData.sections.billingValidation}
                       </div>
                     </div>
                   )}
                 </div>
-              </ScrollArea>
+              </div>
             </div>
 
             <Separator className="my-6" />
