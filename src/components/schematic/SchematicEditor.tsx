@@ -159,7 +159,7 @@ export default function SchematicEditor({
       const target = opt.target;
       const currentTool = activeToolRef.current;
       
-      // DRAWING TOOL: Double-click approach (first click = start, second click = end)
+      // DRAWING TOOL: Left-click for drawing regions (double-click approach)
       if (currentTool === 'draw' && evt.button === 0) {
         const isInteractiveObject = target && target.type !== 'image';
         if (!isInteractiveObject) {
@@ -287,8 +287,19 @@ export default function SchematicEditor({
         }
       }
       
-      // PANNING: Only allow in non-draw modes
-      if (currentTool !== 'draw' && !target) {
+      // PANNING: Allow in all modes (including draw mode with right-click)
+      // In draw mode: right-click or middle mouse for panning
+      // In other modes: any mouse button for panning
+      if (currentTool === 'draw') {
+        // In draw mode, only allow panning with right-click or middle mouse
+        if ((evt.button === 2 || evt.button === 1) && !target) {
+          isPanningLocal = true;
+          lastX = evt.clientX;
+          lastY = evt.clientY;
+          canvas.selection = false;
+        }
+      } else if (!target) {
+        // In other modes, allow panning with any button
         if (evt.button === 0 || evt.button === 1 || evt.button === 2) {
           isPanningLocal = true;
           lastX = evt.clientX;
@@ -338,8 +349,8 @@ export default function SchematicEditor({
         return;
       }
       
-      // PANNING: Only when not in draw mode
-      if (isPanningLocal && currentTool !== 'draw') {
+      // PANNING: Allow in all modes when panning is active
+      if (isPanningLocal) {
         const evt = opt.e as MouseEvent;
         const vpt = canvas.viewportTransform;
         if (vpt) {
@@ -1457,7 +1468,7 @@ export default function SchematicEditor({
           variant={activeTool === "draw" ? "default" : "outline"}
           onClick={() => {
             setActiveTool("draw");
-            toast.info("Click once to start, click again to finish the region box");
+            toast.info("Left-click to draw regions. Right-click + drag to pan around.", { duration: 4000 });
           }}
           size="sm"
           className="gap-2"
