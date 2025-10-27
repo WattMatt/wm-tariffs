@@ -7,13 +7,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { FileText, Loader2, Download, CalendarIcon } from "lucide-react";
+import { FileText, Loader2, Download, CalendarIcon, Eye } from "lucide-react";
 import { format } from "date-fns";
 import jsPDF from "jspdf";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
 
 interface SiteReportExportProps {
   siteId: string;
@@ -35,8 +36,23 @@ interface ColumnConfig {
   selected: boolean;
 }
 
+interface PreviewData {
+  siteName: string;
+  periodStart: Date;
+  periodEnd: Date;
+  meterData: any[];
+  meterHierarchy: any[];
+  meterBreakdown: any[];
+  reconciliationData: any;
+  documentExtractions: any[];
+  anomalies: any[];
+  selectedCsvColumns: any[];
+  reportData: any;
+}
+
 export default function SiteReportExport({ siteId, siteName }: SiteReportExportProps) {
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
   const [periodStart, setPeriodStart] = useState<Date>();
   const [periodEnd, setPeriodEnd] = useState<Date>();
   const [isStartOpen, setIsStartOpen] = useState(false);
@@ -49,6 +65,7 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
   const [availableColumns, setAvailableColumns] = useState<string[]>([]);
   const [columnConfigs, setColumnConfigs] = useState<Record<string, ColumnConfig>>({});
   const [isLoadingColumns, setIsLoadingColumns] = useState(false);
+  const [previewData, setPreviewData] = useState<PreviewData | null>(null);
 
   // Fetch available meters on mount
   useEffect(() => {
@@ -202,13 +219,13 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
     return `${year}-${month}-${day} ${hrs}:${mins}:00`;
   };
 
-  const generateReport = async () => {
+  const generatePreview = async () => {
     if (!periodStart || !periodEnd) {
       toast.error("Please select both start and end dates");
       return;
     }
 
-    setIsGenerating(true);
+    setIsGeneratingPreview(true);
 
     try {
       toast.info("Running reconciliation for selected period...");
@@ -216,7 +233,7 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
       // 1. Fetch all meters for this site (only selected ones)
       if (selectedMeterIds.size === 0) {
         toast.error("Please select at least one meter");
-        setIsGenerating(false);
+        setIsGeneratingPreview(false);
         return;
       }
 
@@ -546,6 +563,60 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
 
       if (aiError) throw aiError;
 
+      // Store preview data
+      setPreviewData({
+        siteName,
+        periodStart,
+        periodEnd,
+        meterData,
+        meterHierarchy,
+        meterBreakdown,
+        reconciliationData,
+        documentExtractions,
+        anomalies,
+        selectedCsvColumns,
+        reportData
+      });
+
+      toast.success("Preview generated successfully!");
+
+    } catch (error) {
+      console.error("Error generating preview:", error);
+      toast.error("Failed to generate preview");
+    } finally {
+      setIsGeneratingPreview(false);
+    }
+  };
+
+  const generateReport = async () => {
+    if (!previewData) {
+      toast.error("Please generate a preview first");
+      return;
+    }
+
+    setIsGenerating(true);
+
+    try {
+      // Extract data from preview
+      const {
+        siteName: previewSiteName,
+        periodStart: previewPeriodStart,
+        periodEnd: previewPeriodEnd,
+        meterData,
+        meterHierarchy,
+        meterBreakdown,
+        reconciliationData,
+        documentExtractions,
+        anomalies,
+        reportData
+      } = previewData;
+
+      // Categorize meters by type for PDF generation
+      const councilBulk = meterData.filter((m: any) => m.meter_type === "council_bulk");
+      const solarMeters = meterData.filter((m: any) => m.meter_type === "solar");
+      const distribution = meterData.filter((m: any) => m.meter_type === "distribution");
+      const checkMeters = meterData.filter((m: any) => m.meter_type === "check_meter");
+
       // 11. Generate PDF with enhanced formatting
       toast.info("Generating PDF...");
       const pdf = new jsPDF();
@@ -741,14 +812,14 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
       
       pdf.setFontSize(20);
       pdf.setFont("helvetica", "bold");
-      pdf.text(siteName, pageWidth / 2, 140, { align: "center" });
+      pdf.text(previewSiteName, pageWidth / 2, 140, { align: "center" });
       
       pdf.setFontSize(11);
       pdf.setFont("helvetica", "normal");
       pdf.text("Audit Period", pageWidth / 2, 155, { align: "center" });
       pdf.setFont("helvetica", "bold");
       pdf.text(
-        `${format(periodStart, "dd MMMM yyyy")} - ${format(periodEnd, "dd MMMM yyyy")}`,
+        `${format(previewPeriodStart, "dd MMMM yyyy")} - ${format(previewPeriodEnd, "dd MMMM yyyy")}`,
         pageWidth / 2,
         165,
         { align: "center" }
@@ -787,7 +858,7 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
       // Section 3: Data Sources and Audit Period
       addSectionHeading("3. DATA SOURCES AND AUDIT PERIOD", 16);
       addSubsectionHeading("Audit Period");
-      addText(`${format(periodStart, "dd MMMM yyyy")} to ${format(periodEnd, "dd MMMM yyyy")}`);
+      addText(`${format(previewPeriodStart, "dd MMMM yyyy")} to ${format(previewPeriodEnd, "dd MMMM yyyy")}`);
       addSpacer(5);
       
       addSubsectionHeading("Council Bulk Supply Meters");
@@ -1159,7 +1230,7 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
       pdf.text(`${pageNumber}`, pageWidth - margin - 10, yPos, { align: "right" });
       
       // Save PDF
-      const fileName = `${siteName.replace(/\s+/g, "_")}_Audit_Report_${format(new Date(), "yyyyMMdd")}.pdf`;
+      const fileName = `${previewSiteName.replace(/\s+/g, "_")}_Audit_Report_${format(new Date(), "yyyyMMdd")}.pdf`;
       pdf.save(fileName);
 
       toast.success("Audit report generated successfully!");
@@ -1464,23 +1535,174 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
         </div>
 
         <Button
-          onClick={generateReport}
-          disabled={isGenerating || !periodStart || !periodEnd || selectedMeterIds.size === 0 || isLoadingMeters}
+          onClick={generatePreview}
+          disabled={isGeneratingPreview || !periodStart || !periodEnd || selectedMeterIds.size === 0 || isLoadingMeters}
           className="w-full"
           size="lg"
+          variant="outline"
         >
-          {isGenerating ? (
+          {isGeneratingPreview ? (
             <>
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Generating Report...
+              Generating Preview...
             </>
           ) : (
             <>
-              <Download className="w-4 h-4 mr-2" />
-              Generate Audit Report
+              <Eye className="w-4 h-4 mr-2" />
+              Generate PDF Preview
             </>
           )}
         </Button>
+
+        {previewData && (
+          <>
+            <Separator className="my-6" />
+            
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold">Report Preview</h3>
+              
+              <ScrollArea className="h-[600px] border rounded-lg p-6 bg-background">
+                <div className="space-y-6 max-w-4xl">
+                  {/* Cover Information */}
+                  <div className="text-center space-y-4 p-8 border rounded-lg bg-primary/5">
+                    <h1 className="text-3xl font-bold text-primary">METERING AUDIT REPORT</h1>
+                    <h2 className="text-2xl font-semibold">{previewData.siteName}</h2>
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium">Audit Period</p>
+                      <p className="text-lg font-semibold">
+                        {format(previewData.periodStart, "dd MMMM yyyy")} - {format(previewData.periodEnd, "dd MMMM yyyy")}
+                      </p>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Report Generated: {format(new Date(), "dd MMMM yyyy 'at' HH:mm")}
+                    </p>
+                  </div>
+
+                  {/* Executive Summary */}
+                  <div className="space-y-3">
+                    <h3 className="text-xl font-bold bg-primary text-primary-foreground p-3 rounded">
+                      1. EXECUTIVE SUMMARY
+                    </h3>
+                    <div className="prose prose-sm max-w-none text-sm whitespace-pre-wrap">
+                      {previewData.reportData.sections.executiveSummary}
+                    </div>
+                  </div>
+
+                  {/* Metering Hierarchy Overview */}
+                  <div className="space-y-3">
+                    <h3 className="text-xl font-bold bg-primary text-primary-foreground p-3 rounded">
+                      2. METERING HIERARCHY OVERVIEW
+                    </h3>
+                    <div className="prose prose-sm max-w-none text-sm whitespace-pre-wrap">
+                      {previewData.reportData.sections.hierarchyOverview}
+                    </div>
+                  </div>
+
+                  {/* Key Metrics */}
+                  <div className="space-y-3">
+                    <h3 className="text-xl font-bold bg-primary text-primary-foreground p-3 rounded">
+                      3. KEY METRICS
+                    </h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="border rounded-lg p-4 space-y-1">
+                        <p className="text-xs text-muted-foreground">Total Supply</p>
+                        <p className="text-2xl font-bold">{previewData.reconciliationData.totalSupply} kWh</p>
+                      </div>
+                      <div className="border rounded-lg p-4 space-y-1">
+                        <p className="text-xs text-muted-foreground">Distribution Total</p>
+                        <p className="text-2xl font-bold">{previewData.reconciliationData.distributionTotal} kWh</p>
+                      </div>
+                      <div className="border rounded-lg p-4 space-y-1">
+                        <p className="text-xs text-muted-foreground">Recovery Rate</p>
+                        <p className="text-2xl font-bold">{previewData.reconciliationData.recoveryRate}%</p>
+                      </div>
+                      <div className="border rounded-lg p-4 space-y-1">
+                        <p className="text-xs text-muted-foreground">Variance</p>
+                        <p className="text-2xl font-bold">
+                          {previewData.reconciliationData.variance} kWh ({previewData.reconciliationData.variancePercentage}%)
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Observations and Anomalies */}
+                  <div className="space-y-3">
+                    <h3 className="text-xl font-bold bg-primary text-primary-foreground p-3 rounded">
+                      4. OBSERVATIONS AND ANOMALIES
+                    </h3>
+                    <div className="prose prose-sm max-w-none text-sm whitespace-pre-wrap">
+                      {previewData.reportData.sections.observations}
+                    </div>
+                    
+                    {previewData.anomalies.length > 0 && (
+                      <div className="space-y-2 mt-4">
+                        <h4 className="font-semibold text-sm">Detected Anomalies</h4>
+                        {previewData.anomalies.map((anomaly: any, idx: number) => (
+                          <div key={idx} className="border-l-4 border-destructive pl-4 py-2">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-xs font-semibold px-2 py-1 bg-destructive/10 text-destructive rounded">
+                                {anomaly.severity}
+                              </span>
+                              {anomaly.meter && (
+                                <span className="text-xs text-muted-foreground">
+                                  Meter: {anomaly.meter}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-sm">{anomaly.description}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Recommendations */}
+                  <div className="space-y-3">
+                    <h3 className="text-xl font-bold bg-primary text-primary-foreground p-3 rounded">
+                      5. RECOMMENDATIONS
+                    </h3>
+                    <div className="prose prose-sm max-w-none text-sm whitespace-pre-wrap">
+                      {previewData.reportData.sections.recommendations}
+                    </div>
+                  </div>
+
+                  {/* Billing Validation */}
+                  {previewData.reportData.sections.billingValidation && (
+                    <div className="space-y-3">
+                      <h3 className="text-xl font-bold bg-primary text-primary-foreground p-3 rounded">
+                        6. BILLING VALIDATION
+                      </h3>
+                      <div className="prose prose-sm max-w-none text-sm whitespace-pre-wrap">
+                        {previewData.reportData.sections.billingValidation}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </ScrollArea>
+            </div>
+
+            <Separator className="my-6" />
+
+            <Button
+              onClick={generateReport}
+              disabled={isGenerating}
+              className="w-full"
+              size="lg"
+            >
+              {isGenerating ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Generating PDF...
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4 mr-2" />
+                  Generate Audit Report
+                </>
+              )}
+            </Button>
+          </>
+        )}
       </CardContent>
     </Card>
   );
