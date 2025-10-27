@@ -341,24 +341,24 @@ export default function SchematicEditor({
         if (zoom > 20) zoom = 20;
         if (zoom < 0.1) zoom = 0.1;
         
-        // Zoom to cursor position
+        // Zoom to cursor position (this properly updates controls)
         const pointer = canvas.getPointer(e);
         canvas.zoomToPoint(pointer, zoom);
         setZoom(zoom);
-      } else if (e.shiftKey) {
-        // SHIFT+Scroll: Pan horizontally
-        const delta = new Point(-e.deltaY, 0);
-        canvas.relativePan(delta);
       } else {
-        // Regular Scroll: Pan vertically
-        const delta = new Point(0, -e.deltaY);
-        canvas.relativePan(delta);
+        // Pan using viewport transform directly
+        const vpt = canvas.viewportTransform;
+        if (vpt) {
+          if (e.shiftKey) {
+            // SHIFT+Scroll: Pan horizontally
+            vpt[4] -= e.deltaY;
+          } else {
+            // Regular Scroll: Pan vertically
+            vpt[5] -= e.deltaY;
+          }
+          canvas.setViewportTransform(vpt); // This updates controls properly
+        }
       }
-      
-      // Critical: Update coordinates for ALL objects to sync controls with viewport
-      canvas.getObjects().forEach(obj => {
-        obj.setCoords();
-      });
       
       canvas.requestRenderAll();
     });
@@ -581,13 +581,12 @@ export default function SchematicEditor({
         const deltaX = evt.clientX - lastX;
         const deltaY = evt.clientY - lastY;
         
-        const delta = new Point(deltaX, deltaY);
-        canvas.relativePan(delta);
-        
-        // Critical: Update coordinates for ALL objects to sync controls with viewport
-        canvas.getObjects().forEach(obj => {
-          obj.setCoords();
-        });
+        const vpt = canvas.viewportTransform;
+        if (vpt) {
+          vpt[4] += deltaX;
+          vpt[5] += deltaY;
+          canvas.setViewportTransform(vpt); // This updates controls properly
+        }
         
         canvas.requestRenderAll();
         
