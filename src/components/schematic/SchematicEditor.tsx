@@ -323,21 +323,38 @@ export default function SchematicEditor({
       selection: true, // Enable selection by default
     });
 
-    // Mouse wheel: Zoom only
+    // Mouse wheel: CTRL+scroll=zoom, SHIFT+scroll=horizontal, scroll=vertical
     canvas.on('mouse:wheel', (opt) => {
-      const delta = opt.e.deltaY;
+      const e = opt.e as WheelEvent;
+      e.preventDefault();
+      e.stopPropagation();
       
-      opt.e.preventDefault();
-      opt.e.stopPropagation();
+      const vpt = canvas.viewportTransform;
+      if (!vpt) return;
       
-      let newZoom = canvas.getZoom();
-      newZoom *= 0.999 ** delta;
-      if (newZoom > 10) newZoom = 10;
-      if (newZoom < 0.5) newZoom = 0.5;
-      
-      const pointer = canvas.getPointer(opt.e);
-      canvas.zoomToPoint(pointer, newZoom);
-      setZoom(newZoom);
+      if (e.ctrlKey || e.metaKey) {
+        // CTRL+Scroll: Zoom in/out
+        const delta = e.deltaY;
+        let zoom = canvas.getZoom();
+        zoom *= 0.999 ** delta;
+        
+        // Limit zoom range
+        if (zoom > 20) zoom = 20;
+        if (zoom < 0.1) zoom = 0.1;
+        
+        // Zoom to cursor position
+        const pointer = canvas.getPointer(e);
+        canvas.zoomToPoint(pointer, zoom);
+        setZoom(zoom);
+      } else if (e.shiftKey) {
+        // SHIFT+Scroll: Pan horizontally
+        vpt[4] -= e.deltaY;
+        canvas.requestRenderAll();
+      } else {
+        // Regular Scroll: Pan vertically
+        vpt[5] -= e.deltaY;
+        canvas.requestRenderAll();
+      }
     });
 
     // Panning variables (consolidated single implementation)
@@ -821,13 +838,14 @@ export default function SchematicEditor({
       }
     }, true);
 
-    // Scroll/Wheel handling for zoom and pan
-    canvas.getElement().addEventListener('wheel', (e) => {
+    // Scroll/Wheel handling for zoom and pan using Fabric's mouse:wheel event
+    canvas.on('mouse:wheel', (opt) => {
+      const e = opt.e as WheelEvent;
       e.preventDefault();
       e.stopPropagation();
       
       const vpt = canvas.viewportTransform;
-      if (!vpt) return false;
+      if (!vpt) return;
       
       if (e.ctrlKey || e.metaKey) {
         // CTRL+Scroll: Zoom in/out
@@ -839,7 +857,7 @@ export default function SchematicEditor({
         if (zoom > 20) zoom = 20;
         if (zoom < 0.1) zoom = 0.1;
         
-        // Zoom to cursor position using Fabric's Point class
+        // Zoom to cursor position
         canvas.zoomToPoint(new Point(e.offsetX, e.offsetY), zoom);
       } else if (e.shiftKey) {
         // SHIFT+Scroll: Pan horizontally
@@ -850,9 +868,7 @@ export default function SchematicEditor({
         vpt[5] -= e.deltaY;
         canvas.requestRenderAll();
       }
-      
-      return false;
-    }, { passive: false });
+    });
 
     setFabricCanvas(canvas);
 
