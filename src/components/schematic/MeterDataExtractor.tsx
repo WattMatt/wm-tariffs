@@ -22,6 +22,8 @@ interface ExtractedMeterData {
   tariff?: string;
   status?: 'pending' | 'approved' | 'rejected';
   position?: { x: number; y: number };
+  scale_x?: number;
+  scale_y?: number;
   phase?: string;
   mccb_size?: number;
   ct_ratio?: string;
@@ -156,6 +158,8 @@ export const MeterDataExtractor = ({
             meter_id: meter.id,
             x_position: originalMeter.position?.x || 50,
             y_position: originalMeter.position?.y || 50,
+            scale_x: originalMeter.scale_x || 1.0,
+            scale_y: originalMeter.scale_y || 1.0,
             label: originalMeter.name
           };
         });

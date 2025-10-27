@@ -1046,8 +1046,8 @@ export default function SchematicEditor({
           const img = new FabricImage(imgElement, {
             left: x,
             top: y,
-            originX: 'left',
-            originY: 'top',
+            originX: 'center',
+            originY: 'center',
             scaleX: scaleX,
             scaleY: scaleY,
             hasControls: isEditMode,
