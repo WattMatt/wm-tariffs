@@ -626,21 +626,24 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
           yPos = margin;
         }
         
-        // Draw header
-        pdf.setFillColor(240, 240, 240);
+        // Draw header with brand color
+        pdf.setFillColor(41, 128, 185); // Consistent brand color
         pdf.rect(margin, yPos - 5, tableWidth, 10, "F");
         
         pdf.setFontSize(9);
         pdf.setFont("helvetica", "bold");
+        pdf.setTextColor(255, 255, 255); // White text on blue header
         let xPos = margin + 2;
         headers.forEach((header, i) => {
           pdf.text(header, xPos, yPos);
           xPos += colWidths[i];
         });
+        pdf.setTextColor(0, 0, 0); // Reset to black
         yPos += 7;
         
         // Draw border around header
-        pdf.setDrawColor(200, 200, 200);
+        pdf.setDrawColor(41, 128, 185);
+        pdf.setLineWidth(0.5);
         pdf.rect(margin, yPos - 12, tableWidth, 10);
         
         // Draw rows
@@ -669,13 +672,15 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
         yPos += 5;
       };
 
-      const addSectionHeading = (text: string, fontSize: number = 14) => {
-        yPos += 8;
-        if (yPos > pageHeight - margin - 20) {
+      const addSectionHeading = (text: string, fontSize: number = 14, forceNewPage: boolean = true) => {
+        // Force new page for major sections (except first content page)
+        if (forceNewPage && pageNumber > 3) {
           addPageNumber();
           pdf.addPage();
           yPos = margin;
         }
+        
+        yPos += 8;
         
         // Track section page for TOC
         sectionPages.push({ title: text, page: pageNumber });
@@ -684,7 +689,8 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
         const cleanTitle = text.replace(/^\d+\.\s*/, ''); // Remove numbering
         indexTerms.push({ term: cleanTitle, page: pageNumber });
         
-        pdf.setFillColor(50, 50, 50);
+        // Consistent brand color scheme - professional blue
+        pdf.setFillColor(41, 128, 185);
         pdf.rect(margin - 2, yPos - 5, pageWidth - 2 * margin + 4, fontSize + 2, "F");
         
         pdf.setTextColor(255, 255, 255);
@@ -708,7 +714,7 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
         
         pdf.setFontSize(11);
         pdf.setFont("helvetica", "bold");
-        pdf.setTextColor(50, 50, 50);
+        pdf.setTextColor(41, 128, 185); // Consistent brand color
         pdf.text(text, margin, yPos);
         pdf.setTextColor(0, 0, 0);
         yPos += 8;
@@ -769,12 +775,12 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
       yPos = margin;
 
       // Section 1: Executive Summary
-      addSectionHeading("1. EXECUTIVE SUMMARY", 16);
+      addSectionHeading("1. EXECUTIVE SUMMARY", 16, false);
       addText(reportData.sections.executiveSummary);
       addSpacer(8);
 
       // Section 2: Metering Hierarchy Overview
-      addSectionHeading("2. METERING HIERARCHY OVERVIEW", 16);
+      addSectionHeading("2. METERING HIERARCHY OVERVIEW", 16, false);
       addText(reportData.sections.hierarchyOverview);
       addSpacer(8);
 
