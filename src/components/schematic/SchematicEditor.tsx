@@ -1543,8 +1543,10 @@ export default function SchematicEditor({
       });
 
     await Promise.all(updates);
-    toast.success("Schematic saved");
+    toast.success("Schematic saved successfully");
     setIsSaving(false);
+    setIsEditMode(false);
+    setActiveTool("select");
   };
 
   const handleClearLines = async () => {
