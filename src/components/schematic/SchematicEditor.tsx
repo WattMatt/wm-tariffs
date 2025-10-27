@@ -1128,7 +1128,7 @@ export default function SchematicEditor({
         height: cardHeight,
         fill: '#ffffff',
         stroke: borderColor,
-        strokeWidth: 2,
+        strokeWidth: 1,
         hasControls: activeTool === 'move',
         selectable: activeTool === 'move',
         hoverCursor: activeTool === 'move' ? 'move' : (activeTool === 'connection' ? 'pointer' : 'default'),
@@ -1177,7 +1177,7 @@ export default function SchematicEditor({
         const labelText = new Text(field.label, {
           left: x - (cardWidth * savedScaleX) / 2 + 5 * savedScaleX,
           top: y - (cardHeight * savedScaleY) / 2 + i * rowHeight * savedScaleY + 3 * savedScaleY,
-          fontSize: 9,
+          fontSize: 12,
           fill: '#000',
           fontWeight: 'bold',
           fontFamily: 'Arial',
@@ -1193,7 +1193,7 @@ export default function SchematicEditor({
         const valueText = new Text(valueDisplay, {
           left: x - (cardWidth * savedScaleX) / 2 + 55 * savedScaleX,
           top: y - (cardHeight * savedScaleY) / 2 + i * rowHeight * savedScaleY + 3 * savedScaleY,
-          fontSize: 9,
+          fontSize: 12,
           fill: '#000',
           fontFamily: 'Arial',
           selectable: false,
