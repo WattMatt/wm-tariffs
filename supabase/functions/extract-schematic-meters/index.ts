@@ -13,7 +13,7 @@ serve(async (req) => {
 
   try {
     const requestBody = await req.json();
-    let { imageUrl, mode, rectangleId, rectangleBounds, region } = requestBody;
+    let { imageUrl, mode, rectangleId, rectangleBounds, region, meterType } = requestBody;
     
     if (!imageUrl) {
       return new Response(
@@ -116,6 +116,17 @@ Example: {"meter_number":"DB-01A","name":"VACANT","area":"187m²","rating":"150A
       const topPixel = Math.round(region.y);
       const bottomPixel = Math.round(region.y + region.height);
       
+      // Map meter type to expected values
+      const meterTypeHint = meterType ? (() => {
+        switch(meterType) {
+          case 'bulk_meter': return 'bulk meter or council bulk supply';
+          case 'check_meter': return 'check meter';
+          case 'tenant_meter': return 'tenant meter or submeter';
+          case 'other': return 'distribution or other meter type';
+          default: return '';
+        }
+      })() : '';
+      
       promptText = `CRITICAL: EXTRACT DATA ONLY FROM THE SPECIFIED COORDINATES
 
 IMAGE DIMENSIONS: ${region.imageWidth} x ${region.imageHeight} pixels
@@ -128,6 +139,7 @@ TOP BOUNDARY:    Y = ${topPixel}px (${yPercent.toFixed(1)}% from top)
 BOTTOM BOUNDARY: Y = ${bottomPixel}px (${(yPercent + heightPercent).toFixed(1)}% from top)
 ==================================================================
 
+${meterTypeHint ? `\nEXPECTED METER TYPE: This region contains a ${meterTypeHint}.\n` : ''}
 ABSOLUTE RESTRICTIONS:
 - Do NOT read any text with X-coordinate < ${leftPixel} or > ${rightPixel}
 - Do NOT read any text with Y-coordinate < ${topPixel} or > ${bottomPixel}

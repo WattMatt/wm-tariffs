@@ -67,7 +67,10 @@ export default function SchematicEditor({
     displayHeight?: number;
     fabricRect: any;
     fabricLabel?: any;
+    meterType?: 'bulk_meter' | 'check_meter' | 'tenant_meter' | 'other';
   }>>([]);
+  const [pendingRegion, setPendingRegion] = useState<any>(null);
+  const [isMeterTypeDialogOpen, setIsMeterTypeDialogOpen] = useState(false);
   const [meterPositions, setMeterPositions] = useState<MeterPosition[]>([]);
   const drawingRectRef = useRef<any>(null);
   const drawStartPointRef = useRef<{ x: number; y: number } | null>(null);
@@ -285,7 +288,8 @@ export default function SchematicEditor({
             displayWidth: width,
             displayHeight: height,
             fabricRect: rect,
-            fabricLabel: label
+            fabricLabel: label,
+            regionNumber
           };
           
           console.log('🎯 Region coordinates:', {
@@ -299,8 +303,9 @@ export default function SchematicEditor({
             imageSize: { w: originalImageWidth, h: originalImageHeight }
           });
           
-          setDrawnRegions(prev => [...prev, newRegion]);
-          toast.success(`Region ${regionNumber} added`);
+          // Open dialog to select meter type for this region
+          setPendingRegion(newRegion);
+          setIsMeterTypeDialogOpen(true);
           
           // Clean up drawing markers
           if (startMarkerRef.current) {
@@ -1490,22 +1495,23 @@ export default function SchematicEditor({
           });
           toast.info(`Scanning region ${i + 1} of ${drawnRegions.length}...`);
           
-          try {
-            const { data, error } = await supabase.functions.invoke('extract-schematic-meters', {
-              body: { 
-                imageUrl: schematicUrl,
-                filePath: filePath || null,
-                mode: 'extract-region',
-                region: {
-                  x: region.x,
-                  y: region.y,
-                  width: region.width,
-                  height: region.height,
-                  imageWidth: imageWidth,
-                  imageHeight: imageHeight
+            try {
+              const { data, error } = await supabase.functions.invoke('extract-schematic-meters', {
+                body: { 
+                  imageUrl: schematicUrl,
+                  filePath: filePath || null,
+                  mode: 'extract-region',
+                  region: {
+                    x: region.x,
+                    y: region.y,
+                    width: region.width,
+                    height: region.height,
+                    imageWidth: imageWidth,
+                    imageHeight: imageHeight
+                  },
+                  meterType: region.meterType || 'other'
                 }
-              }
-            });
+              });
             
             if (error) {
               console.error(`Error scanning region ${i + 1}:`, error);
@@ -1518,6 +1524,7 @@ export default function SchematicEditor({
               // Position should be top-left corner, not center
               const newMeter = {
                 ...data.meter,
+                meter_type: region.meterType || data.meter.meter_type,
                 status: 'pending' as const,
                 position: {
                   x: (region.x / imageWidth) * 100,  // Top-left X as percentage
@@ -1592,6 +1599,63 @@ export default function SchematicEditor({
     
     setDrawnRegions([]);
     toast.success('All regions cleared');
+  };
+
+  const handleMeterTypeSelection = (meterType: 'bulk_meter' | 'check_meter' | 'tenant_meter' | 'other') => {
+    if (!pendingRegion || !fabricCanvas) return;
+
+    // Update the region with meter type
+    const regionWithType = { ...pendingRegion, meterType };
+    
+    // Update the rectangle and label colors based on meter type
+    const colorMap = {
+      bulk_meter: { fill: 'rgba(239, 68, 68, 0.15)', stroke: '#ef4444' },
+      check_meter: { fill: 'rgba(245, 158, 11, 0.15)', stroke: '#f59e0b' },
+      tenant_meter: { fill: 'rgba(16, 185, 129, 0.15)', stroke: '#10b981' },
+      other: { fill: 'rgba(59, 130, 246, 0.15)', stroke: '#3b82f6' }
+    };
+    
+    const colors = colorMap[meterType];
+    
+    // Update rectangle
+    if (regionWithType.fabricRect) {
+      regionWithType.fabricRect.set({
+        fill: colors.fill,
+        stroke: colors.stroke
+      });
+    }
+    
+    // Update label
+    if (regionWithType.fabricLabel) {
+      regionWithType.fabricLabel.set({
+        fill: colors.stroke
+      });
+    }
+    
+    fabricCanvas.renderAll();
+    
+    setDrawnRegions(prev => [...prev, regionWithType]);
+    toast.success(`Region ${regionWithType.regionNumber} added as ${meterType.replace('_', ' ')}`);
+    
+    setPendingRegion(null);
+    setIsMeterTypeDialogOpen(false);
+  };
+
+  const handleCancelMeterTypeSelection = () => {
+    // Remove the drawn region from canvas
+    if (pendingRegion && fabricCanvas) {
+      if (pendingRegion.fabricRect) {
+        fabricCanvas.remove(pendingRegion.fabricRect);
+      }
+      if (pendingRegion.fabricLabel) {
+        fabricCanvas.remove(pendingRegion.fabricLabel);
+      }
+      fabricCanvas.renderAll();
+    }
+    
+    setPendingRegion(null);
+    setIsMeterTypeDialogOpen(false);
+    toast.info('Region cancelled');
   };
 
   return (
@@ -1985,6 +2049,54 @@ export default function SchematicEditor({
               Create Meter & Place on Schematic
             </Button>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Meter Type Selection Dialog */}
+      <Dialog open={isMeterTypeDialogOpen} onOpenChange={(open) => {
+        if (!open) handleCancelMeterTypeSelection();
+      }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Select Meter Type</DialogTitle>
+            <DialogDescription>
+              Choose the type of meter this region contains
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-3 py-4">
+            <Button
+              variant="outline"
+              className="h-20 flex-col gap-2 hover:border-[#ef4444] hover:bg-[#ef4444]/10"
+              onClick={() => handleMeterTypeSelection('bulk_meter')}
+            >
+              <div className="w-4 h-4 rounded-full bg-[#ef4444]" />
+              <span>Bulk Meter</span>
+            </Button>
+            <Button
+              variant="outline"
+              className="h-20 flex-col gap-2 hover:border-[#f59e0b] hover:bg-[#f59e0b]/10"
+              onClick={() => handleMeterTypeSelection('check_meter')}
+            >
+              <div className="w-4 h-4 rounded-full bg-[#f59e0b]" />
+              <span>Check Meter</span>
+            </Button>
+            <Button
+              variant="outline"
+              className="h-20 flex-col gap-2 hover:border-[#10b981] hover:bg-[#10b981]/10"
+              onClick={() => handleMeterTypeSelection('tenant_meter')}
+            >
+              <div className="w-4 h-4 rounded-full bg-[#10b981]" />
+              <span>Tenant Meter</span>
+            </Button>
+            <Button
+              variant="outline"
+              className="h-20 flex-col gap-2 hover:border-[#3b82f6] hover:bg-[#3b82f6]/10"
+              onClick={() => handleMeterTypeSelection('other')}
+            >
+              <div className="w-4 h-4 rounded-full bg-[#3b82f6]" />
+              <span>Other</span>
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 
