@@ -50,6 +50,7 @@ interface TariffStructure {
   id: string;
   name: string;
   tariff_type: string;
+  description: string | null;
 }
 
 interface MetersTabProps {
@@ -139,7 +140,7 @@ export default function MetersTab({ siteId }: MetersTabProps) {
     // Fetch tariff structures for the supply authority
     const { data, error } = await supabase
       .from('tariff_structures')
-      .select('id, name, tariff_type')
+      .select('id, name, tariff_type, description')
       .eq('supply_authority_id', site.supply_authority_id)
       .eq('active', true)
       .order('name');
@@ -586,7 +587,12 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                     <SelectItem value="none">None</SelectItem>
                     {tariffStructures.map((tariff) => (
                         <SelectItem key={tariff.id} value={tariff.id}>
-                          {tariff.name} ({tariff.tariff_type})
+                          <div className="flex flex-col">
+                            <span>{tariff.name} ({tariff.tariff_type})</span>
+                            {tariff.description && (
+                              <span className="text-xs text-muted-foreground">{tariff.description}</span>
+                            )}
+                          </div>
                         </SelectItem>
                       ))}
                     </SelectContent>
