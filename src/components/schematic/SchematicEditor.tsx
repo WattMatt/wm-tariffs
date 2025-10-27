@@ -39,6 +39,67 @@ interface SchematicLine {
   stroke_width: number;
 }
 
+// Helper function to create meter card as an image
+async function createMeterCardImage(
+  fields: Array<{ label: string; value: string }>,
+  borderColor: string,
+  cardWidth: number = 200,
+  cardHeight: number = 140
+): Promise<string> {
+  const rowHeight = 18;
+  const canvas = document.createElement('canvas');
+  canvas.width = cardWidth;
+  canvas.height = cardHeight;
+  const ctx = canvas.getContext('2d');
+  
+  if (!ctx) return '';
+  
+  // Background
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, cardWidth, cardHeight);
+  
+  // Border
+  ctx.strokeStyle = borderColor;
+  ctx.lineWidth = 0.75;
+  ctx.strokeRect(0, 0, cardWidth, cardHeight);
+  
+  // Vertical separator between label and value columns
+  ctx.strokeStyle = '#d1d5db';
+  ctx.lineWidth = 0.5;
+  ctx.beginPath();
+  ctx.moveTo(50, 0);
+  ctx.lineTo(50, cardHeight);
+  ctx.stroke();
+  
+  // Draw each row
+  fields.forEach((field, i) => {
+    const y = i * rowHeight;
+    
+    // Label text (left column)
+    ctx.fillStyle = '#000000';
+    ctx.font = '600 8px Arial, sans-serif';
+    ctx.textBaseline = 'top';
+    ctx.fillText(field.label, 4, y + 2);
+    
+    // Value text (right column)
+    ctx.font = 'normal 8px Arial, sans-serif';
+    const valueDisplay = field.value.length > 22 ? field.value.substring(0, 22) + '...' : field.value;
+    ctx.fillText(valueDisplay, 54, y + 2);
+    
+    // Horizontal separator line
+    if (i < fields.length - 1) {
+      ctx.strokeStyle = '#d1d5db';
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(0, (i + 1) * rowHeight);
+      ctx.lineTo(cardWidth, (i + 1) * rowHeight);
+      ctx.stroke();
+    }
+  });
+  
+  return canvas.toDataURL();
+}
+
 // Helper function to crop a region from an image and upload to storage
 async function cropRegionAndUpload(
   imageUrl: string,
@@ -1094,42 +1155,10 @@ export default function SchematicEditor({
       const x = (pos.x_position / 100) * canvasWidth;
       const y = (pos.y_position / 100) * canvasHeight;
 
-      // Create table-like card matching PDF style
+      // Create table data
       const cardWidth = 200;
       const cardHeight = zone ? 160 : 140;
-      const rowHeight = 18; // Slightly reduced for tighter layout like PDF
       
-      // Background rectangle with scaling enabled
-      const background = new Rect({
-        left: x,
-        top: y,
-        width: cardWidth,
-        height: cardHeight,
-        fill: '#ffffff',
-        stroke: borderColor,
-        strokeWidth: 0.75, // Thinner border like PDF
-        hasControls: activeTool === 'move',
-        selectable: activeTool === 'move',
-        hoverCursor: activeTool === 'move' ? 'move' : (activeTool === 'connection' ? 'pointer' : 'default'),
-        originX: 'center',
-        originY: 'center',
-        lockRotation: true,
-        scaleX: (pos as any).scale_x ? Number((pos as any).scale_x) : 1.0,
-        scaleY: (pos as any).scale_y ? Number((pos as any).scale_y) : 1.0,
-      });
-
-      background.set('data', { meterId: pos.meter_id, positionId: pos.id });
-      
-      background.on('mousedown', () => {
-        if (activeTool === 'connection') {
-          handleMeterClickForConnection(pos.meter_id, x, y);
-        } else if (activeTool === 'select') {
-          // Open edit dialog for this meter
-          setEditingMeter(meter);
-          setIsEditMeterDialogOpen(true);
-        }
-      });
-
       // Create table rows with labels and values
       const fields = [
         { label: 'NO:', value: meter?.meter_number || 'N/A' },
@@ -1147,157 +1176,72 @@ export default function SchematicEditor({
         fields.splice(2, 0, { label: 'ZONE:', value: zoneName });
       }
 
-      const textElements: Text[] = [];
       const savedScaleX = (pos as any).scale_x ? Number((pos as any).scale_x) : 1.0;
       const savedScaleY = (pos as any).scale_y ? Number((pos as any).scale_y) : 1.0;
       
-      fields.forEach((field, i) => {
-        // Label text (left column) - NO SCALING on text itself, only position adjustment
-        const labelText = new Text(field.label, {
-          left: x - (cardWidth * savedScaleX) / 2 + 4 * savedScaleX,
-          top: y - (cardHeight * savedScaleY) / 2 + i * rowHeight * savedScaleY + 2 * savedScaleY,
-          fontSize: 8,
-          fill: '#000000',
-          fontWeight: '600',
-          fontFamily: 'Arial, sans-serif',
-          selectable: false,
-          evented: false,
-          strokeWidth: 0,
-        });
-        textElements.push(labelText);
-
-        // Value text (right column) - NO SCALING on text itself
-        const valueDisplay = field.value.length > 22 ? field.value.substring(0, 22) + '...' : field.value;
-        const valueText = new Text(valueDisplay, {
-          left: x - (cardWidth * savedScaleX) / 2 + 60 * savedScaleX,
-          top: y - (cardHeight * savedScaleY) / 2 + i * rowHeight * savedScaleY + 2 * savedScaleY,
-          fontSize: 8,
-          fill: '#000000',
-          fontWeight: 'normal',
-          fontFamily: 'Arial, sans-serif',
-          selectable: false,
-          evented: false,
-          strokeWidth: 0,
-        });
-        textElements.push(valueText);
-
-        // Horizontal separator line - thinner like PDF
-        if (i < fields.length - 1) {
-          const separator = new Line(
-            [x - (cardWidth * savedScaleX) / 2, y - (cardHeight * savedScaleY) / 2 + (i + 1) * rowHeight * savedScaleY, 
-             x + (cardWidth * savedScaleX) / 2, y - (cardHeight * savedScaleY) / 2 + (i + 1) * rowHeight * savedScaleY],
-            {
-              stroke: '#d1d5db',
-              strokeWidth: 0.5,
-              selectable: false,
-              evented: false,
-            }
-          );
-          textElements.push(separator as any);
-        }
-      });
-
-      // Vertical separator between label and value columns
-      const verticalSeparator = new Line(
-        [x - (cardWidth * savedScaleX) / 2 + 50 * savedScaleX, y - (cardHeight * savedScaleY) / 2, 
-         x - (cardWidth * savedScaleX) / 2 + 50 * savedScaleX, y + (cardHeight * savedScaleY) / 2],
-        {
-          stroke: borderColor,
-          strokeWidth: 1,
-          selectable: false,
-          evented: false,
-        }
-      );
-
-      // Handle dragging and scaling for move tool
-      if (activeTool === 'move') {
-        const updateTextPositions = () => {
-          const newLeft = background.left || x;
-          const newTop = background.top || y;
-          const scaleX = background.scaleX || 1;
-          const scaleY = background.scaleY || 1;
+      // Generate meter card image
+      createMeterCardImage(fields, borderColor, cardWidth, cardHeight).then(imageDataUrl => {
+        FabricImage.fromURL(imageDataUrl).then(img => {
+          img.set({
+            left: x,
+            top: y,
+            originX: 'center',
+            originY: 'center',
+            scaleX: savedScaleX,
+            scaleY: savedScaleY,
+            hasControls: activeTool === 'move',
+            selectable: activeTool === 'move',
+            hoverCursor: activeTool === 'move' ? 'move' : (activeTool === 'connection' ? 'pointer' : 'default'),
+            lockRotation: true,
+          });
           
-          // Move and scale all text elements with the background
-          textElements.forEach((text, i) => {
-            const fieldIndex = Math.floor(i / 2);
-            const isLabel = i % 2 === 0;
-            const isSeparator = text instanceof Line;
-            
-            if (!isSeparator) {
-              text.set({
-                left: newLeft - (cardWidth * scaleX) / 2 + (isLabel ? 5 : 55) * scaleX,
-                top: newTop - (cardHeight * scaleY) / 2 + fieldIndex * rowHeight * scaleY + 3 * scaleY,
-                scaleX: scaleX,
-                scaleY: scaleY,
-              });
-            } else {
-              // Update line positions with scale
-              if (i === textElements.length - 1) {
-                // Vertical separator
-                text.set({
-                  x1: newLeft - (cardWidth * scaleX) / 2 + 50 * scaleX,
-                  y1: newTop - (cardHeight * scaleY) / 2,
-                  x2: newLeft - (cardWidth * scaleX) / 2 + 50 * scaleX,
-                  y2: newTop + (cardHeight * scaleY) / 2,
-                });
+          img.set('data', { meterId: pos.meter_id, positionId: pos.id });
+          
+          img.on('mousedown', () => {
+            if (activeTool === 'connection') {
+              handleMeterClickForConnection(pos.meter_id, x, y);
+            } else if (activeTool === 'select') {
+              // Open edit dialog for this meter
+              setEditingMeter(meter);
+              setIsEditMeterDialogOpen(true);
+            }
+          });
+
+          // Handle dragging and scaling for move tool
+          if (activeTool === 'move') {
+            img.on('modified', async () => {
+              // Convert pixel positions back to percentages for storage
+              const canvasWidth = fabricCanvas.getWidth();
+              const canvasHeight = fabricCanvas.getHeight();
+              const xPercent = ((img.left || 0) / canvasWidth) * 100;
+              const yPercent = ((img.top || 0) / canvasHeight) * 100;
+              const scaleX = img.scaleX || 1;
+              const scaleY = img.scaleY || 1;
+
+              // Update position and scale in database after drag/resize
+              const { error } = await supabase
+                .from('meter_positions')
+                .update({
+                  x_position: xPercent,
+                  y_position: yPercent,
+                  scale_x: scaleX,
+                  scale_y: scaleY,
+                })
+                .eq('id', pos.id);
+
+              if (!error) {
+                toast.success('Meter card updated');
+                fetchMeterPositions();
               } else {
-                // Horizontal separators
-                const separatorFieldIndex = Math.floor((i - 1) / 3);
-                text.set({
-                  x1: newLeft - (cardWidth * scaleX) / 2,
-                  y1: newTop - (cardHeight * scaleY) / 2 + (separatorFieldIndex + 1) * rowHeight * scaleY,
-                  x2: newLeft + (cardWidth * scaleX) / 2,
-                  y2: newTop - (cardHeight * scaleY) / 2 + (separatorFieldIndex + 1) * rowHeight * scaleY,
-                });
+                toast.error('Failed to update meter card');
               }
-            }
-          });
-          
-          verticalSeparator.set({
-            x1: newLeft - (cardWidth * scaleX) / 2 + 50 * scaleX,
-            y1: newTop - (cardHeight * scaleY) / 2,
-            x2: newLeft - (cardWidth * scaleX) / 2 + 50 * scaleX,
-            y2: newTop + (cardHeight * scaleY) / 2,
-          });
-          
-          fabricCanvas.renderAll();
-        };
-
-        background.on('moving', updateTextPositions);
-        background.on('scaling', updateTextPositions);
-
-        background.on('modified', async () => {
-          // Convert pixel positions back to percentages for storage
-          const canvasWidth = fabricCanvas.getWidth();
-          const canvasHeight = fabricCanvas.getHeight();
-          const xPercent = ((background.left || 0) / canvasWidth) * 100;
-          const yPercent = ((background.top || 0) / canvasHeight) * 100;
-          const scaleX = background.scaleX || 1;
-          const scaleY = background.scaleY || 1;
-
-          // Update position and scale in database after drag/resize
-          const { error } = await supabase
-            .from('meter_positions')
-            .update({
-              x_position: xPercent,
-              y_position: yPercent,
-              scale_x: scaleX,
-              scale_y: scaleY,
-            })
-            .eq('id', pos.id);
-
-          if (!error) {
-            toast.success('Meter card updated');
-            fetchMeterPositions();
-          } else {
-            toast.error('Failed to update meter card');
+            });
           }
-        });
-      }
 
-      fabricCanvas.add(background);
-      textElements.forEach(el => fabricCanvas.add(el));
-      fabricCanvas.add(verticalSeparator);
+          fabricCanvas.add(img);
+          fabricCanvas.renderAll();
+        });
+      });
     });
 
     fabricCanvas.renderAll();
