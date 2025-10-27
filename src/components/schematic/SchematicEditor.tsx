@@ -1591,83 +1591,85 @@ export default function SchematicEditor({
         </div>
       </div>
 
-      <div className="space-y-2">
-        {/* Top row - Zones */}
-        <div className="flex gap-3 flex-wrap items-center">
-          <div className="text-xs font-medium text-muted-foreground mr-2 flex items-center">Zones:</div>
-          
-          <Badge 
-            variant="outline" 
-            className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.council_connection_zone ? 'opacity-40' : ''}`}
-            onClick={() => setLegendVisibility(prev => ({ ...prev, council_connection_zone: !prev.council_connection_zone }))}
-          >
-            <div className="w-3 h-3 rounded-full bg-[#ec4899] mr-2" />
-            Council Connection
-          </Badge>
-          
-          <Badge 
-            variant="outline" 
-            className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.mini_sub_zone ? 'opacity-40' : ''}`}
-            onClick={() => setLegendVisibility(prev => ({ ...prev, mini_sub_zone: !prev.mini_sub_zone }))}
-          >
-            <div className="w-3 h-3 rounded-full bg-[#06b6d4] mr-2" />
-            Mini Sub
-          </Badge>
-          
-          <Badge 
-            variant="outline" 
-            className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.main_board_zone ? 'opacity-40' : ''}`}
-            onClick={() => setLegendVisibility(prev => ({ ...prev, main_board_zone: !prev.main_board_zone }))}
-          >
-            <div className="w-3 h-3 rounded-full bg-[#9333ea] mr-2" />
-            Main Board
-          </Badge>
-        </div>
-        
-        {/* Middle row - Meters */}
-        <div className="flex gap-3 flex-wrap items-center">
-          <div className="text-xs font-medium text-muted-foreground mr-2 flex items-center">Meters:</div>
-          
-          <Badge 
-            variant="outline" 
-            className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.bulk_meter ? 'opacity-40' : ''}`}
-            onClick={() => setLegendVisibility(prev => ({ ...prev, bulk_meter: !prev.bulk_meter }))}
-          >
-            <div className="w-3 h-3 rounded-full bg-[#ef4444] mr-2" />
-            Bulk Meter
-          </Badge>
-          
-          <Badge 
-            variant="outline" 
-            className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.check_meter ? 'opacity-40' : ''}`}
-            onClick={() => setLegendVisibility(prev => ({ ...prev, check_meter: !prev.check_meter }))}
-          >
-            <div className="w-3 h-3 rounded-full bg-[#f59e0b] mr-2" />
-            Check Meter
-          </Badge>
-          
-          <Badge 
-            variant="outline" 
-            className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.submeter ? 'opacity-40' : ''}`}
-            onClick={() => setLegendVisibility(prev => ({ ...prev, submeter: !prev.submeter }))}
-          >
-            <div className="w-3 h-3 rounded-full bg-[#10b981] mr-2" />
-            Tenant Meter
-          </Badge>
-          
-          <Badge 
-            variant="outline" 
-            className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.other ? 'opacity-40' : ''}`}
-            onClick={() => setLegendVisibility(prev => ({ ...prev, other: !prev.other }))}
-          >
-            <div className="w-3 h-3 rounded-full bg-[#3b82f6] mr-2" />
-            Other
-          </Badge>
-        </div>
-        
-        {/* Bottom row - Extracted Meters Status */}
-        {extractedMeters.length > 0 && (
+      {/* Legend and PDF Controls in two panes */}
+      <div className="flex gap-4 mb-2">
+        {/* Left pane - Legends */}
+        <div className="flex-1 space-y-3 p-4 bg-muted/50 rounded-lg border border-border">
+          {/* Top row - Zones */}
           <div className="flex gap-3 flex-wrap items-center">
+            <div className="text-xs font-medium text-muted-foreground mr-2 flex items-center">Zones:</div>
+            
+            <Badge 
+              variant="outline" 
+              className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.council_connection_zone ? 'opacity-40' : ''}`}
+              onClick={() => setLegendVisibility(prev => ({ ...prev, council_connection_zone: !prev.council_connection_zone }))}
+            >
+              <div className="w-3 h-3 rounded-full bg-[#ec4899] mr-2" />
+              Council Connection
+            </Badge>
+            
+            <Badge 
+              variant="outline" 
+              className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.mini_sub_zone ? 'opacity-40' : ''}`}
+              onClick={() => setLegendVisibility(prev => ({ ...prev, mini_sub_zone: !prev.mini_sub_zone }))}
+            >
+              <div className="w-3 h-3 rounded-full bg-[#06b6d4] mr-2" />
+              Mini Sub
+            </Badge>
+            
+            <Badge 
+              variant="outline" 
+              className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.main_board_zone ? 'opacity-40' : ''}`}
+              onClick={() => setLegendVisibility(prev => ({ ...prev, main_board_zone: !prev.main_board_zone }))}
+            >
+              <div className="w-3 h-3 rounded-full bg-[#9333ea] mr-2" />
+              Main Board
+            </Badge>
+          </div>
+          
+          {/* Middle row - Meters */}
+          <div className="flex gap-3 flex-wrap items-center">
+            <div className="text-xs font-medium text-muted-foreground mr-2 flex items-center">Meters:</div>
+            
+            <Badge 
+              variant="outline" 
+              className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.bulk_meter ? 'opacity-40' : ''}`}
+              onClick={() => setLegendVisibility(prev => ({ ...prev, bulk_meter: !prev.bulk_meter }))}
+            >
+              <div className="w-3 h-3 rounded-full bg-[#ef4444] mr-2" />
+              Bulk Meter
+            </Badge>
+            
+            <Badge 
+              variant="outline" 
+              className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.check_meter ? 'opacity-40' : ''}`}
+              onClick={() => setLegendVisibility(prev => ({ ...prev, check_meter: !prev.check_meter }))}
+            >
+              <div className="w-3 h-3 rounded-full bg-[#f59e0b] mr-2" />
+              Check Meter
+            </Badge>
+            
+            <Badge 
+              variant="outline" 
+              className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.submeter ? 'opacity-40' : ''}`}
+              onClick={() => setLegendVisibility(prev => ({ ...prev, submeter: !prev.submeter }))}
+            >
+              <div className="w-3 h-3 rounded-full bg-[#10b981] mr-2" />
+              Tenant Meter
+            </Badge>
+            
+            <Badge 
+              variant="outline" 
+              className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.other ? 'opacity-40' : ''}`}
+              onClick={() => setLegendVisibility(prev => ({ ...prev, other: !prev.other }))}
+            >
+              <div className="w-3 h-3 rounded-full bg-[#3b82f6] mr-2" />
+              Other
+            </Badge>
+          </div>
+          
+          {/* Bottom row - Extracted Meters Status (Always visible, greyed out when not applicable) */}
+          <div className={`flex gap-3 flex-wrap items-center transition-opacity ${extractedMeters.length === 0 ? 'opacity-40' : ''}`}>
             <div className="text-xs font-medium text-muted-foreground mr-2 flex items-center">Extracted:</div>
             <Badge variant="outline">
               <div className="w-3 h-3 rounded-full bg-[#dc2626] border-2 border-[#dc2626] mr-2" />
@@ -1682,24 +1684,24 @@ export default function SchematicEditor({
               Confirmed
             </Badge>
           </div>
-        )}
-      </div>
+        </div>
 
-      {/* PDF Zoom Controls - Always above PDF viewer on right side */}
-      <div className="flex justify-end mb-2">
-        <div className="flex gap-2 items-center bg-muted/50 px-3 py-2 rounded-md">
-          <Button variant="outline" size="sm" onClick={handleZoomOut}>
-            <ZoomOut className="w-4 h-4" />
-          </Button>
-          <Badge variant="outline" className="px-3">
-            {Math.round(zoom * 100)}%
-          </Badge>
-          <Button variant="outline" size="sm" onClick={handleZoomIn}>
-            <ZoomIn className="w-4 h-4" />
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleResetZoom}>
-            <Maximize2 className="w-4 h-4" />
-          </Button>
+        {/* Right pane - PDF Zoom Controls */}
+        <div className="flex items-center">
+          <div className="flex gap-2 items-center bg-muted/50 px-4 py-2 rounded-lg border border-border h-fit">
+            <Button variant="outline" size="sm" onClick={handleZoomOut}>
+              <ZoomOut className="w-4 h-4" />
+            </Button>
+            <Badge variant="outline" className="px-3">
+              {Math.round(zoom * 100)}%
+            </Badge>
+            <Button variant="outline" size="sm" onClick={handleZoomIn}>
+              <ZoomIn className="w-4 h-4" />
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleResetZoom}>
+              <Maximize2 className="w-4 h-4" />
+            </Button>
+          </div>
         </div>
       </div>
 
