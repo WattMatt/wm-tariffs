@@ -1544,8 +1544,15 @@ export default function SchematicEditor({
           <Button
             variant={activeTool === "draw" ? "default" : "outline"}
             onClick={() => {
-              setActiveTool("draw");
-              toast.info("Left-click to draw regions. Hold middle mouse + drag to pan.", { duration: 4000 });
+              if (activeTool === "draw") {
+                // If already in draw mode, toggle it off back to select mode
+                setActiveTool("select");
+                toast.info("Region selection disabled");
+              } else {
+                // Enable draw mode
+                setActiveTool("draw");
+                toast.info("Left-click to draw regions. Hold middle mouse + drag to pan.", { duration: 4000 });
+              }
             }}
             disabled={!isEditMode}
             size="sm"
