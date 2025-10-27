@@ -346,23 +346,15 @@ export default function SchematicEditor({
         canvas.zoomToPoint(pointer, zoom);
         setZoom(zoom);
       } else {
-        // Pan the viewport
-        const vpt = canvas.viewportTransform;
-        if (vpt) {
-          if (e.shiftKey) {
-            // SHIFT+Scroll: Pan horizontally
-            vpt[4] -= e.deltaY;
-          } else {
-            // Regular Scroll: Pan vertically
-            vpt[5] -= e.deltaY;
-          }
-          canvas.setViewportTransform(vpt);
-          // Critical: calcOffset() recalculates control positions like zoomToPoint does
-          canvas.calcOffset();
+        // Use built-in relativePan method (equivalent to zoomToPoint for panning)
+        if (e.shiftKey) {
+          // SHIFT+Scroll: Pan horizontally
+          canvas.relativePan(new Point(-e.deltaY, 0));
+        } else {
+          // Regular Scroll: Pan vertically
+          canvas.relativePan(new Point(0, -e.deltaY));
         }
       }
-      
-      // Don't call renderAll here - let the event loop handle it naturally
     });
 
     // Panning variables (consolidated single implementation)
@@ -583,15 +575,8 @@ export default function SchematicEditor({
         const deltaX = evt.clientX - lastX;
         const deltaY = evt.clientY - lastY;
         
-        // Pan the viewport
-        const vpt = canvas.viewportTransform;
-        if (vpt) {
-          vpt[4] += deltaX;
-          vpt[5] += deltaY;
-          canvas.setViewportTransform(vpt);
-          // Critical: calcOffset() recalculates control positions like zoomToPoint does
-          canvas.calcOffset();
-        }
+        // Use built-in relativePan method (equivalent to zoomToPoint for panning)
+        canvas.relativePan(new Point(deltaX, deltaY));
         
         lastX = evt.clientX;
         lastY = evt.clientY;
