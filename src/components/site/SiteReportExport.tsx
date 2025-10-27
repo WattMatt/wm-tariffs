@@ -970,11 +970,79 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
 
       addFooter();
 
-      // TABLE OF CONTENTS PAGE
+      // TABLE OF CONTENTS TITLE PAGE
+      addPageNumber();
+      pdf.addPage();
+      addBlueSidebar();
+      yPos = topMargin + 80;
+      
+      pdf.setTextColor(templateBlue[0], templateBlue[1], templateBlue[2]);
+      pdf.setFontSize(24);
+      pdf.setFont("helvetica", "bold");
+      pdf.text("Table of Contents", pageWidth / 2, yPos, { align: "center" });
+      pdf.setTextColor(0, 0, 0);
+      
+      addFooter();
+
+      // TABLE OF CONTENTS CONTENT PAGE
       addPageNumber();
       pdf.addPage();
       addBlueSidebar();
       yPos = topMargin;
+      
+      // Add table of contents entries
+      const tocEntries = [
+        "1. EXECUTIVE SUMMARY",
+        "2. METERING HIERARCHY OVERVIEW",
+        "3. DATA SOURCES AND AUDIT PERIOD",
+        "4. KEY METRICS",
+        "   4.1 Basic Reconciliation Metrics",
+        "   4.2 CSV Column Aggregations",
+        "5. METERING RECONCILIATION",
+        "   5.1 Supply Summary",
+        "   5.2 Distribution Summary",
+        "6. METER BREAKDOWN",
+        "7. OBSERVATIONS AND ANOMALIES",
+        "8. RECOMMENDATIONS"
+      ];
+      
+      if (documentExtractions && documentExtractions.length > 0) {
+        tocEntries.push("9. BILLING VALIDATION");
+      }
+      
+      pdf.setFontSize(11);
+      pdf.setFont("helvetica", "normal");
+      
+      tocEntries.forEach((entry, index) => {
+        if (yPos > pageHeight - bottomMargin - 10) {
+          addBlueSidebar();
+          addFooter();
+          addPageNumber();
+          pdf.addPage();
+          addBlueSidebar();
+          yPos = topMargin;
+        }
+        
+        const isSubsection = entry.startsWith("   ");
+        const displayEntry = isSubsection ? entry.trim() : entry;
+        const xPosition = leftMargin + (isSubsection ? 10 : 0);
+        
+        if (!isSubsection) {
+          pdf.setFont("helvetica", "bold");
+          pdf.setTextColor(templateBlue[0], templateBlue[1], templateBlue[2]);
+        } else {
+          pdf.setFont("helvetica", "normal");
+          pdf.setTextColor(0, 0, 0);
+        }
+        
+        pdf.text(displayEntry, xPosition, yPos);
+        yPos += 8;
+        
+        pdf.setFont("helvetica", "normal");
+        pdf.setTextColor(0, 0, 0);
+      });
+      
+      addFooter();
 
       // Start main content
       addPageNumber();
@@ -1726,6 +1794,8 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
                   <span className="text-sm text-muted-foreground px-3">
                     Page {currentPage} of {(() => {
                       let totalPages = 1; // Cover page
+                      totalPages += 1; // TOC Title Page
+                      totalPages += 1; // TOC Content Page
                       totalPages += 1; // Executive Summary
                       totalPages += 1; // Metering Hierarchy
                       if ((previewData as any).schematicImageBase64) totalPages += 1; // Schematic
@@ -1742,6 +1812,8 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
                     onClick={() => {
                       const maxPages = (() => {
                         let totalPages = 1;
+                        totalPages += 1; // TOC Title
+                        totalPages += 1; // TOC Content
                         totalPages += 1;
                         totalPages += 1;
                         if ((previewData as any).schematicImageBase64) totalPages += 1;
@@ -1755,6 +1827,8 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
                     }}
                     disabled={currentPage >= (() => {
                       let totalPages = 1;
+                      totalPages += 1; // TOC Title
+                      totalPages += 1; // TOC Content
                       totalPages += 1;
                       totalPages += 1;
                       if ((previewData as any).schematicImageBase64) totalPages += 1;
@@ -1771,33 +1845,67 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
               </div>
 
               {/* Page Container with A4-like aspect ratio */}
-              <div className="border rounded-lg shadow-lg bg-white overflow-hidden" style={{ aspectRatio: '210/297' }}>
-                <div className="h-full w-full p-8 overflow-auto">
+              <div className="border rounded-lg shadow-lg bg-white overflow-hidden relative" style={{ aspectRatio: '210/297' }}>
+                {/* Blue sidebar matching PDF */}
+                <div className="absolute left-0 top-0 bottom-0 w-3 bg-[#176DB1]"></div>
+                
+                <div className="h-full w-full p-8 pl-10 overflow-auto">
                   {/* Page 1: Cover */}
                   {currentPage === 1 && (
                     <div className="h-full flex flex-col items-center justify-center text-center space-y-6">
-                      <div className="w-full bg-primary text-primary-foreground p-8 rounded-lg">
-                        <h1 className="text-4xl font-bold mb-2">METERING AUDIT REPORT</h1>
+                      <div className="w-full p-8">
+                        <h1 className="text-4xl font-bold mb-2 text-[#176DB1]">{previewData.siteName.toUpperCase()}</h1>
+                        <h2 className="text-2xl font-bold text-[#176DB1]">METERING AUDIT REPORT</h2>
                       </div>
-                      <div className="space-y-4 p-8 border rounded-lg bg-muted/30 w-full">
-                        <h2 className="text-3xl font-bold">{previewData.siteName}</h2>
-                        <div className="space-y-2">
+                      <div className="space-y-4 p-8 w-full">
+                        <p className="text-lg font-semibold">Financial Analysis</p>
+                        <div className="space-y-2 mt-8">
                           <p className="text-sm font-medium text-muted-foreground">Audit Period</p>
-                          <p className="text-xl font-semibold">
+                          <p className="text-lg font-semibold">
                             {format(previewData.periodStart, "dd MMMM yyyy")} {startTime} - {format(previewData.periodEnd, "dd MMMM yyyy")} {endTime}
                           </p>
                         </div>
                       </div>
-                      <p className="text-sm text-muted-foreground">
-                        Report Generated: {format(new Date(), "dd MMMM yyyy 'at' HH:mm")}
+                      <p className="text-xs text-muted-foreground absolute bottom-4">
+                        Document Number: AUD-{format(new Date(), "yyyyMMdd-HHmmss")} | Print date: {format(new Date(), "dd/MM/yyyy HH:mm")}
                       </p>
                     </div>
                   )}
 
-                  {/* Page 2: Executive Summary */}
+                  {/* Page 2: Table of Contents Title */}
                   {currentPage === 2 && (
+                    <div className="h-full flex flex-col items-center justify-center">
+                      <h1 className="text-4xl font-bold text-[#176DB1]">Table of Contents</h1>
+                    </div>
+                  )}
+
+                  {/* Page 3: Table of Contents Content */}
+                  {currentPage === 3 && (
+                    <div className="space-y-3 py-8">
+                      <div className="space-y-2 text-sm">
+                        <p className="font-bold text-[#176DB1]">1. EXECUTIVE SUMMARY</p>
+                        <p className="font-bold text-[#176DB1]">2. METERING HIERARCHY OVERVIEW</p>
+                        <p className="font-bold text-[#176DB1]">3. DATA SOURCES AND AUDIT PERIOD</p>
+                        <p className="font-bold text-[#176DB1]">4. KEY METRICS</p>
+                        <p className="pl-6">4.1 Basic Reconciliation Metrics</p>
+                        <p className="pl-6">4.2 CSV Column Aggregations</p>
+                        <p className="font-bold text-[#176DB1]">5. METERING RECONCILIATION</p>
+                        <p className="pl-6">5.1 Supply Summary</p>
+                        <p className="pl-6">5.2 Distribution Summary</p>
+                        <p className="font-bold text-[#176DB1]">6. METER BREAKDOWN</p>
+                        <p className="font-bold text-[#176DB1]">7. OBSERVATIONS AND ANOMALIES</p>
+                        <p className="font-bold text-[#176DB1]">8. RECOMMENDATIONS</p>
+                        {previewData.reportData.sections.billingValidation && (
+                          <p className="font-bold text-[#176DB1]">9. BILLING VALIDATION</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Page 4: Executive Summary */}
+                  {currentPage === 4 && (
                     <div className="space-y-4">
-                      <div className="bg-primary text-primary-foreground p-4 rounded">
+                      <div className="bg-[#176DB1] text-white p-4 rounded">
                         <h3 className="text-2xl font-bold">1. EXECUTIVE SUMMARY</h3>
                       </div>
                       <div className="prose prose-sm max-w-none text-sm whitespace-pre-wrap">
@@ -1806,10 +1914,10 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
                     </div>
                   )}
 
-                  {/* Page 3: Metering Hierarchy */}
-                  {currentPage === 3 && (
+                  {/* Page 5: Metering Hierarchy */}
+                  {currentPage === 5 && (
                     <div className="space-y-4">
-                      <div className="bg-primary text-primary-foreground p-4 rounded">
+                      <div className="bg-[#176DB1] text-white p-4 rounded">
                         <h3 className="text-2xl font-bold">2. METERING HIERARCHY OVERVIEW</h3>
                       </div>
                       <div className="prose prose-sm max-w-none text-sm whitespace-pre-wrap">
@@ -1818,10 +1926,10 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
                     </div>
                   )}
 
-                  {/* Page 4: Schematic (if available) */}
-                  {(previewData as any).schematicImageBase64 && currentPage === 4 && (
+                  {/* Page 6: Schematic (if available) */}
+                  {(previewData as any).schematicImageBase64 && currentPage === 6 && (
                     <div className="space-y-4">
-                      <div className="bg-primary text-primary-foreground p-4 rounded">
+                      <div className="bg-[#176DB1] text-white p-4 rounded">
                         <h3 className="text-2xl font-bold">SITE SCHEMATIC DIAGRAM</h3>
                       </div>
                       <div className="flex flex-col items-center justify-center space-y-2">
@@ -1837,10 +1945,10 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
                     </div>
                   )}
 
-                  {/* Page 5 (or 4 if no schematic): Key Metrics */}
-                  {currentPage === ((previewData as any).schematicImageBase64 ? 5 : 4) && (
+                  {/* Page 7 (or 6 if no schematic): Key Metrics */}
+                  {currentPage === ((previewData as any).schematicImageBase64 ? 7 : 6) && (
                     <div className="space-y-4">
-                      <div className="bg-primary text-primary-foreground p-4 rounded">
+                      <div className="bg-[#176DB1] text-white p-4 rounded">
                         <h3 className="text-2xl font-bold">3. KEY METRICS</h3>
                       </div>
                       <div className="space-y-4">
@@ -1901,10 +2009,10 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
                     </div>
                   )}
 
-                  {/* Page 6 (or 5): Observations */}
-                  {currentPage === ((previewData as any).schematicImageBase64 ? 6 : 5) && (
+                  {/* Page 8 (or 7): Observations */}
+                  {currentPage === ((previewData as any).schematicImageBase64 ? 8 : 7) && (
                     <div className="space-y-4">
-                      <div className="bg-primary text-primary-foreground p-4 rounded">
+                      <div className="bg-[#176DB1] text-white p-4 rounded">
                         <h3 className="text-2xl font-bold">4. OBSERVATIONS AND ANOMALIES</h3>
                       </div>
                       <div className="prose prose-sm max-w-none text-xs whitespace-pre-wrap">
@@ -1933,10 +2041,10 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
                     </div>
                   )}
 
-                  {/* Page 7 (or 6): Recommendations */}
-                  {currentPage === ((previewData as any).schematicImageBase64 ? 7 : 6) && (
+                  {/* Page 9 (or 8): Recommendations */}
+                  {currentPage === ((previewData as any).schematicImageBase64 ? 9 : 8) && (
                     <div className="space-y-4">
-                      <div className="bg-primary text-primary-foreground p-4 rounded">
+                      <div className="bg-[#176DB1] text-white p-4 rounded">
                         <h3 className="text-2xl font-bold">5. RECOMMENDATIONS</h3>
                       </div>
                       <div className="prose prose-sm max-w-none text-xs whitespace-pre-wrap">
@@ -1945,11 +2053,11 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
                     </div>
                   )}
 
-                  {/* Page 8 (or 7): Billing Validation (if exists) */}
+                  {/* Page 10 (or 9): Billing Validation (if exists) */}
                   {previewData.reportData.sections.billingValidation && 
-                   currentPage === ((previewData as any).schematicImageBase64 ? 8 : 7) && (
+                   currentPage === ((previewData as any).schematicImageBase64 ? 10 : 9) && (
                     <div className="space-y-4">
-                      <div className="bg-primary text-primary-foreground p-4 rounded">
+                      <div className="bg-[#176DB1] text-white p-4 rounded">
                         <h3 className="text-2xl font-bold">6. BILLING VALIDATION</h3>
                       </div>
                       <div className="prose prose-sm max-w-none text-xs whitespace-pre-wrap">
