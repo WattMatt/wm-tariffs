@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Gauge, BarChart3, FileText, Building2, Coins, Pencil, TrendingUp, DollarSign, Activity, Calendar, FolderOpen } from "lucide-react";
+import { ArrowLeft, Gauge, BarChart3, FileText, Building2, Coins, Pencil, TrendingUp, DollarSign, Activity, Calendar, FolderOpen, Sun, Zap } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import MetersTab from "@/components/site/MetersTab";
@@ -20,6 +20,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+type SiteSection = 'metering' | 'solar';
 
 interface Site {
   id: string;
@@ -55,6 +57,7 @@ export default function SiteDetail() {
   const [provinces, setProvinces] = useState<string[]>([]);
   const [selectedProvince, setSelectedProvince] = useState<string>("");
   const [filteredAuthorities, setFilteredAuthorities] = useState<SupplyAuthority[]>([]);
+  const [selectedSection, setSelectedSection] = useState<SiteSection>('metering');
   const [siteStats, setSiteStats] = useState({
     meters: 0,
     readings: 0,
@@ -313,74 +316,122 @@ export default function SiteDetail() {
           </Card>
         )}
 
-        <Tabs defaultValue="schematics" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-8 lg:w-auto">
-            <TabsTrigger value="schematics" className="gap-2">
-              <FileText className="w-4 h-4" />
-              Schematics
-            </TabsTrigger>
-            <TabsTrigger value="meters" className="gap-2">
-              <Gauge className="w-4 h-4" />
-              Meters
-            </TabsTrigger>
-            <TabsTrigger value="documents" className="gap-2">
-              <FolderOpen className="w-4 h-4" />
-              Documents
-            </TabsTrigger>
-            <TabsTrigger value="reconciliation" className="gap-2">
-              <BarChart3 className="w-4 h-4" />
-              Reconciliation
-            </TabsTrigger>
-            <TabsTrigger value="load-profiles" className="gap-2">
-              <TrendingUp className="w-4 h-4" />
-              Load Profiles
-            </TabsTrigger>
-            <TabsTrigger value="tariffs" className="gap-2">
-              <DollarSign className="w-4 h-4" />
-              Tariffs
-            </TabsTrigger>
-            <TabsTrigger value="costs" className="gap-2">
-              <Coins className="w-4 h-4" />
-              Costs
-            </TabsTrigger>
-            <TabsTrigger value="audit-report" className="gap-2">
-              <FileText className="w-4 h-4" />
-              Audit Report
-            </TabsTrigger>
-          </TabsList>
+        <Card className="border-border/50">
+          <CardHeader>
+            <CardTitle className="text-lg">Site Sections</CardTitle>
+            <CardDescription>Select a section to view its details</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex gap-3">
+              <Button
+                variant={selectedSection === 'metering' ? 'default' : 'outline'}
+                onClick={() => setSelectedSection('metering')}
+                className="gap-2"
+              >
+                <Zap className="w-4 h-4" />
+                Metering
+              </Button>
+              <Button
+                variant={selectedSection === 'solar' ? 'default' : 'outline'}
+                onClick={() => setSelectedSection('solar')}
+                className="gap-2"
+              >
+                <Sun className="w-4 h-4" />
+                Solar Generation Report
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
 
-          <TabsContent value="schematics">
-            <SchematicsTab siteId={id!} />
-          </TabsContent>
+        {selectedSection === 'metering' && (
+          <Tabs defaultValue="schematics" className="space-y-6">
+            <TabsList className="grid w-full grid-cols-8 lg:w-auto">
+              <TabsTrigger value="schematics" className="gap-2">
+                <FileText className="w-4 h-4" />
+                Schematics
+              </TabsTrigger>
+              <TabsTrigger value="meters" className="gap-2">
+                <Gauge className="w-4 h-4" />
+                Meters
+              </TabsTrigger>
+              <TabsTrigger value="documents" className="gap-2">
+                <FolderOpen className="w-4 h-4" />
+                Documents
+              </TabsTrigger>
+              <TabsTrigger value="reconciliation" className="gap-2">
+                <BarChart3 className="w-4 h-4" />
+                Reconciliation
+              </TabsTrigger>
+              <TabsTrigger value="load-profiles" className="gap-2">
+                <TrendingUp className="w-4 h-4" />
+                Load Profiles
+              </TabsTrigger>
+              <TabsTrigger value="tariffs" className="gap-2">
+                <DollarSign className="w-4 h-4" />
+                Tariffs
+              </TabsTrigger>
+              <TabsTrigger value="costs" className="gap-2">
+                <Coins className="w-4 h-4" />
+                Costs
+              </TabsTrigger>
+              <TabsTrigger value="audit-report" className="gap-2">
+                <FileText className="w-4 h-4" />
+                Audit Report
+              </TabsTrigger>
+            </TabsList>
 
-          <TabsContent value="meters">
-            <MetersTab siteId={id!} />
-          </TabsContent>
+            <TabsContent value="schematics">
+              <SchematicsTab siteId={id!} />
+            </TabsContent>
 
-          <TabsContent value="documents">
-            <DocumentsTab siteId={id!} />
-          </TabsContent>
+            <TabsContent value="meters">
+              <MetersTab siteId={id!} />
+            </TabsContent>
 
-          <TabsContent value="reconciliation">
-            <ReconciliationTab siteId={id!} />
-          </TabsContent>
+            <TabsContent value="documents">
+              <DocumentsTab siteId={id!} />
+            </TabsContent>
 
-          <TabsContent value="load-profiles">
-            <LoadProfilesTab siteId={id!} />
-          </TabsContent>
+            <TabsContent value="reconciliation">
+              <ReconciliationTab siteId={id!} />
+            </TabsContent>
 
-          <TabsContent value="tariffs">
-            <TariffAssignmentTab siteId={id!} />
-          </TabsContent>
+            <TabsContent value="load-profiles">
+              <LoadProfilesTab siteId={id!} />
+            </TabsContent>
 
-          <TabsContent value="costs">
-            <CostCalculationTab siteId={id!} />
-          </TabsContent>
+            <TabsContent value="tariffs">
+              <TariffAssignmentTab siteId={id!} />
+            </TabsContent>
 
-          <TabsContent value="audit-report">
-            <SiteReportExport siteId={id!} siteName={site.name} />
-          </TabsContent>
-        </Tabs>
+            <TabsContent value="costs">
+              <CostCalculationTab siteId={id!} />
+            </TabsContent>
+
+            <TabsContent value="audit-report">
+              <SiteReportExport siteId={id!} siteName={site.name} />
+            </TabsContent>
+          </Tabs>
+        )}
+
+        {selectedSection === 'solar' && (
+          <Card className="border-border/50">
+            <CardHeader>
+              <CardTitle>Solar Generation Report</CardTitle>
+              <CardDescription>Solar generation data and analysis tools</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <Sun className="w-16 h-16 text-warning mb-4" />
+                <h3 className="text-xl font-semibold mb-2">Coming Soon</h3>
+                <p className="text-muted-foreground max-w-md">
+                  Solar generation reporting features are currently in development. 
+                  This section will include solar production tracking, analysis, and reporting capabilities.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
           <DialogContent className="max-w-lg">
