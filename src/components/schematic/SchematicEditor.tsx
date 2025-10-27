@@ -388,6 +388,9 @@ export default function SchematicEditor({
             cornerStyle: 'circle',
           });
           
+          // Hide rotation control
+          rect.setControlsVisibility({ mtr: false });
+          
           // Store region ID on the rect for later updates
           (rect as any).regionId = `region-${Date.now()}-${drawnRegions.length + 1}`;
           
