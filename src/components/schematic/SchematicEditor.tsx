@@ -300,24 +300,6 @@ export default function SchematicEditor({
           
           if (!drawStartPointRef.current) {
             drawStartPointRef.current = { x: pointer.x, y: pointer.y };
-            
-            // Show a marker at start point
-            const marker = new Circle({
-              left: pointer.x,
-              top: pointer.y,
-              radius: 5,
-              fill: 'hsl(210, 100%, 45%)', // Primary blue
-              stroke: '#ffffff',
-              strokeWidth: 2,
-              selectable: false,
-              evented: false,
-              originX: 'center',
-              originY: 'center',
-            });
-            
-            canvas.add(marker);
-            startMarkerRef.current = marker;
-            canvas.renderAll();
             toast.info('Click again to set the end point');
             evt.preventDefault();
             evt.stopPropagation();
@@ -377,6 +359,8 @@ export default function SchematicEditor({
             hasBorders: true,
             lockMovementX: false,
             lockMovementY: false,
+            hoverCursor: 'grab', // Open hand when hovering
+            moveCursor: 'grabbing', // Closed hand when dragging
             cornerColor: 'hsl(210, 100%, 45%)',
             cornerSize: 12,
             transparentCorners: false,
