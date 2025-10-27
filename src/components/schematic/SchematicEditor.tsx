@@ -1690,14 +1690,13 @@ export default function SchematicEditor({
             }
             
             if (data && data.meter) {
-              // Store region coordinates as percentages for rendering
-              // Position should be top-left corner, not center
               const newMeter = {
                 ...data.meter,
                 status: 'pending' as const,
+                scannedImageSnippet: croppedImageUrl, // Store the cropped region image
                 position: {
-                  x: (region.x / imageWidth) * 100,  // Top-left X as percentage
-                  y: (region.y / imageHeight) * 100   // Top-left Y as percentage
+                  x: (region.x / imageWidth) * 100,
+                  y: (region.y / imageHeight) * 100
                 },
                 extractedRegion: {
                   x: (region.x / imageWidth) * 100,
@@ -2301,25 +2300,26 @@ export default function SchematicEditor({
           
           {selectedMeterIndex !== null && extractedMeters[selectedMeterIndex] && (
             <div className="grid grid-cols-2 gap-6">
-              {/* Left side: Extracted region from PDF */}
               <div className="space-y-2">
                 <Label className="text-base font-semibold">Scanned Area from PDF</Label>
-                <div className="border-2 border-primary rounded-lg overflow-hidden bg-muted">
-                  {extractedMeters[selectedMeterIndex].extractedRegion ? (
+                <div className="border-2 border-primary rounded-lg overflow-hidden bg-white">
+                  {extractedMeters[selectedMeterIndex].scannedImageSnippet ? (
+                    <img 
+                      src={extractedMeters[selectedMeterIndex].scannedImageSnippet} 
+                      alt="Scanned meter region" 
+                      className="w-full h-auto"
+                    />
+                  ) : extractedMeters[selectedMeterIndex].extractedRegion ? (
                     <div 
                       className="relative w-full" 
                       style={{
                         height: '600px',
                         backgroundImage: `url(${schematicUrl})`,
-                        // Scale image so region fills container: if region is 5% wide, scale to 100/5 = 2000%
                         backgroundSize: `${(100 / extractedMeters[selectedMeterIndex].extractedRegion.width) * 100}% auto`,
-                        // Position so region's top-left is at container's top-left
-                        // If region starts at x=20%, we need to shift left by 20% of the scaled image
                         backgroundPosition: `${-extractedMeters[selectedMeterIndex].extractedRegion.x * (100 / extractedMeters[selectedMeterIndex].extractedRegion.width)}% ${-extractedMeters[selectedMeterIndex].extractedRegion.y * (100 / extractedMeters[selectedMeterIndex].extractedRegion.width)}%`,
                         backgroundRepeat: 'no-repeat',
                       }}
                     >
-                      {/* Border highlight showing the extracted region */}
                       <div className="absolute inset-2 border-2 border-green-500 pointer-events-none"></div>
                     </div>
                   ) : (
@@ -2528,6 +2528,23 @@ export default function SchematicEditor({
           </DialogHeader>
           {editingMeter && (
             <form onSubmit={handleUpdateMeter} className="space-y-6">
+              {/* Show scanned PDF snippet if available */}
+              {editingMeter.scannedImageSnippet && (
+                <div className="space-y-2 p-4 bg-muted rounded-lg border">
+                  <Label className="text-sm font-semibold">Scanned Area from PDF</Label>
+                  <div className="border rounded overflow-hidden bg-white">
+                    <img 
+                      src={editingMeter.scannedImageSnippet} 
+                      alt="Scanned meter region" 
+                      className="w-full h-auto"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground italic">
+                    This is the exact region that was scanned from the PDF
+                  </p>
+                </div>
+              )}
+              
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="edit_meter_number">NO (Meter Number) *</Label>
