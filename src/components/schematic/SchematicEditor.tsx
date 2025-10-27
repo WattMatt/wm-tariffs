@@ -49,6 +49,7 @@ export default function SchematicEditor({
 }: SchematicEditorProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [fabricCanvas, setFabricCanvas] = useState<FabricCanvas | null>(null);
+  const [isEditMode, setIsEditMode] = useState(false);
   const [activeTool, setActiveTool] = useState<"select" | "meter" | "connection" | "move" | "draw">("select");
   const activeToolRef = useRef<"select" | "meter" | "connection" | "move" | "draw">("select");
   const [isDrawingMode, setIsDrawingMode] = useState(false);
@@ -1460,7 +1461,7 @@ export default function SchematicEditor({
       </div>
       
       <div className="flex gap-2 items-center flex-wrap">
-        <Button onClick={handleScanAll} disabled={isSaving || activeTool !== "select"} variant="default">
+        <Button onClick={handleScanAll} disabled={!isEditMode || isSaving} variant="default">
           <Scan className="w-4 h-4 mr-2" />
           {isSaving ? 'Scanning...' : (drawnRegions.length > 0 ? 'Scan All Regions' : 'Scan All Meters')}
         </Button>
@@ -1470,7 +1471,7 @@ export default function SchematicEditor({
             setActiveTool("draw");
             toast.info("Left-click to draw regions. Hold middle mouse + drag to pan.", { duration: 4000 });
           }}
-          disabled={activeTool !== "select" && activeTool !== "draw"}
+          disabled={!isEditMode}
           size="sm"
           className="gap-2"
         >
@@ -1481,7 +1482,7 @@ export default function SchematicEditor({
           <Button
             variant="destructive"
             onClick={handleClearRegions}
-            disabled={activeTool !== "select" && activeTool !== "draw"}
+            disabled={!isEditMode}
             size="sm"
             className="gap-2"
           >
@@ -1492,7 +1493,7 @@ export default function SchematicEditor({
         <Button
           variant={activeTool === "meter" ? "default" : "outline"}
           onClick={() => setActiveTool("meter")}
-          disabled={activeTool !== "select" && activeTool !== "meter"}
+          disabled={!isEditMode}
           size="sm"
         >
           <Plus className="w-4 h-4 mr-2" />
@@ -1501,7 +1502,7 @@ export default function SchematicEditor({
         <Button
           variant={activeTool === "move" ? "default" : "outline"}
           onClick={() => setActiveTool("move")}
-          disabled={activeTool !== "select" && activeTool !== "move"}
+          disabled={!isEditMode}
           size="sm"
         >
           <Move className="w-4 h-4 mr-2" />
@@ -1510,7 +1511,7 @@ export default function SchematicEditor({
         <Button
           variant={activeTool === "connection" ? "default" : "outline"}
           onClick={() => setActiveTool("connection")}
-          disabled={activeTool !== "select" && activeTool !== "connection"}
+          disabled={!isEditMode}
           size="sm"
         >
           <Link2 className="w-4 h-4 mr-2" />
@@ -1539,18 +1540,26 @@ export default function SchematicEditor({
           onDrawnRegionsUpdate={setDrawnRegions}
         />
         <div className="flex-1" />
-        <Button onClick={handleClearLines} variant="destructive" size="sm" disabled={activeTool !== "select"}>
+        <Button onClick={handleClearLines} variant="destructive" size="sm" disabled={!isEditMode}>
           <Trash2 className="w-4 h-4 mr-2" />
           Clear Lines
         </Button>
         <div className="flex-1" />
-        <Button onClick={handleSave} disabled={isSaving || activeTool !== "select"} size="sm">
+        <Button onClick={handleSave} disabled={!isEditMode || isSaving} size="sm">
           <Save className="w-4 h-4 mr-2" />
           Save
         </Button>
         <Button
-          variant={activeTool === "select" ? "default" : "outline"}
-          onClick={() => setActiveTool("select")}
+          variant={isEditMode ? "default" : "outline"}
+          onClick={() => {
+            setIsEditMode(!isEditMode);
+            if (!isEditMode) {
+              setActiveTool("select");
+              toast.success("Edit mode enabled");
+            } else {
+              toast.info("Edit mode disabled");
+            }
+          }}
           size="sm"
         >
           <Zap className="w-4 h-4 mr-2" />
