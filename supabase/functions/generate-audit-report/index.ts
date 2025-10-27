@@ -179,6 +179,7 @@ CRITICAL FORMATTING INSTRUCTIONS:
 - Do NOT use ## headers or numbered section headers (like 3.1, 3.2)
 - Do NOT use ** for bold text
 - Do NOT include any markdown syntax
+- Do NOT repeat the section title "Observations and Anomalies" at the start
 - Start directly with the content
 - Use simple paragraphs with clear topic sentences
 - Separate topics with line breaks

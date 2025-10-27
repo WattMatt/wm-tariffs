@@ -347,6 +347,8 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
       const solarTotal = solarMeters.reduce((sum, m) => sum + m.totalKwh, 0);
       const distributionTotal = distribution.reduce((sum, m) => sum + m.totalKwh, 0);
       
+      // Calculate total supply from CSV columns with SUM operation (not yet available at this point)
+      // This will be calculated after column configs are processed
       const totalSupply = councilTotal + solarTotal;
       const recoveryRate = totalSupply > 0 ? (distributionTotal / totalSupply) * 100 : 0;
       const discrepancy = totalSupply - distributionTotal;
@@ -540,6 +542,25 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
             };
           }
         });
+
+      // Recalculate Total Supply from SUM columns
+      const totalSupplyFromCsv = Object.entries(csvColumnAggregations)
+        .filter(([_, data]) => data.aggregation === 'sum')
+        .reduce((sum, [_, data]) => sum + data.value, 0);
+      
+      // Update reconciliation data with correct total supply
+      if (totalSupplyFromCsv > 0) {
+        reconciliationData.totalSupply = totalSupplyFromCsv.toFixed(2);
+        const newRecoveryRate = totalSupplyFromCsv > 0 ? (distributionTotal / totalSupplyFromCsv) * 100 : 0;
+        const newDiscrepancy = totalSupplyFromCsv - distributionTotal;
+        const newVariancePercentage = totalSupplyFromCsv > 0 
+          ? ((newDiscrepancy / totalSupplyFromCsv) * 100).toFixed(2)
+          : "0";
+        
+        reconciliationData.recoveryRate = newRecoveryRate.toFixed(2);
+        reconciliationData.variance = newDiscrepancy.toFixed(2);
+        reconciliationData.variancePercentage = newVariancePercentage;
+      }
 
       // 9. Prepare detailed meter breakdown with sorting
       const sortMetersByType = (meters: any[]) => {
@@ -894,7 +915,7 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
       pdf.text("Audit Period", pageWidth / 2, 155, { align: "center" });
       pdf.setFont("helvetica", "bold");
       pdf.text(
-        `${format(previewPeriodStart, "dd MMMM yyyy")} - ${format(previewPeriodEnd, "dd MMMM yyyy")}`,
+        `${format(previewPeriodStart, "dd MMMM yyyy")} ${startTime} - ${format(previewPeriodEnd, "dd MMMM yyyy")} ${endTime}`,
         pageWidth / 2,
         165,
         { align: "center" }
@@ -958,7 +979,7 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
       // Section 3: Data Sources and Audit Period
       addSectionHeading("3. DATA SOURCES AND AUDIT PERIOD", 16);
       addSubsectionHeading("Audit Period");
-      addText(`${format(previewPeriodStart, "dd MMMM yyyy")} to ${format(previewPeriodEnd, "dd MMMM yyyy")}`);
+      addText(`${format(previewPeriodStart, "dd MMMM yyyy")} ${startTime} to ${format(previewPeriodEnd, "dd MMMM yyyy")} ${endTime}`);
       addSpacer(5);
       
       addSubsectionHeading("Council Bulk Supply Meters");
@@ -1108,7 +1129,11 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
       // Section 6: Observations and Anomalies
       const obsSection = reportData.sections.billingValidation ? "6" : "5";
       addSectionHeading(`${obsSection}. OBSERVATIONS AND ANOMALIES`, 16);
-      addText(reportData.sections.observations);
+      // Clean any duplicate heading text from AI response
+      const cleanedObservations = reportData.sections.observations
+        .replace(/^observations\s+and\s+anomalies[:\s]*/i, '')
+        .trim();
+      addText(cleanedObservations);
       addSpacer(5);
       
       if (anomalies.length > 0) {
@@ -1763,7 +1788,7 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
                         <div className="space-y-2">
                           <p className="text-sm font-medium text-muted-foreground">Audit Period</p>
                           <p className="text-xl font-semibold">
-                            {format(previewData.periodStart, "dd MMMM yyyy")} - {format(previewData.periodEnd, "dd MMMM yyyy")}
+                            {format(previewData.periodStart, "dd MMMM yyyy")} {startTime} - {format(previewData.periodEnd, "dd MMMM yyyy")} {endTime}
                           </p>
                         </div>
                       </div>
@@ -1887,7 +1912,7 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
                         <h3 className="text-2xl font-bold">4. OBSERVATIONS AND ANOMALIES</h3>
                       </div>
                       <div className="prose prose-sm max-w-none text-xs whitespace-pre-wrap">
-                        {previewData.reportData.sections.observations}
+                        {previewData.reportData.sections.observations.replace(/^observations\s+and\s+anomalies[:\s]*/i, '').trim()}
                       </div>
                       {previewData.anomalies.length > 0 && (
                         <div className="space-y-2 mt-4">
