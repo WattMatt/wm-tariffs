@@ -354,6 +354,9 @@ export default function SchematicEditor({
         const delta = new Point(0, -e.deltaY);
         canvas.relativePan(delta);
       }
+      
+      // Force full render after viewport change
+      canvas.renderAll();
     });
 
     // Panning variables (consolidated single implementation)
@@ -576,6 +579,7 @@ export default function SchematicEditor({
         
         const delta = new Point(deltaX, deltaY);
         canvas.relativePan(delta);
+        canvas.renderAll(); // Force full render
         
         lastX = evt.clientX;
         lastY = evt.clientY;
