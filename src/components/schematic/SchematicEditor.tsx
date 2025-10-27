@@ -1379,86 +1379,67 @@ export default function SchematicEditor({
         </Button>
       </div>
 
-      <div className="flex gap-2 flex-wrap items-center">
+      <div className="flex gap-3 flex-wrap items-center">
         <div className="text-xs font-medium text-muted-foreground mr-2 flex items-center">Legend:</div>
         
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={legendVisibility.bulk_meter}
-            onChange={(e) => setLegendVisibility(prev => ({ ...prev, bulk_meter: e.target.checked }))}
-            className="w-3 h-3"
-          />
-          <Badge variant="outline" className="cursor-pointer">
-            <div className="w-3 h-3 rounded-full bg-[#ef4444] mr-2" />
-            Bulk Meter
-          </Badge>
-        </label>
+        {/* First group - Zones */}
+        <Badge 
+          variant="outline" 
+          className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.mini_sub_zone ? 'opacity-40' : ''}`}
+          onClick={() => setLegendVisibility(prev => ({ ...prev, mini_sub_zone: !prev.mini_sub_zone }))}
+        >
+          <div className="w-3 h-3 rounded-full bg-[#06b6d4] mr-2" />
+          Mini Sub
+        </Badge>
         
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={legendVisibility.check_meter}
-            onChange={(e) => setLegendVisibility(prev => ({ ...prev, check_meter: e.target.checked }))}
-            className="w-3 h-3"
-          />
-          <Badge variant="outline" className="cursor-pointer">
-            <div className="w-3 h-3 rounded-full bg-[#f59e0b] mr-2" />
-            Check Meter
-          </Badge>
-        </label>
+        <Badge 
+          variant="outline" 
+          className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.main_board_zone ? 'opacity-40' : ''}`}
+          onClick={() => setLegendVisibility(prev => ({ ...prev, main_board_zone: !prev.main_board_zone }))}
+        >
+          <div className="w-3 h-3 rounded-full bg-[#9333ea] mr-2" />
+          Main Board
+        </Badge>
         
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={legendVisibility.main_board_zone}
-            onChange={(e) => setLegendVisibility(prev => ({ ...prev, main_board_zone: e.target.checked }))}
-            className="w-3 h-3"
-          />
-          <Badge variant="outline" className="cursor-pointer">
-            <div className="w-3 h-3 rounded-full bg-[#9333ea] mr-2" />
-            Main Board Zone
-          </Badge>
-        </label>
+        {/* Vertical separator */}
+        <div className="w-px h-6 bg-border mx-1" />
         
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={legendVisibility.mini_sub_zone}
-            onChange={(e) => setLegendVisibility(prev => ({ ...prev, mini_sub_zone: e.target.checked }))}
-            className="w-3 h-3"
-          />
-          <Badge variant="outline" className="cursor-pointer">
-            <div className="w-3 h-3 rounded-full bg-[#06b6d4] mr-2" />
-            Mini Sub Zone
-          </Badge>
-        </label>
+        {/* Second group - Meter Types */}
+        <Badge 
+          variant="outline" 
+          className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.bulk_meter ? 'opacity-40' : ''}`}
+          onClick={() => setLegendVisibility(prev => ({ ...prev, bulk_meter: !prev.bulk_meter }))}
+        >
+          <div className="w-3 h-3 rounded-full bg-[#ef4444] mr-2" />
+          Bulk Meter
+        </Badge>
         
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={legendVisibility.submeter}
-            onChange={(e) => setLegendVisibility(prev => ({ ...prev, submeter: e.target.checked }))}
-            className="w-3 h-3"
-          />
-          <Badge variant="outline" className="cursor-pointer">
-            <div className="w-3 h-3 rounded-full bg-[#10b981] mr-2" />
-            Submeter
-          </Badge>
-        </label>
+        <Badge 
+          variant="outline" 
+          className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.check_meter ? 'opacity-40' : ''}`}
+          onClick={() => setLegendVisibility(prev => ({ ...prev, check_meter: !prev.check_meter }))}
+        >
+          <div className="w-3 h-3 rounded-full bg-[#f59e0b] mr-2" />
+          Check Meter
+        </Badge>
         
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={legendVisibility.other}
-            onChange={(e) => setLegendVisibility(prev => ({ ...prev, other: e.target.checked }))}
-            className="w-3 h-3"
-          />
-          <Badge variant="outline" className="cursor-pointer">
-            <div className="w-3 h-3 rounded-full bg-[#3b82f6] mr-2" />
-            Other
-          </Badge>
-        </label>
+        <Badge 
+          variant="outline" 
+          className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.submeter ? 'opacity-40' : ''}`}
+          onClick={() => setLegendVisibility(prev => ({ ...prev, submeter: !prev.submeter }))}
+        >
+          <div className="w-3 h-3 rounded-full bg-[#10b981] mr-2" />
+          Tenant Meter
+        </Badge>
+        
+        <Badge 
+          variant="outline" 
+          className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.other ? 'opacity-40' : ''}`}
+          onClick={() => setLegendVisibility(prev => ({ ...prev, other: !prev.other }))}
+        >
+          <div className="w-3 h-3 rounded-full bg-[#3b82f6] mr-2" />
+          Other
+        </Badge>
         
         {extractedMeters.length > 0 && (
           <>
