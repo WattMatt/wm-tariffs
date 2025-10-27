@@ -121,7 +121,71 @@ async function createMeterCardImage(
   return canvas.toDataURL();
 }
 
-// Helper function to crop a region from an image and upload to storage
+// Helper function to create and render a meter card on the canvas
+async function renderMeterCardOnCanvas(
+  canvas: FabricCanvas,
+  meter: any,
+  meterIndex: number,
+  canvasWidth: number,
+  canvasHeight: number
+): Promise<any> {
+  // Create meter card image from meter data
+  const fields = [
+    { label: 'NO', value: meter.meter_number || 'N/A' },
+    { label: 'NAME', value: meter.name || 'N/A' },
+    { label: 'AREA', value: meter.area || 'N/A' },
+    { label: 'RATING', value: meter.rating || 'N/A' },
+    { label: 'SERIAL', value: meter.serial_number || 'N/A' },
+  ];
+  
+  const meterCardDataUrl = await createMeterCardImage(fields, '#0e74dd', 200, 140);
+  
+  // Convert extracted region percentage to canvas pixels
+  const region = meter.extractedRegion;
+  if (!region) {
+    console.error('No extracted region found for meter');
+    return null;
+  }
+  
+  const left = (region.x / 100) * canvasWidth;
+  const top = (region.y / 100) * canvasWidth;
+  const targetWidth = (region.width / 100) * canvasWidth;
+  const targetHeight = (region.height / 100) * canvasHeight;
+  
+  // Calculate scale to match the drawn region size
+  // Base card is 200x140
+  const scaleX = targetWidth / 200;
+  const scaleY = targetHeight / 140;
+  
+  return new Promise((resolve) => {
+    FabricImage.fromURL(meterCardDataUrl, {
+      crossOrigin: 'anonymous'
+    }).then((img) => {
+      img.set({
+        left,
+        top,
+        scaleX,
+        scaleY,
+        selectable: true,
+        hasControls: true,
+        hasBorders: true,
+        lockRotation: true,
+        cornerColor: '#0e74dd',
+        cornerSize: 12,
+        transparentCorners: false,
+        borderColor: '#0e74dd',
+      });
+      
+      // Store meter index for reference
+      (img as any).meterIndex = meterIndex;
+      (img as any).meterCardType = 'extracted';
+      
+      canvas.add(img);
+      canvas.renderAll();
+      resolve(img);
+    });
+  });
+}
 async function cropRegionAndUpload(
   imageUrl: string,
   x: number,
@@ -272,6 +336,7 @@ export default function SchematicEditor({
   const [pendingMeterPosition, setPendingMeterPosition] = useState<{ x: number; y: number } | null>(null);
   const [isCsvDialogOpen, setIsCsvDialogOpen] = useState(false);
   const [extractedMeters, setExtractedMeters] = useState<any[]>(propExtractedMeters);
+  const [meterCardObjects, setMeterCardObjects] = useState<Map<number, any>>(new Map()); // Maps meter index to Fabric object
 
   // Sync extracted meters from props
   useEffect(() => {
@@ -652,9 +717,11 @@ export default function SchematicEditor({
       }
     });
     
-    // Handle rectangle resize and move - update region data
+    // Handle rectangle resize and move - update region data AND meter card changes
     canvas.on('object:modified', (e) => {
       const obj = e.target;
+      
+      // Handle region rectangles
       if (obj && obj.type === 'rect' && (obj as any).regionId) {
         const regionId = (obj as any).regionId;
         const rect = obj as Rect;
@@ -689,11 +756,67 @@ export default function SchematicEditor({
             };
           }
           return region;
-          }));
-          
-          canvas.renderAll();
-        }
-      });
+        }));
+        
+        canvas.renderAll();
+      }
+      
+      // Handle meter card objects  
+      if (obj && obj.type === 'image' && (obj as any).meterCardType === 'extracted') {
+        const meterIndex = (obj as any).meterIndex;
+        const img = obj as FabricImage;
+        
+        const canvasWidth = canvas.getWidth();
+        const canvasHeight = canvas.getHeight();
+        const originalImageWidth = (canvas as any).originalImageWidth || canvasWidth;
+        const originalImageHeight = (canvas as any).originalImageHeight || canvasHeight;
+        
+        const left = img.left || 0;
+        const top = img.top || 0;
+        const scaleX = img.scaleX || 1;
+        const scaleY = img.scaleY || 1;
+        
+        // Calculate width/height of card in canvas pixels
+        const cardWidth = 200 * scaleX;
+        const cardHeight = 140 * scaleY;
+        
+        // Convert to percentages relative to original image
+        const positionXPercent = (left / canvasWidth) * 100;
+        const positionYPercent = (top / canvasHeight) * 100;
+        const widthPercent = (cardWidth / canvasWidth) * 100;
+        const heightPercent = (cardHeight / canvasHeight) * 100;
+        
+        // Update meter data
+        setExtractedMeters(prev => {
+          const updated = [...prev];
+          if (updated[meterIndex]) {
+            updated[meterIndex] = {
+              ...updated[meterIndex],
+              position: {
+                x: positionXPercent,
+                y: positionYPercent
+              },
+              extractedRegion: {
+                ...updated[meterIndex].extractedRegion,
+                x: positionXPercent,
+                y: positionYPercent,
+                width: widthPercent,
+                height: heightPercent
+              },
+              scale_x: scaleX,
+              scale_y: scaleY
+            };
+            
+            if (onExtractedMetersUpdate) {
+              onExtractedMetersUpdate(updated);
+            }
+          }
+          return updated;
+        });
+        
+        toast.success('Meter card position/size updated');
+      }
+    });
     
     // No need for object:moving handler since we removed labels
     
@@ -771,10 +894,35 @@ export default function SchematicEditor({
             };
             
             const updatedMeters = [...extractedMeters, newMeter];
+            const newMeterIndex = updatedMeters.length - 1;
+            
             setExtractedMeters(updatedMeters);
             if (onExtractedMetersUpdate) {
               onExtractedMetersUpdate(updatedMeters);
             }
+            
+            // Render the meter card on the canvas
+            try {
+              const meterCardObject = await renderMeterCardOnCanvas(
+                canvas,
+                newMeter,
+                newMeterIndex,
+                canvasWidth,
+                canvasHeight
+              );
+              
+              if (meterCardObject) {
+                // Track this object for future updates
+                setMeterCardObjects(prev => {
+                  const updated = new Map(prev);
+                  updated.set(newMeterIndex, meterCardObject);
+                  return updated;
+                });
+              }
+            } catch (err) {
+              console.error('Failed to render meter card:', err);
+            }
+            
             toast.success(`Extracted meter: ${data.meter.meter_number}`);
           } else {
             toast.error('No meter data found in selected region');
