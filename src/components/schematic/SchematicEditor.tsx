@@ -39,7 +39,55 @@ interface SchematicLine {
   stroke_width: number;
 }
 
-export default function SchematicEditor({ 
+// Helper function to crop a region from an image and return as data URL
+async function cropRegionToDataUrl(
+  imageUrl: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  sourceWidth: number,
+  sourceHeight: number
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    
+    img.onload = () => {
+      // Create an off-screen canvas for cropping
+      const cropCanvas = document.createElement('canvas');
+      cropCanvas.width = width;
+      cropCanvas.height = height;
+      const ctx = cropCanvas.getContext('2d');
+      
+      if (!ctx) {
+        reject(new Error('Could not get canvas context'));
+        return;
+      }
+      
+      // Draw only the specified region from the source image
+      ctx.drawImage(
+        img,
+        x, y,           // Source x, y
+        width, height,  // Source width, height  
+        0, 0,           // Destination x, y
+        width, height   // Destination width, height
+      );
+      
+      // Convert to data URL
+      const dataUrl = cropCanvas.toDataURL('image/png');
+      resolve(dataUrl);
+    };
+    
+    img.onerror = () => {
+      reject(new Error('Failed to load image for cropping'));
+    };
+    
+    img.src = imageUrl;
+  });
+}
+
+export default function SchematicEditor({
   schematicId, 
   schematicUrl, 
   siteId,
@@ -1607,21 +1655,33 @@ export default function SchematicEditor({
           toast.info(`Scanning region ${i + 1} of ${drawnRegions.length}...`);
           
           try {
-              const { data, error } = await supabase.functions.invoke('extract-schematic-meters', {
-                body: { 
-                  imageUrl: schematicUrl,
-                  filePath: filePath || null,
-                  mode: 'extract-region',
-                  region: {
-                    x: region.x,
-                    y: region.y,
-                    width: region.width,
-                    height: region.height,
-                    imageWidth: imageWidth,
-                    imageHeight: imageHeight
-                  }
+            // Create a cropped image of just this region to send to AI
+            // This ensures the AI only sees the exact selected area
+            const croppedImageUrl = await cropRegionToDataUrl(
+              schematicUrl,
+              region.x,
+              region.y,
+              region.width,
+              region.height,
+              imageWidth,
+              imageHeight
+            );
+            
+            const { data, error } = await supabase.functions.invoke('extract-schematic-meters', {
+              body: { 
+                imageUrl: croppedImageUrl, // Send cropped image instead of full image
+                filePath: null,
+                mode: 'extract-region',
+                region: {
+                  x: 0, // Cropped image starts at 0,0
+                  y: 0,
+                  width: region.width,
+                  height: region.height,
+                  imageWidth: region.width, // Cropped image dimensions
+                  imageHeight: region.height
                 }
-              });
+              }
+            });
             
             if (error) {
               console.error(`Error scanning region ${i + 1}:`, error);

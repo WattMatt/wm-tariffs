@@ -107,18 +107,13 @@ Example: {"meter_number":"DB-01A","name":"VACANT","area":"187m²","rating":"150A
         }
       });
       
-      promptText = `You are an expert electrical engineer analyzing a full electrical schematic diagram.
+      promptText = `You are an expert electrical engineer analyzing an electrical schematic diagram.
 
-IMAGE DIMENSIONS: ${Math.round(region.imageWidth)} x ${Math.round(region.imageHeight)} pixels
+⚠️ CRITICAL INSTRUCTION: This image has been pre-cropped to show ONLY the meter information box you need to analyze.
 
-⚠️ FOCUS REGION (ABSOLUTE PIXEL COORDINATES): Extract meter data ONLY from the rectangular area:
-- Top-left corner: x=${Math.round(region.x)}px, y=${Math.round(region.y)}px
-- Dimensions: width=${Math.round(region.width)}px, height=${Math.round(region.height)}px
-- Bottom-right corner: x=${Math.round(region.x + region.width)}px, y=${Math.round(region.y + region.height)}px
+Extract ALL meter data visible in this cropped image.
 
-This focus region contains a single meter information box. IGNORE all other parts of the image outside this precise pixel boundary.
-
-METER DATA TO EXTRACT (from within the focus region only):
+METER DATA TO EXTRACT:
 
 1. meter_number (NO): Extract exactly as shown (e.g., "DB-01A", "MB-03", "INCOMING-01")
 2. name (NAME): Business/tenant name or "VACANT"
@@ -134,7 +129,7 @@ METER TYPE INFERENCE (automatic classification):
 - Otherwise → meter_type: "submeter"
 
 ZONE EXTRACTION:
-- If the meter is within a labeled zone boundary (e.g., "MAIN BOARD 1", "MINI SUB 2"), extract the zone label
+- If zone label visible (e.g., "MAIN BOARD 1", "MINI SUB 2"), extract it
 - Otherwise set zone to null
 
 Return ONLY valid JSON with these exact fields. Use null for fields not visible.
