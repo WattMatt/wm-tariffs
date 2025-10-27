@@ -93,23 +93,30 @@ Return ONLY a valid JSON object with these exact keys.
 NO markdown, NO explanations.
 Example: {"meter_number":"DB-01A","name":"VACANT","area":"187m²","rating":"150A TP","cable_specification":"4C x 95mm² ALU ECC CABLE","serial_number":"35779383","ct_type":"150/5A"}`;
     } else if (mode === 'extract-region') {
-      // Use full image with percentage-based region hints (like tariff extraction)
+      // Use absolute pixel coordinates for precise region extraction
       console.log('🎯 Extract-region mode - analyzing region:', {
-        percentages: { 
-          x: region.x.toFixed(1), 
-          y: region.y.toFixed(1), 
-          width: region.width.toFixed(1), 
-          height: region.height.toFixed(1) 
+        pixels: { 
+          x: Math.round(region.x), 
+          y: Math.round(region.y), 
+          width: Math.round(region.width), 
+          height: Math.round(region.height) 
+        },
+        imageSize: {
+          width: Math.round(region.imageWidth),
+          height: Math.round(region.imageHeight)
         }
       });
       
       promptText = `You are an expert electrical engineer analyzing a full electrical schematic diagram.
 
-⚠️ FOCUS REGION: Extract meter data ONLY from the rectangular area at these coordinates:
-- Position: x: ${region.x.toFixed(1)}% from left edge, y: ${region.y.toFixed(1)}% from top edge
-- Size: width: ${region.width.toFixed(1)}%, height: ${region.height.toFixed(1)}%
+IMAGE DIMENSIONS: ${Math.round(region.imageWidth)} x ${Math.round(region.imageHeight)} pixels
 
-This focus region contains a single meter information box. IGNORE all other parts of the image outside this region.
+⚠️ FOCUS REGION (ABSOLUTE PIXEL COORDINATES): Extract meter data ONLY from the rectangular area:
+- Top-left corner: x=${Math.round(region.x)}px, y=${Math.round(region.y)}px
+- Dimensions: width=${Math.round(region.width)}px, height=${Math.round(region.height)}px
+- Bottom-right corner: x=${Math.round(region.x + region.width)}px, y=${Math.round(region.y + region.height)}px
+
+This focus region contains a single meter information box. IGNORE all other parts of the image outside this precise pixel boundary.
 
 METER DATA TO EXTRACT (from within the focus region only):
 
