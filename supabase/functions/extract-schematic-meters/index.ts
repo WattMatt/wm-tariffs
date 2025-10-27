@@ -147,6 +147,15 @@ EXTRACT these fields with EXACT formatting:
 - meter_type:
   - Determine from context: "council_bulk", "check_meter", "solar", or "distribution"
 
+- zone (optional):
+  - If this meter is within a MAIN BOARD ZONE, extract the zone name (e.g., "MAIN BOARD 1", "MAIN BOARD 3")
+  - Main board zones are identified by:
+    * A large rectangular frame/border
+    * A thick horizontal bar inside (representing the bus bar)
+    * Zone label typically at top-right (e.g., "MAIN BOARD 3")
+    * Multiple meters may be contained within this zone
+  - If not in a main board zone, set to null
+
 Return ONLY a valid JSON object with these exact keys.
 NO markdown, NO explanations.
 Example: {"meter_number":"DB-01A","name":"VACANT","area":"187m²","rating":"150A TP","cable_specification":"4C x 95mm² ALU ECC CABLE","serial_number":"35779383","ct_type":"150/5A","meter_type":"distribution"}`;
@@ -236,6 +245,16 @@ CRITICAL DATA FIELDS (Zero error tolerance):
    - "council_bulk": Main incoming (labeled INCOMING/COUNCIL)
    - "check_meter": Check meters (labeled CHECK METER/BULK CHECK)
    - "distribution": All other meters (DB-XX)
+
+9. zone (optional):
+   - If meter is within a MAIN BOARD ZONE, extract the zone identifier
+   - Main board zones have distinct visual characteristics:
+     * Framed by a LARGE RECTANGULAR BORDER (often purple/magenta color)
+     * Contains a THICK HORIZONTAL BAR inside representing the BUS BAR
+     * Zone label at top (e.g., "MAIN BOARD 1", "MAIN BOARD 3", "MB-1")
+     * Multiple meters/meter blocks positioned within this zone
+   - If meter is within such a zone, set zone to the zone label (e.g., "MAIN BOARD 3")
+   - If meter is standalone/not in a main board zone, set zone to null
 
 POSITIONING (CRITICAL - This determines visual overlay accuracy):
 - position.x: Percentage from LEFT edge to meter box CENTER (0.0 = left edge, 100.0 = right edge)
