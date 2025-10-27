@@ -110,18 +110,33 @@ Example: {"meter_number":"DB-01A","name":"VACANT","area":"187m²","rating":"150A
         }
       });
       
-      promptText = `You are an expert electrical engineer extracting meter label information from a distribution board schematic with 100% fidelity to the original formatting.
+      promptText = `🚨 CRITICAL BOUNDARY RESTRICTION 🚨
+You are STRICTLY FORBIDDEN from looking at ANY part of the image outside the specified rectangular region.
 
-FOCUS AREA: Extract data ONLY from the highlighted region at position:
-- Left edge at: ${xPercent.toFixed(1)}% from the left side of the image
-- Top edge at: ${yPercent.toFixed(1)}% from the top of the image
-- Region width: ${widthPercent.toFixed(1)}% of image width
-- Region height: ${heightPercent.toFixed(1)}% of image height
+═══════════════════════════════════════════════════════════════════════════
+⛔ ABSOLUTE BOUNDARY ENFORCEMENT ⛔
+═══════════════════════════════════════════════════════════════════════════
 
-CRITICAL: This means you should ONLY look at the rectangular area starting at (${xPercent.toFixed(1)}%, ${yPercent.toFixed(1)}%) with dimensions ${widthPercent.toFixed(1)}% × ${heightPercent.toFixed(1)}%. 
-Completely IGNORE all text, labels, and data outside this specific rectangular region.
+YOU MUST EXTRACT DATA FROM THIS EXACT RECTANGULAR REGION ONLY:
 
-IMPORTANT: Look ONLY within this rectangular region. Ignore all text and labels outside this area.
+📍 LEFT BOUNDARY: ${xPercent.toFixed(1)}% from the left edge of the image
+📍 TOP BOUNDARY: ${yPercent.toFixed(1)}% from the top edge of the image
+📏 WIDTH: ${widthPercent.toFixed(1)}% of the total image width
+📏 HEIGHT: ${heightPercent.toFixed(1)}% of the total image height
+
+🚫 STRICTLY FORBIDDEN:
+- Reading ANY text outside these exact boundaries
+- Considering ANY labels outside this region
+- Including ANY data not physically located within this rectangle
+- Looking at neighboring meters or adjacent areas
+
+✅ YOU MUST:
+- ONLY analyze content within the rectangle from ${xPercent.toFixed(1)}% to ${(xPercent + widthPercent).toFixed(1)}% horizontally
+- ONLY analyze content within the rectangle from ${yPercent.toFixed(1)}% to ${(yPercent + heightPercent).toFixed(1)}% vertically
+- Treat everything outside this region as if it does not exist
+- If a field is not visible WITHIN this rectangle, return null for that field
+
+⚠️ VERIFICATION: Before returning your answer, verify that ALL extracted data is physically located within the specified rectangular boundaries.
 
 CRITICAL RULES:
 1. Preserve ALL units exactly as shown (m², A, TP, mm², ALU ECC CABLE, etc.)
