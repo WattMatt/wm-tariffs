@@ -1850,12 +1850,15 @@ export default function SchematicEditor({
           )}
           <Button onClick={handleScanAll} disabled={!isEditMode || isSaving} variant="outline">
             <Scan className="w-4 h-4 mr-2" />
-            {extractionProgress 
-              ? `${extractionProgress.current}/${extractionProgress.total} processed` 
-              : isSaving 
-                ? 'Scanning...' 
-                : (drawnRegions.length > 0 ? 'Scan All Regions' : 'Scan All Meters')
-            }
+            {(() => {
+              const buttonText = drawnRegions.length > 0 ? 'Scan All Regions' : 'Scan All Meters';
+              if (extractionProgress) {
+                return `${buttonText} (${extractionProgress.current}/${extractionProgress.total})`;
+              } else if (isSaving) {
+                return 'Scanning...';
+              }
+              return buttonText;
+            })()}
           </Button>
           <Button
             variant={activeTool === "draw" ? "default" : "outline"}
