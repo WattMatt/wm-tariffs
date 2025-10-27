@@ -250,9 +250,18 @@ export default function SchematicEditor({
             fill: 'rgba(245, 158, 11, 0.15)', // Orange with low opacity
             stroke: '#f59e0b', // Orange border
             strokeWidth: 2,
-            selectable: false,
-            evented: false,
+            selectable: true,
+            evented: true,
+            hasControls: true,
+            hasBorders: true,
+            cornerColor: '#f59e0b',
+            cornerSize: 8,
+            transparentCorners: false,
+            lockRotation: true, // Prevent rotation
           });
+          
+          // Store region ID on the rect for later updates
+          (rect as any).regionId = `region-${Date.now()}-${drawnRegions.length + 1}`;
           
           canvas.add(rect);
           
@@ -282,8 +291,9 @@ export default function SchematicEditor({
           const scaleX = originalImageWidth / canvasWidth;
           const scaleY = originalImageHeight / canvasHeight;
           
+          const regionId = (rect as any).regionId;
           const newRegion = {
-            id: `region-${Date.now()}-${regionNumber}`,
+            id: regionId,
             // Store as absolute pixels in original image space
             x: left * scaleX,
             y: top * scaleY,
@@ -407,6 +417,77 @@ export default function SchematicEditor({
       if (isPanningLocal) {
         isPanningLocal = false;
         canvas.selection = true;
+      }
+    });
+    
+    // Handle rectangle resize and move - update region data
+    canvas.on('object:modified', (e) => {
+      const obj = e.target;
+      if (obj && obj.type === 'rect' && (obj as any).regionId) {
+        const regionId = (obj as any).regionId;
+        const rect = obj as Rect;
+        
+        const canvasWidth = canvas.getWidth();
+        const canvasHeight = canvas.getHeight();
+        const originalImageWidth = (canvas as any).originalImageWidth || canvasWidth;
+        const originalImageHeight = (canvas as any).originalImageHeight || canvasHeight;
+        const displayScale = (canvas as any).displayScale || 1;
+        
+        const left = rect.left || 0;
+        const top = rect.top || 0;
+        const width = (rect.width || 0) * (rect.scaleX || 1);
+        const height = (rect.height || 0) * (rect.scaleY || 1);
+        
+        // Convert from canvas display coordinates to original image pixel coordinates
+        const scaleX = originalImageWidth / canvasWidth;
+        const scaleY = originalImageHeight / canvasHeight;
+        
+        // Update the region in state
+        setDrawnRegions(prev => prev.map(region => {
+          if (region.id === regionId) {
+            // Update label position
+            if (region.fabricLabel) {
+              region.fabricLabel.set({
+                left: left + 8,
+                top: top + 8
+              });
+            }
+            
+            return {
+              ...region,
+              x: left * scaleX,
+              y: top * scaleY,
+              width: width * scaleX,
+              height: height * scaleY,
+              displayLeft: left,
+              displayTop: top,
+              displayWidth: width,
+              displayHeight: height,
+            };
+          }
+          return region;
+        }));
+        
+        canvas.renderAll();
+        console.log('📐 Region resized:', { regionId, left, top, width, height });
+      }
+    });
+    
+    // Update label position when rectangle is moving
+    canvas.on('object:moving', (e) => {
+      const obj = e.target;
+      if (obj && obj.type === 'rect' && (obj as any).regionId) {
+        const regionId = (obj as any).regionId;
+        const rect = obj as Rect;
+        const region = drawnRegions.find(r => r.id === regionId);
+        
+        if (region && region.fabricLabel) {
+          region.fabricLabel.set({
+            left: (rect.left || 0) + 8,
+            top: (rect.top || 0) + 8
+          });
+          canvas.renderAll();
+        }
       }
     });
     
