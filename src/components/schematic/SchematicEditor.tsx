@@ -168,6 +168,17 @@ export default function SchematicEditor({
       const target = opt.target;
       const currentTool = activeToolRef.current;
       
+      // PRIORITY: Middle mouse button ALWAYS triggers panning in any mode
+      if (evt.button === 1) {
+        isPanningLocal = true;
+        lastX = evt.clientX;
+        lastY = evt.clientY;
+        canvas.selection = false;
+        evt.preventDefault();
+        evt.stopPropagation();
+        return; // Exit early - nothing else should happen
+      }
+      
       // DRAWING TOOL: Left-click for drawing regions (double-click approach)
       if (currentTool === 'draw' && evt.button === 0) {
         const isInteractiveObject = target && target.type !== 'image';
@@ -325,22 +336,9 @@ export default function SchematicEditor({
         }
       }
       
-      // PANNING: Allow in all modes (including draw mode with middle mouse)
-      // In draw mode: middle mouse button ALWAYS allows panning (even during rectangle selection)
-      // In other modes: any mouse button for panning
-      if (currentTool === 'draw') {
-        // In draw mode, always allow panning with middle mouse button
-        if (evt.button === 1) {
-          isPanningLocal = true;
-          lastX = evt.clientX;
-          lastY = evt.clientY;
-          canvas.selection = false;
-          evt.preventDefault();
-          evt.stopPropagation();
-        }
-      } else if (!target) {
-        // In other modes, allow panning with any button
-        if (evt.button === 0 || evt.button === 1 || evt.button === 2) {
+      // PANNING in non-draw modes: Allow with any button when no target
+      if (currentTool !== 'draw' && !target) {
+        if (evt.button === 0 || evt.button === 2) {
           isPanningLocal = true;
           lastX = evt.clientX;
           lastY = evt.clientY;
