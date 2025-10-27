@@ -83,17 +83,6 @@ const Settings = () => {
 
     setIsUploading(true);
     try {
-      // Create bucket if it doesn't exist
-      const { data: buckets } = await supabase.storage.listBuckets();
-      const logosBucket = buckets?.find(b => b.name === "logos");
-      
-      if (!logosBucket) {
-        await supabase.storage.createBucket("logos", {
-          public: true,
-          fileSizeLimit: 2097152, // 2MB
-        });
-      }
-
       // Upload file
       const fileExt = file.name.split(".").pop();
       const fileName = `app-logo-${Date.now()}.${fileExt}`;
