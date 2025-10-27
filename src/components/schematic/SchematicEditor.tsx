@@ -87,19 +87,19 @@ async function createMeterCardImage(
       ctx.stroke();
     }
     
-    // Label text (left column) - bold
+    // Label text (left column) - bold and much smaller
     ctx.fillStyle = '#000000';
-    ctx.font = 'bold 10px Arial, sans-serif';
+    ctx.font = 'bold 6px Arial, sans-serif';
     ctx.textBaseline = 'middle';
-    ctx.fillText(field.label, 6, y + rowHeight / 2);
+    ctx.fillText(field.label, 4, y + rowHeight / 2);
     
-    // Value text (right column) - normal weight
-    ctx.font = 'normal 10px Arial, sans-serif';
-    const maxValueLength = 26;
+    // Value text (right column) - normal weight and much smaller
+    ctx.font = 'normal 6px Arial, sans-serif';
+    const maxValueLength = 35;
     const valueDisplay = field.value.length > maxValueLength 
       ? field.value.substring(0, maxValueLength) + '...' 
       : field.value;
-    ctx.fillText(valueDisplay, labelColumnWidth + 6, y + rowHeight / 2);
+    ctx.fillText(valueDisplay, labelColumnWidth + 4, y + rowHeight / 2);
   });
   
   return canvas.toDataURL();
