@@ -357,15 +357,11 @@ export default function SchematicEditor({
             vpt[5] -= e.deltaY;
           }
           canvas.setViewportTransform(vpt);
-          
-          // Update coordinates for ALL objects to sync controls with viewport
-          canvas.getObjects().forEach(obj => {
-            obj.setCoords();
-          });
         }
       }
       
-      canvas.requestRenderAll();
+      // Force synchronous render like zoomToPoint does
+      canvas.renderAll();
     });
 
     // Panning variables (consolidated single implementation)
@@ -591,14 +587,10 @@ export default function SchematicEditor({
           vpt[4] += deltaX;
           vpt[5] += deltaY;
           canvas.setViewportTransform(vpt);
-          
-          // Update coordinates for ALL objects to sync controls with viewport
-          canvas.getObjects().forEach(obj => {
-            obj.setCoords();
-          });
         }
         
-        canvas.requestRenderAll();
+        // Force synchronous render like zoomToPoint does
+        canvas.renderAll();
         
         lastX = evt.clientX;
         lastY = evt.clientY;
