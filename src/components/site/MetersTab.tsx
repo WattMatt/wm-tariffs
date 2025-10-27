@@ -213,7 +213,7 @@ export default function MetersTab({ siteId }: MetersTabProps) {
       serial_number: formData.get("serial_number") as string,
       ct_type: formData.get("ct_type") as string,
       tariff: formData.get("tariff") as string,
-      tariff_structure_id: tariffStructureId || null,
+      tariff_structure_id: tariffStructureId === "none" ? null : tariffStructureId,
       is_revenue_critical: isRevenueCritical,
     };
 
@@ -582,9 +582,9 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                     <SelectTrigger>
                       <SelectValue placeholder="Select tariff structure (optional)" />
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="">None</SelectItem>
-                      {tariffStructures.map((tariff) => (
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {tariffStructures.map((tariff) => (
                         <SelectItem key={tariff.id} value={tariff.id}>
                           {tariff.name} ({tariff.tariff_type})
                         </SelectItem>
