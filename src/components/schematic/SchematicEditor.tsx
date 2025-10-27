@@ -268,6 +268,7 @@ export default function SchematicEditor({
       const target = opt.target;
       const currentTool = activeToolRef.current;
       
+      // Middle mouse button ALWAYS enables panning in ALL modes
       if (evt.button === 1) {
         isPanningLocal = true;
         lastX = evt.clientX;
@@ -1185,23 +1186,21 @@ export default function SchematicEditor({
       const savedScaleY = (pos as any).scale_y ? Number((pos as any).scale_y) : 1.0;
       
       fields.forEach((field, i) => {
-        // Label text (left column) - cleaner rendering like PDF
+        // Label text (left column) - NO SCALING on text itself, only position adjustment
         const labelText = new Text(field.label, {
           left: x - (cardWidth * savedScaleX) / 2 + 4 * savedScaleX,
           top: y - (cardHeight * savedScaleY) / 2 + i * rowHeight * savedScaleY + 2 * savedScaleY,
           fontSize: 10.5,
           fill: '#000000',
           fontWeight: '600',
-          fontFamily: 'system-ui, -apple-system, sans-serif',
+          fontFamily: 'Arial, sans-serif',
           selectable: false,
           evented: false,
-          scaleX: savedScaleX,
-          scaleY: savedScaleY,
           strokeWidth: 0,
         });
         textElements.push(labelText);
 
-        // Value text (right column) - cleaner rendering
+        // Value text (right column) - NO SCALING on text itself
         const valueDisplay = field.value.length > 22 ? field.value.substring(0, 22) + '...' : field.value;
         const valueText = new Text(valueDisplay, {
           left: x - (cardWidth * savedScaleX) / 2 + 60 * savedScaleX,
@@ -1209,11 +1208,9 @@ export default function SchematicEditor({
           fontSize: 10.5,
           fill: '#000000',
           fontWeight: 'normal',
-          fontFamily: 'system-ui, -apple-system, sans-serif',
+          fontFamily: 'Arial, sans-serif',
           selectable: false,
           evented: false,
-          scaleX: savedScaleX,
-          scaleY: savedScaleY,
           strokeWidth: 0,
         });
         textElements.push(valueText);
@@ -1224,7 +1221,7 @@ export default function SchematicEditor({
             [x - (cardWidth * savedScaleX) / 2, y - (cardHeight * savedScaleY) / 2 + (i + 1) * rowHeight * savedScaleY, 
              x + (cardWidth * savedScaleX) / 2, y - (cardHeight * savedScaleY) / 2 + (i + 1) * rowHeight * savedScaleY],
             {
-              stroke: '#cccccc',
+              stroke: '#d1d5db',
               strokeWidth: 0.5,
               selectable: false,
               evented: false,
