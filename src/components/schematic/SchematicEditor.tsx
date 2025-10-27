@@ -1737,7 +1737,7 @@ export default function SchematicEditor({
             <div className="text-xs font-medium text-muted-foreground mr-2 flex items-center">Extracted:</div>
             <Badge variant="outline">
               <div className="w-3 h-3 rounded-full bg-[#dc2626] border-2 border-[#dc2626] mr-2" />
-              Unconfirmed (Click to Verify)
+              Unconfirmed
             </Badge>
             <Badge variant="outline">
               <div className="w-3 h-3 rounded-full bg-[#f59e0b] border-2 border-[#f59e0b] mr-2" />
