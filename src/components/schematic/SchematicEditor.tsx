@@ -2310,18 +2310,31 @@ export default function SchematicEditor({
                     hasRegion: !!meter.extractedRegion
                   });
                   return (
-                    <div className="border-2 border-primary rounded-lg overflow-hidden bg-white min-h-[300px] flex items-center justify-center">
+                    <div className="border-2 border-primary rounded-lg overflow-hidden bg-muted/30 min-h-[400px] max-h-[600px] flex items-center justify-center p-2">
                       {meter.scannedImageSnippet ? (
-                        <img 
-                          src={meter.scannedImageSnippet} 
-                          alt="Scanned meter region" 
-                          className="w-full h-auto max-h-[600px] object-contain"
-                          onLoad={() => console.log('✅ Image loaded:', meter.scannedImageSnippet)}
-                          onError={(e) => {
-                            console.error('❌ Image failed to load:', meter.scannedImageSnippet);
-                            toast.error('Failed to load scanned image snippet');
-                          }}
-                        />
+                        <div className="w-full h-full flex items-center justify-center bg-white rounded">
+                          <img 
+                            src={meter.scannedImageSnippet} 
+                            alt="Scanned meter region" 
+                            className="max-w-full max-h-[580px] object-contain"
+                            style={{ display: 'block' }}
+                            onLoad={(e) => {
+                              console.log('✅ Image loaded:', meter.scannedImageSnippet);
+                              console.log('📐 Image natural size:', {
+                                width: e.currentTarget.naturalWidth,
+                                height: e.currentTarget.naturalHeight,
+                                displayed: {
+                                  width: e.currentTarget.width,
+                                  height: e.currentTarget.height
+                                }
+                              });
+                            }}
+                            onError={(e) => {
+                              console.error('❌ Image failed to load:', meter.scannedImageSnippet);
+                              toast.error('Failed to load scanned image snippet');
+                            }}
+                          />
+                        </div>
                       ) : meter.extractedRegion ? (
                         <div 
                           className="relative w-full" 
