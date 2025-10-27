@@ -1542,112 +1542,115 @@ export default function SchematicEditor({
         </Button>
       </div>
 
-      <div className="flex gap-3 flex-wrap items-center">
-        <div className="text-xs font-medium text-muted-foreground mr-2 flex items-center">Legend:</div>
-        
-        {/* First group - Zones */}
-        <Badge 
-          variant="outline" 
-          className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.mini_sub_zone ? 'opacity-40' : ''}`}
-          onClick={() => setLegendVisibility(prev => ({ ...prev, mini_sub_zone: !prev.mini_sub_zone }))}
-        >
-          <div className="w-3 h-3 rounded-full bg-[#06b6d4] mr-2" />
-          Mini Sub
-        </Badge>
-        
-        <Badge 
-          variant="outline" 
-          className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.main_board_zone ? 'opacity-40' : ''}`}
-          onClick={() => setLegendVisibility(prev => ({ ...prev, main_board_zone: !prev.main_board_zone }))}
-        >
-          <div className="w-3 h-3 rounded-full bg-[#9333ea] mr-2" />
-          Main Board
-        </Badge>
-        
-        <Badge 
-          variant="outline" 
-          className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.council_connection_zone ? 'opacity-40' : ''}`}
-          onClick={() => setLegendVisibility(prev => ({ ...prev, council_connection_zone: !prev.council_connection_zone }))}
-        >
-          <div className="w-3 h-3 rounded-full bg-[#ec4899] mr-2" />
-          Council Connection
-        </Badge>
-        
-        {/* Vertical separator */}
-        <div className="w-px h-6 bg-border mx-1" />
-        
-        {/* Second group - Meter Types */}
-        <Badge 
-          variant="outline" 
-          className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.bulk_meter ? 'opacity-40' : ''}`}
-          onClick={() => setLegendVisibility(prev => ({ ...prev, bulk_meter: !prev.bulk_meter }))}
-        >
-          <div className="w-3 h-3 rounded-full bg-[#ef4444] mr-2" />
-          Bulk Meter
-        </Badge>
-        
-        <Badge 
-          variant="outline" 
-          className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.check_meter ? 'opacity-40' : ''}`}
-          onClick={() => setLegendVisibility(prev => ({ ...prev, check_meter: !prev.check_meter }))}
-        >
-          <div className="w-3 h-3 rounded-full bg-[#f59e0b] mr-2" />
-          Check Meter
-        </Badge>
-        
-        <Badge 
-          variant="outline" 
-          className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.submeter ? 'opacity-40' : ''}`}
-          onClick={() => setLegendVisibility(prev => ({ ...prev, submeter: !prev.submeter }))}
-        >
-          <div className="w-3 h-3 rounded-full bg-[#10b981] mr-2" />
-          Tenant Meter
-        </Badge>
-        
-        <Badge 
-          variant="outline" 
-          className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.other ? 'opacity-40' : ''}`}
-          onClick={() => setLegendVisibility(prev => ({ ...prev, other: !prev.other }))}
-        >
-          <div className="w-3 h-3 rounded-full bg-[#3b82f6] mr-2" />
-          Other
-        </Badge>
-        
-        {extractedMeters.length > 0 && (
-          <>
-            <div className="w-px h-6 bg-border mx-2" />
-            <div className="text-xs font-medium text-muted-foreground mr-2 flex items-center">AI Extracted:</div>
-            <Badge variant="outline">
-              <div className="w-3 h-3 rounded-full bg-[#dc2626] border-2 border-[#dc2626] mr-2" />
-              Unconfirmed (Click to Verify)
-            </Badge>
-            <Badge variant="outline">
-              <div className="w-3 h-3 rounded-full bg-[#f59e0b] border-2 border-[#f59e0b] mr-2" />
-              Needs Review
-            </Badge>
-            <Badge variant="outline">
-              <div className="w-3 h-3 rounded-full bg-[#16a34a] border-2 border-[#16a34a] mr-2" />
-              Confirmed
-            </Badge>
-          </>
-        )}
-        
-        <div className="flex-1" />
-        
-        {/* PDF Controls */}
-        <div className="flex gap-2 items-center">
-          <Button variant="outline" size="sm" onClick={handleZoomOut}>
-            <ZoomOut className="w-4 h-4" />
-          </Button>
-          <Badge variant="outline" className="px-3">
-            {Math.round(zoom * 100)}%
+      <div className="space-y-2">
+        {/* Top row - Zones */}
+        <div className="flex gap-3 flex-wrap items-center">
+          <div className="text-xs font-medium text-muted-foreground mr-2 flex items-center">Zones:</div>
+          
+          <Badge 
+            variant="outline" 
+            className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.mini_sub_zone ? 'opacity-40' : ''}`}
+            onClick={() => setLegendVisibility(prev => ({ ...prev, mini_sub_zone: !prev.mini_sub_zone }))}
+          >
+            <div className="w-3 h-3 rounded-full bg-[#06b6d4] mr-2" />
+            Mini Sub
           </Badge>
-          <Button variant="outline" size="sm" onClick={handleZoomIn}>
-            <ZoomIn className="w-4 h-4" />
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleResetZoom}>
-            <Maximize2 className="w-4 h-4" />
-          </Button>
+          
+          <Badge 
+            variant="outline" 
+            className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.main_board_zone ? 'opacity-40' : ''}`}
+            onClick={() => setLegendVisibility(prev => ({ ...prev, main_board_zone: !prev.main_board_zone }))}
+          >
+            <div className="w-3 h-3 rounded-full bg-[#9333ea] mr-2" />
+            Main Board
+          </Badge>
+          
+          <Badge 
+            variant="outline" 
+            className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.council_connection_zone ? 'opacity-40' : ''}`}
+            onClick={() => setLegendVisibility(prev => ({ ...prev, council_connection_zone: !prev.council_connection_zone }))}
+          >
+            <div className="w-3 h-3 rounded-full bg-[#ec4899] mr-2" />
+            Council Connection
+          </Badge>
+          
+          <div className="flex-1" />
+          
+          {/* PDF Controls */}
+          <div className="flex gap-2 items-center">
+            <Button variant="outline" size="sm" onClick={handleZoomOut}>
+              <ZoomOut className="w-4 h-4" />
+            </Button>
+            <Badge variant="outline" className="px-3">
+              {Math.round(zoom * 100)}%
+            </Badge>
+            <Button variant="outline" size="sm" onClick={handleZoomIn}>
+              <ZoomIn className="w-4 h-4" />
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleResetZoom}>
+              <Maximize2 className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+        
+        {/* Bottom row - Meters */}
+        <div className="flex gap-3 flex-wrap items-center">
+          <div className="text-xs font-medium text-muted-foreground mr-2 flex items-center">Meters:</div>
+          
+          <Badge 
+            variant="outline" 
+            className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.bulk_meter ? 'opacity-40' : ''}`}
+            onClick={() => setLegendVisibility(prev => ({ ...prev, bulk_meter: !prev.bulk_meter }))}
+          >
+            <div className="w-3 h-3 rounded-full bg-[#ef4444] mr-2" />
+            Bulk Meter
+          </Badge>
+          
+          <Badge 
+            variant="outline" 
+            className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.check_meter ? 'opacity-40' : ''}`}
+            onClick={() => setLegendVisibility(prev => ({ ...prev, check_meter: !prev.check_meter }))}
+          >
+            <div className="w-3 h-3 rounded-full bg-[#f59e0b] mr-2" />
+            Check Meter
+          </Badge>
+          
+          <Badge 
+            variant="outline" 
+            className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.submeter ? 'opacity-40' : ''}`}
+            onClick={() => setLegendVisibility(prev => ({ ...prev, submeter: !prev.submeter }))}
+          >
+            <div className="w-3 h-3 rounded-full bg-[#10b981] mr-2" />
+            Tenant Meter
+          </Badge>
+          
+          <Badge 
+            variant="outline" 
+            className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.other ? 'opacity-40' : ''}`}
+            onClick={() => setLegendVisibility(prev => ({ ...prev, other: !prev.other }))}
+          >
+            <div className="w-3 h-3 rounded-full bg-[#3b82f6] mr-2" />
+            Other
+          </Badge>
+          
+          {extractedMeters.length > 0 && (
+            <>
+              <div className="w-px h-6 bg-border mx-2" />
+              <div className="text-xs font-medium text-muted-foreground mr-2 flex items-center">AI Extracted:</div>
+              <Badge variant="outline">
+                <div className="w-3 h-3 rounded-full bg-[#dc2626] border-2 border-[#dc2626] mr-2" />
+                Unconfirmed (Click to Verify)
+              </Badge>
+              <Badge variant="outline">
+                <div className="w-3 h-3 rounded-full bg-[#f59e0b] border-2 border-[#f59e0b] mr-2" />
+                Needs Review
+              </Badge>
+              <Badge variant="outline">
+                <div className="w-3 h-3 rounded-full bg-[#16a34a] border-2 border-[#16a34a] mr-2" />
+                Confirmed
+              </Badge>
+            </>
+          )}
         </div>
       </div>
 
