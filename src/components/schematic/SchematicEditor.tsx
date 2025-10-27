@@ -707,11 +707,8 @@ export default function SchematicEditor({
           // Ctrl+click for multi-select (only in edit mode)
           handleToggleSelectMeter(capturedIndex);
           e.e.stopPropagation();
-        } else if (activeTool === 'select' && !e.e.ctrlKey) {
-          // Regular click - open confirmation dialog (works in any mode)
-          setSelectedMeterIndex(capturedIndex);
-          setIsConfirmMeterDialogOpen(true);
         }
+        // Regular click no longer opens dialog - only double-click does
       });
 
       background.on('mousedblclick', () => {
