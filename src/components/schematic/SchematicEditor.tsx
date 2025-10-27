@@ -1289,14 +1289,6 @@ export default function SchematicEditor({
           {isSaving ? 'Scanning...' : 'Scan All Meters'}
         </Button>
         <Button
-          variant={activeTool === "select" ? "default" : "outline"}
-          onClick={() => setActiveTool("select")}
-          size="sm"
-        >
-          <Zap className="w-4 h-4 mr-2" />
-          Select
-        </Button>
-        <Button
           variant={activeTool === "draw" ? "default" : "outline"}
           onClick={() => {
             setActiveTool("draw");
@@ -1372,6 +1364,14 @@ export default function SchematicEditor({
         <Button onClick={handleClearLines} variant="destructive" size="sm">
           <Trash2 className="w-4 h-4 mr-2" />
           Clear Lines
+        </Button>
+        <Button
+          variant={activeTool === "select" ? "default" : "outline"}
+          onClick={() => setActiveTool("select")}
+          size="sm"
+        >
+          <Zap className="w-4 h-4 mr-2" />
+          Edit
         </Button>
         <Button onClick={handleSave} disabled={isSaving} size="sm">
           <Save className="w-4 h-4 mr-2" />
