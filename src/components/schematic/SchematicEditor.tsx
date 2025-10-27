@@ -347,6 +347,19 @@ export default function SchematicEditor({
             return;
           }
           
+          // Clean up drawing markers BEFORE creating the rectangle
+          if (startMarkerRef.current) {
+            canvas.remove(startMarkerRef.current);
+            startMarkerRef.current = null;
+          }
+          // Remove preview rectangles
+          let objects = canvas.getObjects();
+          objects.forEach(obj => {
+            if ((obj as any).isPreview) {
+              canvas.remove(obj);
+            }
+          });
+          
           const canvasWidth = canvas.getWidth();
           const canvasHeight = canvas.getHeight();
           
@@ -377,20 +390,6 @@ export default function SchematicEditor({
           (rect as any).regionId = `region-${Date.now()}-${drawnRegions.length + 1}`;
           
           canvas.add(rect);
-          
-          // Add region number label
-          const regionNumber = drawnRegions.length + 1;
-          const label = new Text(`${regionNumber}`, {
-            left: left + 8,
-            top: top + 8,
-            fontSize: 16,
-            fill: 'hsl(210, 100%, 45%)', // Primary blue
-            fontWeight: 'bold',
-            selectable: false,
-            evented: false,
-          });
-          
-          canvas.add(label);
           canvas.renderAll();
           
           // Calculate region in ABSOLUTE pixels of the original image
@@ -404,6 +403,7 @@ export default function SchematicEditor({
           const scaleY = originalImageHeight / canvasHeight;
           
           const regionId = (rect as any).regionId;
+          const regionNumber = drawnRegions.length + 1;
           const newRegion = {
             id: regionId,
             // Store as absolute pixels in original image space
@@ -419,32 +419,17 @@ export default function SchematicEditor({
             displayWidth: width,
             displayHeight: height,
             fabricRect: rect,
-            fabricLabel: label
           };
           
           setDrawnRegions(prev => [...prev, newRegion]);
           toast.success(`Region ${regionNumber} added`);
           
-          // Enable canvas selection and select the new rectangle so it can be edited immediately
+          // Enable canvas selection and select the new rectangle so it can be moved immediately
           canvas.selection = true;
           canvas.setActiveObject(rect);
           canvas.renderAll();
           
-          // Clean up drawing markers - MUST remove all markers
-          if (startMarkerRef.current) {
-            canvas.remove(startMarkerRef.current);
-            startMarkerRef.current = null;
-          }
-          // Remove preview rectangles
-          const objects = canvas.getObjects();
-          objects.forEach(obj => {
-            if ((obj as any).isPreview) {
-              canvas.remove(obj);
-            }
-          });
-          
           drawStartPointRef.current = null;
-          canvas.renderAll();
           
           evt.preventDefault();
           evt.stopPropagation();
@@ -548,14 +533,6 @@ export default function SchematicEditor({
         // Update the region in state
         setDrawnRegions(prev => prev.map(region => {
           if (region.id === regionId) {
-            // Update label position
-            if (region.fabricLabel) {
-              region.fabricLabel.set({
-                left: left + 8,
-                top: top + 8
-              });
-            }
-            
             return {
               ...region,
               x: left * scaleX,
@@ -575,23 +552,7 @@ export default function SchematicEditor({
         }
       });
     
-    // Update label position when rectangle is moving
-    canvas.on('object:moving', (e) => {
-      const obj = e.target;
-      if (obj && obj.type === 'rect' && (obj as any).regionId) {
-        const regionId = (obj as any).regionId;
-        const rect = obj as Rect;
-        const region = drawnRegions.find(r => r.id === regionId);
-        
-        if (region && region.fabricLabel) {
-          region.fabricLabel.set({
-            left: (rect.left || 0) + 8,
-            top: (rect.top || 0) + 8
-          });
-          canvas.renderAll();
-        }
-      }
-    });
+    // No need for object:moving handler since we removed labels
     
     // Function to handle extraction from a drawn region
     const handleExtractFromRegion = async (canvas: FabricCanvas, rect: any) => {
@@ -1777,14 +1738,11 @@ export default function SchematicEditor({
       return;
     }
     
-    // Remove all region rectangles and labels from canvas
+    // Remove all region rectangles from canvas
     if (fabricCanvas) {
       drawnRegions.forEach(region => {
         if (region.fabricRect) {
           fabricCanvas.remove(region.fabricRect);
-        }
-        if ((region as any).fabricLabel) {
-          fabricCanvas.remove((region as any).fabricLabel);
         }
       });
       fabricCanvas.renderAll();
@@ -1923,9 +1881,6 @@ export default function SchematicEditor({
                     drawnRegions.forEach(region => {
                       if (region.fabricRect) {
                         fabricCanvas.remove(region.fabricRect);
-                      }
-                      if ((region as any).fabricLabel) {
-                        fabricCanvas.remove((region as any).fabricLabel);
                       }
                     });
                     fabricCanvas.renderAll();
