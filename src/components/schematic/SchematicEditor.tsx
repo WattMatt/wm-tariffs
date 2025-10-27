@@ -156,8 +156,11 @@ export default function SchematicEditor({
       const target = opt.target;
       const currentTool = activeToolRef.current;
       
+      console.log('🖱️ Mouse down:', { button: evt.button, tool: currentTool, hasTarget: !!target });
+      
       // PRIORITY: Middle mouse button ALWAYS triggers panning in any mode
       if (evt.button === 1) {
+        console.log('🖱️ Middle button detected - starting pan');
         isPanningLocal = true;
         lastX = evt.clientX;
         lastY = evt.clientY;
@@ -380,6 +383,11 @@ export default function SchematicEditor({
       if (isPanningLocal) {
         const evt = opt.e as MouseEvent;
         const vpt = canvas.viewportTransform;
+        console.log('🖱️ Panning:', { 
+          deltaX: evt.clientX - lastX, 
+          deltaY: evt.clientY - lastY,
+          vpt: vpt 
+        });
         if (vpt) {
           vpt[4] += evt.clientX - lastX;
           vpt[5] += evt.clientY - lastY;
@@ -431,6 +439,7 @@ export default function SchematicEditor({
     canvas.on('mouse:up', async () => {
       // Clean up panning state
       if (isPanningLocal) {
+        console.log('🖱️ Panning ended');
         isPanningLocal = false;
         canvas.selection = true;
       }
