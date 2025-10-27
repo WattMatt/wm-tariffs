@@ -1339,22 +1339,6 @@ export default function SchematicEditor({
         </Button>
       </div>
 
-      <div className="text-sm text-muted-foreground space-y-1">
-        <div>
-          {activeTool === "select" && "Click on RED meters to verify data • Click GREEN meters to edit • Click database meters to manage"}
-          {activeTool === "draw" && "✏️ AI Extraction Mode: LEFT CLICK + DRAG to draw box around meter"}
-          {activeTool === "meter" && "Click on the schematic to manually place a new meter"}
-          {activeTool === "move" && "Drag meters to reposition them on the schematic"}
-          {activeTool === "connection" && "Click on two meters to draw a connection line"}
-        </div>
-        <div className="text-xs">
-          {activeTool === 'draw' ? (
-            <>🎯 Click once to start, click again to finish • Scroll wheel to pan • Right-click drag to pan</>
-          ) : (
-            <>💡 Scroll wheel to zoom • Left click + drag to pan</>
-          )}
-        </div>
-      </div>
 
       <div className="flex gap-2 flex-wrap">
         <div className="text-xs font-medium text-muted-foreground mr-2 flex items-center">Saved Meters:</div>
