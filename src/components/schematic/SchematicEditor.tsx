@@ -357,16 +357,12 @@ export default function SchematicEditor({
             vpt[5] -= e.deltaY;
           }
           canvas.setViewportTransform(vpt);
-        }
-        
-        canvas.requestRenderAll();
-        
-        // Force control update by triggering viewport-changed event
-        const activeObj = canvas.getActiveObject();
-        if (activeObj) {
-          canvas.fire('selection:updated', { selected: [activeObj], deselected: [] });
+          // Critical: calcOffset() recalculates control positions like zoomToPoint does
+          canvas.calcOffset();
         }
       }
+      
+      // Don't call renderAll here - let the event loop handle it naturally
     });
 
     // Panning variables (consolidated single implementation)
@@ -593,14 +589,8 @@ export default function SchematicEditor({
           vpt[4] += deltaX;
           vpt[5] += deltaY;
           canvas.setViewportTransform(vpt);
-        }
-        
-        canvas.requestRenderAll();
-        
-        // Force control update by triggering viewport-changed event
-        const activeObj = canvas.getActiveObject();
-        if (activeObj) {
-          canvas.fire('selection:updated', { selected: [activeObj], deselected: [] });
+          // Critical: calcOffset() recalculates control positions like zoomToPoint does
+          canvas.calcOffset();
         }
         
         lastX = evt.clientX;
