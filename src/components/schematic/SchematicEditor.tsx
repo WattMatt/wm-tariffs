@@ -1271,7 +1271,7 @@ export default function SchematicEditor({
     });
 
     fabricCanvas.renderAll();
-  }, [fabricCanvas, meterPositions, lines, meters, activeTool, extractedMeters, legendVisibility]);
+  }, [fabricCanvas, meterPositions, lines, meters, activeTool, extractedMeters, legendVisibility, selectedExtractedMeterIds]);
 
   const fetchMeters = async () => {
     const { data } = await supabase
