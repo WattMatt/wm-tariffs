@@ -329,9 +329,6 @@ export default function SchematicEditor({
       e.preventDefault();
       e.stopPropagation();
       
-      const vpt = canvas.viewportTransform;
-      if (!vpt) return;
-      
       if (e.ctrlKey || e.metaKey) {
         // CTRL+Scroll: Zoom in/out
         const delta = e.deltaY;
@@ -348,12 +345,12 @@ export default function SchematicEditor({
         setZoom(zoom);
       } else if (e.shiftKey) {
         // SHIFT+Scroll: Pan horizontally
-        vpt[4] -= e.deltaY;
-        canvas.requestRenderAll();
+        const delta = new Point(-e.deltaY, 0);
+        canvas.relativePan(delta);
       } else {
         // Regular Scroll: Pan vertically
-        vpt[5] -= e.deltaY;
-        canvas.requestRenderAll();
+        const delta = new Point(0, -e.deltaY);
+        canvas.relativePan(delta);
       }
     });
 
@@ -571,14 +568,14 @@ export default function SchematicEditor({
       
       if (isPanningLocal) {
         const evt = opt.e as MouseEvent;
-        const vpt = canvas.viewportTransform;
-        if (vpt) {
-          vpt[4] += evt.clientX - lastX;
-          vpt[5] += evt.clientY - lastY;
-          canvas.requestRenderAll();
-          lastX = evt.clientX;
-          lastY = evt.clientY;
-        }
+        const deltaX = evt.clientX - lastX;
+        const deltaY = evt.clientY - lastY;
+        
+        const delta = new Point(deltaX, deltaY);
+        canvas.relativePan(delta);
+        
+        lastX = evt.clientX;
+        lastY = evt.clientY;
         return;
       }
       
