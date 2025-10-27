@@ -82,7 +82,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
       {/* Sidebar */}
       <aside className={cn(
         "fixed left-0 top-0 h-full bg-secondary border-r border-border flex flex-col transition-all duration-300",
-        collapsed ? "w-16" : "w-64"
+        collapsed ? "w-20" : "w-64"
       )}>
         {/* Collapse Toggle */}
         <Button
@@ -94,7 +94,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
           {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
         </Button>
 
-        <div className="p-6 border-b border-border/50">
+        <div className={cn("border-b border-border/50", collapsed ? "p-4" : "p-6")}>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center shrink-0">
               <Zap className="w-6 h-6 text-white" />
@@ -108,7 +108,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
           </div>
         </div>
 
-        <nav className="flex-1 p-4 space-y-1">
+        <nav className={cn("flex-1 space-y-1", collapsed ? "p-2" : "p-4")}>
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.path;
@@ -118,7 +118,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
                   variant="ghost"
                   className={cn(
                     "w-full text-secondary-foreground/70 hover:text-secondary-foreground hover:bg-secondary-foreground/10",
-                    collapsed ? "justify-center px-0 h-12" : "justify-start",
+                    collapsed ? "justify-center p-3 h-12" : "justify-start",
                     isActive && "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground"
                   )}
                 >
@@ -130,7 +130,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
           })}
         </nav>
 
-        <div className="p-4 border-t border-border/50">
+        <div className={cn("border-t border-border/50", collapsed ? "p-2" : "p-4")}>
           {!collapsed && (
             <div className="mb-3 px-3">
               <p className="text-sm font-medium text-secondary-foreground">{profile?.full_name || "User"}</p>
@@ -141,7 +141,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
             variant="ghost"
             className={cn(
               "w-full text-secondary-foreground/70 hover:text-destructive",
-              collapsed ? "justify-center px-0 h-12" : "justify-start"
+              collapsed ? "justify-center p-3 h-12" : "justify-start"
             )}
             onClick={handleSignOut}
           >
@@ -154,7 +154,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
       {/* Main Content */}
       <main className={cn(
         "p-8 transition-all duration-300",
-        collapsed ? "ml-16" : "ml-64"
+        collapsed ? "ml-20" : "ml-64"
       )}>
         {children}
       </main>
