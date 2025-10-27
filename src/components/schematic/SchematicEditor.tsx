@@ -287,12 +287,12 @@ export default function SchematicEditor({
         }
       }
       
-      // PANNING: Allow in all modes (including draw mode with right-click)
-      // In draw mode: right-click or middle mouse for panning
+      // PANNING: Allow in all modes (including draw mode with middle mouse)
+      // In draw mode: middle mouse button only for panning
       // In other modes: any mouse button for panning
       if (currentTool === 'draw') {
-        // In draw mode, only allow panning with right-click or middle mouse
-        if ((evt.button === 2 || evt.button === 1) && !target) {
+        // In draw mode, only allow panning with middle mouse button
+        if (evt.button === 1 && !target) {
           isPanningLocal = true;
           lastX = evt.clientX;
           lastY = evt.clientY;
@@ -1468,7 +1468,7 @@ export default function SchematicEditor({
           variant={activeTool === "draw" ? "default" : "outline"}
           onClick={() => {
             setActiveTool("draw");
-            toast.info("Left-click to draw regions. Right-click + drag to pan around.", { duration: 4000 });
+            toast.info("Left-click to draw regions. Hold middle mouse + drag to pan.", { duration: 4000 });
           }}
           size="sm"
           className="gap-2"
