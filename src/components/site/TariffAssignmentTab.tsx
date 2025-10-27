@@ -203,7 +203,7 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
     const meterNumberParts = meter.meter_number.match(/\d+[A-Z]?$/i);
     const cleanMeterNumber = meterNumberParts ? meterNumberParts[0] : meter.meter_number;
     
-    return documentShopNumbers.filter(doc => {
+    const matches = documentShopNumbers.filter(doc => {
       const shopNum = doc.shopNumber.toLowerCase();
       const meterNum = cleanMeterNumber.toLowerCase();
       const fullMeterNum = meter.meter_number.toLowerCase();
@@ -221,6 +221,17 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
       
       return false;
     });
+    
+    // Deduplicate by shop number - keep only the most recent document per shop number
+    const uniqueShopNumbers = new Map<string, DocumentShopNumber>();
+    matches.forEach(doc => {
+      const existing = uniqueShopNumbers.get(doc.shopNumber);
+      if (!existing || doc.periodStart > existing.periodStart) {
+        uniqueShopNumbers.set(doc.shopNumber, doc);
+      }
+    });
+    
+    return Array.from(uniqueShopNumbers.values());
   };
 
   const handleTariffChange = (meterId: string, tariffId: string) => {
