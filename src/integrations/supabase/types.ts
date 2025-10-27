@@ -377,6 +377,7 @@ export type Database = {
           tariff: string | null
           tariff_structure_id: string | null
           updated_at: string | null
+          zone: string | null
         }
         Insert: {
           area?: number | null
@@ -400,6 +401,7 @@ export type Database = {
           tariff?: string | null
           tariff_structure_id?: string | null
           updated_at?: string | null
+          zone?: string | null
         }
         Update: {
           area?: number | null
@@ -423,6 +425,7 @@ export type Database = {
           tariff?: string | null
           tariff_structure_id?: string | null
           updated_at?: string | null
+          zone?: string | null
         }
         Relationships: [
           {

@@ -707,12 +707,14 @@ export default function SchematicEditor({
     meterPositions.forEach(pos => {
       const meter = meters.find(m => m.id === pos.meter_id);
       const meterType = meter?.meter_type || 'unknown';
+      const zone = meter?.zone;
       
+      // Determine border color based on zone or meter type
       let borderColor = '#3b82f6'; // default blue
-      if (meterType.includes('bulk')) borderColor = '#ef4444'; // red
+      if (zone === 'main_board') borderColor = '#9333ea'; // purple for Main Board zone
+      else if (zone === 'mini_sub') borderColor = '#06b6d4'; // cyan for Mini Sub zone
+      else if (meterType.includes('bulk')) borderColor = '#ef4444'; // red
       else if (meterType.includes('check')) borderColor = '#f59e0b'; // orange
-      else if (meterType.includes('main_board')) borderColor = '#9333ea'; // purple
-      else if (meterType.includes('mini_sub')) borderColor = '#06b6d4'; // cyan
       else if (meterType.includes('sub')) borderColor = '#10b981'; // green
 
       // Convert percentage positions to pixel positions for canvas
@@ -1049,6 +1051,7 @@ export default function SchematicEditor({
         meter_number: formData.get("meter_number") as string,
         name: formData.get("name") as string,
         meter_type: formData.get("meter_type") as string,
+        zone: formData.get("zone") as string || null,
         area: formData.get("area") ? parseFloat(formData.get("area") as string) : null,
         rating: formData.get("rating") as string,
         cable_specification: formData.get("cable_specification") as string,
@@ -1195,6 +1198,7 @@ export default function SchematicEditor({
       serial_number: formData.get('serial_number') as string,
       ct_type: formData.get('ct_type') as string,
       meter_type: formData.get('meter_type') as string,
+      zone: formData.get('zone') as string || null,
     };
 
     const { error } = await supabase
@@ -1370,11 +1374,11 @@ export default function SchematicEditor({
         </Badge>
         <Badge variant="outline">
           <div className="w-3 h-3 rounded-full bg-[#9333ea] mr-2" />
-          Main Board
+          Main Board Zone
         </Badge>
         <Badge variant="outline">
           <div className="w-3 h-3 rounded-full bg-[#06b6d4] mr-2" />
-          Mini Sub
+          Mini Sub Zone
         </Badge>
         <Badge variant="outline">
           <div className="w-3 h-3 rounded-full bg-[#10b981] mr-2" />
@@ -1506,10 +1510,21 @@ export default function SchematicEditor({
                   <SelectContent className="bg-background z-50">
                     <SelectItem value="council_bulk">Council Bulk Supply</SelectItem>
                     <SelectItem value="check_meter">Check Meter</SelectItem>
-                    <SelectItem value="main_board">Main Board</SelectItem>
-                    <SelectItem value="mini_sub">Mini Sub</SelectItem>
                     <SelectItem value="solar">Solar Generation</SelectItem>
                     <SelectItem value="distribution">Distribution Meter</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="zone">Zone</Label>
+                <Select name="zone">
+                  <SelectTrigger className="bg-background">
+                    <SelectValue placeholder="Select zone (optional)" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-background z-50">
+                    <SelectItem value="main_board">Main Board</SelectItem>
+                    <SelectItem value="mini_sub">Mini Sub</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1597,6 +1612,7 @@ export default function SchematicEditor({
                   serial_number: formData.get('serial_number') as string,
                   ct_type: formData.get('ct_type') as string,
                   meter_type: formData.get('meter_type') as string,
+                  zone: formData.get('zone') as string || null,
                   status: 'approved'
                 };
                 
@@ -1705,10 +1721,21 @@ export default function SchematicEditor({
                       <SelectContent className="bg-background z-50">
                         <SelectItem value="council_bulk">Council Bulk Supply (Main Incoming)</SelectItem>
                         <SelectItem value="check_meter">Check Meter (Verification)</SelectItem>
-                        <SelectItem value="main_board">Main Board</SelectItem>
-                        <SelectItem value="mini_sub">Mini Sub</SelectItem>
                         <SelectItem value="distribution">Distribution Meter</SelectItem>
                         <SelectItem value="solar">Solar Generation</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="confirm_zone">ZONE</Label>
+                    <Select name="zone">
+                      <SelectTrigger className="bg-background">
+                        <SelectValue placeholder="Select zone (optional)" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-background z-50">
+                        <SelectItem value="main_board">Main Board</SelectItem>
+                        <SelectItem value="mini_sub">Mini Sub</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -1851,10 +1878,21 @@ export default function SchematicEditor({
                     <SelectContent className="bg-background z-50">
                       <SelectItem value="council_bulk">Council Bulk Supply</SelectItem>
                       <SelectItem value="check_meter">Check Meter</SelectItem>
-                      <SelectItem value="main_board">Main Board</SelectItem>
-                      <SelectItem value="mini_sub">Mini Sub</SelectItem>
                       <SelectItem value="solar">Solar Generation</SelectItem>
                       <SelectItem value="distribution">Distribution Meter</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit_zone">Zone</Label>
+                  <Select name="zone" defaultValue={editingMeter.zone || ''}>
+                    <SelectTrigger className="bg-background">
+                      <SelectValue placeholder="Select zone (optional)" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-background z-50">
+                      <SelectItem value="main_board">Main Board</SelectItem>
+                      <SelectItem value="mini_sub">Mini Sub</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
