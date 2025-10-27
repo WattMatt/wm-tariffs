@@ -346,19 +346,18 @@ export default function SchematicEditor({
         canvas.zoomToPoint(pointer, zoom);
         setZoom(zoom);
       } else {
-        // Pan using the same approach as zoom
+        // Use absolutePan like zoom uses zoomToPoint - built-in method handles everything
         const vpt = canvas.viewportTransform;
         if (vpt) {
+          const currentPoint = new Point(-vpt[4], -vpt[5]);
           if (e.shiftKey) {
             // SHIFT+Scroll: Pan horizontally
-            vpt[4] -= e.deltaY;
+            currentPoint.x += e.deltaY;
           } else {
             // Regular Scroll: Pan vertically
-            vpt[5] -= e.deltaY;
+            currentPoint.y += e.deltaY;
           }
-          canvas.setViewportTransform(vpt);
-          canvas.calcViewportBoundaries();
-          canvas.renderAll();
+          canvas.absolutePan(currentPoint);
         }
       }
     });
@@ -581,13 +580,13 @@ export default function SchematicEditor({
         const deltaX = evt.clientX - lastX;
         const deltaY = evt.clientY - lastY;
         
+        // Use absolutePan like zoom uses zoomToPoint - built-in method handles everything
         const vpt = canvas.viewportTransform;
         if (vpt) {
-          vpt[4] += deltaX;
-          vpt[5] += deltaY;
-          canvas.setViewportTransform(vpt);
-          canvas.calcViewportBoundaries();
-          canvas.renderAll();
+          const currentPoint = new Point(-vpt[4], -vpt[5]);
+          currentPoint.x -= deltaX;
+          currentPoint.y -= deltaY;
+          canvas.absolutePan(currentPoint);
         }
         
         lastX = evt.clientX;
