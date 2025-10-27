@@ -483,7 +483,64 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
       // Update reconciliation data with documents count
       reconciliationData.documentsAnalyzed = documentExtractions.length;
 
-      // 8. Prepare detailed meter breakdown with sorting
+      // 7. Fetch schematic for the site
+      const { data: schematics, error: schematicsError } = await supabase
+        .from("schematics")
+        .select("id, name, file_path, converted_image_path")
+        .eq("site_id", siteId)
+        .limit(1);
+
+      if (schematicsError) {
+        console.error("Error fetching schematic:", schematicsError);
+      }
+
+      const schematicData = schematics && schematics.length > 0 ? schematics[0] : null;
+      let schematicImageBase64 = null;
+
+      if (schematicData?.converted_image_path) {
+        try {
+          const { data: imageData } = await supabase.storage
+            .from("schematics")
+            .download(schematicData.converted_image_path);
+          
+          if (imageData) {
+            const arrayBuffer = await imageData.arrayBuffer();
+            const base64 = btoa(
+              new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+            );
+            schematicImageBase64 = `data:image/png;base64,${base64}`;
+          }
+        } catch (err) {
+          console.error("Error loading schematic image:", err);
+        }
+      }
+
+      // 8. Calculate site-wide CSV column aggregations
+      const csvColumnAggregations: Record<string, { value: number; aggregation: string; multiplier: number }> = {};
+      
+      Object.entries(columnConfigs)
+        .filter(([_, config]) => config.selected)
+        .forEach(([columnName, config]) => {
+          if (config.aggregation === 'sum') {
+            const total = meterData.reduce((sum, meter) => {
+              return sum + (meter.columnTotals[columnName] || 0);
+            }, 0);
+            csvColumnAggregations[columnName] = {
+              value: total * config.multiplier,
+              aggregation: 'sum',
+              multiplier: config.multiplier
+            };
+          } else if (config.aggregation === 'max') {
+            const maxValue = Math.max(...meterData.map(meter => meter.columnMaxValues[columnName] || 0));
+            csvColumnAggregations[columnName] = {
+              value: maxValue * config.multiplier,
+              aggregation: 'max',
+              multiplier: config.multiplier
+            };
+          }
+        });
+
+      // 9. Prepare detailed meter breakdown with sorting
       const sortMetersByType = (meters: any[]) => {
         return meters.sort((a, b) => {
           // Sort by type priority: council_bulk > solar > check_meter > distribution
@@ -563,7 +620,7 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
 
       if (aiError) throw aiError;
 
-      // Store preview data
+      // Store preview data with schematic and CSV aggregations
       setPreviewData({
         siteName,
         periodStart,
@@ -575,8 +632,10 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
         documentExtractions,
         anomalies,
         selectedCsvColumns,
-        reportData
-      });
+        reportData,
+        schematicImageBase64,
+        csvColumnAggregations
+      } as any);
 
       toast.success("Preview generated successfully!");
 
@@ -608,8 +667,10 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
         reconciliationData,
         documentExtractions,
         anomalies,
-        reportData
-      } = previewData;
+        reportData,
+        schematicImageBase64,
+        csvColumnAggregations
+      } = previewData as any;
 
       // Categorize meters by type for PDF generation
       const councilBulk = meterData.filter((m: any) => m.meter_type === "council_bulk");
@@ -636,12 +697,23 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
         pageNumber++;
       };
 
+      // Helper function to clean markdown formatting
+      const cleanMarkdown = (text: string): string => {
+        if (!text) return '';
+        return text
+          .replace(/^##\s+.+$/gm, '') // Remove ## headers
+          .replace(/\*\*(.*?)\*\*/g, '$1') // Remove ** bold
+          .replace(/^\d+\.\d+\s+/gm, '') // Remove numbered subsections like 3.1, 4.2
+          .trim();
+      };
+
       // Helper function to add text with wrapping
       const addText = (text: string, fontSize: number = 10, isBold: boolean = false, indent: number = 0) => {
+        const cleanedText = cleanMarkdown(text);
         pdf.setFontSize(fontSize);
         pdf.setFont("helvetica", isBold ? "bold" : "normal");
         const maxWidth = pageWidth - 2 * margin - indent;
-        const lines = pdf.splitTextToSize(text, maxWidth);
+        const lines = pdf.splitTextToSize(cleanedText, maxWidth);
         
         lines.forEach((line: string) => {
           if (yPos > pageHeight - margin - 15) {
@@ -743,9 +815,9 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
         yPos += 5;
       };
 
-      const addSectionHeading = (text: string, fontSize: number = 14, forceNewPage: boolean = true) => {
-        // Force new page for major sections (except first content page)
-        if (forceNewPage && pageNumber > 3) {
+      const addSectionHeading = (text: string, fontSize: number = 14, forceNewPage: boolean = false) => {
+        // Force new page for major sections
+        if (forceNewPage) {
           addPageNumber();
           pdf.addPage();
           yPos = margin;
@@ -851,8 +923,33 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
       addSpacer(8);
 
       // Section 2: Metering Hierarchy Overview
-      addSectionHeading("2. METERING HIERARCHY OVERVIEW", 16, false);
+      addSectionHeading("2. METERING HIERARCHY OVERVIEW", 16, true);
       addText(reportData.sections.hierarchyOverview);
+      addSpacer(5);
+      
+      // Add schematic if available
+      if (schematicImageBase64) {
+        if (yPos > pageHeight - 150) {
+          addPageNumber();
+          pdf.addPage();
+          yPos = margin;
+        }
+        
+        try {
+          const imgWidth = pageWidth - 2 * margin;
+          const imgHeight = 120; // Fixed height for schematic
+          pdf.addImage(schematicImageBase64, 'PNG', margin, yPos, imgWidth, imgHeight);
+          yPos += imgHeight + 5;
+          
+          pdf.setFontSize(9);
+          pdf.setFont("helvetica", "italic");
+          pdf.text("Figure 1: Site Metering Schematic Diagram", pageWidth / 2, yPos, { align: "center" });
+          pdf.setFont("helvetica", "normal");
+          yPos += 10;
+        } catch (err) {
+          console.error("Error adding schematic to PDF:", err);
+        }
+      }
       addSpacer(8);
 
       // Section 3: Data Sources and Audit Period
@@ -879,10 +976,47 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
       addText(`${reconciliationData.documentsAnalyzed} billing documents processed and validated`);
       addSpacer(8);
 
-      // Section 4: Metering Reconciliation
-      addSectionHeading("4. METERING RECONCILIATION", 16);
+      // Section 4: Key Metrics
+      addSectionHeading("4. KEY METRICS", 16, true);
       
-      addSubsectionHeading("4.1 Supply Summary");
+      addSubsectionHeading("4.1 Basic Reconciliation Metrics");
+      
+      const basicMetricsRows = [
+        ["Total Supply", `${reconciliationData.totalSupply} kWh`],
+        ["Distribution Total", `${reconciliationData.distributionTotal} kWh`],
+        ["Recovery Rate", `${reconciliationData.recoveryRate}%`],
+        ["Variance", `${parseFloat(reconciliationData.variancePercentage) > 0 ? "+" : ""}${reconciliationData.variance} kWh (${parseFloat(reconciliationData.variancePercentage) > 0 ? "+" : ""}${reconciliationData.variancePercentage}%)`]
+      ];
+      
+      addTable(["Metric", "Value"], basicMetricsRows, [100, 70]);
+      addSpacer(8);
+      
+      // Add CSV Column Aggregations if available
+      if (csvColumnAggregations && Object.keys(csvColumnAggregations).length > 0) {
+        addSubsectionHeading("4.2 CSV Column Aggregations");
+        addText("Site-wide aggregated values for selected CSV columns:");
+        addSpacer(3);
+        
+        const csvMetricsRows = Object.entries(csvColumnAggregations).map(([columnName, data]: [string, any]) => [
+          columnName,
+          data.value.toFixed(2),
+          data.aggregation === 'sum' ? 'kWh' : 'kVA',
+          data.aggregation.toUpperCase(),
+          data.multiplier !== 1 ? `×${data.multiplier}` : '-'
+        ]);
+        
+        addTable(
+          ["Column", "Value", "Unit", "Aggregation", "Multiplier"],
+          csvMetricsRows,
+          [50, 35, 25, 30, 30]
+        );
+        addSpacer(8);
+      }
+
+      // Section 5: Metering Reconciliation
+      addSectionHeading("5. METERING RECONCILIATION", 16, true);
+      
+      addSubsectionHeading("5.1 Supply Summary");
       
       // Create supply table
       const supplyRows = [
@@ -896,7 +1030,7 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
       addTable(["Supply Source", "Energy (kWh)"], supplyRows, [120, 50]);
       addSpacer(5);
       
-      addSubsectionHeading("4.2 Distribution Summary");
+      addSubsectionHeading("5.2 Distribution Summary");
       
       // Create distribution table
       const distributionRows = [
@@ -908,7 +1042,7 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
       addTable(["Metric", "Value"], distributionRows, [120, 50]);
       addSpacer(5);
 
-      addSubsectionHeading("4.3 Individual Meter Consumption");
+      addSubsectionHeading("5.3 Individual Meter Consumption");
       addSpacer(2);
       
       // Create meter consumption table by category
@@ -1041,17 +1175,15 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
       }
       addSpacer(8);
 
-      // Section 7: Recommendations
-      const recSection = reportData.sections.billingValidation ? "7" : "6";
-      addSectionHeading(`${recSection}. RECOMMENDATIONS`, 16);
+      // Section 8: Recommendations
+      const recSection = reportData.sections.billingValidation ? "8" : "7";
+      addSectionHeading(`${recSection}. RECOMMENDATIONS`, 16, true);
       addText(reportData.sections.recommendations);
       addSpacer(8);
 
-      // Section 8: Appendices
-      pdf.addPage();
-      yPos = margin;
-      const appSection = reportData.sections.billingValidation ? "8" : "7";
-      addSectionHeading(`${appSection}. APPENDICES`, 16);
+      // Section 9: Appendices
+      const appSection = reportData.sections.billingValidation ? "9" : "8";
+      addSectionHeading(`${appSection}. APPENDICES`, 16, true);
       
       addSubsectionHeading(`Appendix A: Complete Meter Hierarchy`);
       addSpacer(2);
@@ -1133,10 +1265,7 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
       }
 
       // Add Document Index at the end
-      pdf.addPage();
-      yPos = margin;
-      
-      addSectionHeading("DOCUMENT INDEX", 16);
+      addSectionHeading("DOCUMENT INDEX", 16, true);
       addText("This index provides quick reference to key topics, meters, and sections within this audit report.");
       addSpacer(5);
       
@@ -1153,9 +1282,9 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
       });
       
       // Add anomaly types to index
-      const anomalyTypes = [...new Set(anomalies.map(a => a.type))];
-      anomalyTypes.forEach(type => {
-        const displayType = type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+      const anomalyTypes = [...new Set(anomalies.map((a: any) => a.type))];
+      anomalyTypes.forEach((type: any) => {
+        const displayType = String(type).replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
         indexTerms.push({ 
           term: displayType, 
           page: sectionPages.find(s => s.title.includes("ANOMALIES"))?.page || 5 
@@ -1598,30 +1727,84 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
                     </div>
                   </div>
 
+                  {/* Schematic */}
+                  {(previewData as any).schematicImageBase64 && (
+                    <div className="space-y-3">
+                      <h4 className="text-sm font-semibold">Site Schematic Diagram</h4>
+                      <div className="border rounded-lg p-4 bg-muted/30">
+                        <img 
+                          src={(previewData as any).schematicImageBase64} 
+                          alt="Site Metering Schematic" 
+                          className="w-full h-auto"
+                        />
+                        <p className="text-xs text-muted-foreground text-center mt-2">
+                          Figure 1: Site Metering Schematic Diagram
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Key Metrics */}
                   <div className="space-y-3">
                     <h3 className="text-xl font-bold bg-primary text-primary-foreground p-3 rounded">
                       3. KEY METRICS
                     </h3>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="border rounded-lg p-4 space-y-1">
-                        <p className="text-xs text-muted-foreground">Total Supply</p>
-                        <p className="text-2xl font-bold">{previewData.reconciliationData.totalSupply} kWh</p>
+                    
+                    <div className="space-y-4">
+                      <div>
+                        <h4 className="text-sm font-semibold mb-3">Basic Reconciliation Metrics</h4>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="border rounded-lg p-4 space-y-1">
+                            <p className="text-xs text-muted-foreground">Total Supply</p>
+                            <p className="text-2xl font-bold">{previewData.reconciliationData.totalSupply} kWh</p>
+                          </div>
+                          <div className="border rounded-lg p-4 space-y-1">
+                            <p className="text-xs text-muted-foreground">Distribution Total</p>
+                            <p className="text-2xl font-bold">{previewData.reconciliationData.distributionTotal} kWh</p>
+                          </div>
+                          <div className="border rounded-lg p-4 space-y-1">
+                            <p className="text-xs text-muted-foreground">Recovery Rate</p>
+                            <p className="text-2xl font-bold">{previewData.reconciliationData.recoveryRate}%</p>
+                          </div>
+                          <div className="border rounded-lg p-4 space-y-1">
+                            <p className="text-xs text-muted-foreground">Variance</p>
+                            <p className="text-2xl font-bold">
+                              {previewData.reconciliationData.variance} kWh ({previewData.reconciliationData.variancePercentage}%)
+                            </p>
+                          </div>
+                        </div>
                       </div>
-                      <div className="border rounded-lg p-4 space-y-1">
-                        <p className="text-xs text-muted-foreground">Distribution Total</p>
-                        <p className="text-2xl font-bold">{previewData.reconciliationData.distributionTotal} kWh</p>
-                      </div>
-                      <div className="border rounded-lg p-4 space-y-1">
-                        <p className="text-xs text-muted-foreground">Recovery Rate</p>
-                        <p className="text-2xl font-bold">{previewData.reconciliationData.recoveryRate}%</p>
-                      </div>
-                      <div className="border rounded-lg p-4 space-y-1">
-                        <p className="text-xs text-muted-foreground">Variance</p>
-                        <p className="text-2xl font-bold">
-                          {previewData.reconciliationData.variance} kWh ({previewData.reconciliationData.variancePercentage}%)
-                        </p>
-                      </div>
+
+                      {/* CSV Column Aggregations */}
+                      {(previewData as any).csvColumnAggregations && Object.keys((previewData as any).csvColumnAggregations).length > 0 && (
+                        <div>
+                          <h4 className="text-sm font-semibold mb-3">CSV Column Aggregations</h4>
+                          <div className="border rounded-lg overflow-hidden">
+                            <table className="w-full text-sm">
+                              <thead className="bg-primary text-primary-foreground">
+                                <tr>
+                                  <th className="text-left p-2">Column</th>
+                                  <th className="text-right p-2">Value</th>
+                                  <th className="text-center p-2">Unit</th>
+                                  <th className="text-center p-2">Aggregation</th>
+                                  <th className="text-center p-2">Multiplier</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {Object.entries((previewData as any).csvColumnAggregations).map(([columnName, data]: [string, any]) => (
+                                  <tr key={columnName} className="border-t">
+                                    <td className="p-2 font-medium">{columnName}</td>
+                                    <td className="p-2 text-right">{data.value.toFixed(2)}</td>
+                                    <td className="p-2 text-center">{data.aggregation === 'sum' ? 'kWh' : 'kVA'}</td>
+                                    <td className="p-2 text-center uppercase text-xs">{data.aggregation}</td>
+                                    <td className="p-2 text-center">{data.multiplier !== 1 ? `×${data.multiplier}` : '-'}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
 

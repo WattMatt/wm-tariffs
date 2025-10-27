@@ -65,6 +65,14 @@ serve(async (req) => {
     // Generate Executive Summary
     const executiveSummaryPrompt = `Generate a professional executive summary for a metering audit report for ${siteName}.
 
+CRITICAL FORMATTING INSTRUCTIONS:
+- Use PLAIN TEXT ONLY - no markdown formatting
+- Do NOT use ## headers or section titles
+- Do NOT use ** for bold text
+- Do NOT include any markdown syntax
+- Start directly with the content
+- Use simple paragraphs separated by line breaks
+
 Audit Period: ${auditPeriodStart} to ${auditPeriodEnd}
 
 Reconciliation Data:
@@ -86,7 +94,7 @@ Structure (3-4 paragraphs):
    - Mention financial impact estimate if variance is significant (estimate ZAR loss based on ~R2.50/kWh average tariff)
 4. Recommendations preview: Brief mention of infrastructure upgrades, billing improvements, or remedial actions needed
 
-Writing style: Professional, evidence-based, quantitative. Use specific numbers from the data provided.`;
+Writing style: Professional, evidence-based, quantitative. Use specific numbers from the data provided. Plain text only.`;
 
     const execSummaryResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -113,6 +121,14 @@ Writing style: Professional, evidence-based, quantitative. Use specific numbers 
     // Generate Metering Hierarchy Overview
     const hierarchyPrompt = `Generate a metering hierarchy overview for ${siteName}.
 
+CRITICAL FORMATTING INSTRUCTIONS:
+- Use PLAIN TEXT ONLY - no markdown formatting
+- Do NOT use ## headers or section titles
+- Do NOT use ** for bold text
+- Do NOT include any markdown syntax
+- Start directly with the content
+- Use simple paragraphs separated by line breaks
+
 Meter Hierarchy Data:
 ${JSON.stringify(meterHierarchy, null, 2)}
 
@@ -131,7 +147,7 @@ Structure (2-3 paragraphs):
 
 Include specific meter identifiers (numbers) and mention consumption data where relevant.
 
-Writing style: Technical but clear, structured, with specific meter references.`;
+Writing style: Technical but clear, structured, with specific meter references. Plain text only.`;
 
     const hierarchyResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -158,6 +174,15 @@ Writing style: Technical but clear, structured, with specific meter references.`
     // Generate Observations and Anomalies with CSV data
     const observationsPrompt = `Generate a comprehensive observations and anomalies section for the metering audit.
 
+CRITICAL FORMATTING INSTRUCTIONS:
+- Use PLAIN TEXT ONLY - no markdown formatting
+- Do NOT use ## headers or numbered section headers (like 3.1, 3.2)
+- Do NOT use ** for bold text
+- Do NOT include any markdown syntax
+- Start directly with the content
+- Use simple paragraphs with clear topic sentences
+- Separate topics with line breaks
+
 Anomalies Detected:
 ${JSON.stringify(anomalies, null, 2)}
 
@@ -168,19 +193,19 @@ Meter Breakdown:
 ${JSON.stringify(meterBreakdown, null, 2)}
 ${csvColumnsSummary}
 
-Structure as numbered subsections (3.1, 3.2, 3.3, etc.):
+Content to include (as separate paragraphs without numbering):
 
-3.1 Critical Meter Reading Deficiencies
+Critical Meter Reading Deficiencies:
 - Identify meters with no readings or insufficient readings
 - Specify meter numbers and reading counts
 - Discuss implications for reconciliation accuracy
 
-${selectedCsvColumns && selectedCsvColumns.length > 0 ? `3.2 CSV Data Analysis - MANDATORY SECTION
+${selectedCsvColumns && selectedCsvColumns.length > 0 ? `CSV Data Analysis - MANDATORY:
 THIS SECTION IS CRITICAL AND MUST BE INCLUDED.
 
 You MUST analyze the CSV column data provided above. For each selected column (${selectedCsvColumns.map((c: any) => c.columnName).join(', ')}):
 
-a) Present the data in a clear table format showing:
+a) Present the data clearly showing:
    - Meter number and name
    - Values for each selected CSV column
    - Units and aggregation method used
@@ -196,39 +221,33 @@ c) Highlight specific concerns:
    - Unusual power factor implications
    - Demand charges that may be incorrectly billed
 
-Example format:
-"Analysis of P1 (kWh), P2 (kWh), and S (kVA) readings:
-- Meter 12345: P1=1500 kWh, P2=800 kWh, S=45 kVA max demand
-- Meter 67890: P1=3200 kWh, P2=1100 kWh, S=78 kVA max demand
-Notable observations: Meter 12345 shows unusually low P2 consumption..."
-
 ` : ''}
 
-3.3 Excessive Variance Between Supply and Distribution
+Variance Between Supply and Distribution:
 - Analyze the ${reconciliationData.variancePercentage}% variance
 - Compare to acceptable threshold (~5-7%)
 - Discuss magnitude of discrepancy (${reconciliationData.variance} kWh)
 
-3.4 Sub-Optimal Energy Recovery Rate
+Energy Recovery Rate:
 - Analyze recovery rate of ${reconciliationData.recoveryRate}%
 - Compare to acceptable threshold (90-95%)
 - Discuss lost revenue implications
 
-3.5 Missing or Inaccessible Meters
+Missing or Inaccessible Meters:
 - Identify any meters that appear in hierarchy but have no data
 - Discuss potential causes (bypassed, tampered, faulty)
 
-3.6 Billing Discrepancies (Inferred)
+Billing Discrepancies:
 - Based on variance and anomalies, infer potential billing issues
 - Mention overbilling or underbilling scenarios
 
-For each subsection:
+For each topic:
 - State the issue clearly with data
-- List potential causes (bulleted: meter faults, tampering, bypassing, calibration drift, CT ratio errors)
+- List potential causes
 - Analyze impact (financial, operational, compliance)
 - Connect to other findings if relevant
 
-Writing style: Technical, evidence-based, South African municipal context. Reference specific meters and consumption values.`;
+Writing style: Technical, evidence-based, South African municipal context. Reference specific meters and consumption values. Plain text only.`;
 
     const observationsResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -255,46 +274,55 @@ Writing style: Technical, evidence-based, South African municipal context. Refer
     // Generate Recommendations
     const recommendationsPrompt = `Generate detailed, actionable recommendations for the metering audit findings.
 
+CRITICAL FORMATTING INSTRUCTIONS:
+- Use PLAIN TEXT ONLY - no markdown formatting
+- Do NOT use ## headers or numbered section headers (like 4.1, 4.2)
+- Do NOT use ** for bold text
+- Do NOT include any markdown syntax
+- Start directly with the content
+- Use clear topic sentences for each recommendation category
+- Separate categories with line breaks
+
 Issues Found:
 ${JSON.stringify(anomalies, null, 2)}
 
 Reconciliation Data:
 ${JSON.stringify(reconciliationData, null, 2)}
 
-Structure as 4 main subsections (4.1, 4.2, 4.3, 4.4) with detailed recommendations:
+Content to include (as separate paragraphs with clear topic sentences):
 
-4.1 Remedial Actions for Immediate Discrepancies
+Remedial Actions for Immediate Discrepancies:
 Focus: Fix current issues causing variance and low recovery rate
 - Address meters with no/insufficient readings
 - Investigate and rectify negative consumption meters
 - Resolve variance between supply and distribution
-Each recommendation should include: Action → Objective → Process (numbered steps) → Benefits → Priority (High/Medium/Low)
+Each recommendation should include: Action, Objective, Process steps, Benefits, Priority
 
-4.2 Metering Infrastructure Upgrades and Enhancements
+Metering Infrastructure Upgrades and Enhancements:
 Focus: Long-term infrastructure improvements
 - Smart meter installations
 - CT ratio verifications
 - Meter calibration programs
 - Communication system upgrades
-Format: Action → Objective → Process → Benefits → Priority → Timeline estimate
+Include: Action, Objective, Process, Benefits, Priority, Timeline estimate
 
-4.3 Billing Workflow and Data Management Improvements
+Billing Workflow and Data Management Improvements:
 Focus: Process and system improvements
 - Automated meter reading systems
 - Data validation protocols
 - Billing reconciliation procedures
 - Energy management dashboards
-Format: Action → Objective → Process → Benefits → Priority
+Include: Action, Objective, Process, Benefits, Priority
 
-4.4 Preventative Measures for Future Audits
+Preventative Measures for Future Audits:
 Focus: Ongoing monitoring and compliance
 - Regular audit schedules
 - Real-time monitoring systems
 - Tamper detection protocols
 - Staff training programs
-Format: Action → Objective → Process → Benefits → Priority → Frequency
+Include: Action, Objective, Process, Benefits, Priority, Frequency
 
-Writing style: Action-oriented, specific, prioritized. Each recommendation should be numbered (e.g., 4.1.1, 4.1.2) and include concrete implementation steps. Reference South African municipal billing context where relevant.`;
+Writing style: Action-oriented, specific, prioritized. Include concrete implementation steps. Reference South African municipal billing context where relevant. Plain text only.`;
 
     const recommendationsResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -322,50 +350,58 @@ Writing style: Action-oriented, specific, prioritized. Each recommendation shoul
     if (documentExtractions?.length > 0) {
       const billingPrompt = `Generate a comprehensive billing validation summary based on extracted document data.
 
+CRITICAL FORMATTING INSTRUCTIONS:
+- Use PLAIN TEXT ONLY - no markdown formatting
+- Do NOT use ## headers or numbered section headers
+- Do NOT use ** for bold text
+- Do NOT include any markdown syntax
+- Start directly with the content
+- Use clear topic sentences
+- Separate topics with line breaks
+
 Extracted Billing Data:
 ${JSON.stringify(documentExtractions, null, 2)}
 
 Meter Data for Cross-Reference:
 ${JSON.stringify(meterBreakdown, null, 2)}
 
-Structure:
+Content to include (as paragraphs with clear topic sentences):
 
-Overview Paragraph:
+Overview:
 State purpose of billing validation - cross-checking tenant bills against meter readings to verify accuracy.
 
-Subsections (numbered):
-1. Consumption Calculation Verification
-   - Compare billed consumption vs. actual meter readings
-   - Identify discrepancies by tenant/unit
+Consumption Calculation Verification:
+- Compare billed consumption vs. actual meter readings
+- Identify discrepancies by tenant/unit
    
-2. Tariff Application Verification
-   - Verify correct tariff rates applied
-   - Check for TOU (Time of Use) application if applicable
-   - Verify demand charges, fixed charges
+Tariff Application Verification:
+- Verify correct tariff rates applied
+- Check for TOU (Time of Use) application if applicable
+- Verify demand charges, fixed charges
 
-3. Discrepancies/Potential Overbilling-Underbilling
-   - List specific cases where bills don't match readings
-   - Calculate variance amounts in kWh and ZAR
+Discrepancies and Potential Overbilling or Underbilling:
+- List specific cases where bills don't match readings
+- Calculate variance amounts in kWh and ZAR
    
-4. Total Amount Verification
-   - Cross-check calculated totals vs. billed totals
-   - Identify mathematical errors
+Total Amount Verification:
+- Cross-check calculated totals vs. billed totals
+- Identify mathematical errors
 
-5. Generator kWh Charge Analysis (if solar present)
-   - Verify solar credit calculations
-   - Check net metering accuracy
+Generator kWh Charge Analysis (if solar present):
+- Verify solar credit calculations
+- Check net metering accuracy
 
-6. Tenant-Specific Rate Structures
-   - Verify each tenant has correct tariff assignment
-   - Check for bulk rate vs. municipal rate inconsistencies
+Tenant-Specific Rate Structures:
+- Verify each tenant has correct tariff assignment
+- Check for bulk rate vs. municipal rate inconsistencies
 
-Identified Cases of Overbilling or Underbilling:
-List specific findings as bullet points with meter/tenant identification
+Identified Cases:
+List specific findings with meter/tenant identification
 
 Recommendations:
-Number 3-5 specific recommendations for billing process improvements
+Provide 3-5 specific recommendations for billing process improvements
 
-Writing style: Factual, quantitative, evidence-based. Include specific ZAR amounts and kWh values.`;
+Writing style: Factual, quantitative, evidence-based. Include specific ZAR amounts and kWh values. Plain text only.`;
 
       const billingResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
         method: 'POST',
