@@ -386,37 +386,23 @@ export default function SchematicEditor({
           canvas.renderAll();
           
           // Calculate region in ABSOLUTE pixels of the original image
-          // canvas.getPointer() returns viewport coordinates, so we need to transform them
-          // to canvas space first (accounting for pan/zoom), then scale to original image size
+          // canvas.getPointer() already returns coordinates in canvas space (accounting for pan/zoom)
+          // We just need to scale from canvas display size to original image pixel size
           const originalImageWidth = (canvas as any).originalImageWidth || canvasWidth;
           const originalImageHeight = (canvas as any).originalImageHeight || canvasHeight;
           
-          // Get viewport transform and apply inverse to convert viewport coords to canvas coords
-          const vpt = canvas.viewportTransform!;
-          const inverted = util.invertTransform(vpt);
-          
-          // Transform all corners of the rectangle from viewport to canvas space
-          const topLeftCanvas = util.transformPoint({ x: left, y: top }, inverted);
-          const bottomRightCanvas = util.transformPoint({ x: left + width, y: top + height }, inverted);
-          
-          // Calculate dimensions in canvas space (after removing pan/zoom effects)
-          const canvasX = topLeftCanvas.x;
-          const canvasY = topLeftCanvas.y;
-          const canvasRegionWidth = bottomRightCanvas.x - topLeftCanvas.x;
-          const canvasRegionHeight = bottomRightCanvas.y - topLeftCanvas.y;
-          
-          // Now scale from canvas space to original image pixel space
-          const scaleX = originalImageWidth / canvas.getWidth();
-          const scaleY = originalImageHeight / canvas.getHeight();
+          // Scale from canvas display space to original image pixel space
+          const scaleX = originalImageWidth / canvasWidth;
+          const scaleY = originalImageHeight / canvasHeight;
           
           const regionId = (rect as any).regionId;
           const newRegion = {
             id: regionId,
             // Store as absolute pixels in original image space
-            x: canvasX * scaleX,
-            y: canvasY * scaleY,
-            width: canvasRegionWidth * scaleX,
-            height: canvasRegionHeight * scaleY,
+            x: left * scaleX,
+            y: top * scaleY,
+            width: width * scaleX,
+            height: height * scaleY,
             imageWidth: originalImageWidth,
             imageHeight: originalImageHeight,
             // Also store display coordinates for canvas rendering
@@ -536,7 +522,6 @@ export default function SchematicEditor({
         const canvasHeight = canvas.getHeight();
         const originalImageWidth = (canvas as any).originalImageWidth || canvasWidth;
         const originalImageHeight = (canvas as any).originalImageHeight || canvasHeight;
-        const displayScale = (canvas as any).displayScale || 1;
         
         const left = rect.left || 0;
         const top = rect.top || 0;
@@ -606,16 +591,18 @@ export default function SchematicEditor({
       const height = rect.height || 0;
       
       if (width > 20 && height > 20) {
-        // Get original image dimensions and scale from canvas
-        const originalImageWidth = (canvas as any).originalImageWidth || canvasWidth;
-        const originalImageHeight = (canvas as any).originalImageHeight || canvasHeight;
-        const displayScale = (canvas as any).displayScale || 1;
-        
-        // Convert from canvas display coordinates to original image pixel coordinates
-        const imageLeft = left / displayScale;
-        const imageTop = top / displayScale;
-        const imageWidth = width / displayScale;
-        const imageHeight = height / displayScale;
+      // Get original image dimensions and scale from canvas
+      const originalImageWidth = (canvas as any).originalImageWidth || canvasWidth;
+      const originalImageHeight = (canvas as any).originalImageHeight || canvasHeight;
+      
+      // Convert from canvas display coordinates to original image pixel coordinates
+      const scaleX = originalImageWidth / canvasWidth;
+      const scaleY = originalImageHeight / canvasHeight;
+      
+      const imageLeft = left * scaleX;
+      const imageTop = top * scaleY;
+      const imageWidth = width * scaleX;
+      const imageHeight = height * scaleY;
         
         try {
           toast.info('Extracting meter data from selected region...');
@@ -779,7 +766,6 @@ export default function SchematicEditor({
       // Store original image dimensions for region coordinate conversion
       (canvas as any).originalImageWidth = imgWidth;
       (canvas as any).originalImageHeight = imgHeight;
-      (canvas as any).displayScale = scale;
       
       canvas.setDimensions({ width: canvasWidth, height: canvasHeight });
       
