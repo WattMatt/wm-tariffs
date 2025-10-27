@@ -43,27 +43,31 @@ interface SchematicLine {
 async function createMeterCardImage(
   fields: Array<{ label: string; value: string }>,
   borderColor: string,
-  cardWidth: number = 200,
-  cardHeight: number = 140
+  targetWidth: number = 200,
+  targetHeight: number = 140
 ): Promise<string> {
+  // Create at 2.5x size for better text clarity (matching reference dimensions)
+  const baseWidth = 500;
+  const baseHeight = 175;
+  
   const canvas = document.createElement('canvas');
-  canvas.width = cardWidth;
-  canvas.height = cardHeight;
+  canvas.width = baseWidth;
+  canvas.height = baseHeight;
   const ctx = canvas.getContext('2d');
   
   if (!ctx) return '';
   
-  const rowHeight = cardHeight / fields.length;
-  const labelColumnWidth = 70; // Wider label column for better readability
+  const rowHeight = baseHeight / fields.length;
+  const labelColumnWidth = 175; // Proportional to base width
   
   // Background
   ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, cardWidth, cardHeight);
+  ctx.fillRect(0, 0, baseWidth, baseHeight);
   
   // Main outer border
   ctx.strokeStyle = '#000000';
-  ctx.lineWidth = 1.5;
-  ctx.strokeRect(0, 0, cardWidth, cardHeight);
+  ctx.lineWidth = 3;
+  ctx.strokeRect(0, 0, baseWidth, baseHeight);
   
   // Draw each row
   fields.forEach((field, i) => {
@@ -71,7 +75,7 @@ async function createMeterCardImage(
     
     // Vertical separator between label and value columns
     ctx.strokeStyle = '#000000';
-    ctx.lineWidth = 1;
+    ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(labelColumnWidth, y);
     ctx.lineTo(labelColumnWidth, y + rowHeight);
@@ -80,26 +84,26 @@ async function createMeterCardImage(
     // Horizontal separator line (except after last row)
     if (i < fields.length - 1) {
       ctx.strokeStyle = '#000000';
-      ctx.lineWidth = 1;
+      ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.moveTo(0, y + rowHeight);
-      ctx.lineTo(cardWidth, y + rowHeight);
+      ctx.lineTo(baseWidth, y + rowHeight);
       ctx.stroke();
     }
     
-    // Label text (left column) - bold and much smaller
+    // Label text (left column) - bold
     ctx.fillStyle = '#000000';
-    ctx.font = 'bold 6px Arial, sans-serif';
+    ctx.font = 'bold 14px Arial, sans-serif';
     ctx.textBaseline = 'middle';
-    ctx.fillText(field.label, 4, y + rowHeight / 2);
+    ctx.fillText(field.label, 10, y + rowHeight / 2);
     
-    // Value text (right column) - normal weight and much smaller
-    ctx.font = 'normal 6px Arial, sans-serif';
-    const maxValueLength = 35;
+    // Value text (right column) - normal weight
+    ctx.font = 'normal 14px Arial, sans-serif';
+    const maxValueLength = 40;
     const valueDisplay = field.value.length > maxValueLength 
       ? field.value.substring(0, maxValueLength) + '...' 
       : field.value;
-    ctx.fillText(valueDisplay, labelColumnWidth + 4, y + rowHeight / 2);
+    ctx.fillText(valueDisplay, labelColumnWidth + 10, y + rowHeight / 2);
   });
   
   return canvas.toDataURL();
@@ -940,12 +944,18 @@ export default function SchematicEditor({
         imgElement.src = imageDataUrl;
         
         imgElement.onload = () => {
-          // Create fabric image with border overlay
+          // Calculate scale to fit the target rectangle
+          const scaleX = cardWidth / imgElement.width;
+          const scaleY = cardHeight / imgElement.height;
+          
+          // Create fabric image with scaling to fit rectangle
           const img = new FabricImage(imgElement, {
             left: x,
             top: y,
             originX: 'left',
             originY: 'top',
+            scaleX: scaleX,
+            scaleY: scaleY,
             hasControls: isEditMode,
             selectable: isEditMode,
             hoverCursor: isEditMode ? 'move' : 'pointer',
@@ -1095,13 +1105,18 @@ export default function SchematicEditor({
         imgElement.src = imageDataUrl;
         
         imgElement.onload = () => {
+          // Calculate base scale to fit the target rectangle
+          const baseScaleX = cardWidth / imgElement.width;
+          const baseScaleY = cardHeight / imgElement.height;
+          
+          // Apply both base scale and saved scale
           const img = new FabricImage(imgElement, {
             left: x,
             top: y,
             originX: 'center',
             originY: 'center',
-            scaleX: savedScaleX,
-            scaleY: savedScaleY,
+            scaleX: baseScaleX * savedScaleX,
+            scaleY: baseScaleY * savedScaleY,
             hasControls: activeTool === 'move',
             selectable: activeTool === 'move',
             hoverCursor: activeTool === 'move' ? 'move' : (activeTool === 'connection' ? 'pointer' : 'default'),
@@ -1128,8 +1143,12 @@ export default function SchematicEditor({
               const canvasHeight = fabricCanvas.getHeight();
               const xPercent = ((img.left || 0) / canvasWidth) * 100;
               const yPercent = ((img.top || 0) / canvasHeight) * 100;
-              const scaleX = img.scaleX || 1;
-              const scaleY = img.scaleY || 1;
+              
+              // Extract user scale (removing base scale)
+              const currentScaleX = img.scaleX || 1;
+              const currentScaleY = img.scaleY || 1;
+              const userScaleX = currentScaleX / baseScaleX;
+              const userScaleY = currentScaleY / baseScaleY;
 
               // Update position and scale in database after drag/resize
               const { error } = await supabase
@@ -1137,8 +1156,8 @@ export default function SchematicEditor({
                 .update({
                   x_position: xPercent,
                   y_position: yPercent,
-                  scale_x: scaleX,
-                  scale_y: scaleY,
+                  scale_x: userScaleX,
+                  scale_y: userScaleY,
                 })
                 .eq('id', pos.id);
 
