@@ -76,6 +76,16 @@ export default function SchematicEditor({
   const [isEditMeterDialogOpen, setIsEditMeterDialogOpen] = useState(false);
   const [isConfirmMeterDialogOpen, setIsConfirmMeterDialogOpen] = useState(false);
   const [editingMeter, setEditingMeter] = useState<any>(null);
+  
+  // Legend visibility toggles
+  const [legendVisibility, setLegendVisibility] = useState({
+    bulk_meter: true,
+    check_meter: true,
+    main_board_zone: true,
+    mini_sub_zone: true,
+    submeter: true,
+    other: true
+  });
 
   // Load initial data on mount
   useEffect(() => {
@@ -711,11 +721,29 @@ export default function SchematicEditor({
       
       // Determine border color based on zone or meter type
       let borderColor = '#3b82f6'; // default blue
-      if (zone === 'main_board') borderColor = '#9333ea'; // purple for Main Board zone
-      else if (zone === 'mini_sub') borderColor = '#06b6d4'; // cyan for Mini Sub zone
-      else if (meterType.includes('bulk')) borderColor = '#ef4444'; // red
-      else if (meterType.includes('check')) borderColor = '#f59e0b'; // orange
-      else if (meterType.includes('sub')) borderColor = '#10b981'; // green
+      let categoryKey = 'other';
+      
+      if (zone === 'main_board') {
+        borderColor = '#9333ea'; // purple for Main Board zone
+        categoryKey = 'main_board_zone';
+      } else if (zone === 'mini_sub') {
+        borderColor = '#06b6d4'; // cyan for Mini Sub zone
+        categoryKey = 'mini_sub_zone';
+      } else if (meterType.includes('bulk')) {
+        borderColor = '#ef4444'; // red
+        categoryKey = 'bulk_meter';
+      } else if (meterType.includes('check')) {
+        borderColor = '#f59e0b'; // orange
+        categoryKey = 'check_meter';
+      } else if (meterType.includes('sub')) {
+        borderColor = '#10b981'; // green
+        categoryKey = 'submeter';
+      }
+      
+      // Skip rendering if this category is hidden
+      if (!legendVisibility[categoryKey as keyof typeof legendVisibility]) {
+        return;
+      }
 
       // Convert percentage positions to pixel positions for canvas
       const canvasWidth = fabricCanvas.getWidth();
@@ -931,7 +959,7 @@ export default function SchematicEditor({
     });
 
     fabricCanvas.renderAll();
-  }, [fabricCanvas, meterPositions, lines, meters, activeTool, extractedMeters]);
+  }, [fabricCanvas, meterPositions, lines, meters, activeTool, extractedMeters, legendVisibility]);
 
   const fetchMeters = async () => {
     const { data } = await supabase
@@ -1351,32 +1379,86 @@ export default function SchematicEditor({
         </Button>
       </div>
 
-      <div className="flex gap-2 flex-wrap">
-        <div className="text-xs font-medium text-muted-foreground mr-2 flex items-center">Saved Meters:</div>
-        <Badge variant="outline">
-          <div className="w-3 h-3 rounded-full bg-[#ef4444] mr-2" />
-          Bulk Meter
-        </Badge>
-        <Badge variant="outline">
-          <div className="w-3 h-3 rounded-full bg-[#f59e0b] mr-2" />
-          Check Meter
-        </Badge>
-        <Badge variant="outline">
-          <div className="w-3 h-3 rounded-full bg-[#9333ea] mr-2" />
-          Main Board Zone
-        </Badge>
-        <Badge variant="outline">
-          <div className="w-3 h-3 rounded-full bg-[#06b6d4] mr-2" />
-          Mini Sub Zone
-        </Badge>
-        <Badge variant="outline">
-          <div className="w-3 h-3 rounded-full bg-[#10b981] mr-2" />
-          Submeter
-        </Badge>
-        <Badge variant="outline">
-          <div className="w-3 h-3 rounded-full bg-[#3b82f6] mr-2" />
-          Other
-        </Badge>
+      <div className="flex gap-2 flex-wrap items-center">
+        <div className="text-xs font-medium text-muted-foreground mr-2 flex items-center">Legend:</div>
+        
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={legendVisibility.bulk_meter}
+            onChange={(e) => setLegendVisibility(prev => ({ ...prev, bulk_meter: e.target.checked }))}
+            className="w-3 h-3"
+          />
+          <Badge variant="outline" className="cursor-pointer">
+            <div className="w-3 h-3 rounded-full bg-[#ef4444] mr-2" />
+            Bulk Meter
+          </Badge>
+        </label>
+        
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={legendVisibility.check_meter}
+            onChange={(e) => setLegendVisibility(prev => ({ ...prev, check_meter: e.target.checked }))}
+            className="w-3 h-3"
+          />
+          <Badge variant="outline" className="cursor-pointer">
+            <div className="w-3 h-3 rounded-full bg-[#f59e0b] mr-2" />
+            Check Meter
+          </Badge>
+        </label>
+        
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={legendVisibility.main_board_zone}
+            onChange={(e) => setLegendVisibility(prev => ({ ...prev, main_board_zone: e.target.checked }))}
+            className="w-3 h-3"
+          />
+          <Badge variant="outline" className="cursor-pointer">
+            <div className="w-3 h-3 rounded-full bg-[#9333ea] mr-2" />
+            Main Board Zone
+          </Badge>
+        </label>
+        
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={legendVisibility.mini_sub_zone}
+            onChange={(e) => setLegendVisibility(prev => ({ ...prev, mini_sub_zone: e.target.checked }))}
+            className="w-3 h-3"
+          />
+          <Badge variant="outline" className="cursor-pointer">
+            <div className="w-3 h-3 rounded-full bg-[#06b6d4] mr-2" />
+            Mini Sub Zone
+          </Badge>
+        </label>
+        
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={legendVisibility.submeter}
+            onChange={(e) => setLegendVisibility(prev => ({ ...prev, submeter: e.target.checked }))}
+            className="w-3 h-3"
+          />
+          <Badge variant="outline" className="cursor-pointer">
+            <div className="w-3 h-3 rounded-full bg-[#10b981] mr-2" />
+            Submeter
+          </Badge>
+        </label>
+        
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={legendVisibility.other}
+            onChange={(e) => setLegendVisibility(prev => ({ ...prev, other: e.target.checked }))}
+            className="w-3 h-3"
+          />
+          <Badge variant="outline" className="cursor-pointer">
+            <div className="w-3 h-3 rounded-full bg-[#3b82f6] mr-2" />
+            Other
+          </Badge>
+        </label>
         
         {extractedMeters.length > 0 && (
           <>
