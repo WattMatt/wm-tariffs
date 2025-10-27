@@ -118,11 +118,11 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
                   variant="ghost"
                   className={cn(
                     "w-full text-secondary-foreground/70 hover:text-secondary-foreground hover:bg-secondary-foreground/10",
-                    collapsed ? "justify-center px-2" : "justify-start",
+                    collapsed ? "justify-center px-0" : "justify-start",
                     isActive && "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground"
                   )}
                 >
-                  <Icon className={cn("w-4 h-4", !collapsed && "mr-3")} />
+                  <Icon className={cn("shrink-0", collapsed ? "w-5 h-5" : "w-4 h-4 mr-3")} />
                   {!collapsed && item.label}
                 </Button>
               </Link>
@@ -141,11 +141,11 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
             variant="ghost"
             className={cn(
               "w-full text-secondary-foreground/70 hover:text-destructive",
-              collapsed ? "justify-center px-2" : "justify-start"
+              collapsed ? "justify-center px-0" : "justify-start"
             )}
             onClick={handleSignOut}
           >
-            <LogOut className={cn("w-4 h-4", !collapsed && "mr-3")} />
+            <LogOut className={cn("shrink-0", collapsed ? "w-5 h-5" : "w-4 h-4 mr-3")} />
             {!collapsed && "Sign Out"}
           </Button>
         </div>
