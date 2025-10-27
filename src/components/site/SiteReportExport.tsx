@@ -702,22 +702,52 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
       const distribution = meterData.filter((m: any) => m.meter_type === "distribution");
       const checkMeters = meterData.filter((m: any) => m.meter_type === "check_meter");
 
-      // 11. Generate PDF with enhanced formatting
+      // 11. Generate PDF with template styling
       toast.info("Generating PDF...");
       const pdf = new jsPDF();
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
-      const margin = 20;
-      let yPos = margin;
+      
+      // Template styling constants
+      const blueBarWidth = 15; // Width of left blue bar
+      const leftMargin = 25; // Left margin (accounting for blue bar)
+      const rightMargin = 20;
+      const topMargin = 20;
+      const bottomMargin = 20;
+      
+      // Template blue color (from the template)
+      const templateBlue = [0, 102, 179]; // RGB for #0066B3
+      
+      let yPos = topMargin;
       let pageNumber = 1;
       const sectionPages: { title: string; page: number }[] = [];
       const indexTerms: { term: string; page: number }[] = [];
+      
+      // Helper to add blue sidebar on each page
+      const addBlueSidebar = () => {
+        pdf.setFillColor(templateBlue[0], templateBlue[1], templateBlue[2]);
+        pdf.rect(0, 0, blueBarWidth, pageHeight, "F");
+      };
+      
+      // Helper to add footer
+      const addFooter = () => {
+        pdf.setFontSize(8);
+        pdf.setFont("helvetica", "normal");
+        pdf.setTextColor(100, 100, 100);
+        const docNumber = `Document Number: AUD-${format(new Date(), "yyyyMMdd-HHmmss")}`;
+        const printDate = `Print date: ${format(new Date(), "dd/MM/yyyy HH:mm")}`;
+        pdf.text(docNumber, leftMargin, pageHeight - 10);
+        pdf.text(printDate, pageWidth - rightMargin, pageHeight - 10, { align: "right" });
+        pdf.setTextColor(0, 0, 0);
+      };
 
       // Helper function to add page number
       const addPageNumber = () => {
         pdf.setFontSize(9);
         pdf.setFont("helvetica", "normal");
-        pdf.text(`Page ${pageNumber}`, pageWidth - margin, pageHeight - 10, { align: "right" });
+        pdf.setTextColor(100, 100, 100);
+        pdf.text(`Page ${pageNumber} of`, pageWidth / 2, pageHeight - 5, { align: "center" });
+        pdf.setTextColor(0, 0, 0);
         pageNumber++;
       };
 
@@ -736,16 +766,19 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
         const cleanedText = cleanMarkdown(text);
         pdf.setFontSize(fontSize);
         pdf.setFont("helvetica", isBold ? "bold" : "normal");
-        const maxWidth = pageWidth - 2 * margin - indent;
+        const maxWidth = pageWidth - leftMargin - rightMargin - indent;
         const lines = pdf.splitTextToSize(cleanedText, maxWidth);
         
         lines.forEach((line: string) => {
-          if (yPos > pageHeight - margin - 15) {
+          if (yPos > pageHeight - bottomMargin - 15) {
+            addBlueSidebar();
+            addFooter();
             addPageNumber();
             pdf.addPage();
-            yPos = margin;
+            addBlueSidebar();
+            yPos = topMargin;
           }
-          pdf.text(line, margin + indent, yPos);
+          pdf.text(line, leftMargin + indent, yPos);
           yPos += fontSize * 0.5;
         });
         yPos += 3;
@@ -756,25 +789,31 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
         const indent = 5 + (level * 5);
         const bullet = level === 0 ? "•" : "◦";
         
-        if (yPos > pageHeight - margin - 15) {
+        if (yPos > pageHeight - bottomMargin - 15) {
+          addBlueSidebar();
+          addFooter();
           addPageNumber();
           pdf.addPage();
-          yPos = margin;
+          addBlueSidebar();
+          yPos = topMargin;
         }
         
         pdf.setFontSize(10);
         pdf.setFont("helvetica", "normal");
-        pdf.text(bullet, margin + indent, yPos);
+        pdf.text(bullet, leftMargin + indent, yPos);
         
-        const maxWidth = pageWidth - 2 * margin - indent - 5;
+        const maxWidth = pageWidth - leftMargin - rightMargin - indent - 5;
         const lines = pdf.splitTextToSize(text, maxWidth);
         lines.forEach((line: string, index: number) => {
-          if (index > 0 && yPos > pageHeight - margin - 15) {
+          if (index > 0 && yPos > pageHeight - bottomMargin - 15) {
+            addBlueSidebar();
+            addFooter();
             addPageNumber();
             pdf.addPage();
-            yPos = margin;
+            addBlueSidebar();
+            yPos = topMargin;
           }
-          pdf.text(line, margin + indent + 5, yPos);
+          pdf.text(line, leftMargin + indent + 5, yPos);
           yPos += 5;
         });
         yPos += 2;
@@ -782,25 +821,28 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
 
       // Helper function to add table
       const addTable = (headers: string[], rows: string[][], columnWidths?: number[]) => {
-        const tableWidth = pageWidth - 2 * margin;
+        const tableWidth = pageWidth - leftMargin - rightMargin;
         const defaultColWidth = tableWidth / headers.length;
         const colWidths = columnWidths || headers.map(() => defaultColWidth);
         
         // Check if we need a new page
-        if (yPos > pageHeight - margin - 40) {
+        if (yPos > pageHeight - bottomMargin - 40) {
+          addBlueSidebar();
+          addFooter();
           addPageNumber();
           pdf.addPage();
-          yPos = margin;
+          addBlueSidebar();
+          yPos = topMargin;
         }
         
-        // Draw header with brand color
-        pdf.setFillColor(41, 128, 185); // Consistent brand color
-        pdf.rect(margin, yPos - 5, tableWidth, 10, "F");
+        // Draw header with template blue color
+        pdf.setFillColor(templateBlue[0], templateBlue[1], templateBlue[2]);
+        pdf.rect(leftMargin, yPos - 5, tableWidth, 10, "F");
         
         pdf.setFontSize(9);
         pdf.setFont("helvetica", "bold");
         pdf.setTextColor(255, 255, 255); // White text on blue header
-        let xPos = margin + 2;
+        let xPos = leftMargin + 2;
         headers.forEach((header, i) => {
           pdf.text(header, xPos, yPos);
           xPos += colWidths[i];
@@ -809,20 +851,23 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
         yPos += 7;
         
         // Draw border around header
-        pdf.setDrawColor(41, 128, 185);
+        pdf.setDrawColor(templateBlue[0], templateBlue[1], templateBlue[2]);
         pdf.setLineWidth(0.5);
-        pdf.rect(margin, yPos - 12, tableWidth, 10);
+        pdf.rect(leftMargin, yPos - 12, tableWidth, 10);
         
         // Draw rows
         pdf.setFont("helvetica", "normal");
         rows.forEach((row) => {
-          if (yPos > pageHeight - margin - 15) {
+          if (yPos > pageHeight - bottomMargin - 15) {
+            addBlueSidebar();
+            addFooter();
             addPageNumber();
             pdf.addPage();
-            yPos = margin + 15;
+            addBlueSidebar();
+            yPos = topMargin + 15;
           }
           
-          xPos = margin + 2;
+          xPos = leftMargin + 2;
           row.forEach((cell, i) => {
             const cellLines = pdf.splitTextToSize(cell, colWidths[i] - 4);
             pdf.text(cellLines[0] || "", xPos, yPos);
@@ -831,7 +876,7 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
           
           // Draw row border
           pdf.setDrawColor(220, 220, 220);
-          pdf.rect(margin, yPos - 5, tableWidth, 8);
+          pdf.rect(leftMargin, yPos - 5, tableWidth, 8);
           
           yPos += 8;
         });
@@ -842,9 +887,12 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
       const addSectionHeading = (text: string, fontSize: number = 14, forceNewPage: boolean = false) => {
         // Force new page for major sections
         if (forceNewPage) {
+          addBlueSidebar();
+          addFooter();
           addPageNumber();
           pdf.addPage();
-          yPos = margin;
+          addBlueSidebar();
+          yPos = topMargin;
         }
         
         yPos += 8;
@@ -856,24 +904,24 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
         const cleanTitle = text.replace(/^\d+\.\s*/, ''); // Remove numbering
         indexTerms.push({ term: cleanTitle, page: pageNumber });
         
-        // Consistent brand color scheme - professional blue
-        pdf.setFillColor(41, 128, 185);
-        pdf.rect(margin - 2, yPos - 5, pageWidth - 2 * margin + 4, fontSize + 2, "F");
-        
-        pdf.setTextColor(255, 255, 255);
+        // Section heading in template blue (no filled background, just colored text)
         pdf.setFontSize(fontSize);
         pdf.setFont("helvetica", "bold");
-        pdf.text(text, margin + 2, yPos + 3);
+        pdf.setTextColor(templateBlue[0], templateBlue[1], templateBlue[2]);
+        pdf.text(text, leftMargin, yPos);
         pdf.setTextColor(0, 0, 0);
         yPos += fontSize + 5;
       };
 
       const addSubsectionHeading = (text: string) => {
         yPos += 5;
-        if (yPos > pageHeight - margin - 20) {
+        if (yPos > pageHeight - bottomMargin - 20) {
+          addBlueSidebar();
+          addFooter();
           addPageNumber();
           pdf.addPage();
-          yPos = margin;
+          addBlueSidebar();
+          yPos = topMargin;
         }
         
         // Add subsection to index
@@ -881,8 +929,8 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
         
         pdf.setFontSize(11);
         pdf.setFont("helvetica", "bold");
-        pdf.setTextColor(41, 128, 185); // Consistent brand color
-        pdf.text(text, margin, yPos);
+        pdf.setTextColor(templateBlue[0], templateBlue[1], templateBlue[2]);
+        pdf.text(text, leftMargin, yPos);
         pdf.setTextColor(0, 0, 0);
         yPos += 8;
       };
@@ -891,25 +939,24 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
         yPos += height;
       };
 
-      // COVER PAGE with professional design
-      pdf.setFillColor(41, 128, 185); // Professional blue
-      pdf.rect(0, 0, pageWidth, 100, "F");
+      // COVER PAGE matching template style
+      addBlueSidebar();
       
-      pdf.setTextColor(255, 255, 255);
+      // Title centered on page
+      pdf.setTextColor(templateBlue[0], templateBlue[1], templateBlue[2]);
       pdf.setFontSize(32);
       pdf.setFont("helvetica", "bold");
-      pdf.text("METERING AUDIT REPORT", pageWidth / 2, 50, { align: "center" });
+      pdf.text(previewSiteName.toUpperCase(), pageWidth / 2, 80, { align: "center" });
+      
+      pdf.setFontSize(18);
+      pdf.text("METERING AUDIT REPORT", pageWidth / 2, 100, { align: "center" });
       
       pdf.setTextColor(0, 0, 0);
-      pdf.setFillColor(245, 245, 245);
-      pdf.rect(margin, 120, pageWidth - 2 * margin, 60, "F");
-      pdf.setDrawColor(200, 200, 200);
-      pdf.rect(margin, 120, pageWidth - 2 * margin, 60);
+      pdf.setFontSize(14);
+      pdf.setFont("helvetica", "normal");
+      pdf.text("Financial Analysis", pageWidth / 2, 115, { align: "center" });
       
-      pdf.setFontSize(20);
-      pdf.setFont("helvetica", "bold");
-      pdf.text(previewSiteName, pageWidth / 2, 140, { align: "center" });
-      
+      // Audit Period section
       pdf.setFontSize(11);
       pdf.setFont("helvetica", "normal");
       pdf.text("Audit Period", pageWidth / 2, 155, { align: "center" });
@@ -921,25 +968,19 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
         { align: "center" }
       );
 
-      pdf.setFontSize(9);
-      pdf.setFont("helvetica", "normal");
-      pdf.text(`Report Generated: ${format(new Date(), "dd MMMM yyyy 'at' HH:mm")}`, pageWidth / 2, 220, { align: "center" });
-      pdf.text(`Document ID: AUD-${format(new Date(), "yyyyMMdd-HHmmss")}`, pageWidth / 2, 228, { align: "center" });
-      
-      // Footer on cover
-      pdf.setFontSize(8);
-      pdf.setTextColor(100, 100, 100);
-      pdf.text("Confidential - For Internal Use Only", pageWidth / 2, pageHeight - 15, { align: "center" });
+      addFooter();
 
-      // TABLE OF CONTENTS PAGE - Placeholder
-      // We'll come back and fill this in after we know all page numbers
-      const tocPageIndex = pdf.internal.pages.length;
+      // TABLE OF CONTENTS PAGE
+      addPageNumber();
       pdf.addPage();
-      const tocYStart = margin;
+      addBlueSidebar();
+      yPos = topMargin;
 
       // Start main content
+      addPageNumber();
       pdf.addPage();
-      yPos = margin;
+      addBlueSidebar();
+      yPos = topMargin;
 
       // Section 1: Executive Summary
       addSectionHeading("1. EXECUTIVE SUMMARY", 16, false);
@@ -954,15 +995,18 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
       // Add schematic if available
       if (schematicImageBase64) {
         if (yPos > pageHeight - 150) {
+          addBlueSidebar();
+          addFooter();
           addPageNumber();
           pdf.addPage();
-          yPos = margin;
+          addBlueSidebar();
+          yPos = topMargin;
         }
         
         try {
-          const imgWidth = pageWidth - 2 * margin;
-          const imgHeight = 120; // Fixed height for schematic
-          pdf.addImage(schematicImageBase64, 'PNG', margin, yPos, imgWidth, imgHeight);
+          const imgWidth = pageWidth - leftMargin - rightMargin;
+          const imgHeight = 120;
+          pdf.addImage(schematicImageBase64, 'PNG', leftMargin, yPos, imgWidth, imgHeight);
           yPos += imgHeight + 5;
           
           pdf.setFontSize(9);
@@ -1337,54 +1381,6 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
       });
       
       addTable(["Topic", "Page"], indexRows, [140, 30]);
-      
-      // Now go back and fill in the TOC with actual page numbers
-      pdf.setPage(tocPageIndex);
-      yPos = tocYStart;
-      
-      pdf.setTextColor(0, 0, 0);
-      pdf.setFontSize(20);
-      pdf.setFont("helvetica", "bold");
-      pdf.text("TABLE OF CONTENTS", margin, yPos);
-      yPos += 15;
-      
-      pdf.setDrawColor(41, 128, 185);
-      pdf.setLineWidth(0.5);
-      pdf.line(margin, yPos, pageWidth - margin, yPos);
-      yPos += 10;
-      
-      pdf.setFontSize(11);
-      sectionPages.forEach((section, idx) => {
-        if (yPos > pageHeight - margin - 15) {
-          pdf.addPage();
-          yPos = margin + 20;
-        }
-        
-        pdf.setFont("helvetica", idx === 0 || section.title.match(/^\d+\./) ? "bold" : "normal");
-        const indent = section.title.match(/^\d+\.\d+/) ? 10 : 0;
-        
-        pdf.text(section.title, margin + 5 + indent, yPos);
-        pdf.text(`${section.page}`, pageWidth - margin - 10, yPos, { align: "right" });
-        
-        // Dotted line
-        const titleWidth = pdf.getTextWidth(section.title);
-        const pageNumWidth = pdf.getTextWidth(`${section.page}`);
-        const dotSpace = pageWidth - 2 * margin - titleWidth - pageNumWidth - 20 - indent;
-        const numDots = Math.floor(dotSpace / 2);
-        
-        pdf.setFontSize(8);
-        const dots = ".".repeat(Math.max(0, numDots));
-        pdf.text(dots, margin + 5 + indent + titleWidth + 3, yPos);
-        
-        yPos += 8;
-        pdf.setFontSize(11);
-      });
-      
-      // Add index reference to TOC
-      yPos += 5;
-      pdf.setFont("helvetica", "bold");
-      pdf.text("Document Index", margin + 5, yPos);
-      pdf.text(`${pageNumber}`, pageWidth - margin - 10, yPos, { align: "right" });
       
       // Save PDF
       const fileName = `${previewSiteName.replace(/\s+/g, "_")}_Audit_Report_${format(new Date(), "yyyyMMdd")}.pdf`;
