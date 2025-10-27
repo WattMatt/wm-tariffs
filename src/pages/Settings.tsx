@@ -142,8 +142,13 @@ const Settings = () => {
 
       toast({
         title: "Success",
-        description: "Settings saved successfully",
+        description: "Settings saved successfully. Refresh the page to see changes.",
       });
+      
+      // Reload the page to refresh all components
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
     } catch (error: any) {
       console.error("Error saving settings:", error);
       toast({
