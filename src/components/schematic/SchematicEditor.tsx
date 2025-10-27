@@ -1480,7 +1480,7 @@ export default function SchematicEditor({
       <div className="flex gap-2 items-start justify-between">
         {/* Left side: Action buttons that can wrap */}
         <div className="flex gap-2 items-center flex-wrap flex-1">
-          <Button onClick={handleScanAll} disabled={!isEditMode || isSaving} variant="default">
+          <Button onClick={handleScanAll} disabled={!isEditMode || isSaving} variant="outline">
             <Scan className="w-4 h-4 mr-2" />
             {isSaving ? 'Scanning...' : (drawnRegions.length > 0 ? 'Scan All Regions' : 'Scan All Meters')}
           </Button>
@@ -1566,7 +1566,7 @@ export default function SchematicEditor({
         
         {/* Right side: Save and Edit buttons - always stay top right */}
         <div className="flex gap-2 items-center shrink-0">
-          <Button onClick={handleSave} disabled={!isEditMode || isSaving} size="sm">
+          <Button onClick={handleSave} disabled={!isEditMode || isSaving} variant="outline" size="sm">
             <Save className="w-4 h-4 mr-2" />
             Save
           </Button>
