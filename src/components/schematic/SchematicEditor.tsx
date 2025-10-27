@@ -253,6 +253,8 @@ export default function SchematicEditor({
           canvas.renderAll();
           
           // Store region in state with percentage coordinates
+          // These percentages are relative to the canvas, which matches the image aspect ratio
+          // The AI will receive these percentages and apply them to the full-resolution image
           const newRegion = {
             id: `region-${Date.now()}-${regionNumber}`,
             x: (left / canvasWidth) * 100,
@@ -262,6 +264,16 @@ export default function SchematicEditor({
             fabricRect: rect,
             fabricLabel: label
           };
+          
+          console.log('🎯 Region coordinates:', {
+            canvas: { left, top, width, height },
+            percentages: {
+              x: newRegion.x.toFixed(2) + '%',
+              y: newRegion.y.toFixed(2) + '%',
+              width: newRegion.width.toFixed(2) + '%',
+              height: newRegion.height.toFixed(2) + '%'
+            }
+          });
           
           setDrawnRegions(prev => [...prev, newRegion]);
           toast.success(`Region ${regionNumber} added`);
@@ -502,6 +514,11 @@ export default function SchematicEditor({
         scale: scale.toFixed(3),
         aspectRatio: (canvasWidth / canvasHeight).toFixed(2)
       });
+      
+      // Store original image dimensions for region coordinate conversion
+      (canvas as any).originalImageWidth = imgWidth;
+      (canvas as any).originalImageHeight = imgHeight;
+      (canvas as any).displayScale = scale;
       
       canvas.setDimensions({ width: canvasWidth, height: canvasHeight });
       
@@ -1377,6 +1394,12 @@ export default function SchematicEditor({
         
         for (let i = 0; i < drawnRegions.length; i++) {
           const region = drawnRegions[i];
+          console.log(`🔍 Scanning region ${i + 1}:`, {
+            x: region.x.toFixed(2) + '%',
+            y: region.y.toFixed(2) + '%',
+            width: region.width.toFixed(2) + '%',
+            height: region.height.toFixed(2) + '%'
+          });
           toast.info(`Scanning region ${i + 1} of ${drawnRegions.length}...`);
           
           try {

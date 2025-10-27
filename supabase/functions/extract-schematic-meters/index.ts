@@ -93,11 +93,25 @@ Return ONLY a valid JSON object with these exact keys.
 NO markdown, NO explanations.
 Example: {"meter_number":"DB-01A","name":"VACANT","area":"187m²","rating":"150A TP","cable_specification":"4C x 95mm² ALU ECC CABLE","serial_number":"35779383","ct_type":"150/5A"}`;
     } else if (mode === 'extract-region') {
+      console.log('🎯 Extract-region mode:', {
+        region: {
+          x: `${region.x.toFixed(2)}%`,
+          y: `${region.y.toFixed(2)}%`,
+          width: `${region.width.toFixed(2)}%`,
+          height: `${region.height.toFixed(2)}%`
+        }
+      });
+      
       promptText = `You are an expert electrical engineer extracting meter label information from a distribution board schematic with 100% fidelity to the original formatting.
 
 FOCUS AREA: Extract data ONLY from the highlighted region at position:
-- Left: ${region.x}%, Top: ${region.y}%
-- Width: ${region.width}%, Height: ${region.height}%
+- Left edge at: ${region.x.toFixed(1)}% from the left side of the image
+- Top edge at: ${region.y.toFixed(1)}% from the top of the image
+- Region width: ${region.width.toFixed(1)}% of image width
+- Region height: ${region.height.toFixed(1)}% of image height
+
+CRITICAL: This means you should ONLY look at the rectangular area starting at (${region.x.toFixed(1)}%, ${region.y.toFixed(1)}%) with dimensions ${region.width.toFixed(1)}% × ${region.height.toFixed(1)}%. 
+Completely IGNORE all text, labels, and data outside this specific rectangular region.
 
 IMPORTANT: Look ONLY within this rectangular region. Ignore all text and labels outside this area.
 
