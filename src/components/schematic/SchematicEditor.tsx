@@ -1624,7 +1624,7 @@ export default function SchematicEditor({
           </Badge>
         </div>
         
-        {/* Bottom row - Meters */}
+        {/* Middle row - Meters */}
         <div className="flex gap-3 flex-wrap items-center">
           <div className="text-xs font-medium text-muted-foreground mr-2 flex items-center">Meters:</div>
           
@@ -1664,25 +1664,6 @@ export default function SchematicEditor({
             Other
           </Badge>
           
-          {extractedMeters.length > 0 && (
-            <>
-              <div className="w-px h-6 bg-border mx-2" />
-              <div className="text-xs font-medium text-muted-foreground mr-2 flex items-center">AI Extracted:</div>
-              <Badge variant="outline">
-                <div className="w-3 h-3 rounded-full bg-[#dc2626] border-2 border-[#dc2626] mr-2" />
-                Unconfirmed (Click to Verify)
-              </Badge>
-              <Badge variant="outline">
-                <div className="w-3 h-3 rounded-full bg-[#f59e0b] border-2 border-[#f59e0b] mr-2" />
-                Needs Review
-              </Badge>
-              <Badge variant="outline">
-                <div className="w-3 h-3 rounded-full bg-[#16a34a] border-2 border-[#16a34a] mr-2" />
-                Confirmed
-              </Badge>
-            </>
-          )}
-          
           <div className="flex-1" />
           
           {/* PDF Controls */}
@@ -1701,6 +1682,25 @@ export default function SchematicEditor({
             </Button>
           </div>
         </div>
+        
+        {/* Bottom row - Extracted Meters Status */}
+        {extractedMeters.length > 0 && (
+          <div className="flex gap-3 flex-wrap items-center">
+            <div className="text-xs font-medium text-muted-foreground mr-2 flex items-center">Extracted:</div>
+            <Badge variant="outline">
+              <div className="w-3 h-3 rounded-full bg-[#dc2626] border-2 border-[#dc2626] mr-2" />
+              Unconfirmed (Click to Verify)
+            </Badge>
+            <Badge variant="outline">
+              <div className="w-3 h-3 rounded-full bg-[#f59e0b] border-2 border-[#f59e0b] mr-2" />
+              Needs Review
+            </Badge>
+            <Badge variant="outline">
+              <div className="w-3 h-3 rounded-full bg-[#16a34a] border-2 border-[#16a34a] mr-2" />
+              Confirmed
+            </Badge>
+          </div>
+        )}
       </div>
 
       <div className="border border-border rounded-lg overflow-hidden shadow-lg">
