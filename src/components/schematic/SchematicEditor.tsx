@@ -719,13 +719,16 @@ export default function SchematicEditor({
 
       const textElements: Text[] = [];
       // Calculate font size based on card height for better scaling
-      // Reduce font size to fit smaller rectangles better
-      const fontSize = Math.max(6, Math.min(10, rowHeight * 0.35));
+      // Further reduce font size for smaller rectangles
+      const fontSize = Math.max(5, Math.min(8, rowHeight * 0.3));
+      
+      // Make first column narrower - just enough for labels
+      const labelColumnWidth = 35; // Reduced from 50 to 35
       
       // Calculate base positions based on origin type
-      const baseLeftOffset = useTopLeftOrigin ? 5 * scaleX : (-(cardWidth * scaleX) / 2 + 5 * scaleX);
-      const baseTopOffset = useTopLeftOrigin ? 3 * scaleY : (-(cardHeight * scaleY) / 2 + 3 * scaleY);
-      const valueLeftOffset = useTopLeftOrigin ? 55 * scaleX : (-(cardWidth * scaleX) / 2 + 55 * scaleX);
+      const baseLeftOffset = useTopLeftOrigin ? 3 * scaleX : (-(cardWidth * scaleX) / 2 + 3 * scaleX);
+      const baseTopOffset = useTopLeftOrigin ? 2 * scaleY : (-(cardHeight * scaleY) / 2 + 2 * scaleY);
+      const valueLeftOffset = useTopLeftOrigin ? (labelColumnWidth + 3) * scaleX : (-(cardWidth * scaleX) / 2 + (labelColumnWidth + 3) * scaleX);
       
       fields.forEach((field, i) => {
         // Label text (left column)
@@ -781,7 +784,7 @@ export default function SchematicEditor({
       });
 
       // Vertical separator between label and value columns
-      const vertX = useTopLeftOrigin ? x + 50 * scaleX : x - (cardWidth * scaleX) / 2 + 50 * scaleX;
+      const vertX = useTopLeftOrigin ? x + labelColumnWidth * scaleX : x - (cardWidth * scaleX) / 2 + labelColumnWidth * scaleX;
       const vertY1 = useTopLeftOrigin ? y : y - (cardHeight * scaleY) / 2;
       const vertY2 = useTopLeftOrigin ? y + cardHeight * scaleY : y + (cardHeight * scaleY) / 2;
       
@@ -804,9 +807,9 @@ export default function SchematicEditor({
         const scaleY = background.scaleY || 1;
         
         // Calculate offsets based on origin type
-        const newBaseLeftOffset = useTopLeftOrigin ? 5 * scaleX : (-(cardWidth * scaleX) / 2 + 5 * scaleX);
-        const newBaseTopOffset = useTopLeftOrigin ? 3 * scaleY : (-(cardHeight * scaleY) / 2 + 3 * scaleY);
-        const newValueLeftOffset = useTopLeftOrigin ? 55 * scaleX : (-(cardWidth * scaleX) / 2 + 55 * scaleX);
+        const newBaseLeftOffset = useTopLeftOrigin ? 3 * scaleX : (-(cardWidth * scaleX) / 2 + 3 * scaleX);
+        const newBaseTopOffset = useTopLeftOrigin ? 2 * scaleY : (-(cardHeight * scaleY) / 2 + 2 * scaleY);
+        const newValueLeftOffset = useTopLeftOrigin ? (labelColumnWidth + 3) * scaleX : (-(cardWidth * scaleX) / 2 + (labelColumnWidth + 3) * scaleX);
         
         // Move and scale all text elements with the background
         textElements.forEach((text, i) => {
@@ -825,7 +828,7 @@ export default function SchematicEditor({
             // Update line positions with scale
             if (i === textElements.length - 1) {
               // Vertical separator
-              const vertX = useTopLeftOrigin ? newLeft + 50 * scaleX : newLeft - (cardWidth * scaleX) / 2 + 50 * scaleX;
+              const vertX = useTopLeftOrigin ? newLeft + labelColumnWidth * scaleX : newLeft - (cardWidth * scaleX) / 2 + labelColumnWidth * scaleX;
               const vertY1 = useTopLeftOrigin ? newTop : newTop - (cardHeight * scaleY) / 2;
               const vertY2 = useTopLeftOrigin ? newTop + cardHeight * scaleY : newTop + (cardHeight * scaleY) / 2;
               text.set({
@@ -853,7 +856,7 @@ export default function SchematicEditor({
         });
         
         // Update vertical separator
-        const newVertX = useTopLeftOrigin ? newLeft + 50 * scaleX : newLeft - (cardWidth * scaleX) / 2 + 50 * scaleX;
+        const newVertX = useTopLeftOrigin ? newLeft + labelColumnWidth * scaleX : newLeft - (cardWidth * scaleX) / 2 + labelColumnWidth * scaleX;
         const newVertY1 = useTopLeftOrigin ? newTop : newTop - (cardHeight * scaleY) / 2;
         const newVertY2 = useTopLeftOrigin ? newTop + cardHeight * scaleY : newTop + (cardHeight * scaleY) / 2;
         
