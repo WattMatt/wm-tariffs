@@ -598,7 +598,7 @@ export default function SchematicEditor({
       const cardHeight = 140;
       const rowHeight = 20;
       
-      // Background rectangle with scaling enabled
+      // Background rectangle with scaling enabled - ALWAYS moveable
       const background = new Rect({
         left: x,
         top: y,
@@ -607,9 +607,9 @@ export default function SchematicEditor({
         fill: fillColor,
         stroke: borderColor,
         strokeWidth: 3, // Thicker border for visibility
-        hasControls: activeTool === 'move',
-        selectable: activeTool === 'move',
-        hoverCursor: 'pointer',
+        hasControls: true, // Always allow controls
+        selectable: true, // Always selectable for dragging
+        hoverCursor: 'move',
         originX: 'center',
         originY: 'center',
         lockRotation: true,
@@ -625,18 +625,16 @@ export default function SchematicEditor({
         meterData: meter 
       });
       
-      // Add click handler to open confirmation dialog
-      background.on('mousedown', () => {
-        if (activeTool === 'select') {
-          const objectData = background.get('data') as any;
-          console.log(`🎯 Clicked meter:`, {
-            index: objectData.index,
-            meterNumber: objectData.meterNumber,
-            capturedIndex
-          });
-          setSelectedMeterIndex(objectData.index);
-          setIsConfirmMeterDialogOpen(true);
-        }
+      // Add double-click handler to open edit dialog
+      background.on('mousedblclick', () => {
+        const objectData = background.get('data') as any;
+        console.log(`🎯 Double-clicked meter:`, {
+          index: objectData.index,
+          meterNumber: objectData.meterNumber,
+          capturedIndex
+        });
+        setSelectedMeterIndex(objectData.index);
+        setIsConfirmMeterDialogOpen(true);
       });
 
       // Create table rows with labels and values
@@ -712,82 +710,83 @@ export default function SchematicEditor({
         }
       );
       
-      // Handle dragging for extracted meters
-      if (activeTool === 'move') {
-        const updateTextPositions = () => {
-          const newLeft = background.left || x;
-          const newTop = background.top || y;
-          const scaleX = background.scaleX || 1;
-          const scaleY = background.scaleY || 1;
+      
+      // Handle dragging for extracted meters - ALWAYS enabled
+      const updateTextPositions = () => {
+        const newLeft = background.left || x;
+        const newTop = background.top || y;
+        const scaleX = background.scaleX || 1;
+        const scaleY = background.scaleY || 1;
+        
+        // Move and scale all text elements with the background
+        textElements.forEach((text, i) => {
+          const fieldIndex = Math.floor(i / 2);
+          const isLabel = i % 2 === 0;
+          const isSeparator = text instanceof Line;
           
-          // Move and scale all text elements with the background
-          textElements.forEach((text, i) => {
-            const fieldIndex = Math.floor(i / 2);
-            const isLabel = i % 2 === 0;
-            const isSeparator = text instanceof Line;
-            
-            if (!isSeparator) {
+          if (!isSeparator) {
+            text.set({
+              left: newLeft - (cardWidth * scaleX) / 2 + (isLabel ? 5 : 55) * scaleX,
+              top: newTop - (cardHeight * scaleY) / 2 + fieldIndex * rowHeight * scaleY + 3 * scaleY,
+              scaleX: scaleX,
+              scaleY: scaleY,
+            });
+          } else {
+            // Update line positions with scale
+            if (i === textElements.length - 1) {
+              // Vertical separator
               text.set({
-                left: newLeft - (cardWidth * scaleX) / 2 + (isLabel ? 5 : 55) * scaleX,
-                top: newTop - (cardHeight * scaleY) / 2 + fieldIndex * rowHeight * scaleY + 3 * scaleY,
-                scaleX: scaleX,
-                scaleY: scaleY,
+                x1: newLeft - (cardWidth * scaleX) / 2 + 50 * scaleX,
+                y1: newTop - (cardHeight * scaleY) / 2,
+                x2: newLeft - (cardWidth * scaleX) / 2 + 50 * scaleX,
+                y2: newTop + (cardHeight * scaleY) / 2,
               });
             } else {
-              // Update line positions with scale
-              if (i === textElements.length - 1) {
-                // Vertical separator
-                text.set({
-                  x1: newLeft - (cardWidth * scaleX) / 2 + 50 * scaleX,
-                  y1: newTop - (cardHeight * scaleY) / 2,
-                  x2: newLeft - (cardWidth * scaleX) / 2 + 50 * scaleX,
-                  y2: newTop + (cardHeight * scaleY) / 2,
-                });
-              } else {
-                // Horizontal separators
-                const separatorFieldIndex = Math.floor((i - 1) / 3);
-                text.set({
-                  x1: newLeft - (cardWidth * scaleX) / 2,
-                  y1: newTop - (cardHeight * scaleY) / 2 + (separatorFieldIndex + 1) * rowHeight * scaleY,
-                  x2: newLeft + (cardWidth * scaleX) / 2,
-                  y2: newTop - (cardHeight * scaleY) / 2 + (separatorFieldIndex + 1) * rowHeight * scaleY,
-                });
-              }
+              // Horizontal separators
+              const separatorFieldIndex = Math.floor((i - 1) / 3);
+              text.set({
+                x1: newLeft - (cardWidth * scaleX) / 2,
+                y1: newTop - (cardHeight * scaleY) / 2 + (separatorFieldIndex + 1) * rowHeight * scaleY,
+                x2: newLeft + (cardWidth * scaleX) / 2,
+                y2: newTop - (cardHeight * scaleY) / 2 + (separatorFieldIndex + 1) * rowHeight * scaleY,
+              });
             }
-          });
-          
-          verticalSeparator.set({
-            x1: newLeft - (cardWidth * scaleX) / 2 + 50 * scaleX,
-            y1: newTop - (cardHeight * scaleY) / 2,
-            x2: newLeft - (cardWidth * scaleX) / 2 + 50 * scaleX,
-            y2: newTop + (cardHeight * scaleY) / 2,
-          });
-          
-          fabricCanvas.renderAll();
-        };
-
-        background.on('moving', updateTextPositions);
-        background.on('scaling', updateTextPositions);
-
-        background.on('modified', () => {
-          // Update position and scale in extracted meters state
-          const newX = ((background.left || 0) / canvasWidth) * 100;
-          const newY = ((background.top || 0) / canvasHeight) * 100;
-          const scaleX = background.scaleX || 1;
-          const scaleY = background.scaleY || 1;
-          
-          const updatedMeters = [...extractedMeters];
-          updatedMeters[capturedIndex] = {
-            ...updatedMeters[capturedIndex],
-            position: { x: newX, y: newY, scaleX, scaleY }
-          };
-          setExtractedMeters(updatedMeters);
-          if (onExtractedMetersUpdate) {
-            onExtractedMetersUpdate(updatedMeters);
           }
-          toast.success('Meter card updated');
         });
-      }
+        
+        verticalSeparator.set({
+          x1: newLeft - (cardWidth * scaleX) / 2 + 50 * scaleX,
+          y1: newTop - (cardHeight * scaleY) / 2,
+          x2: newLeft - (cardWidth * scaleX) / 2 + 50 * scaleX,
+          y2: newTop + (cardHeight * scaleY) / 2,
+        });
+        
+        fabricCanvas.renderAll();
+      };
+
+      background.on('moving', updateTextPositions);
+      background.on('scaling', updateTextPositions);
+
+      background.on('modified', () => {
+        // Update position and scale in extracted meters state
+        const newX = ((background.left || 0) / canvasWidth) * 100;
+        const newY = ((background.top || 0) / canvasHeight) * 100;
+        const scaleX = background.scaleX || 1;
+        const scaleY = background.scaleY || 1;
+        
+        const updatedMeters = [...extractedMeters];
+        updatedMeters[capturedIndex] = {
+          ...updatedMeters[capturedIndex],
+          position: { x: newX, y: newY },
+          scale_x: scaleX,
+          scale_y: scaleY
+        };
+        setExtractedMeters(updatedMeters);
+        if (onExtractedMetersUpdate) {
+          onExtractedMetersUpdate(updatedMeters);
+        }
+        toast.success('Meter position updated');
+      });
 
       fabricCanvas.add(background);
       textElements.forEach(el => fabricCanvas.add(el));
