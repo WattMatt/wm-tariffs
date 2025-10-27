@@ -77,6 +77,7 @@ export default function SchematicEditor({
   const [meters, setMeters] = useState<any[]>([]);
   const [selectedMeterForConnection, setSelectedMeterForConnection] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [extractionProgress, setExtractionProgress] = useState<{ current: number; total: number } | null>(null);
   const [isAddMeterDialogOpen, setIsAddMeterDialogOpen] = useState(false);
   const [pendingMeterPosition, setPendingMeterPosition] = useState<{ x: number; y: number } | null>(null);
   const [isCsvDialogOpen, setIsCsvDialogOpen] = useState(false);
@@ -1600,8 +1601,14 @@ export default function SchematicEditor({
         let successCount = 0;
         let errorCount = 0;
         
+        // Initialize progress tracking
+        setExtractionProgress({ current: 0, total: drawnRegions.length });
+        
         for (let i = 0; i < drawnRegions.length; i++) {
           const region = drawnRegions[i];
+          
+          // Update progress
+          setExtractionProgress({ current: i + 1, total: drawnRegions.length });
           
           // Ensure imageWidth and imageHeight are present (they might be missing from old regions)
           const imageWidth = region.imageWidth || (fabricCanvas as any)?.originalImageWidth || 2000;
@@ -1696,6 +1703,7 @@ export default function SchematicEditor({
       toast.error('Scan failed');
     } finally {
       setIsSaving(false);
+      setExtractionProgress(null); // Reset progress
     }
   };
 
@@ -1828,7 +1836,12 @@ export default function SchematicEditor({
           )}
           <Button onClick={handleScanAll} disabled={!isEditMode || isSaving} variant="outline">
             <Scan className="w-4 h-4 mr-2" />
-            {isSaving ? 'Scanning...' : (drawnRegions.length > 0 ? 'Scan All Regions' : 'Scan All Meters')}
+            {extractionProgress 
+              ? `${extractionProgress.current}/${extractionProgress.total} processed` 
+              : isSaving 
+                ? 'Scanning...' 
+                : (drawnRegions.length > 0 ? 'Scan All Regions' : 'Scan All Meters')
+            }
           </Button>
           <Button
             variant={activeTool === "draw" ? "default" : "outline"}
