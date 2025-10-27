@@ -287,58 +287,52 @@ export default function SiteDetail() {
           </Card>
         </div>
 
-        {(site.address || site.council_connection_point) && (
-          <Card className="border-border/50">
-            <CardHeader>
-              <CardTitle className="text-base">Site Information</CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {site.address && (
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">Address</p>
-                  <p className="font-medium">{site.address}</p>
-                </div>
-              )}
-              {site.council_connection_point && (
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">Council Connection Point</p>
-                  <p className="font-mono font-medium">{site.council_connection_point}</p>
-                </div>
-              )}
-              {site.supply_authorities && (
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">Supply Authority</p>
-                  <p className="font-medium">{site.supply_authorities.name}</p>
-                  <p className="text-xs text-muted-foreground">{site.supply_authorities.region}</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
         <Card className="border-border/50">
           <CardHeader>
-            <CardTitle className="text-lg">Site Sections</CardTitle>
-            <CardDescription>Select a section to view its details</CardDescription>
+            <CardTitle className="text-base">Site Information</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="flex gap-3">
-              <Button
-                variant={selectedSection === 'metering' ? 'default' : 'outline'}
-                onClick={() => setSelectedSection('metering')}
-                className="gap-2"
-              >
-                <Zap className="w-4 h-4" />
-                Metering
-              </Button>
-              <Button
-                variant={selectedSection === 'solar' ? 'default' : 'outline'}
-                onClick={() => setSelectedSection('solar')}
-                className="gap-2"
-              >
-                <Sun className="w-4 h-4" />
-                Solar Generation Report
-              </Button>
+          <CardContent className="space-y-6">
+            {(site.address || site.council_connection_point || site.supply_authorities) && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {site.council_connection_point && (
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">Council Connection Point</p>
+                    <p className="font-mono font-medium">{site.council_connection_point}</p>
+                  </div>
+                )}
+                {site.supply_authorities && (
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">Supply Authority</p>
+                    <p className="font-medium">{site.supply_authorities.name}</p>
+                    <p className="text-xs text-muted-foreground">{site.supply_authorities.region}</p>
+                  </div>
+                )}
+              </div>
+            )}
+            
+            <div className="space-y-3 pt-2 border-t">
+              <div>
+                <p className="text-sm font-medium mb-2">Site Sections</p>
+                <p className="text-xs text-muted-foreground mb-3">Select a section to view its details</p>
+              </div>
+              <div className="flex gap-3">
+                <Button
+                  variant={selectedSection === 'metering' ? 'default' : 'outline'}
+                  onClick={() => setSelectedSection('metering')}
+                  className="gap-2"
+                >
+                  <Zap className="w-4 h-4" />
+                  Metering
+                </Button>
+                <Button
+                  variant={selectedSection === 'solar' ? 'default' : 'outline'}
+                  onClick={() => setSelectedSection('solar')}
+                  className="gap-2"
+                >
+                  <Sun className="w-4 h-4" />
+                  Solar Generation Report
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
