@@ -39,22 +39,22 @@ interface SchematicLine {
   stroke_width: number;
 }
 
-// Helper function to crop a region from an image and return as data URL
-async function cropRegionToDataUrl(
+// Helper function to crop a region from an image and upload to storage
+async function cropRegionAndUpload(
   imageUrl: string,
   x: number,
   y: number,
   width: number,
   height: number,
   sourceWidth: number,
-  sourceHeight: number
+  sourceHeight: number,
+  schematicId: string
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
     
-    img.onload = () => {
-      // Create an off-screen canvas for cropping
+    img.onload = async () => {
       const cropCanvas = document.createElement('canvas');
       cropCanvas.width = width;
       cropCanvas.height = height;
@@ -65,18 +65,46 @@ async function cropRegionToDataUrl(
         return;
       }
       
-      // Draw only the specified region from the source image
       ctx.drawImage(
         img,
-        x, y,           // Source x, y
-        width, height,  // Source width, height  
-        0, 0,           // Destination x, y
-        width, height   // Destination width, height
+        x, y,
+        width, height,
+        0, 0,
+        width, height
       );
       
-      // Convert to data URL
-      const dataUrl = cropCanvas.toDataURL('image/png');
-      resolve(dataUrl);
+      // Convert to blob for upload
+      cropCanvas.toBlob(async (blob) => {
+        if (!blob) {
+          reject(new Error('Failed to create blob'));
+          return;
+        }
+        
+        try {
+          // Upload to Supabase Storage
+          const fileName = `${schematicId}_${Date.now()}_${Math.round(x)}_${Math.round(y)}.png`;
+          const { data, error } = await supabase.storage
+            .from('meter-snippets')
+            .upload(fileName, blob, {
+              contentType: 'image/png',
+              upsert: false
+            });
+          
+          if (error) {
+            reject(error);
+            return;
+          }
+          
+          // Get public URL
+          const { data: { publicUrl } } = supabase.storage
+            .from('meter-snippets')
+            .getPublicUrl(fileName);
+          
+          resolve(publicUrl);
+        } catch (err) {
+          reject(err);
+        }
+      }, 'image/png');
     };
     
     img.onerror = () => {
@@ -1655,16 +1683,15 @@ export default function SchematicEditor({
           toast.info(`Scanning region ${i + 1} of ${drawnRegions.length}...`);
           
           try {
-            // Create a cropped image of just this region to send to AI
-            // This ensures the AI only sees the exact selected area
-            const croppedImageUrl = await cropRegionToDataUrl(
+            const croppedImageUrl = await cropRegionAndUpload(
               schematicUrl,
               region.x,
               region.y,
               region.width,
               region.height,
               imageWidth,
-              imageHeight
+              imageHeight,
+              schematicId
             );
             
             const { data, error } = await supabase.functions.invoke('extract-schematic-meters', {
