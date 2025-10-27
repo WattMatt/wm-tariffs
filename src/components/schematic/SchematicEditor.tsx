@@ -346,7 +346,7 @@ export default function SchematicEditor({
         canvas.zoomToPoint(pointer, zoom);
         setZoom(zoom);
       } else {
-        // Pan using viewport transform directly
+        // Pan using the same approach as zoom
         const vpt = canvas.viewportTransform;
         if (vpt) {
           if (e.shiftKey) {
@@ -357,11 +357,10 @@ export default function SchematicEditor({
             vpt[5] -= e.deltaY;
           }
           canvas.setViewportTransform(vpt);
+          canvas.calcViewportBoundaries();
+          canvas.renderAll();
         }
       }
-      
-      // Force synchronous render like zoomToPoint does
-      canvas.renderAll();
     });
 
     // Panning variables (consolidated single implementation)
@@ -587,10 +586,9 @@ export default function SchematicEditor({
           vpt[4] += deltaX;
           vpt[5] += deltaY;
           canvas.setViewportTransform(vpt);
+          canvas.calcViewportBoundaries();
+          canvas.renderAll();
         }
-        
-        // Force synchronous render like zoomToPoint does
-        canvas.renderAll();
         
         lastX = evt.clientX;
         lastY = evt.clientY;
