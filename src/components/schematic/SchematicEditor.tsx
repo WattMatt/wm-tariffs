@@ -806,7 +806,7 @@ export default function SchematicEditor({
       const canvasWidth = fabricCanvas.getWidth();
       const canvasHeight = fabricCanvas.getHeight();
       
-      let x, y, cardWidth, cardHeight, useTopLeftOrigin;
+      let x, y, cardWidth, cardHeight;
       
       // Use extractedRegion for absolute positioning if available
       if (meter.extractedRegion) {
@@ -815,21 +815,17 @@ export default function SchematicEditor({
         y = (meter.extractedRegion.y / 100) * canvasHeight;
         cardWidth = (meter.extractedRegion.width / 100) * canvasWidth;
         cardHeight = (meter.extractedRegion.height / 100) * canvasHeight;
-        useTopLeftOrigin = true;
       } else if (meter.position) {
-        // Fallback to position if no region data
-        x = (meter.position.x / 100) * canvasWidth;
-        y = (meter.position.y / 100) * canvasHeight;
+        // Fallback to position if no region data - center origin
+        x = (meter.position.x / 100) * canvasWidth - 100; // Center to top-left conversion
+        y = (meter.position.y / 100) * canvasHeight - 70;
         cardWidth = 200;
         cardHeight = 140;
-        useTopLeftOrigin = false;
       } else {
         return;
       }
       
-      const scaleX = meter.scale_x || 1.0;
-      const scaleY = meter.scale_y || 1.0;
-      
+      // NO SCALING - use absolute dimensions directly
       let borderColor = '#dc2626';
       let fillColor = '#ffffff';
       
@@ -856,7 +852,7 @@ export default function SchematicEditor({
       
       const rowHeight = cardHeight / 7;
       
-      // Background rectangle with scaling enabled - Only moveable in edit mode
+      // Background rectangle - simple top-left positioning, NO SCALING
       const background = new Rect({
         left: x,
         top: y,
@@ -864,15 +860,15 @@ export default function SchematicEditor({
         height: cardHeight,
         fill: fillColor,
         stroke: borderColor,
-        strokeWidth: strokeWidth, // Variable width for selection highlight
-        hasControls: isEditMode, // Only allow controls in edit mode
-        selectable: isEditMode, // Only selectable in edit mode
+        strokeWidth: strokeWidth,
+        hasControls: isEditMode,
+        selectable: isEditMode,
         hoverCursor: isEditMode ? 'move' : 'pointer',
-        originX: useTopLeftOrigin ? 'left' : 'center',  // Top-left for extracted regions
-        originY: useTopLeftOrigin ? 'top' : 'center',   // Top-left for extracted regions
+        originX: 'left',  // Always use top-left origin
+        originY: 'top',
         lockRotation: true,
-        scaleX: scaleX,
-        scaleY: scaleY,
+        lockScalingX: true,  // Prevent scaling
+        lockScalingY: true,
       });
 
       // Store the actual meter data and index directly in the fabric object
@@ -912,59 +908,46 @@ export default function SchematicEditor({
       ];
 
       const textElements: Text[] = [];
-      // Calculate font size based on card height - make it larger for readability
-      const fontSize = Math.max(8, Math.min(16, rowHeight * 0.5));
+      // Calculate font size based on card height - larger for readability
+      const fontSize = Math.max(10, Math.min(14, rowHeight * 0.6));
       
-      // Make first column narrower - just enough for labels
-      const labelColumnWidth = Math.max(40, cardWidth * 0.25);
-      
-      // Calculate base positions based on origin type
-      const baseLeftOffset = useTopLeftOrigin ? 3 * scaleX : (-(cardWidth * scaleX) / 2 + 3 * scaleX);
-      const baseTopOffset = useTopLeftOrigin ? 2 * scaleY : (-(cardHeight * scaleY) / 2 + 2 * scaleY);
-      const valueLeftOffset = useTopLeftOrigin ? (labelColumnWidth + 3) * scaleX : (-(cardWidth * scaleX) / 2 + (labelColumnWidth + 3) * scaleX);
+      // Label column width
+      const labelColumnWidth = Math.max(45, cardWidth * 0.3);
+      const padding = 4;
       
       fields.forEach((field, i) => {
         // Label text (left column)
         const labelText = new Text(field.label, {
-          left: x + baseLeftOffset,
-          top: y + baseTopOffset + i * rowHeight * scaleY,
+          left: x + padding,
+          top: y + padding + i * rowHeight,
           fontSize: fontSize,
           fill: '#000',
           fontWeight: 'bold',
           fontFamily: 'Arial',
           selectable: false,
           evented: false,
-          scaleX: scaleX,
-          scaleY: scaleY,
         });
         textElements.push(labelText);
 
-        // Value text (right column) - adjust truncation based on card width
-        const maxValueLength = Math.floor(cardWidth / 8);
+        // Value text (right column)
+        const maxValueLength = Math.floor((cardWidth - labelColumnWidth - padding * 3) / (fontSize * 0.6));
         const valueDisplay = field.value.length > maxValueLength ? field.value.substring(0, maxValueLength) + '...' : field.value;
         const valueText = new Text(valueDisplay, {
-          left: x + valueLeftOffset,
-          top: y + baseTopOffset + i * rowHeight * scaleY,
+          left: x + labelColumnWidth + padding,
+          top: y + padding + i * rowHeight,
           fontSize: fontSize,
           fill: '#000',
           fontFamily: 'Arial',
           selectable: false,
           evented: false,
-          scaleX: scaleX,
-          scaleY: scaleY,
         });
         textElements.push(valueText);
 
         // Horizontal separator line
         if (i < fields.length - 1) {
-          const separatorY = useTopLeftOrigin 
-            ? y + (i + 1) * rowHeight * scaleY
-            : y - (cardHeight * scaleY) / 2 + (i + 1) * rowHeight * scaleY;
-          const separatorX1 = useTopLeftOrigin ? x : x - (cardWidth * scaleX) / 2;
-          const separatorX2 = useTopLeftOrigin ? x + cardWidth * scaleX : x + (cardWidth * scaleX) / 2;
-          
+          const separatorY = y + (i + 1) * rowHeight;
           const separator = new Line(
-            [separatorX1, separatorY, separatorX2, separatorY],
+            [x, separatorY, x + cardWidth, separatorY],
             {
               stroke: borderColor,
               strokeWidth: 1,
@@ -977,9 +960,9 @@ export default function SchematicEditor({
       });
 
       // Vertical separator between label and value columns
-      const vertX = useTopLeftOrigin ? x + labelColumnWidth * scaleX : x - (cardWidth * scaleX) / 2 + labelColumnWidth * scaleX;
-      const vertY1 = useTopLeftOrigin ? y : y - (cardHeight * scaleY) / 2;
-      const vertY2 = useTopLeftOrigin ? y + cardHeight * scaleY : y + (cardHeight * scaleY) / 2;
+      const vertX = x + labelColumnWidth;
+      const vertY1 = y;
+      const vertY2 = y + cardHeight;
       
       const verticalSeparator = new Line(
         [vertX, vertY1, vertX, vertY2],
@@ -992,24 +975,12 @@ export default function SchematicEditor({
       );
       
       
-      // Handle dragging for extracted meters - ALWAYS enabled
+      // Handle dragging for extracted meters - simple position update
       const updateTextPositions = () => {
         const newLeft = background.left || x;
         const newTop = background.top || y;
-        const newScaleX = background.scaleX || 1;
-        const newScaleY = background.scaleY || 1;
         
-        // Calculate scaled dimensions
-        const scaledWidth = cardWidth * newScaleX;
-        const scaledHeight = cardHeight * newScaleY;
-        const scaledRowHeight = rowHeight * newScaleY;
-        
-        // Calculate offsets based on origin type with NEW scaled dimensions
-        const newBaseLeftOffset = useTopLeftOrigin ? 3 * newScaleX : (-scaledWidth / 2 + 3 * newScaleX);
-        const newBaseTopOffset = useTopLeftOrigin ? 2 * newScaleY : (-scaledHeight / 2 + 2 * newScaleY);
-        const newValueLeftOffset = useTopLeftOrigin ? (labelColumnWidth + 3) * newScaleX : (-scaledWidth / 2 + (labelColumnWidth + 3) * newScaleX);
-        
-        // Move and scale all text elements with the background
+        // Move all text elements with the background (no scaling)
         textElements.forEach((text, i) => {
           const fieldIndex = Math.floor(i / 2);
           const isLabel = i % 2 === 0;
@@ -1017,36 +988,27 @@ export default function SchematicEditor({
           
           if (!isSeparator) {
             text.set({
-              left: newLeft + (isLabel ? newBaseLeftOffset : newValueLeftOffset),
-              top: newTop + newBaseTopOffset + fieldIndex * scaledRowHeight,
-              scaleX: newScaleX,
-              scaleY: newScaleY,
+              left: newLeft + (isLabel ? padding : labelColumnWidth + padding),
+              top: newTop + padding + fieldIndex * rowHeight,
             });
           } else {
-            // Update line positions with scale
+            // Update line positions
             if (i === textElements.length - 1) {
               // Vertical separator
-              const vertX = useTopLeftOrigin ? newLeft + labelColumnWidth * newScaleX : newLeft - scaledWidth / 2 + labelColumnWidth * newScaleX;
-              const vertY1 = useTopLeftOrigin ? newTop : newTop - scaledHeight / 2;
-              const vertY2 = useTopLeftOrigin ? newTop + scaledHeight : newTop + scaledHeight / 2;
               text.set({
-                x1: vertX,
-                y1: vertY1,
-                x2: vertX,
-                y2: vertY2,
+                x1: newLeft + labelColumnWidth,
+                y1: newTop,
+                x2: newLeft + labelColumnWidth,
+                y2: newTop + cardHeight,
               });
             } else {
               // Horizontal separators
               const separatorFieldIndex = Math.floor((i - 1) / 3);
-              const separatorY = useTopLeftOrigin 
-                ? newTop + (separatorFieldIndex + 1) * scaledRowHeight
-                : newTop - scaledHeight / 2 + (separatorFieldIndex + 1) * scaledRowHeight;
-              const separatorX1 = useTopLeftOrigin ? newLeft : newLeft - scaledWidth / 2;
-              const separatorX2 = useTopLeftOrigin ? newLeft + scaledWidth : newLeft + scaledWidth / 2;
+              const separatorY = newTop + (separatorFieldIndex + 1) * rowHeight;
               text.set({
-                x1: separatorX1,
+                x1: newLeft,
                 y1: separatorY,
-                x2: separatorX2,
+                x2: newLeft + cardWidth,
                 y2: separatorY,
               });
             }
@@ -1054,36 +1016,27 @@ export default function SchematicEditor({
         });
         
         // Update vertical separator
-        const newVertX = useTopLeftOrigin ? newLeft + labelColumnWidth * newScaleX : newLeft - scaledWidth / 2 + labelColumnWidth * newScaleX;
-        const newVertY1 = useTopLeftOrigin ? newTop : newTop - scaledHeight / 2;
-        const newVertY2 = useTopLeftOrigin ? newTop + scaledHeight : newTop + scaledHeight / 2;
-        
         verticalSeparator.set({
-          x1: newVertX,
-          y1: newVertY1,
-          x2: newVertX,
-          y2: newVertY2,
+          x1: newLeft + labelColumnWidth,
+          y1: newTop,
+          x2: newLeft + labelColumnWidth,
+          y2: newTop + cardHeight,
         });
         
         fabricCanvas.renderAll();
       };
 
       background.on('moving', updateTextPositions);
-      background.on('scaling', updateTextPositions);
 
       background.on('modified', () => {
-        // Update position and scale in extracted meters state
+        // Update position in extracted meters state (no scaling anymore)
         const newX = ((background.left || 0) / canvasWidth) * 100;
         const newY = ((background.top || 0) / canvasHeight) * 100;
-        const scaleX = background.scaleX || 1;
-        const scaleY = background.scaleY || 1;
         
         const updatedMeters = [...extractedMeters];
         updatedMeters[capturedIndex] = {
           ...updatedMeters[capturedIndex],
           position: { x: newX, y: newY },
-          scale_x: scaleX,
-          scale_y: scaleY
         };
         setExtractedMeters(updatedMeters);
         if (onExtractedMetersUpdate) {
