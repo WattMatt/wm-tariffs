@@ -323,38 +323,37 @@ export default function SchematicEditor({
           canvas.renderAll();
           
           // Calculate region in ABSOLUTE pixels of the original image
-          // This matches how tariff extraction does it - convert from displayed canvas coordinates
-          // to original image pixel coordinates
+          // canvas.getPointer() returns viewport coordinates, so we need to transform them
+          // to canvas space first (accounting for pan/zoom), then scale to original image size
           const originalImageWidth = (canvas as any).originalImageWidth || canvasWidth;
           const originalImageHeight = (canvas as any).originalImageHeight || canvasHeight;
-          const displayScale = (canvas as any).displayScale || 1;
           
-          // First, inverse transform from viewport space to image space (accounts for pan/zoom)
+          // Get viewport transform and apply inverse to convert viewport coords to canvas coords
           const vpt = canvas.viewportTransform!;
           const inverted = util.invertTransform(vpt);
           
-          // Transform the four corners of the rectangle
-          const topLeft = util.transformPoint({ x: left, y: top }, inverted);
-          const bottomRight = util.transformPoint({ x: left + width, y: top + height }, inverted);
+          // Transform all corners of the rectangle from viewport to canvas space
+          const topLeftCanvas = util.transformPoint({ x: left, y: top }, inverted);
+          const bottomRightCanvas = util.transformPoint({ x: left + width, y: top + height }, inverted);
           
-          // Calculate dimensions in image space
-          const imageSpaceX = topLeft.x;
-          const imageSpaceY = topLeft.y;
-          const imageSpaceWidth = bottomRight.x - topLeft.x;
-          const imageSpaceHeight = bottomRight.y - topLeft.y;
+          // Calculate dimensions in canvas space (after removing pan/zoom effects)
+          const canvasX = topLeftCanvas.x;
+          const canvasY = topLeftCanvas.y;
+          const canvasRegionWidth = bottomRightCanvas.x - topLeftCanvas.x;
+          const canvasRegionHeight = bottomRightCanvas.y - topLeftCanvas.y;
           
-          // Now convert from canvas display size to original image pixel coordinates
-          const scaleX = originalImageWidth / canvasWidth;
-          const scaleY = originalImageHeight / canvasHeight;
+          // Now scale from canvas space to original image pixel space
+          const scaleX = originalImageWidth / canvas.getWidth();
+          const scaleY = originalImageHeight / canvas.getHeight();
           
           const regionId = (rect as any).regionId;
           const newRegion = {
             id: regionId,
             // Store as absolute pixels in original image space
-            x: imageSpaceX * scaleX,
-            y: imageSpaceY * scaleY,
-            width: imageSpaceWidth * scaleX,
-            height: imageSpaceHeight * scaleY,
+            x: canvasX * scaleX,
+            y: canvasY * scaleY,
+            width: canvasRegionWidth * scaleX,
+            height: canvasRegionHeight * scaleY,
             imageWidth: originalImageWidth,
             imageHeight: originalImageHeight,
             // Also store display coordinates for canvas rendering
@@ -367,14 +366,16 @@ export default function SchematicEditor({
           };
           
           console.log('🎯 Region coordinates:', {
-            display: { left, top, width, height },
+            viewport: { left, top, width, height },
+            canvas: { x: canvasX, y: canvasY, width: canvasRegionWidth, height: canvasRegionHeight },
             original: {
               x: Math.round(newRegion.x),
               y: Math.round(newRegion.y),
               width: Math.round(newRegion.width),
               height: Math.round(newRegion.height)
             },
-            imageSize: { w: originalImageWidth, h: originalImageHeight }
+            imageSize: { w: originalImageWidth, h: originalImageHeight },
+            vpt: vpt
           });
           
           setDrawnRegions(prev => [...prev, newRegion]);
