@@ -346,7 +346,7 @@ export default function SchematicEditor({
         canvas.zoomToPoint(pointer, zoom);
         setZoom(zoom);
       } else {
-        // Use built-in relativePan method (equivalent to zoomToPoint for panning)
+        // Use built-in relativePan method
         if (e.shiftKey) {
           // SHIFT+Scroll: Pan horizontally
           canvas.relativePan(new Point(-e.deltaY, 0));
@@ -354,6 +354,15 @@ export default function SchematicEditor({
           // Regular Scroll: Pan vertically
           canvas.relativePan(new Point(0, -e.deltaY));
         }
+        
+        // Update controls AFTER render completes
+        requestAnimationFrame(() => {
+          const activeObj = canvas.getActiveObject();
+          if (activeObj) {
+            activeObj.setCoords();
+            canvas.requestRenderAll();
+          }
+        });
       }
     });
 
@@ -575,8 +584,17 @@ export default function SchematicEditor({
         const deltaX = evt.clientX - lastX;
         const deltaY = evt.clientY - lastY;
         
-        // Use built-in relativePan method (equivalent to zoomToPoint for panning)
+        // Use built-in relativePan method
         canvas.relativePan(new Point(deltaX, deltaY));
+        
+        // Update controls AFTER render completes
+        requestAnimationFrame(() => {
+          const activeObj = canvas.getActiveObject();
+          if (activeObj) {
+            activeObj.setCoords();
+            canvas.requestRenderAll();
+          }
+        });
         
         lastX = evt.clientX;
         lastY = evt.clientY;
