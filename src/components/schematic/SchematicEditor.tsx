@@ -1156,7 +1156,7 @@ export default function SchematicEditor({
         const labelText = new Text(field.label, {
           left: x - (cardWidth * savedScaleX) / 2 + 4 * savedScaleX,
           top: y - (cardHeight * savedScaleY) / 2 + i * rowHeight * savedScaleY + 2 * savedScaleY,
-          fontSize: 10.5,
+          fontSize: 8,
           fill: '#000000',
           fontWeight: '600',
           fontFamily: 'Arial, sans-serif',
@@ -1171,7 +1171,7 @@ export default function SchematicEditor({
         const valueText = new Text(valueDisplay, {
           left: x - (cardWidth * savedScaleX) / 2 + 60 * savedScaleX,
           top: y - (cardHeight * savedScaleY) / 2 + i * rowHeight * savedScaleY + 2 * savedScaleY,
-          fontSize: 10.5,
+          fontSize: 8,
           fill: '#000000',
           fontWeight: 'normal',
           fontFamily: 'Arial, sans-serif',
