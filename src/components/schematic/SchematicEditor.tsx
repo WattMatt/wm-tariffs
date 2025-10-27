@@ -355,6 +355,11 @@ export default function SchematicEditor({
         vpt[5] -= e.deltaY;
         canvas.requestRenderAll();
       }
+      
+      // Update all object coordinates after viewport transformation
+      canvas.forEachObject((obj) => {
+        obj.setCoords();
+      });
     });
 
     // Panning variables (consolidated single implementation)
@@ -494,6 +499,7 @@ export default function SchematicEditor({
           (rect as any).regionId = `region-${Date.now()}-${drawnRegions.length + 1}`;
           
           canvas.add(rect);
+          rect.setCoords(); // Update control handle positions
           canvas.renderAll();
           
           // Calculate region in ABSOLUTE pixels of the original image
@@ -577,6 +583,11 @@ export default function SchematicEditor({
           canvas.requestRenderAll();
           lastX = evt.clientX;
           lastY = evt.clientY;
+          
+          // Update all object coordinates after panning
+          canvas.forEachObject((obj) => {
+            obj.setCoords();
+          });
         }
         return;
       }
