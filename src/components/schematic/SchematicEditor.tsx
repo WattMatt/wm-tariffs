@@ -289,15 +289,17 @@ export default function SchematicEditor({
       }
       
       // PANNING: Allow in all modes (including draw mode with middle mouse)
-      // In draw mode: middle mouse button only for panning
+      // In draw mode: middle mouse button ALWAYS allows panning (even during rectangle selection)
       // In other modes: any mouse button for panning
       if (currentTool === 'draw') {
-        // In draw mode, only allow panning with middle mouse button
-        if (evt.button === 1 && !target) {
+        // In draw mode, always allow panning with middle mouse button
+        if (evt.button === 1) {
           isPanningLocal = true;
           lastX = evt.clientX;
           lastY = evt.clientY;
           canvas.selection = false;
+          evt.preventDefault();
+          evt.stopPropagation();
         }
       } else if (!target) {
         // In other modes, allow panning with any button
