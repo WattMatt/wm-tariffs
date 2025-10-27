@@ -315,7 +315,22 @@ export default function SchematicEditor({
     canvas.on('mouse:move', (opt) => {
       const currentTool = activeToolRef.current;
       
+      // PANNING: Handle panning first, before any other logic
+      if (isPanningLocal) {
+        const evt = opt.e as MouseEvent;
+        const vpt = canvas.viewportTransform;
+        if (vpt) {
+          vpt[4] += evt.clientX - lastX;
+          vpt[5] += evt.clientY - lastY;
+          canvas.requestRenderAll();
+          lastX = evt.clientX;
+          lastY = evt.clientY;
+        }
+        return; // Don't process other mouse movements while panning
+      }
+      
       // DRAWING MODE: Show preview rectangle from start point to current mouse position
+      // Only show preview if NOT panning
       if (currentTool === 'draw' && drawStartPointRef.current && !drawingRectRef.current) {
         const pointer = canvas.getPointer(opt.e);
         const startPoint = drawStartPointRef.current;
@@ -349,20 +364,6 @@ export default function SchematicEditor({
         (preview as any).isPreview = true;
         canvas.add(preview);
         canvas.renderAll();
-        return;
-      }
-      
-      // PANNING: Allow in all modes when panning is active
-      if (isPanningLocal) {
-        const evt = opt.e as MouseEvent;
-        const vpt = canvas.viewportTransform;
-        if (vpt) {
-          vpt[4] += evt.clientX - lastX;
-          vpt[5] += evt.clientY - lastY;
-          canvas.requestRenderAll();
-          lastX = evt.clientX;
-          lastY = evt.clientY;
-        }
       }
     });
 
