@@ -326,51 +326,36 @@ export default function SchematicEditor({
       enableRetinaScaling: true, // Better control rendering on high-DPI displays
     });
 
-    // Mouse wheel: CTRL+scroll=zoom, SHIFT+scroll=horizontal, scroll=vertical
+    // Mouse wheel: Always zoom (zoom to cursor position)
     canvas.on('mouse:wheel', (opt) => {
       const e = opt.e as WheelEvent;
       e.preventDefault();
       e.stopPropagation();
       
-      if (e.ctrlKey || e.metaKey) {
-        // CTRL+Scroll: Zoom in/out
-        const delta = e.deltaY;
-        let zoom = canvas.getZoom();
-        zoom *= 0.999 ** delta;
-        
-        // Limit zoom range
-        if (zoom > 20) zoom = 20;
-        if (zoom < 0.1) zoom = 0.1;
-        
-        // Zoom to cursor position (this properly updates controls)
-        const pointer = canvas.getPointer(e);
-        canvas.zoomToPoint(pointer, zoom);
-        setZoom(zoom);
-      } else {
-        // Use built-in relativePan method
-        if (e.shiftKey) {
-          // SHIFT+Scroll: Pan horizontally
-          canvas.relativePan(new Point(-e.deltaY, 0));
-        } else {
-          // Regular Scroll: Pan vertically
-          canvas.relativePan(new Point(0, -e.deltaY));
-        }
-        
-        // Update controls AFTER render completes
-        requestAnimationFrame(() => {
-          const activeObj = canvas.getActiveObject();
-          if (activeObj) {
-            activeObj.setCoords();
-            canvas.requestRenderAll();
-          }
-        });
-      }
+      // Scroll: Zoom in/out toward cursor
+      const delta = e.deltaY;
+      let zoom = canvas.getZoom();
+      zoom *= 0.999 ** delta;
+      
+      // Clamp zoom between 5% and 2000%
+      if (zoom > 20) zoom = 20;
+      if (zoom < 0.05) zoom = 0.05;
+      
+      // Zoom to cursor position
+      const pointer = canvas.getPointer(e);
+      canvas.zoomToPoint(pointer, zoom);
+      setZoom(zoom);
+      
+      // Show zoom percentage toast
+      const zoomPercent = Math.round(zoom * 100);
+      toast(`Zoom: ${zoomPercent}%`, { duration: 800 });
     });
 
-    // Panning variables (consolidated single implementation)
+    // Panning variables with movement tracking
     let isPanningLocal = false;
     let lastX = 0;
     let lastY = 0;
+    let hasMoved = false;
 
     canvas.on('mouse:down', (opt) => {
       const evt = opt.e as MouseEvent;
@@ -380,9 +365,11 @@ export default function SchematicEditor({
       // Middle mouse button ALWAYS enables panning in ALL modes
       if (evt.button === 1) {
         isPanningLocal = true;
+        hasMoved = false;
         lastX = evt.clientX;
         lastY = evt.clientY;
         canvas.selection = false;
+        canvas.defaultCursor = 'grab';
         evt.preventDefault();
         evt.stopPropagation();
         return;
@@ -582,6 +569,12 @@ export default function SchematicEditor({
       
       if (isPanningLocal) {
         const evt = opt.e as MouseEvent;
+        evt.preventDefault();
+        evt.stopPropagation();
+        
+        hasMoved = true;
+        canvas.defaultCursor = 'grabbing';
+        
         const deltaX = evt.clientX - lastX;
         const deltaY = evt.clientY - lastY;
         
@@ -640,10 +633,22 @@ export default function SchematicEditor({
       }
     });
 
-    canvas.on('mouse:up', async () => {
+    canvas.on('mouse:up', async (opt) => {
+      const evt = opt.e as MouseEvent;
+      
       if (isPanningLocal) {
         isPanningLocal = false;
         canvas.selection = true;
+        canvas.defaultCursor = 'default';
+        
+        // Small timeout to prevent accidental clicks after panning
+        if (hasMoved) {
+          evt.preventDefault();
+          evt.stopPropagation();
+          setTimeout(() => {
+            hasMoved = false;
+          }, 50);
+        }
       }
     });
     
@@ -806,89 +811,6 @@ export default function SchematicEditor({
     // Prevent context menu on right click
     canvas.getElement().addEventListener('contextmenu', (e) => {
       e.preventDefault();
-    });
-
-    // Middle button panning using DOM events
-    let isPanning = false;
-    let lastPanX = 0;
-    let lastPanY = 0;
-    
-    canvas.getElement().addEventListener('mousedown', (e) => {
-      if (e.button === 1) {
-        e.preventDefault();
-        e.stopPropagation();
-        isPanning = true;
-        lastPanX = e.clientX;
-        lastPanY = e.clientY;
-        canvas.selection = false;
-        return false;
-      }
-    }, true);
-    
-    canvas.getElement().addEventListener('mousemove', (e) => {
-      if (isPanning) {
-        e.preventDefault();
-        e.stopPropagation();
-        const vpt = canvas.viewportTransform;
-        if (vpt) {
-          vpt[4] += e.clientX - lastPanX;
-          vpt[5] += e.clientY - lastPanY;
-          canvas.requestRenderAll();
-          lastPanX = e.clientX;
-          lastPanY = e.clientY;
-        }
-        return false;
-      }
-    }, true);
-    
-    canvas.getElement().addEventListener('mouseup', (e) => {
-      if (e.button === 1 && isPanning) {
-        e.preventDefault();
-        e.stopPropagation();
-        isPanning = false;
-        canvas.selection = true;
-        return false;
-      }
-    }, true);
-    
-    canvas.getElement().addEventListener('auxclick', (e) => {
-      if (e.button === 1) {
-        e.preventDefault();
-        e.stopPropagation();
-        return false;
-      }
-    }, true);
-
-    // Scroll/Wheel handling for zoom and pan using Fabric's mouse:wheel event
-    canvas.on('mouse:wheel', (opt) => {
-      const e = opt.e as WheelEvent;
-      e.preventDefault();
-      e.stopPropagation();
-      
-      const vpt = canvas.viewportTransform;
-      if (!vpt) return;
-      
-      if (e.ctrlKey || e.metaKey) {
-        // CTRL+Scroll: Zoom in/out
-        const delta = e.deltaY;
-        let zoom = canvas.getZoom();
-        zoom *= 0.999 ** delta;
-        
-        // Limit zoom range
-        if (zoom > 20) zoom = 20;
-        if (zoom < 0.1) zoom = 0.1;
-        
-        // Zoom to cursor position
-        canvas.zoomToPoint(new Point(e.offsetX, e.offsetY), zoom);
-      } else if (e.shiftKey) {
-        // SHIFT+Scroll: Pan horizontally
-        vpt[4] -= e.deltaY;
-        canvas.requestRenderAll();
-      } else {
-        // Regular Scroll: Pan vertically
-        vpt[5] -= e.deltaY;
-        canvas.requestRenderAll();
-      }
     });
 
     setFabricCanvas(canvas);

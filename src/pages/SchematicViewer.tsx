@@ -367,9 +367,39 @@ export default function SchematicViewer() {
 
   const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
     e.preventDefault();
-    const delta = e.deltaY * -0.01;
-    const newZoom = Math.min(Math.max(0.5, zoom + delta), 10);
+    
+    // Exponential zoom with zoom to cursor
+    const delta = e.deltaY;
+    let newZoom = zoom * (0.999 ** delta);
+    
+    // Clamp zoom between 5% and 2000%
+    newZoom = Math.min(Math.max(0.05, newZoom), 20);
+    
+    if (containerRef.current && imageRef.current) {
+      const containerRect = containerRef.current.getBoundingClientRect();
+      
+      // Get cursor position relative to container
+      const mouseX = e.clientX - containerRect.left;
+      const mouseY = e.clientY - containerRect.top;
+      
+      // Calculate the point in the zoomed image that's under the cursor
+      const pointX = (mouseX - pan.x) / zoom;
+      const pointY = (mouseY - pan.y) / zoom;
+      
+      // Calculate new pan to keep the point under the cursor
+      const newPan = {
+        x: mouseX - pointX * newZoom,
+        y: mouseY - pointY * newZoom
+      };
+      
+      setPan(newPan);
+    }
+    
     setZoom(newZoom);
+    
+    // Show zoom percentage toast
+    const zoomPercent = Math.round(newZoom * 100);
+    toast(`Zoom: ${zoomPercent}%`, { duration: 800 });
   };
 
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -387,8 +417,19 @@ export default function SchematicViewer() {
       return;
     }
     
-    // Only pan if not clicking on a meter marker
-    if ((e.button === 0 || e.button === 1) && !(e.target as HTMLElement).closest('.meter-marker')) {
+    // Middle mouse button ALWAYS enables panning
+    if (e.button === 1) {
+      e.preventDefault();
+      setIsDragging(true);
+      setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
+      if (containerRef.current) {
+        containerRef.current.style.cursor = 'grab';
+      }
+      return;
+    }
+    
+    // Left button pans if not clicking on a meter marker
+    if (e.button === 0 && !(e.target as HTMLElement).closest('.meter-marker')) {
       e.preventDefault();
       setIsDragging(true);
       setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
@@ -460,6 +501,9 @@ export default function SchematicViewer() {
       setExtractedMeters(updated);
     } else if (isDragging) {
       // Panning the view
+      if (containerRef.current) {
+        containerRef.current.style.cursor = 'grabbing';
+      }
       setPan({
         x: e.clientX - dragStart.x,
         y: e.clientY - dragStart.y
