@@ -1473,14 +1473,23 @@ export default function SchematicEditor({
             }
             
             if (data && data.meter) {
+              // Convert absolute pixel coordinates to percentages for rendering
+              const centerX = region.x + (region.width / 2);
+              const centerY = region.y + (region.height / 2);
+              
               const newMeter = {
                 ...data.meter,
                 status: 'pending' as const,
                 position: {
-                  x: region.x + (region.width / 2),
-                  y: region.y + (region.height / 2)
+                  x: (centerX / imageWidth) * 100,  // Convert to percentage
+                  y: (centerY / imageHeight) * 100   // Convert to percentage
                 },
-                extractedRegion: region,
+                extractedRegion: {
+                  x: (region.x / imageWidth) * 100,
+                  y: (region.y / imageHeight) * 100,
+                  width: (region.width / imageWidth) * 100,
+                  height: (region.height / imageHeight) * 100
+                },
                 scale_x: 1,
                 scale_y: 1
               };
