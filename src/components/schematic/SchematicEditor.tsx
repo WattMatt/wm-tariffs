@@ -674,7 +674,7 @@ export default function SchematicEditor({
       
       const rowHeight = cardHeight / 7; // 7 rows of data
       
-      // Background rectangle with scaling enabled - ALWAYS moveable
+      // Background rectangle with scaling enabled - Only moveable in edit mode
       const background = new Rect({
         left: x,
         top: y,
@@ -683,9 +683,9 @@ export default function SchematicEditor({
         fill: fillColor,
         stroke: borderColor,
         strokeWidth: strokeWidth, // Variable width for selection highlight
-        hasControls: true, // Always allow controls
-        selectable: true, // Always selectable for dragging
-        hoverCursor: 'move',
+        hasControls: isEditMode, // Only allow controls in edit mode
+        selectable: isEditMode, // Only selectable in edit mode
+        hoverCursor: isEditMode ? 'move' : 'pointer',
         originX: useTopLeftOrigin ? 'left' : 'center',  // Top-left for extracted regions
         originY: useTopLeftOrigin ? 'top' : 'center',   // Top-left for extracted regions
         lockRotation: true,
@@ -701,21 +701,21 @@ export default function SchematicEditor({
         meterData: meter 
       });
       
-      // Add double-click handler to open edit dialog
       // Add selection handler
       background.on('mousedown', (e) => {
-        if (activeTool === 'select' && e.e.ctrlKey) {
-          // Ctrl+click for multi-select
+        if (isEditMode && activeTool === 'select' && e.e.ctrlKey) {
+          // Ctrl+click for multi-select (only in edit mode)
           handleToggleSelectMeter(capturedIndex);
           e.e.stopPropagation();
         } else if (activeTool === 'select' && !e.e.ctrlKey) {
-          // Regular click - open confirmation dialog
+          // Regular click - open confirmation dialog (works in any mode)
           setSelectedMeterIndex(capturedIndex);
           setIsConfirmMeterDialogOpen(true);
         }
       });
 
       background.on('mousedblclick', () => {
+        // Double-click to open dialog (works in any mode)
         const objectData = background.get('data') as any;
         console.log(`🎯 Double-clicked meter:`, {
           index: objectData.index,
