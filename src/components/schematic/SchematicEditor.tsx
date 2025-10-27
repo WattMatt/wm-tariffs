@@ -523,29 +523,15 @@ export default function SchematicEditor({
         const imageWidth = width / displayScale;
         const imageHeight = height / displayScale;
         
-        console.log('📐 Original image coordinates (pixels):', {
+        console.log('📐 Original image coordinates (absolute pixels):', {
           x: Math.round(imageLeft),
           y: Math.round(imageTop),
           width: Math.round(imageWidth),
-          height: Math.round(imageHeight)
+          height: Math.round(imageHeight),
+          imageSize: { w: originalImageWidth, h: originalImageHeight }
         });
         
-        // Now convert to percentages of the original image
-        const region = {
-          x: (imageLeft / originalImageWidth) * 100,
-          y: (imageTop / originalImageHeight) * 100,
-          width: (imageWidth / originalImageWidth) * 100,
-          height: (imageHeight / originalImageHeight) * 100
-        };
-        
-        console.log('✅ Region percentages (should be 0-100):', {
-          x: region.x.toFixed(2),
-          y: region.y.toFixed(2),
-          width: region.width.toFixed(2),
-          height: region.height.toFixed(2)
-        });
-        
-        // Extract meter data from this region
+        // Extract meter data from this region using ABSOLUTE PIXEL coordinates
         try {
           toast.info('Extracting meter data from selected region...');
           
@@ -554,7 +540,14 @@ export default function SchematicEditor({
               imageUrl: schematicUrl,
               filePath: filePath || null,
               mode: 'extract-region',
-              region
+              region: {
+                x: imageLeft,
+                y: imageTop,
+                width: imageWidth,
+                height: imageHeight,
+                imageWidth: originalImageWidth,
+                imageHeight: originalImageHeight
+              }
             }
           });
           
@@ -566,16 +559,26 @@ export default function SchematicEditor({
           console.log('Extraction response:', data);
           
           if (data && data.meter) {
+            // Store position as percentages for consistent rendering
+            const positionXPercent = (imageLeft / originalImageWidth) * 100;
+            const positionYPercent = (imageTop / originalImageHeight) * 100;
+            const widthPercent = (imageWidth / originalImageWidth) * 100;
+            const heightPercent = (imageHeight / originalImageHeight) * 100;
+            
             // Add extracted meter to the list with position at center of drawn region
-            // Store the entire region for side-by-side comparison
             const newMeter = {
               ...data.meter,
               status: 'pending' as const,
               position: {
-                x: region.x + (region.width / 2),
-                y: region.y + (region.height / 2)
+                x: positionXPercent,
+                y: positionYPercent
               },
-              extractedRegion: region, // Store the drawn region for display
+              extractedRegion: {
+                x: positionXPercent,
+                y: positionYPercent,
+                width: widthPercent,
+                height: heightPercent
+              },
               scale_x: 1,
               scale_y: 1
             };
