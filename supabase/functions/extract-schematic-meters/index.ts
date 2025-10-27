@@ -93,58 +93,83 @@ Return ONLY a valid JSON object with these exact keys.
 NO markdown, NO explanations.
 Example: {"meter_number":"DB-01A","name":"VACANT","area":"187m²","rating":"150A TP","cable_specification":"4C x 95mm² ALU ECC CABLE","serial_number":"35779383","ct_type":"150/5A"}`;
     } else if (mode === 'extract-region') {
-      // Convert absolute pixel coordinates to percentages for the AI
-      const xPercent = (region.x / region.imageWidth) * 100;
-      const yPercent = (region.y / region.imageHeight) * 100;
-      const widthPercent = (region.width / region.imageWidth) * 100;
-      const heightPercent = (region.height / region.imageHeight) * 100;
+      // For region extraction, we MUST crop the image server-side
+      // Vision models cannot be restricted to specific coordinates via prompting
       
-      console.log('🎯 Extract-region mode:', {
-        pixels: { x: Math.round(region.x), y: Math.round(region.y), width: Math.round(region.width), height: Math.round(region.height) },
-        imageSize: { w: region.imageWidth, h: region.imageHeight },
-        percentages: {
-          x: `${xPercent.toFixed(2)}%`,
-          y: `${yPercent.toFixed(2)}%`,
-          width: `${widthPercent.toFixed(2)}%`,
-          height: `${heightPercent.toFixed(2)}%`
-        }
+      console.log('🎯 Extract-region mode - will crop image server-side:', {
+        pixels: { 
+          x: Math.round(region.x), 
+          y: Math.round(region.y), 
+          width: Math.round(region.width), 
+          height: Math.round(region.height) 
+        },
+        imageSize: { w: region.imageWidth, h: region.imageHeight }
       });
       
-      // Calculate pixel boundaries
-      const leftPixel = Math.round(region.x);
-      const rightPixel = Math.round(region.x + region.width);
-      const topPixel = Math.round(region.y);
-      const bottomPixel = Math.round(region.y + region.height);
-      
-      promptText = `CRITICAL: EXTRACT DATA ONLY FROM THE SPECIFIED COORDINATES
+      try {
+        // Download the full image
+        console.log('📥 Downloading image for cropping...');
+        const imageResponse = await fetch(imageUrl);
+        if (!imageResponse.ok) {
+          throw new Error(`Failed to download image: ${imageResponse.status}`);
+        }
+        
+        const imageArrayBuffer = await imageResponse.arrayBuffer();
+        const imageBuffer = new Uint8Array(imageArrayBuffer);
+        
+        console.log(`📊 Image downloaded: ${imageBuffer.length} bytes`);
+        
+        // Use jimp for image processing (more memory efficient than imagescript)
+        const Jimp = (await import('https://esm.sh/jimp@0.22.10')).default;
+        
+        console.log('🔄 Loading image with Jimp...');
+        const image = await Jimp.read(imageBuffer.buffer);
+        
+        console.log(`📐 Original image size: ${image.bitmap.width}x${image.bitmap.height}`);
+        
+        // Crop to the exact region
+        const cropX = Math.max(0, Math.floor(region.x));
+        const cropY = Math.max(0, Math.floor(region.y));
+        const cropWidth = Math.min(Math.ceil(region.width), image.bitmap.width - cropX);
+        const cropHeight = Math.min(Math.ceil(region.height), image.bitmap.height - cropY);
+        
+        console.log('✂️ Cropping region:', { x: cropX, y: cropY, width: cropWidth, height: cropHeight });
+        
+        image.crop(cropX, cropY, cropWidth, cropHeight);
+        
+        console.log(`✅ Cropped to: ${image.bitmap.width}x${image.bitmap.height}`);
+        
+        // Convert to base64 PNG
+        const base64Image = await image.getBase64Async(Jimp.MIME_PNG);
+        
+        console.log('📤 Converted to base64, sending to AI...');
+        
+        // Now send ONLY the cropped image to AI
+        promptText = `You are analyzing a cropped section from an electrical schematic diagram.
 
-IMAGE DIMENSIONS: ${region.imageWidth} x ${region.imageHeight} pixels
+This image shows ONLY the meter information box that was selected. There is no other content.
 
-YOU MUST ONLY READ TEXT WITHIN THIS EXACT RECTANGULAR REGION:
-==================================================================
-LEFT BOUNDARY:   X = ${leftPixel}px (${xPercent.toFixed(1)}% from left)
-RIGHT BOUNDARY:  X = ${rightPixel}px (${(xPercent + widthPercent).toFixed(1)}% from left)
-TOP BOUNDARY:    Y = ${topPixel}px (${yPercent.toFixed(1)}% from top)
-BOTTOM BOUNDARY: Y = ${bottomPixel}px (${(yPercent + heightPercent).toFixed(1)}% from top)
-==================================================================
+Extract ALL visible meter information from this cropped image:
+- meter_number (e.g., "DB-03")
+- name (tenant/business name or "VACANT")
+- area (in square meters with m² or m2 unit)
+- rating (e.g., "80A TP", "100A TP")
+- cable_specification (full cable description with units)
+- serial_number (meter serial number)
+- ct_type (current transformer specification)
+- meter_type (infer from name: "bulk" for council/main, "check_meter" for check, "submeter" for tenants)
+- zone (if visible, e.g., "MAIN BOARD 1", "MINI SUB 1")
 
-ABSOLUTE RESTRICTIONS:
-- Do NOT read any text with X-coordinate < ${leftPixel} or > ${rightPixel}
-- Do NOT read any text with Y-coordinate < ${topPixel} or > ${bottomPixel}
-- Ignore ALL meter boxes, labels, and data outside these pixel boundaries
-- Only analyze content within the ${Math.round(region.width)}x${Math.round(region.height)}px selection box
-
-Extract these fields from ONLY the selected region:
-- meter_number, name, area (with m2), rating, cable_specification, serial_number, ct_type, meter_type, zone
-
-IMPORTANT: Infer the meter_type based on the meter_number and name:
-- If name contains "BULK", "COUNCIL", "INCOMING", or "MAIN" -> meter_type should be "bulk"
-- If name contains "CHECK" -> meter_type should be "check_meter"
-- If name contains tenant/business names -> meter_type should be "submeter" or "tenant"
-- Otherwise -> meter_type can be "distribution" or null
-
-Return ONLY valid JSON.
-Example: {"meter_number":"DB-11","name":"CHICKEN LICKEN","area":"104m2","rating":"80A TP","cable_specification":"2 x 4C x 50mm2 ALU ECC CABLES","serial_number":"35777111","ct_type":"100/5A","meter_type":"submeter","zone":"MINI SUB 1"}`;
+Return ONLY valid JSON with these exact fields. Use null for any fields not visible.
+Example: {"meter_number":"DB-03","name":"ACKERMANS","area":"434m²","rating":"100A TP","cable_specification":"4C x 35mm² ALU ECC CABLE","serial_number":"35777225","ct_type":"DOL","meter_type":"submeter","zone":null}`;
+        
+        // Replace imageUrl with the cropped base64 image
+        imageUrl = base64Image;
+        
+      } catch (cropError: any) {
+        console.error('❌ Image cropping failed:', cropError);
+        throw new Error(`Failed to crop image: ${cropError?.message || String(cropError)}`);
+      }
     } else {
       // Full extraction mode - MAXIMUM ACCURACY REQUIRED
       promptText = `You are an expert electrical engineer performing CRITICAL DATA EXTRACTION from an electrical schematic. This data will be used for financial calculations and legal compliance - 100% accuracy is MANDATORY.
