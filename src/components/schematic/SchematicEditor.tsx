@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Canvas as FabricCanvas, Circle, Line, Text, FabricImage, Rect, util } from "fabric";
+import { Canvas as FabricCanvas, Circle, Line, Text, FabricImage, Rect, util, Point } from "fabric";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -820,6 +820,39 @@ export default function SchematicEditor({
         return false;
       }
     }, true);
+
+    // Scroll/Wheel handling for zoom and pan
+    canvas.getElement().addEventListener('wheel', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const vpt = canvas.viewportTransform;
+      if (!vpt) return false;
+      
+      if (e.ctrlKey || e.metaKey) {
+        // CTRL+Scroll: Zoom in/out
+        const delta = e.deltaY;
+        let zoom = canvas.getZoom();
+        zoom *= 0.999 ** delta;
+        
+        // Limit zoom range
+        if (zoom > 20) zoom = 20;
+        if (zoom < 0.1) zoom = 0.1;
+        
+        // Zoom to cursor position using Fabric's Point class
+        canvas.zoomToPoint(new Point(e.offsetX, e.offsetY), zoom);
+      } else if (e.shiftKey) {
+        // SHIFT+Scroll: Pan horizontally
+        vpt[4] -= e.deltaY;
+        canvas.requestRenderAll();
+      } else {
+        // Regular Scroll: Pan vertically
+        vpt[5] -= e.deltaY;
+        canvas.requestRenderAll();
+      }
+      
+      return false;
+    }, { passive: false });
 
     setFabricCanvas(canvas);
 
@@ -2001,11 +2034,11 @@ export default function SchematicEditor({
             </Badge>
           </div>
           
-          {/* Help text for multi-select and panning */}
+          {/* Help text for multi-select and navigation */}
           {extractedMeters.length > 0 && (
             <div className="text-xs text-muted-foreground italic space-y-1">
               <div>💡 Tip: Shift+Click extracted meters to select multiple for bulk operations</div>
-              <div>🖱️ Pan: Middle-click drag, or Shift/Ctrl+Drag in draw mode</div>
+              <div>🖱️ Navigation: Scroll (up/down), Shift+Scroll (left/right), Ctrl+Scroll (zoom)</div>
             </div>
           )}
         </div>
