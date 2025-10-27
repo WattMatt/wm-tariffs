@@ -356,7 +356,12 @@ export default function SchematicEditor({
             // Regular Scroll: Pan vertically
             vpt[5] -= e.deltaY;
           }
-          canvas.setViewportTransform(vpt); // This updates controls properly
+          canvas.setViewportTransform(vpt);
+          
+          // Update coordinates for ALL objects to sync controls with viewport
+          canvas.getObjects().forEach(obj => {
+            obj.setCoords();
+          });
         }
       }
       
@@ -585,7 +590,12 @@ export default function SchematicEditor({
         if (vpt) {
           vpt[4] += deltaX;
           vpt[5] += deltaY;
-          canvas.setViewportTransform(vpt); // This updates controls properly
+          canvas.setViewportTransform(vpt);
+          
+          // Update coordinates for ALL objects to sync controls with viewport
+          canvas.getObjects().forEach(obj => {
+            obj.setCoords();
+          });
         }
         
         canvas.requestRenderAll();
