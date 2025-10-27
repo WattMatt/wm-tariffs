@@ -1,48 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
-import { Image } from "https://deno.land/x/imagescript@1.2.15/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
-
-// Helper function to crop image to specific region
-async function cropImageToRegion(imageUrl: string, region: { x: number, y: number, width: number, height: number, imageWidth: number, imageHeight: number }): Promise<string> {
-  console.log('🔪 Cropping image to region:', region);
-  
-  try {
-    // Download the image
-    const imageResponse = await fetch(imageUrl);
-    if (!imageResponse.ok) {
-      throw new Error(`Failed to download image: ${imageResponse.status}`);
-    }
-    
-    const imageBuffer = await imageResponse.arrayBuffer();
-    const image = await Image.decode(new Uint8Array(imageBuffer));
-    
-    console.log(`📐 Original image dimensions: ${image.width}x${image.height}`);
-    
-    // Crop the image to the specified region (coordinates are in pixels)
-    const croppedImage = image.crop(
-      Math.round(region.x),
-      Math.round(region.y),
-      Math.round(region.width),
-      Math.round(region.height)
-    );
-    
-    console.log(`✂️ Cropped to: ${croppedImage.width}x${croppedImage.height}`);
-    
-    // Encode to PNG and convert to base64
-    const pngBuffer = await croppedImage.encode();
-    const base64 = btoa(String.fromCharCode(...new Uint8Array(pngBuffer)));
-    
-    return `data:image/png;base64,${base64}`;
-  } catch (error) {
-    console.error('❌ Image cropping failed:', error);
-    throw error;
-  }
-}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -148,108 +110,35 @@ Example: {"meter_number":"DB-01A","name":"VACANT","area":"187m²","rating":"150A
         }
       });
       
-      // Crop the image to the exact region before sending to AI
-      const croppedImageUrl = await cropImageToRegion(imageUrl, region);
-      console.log('✅ Image cropped - sending only the selected region to AI');
+      // Calculate pixel boundaries
+      const leftPixel = Math.round(region.x);
+      const rightPixel = Math.round(region.x + region.width);
+      const topPixel = Math.round(region.y);
+      const bottomPixel = Math.round(region.y + region.height);
       
-      // Replace imageUrl with cropped version for this request
-      imageUrl = croppedImageUrl;
-      
-      promptText = `You are an expert electrical engineer extracting meter label information from a cropped meter box image.
+      promptText = `CRITICAL: EXTRACT DATA ONLY FROM THE SPECIFIED COORDINATES
 
-⚠️ IMPORTANT: This image shows ONLY the meter box region that was selected. Analyze the entire visible image.
+IMAGE DIMENSIONS: ${region.imageWidth} x ${region.imageHeight} pixels
 
-═══════════════════════════════════════════════════════════════════════════
-⛔ ABSOLUTE BOUNDARY ENFORCEMENT ⛔
-═══════════════════════════════════════════════════════════════════════════
+YOU MUST ONLY READ TEXT WITHIN THIS EXACT RECTANGULAR REGION:
+==================================================================
+LEFT BOUNDARY:   X = ${leftPixel}px (${xPercent.toFixed(1)}% from left)
+RIGHT BOUNDARY:  X = ${rightPixel}px (${(xPercent + widthPercent).toFixed(1)}% from left)
+TOP BOUNDARY:    Y = ${topPixel}px (${yPercent.toFixed(1)}% from top)
+BOTTOM BOUNDARY: Y = ${bottomPixel}px (${(yPercent + heightPercent).toFixed(1)}% from top)
+==================================================================
 
-YOU MUST EXTRACT DATA FROM THIS EXACT RECTANGULAR REGION ONLY:
+ABSOLUTE RESTRICTIONS:
+- Do NOT read any text with X-coordinate < ${leftPixel} or > ${rightPixel}
+- Do NOT read any text with Y-coordinate < ${topPixel} or > ${bottomPixel}
+- Ignore ALL meter boxes, labels, and data outside these pixel boundaries
+- Only analyze content within the ${Math.round(region.width)}x${Math.round(region.height)}px selection box
 
-📍 LEFT BOUNDARY: ${xPercent.toFixed(1)}% from the left edge of the image
-📍 TOP BOUNDARY: ${yPercent.toFixed(1)}% from the top edge of the image
-📏 WIDTH: ${widthPercent.toFixed(1)}% of the total image width
-📏 HEIGHT: ${heightPercent.toFixed(1)}% of the total image height
+Extract these fields from ONLY the selected region:
+- meter_number, name, area (with m2), rating, cable_specification, serial_number, ct_type, meter_type, zone
 
-🚫 STRICTLY FORBIDDEN:
-- Reading ANY text outside these exact boundaries
-- Considering ANY labels outside this region
-- Including ANY data not physically located within this rectangle
-- Looking at neighboring meters or adjacent areas
-
-✅ YOU MUST:
-- ONLY analyze content within the rectangle from ${xPercent.toFixed(1)}% to ${(xPercent + widthPercent).toFixed(1)}% horizontally
-- ONLY analyze content within the rectangle from ${yPercent.toFixed(1)}% to ${(yPercent + heightPercent).toFixed(1)}% vertically
-- Treat everything outside this region as if it does not exist
-- If a field is not visible WITHIN this rectangle, return null for that field
-
-⚠️ VERIFICATION: Before returning your answer, verify that ALL extracted data is physically located within the specified rectangular boundaries.
-
-CRITICAL RULES:
-1. Preserve ALL units exactly as shown (m², A, TP, mm², ALU ECC CABLE, etc.)
-2. Do NOT abbreviate or reformat values
-3. All fields must be present - use null only if genuinely not visible
-4. Extract exactly what you see, character-for-character
-
-EXTRACT these fields with EXACT formatting:
-
-- meter_number (NO): 
-  - Extract exactly as labeled (e.g., "DB-01A", "MB-03", "INCOMING-01")
-  - Common label: "NO:", "NO.", or just visible meter number
-  - Look for pattern: DB-XX, MB-XX, INCOMING-XX
-  
-- name (NAME): 
-  - Extract exactly as shown (e.g., "VACANT", "ACKERMANS", "MAIN BOARD 1")
-  - Common label: "NAME:", "TENANT:"
-  - This is usually the tenant/occupant name
-  
-- area (AREA): 
-  - MUST include "m²" unit (e.g., "187m²", "406m²")
-  - Common label: "AREA:", "SIZE:"
-  - If value appears as just a number, add "m²"
-  
-- rating (RATING): 
-  - MUST include full units (e.g., "150A TP", "100A TP", "250A TP")
-  - Common label: "RATING:", "SIZE:"
-  - Preserve spaces and formatting exactly - TP means Three Phase
-  
-- cable_specification (CABLE): 
-  - Full specification with ALL units (e.g., "4C x 95mm² ALU ECC CABLE")
-  - Common label: "CABLE:", "CABLE SPEC:", "CABLE SIZE:"
-  - Do NOT abbreviate "ALU ECC CABLE"
-  - Format: "XC x XXmm² ALU ECC CABLE"
-  
-- serial_number (SERIAL): 
-  - Extract number exactly (e.g., "35779383", "35777285")
-  - Common label: "SERIAL:", "S/N:", "METER NO:"
-  - Usually an 8-digit number
-  
-- ct_type (CT): 
-  - Extract with format/ratio (e.g., "150/5A", "DOL", "300/5A")
-  - Common label: "CT:", "CT RATIO:", "CT TYPE:"
-
-- meter_type:
-  - Determine from context: "council_bulk", "check_meter", "solar", or "distribution"
-
-- zone (optional):
-  - If this meter is within a MAIN BOARD ZONE, extract the zone name (e.g., "MAIN BOARD 1", "MAIN BOARD 3")
-  - Main board zones are identified by:
-    * A large rectangular frame/border
-    * A thick horizontal bar inside (representing the bus bar)
-    * Zone label typically at top-right (e.g., "MAIN BOARD 3")
-    * Multiple meters may be contained within this zone
-  - If not in a main board zone, set to null
-  
-  - MINI SUB zones are identified by:
-    * A rectangular border/frame
-    * TWO OVERLAPPING CIRCLES in the center (this is the transformer symbol - key identifier)
-    * Text label "MINI SUB X" with power rating (e.g., "MINI SUB 1 800kVA")
-    * Electrical connection lines/symbols at top and bottom
-    * NO thick horizontal bus bar (unlike main boards)
-  - If meter is within a Mini Sub zone, set zone to "MINI SUB X" where X is the number
-
-Return ONLY a valid JSON object with these exact keys.
-NO markdown, NO explanations.
-Example: {"meter_number":"DB-01A","name":"VACANT","area":"187m²","rating":"150A TP","cable_specification":"4C x 95mm² ALU ECC CABLE","serial_number":"35779383","ct_type":"150/5A","meter_type":"distribution"}`;
+Return ONLY valid JSON.
+Example: {"meter_number":"DB-11","name":"CHICKEN LICKEN","area":"104m2","rating":"80A TP","cable_specification":"2 x 4C x 50mm2 ALU ECC CABLES","serial_number":"35777111","ct_type":"100/5A","meter_type":"distribution","zone":"MINI SUB 1"}`;
     } else {
       // Full extraction mode - MAXIMUM ACCURACY REQUIRED
       promptText = `You are an expert electrical engineer performing CRITICAL DATA EXTRACTION from an electrical schematic. This data will be used for financial calculations and legal compliance - 100% accuracy is MANDATORY.
