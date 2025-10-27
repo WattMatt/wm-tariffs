@@ -1794,9 +1794,9 @@ export default function SchematicEditor({
 
   return (
     <div className="space-y-4">
-      {/* Action buttons and Save/Edit in separate sections */}
+      {/* First row: Scan All and Select Regions with Save/Edit buttons */}
       <div className="flex gap-2 items-start justify-between">
-        {/* Left side: Action buttons that can wrap */}
+        {/* Left side: Scan buttons and selection badges */}
         <div className="flex gap-2 items-center flex-wrap flex-1">
           {selectedExtractedMeterIds.length > 0 && (
             <>
@@ -1831,7 +1831,7 @@ export default function SchematicEditor({
               <div className="h-6 w-px bg-border" />
             </>
           )}
-          <Button onClick={handleScanAll} disabled={!isEditMode || isSaving} variant="outline">
+          <Button onClick={handleScanAll} disabled={!isEditMode || isSaving} variant="outline" size="sm">
             <Scan className="w-4 h-4 mr-2" />
             {(() => {
               const buttonText = drawnRegions.length > 0 ? 'Scan All Regions' : 'Scan All Meters';
@@ -1878,45 +1878,6 @@ export default function SchematicEditor({
             <Scan className="w-4 h-4" />
             Select Regions {drawnRegions.length > 0 && `(${drawnRegions.length})`}
           </Button>
-          {drawnRegions.length > 0 && (
-            <Button
-              variant="destructive"
-              onClick={handleClearRegions}
-              disabled={!isEditMode}
-              size="sm"
-              className="gap-2"
-            >
-              <Trash2 className="w-4 h-4" />
-              Clear Regions
-            </Button>
-          )}
-          <Button
-            variant={activeTool === "meter" ? "default" : "outline"}
-            onClick={() => setActiveTool("meter")}
-            disabled={!isEditMode}
-            size="sm"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Add Meter
-          </Button>
-          <Button
-            variant={activeTool === "move" ? "default" : "outline"}
-            onClick={() => setActiveTool("move")}
-            disabled={!isEditMode}
-            size="sm"
-          >
-            <Move className="w-4 h-4 mr-2" />
-            Move
-          </Button>
-          <Button
-            variant={activeTool === "connection" ? "default" : "outline"}
-            onClick={() => setActiveTool("connection")}
-            disabled={!isEditMode}
-            size="sm"
-          >
-            <Link2 className="w-4 h-4 mr-2" />
-            Connect
-          </Button>
           <MeterDataExtractor
             siteId={siteId}
             schematicId={schematicId}
@@ -1939,10 +1900,6 @@ export default function SchematicEditor({
             drawnRegions={drawnRegions}
             onDrawnRegionsUpdate={setDrawnRegions}
           />
-          <Button onClick={handleClearLines} variant="destructive" size="sm" disabled={!isEditMode}>
-            <Trash2 className="w-4 h-4 mr-2" />
-            Clear Lines
-          </Button>
         </div>
         
         {/* Right side: Save and Edit buttons - always stay top right */}
@@ -1970,6 +1927,53 @@ export default function SchematicEditor({
             {isEditMode ? "Cancel" : "Edit"}
           </Button>
         </div>
+      </div>
+
+      {/* Second row: Action buttons */}
+      <div className="flex gap-2 items-center flex-wrap">
+        <Button onClick={handleClearLines} variant="destructive" size="sm" disabled={!isEditMode}>
+          <Trash2 className="w-4 h-4 mr-2" />
+          Clear Lines
+        </Button>
+        {drawnRegions.length > 0 && (
+          <Button
+            variant="destructive"
+            onClick={handleClearRegions}
+            disabled={!isEditMode}
+            size="sm"
+            className="gap-2"
+          >
+            <Trash2 className="w-4 h-4" />
+            Clear Regions
+          </Button>
+        )}
+        <Button
+          variant={activeTool === "meter" ? "default" : "outline"}
+          onClick={() => setActiveTool("meter")}
+          disabled={!isEditMode}
+          size="sm"
+        >
+          <Plus className="w-4 h-4 mr-2" />
+          Add Meter
+        </Button>
+        <Button
+          variant={activeTool === "move" ? "default" : "outline"}
+          onClick={() => setActiveTool("move")}
+          disabled={!isEditMode}
+          size="sm"
+        >
+          <Move className="w-4 h-4 mr-2" />
+          Move
+        </Button>
+        <Button
+          variant={activeTool === "connection" ? "default" : "outline"}
+          onClick={() => setActiveTool("connection")}
+          disabled={!isEditMode}
+          size="sm"
+        >
+          <Link2 className="w-4 h-4 mr-2" />
+          Connect
+        </Button>
       </div>
 
       {/* Legend and PDF Controls in two panes */}
