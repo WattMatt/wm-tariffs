@@ -2101,13 +2101,22 @@ export default function SchematicEditor({
             
             // Create meter in database (with extracted data or empty)
             const meterNumber = extractedMeterData?.meter_number || `METER-${Date.now()}-${i}`;
+            
+            // Validate meter_type - use council_bulk as default since submeter is not valid
+            let meterType = extractedMeterData?.meter_type || "council_bulk";
+            const validMeterTypes = ["council_bulk", "check_meter"];
+            if (!validMeterTypes.includes(meterType)) {
+              console.warn(`Invalid meter_type "${meterType}", defaulting to "council_bulk"`);
+              meterType = "council_bulk";
+            }
+            
             const { data: newMeter, error: meterError } = await supabase
               .from("meters")
               .insert({
                 site_id: siteId,
                 meter_number: meterNumber,
                 name: extractedMeterData?.name || "VACANT",
-                meter_type: extractedMeterData?.meter_type || "submeter",
+                meter_type: meterType,
                 zone: extractedMeterData?.zone || null,
                 area: extractedMeterData?.area ? parseFloat(extractedMeterData.area.replace('m²', '')) : null,
                 rating: extractedMeterData?.rating || null,
