@@ -544,6 +544,12 @@ export default function SchematicEditor({
       const evt = opt.e as MouseEvent;
       const target = opt.target;
       
+      // CRITICAL: Prevent browser's default middle-click behavior (autoscroll)
+      if (evt.button === 1) {
+        evt.preventDefault();
+        evt.stopPropagation();
+      }
+      
       // CRITICAL: Use ref instead of state to get current tool
       // State would be stale from when this handler was registered
       const currentTool = activeToolRef.current;
@@ -556,8 +562,6 @@ export default function SchematicEditor({
         lastY = evt.clientY;
         canvas.selection = false;
         canvas.defaultCursor = 'grab';
-        evt.preventDefault();
-        evt.stopPropagation();
         return;
       }
       
