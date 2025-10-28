@@ -1182,6 +1182,10 @@ export default function SchematicEditor({
 
     setFabricCanvas(canvas);
 
+    return () => {
+      canvas.dispose();
+    };
+
     // Load background image
     FabricImage.fromURL(schematicUrl, {
       crossOrigin: 'anonymous'
@@ -1225,7 +1229,7 @@ export default function SchematicEditor({
   // CRITICAL: Uses repositioningMeterRef to check current repositioning state
   // This ensures the handler can detect and cancel repositioning even when state has changed
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
+    const handleEscapeKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && repositioningMeterRef.current) {
         e.preventDefault();
         
@@ -1259,11 +1263,51 @@ export default function SchematicEditor({
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', handleEscapeKey);
     return () => {
-      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keydown', handleEscapeKey);
     };
   }, [fabricCanvas]);
+
+  // DELETE KEY: Remove selected meter card in edit mode
+  useEffect(() => {
+    if (!fabricCanvas) return;
+
+    const handleDeleteKey = async (e: KeyboardEvent) => {
+      if (!isEditMode) return;
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        const activeObject = fabricCanvas.getActiveObject();
+        if (activeObject && (activeObject as any).data) {
+          const data = (activeObject as any).data;
+          if (data.meterId && data.positionId) {
+            if (confirm(`Delete this meter card? This will remove the meter from the schematic but not from the database.`)) {
+              // Delete the meter position
+              const { error } = await supabase
+                .from('meter_positions')
+                .delete()
+                .eq('id', data.positionId);
+              
+              if (error) {
+                toast.error('Failed to delete meter card');
+                console.error('Delete error:', error);
+                return;
+              }
+              
+              fabricCanvas.remove(activeObject);
+              toast.success('Meter card removed from schematic');
+              fetchMeterPositions();
+            }
+          }
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleDeleteKey);
+    return () => {
+      window.removeEventListener('keydown', handleDeleteKey);
+    };
+  }, [fabricCanvas, isEditMode]);
+
 
   // Update cursor when tool changes
   useEffect(() => {
