@@ -367,39 +367,59 @@ export default function SchematicViewer() {
 
   const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
     e.preventDefault();
+    e.stopPropagation();
     
-    // Exponential zoom with zoom to cursor
     const delta = e.deltaY;
-    let newZoom = zoom * (0.999 ** delta);
     
-    // Clamp zoom between 5% and 2000%
-    newZoom = Math.min(Math.max(0.05, newZoom), 20);
-    
-    if (containerRef.current && imageRef.current) {
-      const containerRect = containerRef.current.getBoundingClientRect();
+    // CTRL + SCROLL: Zoom in/out with fixed step-based multiplier
+    if (e.ctrlKey || e.metaKey) {
+      // Use consistent zoom steps: 1.1 for zoom in (delta < 0), 0.9 for zoom out (delta > 0)
+      const zoomStep = delta < 0 ? 1.1 : 0.9;
+      let newZoom = zoom * zoomStep;
       
-      // Get cursor position relative to container
-      const mouseX = e.clientX - containerRect.left;
-      const mouseY = e.clientY - containerRect.top;
+      // Clamp zoom between 25% and 400% for usability
+      newZoom = Math.min(Math.max(0.25, newZoom), 4);
       
-      // Calculate the point in the zoomed image that's under the cursor
-      const pointX = (mouseX - pan.x) / zoom;
-      const pointY = (mouseY - pan.y) / zoom;
+      if (containerRef.current && imageRef.current) {
+        const containerRect = containerRef.current.getBoundingClientRect();
+        
+        // Get cursor position relative to container
+        const mouseX = e.clientX - containerRect.left;
+        const mouseY = e.clientY - containerRect.top;
+        
+        // Calculate the point in the zoomed image that's under the cursor
+        const pointX = (mouseX - pan.x) / zoom;
+        const pointY = (mouseY - pan.y) / zoom;
+        
+        // Calculate new pan to keep the point under the cursor
+        const newPan = {
+          x: mouseX - pointX * newZoom,
+          y: mouseY - pointY * newZoom
+        };
+        
+        setPan(newPan);
+      }
       
-      // Calculate new pan to keep the point under the cursor
-      const newPan = {
-        x: mouseX - pointX * newZoom,
-        y: mouseY - pointY * newZoom
-      };
+      setZoom(newZoom);
       
-      setPan(newPan);
+      // Show zoom percentage toast
+      const zoomPercent = Math.round(newZoom * 100);
+      toast(`Zoom: ${zoomPercent}%`, { duration: 800 });
     }
-    
-    setZoom(newZoom);
-    
-    // Show zoom percentage toast
-    const zoomPercent = Math.round(newZoom * 100);
-    toast(`Zoom: ${zoomPercent}%`, { duration: 800 });
+    // SHIFT + SCROLL: Pan left/right with dampening for smooth control
+    else if (e.shiftKey) {
+      setPan(prev => ({
+        x: prev.x - delta * 0.5,
+        y: prev.y
+      }));
+    }
+    // SCROLL alone: Pan up/down with dampening for smooth control
+    else {
+      setPan(prev => ({
+        x: prev.x,
+        y: prev.y - delta * 0.5
+      }));
+    }
   };
 
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
