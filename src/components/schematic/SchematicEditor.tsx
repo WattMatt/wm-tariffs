@@ -643,6 +643,7 @@ export default function SchematicEditor({
     
     canvas.on('mouse:down', (opt) => {
       const currentTool = activeToolRef.current;
+      console.log('mouse:down', { currentTool, hasTarget: !!opt.target, targetType: opt.target?.type, targetRegionId: (opt.target as any)?.regionId });
       
       // Only handle drawing if in draw mode
       if (currentTool !== 'draw') return;
@@ -785,7 +786,11 @@ export default function SchematicEditor({
             fabricRect: permanentRect
           };
           
-          setDrawnRegions(prev => [...prev, newRegion]);
+          setDrawnRegions(prev => {
+            const updated = [...prev, newRegion];
+            console.log('Region added to drawnRegions', { total: updated.length, regionId });
+            return updated;
+          });
           
           // Remove preview and marker
           if (drawingRectRef.current) {
@@ -2004,9 +2009,17 @@ export default function SchematicEditor({
     if (!schematicUrl) return;
     setIsSaving(true);
     
+    console.log('=== handleScanAll START ===', { 
+      drawnRegionsCount: drawnRegions.length, 
+      siteId, 
+      schematicId,
+      schematicUrl 
+    });
+    
     try {
       // Case A: No regions drawn - scan entire PDF
       if (drawnRegions.length === 0) {
+        console.log('Case A: No regions drawn, doing full extraction');
         const { data, error } = await supabase.functions.invoke('extract-schematic-meters', {
           body: { imageUrl: schematicUrl, mode: 'full-extraction' }
         });
@@ -2025,6 +2038,7 @@ export default function SchematicEditor({
       } 
       // Case B: Regions drawn - scan each region and create meters
       else {
+        console.log('Case B: Processing', drawnRegions.length, 'drawn regions');
         let successCount = 0;
         let errorCount = 0;
         
