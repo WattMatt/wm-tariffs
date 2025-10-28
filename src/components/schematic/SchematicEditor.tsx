@@ -2340,21 +2340,23 @@ export default function SchematicEditor({
             Draw Regions {drawnRegions.length > 0 && `(${drawnRegions.length})`}
           </Button>
           <Button
-            variant={selectedRegionIndices.length > 0 ? "default" : "outline"}
+            variant={activeTool === "bulk" ? "default" : "outline"}
             onClick={() => {
-              if (selectedRegionIndices.length > 0) {
-                setSelectedRegionIndices([]);
-                toast.info("Region selection cleared");
+              if (activeTool === "bulk") {
+                setActiveTool("select");
+                setSelectedMeterCardIds([]);
+                toast.info("Bulk select mode disabled");
               } else {
-                toast.info("Shift+click on regions to select them", { duration: 4000 });
+                setActiveTool("bulk");
+                toast.info("Click on meter cards to select them for bulk actions", { duration: 4000 });
               }
             }}
-            disabled={!isEditMode || drawnRegions.length === 0}
+            disabled={!isEditMode}
             size="sm"
             className="gap-2"
           >
             <Scan className="w-4 h-4" />
-            Select Regions {selectedRegionIndices.length > 0 && `(${selectedRegionIndices.length})`}
+            Select Regions {selectedMeterCardIds.length > 0 && `(${selectedMeterCardIds.length})`}
           </Button>
           <MeterDataExtractor
             siteId={siteId}
@@ -2442,23 +2444,6 @@ export default function SchematicEditor({
         >
           <Move className="w-4 h-4 mr-2" />
           Move
-        </Button>
-        <Button
-          variant={activeTool === "bulk" ? "default" : "outline"}
-          onClick={() => {
-            if (activeTool === "bulk") {
-              setActiveTool("select");
-              toast.info("Bulk select mode disabled");
-            } else {
-              setActiveTool("bulk");
-              toast.info("Click on meter cards to select them for bulk actions", { duration: 4000 });
-            }
-          }}
-          disabled={!isEditMode}
-          size="sm"
-        >
-          <CheckSquare className="w-4 h-4 mr-2" />
-          Bulk Select {selectedMeterCardIds.length > 0 && `(${selectedMeterCardIds.length})`}
         </Button>
         <Button
           variant={activeTool === "connection" ? "default" : "outline"}
