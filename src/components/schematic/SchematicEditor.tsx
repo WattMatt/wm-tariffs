@@ -2110,28 +2110,78 @@ export default function SchematicEditor({
               meterType = "bulk_meter";
             }
             
-            const { data: newMeter, error: meterError } = await supabase
+            // Check if meter with this number already exists for this site
+            const { data: existingMeter } = await supabase
               .from("meters")
-              .insert({
-                site_id: siteId,
-                meter_number: meterNumber,
-                name: extractedMeterData?.name || "VACANT",
-                meter_type: meterType,
-                zone: extractedMeterData?.zone || null,
-                area: extractedMeterData?.area ? parseFloat(extractedMeterData.area.replace('m²', '')) : null,
-                rating: extractedMeterData?.rating || null,
-                cable_specification: extractedMeterData?.cable_specification || null,
-                serial_number: extractedMeterData?.serial_number || null,
-                ct_type: extractedMeterData?.ct_type || null,
-                location: null,
-                tariff: null,
-                is_revenue_critical: false,
-              })
-              .select()
-              .single();
+              .select("id")
+              .eq("site_id", siteId)
+              .eq("meter_number", meterNumber)
+              .maybeSingle();
             
-            if (meterError || !newMeter) {
-              console.error(`Failed to create meter for region ${i + 1}:`, meterError);
+            let newMeter;
+            
+            if (existingMeter) {
+              // Update existing meter with new data
+              console.log(`Updating existing meter ${meterNumber}`);
+              const { data: updatedMeter, error: updateError } = await supabase
+                .from("meters")
+                .update({
+                  name: extractedMeterData?.name || "VACANT",
+                  meter_type: meterType,
+                  zone: extractedMeterData?.zone || null,
+                  area: extractedMeterData?.area ? parseFloat(extractedMeterData.area.replace('m²', '')) : null,
+                  rating: extractedMeterData?.rating || null,
+                  cable_specification: extractedMeterData?.cable_specification || null,
+                  serial_number: extractedMeterData?.serial_number || null,
+                  ct_type: extractedMeterData?.ct_type || null,
+                })
+                .eq("id", existingMeter.id)
+                .select()
+                .single();
+              
+              if (updateError) {
+                console.error(`Failed to update existing meter ${meterNumber}:`, updateError);
+                errorCount++;
+                continue;
+              }
+              newMeter = updatedMeter;
+              toast.info(`Updated existing meter ${meterNumber}`);
+            } else {
+              // Create new meter
+              const { data: createdMeter, error: meterError } = await supabase
+                .from("meters")
+                .insert({
+                  site_id: siteId,
+                  meter_number: meterNumber,
+                  name: extractedMeterData?.name || "VACANT",
+                  meter_type: meterType,
+                  zone: extractedMeterData?.zone || null,
+                  area: extractedMeterData?.area ? parseFloat(extractedMeterData.area.replace('m²', '')) : null,
+                  rating: extractedMeterData?.rating || null,
+                  cable_specification: extractedMeterData?.cable_specification || null,
+                  serial_number: extractedMeterData?.serial_number || null,
+                  ct_type: extractedMeterData?.ct_type || null,
+                  location: null,
+                  tariff: null,
+                  is_revenue_critical: false,
+                })
+                .select()
+                .single();
+              
+              if (meterError) {
+                console.error(`Failed to create meter for region ${i + 1}:`, meterError);
+                errorCount++;
+                continue;
+              }
+              newMeter = createdMeter;
+              if (extractedMeterData) {
+                toast.success(`Created meter ${meterNumber} with AI data`);
+              } else {
+                toast.info(`Created empty meter ${meterNumber} - edit to populate`);
+              }
+            }
+            
+            if (!newMeter) {
               errorCount++;
               continue;
             }
@@ -2154,11 +2204,6 @@ export default function SchematicEditor({
               errorCount++;
             } else {
               successCount++;
-              if (extractedMeterData) {
-                toast.success(`Created meter ${meterNumber} with AI data`);
-              } else {
-                toast.info(`Created empty meter ${meterNumber} - edit to populate`);
-              }
             }
           } catch (err) {
             console.error(`Failed to process region ${i + 1}:`, err);

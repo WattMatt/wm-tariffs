@@ -124,9 +124,9 @@ METER DATA TO EXTRACT:
 7. ct_type (CT): Format/ratio (e.g., "150/5A", "DOL")
 
 METER TYPE INFERENCE (automatic classification):
-- If meter_number contains "INCOMING", "COUNCIL", or "BULK" → meter_type: "bulk"
+- If meter_number contains "INCOMING", "COUNCIL", or "BULK" → meter_type: "bulk_meter"
 - If meter_number contains "CHECK" → meter_type: "check_meter"
-- Otherwise → meter_type: "submeter"
+- Otherwise → meter_type: "tenant_meter"
 
 ZONE EXTRACTION:
 - If zone label visible (e.g., "MAIN BOARD 1", "MINI SUB 2"), extract it
@@ -135,7 +135,7 @@ ZONE EXTRACTION:
 Return ONLY valid JSON with these exact fields. Use null for fields not visible.
 NO markdown, NO explanations.
 
-Example: {"meter_number":"DB-03","name":"ACKERMANS","area":"434m²","rating":"100A TP","cable_specification":"4C x 35mm² ALU ECC CABLE","serial_number":"35777225","ct_type":"DOL","meter_type":"submeter","zone":null}`;
+Example: {"meter_number":"DB-03","name":"ACKERMANS","area":"434m²","rating":"100A TP","cable_specification":"4C x 35mm² ALU ECC CABLE","serial_number":"35777225","ct_type":"DOL","meter_type":"tenant_meter","zone":null}`;
     } else {
       // Full extraction mode - MAXIMUM ACCURACY REQUIRED
       promptText = `You are an expert electrical engineer performing CRITICAL DATA EXTRACTION from an electrical schematic. This data will be used for financial calculations and legal compliance - 100% accuracy is MANDATORY.
@@ -219,9 +219,9 @@ CRITICAL DATA FIELDS (Zero error tolerance):
    - Exact format (e.g., "DOL", "150/5A", "300/5A")
 
 8. meter_type:
-   - "council_bulk": Main incoming (labeled INCOMING/COUNCIL)
+   - "bulk_meter": Main incoming (labeled INCOMING/COUNCIL)
    - "check_meter": Check meters (labeled CHECK METER/BULK CHECK)
-   - "distribution": All other meters (DB-XX)
+   - "tenant_meter": All other meters (DB-XX)
 
 9. zone (optional):
    - If meter is within a MAIN BOARD ZONE, extract the zone identifier
@@ -272,7 +272,7 @@ OUTPUT FORMAT:
       "cable_specification": "4C x 16mm² ALU ECC CABLE",
       "serial_number": "34020113A",
       "ct_type": "DOL",
-      "meter_type": "distribution",
+      "meter_type": "tenant_meter",
       "position": {"x": 33.7, "y": 49.0},
       "scale_x": 1.0,
       "scale_y": 1.0
@@ -400,6 +400,15 @@ Return ONLY valid JSON. NO markdown, NO explanations.`;
         console.warn(`⚠️ Area field missing m² unit: ${result.area}`);
       }
       
+      // Map old meter_type values to new ones
+      if (result.meter_type === 'submeter') {
+        result.meter_type = 'tenant_meter';
+      } else if (result.meter_type === 'distribution') {
+        result.meter_type = 'tenant_meter';
+      } else if (result.meter_type === 'council_bulk' || result.meter_type === 'bulk') {
+        result.meter_type = 'bulk_meter';
+      }
+      
       console.log(`✓ Meter label extracted successfully: ${result.meter_number} - ${result.name}`);
       console.log(`  Fields extracted: ${Object.keys(result).join(', ')}`);
       
@@ -442,6 +451,15 @@ Return ONLY valid JSON. NO markdown, NO explanations.`;
         // Validate area format
         if (meter.area && !meter.area.includes('m²')) {
           console.warn(`⚠️ Meter ${idx + 1} area missing m² unit: ${meter.area}`);
+        }
+        
+        // Map old meter_type values to new ones
+        if (meter.meter_type === 'submeter') {
+          meter.meter_type = 'tenant_meter';
+        } else if (meter.meter_type === 'distribution') {
+          meter.meter_type = 'tenant_meter';
+        } else if (meter.meter_type === 'council_bulk' || meter.meter_type === 'bulk') {
+          meter.meter_type = 'bulk_meter';
         }
       });
       
