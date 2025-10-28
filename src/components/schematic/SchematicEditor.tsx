@@ -2323,10 +2323,6 @@ export default function SchematicEditor({
               <div className="w-3 h-3 rounded-full bg-[#16a34a] border-2 border-[#16a34a] mr-2" />
               Confirmed
             </Badge>
-            <Badge variant="outline" className="bg-[#8b5cf6] text-white border-[#8b5cf6]">
-              <div className="w-3 h-3 rounded-full bg-white mr-2" />
-              Selected
-            </Badge>
           </div>
         </div>
 
