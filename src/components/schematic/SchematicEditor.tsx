@@ -100,64 +100,6 @@ import { MeterDataExtractor } from "./MeterDataExtractor";
 import { MeterFormFields } from "./MeterFormFields";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 
-// Helper function to calculate snap points for a meter card
-const calculateSnapPoints = (left: number, top: number, width: number, height: number) => {
-  const centerX = left + width / 2;
-  const centerY = top + height / 2;
-  
-  return {
-    top: { x: centerX, y: top },
-    right: { x: left + width, y: centerY },
-    bottom: { x: centerX, y: top + height },
-    left: { x: left, y: centerY }
-  };
-};
-
-// Helper function to find nearest snap point
-const findNearestSnapPoint = (targetX: number, targetY: number, snapPoints: ReturnType<typeof calculateSnapPoints>) => {
-  let nearest = { ...snapPoints.top, edge: 'top' };
-  let minDistance = Math.hypot(snapPoints.top.x - targetX, snapPoints.top.y - targetY);
-  
-  Object.entries(snapPoints).forEach(([edge, point]) => {
-    const distance = Math.hypot(point.x - targetX, point.y - targetY);
-    if (distance < minDistance) {
-      minDistance = distance;
-      nearest = { ...point, edge };
-    }
-  });
-  
-  return nearest;
-};
-
-// Helper function to create an arrow head polygon
-const createArrowHead = (fromX: number, fromY: number, toX: number, toY: number, color: string) => {
-  const headLength = 15;
-  const headWidth = 10;
-  
-  // Calculate angle
-  const angle = Math.atan2(toY - fromY, toX - fromX);
-  
-  // Calculate arrow head points
-  const point1 = {
-    x: toX - headLength * Math.cos(angle - Math.PI / 6),
-    y: toY - headLength * Math.sin(angle - Math.PI / 6)
-  };
-  
-  const point2 = {
-    x: toX - headLength * Math.cos(angle + Math.PI / 6),
-    y: toY - headLength * Math.sin(angle + Math.PI / 6)
-  };
-  
-  return new Polygon([
-    { x: toX, y: toY },
-    { x: point1.x, y: point1.y },
-    { x: point2.x, y: point2.y }
-  ], {
-    fill: color,
-    selectable: false,
-    evented: false,
-  });
-};
 
 interface SchematicEditorProps {
   schematicId: string;
@@ -176,15 +118,6 @@ interface MeterPosition {
   label: string;
 }
 
-interface SchematicLine {
-  id: string;
-  from_x: number;
-  from_y: number;
-  to_x: number;
-  to_y: number;
-  color: string;
-  stroke_width: number;
-}
 
 // Helper function to create meter card as an image matching reference format
 async function createMeterCardImage(
@@ -453,8 +386,8 @@ export default function SchematicEditor({
   
   // FABRIC.JS EVENT HANDLER PATTERN: State + Ref for tool selection
   // State drives UI, ref provides current value to canvas event handlers
-  const [activeTool, setActiveTool] = useState<"select" | "meter" | "connection" | "draw">("select");
-  const activeToolRef = useRef<"select" | "meter" | "connection" | "draw">("select");
+  const [activeTool, setActiveTool] = useState<"select" | "meter" | "draw">("select");
+  const activeToolRef = useRef<"select" | "meter" | "draw">("select");
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [drawnRegions, setDrawnRegions] = useState<Array<{
     id: string;
@@ -478,9 +411,7 @@ export default function SchematicEditor({
   const drawStartPointRef = useRef<{ x: number; y: number } | null>(null);
   const startMarkerRef = useRef<any>(null);
   const selectionBoxRef = useRef<any>(null); // For shift+drag multi-select box
-  const [lines, setLines] = useState<SchematicLine[]>([]);
   const [meters, setMeters] = useState<any[]>([]);
-  const [selectedMeterForConnection, setSelectedMeterForConnection] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [extractionProgress, setExtractionProgress] = useState<{ current: number; total: number } | null>(null);
   const [isAddMeterDialogOpen, setIsAddMeterDialogOpen] = useState(false);
@@ -496,13 +427,6 @@ export default function SchematicEditor({
   const [selectedMeterIndex, setSelectedMeterIndex] = useState<number | null>(null);
   const [selectedMeterId, setSelectedMeterId] = useState<string | null>(null);
   const [selectedMeterIds, setSelectedMeterIds] = useState<string[]>([]); // For bulk selection with Shift+click
-  
-  // Line drawing state
-  const [isDrawingConnection, setIsDrawingConnection] = useState(false);
-  const [connectionLinePoints, setConnectionLinePoints] = useState<Array<{x: number, y: number}>>([]);
-  const [startSnapPoint, setStartSnapPoint] = useState<{x: number, y: number, meterId: string} | null>(null);
-  const tempLineRef = useRef<Line | Polyline | null>(null);
-  const connectionNodesRef = useRef<Circle[]>([]);
   const [isSelectionMode, setIsSelectionMode] = useState(false); // Track whether selection mode is active
   const [zoom, setZoom] = useState(1);
   const [isEditMeterDialogOpen, setIsEditMeterDialogOpen] = useState(false);
@@ -546,7 +470,6 @@ export default function SchematicEditor({
   useEffect(() => {
     fetchMeters();
     fetchMeterPositions();
-    fetchLines();
   }, [schematicId, siteId]);
 
   // FABRIC.JS EVENT HANDLER PATTERN: Sync activeTool state to ref
@@ -622,18 +545,6 @@ export default function SchematicEditor({
   useEffect(() => {
     isEditModeRef.current = isEditMode;
   }, [isEditMode]);
-  
-  // Sync connection drawing state to refs for Fabric.js event handlers
-  const isDrawingConnectionRef = useRef(false);
-  const connectionLinePointsRef = useRef<Array<{x: number, y: number}>>([]);
-  
-  useEffect(() => {
-    isDrawingConnectionRef.current = isDrawingConnection;
-  }, [isDrawingConnection]);
-  
-  useEffect(() => {
-    connectionLinePointsRef.current = connectionLinePoints;
-  }, [connectionLinePoints]);
 
   // Update border colors when toggling edit mode
   useEffect(() => {
@@ -780,16 +691,6 @@ export default function SchematicEditor({
       }
     });
 
-    // Handle keyboard events for canceling connection drawing
-    const handleKeyDown = (evt: KeyboardEvent) => {
-      if (evt.key === 'Escape' && isDrawingConnectionRef.current) {
-        evt.preventDefault();
-        cancelConnectionDrawing();
-        toast.info("Connection drawing cancelled");
-      }
-    };
-    
-    window.addEventListener('keydown', handleKeyDown);
 
     // Mouse handlers for drawing rectangles when in draw mode AND Shift+click selection AND Shift+drag multi-select
     let isDrawing = false;
@@ -803,9 +704,6 @@ export default function SchematicEditor({
       const target = opt.target;
       
       console.log('mouse:down', { currentTool, hasTarget: !!target, targetType: target?.type, targetRegionId: (target as any)?.regionId, shiftKey: evt.shiftKey, isSelectionMode: isSelectionModeRef.current });
-      
-      // Connection mode clicks are handled by snap point click handlers only
-      // No intermediate nodes allowed
       
       // Handle Shift+drag multi-select in selection mode (when shift pressed)
       if (evt.shiftKey && isSelectionModeRef.current) {
@@ -1580,7 +1478,6 @@ export default function SchematicEditor({
     });
 
     return () => {
-      window.removeEventListener('keydown', handleKeyDown);
       canvas.dispose();
     };
   }, [schematicUrl]);
@@ -1656,21 +1553,6 @@ export default function SchematicEditor({
       if (!(obj as any).isBackgroundImage) {
         fabricCanvas.remove(obj);
       }
-    });
-
-    // Render saved lines with arrow heads
-    lines.forEach(line => {
-      const fabricLine = new Line([line.from_x, line.from_y, line.to_x, line.to_y], {
-        stroke: line.color,
-        strokeWidth: line.stroke_width,
-        selectable: false,
-        evented: false,
-      });
-      fabricCanvas.add(fabricLine);
-      
-      // Add arrow head to show electricity flow direction (from child to parent)
-      const arrowHead = createArrowHead(line.from_x, line.from_y, line.to_x, line.to_y, line.color);
-      fabricCanvas.add(arrowHead);
     });
 
     // Render extracted meters (from AI extraction)
@@ -1841,48 +1723,6 @@ export default function SchematicEditor({
 
           fabricCanvas.add(img);
           
-          // Add snap point indicators when in connection mode
-          if (activeTool === 'connection') {
-            const actualWidth = cardWidth * scaleX;
-            const actualHeight = cardHeight * scaleY;
-            const snapPoints = calculateSnapPoints(
-              x - actualWidth / 2,
-              y - actualHeight / 2,
-              actualWidth,
-              actualHeight
-            );
-            
-            // Create small circles at each snap point
-            Object.values(snapPoints).forEach(point => {
-              const snapCircle = new Circle({
-                left: point.x,
-                top: point.y,
-                radius: 10,
-                fill: '#3b82f6',
-                stroke: '#ffffff',
-                strokeWidth: 2,
-                originX: 'center',
-                originY: 'center',
-                selectable: false,
-                evented: true,
-                opacity: 0.9,
-                hoverCursor: 'crosshair'
-              });
-              (snapCircle as any).isSnapPoint = true;
-              (snapCircle as any).meterId = meter.id;
-              (snapCircle as any).snapPoint = point;
-              
-              // Add click handler for line drawing
-              snapCircle.on('mousedown', (e) => {
-                handleSnapPointClick(point.x, point.y, meter.id);
-                e.e.stopPropagation();
-                e.e.preventDefault();
-              });
-              
-              fabricCanvas.add(snapCircle);
-            });
-          }
-          
           fabricCanvas.renderAll();
         };
       });
@@ -2020,11 +1860,9 @@ export default function SchematicEditor({
             setIsEditMeterDialogOpen(true);
           });
 
-          // Single click for connection mode or viewing details
+          // Single click for viewing details
           img.on('mousedown', () => {
-            if (activeTool === 'connection') {
-              handleMeterClickForConnection(pos.meter_id, x, y);
-            } else if (!isEditModeRef.current && activeTool === 'select' && !isSelectionModeRef.current) {
+            if (!isEditModeRef.current && activeTool === 'select' && !isSelectionModeRef.current) {
               // View meter details in normal mode (but not in selection mode or edit mode)
               setViewingMeter(meter);
               setIsViewMeterDialogOpen(true);
@@ -2115,55 +1953,13 @@ export default function SchematicEditor({
 
           fabricCanvas.add(img);
           
-          // Add snap point indicators when in connection mode
-          if (activeTool === 'connection') {
-            const actualWidth = cardWidth * baseScaleX * savedScaleX;
-            const actualHeight = cardHeight * baseScaleY * savedScaleY;
-            const snapPoints = calculateSnapPoints(
-              x - actualWidth / 2,
-              y - actualHeight / 2,
-              actualWidth,
-              actualHeight
-            );
-            
-            // Create small circles at each snap point
-            Object.values(snapPoints).forEach(point => {
-              const snapCircle = new Circle({
-                left: point.x,
-                top: point.y,
-                radius: 10,
-                fill: '#3b82f6',
-                stroke: '#ffffff',
-                strokeWidth: 2,
-                originX: 'center',
-                originY: 'center',
-                selectable: false,
-                evented: true,
-                opacity: 0.9,
-                hoverCursor: 'crosshair'
-              });
-              (snapCircle as any).isSnapPoint = true;
-              (snapCircle as any).meterId = pos.meter_id;
-              (snapCircle as any).snapPoint = point;
-              
-              // Add click handler for line drawing
-              snapCircle.on('mousedown', (e) => {
-                handleSnapPointClick(point.x, point.y, pos.meter_id);
-                e.e.stopPropagation();
-                e.e.preventDefault();
-              });
-              
-              fabricCanvas.add(snapCircle);
-            });
-          }
-          
           fabricCanvas.renderAll();
         };
       });
     });
 
     fabricCanvas.renderAll();
-  }, [fabricCanvas, meterPositions, lines, meters, activeTool, extractedMeters, legendVisibility, selectedExtractedMeterIds]);
+  }, [fabricCanvas, meterPositions, meters, activeTool, extractedMeters, legendVisibility, selectedExtractedMeterIds]);
 
   const fetchMeters = async () => {
     const { data } = await supabase
@@ -2201,155 +1997,6 @@ export default function SchematicEditor({
     setMeterPositions(data || []);
   };
 
-  const fetchLines = async () => {
-    const { data } = await supabase
-      .from("schematic_lines")
-      .select("*")
-      .eq("schematic_id", schematicId);
-    
-    setLines(data || []);
-  };
-
-  const handleSnapPointClick = async (x: number, y: number, meterId: string) => {
-    if (!fabricCanvas) return;
-    
-    if (!isDrawingConnection) {
-      // First click - start connection
-      setIsDrawingConnection(true);
-      isDrawingConnectionRef.current = true;
-      setStartSnapPoint({ x, y, meterId });
-      
-      toast.info("Click another snap point on a different meter to complete");
-    } else {
-      // Second click - complete the connection
-      if (meterId === startSnapPoint?.meterId) {
-        toast.error("Cannot connect a meter to itself! Select a snap point on a DIFFERENT meter.");
-        return;
-      }
-      
-      // Save the connection directly to database
-      const finalPoints = [startSnapPoint!, { x, y }];
-      await createConnectionWithPath(startSnapPoint!.meterId, meterId, finalPoints);
-      
-      // Reset drawing state
-      setIsDrawingConnection(false);
-      isDrawingConnectionRef.current = false;
-      setConnectionLinePoints([]);
-      connectionLinePointsRef.current = [];
-      setStartSnapPoint(null);
-      
-      toast.success("Connection created");
-    }
-  };
-  
-  const createConnectionWithPath = async (fromMeterId: string, toMeterId: string, points: Array<{x: number, y: number}>) => {
-    if (!fabricCanvas) return;
-    
-    // Save a single straight line segment
-    const { error } = await supabase
-      .from("schematic_lines")
-      .insert({
-        schematic_id: schematicId,
-        from_x: points[0].x,
-        from_y: points[0].y,
-        to_x: points[1].x,
-        to_y: points[1].y,
-        color: '#3b82f6',
-        stroke_width: 3
-      });
-    
-    if (error) {
-      toast.error("Failed to save connection line");
-      console.error(error);
-      return;
-    }
-    
-    // Also save the meter connection relationship
-    const { error: connError } = await supabase
-      .from('meter_connections')
-      .insert({
-        parent_meter_id: toMeterId,
-        child_meter_id: fromMeterId,
-        connection_type: 'direct',
-      });
-    
-    if (connError) {
-      console.error("Failed to save meter connection:", connError);
-    }
-    
-    // Refresh the lines to show the new connection
-    await fetchLines();
-  };
-
-  const handleMeterClickForConnection = (meterId: string, x: number, y: number) => {
-    if (!selectedMeterForConnection) {
-      setSelectedMeterForConnection(meterId);
-      toast.info("Select the parent meter to connect to");
-    } else {
-      // Create connection
-      createConnection(selectedMeterForConnection, meterId, x, y);
-      setSelectedMeterForConnection(null);
-    }
-  };
-
-  const createConnection = async (childId: string, parentId: string, toX: number, toY: number) => {
-    const childPos = meterPositions.find(p => p.meter_id === childId);
-    const parentPos = meterPositions.find(p => p.meter_id === parentId);
-    if (!childPos || !parentPos || !fabricCanvas) return;
-
-    // Convert percentage positions to pixel for line drawing
-    const canvasWidth = fabricCanvas.getWidth();
-    const canvasHeight = fabricCanvas.getHeight();
-    
-    // Calculate meter card dimensions (assuming standard card size)
-    const cardWidth = 200;
-    const cardHeight = 120;
-    
-    // Calculate positions and snap points for both meters
-    const childX = (childPos.x_position / 100) * canvasWidth;
-    const childY = (childPos.y_position / 100) * canvasHeight;
-    const parentX = (parentPos.x_position / 100) * canvasWidth;
-    const parentY = (parentPos.y_position / 100) * canvasHeight;
-    
-    const childSnapPoints = calculateSnapPoints(childX - cardWidth/2, childY - cardHeight/2, cardWidth, cardHeight);
-    const parentSnapPoints = calculateSnapPoints(parentX - cardWidth/2, parentY - cardHeight/2, cardWidth, cardHeight);
-    
-    // Find nearest snap points on each meter
-    const childSnap = findNearestSnapPoint(parentX, parentY, childSnapPoints);
-    const parentSnap = findNearestSnapPoint(childX, childY, parentSnapPoints);
-
-    // Save meter connection
-    const { error: connError } = await supabase
-      .from("meter_connections")
-      .insert({
-        child_meter_id: childId,
-        parent_meter_id: parentId,
-        connection_type: 'tenant_meter'
-      });
-
-    if (connError) {
-      toast.error("Failed to create meter connection");
-      return;
-    }
-
-    // Save line with snapped coordinates
-    const { error: lineError } = await supabase
-      .from("schematic_lines")
-      .insert({
-        schematic_id: schematicId,
-        from_x: childSnap.x,
-        from_y: childSnap.y,
-        to_x: parentSnap.x,
-        to_y: parentSnap.y,
-        color: '#3b82f6',
-        stroke_width: 3
-      });
-
-    if (!lineError) {
-      toast.success("Connection created");
-      fetchLines();
-    }
-  };
 
   const handleCanvasClick = async (e: any) => {
     if (activeTool !== 'meter') return;
@@ -2461,31 +2108,6 @@ export default function SchematicEditor({
     setActiveTool("select");
   };
 
-  const handleClearLines = async () => {
-    // Cancel any active connection drawing first
-    cancelConnectionDrawing();
-    
-    const { error } = await supabase
-      .from("schematic_lines")
-      .delete()
-      .eq("schematic_id", schematicId);
-
-    if (!error) {
-      toast.success("All connections cleared");
-      fetchLines();
-    }
-  };
-  
-  const cancelConnectionDrawing = () => {
-    if (!fabricCanvas) return;
-    
-    // Reset all drawing state
-    setIsDrawingConnection(false);
-    isDrawingConnectionRef.current = false;
-    setConnectionLinePoints([]);
-    connectionLinePointsRef.current = [];
-    setStartSnapPoint(null);
-  };
 
   const handleZoomIn = () => {
     if (!fabricCanvas) return;
@@ -3129,15 +2751,8 @@ export default function SchematicEditor({
             Select {(selectedRegionIndices.length + selectedMeterIds.length) > 0 && `(${selectedRegionIndices.length + selectedMeterIds.length})`}
           </Button>
           <Button
-            variant={activeTool === "connection" ? "default" : "outline"}
-            onClick={() => {
-              const newTool = activeTool === "connection" ? "select" : "connection";
-              if (activeTool === "connection") {
-                // Cancel any active drawing when turning off connection mode
-                cancelConnectionDrawing();
-              }
-              setActiveTool(newTool);
-            }}
+            variant="outline"
+            onClick={() => {}}
             disabled={!isEditMode}
             size="sm"
             className="gap-2"
@@ -3184,7 +2799,6 @@ export default function SchematicEditor({
                 toast.success("Edit mode enabled");
               } else {
                 // Cancel edit mode and reset active tool
-                cancelConnectionDrawing();
                 setActiveTool("select");
                 toast.info("Edit mode cancelled - unsaved changes discarded");
               }
@@ -3326,12 +2940,6 @@ export default function SchematicEditor({
           >
             <Trash2 className="w-4 h-4" />
             Clear Regions
-          </Button>
-        )}
-        {activeTool === 'connection' && (
-          <Button onClick={handleClearLines} variant="destructive" size="sm" disabled={!isEditMode}>
-            <Trash2 className="w-4 h-4 mr-2" />
-            Clear Lines
           </Button>
         )}
       </div>
@@ -3478,14 +3086,6 @@ export default function SchematicEditor({
               </Button>
             );
           })}
-        </div>
-      )}
-
-      {activeTool === 'connection' && selectedMeterForConnection && (
-        <div className="p-4 bg-primary/10 rounded-lg">
-          <p className="text-sm">
-            Connection mode: Select the parent meter to connect to
-          </p>
         </div>
       )}
 
