@@ -2531,8 +2531,33 @@ export default function SchematicEditor({
     if (!editingMeter) return;
 
     const formData = new FormData(e.target as HTMLFormElement);
+    let meterNumber = formData.get('meter_number') as string;
+    
+    // Generate unique meter number if empty
+    if (!meterNumber || meterNumber.trim() === '') {
+      // Query existing AUTO-METER numbers to find next available
+      const { data: existingMeters } = await supabase
+        .from("meters")
+        .select("meter_number")
+        .eq("site_id", siteId)
+        .like("meter_number", "AUTO-%");
+      
+      // Find the next available AUTO-METER number
+      const autoNumbers = (existingMeters || [])
+        .map(m => {
+          const match = m.meter_number.match(/AUTO-METER-(\d+)/);
+          return match ? parseInt(match[1], 10) : 0;
+        })
+        .filter(n => n > 0);
+      
+      const nextNumber = autoNumbers.length > 0 ? Math.max(...autoNumbers) + 1 : 1;
+      meterNumber = `AUTO-METER-${String(nextNumber).padStart(3, '0')}`;
+      
+      toast.info(`Generated meter number: ${meterNumber}`);
+    }
+    
     const updatedData = {
-      meter_number: formData.get('meter_number') as string,
+      meter_number: meterNumber,
       name: formData.get('name') as string,
       area: formData.get('area') ? Number(formData.get('area')) : null,
       rating: formData.get('rating') as string,
