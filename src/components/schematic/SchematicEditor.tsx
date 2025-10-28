@@ -692,23 +692,28 @@ export default function SchematicEditor({
 
       const delta = evt.deltaY;
       
-      // CTRL + SCROLL: Zoom in/out
+      // CTRL + SCROLL: Zoom in/out with fixed step-based multiplier
       if (evt.ctrlKey || evt.metaKey) {
         let newZoom = canvas.getZoom();
-        newZoom *= 0.999 ** delta;
         
-        // Clamp zoom between 10% and 2000%
-        newZoom = Math.min(Math.max(0.1, newZoom), 20);
+        // Use consistent zoom steps: 1.1 for zoom in (delta < 0), 0.9 for zoom out (delta > 0)
+        // This provides smooth, predictable zoom regardless of device or scroll speed
+        const zoomStep = delta < 0 ? 1.1 : 0.9;
+        newZoom *= zoomStep;
         
-        // Zoom to cursor position
+        // Clamp zoom between 25% and 400% for usability
+        newZoom = Math.min(Math.max(0.25, newZoom), 4);
+        
+        // Zoom to cursor position using original event coordinates (not affected by snap logic)
         const point = new Point(evt.offsetX, evt.offsetY);
         canvas.zoomToPoint(point, newZoom);
         
         setZoom(newZoom);
       }
-      // SHIFT + SCROLL: Pan left/right
+      // SHIFT + SCROLL: Pan left/right with dampening for smooth control
       else if (evt.shiftKey) {
-        canvas.relativePan(new Point(-delta, 0));
+        // Apply dampening multiplier (0.5) for smoother pan speed across devices
+        canvas.relativePan(new Point(-delta * 0.5, 0));
         
         // Update controls after pan
         requestAnimationFrame(() => {
@@ -719,9 +724,10 @@ export default function SchematicEditor({
           }
         });
       }
-      // SCROLL alone: Pan up/down
+      // SCROLL alone: Pan up/down with dampening for smooth control
       else {
-        canvas.relativePan(new Point(0, -delta));
+        // Apply dampening multiplier (0.5) for smoother pan speed across devices
+        canvas.relativePan(new Point(0, -delta * 0.5));
         
         // Update controls after pan
         requestAnimationFrame(() => {
