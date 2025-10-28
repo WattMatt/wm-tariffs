@@ -812,7 +812,7 @@ export default function SchematicViewer() {
                       ref={containerRef}
                       className="relative bg-muted/20 rounded-lg border-2 border-border/50 flex-1 overflow-hidden"
                       style={{ 
-                        cursor: isDragging ? 'grabbing' : 'grab'
+                        cursor: isDragging ? 'grabbing' : 'default'
                       }}
                       onWheel={handleWheel}
                       onMouseDown={handleMouseDown}
