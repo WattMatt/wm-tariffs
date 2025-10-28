@@ -2285,7 +2285,7 @@ export default function SchematicEditor({
       ct_type: formData.get('ct_type') as string,
       meter_type: formData.get('meter_type') as string,
       zone: formData.get('zone') as string || null,
-      confirmation_status: formData.get('confirmation_status') as string || 'unconfirmed',
+      confirmation_status: 'confirmed', // Automatically approve on save
     };
 
     const { error } = await supabase
@@ -2294,11 +2294,11 @@ export default function SchematicEditor({
       .eq('id', editingMeter.id);
 
     if (error) {
-      toast.error('Failed to update meter');
+      toast.error('Failed to save meter');
       return;
     }
 
-    toast.success('Meter updated successfully');
+    toast.success('Meter saved and approved');
     setIsEditMeterDialogOpen(false);
     setEditingMeter(null);
     fetchMeters();
@@ -3567,7 +3567,7 @@ export default function SchematicEditor({
                   Reposition & Rescale
                 </Button>
                 <Button type="submit" className="flex-1">
-                  Update Meter
+                  Save
                 </Button>
                 <Button 
                   type="button" 
