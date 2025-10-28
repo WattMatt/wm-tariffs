@@ -614,8 +614,168 @@ export default function SchematicEditor({
       }
     });
 
+    // Mouse handlers for drawing rectangles when in draw mode
+    let isDrawing = false;
+    let startPoint: { x: number; y: number } | null = null;
+    
+    canvas.on('mouse:down', (opt) => {
+      const currentTool = activeToolRef.current;
+      
+      // Only handle drawing if in draw mode
+      if (currentTool !== 'draw') return;
+      
+      const pointer = canvas.getPointer(opt.e);
+      isDrawing = true;
+      startPoint = { x: pointer.x, y: pointer.y };
+      
+      // Create start marker
+      const marker = new Circle({
+        left: pointer.x,
+        top: pointer.y,
+        radius: 5,
+        fill: '#3b82f6',
+        stroke: '#ffffff',
+        strokeWidth: 2,
+        originX: 'center',
+        originY: 'center',
+        selectable: false,
+        evented: false,
+      });
+      startMarkerRef.current = marker;
+      canvas.add(marker);
+      
+      // Store start point in ref
+      drawStartPointRef.current = startPoint;
+    });
+    
+    canvas.on('mouse:move', (opt) => {
+      if (!isDrawing || !startPoint || activeToolRef.current !== 'draw') return;
+      
+      const pointer = canvas.getPointer(opt.e);
+      
+      // Remove previous preview rectangle
+      if (drawingRectRef.current) {
+        canvas.remove(drawingRectRef.current);
+      }
+      
+      // Create new preview rectangle
+      const left = Math.min(startPoint.x, pointer.x);
+      const top = Math.min(startPoint.y, pointer.y);
+      const width = Math.abs(pointer.x - startPoint.x);
+      const height = Math.abs(pointer.y - startPoint.y);
+      
+      const rect = new Rect({
+        left,
+        top,
+        width,
+        height,
+        fill: 'rgba(59, 130, 246, 0.1)',
+        stroke: '#3b82f6',
+        strokeWidth: 2,
+        selectable: false,
+        evented: false,
+      });
+      
+      drawingRectRef.current = rect;
+      canvas.add(rect);
+      canvas.renderAll();
+    });
+
     canvas.on('mouse:up', async (opt) => {
       const evt = opt.e as MouseEvent;
+      
+      // Handle rectangle drawing completion
+      if (isDrawing && startPoint && activeToolRef.current === 'draw') {
+        const pointer = canvas.getPointer(opt.e);
+        
+        // Calculate rectangle dimensions
+        const left = Math.min(startPoint.x, pointer.x);
+        const top = Math.min(startPoint.y, pointer.y);
+        const width = Math.abs(pointer.x - startPoint.x);
+        const height = Math.abs(pointer.y - startPoint.y);
+        
+        // Only create region if rectangle is large enough
+        if (width > 20 && height > 20) {
+          // Get original image dimensions
+          const canvasWidth = canvas.getWidth();
+          const canvasHeight = canvas.getHeight();
+          const originalImageWidth = (canvas as any).originalImageWidth || canvasWidth;
+          const originalImageHeight = (canvas as any).originalImageHeight || canvasHeight;
+          
+          // Convert from canvas display to original image coordinates
+          const scaleX = originalImageWidth / canvasWidth;
+          const scaleY = originalImageHeight / canvasHeight;
+          
+          const regionId = `region-${Date.now()}`;
+          
+          // Create permanent rectangle
+          const permanentRect = new Rect({
+            left,
+            top,
+            width,
+            height,
+            fill: 'rgba(59, 130, 246, 0.15)',
+            stroke: '#3b82f6',
+            strokeWidth: 2,
+            selectable: true,
+            evented: true,
+            hasControls: true,
+            hasBorders: true,
+          });
+          
+          (permanentRect as any).regionId = regionId;
+          
+          // Store region data
+          const newRegion = {
+            id: regionId,
+            x: left * scaleX,
+            y: top * scaleY,
+            width: width * scaleX,
+            height: height * scaleY,
+            imageWidth: originalImageWidth,
+            imageHeight: originalImageHeight,
+            displayLeft: left,
+            displayTop: top,
+            displayWidth: width,
+            displayHeight: height,
+            fabricRect: permanentRect
+          };
+          
+          setDrawnRegions(prev => [...prev, newRegion]);
+          
+          // Remove preview and marker
+          if (drawingRectRef.current) {
+            canvas.remove(drawingRectRef.current);
+            drawingRectRef.current = null;
+          }
+          if (startMarkerRef.current) {
+            canvas.remove(startMarkerRef.current);
+            startMarkerRef.current = null;
+          }
+          
+          canvas.add(permanentRect);
+          canvas.renderAll();
+          
+          toast.success('Region drawn successfully');
+        } else {
+          // Rectangle too small
+          if (drawingRectRef.current) {
+            canvas.remove(drawingRectRef.current);
+            drawingRectRef.current = null;
+          }
+          if (startMarkerRef.current) {
+            canvas.remove(startMarkerRef.current);
+            startMarkerRef.current = null;
+          }
+          canvas.renderAll();
+        }
+        
+        // Reset drawing state
+        isDrawing = false;
+        startPoint = null;
+        drawStartPointRef.current = null;
+        return;
+      }
       
       // REPOSITIONING MODE: Apply new position and scale
       // CRITICAL: Use refs to check current repositioning state and start point
