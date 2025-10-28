@@ -553,10 +553,6 @@ export default function SchematicEditor({
       const pointer = canvas.getPointer(e);
       canvas.zoomToPoint(pointer, zoom);
       setZoom(zoom);
-      
-      // Show zoom percentage toast
-      const zoomPercent = Math.round(zoom * 100);
-      toast(`Zoom: ${zoomPercent}%`, { duration: 800 });
     });
 
     // Panning variables with movement tracking
