@@ -581,6 +581,23 @@ export default function SchematicEditor({
     }
   }, [activeTool, fabricCanvas]);
 
+  // Update meter card selectability and controls when edit mode changes
+  useEffect(() => {
+    if (fabricCanvas) {
+      fabricCanvas.getObjects().forEach((obj: any) => {
+        // Update meter card images (they have meterId in their data)
+        if (obj.type === 'image' && obj.data?.meterId) {
+          obj.set({
+            selectable: isEditMode,
+            hasControls: isEditMode,
+            hoverCursor: isEditMode ? 'move' : 'pointer'
+          });
+        }
+      });
+      fabricCanvas.renderAll();
+    }
+  }, [isEditMode, fabricCanvas]);
+
   // FABRIC.JS EVENT HANDLER PATTERN: Sync repositioning state to refs
   // Critical for the reposition feature - without this, mouse handlers use stale meter data
   useEffect(() => {
