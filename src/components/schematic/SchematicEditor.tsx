@@ -3711,36 +3711,6 @@ export default function SchematicEditor({
         }
       }}>
         <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
-          <DialogHeader>
-            <div className="flex items-center justify-between">
-              <DialogTitle>Edit Meter Details</DialogTitle>
-              {bulkEditMeterIds.length > 0 && (
-                <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    onClick={navigateToPreviousMeter}
-                    disabled={currentBulkEditIndex === 0}
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </Button>
-                  <span className="text-sm text-muted-foreground">
-                    {currentBulkEditIndex + 1} / {bulkEditMeterIds.length}
-                  </span>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    onClick={navigateToNextMeter}
-                    disabled={currentBulkEditIndex >= bulkEditMeterIds.length - 1}
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </Button>
-                </div>
-              )}
-            </div>
-          </DialogHeader>
           {editingMeter && (
             <form onSubmit={handleUpdateMeter} className="flex-1 flex flex-col min-h-0">
               <div className="flex gap-4 flex-1 min-h-0 overflow-hidden">
@@ -3770,14 +3740,44 @@ export default function SchematicEditor({
                   </div>
                 )}
                 
-                {/* Right Pane - Form Fields */}
-                <div className={`${editingMeter.scannedImageSnippet ? 'w-1/2 pl-4 pr-4' : 'w-full'} overflow-y-auto`}>
-                  <MeterFormFields
-                    key={editingMeter.id + '-' + (editingMeter.updated_at || Date.now())}
-                    idPrefix="edit"
-                    defaultValues={editingMeter}
-                    showLocationAndTariff={true}
-                  />
+                {/* Right Pane - Form Fields with Header */}
+                <div className={`${editingMeter.scannedImageSnippet ? 'w-1/2' : 'w-full'} flex flex-col min-h-0`}>
+                  <div className="flex items-center justify-between mb-4 px-4">
+                    <DialogTitle>Edit Meter Details</DialogTitle>
+                    {bulkEditMeterIds.length > 0 && (
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={navigateToPreviousMeter}
+                          disabled={currentBulkEditIndex === 0}
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                        </Button>
+                        <span className="text-sm text-muted-foreground">
+                          {currentBulkEditIndex + 1} / {bulkEditMeterIds.length}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={navigateToNextMeter}
+                          disabled={currentBulkEditIndex >= bulkEditMeterIds.length - 1}
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 overflow-y-auto px-4">
+                    <MeterFormFields
+                      key={editingMeter.id + '-' + (editingMeter.updated_at || Date.now())}
+                      idPrefix="edit"
+                      defaultValues={editingMeter}
+                      showLocationAndTariff={true}
+                    />
+                  </div>
                 </div>
               </div>
 
