@@ -809,7 +809,7 @@ export default function SchematicEditor({
           left: pointer.x,
           top: pointer.y,
           radius: 6,
-          fill: '#ef4444',
+          fill: '#3b82f6',
           stroke: '#ffffff',
           strokeWidth: 2,
           originX: 'center',
@@ -832,7 +832,6 @@ export default function SchematicEditor({
           strokeWidth: 3,
           selectable: false,
           evented: false,
-          strokeDashArray: [5, 5],
           fill: 'transparent',
         });
         tempLineRef.current = tempLine;
@@ -979,7 +978,6 @@ export default function SchematicEditor({
           strokeWidth: 3,
           selectable: false,
           evented: false,
-          strokeDashArray: [5, 5],
           fill: 'transparent',
         });
         tempLineRef.current = tempLine;
@@ -2283,7 +2281,7 @@ export default function SchematicEditor({
         left: x,
         top: y,
         radius: 6,
-        fill: '#ef4444',
+        fill: '#3b82f6',
         stroke: '#ffffff',
         strokeWidth: 2,
         originX: 'center',
@@ -2291,8 +2289,9 @@ export default function SchematicEditor({
         selectable: false,
         evented: false,
       });
-      connectionNodesRef.current = [startNode];
+       connectionNodesRef.current = [startNode];
       fabricCanvas.add(startNode);
+      fabricCanvas.renderAll();
       
       toast.info("Click to add nodes, click another snap point to complete");
     } else {
@@ -2316,6 +2315,7 @@ export default function SchematicEditor({
         setConnectionLinePoints([]);
         setStartSnapPoint(null);
         
+        fabricCanvas.renderAll();
         toast.success("Connection created");
       } else {
         toast.error("Select a snap point on a different meter");
