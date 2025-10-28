@@ -2294,15 +2294,23 @@ export default function SchematicEditor({
       toast.info("Click another snap point on a different meter to complete");
     } else {
       // Second click - complete the connection
-      // Check if clicking on a different meter's snap point
-      if (meterId !== startSnapPoint?.meterId) {
-        // Create a straight line connection
-        const finalPoints = [startSnapPoint!, { x, y }];
+      // STRICT CHECK: Must be a different meter
+      if (meterId === startSnapPoint?.meterId) {
+        toast.error("Cannot connect a meter to itself! Select a snap point on a DIFFERENT meter.");
+        return; // Exit early without creating connection
+      }
+      
+      // Create a straight line connection
+      const finalPoints = [startSnapPoint!, { x, y }];
+      
+      // Save the connection and WAIT for it to complete
+      const success = await createConnectionWithPath(startSnapPoint!.meterId, meterId, finalPoints);
+      
+      if (success) {
+        // Wait a moment for the lines to be fetched and rendered
+        await new Promise(resolve => setTimeout(resolve, 300));
         
-        // Save the connection and WAIT for it to complete
-        await createConnectionWithPath(startSnapPoint!.meterId, meterId, finalPoints);
-        
-        // Now clean up temporary drawing objects AFTER the line is saved and rendered
+        // Now clean up temporary drawing objects AFTER the permanent line is rendered
         if (tempLineRef.current) {
           fabricCanvas.remove(tempLineRef.current);
           tempLineRef.current = null;
@@ -2319,14 +2327,12 @@ export default function SchematicEditor({
         
         fabricCanvas.renderAll();
         toast.success("Connection created");
-      } else {
-        toast.error("Select a snap point on a different meter");
       }
     }
   };
   
-  const createConnectionWithPath = async (fromMeterId: string, toMeterId: string, points: Array<{x: number, y: number}>) => {
-    if (!fabricCanvas) return;
+  const createConnectionWithPath = async (fromMeterId: string, toMeterId: string, points: Array<{x: number, y: number}>): Promise<boolean> => {
+    if (!fabricCanvas) return false;
     
     // Save a single straight line segment
     const { error } = await supabase
@@ -2344,7 +2350,7 @@ export default function SchematicEditor({
     if (error) {
       toast.error("Failed to save connection line");
       console.error(error);
-      return;
+      return false;
     }
     
     // Also save the meter connection relationship
@@ -2360,8 +2366,9 @@ export default function SchematicEditor({
       console.error("Failed to save meter connection:", connError);
     }
     
-    // Refresh the lines to show the new connection
+    // Refresh the lines to show the new connection and wait for it
     await fetchLines();
+    return true;
   };
 
   const handleMeterClickForConnection = (meterId: string, x: number, y: number) => {
