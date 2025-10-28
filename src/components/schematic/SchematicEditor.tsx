@@ -559,9 +559,11 @@ export default function SchematicEditor({
       width: 1400,
       height: 900,
       backgroundColor: "#f8f9fa",
-      selection: true, // Enable selection by default
-      renderOnAddRemove: true, // Ensure immediate rendering
-      enableRetinaScaling: true, // Better control rendering on high-DPI displays
+      selection: true,
+      renderOnAddRemove: true,
+      enableRetinaScaling: true,
+      controlsAboveOverlay: true,
+      preserveObjectStacking: true,
     });
 
     // Handle scroll/wheel events for navigation and zoom - CONSISTENT ACROSS ALL MODES
@@ -724,16 +726,18 @@ export default function SchematicEditor({
             hasControls: true,
             hasBorders: true,
             lockRotation: true,
+            lockScalingFlip: true,
             cornerStyle: 'circle',
-            cornerSize: 12,
+            cornerSize: 14,
             cornerColor: '#3b82f6',
             cornerStrokeColor: '#ffffff',
             transparentCorners: false,
             borderColor: '#3b82f6',
             borderDashArray: [5, 5],
+            borderScaleFactor: 2,
             hoverCursor: 'move',
             moveCursor: 'move',
-            padding: 0,
+            padding: 5,
           });
           
           (permanentRect as any).regionId = regionId;
