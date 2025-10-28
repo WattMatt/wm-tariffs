@@ -125,9 +125,9 @@ const calculateSnapPoints = (left: number, top: number, width: number, height: n
   const centerY = top + height / 2;
   
   return {
-    top: { x: centerX, y: top },
+    top: { x: centerX, y: top - height },
     right: { x: left + width + width, y: centerY },
-    bottom: { x: centerX, y: top + height },
+    bottom: { x: centerX, y: top + height + height },
     left: { x: left - width, y: centerY }
   };
 };
