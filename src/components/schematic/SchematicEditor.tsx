@@ -1563,6 +1563,8 @@ export default function SchematicEditor({
             lockRotation: true,
             lockScalingX: true,
             lockScalingY: true,
+            stroke: borderColor,
+            strokeWidth: strokeWidth,
           });
           
           // Store the actual meter data
@@ -1763,6 +1765,8 @@ export default function SchematicEditor({
             selectable: isEditMode,
             hoverCursor: isEditMode ? 'move' : 'pointer',
             lockRotation: true,
+            stroke: borderColor,
+            strokeWidth: 4,
           });
           
           img.set('data', { meterId: pos.meter_id, positionId: pos.id });
