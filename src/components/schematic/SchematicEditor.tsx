@@ -1823,15 +1823,16 @@ export default function SchematicEditor({
               const snapCircle = new Circle({
                 left: point.x,
                 top: point.y,
-                radius: 6,
+                radius: 10,
                 fill: '#3b82f6',
                 stroke: '#ffffff',
                 strokeWidth: 2,
                 originX: 'center',
                 originY: 'center',
                 selectable: false,
-                evented: false,
-                opacity: 0.8
+                evented: true,
+                opacity: 0.9,
+                hoverCursor: 'crosshair'
               });
               (snapCircle as any).isSnapPoint = true;
               fabricCanvas.add(snapCircle);
@@ -2086,15 +2087,16 @@ export default function SchematicEditor({
               const snapCircle = new Circle({
                 left: point.x,
                 top: point.y,
-                radius: 6,
+                radius: 10,
                 fill: '#3b82f6',
                 stroke: '#ffffff',
                 strokeWidth: 2,
                 originX: 'center',
                 originY: 'center',
                 selectable: false,
-                evented: false,
-                opacity: 0.8
+                evented: true,
+                opacity: 0.9,
+                hoverCursor: 'crosshair'
               });
               (snapCircle as any).isSnapPoint = true;
               fabricCanvas.add(snapCircle);
