@@ -1811,11 +1811,13 @@ export default function SchematicEditor({
           if (activeTool === 'connection') {
             const actualWidth = cardWidth * scaleX;
             const actualHeight = cardHeight * scaleY;
+            // Account for stroke width - stroke is drawn half inside, half outside
+            const strokeOffset = strokeWidth / 2;
             const snapPoints = calculateSnapPoints(
-              x - actualWidth / 2,
-              y - actualHeight / 2,
-              actualWidth,
-              actualHeight
+              x - (actualWidth + strokeWidth) / 2,
+              y - (actualHeight + strokeWidth) / 2,
+              actualWidth + strokeWidth,
+              actualHeight + strokeWidth
             );
             
             // Create small circles at each snap point
@@ -2075,11 +2077,13 @@ export default function SchematicEditor({
           if (activeTool === 'connection') {
             const actualWidth = cardWidth * baseScaleX * savedScaleX;
             const actualHeight = cardHeight * baseScaleY * savedScaleY;
+            // Account for stroke width - stroke is drawn half inside, half outside
+            const currentStrokeWidth = isEditMode ? 4 : 3;
             const snapPoints = calculateSnapPoints(
-              x - actualWidth / 2,
-              y - actualHeight / 2,
-              actualWidth,
-              actualHeight
+              x - (actualWidth + currentStrokeWidth) / 2,
+              y - (actualHeight + currentStrokeWidth) / 2,
+              actualWidth + currentStrokeWidth,
+              actualHeight + currentStrokeWidth
             );
             
             // Create small circles at each snap point
