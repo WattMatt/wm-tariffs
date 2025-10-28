@@ -1735,6 +1735,13 @@ export default function SchematicEditor({
     // Render saved meter positions
     meterPositions.forEach(pos => {
       const meter = meters.find(m => m.id === pos.meter_id);
+      
+      // Skip if meter not found (could be deleted)
+      if (!meter) {
+        console.warn(`Meter not found for position: ${pos.meter_id}`);
+        return;
+      }
+      
       const meterType = meter?.meter_type || 'unknown';
       const zone = meter?.zone;
       
