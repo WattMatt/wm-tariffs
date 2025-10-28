@@ -1799,8 +1799,10 @@ export default function SchematicEditor({
               strokeWidth: strokeWidth,
               selectable: false,
               evented: false,
-              originX: 'left',
-              originY: 'top',
+              originX: 'center',
+              originY: 'center',
+              scaleX: scaleX,
+              scaleY: scaleY,
             });
             fabricCanvas.add(border);
           }
