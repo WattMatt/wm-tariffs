@@ -2263,7 +2263,7 @@ export default function SchematicEditor({
     setLines(data || []);
   };
 
-  const handleSnapPointClick = (x: number, y: number, meterId: string) => {
+  const handleSnapPointClick = async (x: number, y: number, meterId: string) => {
     if (!fabricCanvas) return;
     
     if (!isDrawingConnection) {
@@ -2299,10 +2299,10 @@ export default function SchematicEditor({
         // Create a straight line connection
         const finalPoints = [startSnapPoint!, { x, y }];
         
-        // Save the connection
-        createConnectionWithPath(startSnapPoint!.meterId, meterId, finalPoints);
+        // Save the connection and WAIT for it to complete
+        await createConnectionWithPath(startSnapPoint!.meterId, meterId, finalPoints);
         
-        // Clean up temporary drawing objects
+        // Now clean up temporary drawing objects AFTER the line is saved and rendered
         if (tempLineRef.current) {
           fabricCanvas.remove(tempLineRef.current);
           tempLineRef.current = null;
