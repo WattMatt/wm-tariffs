@@ -1,3 +1,92 @@
+/**
+ * SchematicEditor Component
+ * 
+ * An interactive schematic editor built with Fabric.js v6 for React.
+ * Handles meter placement, repositioning, connection drawing, and region extraction.
+ * 
+ * ==================================================================================
+ * CRITICAL: FABRIC.JS + REACT STATE MANAGEMENT PATTERN
+ * ==================================================================================
+ * 
+ * This component uses Fabric.js for canvas manipulation, which creates a unique
+ * challenge: Fabric.js event handlers (mouse:down, mouse:move, mouse:up) are
+ * registered ONCE when the canvas is initialized but need access to the LATEST
+ * React state values.
+ * 
+ * THE PROBLEM - Stale Closures:
+ * --------------------------------
+ * When Fabric.js event handlers are registered, they capture the current values
+ * of state variables at registration time. If state changes later, the handlers
+ * still reference the OLD values, causing bugs like:
+ * - Drawing mode not activating properly
+ * - Repositioning mode using stale meter data
+ * - Tool changes not being reflected in interactions
+ * 
+ * THE SOLUTION - Refs for Event Handlers:
+ * ----------------------------------------
+ * We use a dual system:
+ * 1. STATE for UI rendering and React lifecycle
+ * 2. REFS for Fabric.js event handler access (always current)
+ * 
+ * PATTERN TO FOLLOW:
+ * ------------------
+ * For ANY state that needs to be accessed in Fabric.js event handlers:
+ * 
+ * 1. Create BOTH a state AND a ref:
+ *    const [activeTool, setActiveTool] = useState("select");
+ *    const activeToolRef = useRef("select");
+ * 
+ * 2. Sync ref with state using useEffect:
+ *    useEffect(() => {
+ *      activeToolRef.current = activeTool;
+ *    }, [activeTool]);
+ * 
+ * 3. In Fabric.js event handlers, ALWAYS use the ref:
+ *    canvas.on('mouse:down', (opt) => {
+ *      const currentTool = activeToolRef.current; // NOT activeTool!
+ *      // ... handle interaction based on currentTool
+ *    });
+ * 
+ * 4. Update state normally in React event handlers:
+ *    <Button onClick={() => setActiveTool("draw")}>Draw</Button>
+ * 
+ * EXAMPLES IN THIS COMPONENT:
+ * ----------------------------
+ * - activeTool / activeToolRef (lines ~307)
+ * - repositioningMeter / repositioningMeterRef (lines ~351, ~356)
+ * - repositionStartPoint / repositionStartPointRef (lines ~352, ~357)
+ * - isRepositionDragging / isRepositionDraggingRef (lines ~353, ~358)
+ * 
+ * WHY THIS WORKS:
+ * ---------------
+ * - Refs are mutable and persist across renders without triggering re-renders
+ * - When we update a ref via useEffect, ALL event handlers immediately see the new value
+ * - State still drives UI updates and React's declarative model
+ * - No need to re-register event handlers when state changes
+ * 
+ * WHEN TO USE THIS PATTERN:
+ * --------------------------
+ * Use refs for Fabric.js event handler access when:
+ * ✅ State determines canvas interaction behavior (tool modes, edit states)
+ * ✅ State changes frequently and event handlers need current values
+ * ✅ You encounter "stale closure" bugs where handlers use old data
+ * 
+ * DO NOT overuse refs:
+ * ❌ For UI-only state that Fabric.js never accesses
+ * ❌ For derived values that can be computed from other state
+ * ❌ For simple callbacks that don't depend on changing state
+ * 
+ * DEBUGGING TIPS:
+ * ---------------
+ * If canvas interactions behave unexpectedly:
+ * 1. Check if event handlers read from state instead of refs
+ * 2. Verify useEffect syncs are in place for all critical refs
+ * 3. Add console.logs comparing state vs ref values in handlers
+ * 4. Ensure refs are updated BEFORE any asynchronous operations
+ * 
+ * ==================================================================================
+ */
+
 import { useEffect, useRef, useState } from "react";
 import { Canvas as FabricCanvas, Circle, Line, Text, FabricImage, Rect, util, Point } from "fabric";
 import { Button } from "@/components/ui/button";
@@ -303,6 +392,9 @@ export default function SchematicEditor({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [fabricCanvas, setFabricCanvas] = useState<FabricCanvas | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
+  
+  // FABRIC.JS EVENT HANDLER PATTERN: State + Ref for tool selection
+  // State drives UI, ref provides current value to canvas event handlers
   const [activeTool, setActiveTool] = useState<"select" | "meter" | "connection" | "move" | "draw">("select");
   const activeToolRef = useRef<"select" | "meter" | "connection" | "move" | "draw">("select");
   const [isDrawingMode, setIsDrawingMode] = useState(false);
@@ -348,11 +440,15 @@ export default function SchematicEditor({
   const [isEditMeterDialogOpen, setIsEditMeterDialogOpen] = useState(false);
   const [isConfirmMeterDialogOpen, setIsConfirmMeterDialogOpen] = useState(false);
   const [editingMeter, setEditingMeter] = useState<any>(null);
+  
+  // FABRIC.JS EVENT HANDLER PATTERN: Repositioning state + refs
+  // These control the "Reposition & Rescale" feature where users redraw meter card bounds
+  // State drives UI updates, refs provide current values to mouse event handlers
   const [repositioningMeter, setRepositioningMeter] = useState<{ meterId?: string, positionId?: string, meterIndex?: number, isSaved: boolean } | null>(null);
   const [repositionStartPoint, setRepositionStartPoint] = useState<{ x: number; y: number } | null>(null);
   const [isRepositionDragging, setIsRepositionDragging] = useState(false);
   
-  // Refs for repositioning to avoid stale closures
+  // Refs synced with repositioning state to prevent stale closures in Fabric.js handlers
   const repositioningMeterRef = useRef<{ meterId?: string, positionId?: string, meterIndex?: number, isSaved: boolean } | null>(null);
   const repositionStartPointRef = useRef<{ x: number; y: number } | null>(null);
   const isRepositionDraggingRef = useRef(false);
@@ -375,7 +471,8 @@ export default function SchematicEditor({
     fetchLines();
   }, [schematicId, siteId]);
 
-  // Sync drawing mode state and ref when tool changes
+  // FABRIC.JS EVENT HANDLER PATTERN: Sync activeTool state to ref
+  // This ensures canvas event handlers always read the current tool selection
   useEffect(() => {
     activeToolRef.current = activeTool;
     const newDrawingMode = activeTool === 'draw';
@@ -387,7 +484,8 @@ export default function SchematicEditor({
     }
   }, [activeTool, fabricCanvas]);
 
-  // Sync repositioning refs with state to avoid stale closures
+  // FABRIC.JS EVENT HANDLER PATTERN: Sync repositioning state to refs
+  // Critical for the reposition feature - without this, mouse handlers use stale meter data
   useEffect(() => {
     repositioningMeterRef.current = repositioningMeter;
     repositionStartPointRef.current = repositionStartPoint;
@@ -440,6 +538,9 @@ export default function SchematicEditor({
     canvas.on('mouse:down', (opt) => {
       const evt = opt.e as MouseEvent;
       const target = opt.target;
+      
+      // CRITICAL: Use ref instead of state to get current tool
+      // State would be stale from when this handler was registered
       const currentTool = activeToolRef.current;
       
       // Middle mouse button ALWAYS enables panning in ALL modes
@@ -456,10 +557,12 @@ export default function SchematicEditor({
       }
       
       // REPOSITIONING MODE: Handle drawing new region for meter card
+      // CRITICAL: Use repositioningMeterRef.current instead of repositioningMeter state
+      // This ensures we check the CURRENT repositioning state, not stale captured value
       if (repositioningMeterRef.current && evt.button === 0) {
         const pointer = canvas.getPointer(opt.e);
         setRepositionStartPoint(pointer);
-        repositionStartPointRef.current = pointer;
+        repositionStartPointRef.current = pointer; // Update ref immediately for move handler
         setIsRepositionDragging(false);
         isRepositionDraggingRef.current = false;
         evt.preventDefault();
@@ -657,9 +760,11 @@ export default function SchematicEditor({
     });
 
     canvas.on('mouse:move', (opt) => {
+      // CRITICAL: Use activeToolRef.current to get current tool, not activeTool state
       const currentTool = activeToolRef.current;
       
       // REPOSITIONING MODE: Show preview rectangle
+      // CRITICAL: Use refs to check current repositioning state, not stale state values
       if (repositioningMeterRef.current && repositionStartPointRef.current) {
         const pointer = canvas.getPointer(opt.e);
         const currentX = pointer.x;
@@ -771,8 +876,10 @@ export default function SchematicEditor({
       const evt = opt.e as MouseEvent;
       
       // REPOSITIONING MODE: Apply new position and scale
+      // CRITICAL: Use refs to check current repositioning state and start point
+      // This ensures we have the latest values when completing the repositioning action
       if (repositioningMeterRef.current && repositionStartPointRef.current) {
-        // Only apply changes if user actually dragged
+        // Only apply changes if user actually dragged (checked via ref)
         if (!isRepositionDraggingRef.current) {
           // User just clicked without dragging, ignore
           setRepositionStartPoint(null);
@@ -1174,7 +1281,9 @@ export default function SchematicEditor({
     };
   }, [schematicUrl]);
 
-  // Keyboard handler for ESC key to cancel repositioning
+  // ESCAPE KEY: Cancel repositioning mode
+  // CRITICAL: Uses repositioningMeterRef to check current repositioning state
+  // This ensures the handler can detect and cancel repositioning even when state has changed
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && repositioningMeterRef.current) {
@@ -2778,11 +2887,14 @@ export default function SchematicEditor({
                     onClick={() => {
                       setIsConfirmMeterDialogOpen(false);
                       if (selectedMeterIndex !== null) {
+                        // ACTIVATE REPOSITIONING MODE for extracted (unsaved) meter
+                        // State update will trigger useEffect that syncs to repositioningMeterRef
+                        // Canvas mouse handlers will then use ref to detect repositioning mode
                         setRepositioningMeter({ 
                           meterIndex: selectedMeterIndex,
                           isSaved: false 
                         });
-                        // Dim other objects
+                        // Dim other objects for visual clarity
                         fabricCanvas?.getObjects().forEach((obj: any) => {
                           const meterCard = meterCardObjects.get(selectedMeterIndex);
                           if (obj !== meterCard) {
@@ -2999,17 +3111,20 @@ export default function SchematicEditor({
                     // Find the position ID for this meter
                     const position = meterPositions.find(p => p.meter_id === editingMeter.id);
                     if (position) {
+                      // ACTIVATE REPOSITIONING MODE for saved meter
+                      // State update will trigger useEffect that syncs to repositioningMeterRef
+                      // Canvas mouse handlers will then use ref to detect repositioning mode
                       setRepositioningMeter({ 
                         meterId: editingMeter.id, 
                         positionId: position.id,
                         isSaved: true 
                       });
-                      // Disable canvas selection and change cursor
+                      // Disable canvas selection and change cursor for drawing mode
                       if (fabricCanvas) {
                         fabricCanvas.selection = false;
                         fabricCanvas.defaultCursor = 'crosshair';
                       }
-                      // Dim other objects
+                      // Dim other objects for visual clarity
                       fabricCanvas?.getObjects().forEach((obj: any) => {
                         const objData = obj.get('data');
                         if (!objData || objData.meterId !== editingMeter.id) {
