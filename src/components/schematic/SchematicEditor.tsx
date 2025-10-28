@@ -3487,7 +3487,7 @@ export default function SchematicEditor({
 
       {/* Edit Meter Dialog for Database Meters */}
       <Dialog open={isEditMeterDialogOpen} onOpenChange={setIsEditMeterDialogOpen}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle>Edit Meter Details</DialogTitle>
             <DialogDescription>
@@ -3495,15 +3495,36 @@ export default function SchematicEditor({
             </DialogDescription>
           </DialogHeader>
           {editingMeter && (
-            <form onSubmit={handleUpdateMeter} className="space-y-6">
-              <MeterFormFields 
-                idPrefix="edit"
-                defaultValues={editingMeter}
-                showLocationAndTariff={true}
-                scannedImageSnippet={editingMeter.scannedImageSnippet}
-              />
+            <form onSubmit={handleUpdateMeter} className="flex-1 flex flex-col min-h-0">
+              <div className="flex gap-4 flex-1 min-h-0 overflow-hidden">
+                {/* Left Pane - Scanned Area */}
+                {editingMeter.scannedImageSnippet && (
+                  <div className="w-1/2 flex flex-col space-y-2 overflow-y-auto p-4 bg-muted rounded-lg border">
+                    <Label className="text-sm font-semibold">Scanned Area from PDF</Label>
+                    <div className="border rounded overflow-hidden bg-white flex-1">
+                      <img 
+                        src={editingMeter.scannedImageSnippet} 
+                        alt="Scanned meter region" 
+                        className="w-full h-auto"
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground italic">
+                      This is the exact region that was scanned from the PDF
+                    </p>
+                  </div>
+                )}
+                
+                {/* Right Pane - Form Fields */}
+                <div className={`${editingMeter.scannedImageSnippet ? 'w-1/2' : 'w-full'} overflow-y-auto pr-2`}>
+                  <MeterFormFields 
+                    idPrefix="edit"
+                    defaultValues={editingMeter}
+                    showLocationAndTariff={true}
+                  />
+                </div>
+              </div>
 
-              <div className="flex gap-2">
+              <div className="flex gap-2 pt-4 border-t mt-4">
                 <Button
                   type="button"
                   variant="outline"

@@ -20,14 +20,12 @@ interface MeterFormFieldsProps {
     confirmation_status?: string;
   };
   showLocationAndTariff?: boolean;
-  scannedImageSnippet?: string;
 }
 
 export function MeterFormFields({ 
   idPrefix, 
   defaultValues, 
-  showLocationAndTariff = false,
-  scannedImageSnippet 
+  showLocationAndTariff = false
 }: MeterFormFieldsProps) {
   // Clean VERIFY: and NOT_VISIBLE prefixes from extracted data
   const cleanValue = (value?: string | number) => {
@@ -42,25 +40,7 @@ export function MeterFormFields({
   };
 
   return (
-    <>
-      {/* Show scanned PDF snippet if available */}
-      {scannedImageSnippet && (
-        <div className="space-y-2 p-4 bg-muted rounded-lg border">
-          <Label className="text-sm font-semibold">Scanned Area from PDF</Label>
-          <div className="border rounded overflow-hidden bg-white">
-            <img 
-              src={scannedImageSnippet} 
-              alt="Scanned meter region" 
-              className="w-full h-auto"
-            />
-          </div>
-          <p className="text-xs text-muted-foreground italic">
-            This is the exact region that was scanned from the PDF
-          </p>
-        </div>
-      )}
-
-      <div className="grid grid-cols-2 gap-4">
+    <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor={`${idPrefix}_meter_number`}>NO (Meter Number) *</Label>
           <Input 
@@ -217,6 +197,5 @@ export function MeterFormFields({
           </>
         )}
       </div>
-    </>
   );
 }
