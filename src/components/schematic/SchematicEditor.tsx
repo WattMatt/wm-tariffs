@@ -3625,6 +3625,7 @@ export default function SchematicEditor({
                 {/* Right Pane - Form Fields */}
                 <div className={`${editingMeter.scannedImageSnippet ? 'w-1/2' : 'w-full'} overflow-y-auto pr-2`}>
                   <MeterFormFields 
+                    key={editingMeter.id + '-' + (editingMeter.updated_at || Date.now())}
                     idPrefix="edit"
                     defaultValues={editingMeter}
                     showLocationAndTariff={true}
@@ -3663,7 +3664,7 @@ export default function SchematicEditor({
                       if (error) throw error;
                       
                       if (data?.meter) {
-                        // Update the editing meter with newly extracted data
+                        // Update the editing meter with newly extracted data, including timestamp for key
                         setEditingMeter({
                           ...editingMeter,
                           meter_number: data.meter.meter_number || editingMeter.meter_number,
@@ -3675,6 +3676,7 @@ export default function SchematicEditor({
                           ct_type: data.meter.ct_type || editingMeter.ct_type,
                           meter_type: data.meter.meter_type || editingMeter.meter_type,
                           zone: data.meter.zone || editingMeter.zone,
+                          updated_at: Date.now(), // Force form re-render
                         });
                         toast.success('Meter data re-extracted successfully!');
                       } else {
