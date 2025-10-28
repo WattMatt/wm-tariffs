@@ -540,6 +540,38 @@ export default function SchematicEditor({
     let lastY = 0;
     let hasMoved = false;
 
+    // Mouse wheel: Different behaviors based on modifier keys
+    canvas.on('mouse:wheel', (opt) => {
+      const e = opt.e as WheelEvent;
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const delta = e.deltaY;
+      
+      if (e.ctrlKey) {
+        // CTRL + SCROLL: Zoom in/out
+        let zoom = canvas.getZoom();
+        zoom *= 0.999 ** delta;
+        
+        // Clamp zoom between 5% and 2000%
+        if (zoom > 20) zoom = 20;
+        if (zoom < 0.05) zoom = 0.05;
+        
+        // Zoom to cursor position
+        const pointer = canvas.getPointer(e);
+        canvas.zoomToPoint(pointer, zoom);
+        setZoom(zoom);
+      } else if (e.shiftKey) {
+        // SHIFT + SCROLL: Pan left/right
+        const panAmount = delta * 0.5;
+        canvas.relativePan(new Point(-panAmount, 0));
+      } else {
+        // SCROLL alone: Pan up/down
+        const panAmount = delta * 0.5;
+        canvas.relativePan(new Point(0, -panAmount));
+      }
+    });
+
     canvas.on('mouse:down', (opt) => {
       const evt = opt.e as MouseEvent;
       const target = opt.target;
