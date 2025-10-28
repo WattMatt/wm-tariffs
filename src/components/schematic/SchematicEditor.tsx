@@ -2186,7 +2186,18 @@ export default function SchematicEditor({
               continue;
             }
             
-            // Create meter position on schematic
+            // Calculate scale based on drawn rectangle size
+            // Base meter card size is 200x140
+            const baseMeterWidth = 200;
+            const baseMeterHeight = 140;
+            const canvasWidth = fabricCanvas?.getWidth() || 1000;
+            const canvasHeight = fabricCanvas?.getHeight() || 1000;
+            
+            // Convert region display dimensions to scale factors
+            const scaleX = region.displayWidth / baseMeterWidth;
+            const scaleY = region.displayHeight / baseMeterHeight;
+            
+            // Create meter position on schematic with proper scale
             const { error: posError } = await supabase
               .from("meter_positions")
               .insert({
@@ -2195,8 +2206,8 @@ export default function SchematicEditor({
                 x_position: xPercent,
                 y_position: yPercent,
                 label: meterNumber,
-                scale_x: 1.0,
-                scale_y: 1.0
+                scale_x: scaleX,
+                scale_y: scaleY
               });
             
             if (posError) {
