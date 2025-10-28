@@ -98,6 +98,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import CsvImportDialog from "@/components/site/CsvImportDialog";
 import { MeterDataExtractor } from "./MeterDataExtractor";
 import { MeterFormFields } from "./MeterFormFields";
+import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 
 // Helper function to calculate snap points for a meter card
 const calculateSnapPoints = (left: number, top: number, width: number, height: number) => {
@@ -3610,11 +3611,23 @@ export default function SchematicEditor({
                   <div className="w-1/2 flex flex-col space-y-2 overflow-y-auto p-4">
                     <Label className="text-sm font-semibold">Scanned Area from PDF</Label>
                     <div className="border rounded overflow-hidden bg-white w-fit">
-                      <img 
-                        src={editingMeter.scannedImageSnippet} 
-                        alt="Scanned meter region" 
-                        className="w-full h-auto"
-                      />
+                      <TransformWrapper
+                        initialScale={1}
+                        minScale={0.5}
+                        maxScale={4}
+                        centerOnInit={true}
+                      >
+                        <TransformComponent
+                          wrapperClass="!w-full !h-full"
+                          contentClass="!w-full !h-full"
+                        >
+                          <img 
+                            src={editingMeter.scannedImageSnippet} 
+                            alt="Scanned meter region" 
+                            className="w-full h-auto"
+                          />
+                        </TransformComponent>
+                      </TransformWrapper>
                     </div>
                   </div>
                 )}
