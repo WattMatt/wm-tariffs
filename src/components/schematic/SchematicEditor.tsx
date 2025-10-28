@@ -2569,7 +2569,7 @@ export default function SchematicEditor({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-2">
       {/* First row: Scan All and Select Regions with Save/Edit buttons */}
       <div className="flex gap-2 items-start justify-between">
         {/* Left side: Scan buttons and selection badges */}
@@ -2752,7 +2752,7 @@ export default function SchematicEditor({
 
       {/* Second row: Bulk Action buttons (visible when in selection mode with selected items) */}
       {isSelectionMode && (selectedRegionIndices.length > 0 || selectedMeterIds.length > 0) && (
-        <div className="flex gap-2 items-center flex-wrap p-3 bg-muted rounded-lg border">
+        <div className="flex gap-2 items-center flex-wrap">
           <span className="text-sm font-medium text-muted-foreground">
             {selectedRegionIndices.length + selectedMeterIds.length} item(s) selected:
           </span>
