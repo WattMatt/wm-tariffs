@@ -358,6 +358,7 @@ export type Database = {
         Row: {
           area: number | null
           cable_specification: string | null
+          confirmation_status: string | null
           created_at: string | null
           ct_ratio: string | null
           ct_type: string | null
@@ -383,6 +384,7 @@ export type Database = {
         Insert: {
           area?: number | null
           cable_specification?: string | null
+          confirmation_status?: string | null
           created_at?: string | null
           ct_ratio?: string | null
           ct_type?: string | null
@@ -408,6 +410,7 @@ export type Database = {
         Update: {
           area?: number | null
           cable_specification?: string | null
+          confirmation_status?: string | null
           created_at?: string | null
           ct_ratio?: string | null
           ct_type?: string | null

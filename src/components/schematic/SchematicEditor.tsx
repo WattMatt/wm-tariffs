@@ -1678,17 +1678,38 @@ export default function SchematicEditor({
       const meterType = meter?.meter_type || 'unknown';
       const zone = meter?.zone;
       
-      // Determine border color based on zone or meter type
+      // Determine border color based on confirmation status first
+      const confirmationStatus = (meter as any).confirmation_status || 'unconfirmed';
       let borderColor = '#3b82f6'; // default blue
       let categoryKey = 'other';
       
+      // Priority 1: Zone colors (highest priority)
       if (zone === 'main_board') {
         borderColor = '#9333ea'; // purple for Main Board zone
         categoryKey = 'main_board_zone';
       } else if (zone === 'mini_sub') {
         borderColor = '#06b6d4'; // cyan for Mini Sub zone
         categoryKey = 'mini_sub_zone';
-      } else if (meterType.includes('bulk')) {
+      } 
+      // Priority 2: Confirmation status colors
+      else if (confirmationStatus === 'confirmed') {
+        borderColor = '#22c55e'; // green for confirmed
+        if (meterType.includes('bulk')) categoryKey = 'bulk_meter';
+        else if (meterType.includes('check')) categoryKey = 'check_meter';
+        else if (meterType.includes('tenant')) categoryKey = 'tenant_meter';
+      } else if (confirmationStatus === 'needs_review') {
+        borderColor = '#f59e0b'; // amber/orange for needs review
+        if (meterType.includes('bulk')) categoryKey = 'bulk_meter';
+        else if (meterType.includes('check')) categoryKey = 'check_meter';
+        else if (meterType.includes('tenant')) categoryKey = 'tenant_meter';
+      } else if (confirmationStatus === 'unconfirmed') {
+        borderColor = '#ef4444'; // red for unconfirmed
+        if (meterType.includes('bulk')) categoryKey = 'bulk_meter';
+        else if (meterType.includes('check')) categoryKey = 'check_meter';
+        else if (meterType.includes('tenant')) categoryKey = 'tenant_meter';
+      }
+      // Priority 3: Meter type colors (fallback)
+      else if (meterType.includes('bulk')) {
         borderColor = '#ef4444'; // red
         categoryKey = 'bulk_meter';
       } else if (meterType.includes('check')) {
@@ -2219,6 +2240,7 @@ export default function SchematicEditor({
       ct_type: formData.get('ct_type') as string,
       meter_type: formData.get('meter_type') as string,
       zone: formData.get('zone') as string || null,
+      confirmation_status: formData.get('confirmation_status') as string || 'unconfirmed',
     };
 
     const { error } = await supabase
@@ -2386,6 +2408,7 @@ export default function SchematicEditor({
                   serial_number: extractedMeterData?.serial_number || null,
                   ct_type: extractedMeterData?.ct_type || null,
                   scanned_snippet_url: croppedImageUrl, // Save the snippet image
+                  confirmation_status: 'needs_review', // Re-scanned meters need review
                 })
                 .eq("id", existingMeter.id)
                 .select()
@@ -2417,6 +2440,7 @@ export default function SchematicEditor({
                   tariff: null,
                   is_revenue_critical: false,
                   scanned_snippet_url: croppedImageUrl, // Save the snippet image
+                  confirmation_status: 'unconfirmed', // New scanned meters are unconfirmed
                 })
                 .select()
                 .single();

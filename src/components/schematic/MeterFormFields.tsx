@@ -17,6 +17,7 @@ interface MeterFormFieldsProps {
     zone?: string;
     location?: string;
     tariff?: string;
+    confirmation_status?: string;
   };
   showLocationAndTariff?: boolean;
   scannedImageSnippet?: string;
@@ -170,6 +171,20 @@ export function MeterFormFields({
             <SelectContent className="bg-background z-50">
               <SelectItem value="main_board">Main Board</SelectItem>
               <SelectItem value="mini_sub">Mini Sub</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor={`${idPrefix}_confirmation_status`}>Confirmation Status</Label>
+          <Select name="confirmation_status" defaultValue={defaultValues.confirmation_status || 'unconfirmed'}>
+            <SelectTrigger className="bg-background">
+              <SelectValue placeholder="Select status" />
+            </SelectTrigger>
+            <SelectContent className="bg-background z-50">
+              <SelectItem value="unconfirmed">🔴 Unconfirmed</SelectItem>
+              <SelectItem value="needs_review">🟠 Needs Review</SelectItem>
+              <SelectItem value="confirmed">🟢 Confirmed</SelectItem>
             </SelectContent>
           </Select>
         </div>
