@@ -401,6 +401,12 @@ export default function SchematicEditor({
   // Bulk selection state for saved meter cards
   const [selectedMeterCardIds, setSelectedMeterCardIds] = useState<string[]>([]);
   const selectedMeterCardIdsRef = useRef<string[]>([]);
+  
+  // Bulk selection drag state
+  const [bulkSelectStartPoint, setBulkSelectStartPoint] = useState<{ x: number; y: number } | null>(null);
+  const bulkSelectStartPointRef = useRef<{ x: number; y: number } | null>(null);
+  const [isBulkSelecting, setIsBulkSelecting] = useState(false);
+  const isBulkSelectingRef = useRef(false);
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [drawnRegions, setDrawnRegions] = useState<Array<{
     id: string;
@@ -498,6 +504,15 @@ export default function SchematicEditor({
   useEffect(() => {
     selectedMeterCardIdsRef.current = selectedMeterCardIds;
   }, [selectedMeterCardIds]);
+  
+  // Sync bulk selection drag state to refs
+  useEffect(() => {
+    bulkSelectStartPointRef.current = bulkSelectStartPoint;
+  }, [bulkSelectStartPoint]);
+  
+  useEffect(() => {
+    isBulkSelectingRef.current = isBulkSelecting;
+  }, [isBulkSelecting]);
 
   // FABRIC.JS EVENT HANDLER PATTERN: Sync repositioning state to refs
   // Critical for the reposition feature - without this, mouse handlers use stale meter data
@@ -750,35 +765,46 @@ export default function SchematicEditor({
         }
       }
       
-      // BULK SELECT MODE: Handle clicking on meter cards to toggle selection
-      if (currentTool === 'bulk' && evt.button === 0 && target) {
-        const isMeterCard = (target as any).meterCardType && (target as any).meterId;
-        if (isMeterCard) {
-          const meterId = (target as any).meterId;
-          const currentSelection = selectedMeterCardIdsRef.current;
-          
-          if (currentSelection.includes(meterId)) {
-            // Deselect
-            setSelectedMeterCardIds(prev => prev.filter(id => id !== meterId));
-            target.set({
-              strokeWidth: 0,
-              borderColor: '#0e74dd',
-              cornerColor: '#0e74dd',
-            });
-          } else {
-            // Select
-            setSelectedMeterCardIds(prev => [...prev, meterId]);
-            target.set({
-              strokeWidth: 4,
-              stroke: 'hsl(142, 76%, 36%)',
-              borderColor: 'hsl(142, 76%, 36%)',
-              cornerColor: 'hsl(142, 76%, 36%)',
-            });
+      // BULK SELECT MODE: Handle clicking on meter cards to toggle selection OR start drag selection
+      if (currentTool === 'bulk' && evt.button === 0) {
+        if (target) {
+          const isMeterCard = (target as any).meterCardType && (target as any).meterId;
+          if (isMeterCard) {
+            const meterId = (target as any).meterId;
+            const currentSelection = selectedMeterCardIdsRef.current;
+            
+            if (currentSelection.includes(meterId)) {
+              // Deselect
+              setSelectedMeterCardIds(prev => prev.filter(id => id !== meterId));
+              target.set({
+                strokeWidth: 0,
+                borderColor: '#0e74dd',
+                cornerColor: '#0e74dd',
+              });
+            } else {
+              // Select
+              setSelectedMeterCardIds(prev => [...prev, meterId]);
+              target.set({
+                strokeWidth: 4,
+                stroke: 'hsl(142, 76%, 36%)',
+                borderColor: 'hsl(142, 76%, 36%)',
+                cornerColor: 'hsl(142, 76%, 36%)',
+              });
+            }
+            
+            canvas.renderAll();
+            evt.preventDefault();
+            evt.stopPropagation();
+            return;
           }
-          
-          canvas.renderAll();
-          evt.preventDefault();
-          evt.stopPropagation();
+        } else if (!evt.shiftKey && !evt.ctrlKey) {
+          // Start drag selection on empty canvas
+          const pointer = canvas.getPointer(evt);
+          setBulkSelectStartPoint({ x: pointer.x, y: pointer.y });
+          bulkSelectStartPointRef.current = { x: pointer.x, y: pointer.y };
+          setIsBulkSelecting(false);
+          isBulkSelectingRef.current = false;
+          canvas.selection = false;
           return;
         }
       }
@@ -810,6 +836,48 @@ export default function SchematicEditor({
     canvas.on('mouse:move', (opt) => {
       // CRITICAL: Use activeToolRef.current to get current tool, not activeTool state
       const currentTool = activeToolRef.current;
+      
+      // BULK SELECT MODE: Show selection rectangle during drag
+      if (currentTool === 'bulk' && bulkSelectStartPointRef.current) {
+        const pointer = canvas.getPointer(opt.e);
+        const currentX = pointer.x;
+        const currentY = pointer.y;
+
+        // Check if user has dragged enough (minimum 5 pixels)
+        const dragDistance = Math.sqrt(
+          Math.pow(currentX - bulkSelectStartPointRef.current.x, 2) + 
+          Math.pow(currentY - bulkSelectStartPointRef.current.y, 2)
+        );
+
+        if (dragDistance > 5) {
+          isBulkSelectingRef.current = true;
+          setIsBulkSelecting(true);
+
+          // Remove any existing preview rectangle
+          const existingPreview = canvas.getObjects().find((obj: any) => obj.bulkSelectPreview);
+          if (existingPreview) {
+            canvas.remove(existingPreview);
+          }
+
+          // Draw preview rectangle
+          const previewRect = new Rect({
+            left: Math.min(bulkSelectStartPointRef.current.x, currentX),
+            top: Math.min(bulkSelectStartPointRef.current.y, currentY),
+            width: Math.abs(currentX - bulkSelectStartPointRef.current.x),
+            height: Math.abs(currentY - bulkSelectStartPointRef.current.y),
+            fill: 'rgba(14, 116, 221, 0.1)',
+            stroke: 'hsl(210, 100%, 45%)',
+            strokeWidth: 2,
+            strokeDashArray: [5, 5],
+            selectable: false,
+            evented: false,
+          });
+          (previewRect as any).bulkSelectPreview = true;
+          canvas.add(previewRect);
+          canvas.renderAll();
+        }
+        return;
+      }
       
       // REPOSITIONING MODE: Show preview rectangle
       // CRITICAL: Use refs to check current repositioning state, not stale state values
@@ -922,6 +990,73 @@ export default function SchematicEditor({
 
     canvas.on('mouse:up', async (opt) => {
       const evt = opt.e as MouseEvent;
+      
+      // BULK SELECT MODE: Select all meter cards within selection rectangle
+      if (bulkSelectStartPointRef.current) {
+        // Only process if user actually dragged
+        if (isBulkSelectingRef.current) {
+          const pointer = canvas.getPointer(opt.e);
+          
+          // Remove preview rectangle
+          const existingPreview = canvas.getObjects().find((obj: any) => obj.bulkSelectPreview);
+          if (existingPreview) {
+            canvas.remove(existingPreview);
+          }
+          
+          // Calculate selection bounds
+          const selectionLeft = Math.min(bulkSelectStartPointRef.current.x, pointer.x);
+          const selectionTop = Math.min(bulkSelectStartPointRef.current.y, pointer.y);
+          const selectionRight = Math.max(bulkSelectStartPointRef.current.x, pointer.x);
+          const selectionBottom = Math.max(bulkSelectStartPointRef.current.y, pointer.y);
+          
+          // Find all meter cards that intersect with the selection rectangle
+          const selectedMeterIds: string[] = [];
+          canvas.getObjects().forEach((obj: any) => {
+            if (obj.meterCardType && obj.meterId) {
+              const objLeft = obj.left;
+              const objTop = obj.top;
+              const objRight = obj.left + obj.width * obj.scaleX;
+              const objBottom = obj.top + obj.height * obj.scaleY;
+              
+              // Check if rectangles intersect
+              const intersects = !(objRight < selectionLeft || 
+                                  objLeft > selectionRight || 
+                                  objBottom < selectionTop || 
+                                  objTop > selectionBottom);
+              
+              if (intersects) {
+                selectedMeterIds.push(obj.meterId);
+                // Apply selection styling
+                obj.set({
+                  strokeWidth: 4,
+                  stroke: 'hsl(142, 76%, 36%)',
+                  borderColor: 'hsl(142, 76%, 36%)',
+                  cornerColor: 'hsl(142, 76%, 36%)',
+                });
+              }
+            }
+          });
+          
+          if (selectedMeterIds.length > 0) {
+            setSelectedMeterCardIds(prev => {
+              // Merge with existing selection
+              const newSelection = [...new Set([...prev, ...selectedMeterIds])];
+              return newSelection;
+            });
+            toast.success(`Selected ${selectedMeterIds.length} meter(s)`);
+          }
+          
+          canvas.renderAll();
+        }
+        
+        // Reset bulk selection state
+        setBulkSelectStartPoint(null);
+        bulkSelectStartPointRef.current = null;
+        setIsBulkSelecting(false);
+        isBulkSelectingRef.current = false;
+        canvas.selection = true;
+        return;
+      }
       
       // REPOSITIONING MODE: Apply new position and scale
       // CRITICAL: Use refs to check current repositioning state and start point
@@ -1365,9 +1500,33 @@ export default function SchematicEditor({
           isRepositionDraggingRef.current = false;
           
           toast.info("Repositioning cancelled");
+        } else if (bulkSelectStartPointRef.current) {
+          // Cancel bulk selection drag if in progress
+          e.preventDefault();
+          const existingPreview = fabricCanvas?.getObjects().find((obj: any) => obj.bulkSelectPreview);
+          if (existingPreview) {
+            fabricCanvas?.remove(existingPreview);
+          }
+          setBulkSelectStartPoint(null);
+          bulkSelectStartPointRef.current = null;
+          setIsBulkSelecting(false);
+          isBulkSelectingRef.current = false;
+          fabricCanvas?.renderAll();
+          toast.info("Bulk selection cancelled");
         } else if (activeToolRef.current === 'bulk' && selectedMeterCardIdsRef.current.length > 0) {
           e.preventDefault();
           setSelectedMeterCardIds([]);
+          // Clear visual selection from meter cards
+          fabricCanvas?.getObjects().forEach((obj: any) => {
+            if (obj.meterCardType) {
+              obj.set({
+                strokeWidth: 0,
+                borderColor: '#0e74dd',
+                cornerColor: '#0e74dd',
+              });
+            }
+          });
+          fabricCanvas?.renderAll();
           toast.info("Selection cleared");
         }
       }
