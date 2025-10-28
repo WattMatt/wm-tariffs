@@ -506,6 +506,8 @@ export default function SchematicEditor({
   const [editingMeter, setEditingMeter] = useState<any>(null);
   const [isViewMeterDialogOpen, setIsViewMeterDialogOpen] = useState(false);
   const [viewingMeter, setViewingMeter] = useState<any>(null);
+  const [showUnconfirmed, setShowUnconfirmed] = useState(true);
+  const [showConfirmed, setShowConfirmed] = useState(true);
   
   // FABRIC.JS EVENT HANDLER PATTERN: State + refs for complex interactions
   // State drives UI updates, refs provide current values to mouse event handlers
@@ -671,6 +673,29 @@ export default function SchematicEditor({
     
     fabricCanvas.renderAll();
   }, [isEditMode, fabricCanvas, meters]);
+
+  // Control visibility based on confirmation status filters
+  useEffect(() => {
+    if (!fabricCanvas || !meters.length) return;
+    
+    fabricCanvas.getObjects().forEach((obj: any) => {
+      if (obj.type === 'image' && obj.data?.meterId) {
+        const meterId = obj.data.meterId;
+        const meter = meters.find(m => m.id === meterId);
+        
+        if (meter) {
+          const confirmationStatus = (meter as any).confirmation_status || 'unconfirmed';
+          const shouldShow = 
+            (confirmationStatus === 'confirmed' && showConfirmed) ||
+            (confirmationStatus === 'unconfirmed' && showUnconfirmed);
+          
+          obj.set({ visible: shouldShow });
+        }
+      }
+    });
+    
+    fabricCanvas.renderAll();
+  }, [showConfirmed, showUnconfirmed, fabricCanvas, meters]);
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -3233,11 +3258,19 @@ export default function SchematicEditor({
           {/* Bottom row - Extracted Meters Status (Always visible, greyed out when not applicable) */}
           <div className={`flex gap-3 flex-wrap items-center transition-opacity ${extractedMeters.length === 0 ? 'opacity-40' : ''}`}>
             <div className="text-xs font-medium text-muted-foreground mr-2 flex items-center">Extracted:</div>
-            <Badge variant="outline">
+            <Badge 
+              variant="outline" 
+              className={`cursor-pointer transition-all ${!showUnconfirmed ? 'opacity-40' : 'hover:bg-muted'}`}
+              onClick={() => setShowUnconfirmed(!showUnconfirmed)}
+            >
               <div className="w-3 h-3 rounded-full bg-[#dc2626] border-2 border-[#dc2626] mr-2" />
               Unconfirmed
             </Badge>
-            <Badge variant="outline">
+            <Badge 
+              variant="outline" 
+              className={`cursor-pointer transition-all ${!showConfirmed ? 'opacity-40' : 'hover:bg-muted'}`}
+              onClick={() => setShowConfirmed(!showConfirmed)}
+            >
               <div className="w-3 h-3 rounded-full bg-[#16a34a] border-2 border-[#16a34a] mr-2" />
               Confirmed
             </Badge>
