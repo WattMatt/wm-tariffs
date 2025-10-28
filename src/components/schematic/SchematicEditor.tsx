@@ -583,10 +583,6 @@ export default function SchematicEditor({
       const pointer = canvas.getPointer(e);
       canvas.zoomToPoint(pointer, zoom);
       setZoom(zoom);
-      
-      // Show zoom percentage toast
-      const zoomPercent = Math.round(zoom * 100);
-      toast(`Zoom: ${zoomPercent}%`, { duration: 800 });
     });
 
     // Handle scroll/wheel events for navigation and zoom
@@ -2266,15 +2262,6 @@ export default function SchematicEditor({
             Clear Regions
           </Button>
         )}
-        <Button
-          variant={activeTool === "meter" ? "default" : "outline"}
-          onClick={() => setActiveTool(activeTool === "meter" ? "select" : "meter")}
-          disabled={!isEditMode}
-          size="sm"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Add Meter
-        </Button>
         <Button onClick={handleClearLines} variant="destructive" size="sm" disabled={!isEditMode}>
           <Trash2 className="w-4 h-4 mr-2" />
           Clear Lines
