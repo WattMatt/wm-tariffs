@@ -67,6 +67,11 @@ EXTRACT these fields with EXACT formatting:
 
 - meter_number (NO): 
   - Extract exactly as labeled (e.g., "DB-01A", "MB-03", "INCOMING-01")
+  - **If NOT VISIBLE:** Generate based on NAME and context:
+    * For bulk/incoming: "MAIN-01", "MAIN-02" etc.
+    * For check meters: "CHECK-01", "CHECK-02" etc.
+    * For tenant meters: Use NAME abbreviation (e.g., "CAR-01" for CAR WASH, "VAC-01" for VACANT)
+    * Include zone prefix if identifiable: "MB-" for main board, "MS-" for mini sub
   
 - name (NAME): 
   - Extract exactly as shown (e.g., "VACANT", "ACKERMANS", "MAIN BOARD 1")
@@ -116,6 +121,11 @@ Extract ALL meter data visible in this cropped image.
 METER DATA TO EXTRACT:
 
 1. meter_number (NO): Extract exactly as shown (e.g., "DB-01A", "MB-03", "INCOMING-01")
+   - **If NOT VISIBLE:** Generate contextually relevant number based on NAME/type:
+     * Bulk/incoming meters: "MAIN-01", "MAIN-02"
+     * Check meters: "CHECK-01", "CHECK-02"
+     * Tenant meters: First 2-3 letters of NAME + number (e.g., "CAR-01", "VAC-01")
+     * Add zone prefix where applicable: "MB-" or "MS-"
 2. name (NAME): Business/tenant name or "VACANT"
 3. area (AREA): Include unit "m²" (e.g., "187m²", "406m²")
 4. rating (RATING): Include full units (e.g., "150A TP", "100A TP")
@@ -196,6 +206,12 @@ CRITICAL DATA FIELDS (Zero error tolerance):
    - Extract EXACTLY as shown (e.g., "DB-01W", "MB-1 INCOMING COUNCIL")
    - Include all letters, numbers, hyphens, spaces
    - If unclear: prefix with "VERIFY:"
+   - **If NOT VISIBLE or completely missing:** Generate a relevant meter number based on available data:
+     * For bulk/incoming meters with NAME containing "MAIN", "INCOMING", "COUNCIL", "BULK": use "MAIN-[sequential]" (e.g., "MAIN-01", "MAIN-02")
+     * For check meters with NAME containing "CHECK": use "CHECK-[sequential]" (e.g., "CHECK-01", "CHECK-02")
+     * For tenant meters with specific NAME: use first 2-3 letters of NAME + sequential (e.g., "CAR-01" for CAR WASH, "VAC-01" for VACANT)
+     * Include zone prefix if applicable: "MB-" for main board, "MS-" for mini sub (e.g., "MB-CAR-01")
+     * Always use format that's meaningful and traceable to the actual meter
 
 2. serial_number (SERIAL): ⚠️ MOST CRITICAL FIELD
    - Read character-by-character, verify twice
@@ -256,12 +272,13 @@ VALIDATION CHECKLIST:
 ✓ Positions reflect actual visual layout
 ✓ Scales match relative sizes on schematic
 ✓ All units preserved (m², A TP, mm², ALU ECC CABLE)
+✓ Meter numbers are either extracted exactly or intelligently generated based on context
 
 OUTPUT FORMAT:
 {
   "meters": [
     {
-      "meter_number": "DB-01W",
+      "meter_number": "DB-01W",  // Extract exactly as shown, or generate contextually if not visible (e.g., "MB-CAR-01", "MAIN-01", "CHECK-01")
       "name": "CAR WASH",
       "area": "187m²",
       "rating": "80A TP",
