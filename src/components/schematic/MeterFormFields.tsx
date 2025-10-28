@@ -2,6 +2,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Wand2 } from "lucide-react";
+import { useState } from "react";
 
 interface MeterFormFieldsProps {
   idPrefix: string;
@@ -39,18 +42,73 @@ export function MeterFormFields({
     return String(value).includes('NOT_VISIBLE');
   };
 
+  // State for meter number to allow button to update it
+  const [meterNumber, setMeterNumber] = useState(cleanValue(defaultValues.meter_number));
+
+  // Generate meter number based on name
+  const generateMeterNumber = () => {
+    const nameInput = document.getElementById(`${idPrefix}_name`) as HTMLInputElement;
+    const meterTypeSelect = document.querySelector(`select[name="meter_type"]`) as HTMLSelectElement;
+    const zoneSelect = document.querySelector(`select[name="zone"]`) as HTMLSelectElement;
+    
+    const name = nameInput?.value || '';
+    const meterType = meterTypeSelect?.value || 'tenant_meter';
+    const zone = zoneSelect?.value || '';
+    
+    if (!name) {
+      return;
+    }
+    
+    let generatedNumber = '';
+    
+    // Add zone prefix if available
+    if (zone === 'main_board') {
+      generatedNumber = 'MB-';
+    } else if (zone === 'mini_sub') {
+      generatedNumber = 'MS-';
+    }
+    
+    // Determine prefix based on meter type and name
+    if (meterType === 'bulk_meter' || name.toUpperCase().includes('MAIN') || 
+        name.toUpperCase().includes('INCOMING') || name.toUpperCase().includes('COUNCIL')) {
+      generatedNumber += 'MAIN-01';
+    } else if (meterType === 'check_meter' || name.toUpperCase().includes('CHECK')) {
+      generatedNumber += 'CHECK-01';
+    } else {
+      // Use first 2-3 letters of name for tenant meters
+      const cleanName = name.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const prefix = cleanName.substring(0, Math.min(3, cleanName.length));
+      generatedNumber += prefix ? `${prefix}-01` : 'METER-01';
+    }
+    
+    setMeterNumber(generatedNumber);
+  };
+
   return (
     <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor={`${idPrefix}_meter_number`}>NO (Meter Number) *</Label>
-          <Input 
-            id={`${idPrefix}_meter_number`}
-            name="meter_number" 
-            required 
-            defaultValue={cleanValue(defaultValues.meter_number)}
-            placeholder="DB-03"
-            className={hasNotVisible(defaultValues.meter_number) ? 'border-orange-500' : ''}
-          />
+          <div className="flex gap-2">
+            <Input 
+              id={`${idPrefix}_meter_number`}
+              name="meter_number" 
+              required 
+              value={meterNumber}
+              onChange={(e) => setMeterNumber(e.target.value)}
+              placeholder="DB-03"
+              className={hasNotVisible(defaultValues.meter_number) ? 'border-orange-500' : ''}
+            />
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={generateMeterNumber}
+              className="shrink-0"
+              title="Generate meter number from name"
+            >
+              <Wand2 className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
 
       <div className="space-y-2">
