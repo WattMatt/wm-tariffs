@@ -2565,6 +2565,57 @@ export default function SchematicEditor({
 
       {/* Second row: Action buttons */}
       <div className="flex gap-2 items-center flex-wrap">
+        <Button
+          variant={activeTool === "meter" ? "default" : "outline"}
+          onClick={() => {
+            if (activeTool === "meter") {
+              setActiveTool("select");
+              toast.info("Add Meter mode disabled");
+            } else {
+              setActiveTool("meter");
+              toast.info("Click on the schematic to add a meter");
+            }
+          }}
+          disabled={!isEditMode}
+          size="sm"
+        >
+          <Plus className="w-4 h-4 mr-2" />
+          Add Meter
+        </Button>
+        <Button
+          variant={activeTool === "move" ? "default" : "outline"}
+          onClick={() => {
+            if (activeTool === "move") {
+              setActiveTool("select");
+              toast.info("Move mode disabled");
+            } else {
+              setActiveTool("move");
+              toast.info("Click on a meter card to reposition it");
+            }
+          }}
+          disabled={!isEditMode}
+          size="sm"
+        >
+          <Move className="w-4 h-4 mr-2" />
+          Move
+        </Button>
+        <Button
+          variant={activeTool === "connection" ? "default" : "outline"}
+          onClick={() => {
+            if (activeTool === "connection") {
+              setActiveTool("select");
+              toast.info("Connect mode disabled");
+            } else {
+              setActiveTool("connection");
+              toast.info("Click on meters to connect them");
+            }
+          }}
+          disabled={!isEditMode}
+          size="sm"
+        >
+          <Link2 className="w-4 h-4 mr-2" />
+          Connect
+        </Button>
         <Button onClick={handleClearLines} variant="destructive" size="sm" disabled={!isEditMode}>
           <Trash2 className="w-4 h-4 mr-2" />
           Clear Lines
@@ -2581,33 +2632,6 @@ export default function SchematicEditor({
             Clear Regions
           </Button>
         )}
-        <Button
-          variant={activeTool === "meter" ? "default" : "outline"}
-          onClick={() => setActiveTool("meter")}
-          disabled={!isEditMode}
-          size="sm"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Add Meter
-        </Button>
-        <Button
-          variant={activeTool === "move" ? "default" : "outline"}
-          onClick={() => setActiveTool("move")}
-          disabled={!isEditMode}
-          size="sm"
-        >
-          <Move className="w-4 h-4 mr-2" />
-          Move
-        </Button>
-        <Button
-          variant={activeTool === "connection" ? "default" : "outline"}
-          onClick={() => setActiveTool("connection")}
-          disabled={!isEditMode}
-          size="sm"
-        >
-          <Link2 className="w-4 h-4 mr-2" />
-          Connect
-        </Button>
         
         {/* Bulk Actions - show when meters are selected */}
         {selectedMeterCardIds.length > 0 && (
