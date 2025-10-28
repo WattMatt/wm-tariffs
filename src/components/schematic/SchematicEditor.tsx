@@ -133,6 +133,35 @@ const calculateSnapPoints = (left: number, top: number, width: number, height: n
   };
 };
 
+// Helper function to find the nearest snap point within threshold distance
+const findNearestSnapPoint = (
+  canvas: FabricCanvas,
+  pointer: { x: number; y: number },
+  threshold: number = 10
+): { x: number; y: number } | null => {
+  let nearestPoint: { x: number; y: number } | null = null;
+  let minDistance = threshold;
+  
+  // Find all snap point circles on the canvas
+  canvas.getObjects().forEach((obj: any) => {
+    if (obj.isSnapPoint && obj.type === 'circle') {
+      const snapX = obj.left;
+      const snapY = obj.top;
+      
+      const distance = Math.sqrt(
+        Math.pow(pointer.x - snapX, 2) + Math.pow(pointer.y - snapY, 2)
+      );
+      
+      if (distance < minDistance) {
+        minDistance = distance;
+        nearestPoint = { x: snapX, y: snapY };
+      }
+    }
+  });
+  
+  return nearestPoint;
+};
+
 // Helper function to create meter card as an image matching reference format
 async function createMeterCardImage(
   fields: Array<{ label: string; value: string }>,
@@ -839,11 +868,19 @@ export default function SchematicEditor({
     
     canvas.on('mouse:move', (opt) => {
       const evt = opt.e as MouseEvent;
+      let pointer = canvas.getPointer(opt.e);
+      
+      // Apply snap-to-point logic when in connection mode
+      if (activeToolRef.current === 'connection') {
+        const snappedPoint = findNearestSnapPoint(canvas, pointer, 10);
+        if (snappedPoint) {
+          pointer = new Point(snappedPoint.x, snappedPoint.y);
+        }
+      }
       
       // Check if user is dragging with shift held and selection mode active
       // Enable shift-drag selection if they started with shift+click and are now moving
       if (evt.shiftKey && isSelectionModeRef.current && startPoint && !isShiftDragSelecting) {
-        const pointer = canvas.getPointer(opt.e);
         const distance = Math.sqrt(
           Math.pow(pointer.x - startPoint.x, 2) + Math.pow(pointer.y - startPoint.y, 2)
         );
@@ -857,8 +894,6 @@ export default function SchematicEditor({
       
       // Handle shift+drag multi-select box
       if (isShiftDragSelecting && startPoint) {
-        const pointer = canvas.getPointer(opt.e);
-        
         // Remove previous selection box
         if (selectionBoxRef.current) {
           canvas.remove(selectionBoxRef.current);
@@ -890,8 +925,6 @@ export default function SchematicEditor({
       }
       
       if (!isDrawing || !startPoint || activeToolRef.current !== 'draw') return;
-      
-      const pointer = canvas.getPointer(opt.e);
       
       // Remove previous preview rectangle
       if (drawingRectRef.current) {
