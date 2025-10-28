@@ -88,7 +88,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { Canvas as FabricCanvas, Circle, Line, Text, FabricImage, Rect, util, Point } from "fabric";
+import { Canvas as FabricCanvas, Circle, Line, Text, FabricImage, Rect, Polygon, util, Point } from "fabric";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -101,6 +101,65 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import CsvImportDialog from "@/components/site/CsvImportDialog";
 import { MeterDataExtractor } from "./MeterDataExtractor";
 import { MeterFormFields } from "./MeterFormFields";
+
+// Helper function to calculate snap points for a meter card
+const calculateSnapPoints = (left: number, top: number, width: number, height: number) => {
+  const centerX = left + width / 2;
+  const centerY = top + height / 2;
+  
+  return {
+    top: { x: centerX, y: top },
+    right: { x: left + width, y: centerY },
+    bottom: { x: centerX, y: top + height },
+    left: { x: left, y: centerY }
+  };
+};
+
+// Helper function to find nearest snap point
+const findNearestSnapPoint = (targetX: number, targetY: number, snapPoints: ReturnType<typeof calculateSnapPoints>) => {
+  let nearest = { ...snapPoints.top, edge: 'top' };
+  let minDistance = Math.hypot(snapPoints.top.x - targetX, snapPoints.top.y - targetY);
+  
+  Object.entries(snapPoints).forEach(([edge, point]) => {
+    const distance = Math.hypot(point.x - targetX, point.y - targetY);
+    if (distance < minDistance) {
+      minDistance = distance;
+      nearest = { ...point, edge };
+    }
+  });
+  
+  return nearest;
+};
+
+// Helper function to create an arrow head polygon
+const createArrowHead = (fromX: number, fromY: number, toX: number, toY: number, color: string) => {
+  const headLength = 15;
+  const headWidth = 10;
+  
+  // Calculate angle
+  const angle = Math.atan2(toY - fromY, toX - fromX);
+  
+  // Calculate arrow head points
+  const point1 = {
+    x: toX - headLength * Math.cos(angle - Math.PI / 6),
+    y: toY - headLength * Math.sin(angle - Math.PI / 6)
+  };
+  
+  const point2 = {
+    x: toX - headLength * Math.cos(angle + Math.PI / 6),
+    y: toY - headLength * Math.sin(angle + Math.PI / 6)
+  };
+  
+  return new Polygon([
+    { x: toX, y: toY },
+    { x: point1.x, y: point1.y },
+    { x: point2.x, y: point2.y }
+  ], {
+    fill: color,
+    selectable: false,
+    evented: false,
+  });
+};
 
 interface SchematicEditorProps {
   schematicId: string;
@@ -1043,7 +1102,7 @@ export default function SchematicEditor({
       }
     });
 
-    // Render saved lines
+    // Render saved lines with arrow heads
     lines.forEach(line => {
       const fabricLine = new Line([line.from_x, line.from_y, line.to_x, line.to_y], {
         stroke: line.color,
@@ -1052,6 +1111,10 @@ export default function SchematicEditor({
         evented: false,
       });
       fabricCanvas.add(fabricLine);
+      
+      // Add arrow head to show electricity flow direction (from child to parent)
+      const arrowHead = createArrowHead(line.from_x, line.from_y, line.to_x, line.to_y, line.color);
+      fabricCanvas.add(arrowHead);
     });
 
     // Render extracted meters (from AI extraction)
@@ -1219,6 +1282,38 @@ export default function SchematicEditor({
           }
 
           fabricCanvas.add(img);
+          
+          // Add snap point indicators when in connection mode
+          if (activeTool === 'connection') {
+            const actualWidth = cardWidth * scaleX;
+            const actualHeight = cardHeight * scaleY;
+            const snapPoints = calculateSnapPoints(
+              x - actualWidth / 2,
+              y - actualHeight / 2,
+              actualWidth,
+              actualHeight
+            );
+            
+            // Create small circles at each snap point
+            Object.values(snapPoints).forEach(point => {
+              const snapCircle = new Circle({
+                left: point.x,
+                top: point.y,
+                radius: 6,
+                fill: '#3b82f6',
+                stroke: '#ffffff',
+                strokeWidth: 2,
+                originX: 'center',
+                originY: 'center',
+                selectable: false,
+                evented: false,
+                opacity: 0.8
+              });
+              (snapCircle as any).isSnapPoint = true;
+              fabricCanvas.add(snapCircle);
+            });
+          }
+          
           fabricCanvas.renderAll();
         };
       });
@@ -1363,6 +1458,38 @@ export default function SchematicEditor({
           }
 
           fabricCanvas.add(img);
+          
+          // Add snap point indicators when in connection mode
+          if (activeTool === 'connection') {
+            const actualWidth = cardWidth * baseScaleX * savedScaleX;
+            const actualHeight = cardHeight * baseScaleY * savedScaleY;
+            const snapPoints = calculateSnapPoints(
+              x - actualWidth / 2,
+              y - actualHeight / 2,
+              actualWidth,
+              actualHeight
+            );
+            
+            // Create small circles at each snap point
+            Object.values(snapPoints).forEach(point => {
+              const snapCircle = new Circle({
+                left: point.x,
+                top: point.y,
+                radius: 6,
+                fill: '#3b82f6',
+                stroke: '#ffffff',
+                strokeWidth: 2,
+                originX: 'center',
+                originY: 'center',
+                selectable: false,
+                evented: false,
+                opacity: 0.8
+              });
+              (snapCircle as any).isSnapPoint = true;
+              fabricCanvas.add(snapCircle);
+            });
+          }
+          
           fabricCanvas.renderAll();
         };
       });
@@ -1429,13 +1556,29 @@ export default function SchematicEditor({
 
   const createConnection = async (childId: string, parentId: string, toX: number, toY: number) => {
     const childPos = meterPositions.find(p => p.meter_id === childId);
-    if (!childPos || !fabricCanvas) return;
+    const parentPos = meterPositions.find(p => p.meter_id === parentId);
+    if (!childPos || !parentPos || !fabricCanvas) return;
 
     // Convert percentage positions to pixel for line drawing
     const canvasWidth = fabricCanvas.getWidth();
     const canvasHeight = fabricCanvas.getHeight();
-    const fromX = (childPos.x_position / 100) * canvasWidth;
-    const fromY = (childPos.y_position / 100) * canvasHeight;
+    
+    // Calculate meter card dimensions (assuming standard card size)
+    const cardWidth = 200;
+    const cardHeight = 120;
+    
+    // Calculate positions and snap points for both meters
+    const childX = (childPos.x_position / 100) * canvasWidth;
+    const childY = (childPos.y_position / 100) * canvasHeight;
+    const parentX = (parentPos.x_position / 100) * canvasWidth;
+    const parentY = (parentPos.y_position / 100) * canvasHeight;
+    
+    const childSnapPoints = calculateSnapPoints(childX - cardWidth/2, childY - cardHeight/2, cardWidth, cardHeight);
+    const parentSnapPoints = calculateSnapPoints(parentX - cardWidth/2, parentY - cardHeight/2, cardWidth, cardHeight);
+    
+    // Find nearest snap points on each meter
+    const childSnap = findNearestSnapPoint(parentX, parentY, childSnapPoints);
+    const parentSnap = findNearestSnapPoint(childX, childY, parentSnapPoints);
 
     // Save meter connection
     const { error: connError } = await supabase
@@ -1451,15 +1594,15 @@ export default function SchematicEditor({
       return;
     }
 
-    // Save line
+    // Save line with snapped coordinates
     const { error: lineError } = await supabase
       .from("schematic_lines")
       .insert({
         schematic_id: schematicId,
-        from_x: fromX,
-        from_y: fromY,
-        to_x: toX,
-        to_y: toY,
+        from_x: childSnap.x,
+        from_y: childSnap.y,
+        to_x: parentSnap.x,
+        to_y: parentSnap.y,
         color: '#3b82f6',
         stroke_width: 3
       });
