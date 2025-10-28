@@ -155,18 +155,18 @@ export function MeterFormFields({
           </Select>
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor={`${idPrefix}_confirmation_status`}>Confirmation Status</Label>
-          <Select name="confirmation_status" defaultValue={defaultValues.confirmation_status || 'unconfirmed'}>
-            <SelectTrigger className="bg-background">
-              <SelectValue placeholder="Select status" />
-            </SelectTrigger>
-            <SelectContent className="bg-background z-50">
-              <SelectItem value="unconfirmed">🔴 Unconfirmed</SelectItem>
-              <SelectItem value="confirmed">🟢 Confirmed</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+      <div className="space-y-2">
+        <Label htmlFor={`${idPrefix}_confirmation_status`}>Confirmation Status</Label>
+        <Select name="confirmation_status" defaultValue="confirmed">
+          <SelectTrigger className="bg-background">
+            <SelectValue placeholder="Select status" />
+          </SelectTrigger>
+          <SelectContent className="bg-background z-50">
+            <SelectItem value="unconfirmed">🔴 Unconfirmed</SelectItem>
+            <SelectItem value="confirmed">🟢 Confirmed</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
 
         {showLocationAndTariff && (
           <>
