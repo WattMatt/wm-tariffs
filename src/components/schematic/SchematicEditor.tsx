@@ -538,9 +538,30 @@ export default function SchematicEditor({
     const newDrawingMode = activeTool === 'draw';
     setIsDrawingMode(newDrawingMode);
     
-    // Ensure canvas selection is enabled in draw mode to allow editing rectangles
-    if (fabricCanvas && activeTool === 'draw') {
-      fabricCanvas.selection = true;
+    // Handle object selectability based on tool mode
+    if (fabricCanvas) {
+      if (activeTool === 'draw') {
+        // In draw mode: enable selection but only for rectangles
+        fabricCanvas.selection = true;
+        fabricCanvas.getObjects().forEach((obj: any) => {
+          // Only rectangles with regionId are selectable in draw mode
+          if (obj.type === 'rect' && obj.regionId) {
+            obj.selectable = true;
+            obj.evented = true;
+          } else {
+            obj.selectable = false;
+            obj.evented = false;
+          }
+        });
+      } else {
+        // In other modes: restore selectability for all objects
+        fabricCanvas.selection = true;
+        fabricCanvas.getObjects().forEach((obj: any) => {
+          obj.selectable = true;
+          obj.evented = true;
+        });
+      }
+      fabricCanvas.renderAll();
     }
   }, [activeTool, fabricCanvas]);
 
@@ -625,9 +646,6 @@ export default function SchematicEditor({
       
       // Only handle drawing if in draw mode
       if (currentTool !== 'draw') return;
-      
-      // Don't start drawing if clicking on an existing object
-      if (opt.target) return;
       
       const pointer = canvas.getPointer(opt.e);
       isDrawing = true;
