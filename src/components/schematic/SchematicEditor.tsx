@@ -2425,14 +2425,16 @@ export default function SchematicEditor({
           <Button
             variant={selectedRegionIndices.length > 0 ? "default" : "outline"}
             onClick={() => {
-              if (selectedRegionIndices.length > 0) {
+              if (drawnRegions.length === 0) {
+                toast.info("First draw regions using the 'Draw Regions' button, then use this to select them with Shift+click", { duration: 5000 });
+              } else if (selectedRegionIndices.length > 0) {
                 setSelectedRegionIndices([]);
                 toast.info("Region selection cleared");
               } else {
                 toast.info("Shift+click on regions to select them", { duration: 4000 });
               }
             }}
-            disabled={!isEditMode || drawnRegions.length === 0}
+            disabled={!isEditMode}
             size="sm"
             className="gap-2"
           >
