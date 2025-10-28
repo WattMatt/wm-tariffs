@@ -501,7 +501,7 @@ export default function SchematicEditor({
   const [isDrawingConnection, setIsDrawingConnection] = useState(false);
   const [connectionLinePoints, setConnectionLinePoints] = useState<Array<{x: number, y: number}>>([]);
   const [startSnapPoint, setStartSnapPoint] = useState<{x: number, y: number, meterId: string} | null>(null);
-  const tempLineRef = useRef<Polyline | null>(null);
+  const tempLineRef = useRef<Line | Polyline | null>(null);
   const connectionNodesRef = useRef<Circle[]>([]);
   const [isSelectionMode, setIsSelectionMode] = useState(false); // Track whether selection mode is active
   const [zoom, setZoom] = useState(1);
@@ -804,53 +804,8 @@ export default function SchematicEditor({
       
       console.log('mouse:down', { currentTool, hasTarget: !!target, targetType: target?.type, targetRegionId: (target as any)?.regionId, shiftKey: evt.shiftKey, isSelectionMode: isSelectionModeRef.current });
       
-      // Handle connection line drawing mode
-      if (isDrawingConnectionRef.current && currentTool === 'connection') {
-        // Check if clicking on a snap point (handled by snap point click handler)
-        if (target && (target as any).isSnapPoint) {
-          return; // Let the snap point handler deal with it
-        }
-        
-        // Otherwise, add a node at the click position
-        const pointer = canvas.getPointer(opt.e);
-        setConnectionLinePoints(prev => [...prev, { x: pointer.x, y: pointer.y }]);
-        
-        // Create a node marker
-        const node = new Circle({
-          left: pointer.x,
-          top: pointer.y,
-          radius: 6,
-          fill: '#3b82f6',
-          stroke: '#ffffff',
-          strokeWidth: 2,
-          originX: 'center',
-          originY: 'center',
-          selectable: false,
-          evented: false,
-        });
-        connectionNodesRef.current.push(node);
-        canvas.add(node);
-        
-        // Update the temporary line
-        if (tempLineRef.current) {
-          canvas.remove(tempLineRef.current);
-        }
-        
-        const allPoints = [...connectionLinePoints, { x: pointer.x, y: pointer.y }];
-        
-        const tempLine = new Polyline(allPoints, {
-          stroke: '#3b82f6',
-          strokeWidth: 3,
-          selectable: false,
-          evented: false,
-          fill: 'transparent',
-        });
-        tempLineRef.current = tempLine;
-        canvas.add(tempLine);
-        canvas.renderAll();
-        
-        return; // Don't proceed with other mouse:down logic
-      }
+      // Connection mode clicks are handled by snap point click handlers only
+      // No intermediate nodes allowed
       
       // Handle Shift+drag multi-select in selection mode (when shift pressed)
       if (evt.shiftKey && isSelectionModeRef.current) {
@@ -973,7 +928,7 @@ export default function SchematicEditor({
     canvas.on('mouse:move', (opt) => {
       const evt = opt.e as MouseEvent;
       
-      // Handle cursor snapping to snap points when in connection mode
+      // Handle cursor snapping and line preview when in connection mode
       if (activeToolRef.current === 'connection') {
         let pointer = canvas.getPointer(opt.e);
         
@@ -996,27 +951,28 @@ export default function SchematicEditor({
           }
         }
         
-        // If actively drawing a line, show the preview
+        // If actively drawing a line, show straight line preview from start point to cursor
         if (isDrawingConnectionRef.current && connectionLinePointsRef.current.length > 0) {
-          // Use snapped point if found, otherwise use cursor position
           const targetPoint = snappedPoint || pointer;
+          const startPoint = connectionLinePointsRef.current[0];
           
-          // Update the temporary line preview
+          // Remove old preview line
           if (tempLineRef.current) {
             canvas.remove(tempLineRef.current);
           }
           
-          const allPoints = [...connectionLinePointsRef.current, targetPoint];
-          
-          const tempLine = new Polyline(allPoints, {
-            stroke: '#3b82f6',
-            strokeWidth: 3,
-            selectable: false,
-            evented: false,
-            fill: 'transparent',
-          });
-          tempLineRef.current = tempLine;
-          canvas.add(tempLine);
+          // Draw straight line from start to current position
+          const previewLine = new Line(
+            [startPoint.x, startPoint.y, targetPoint.x, targetPoint.y],
+            {
+              stroke: '#3b82f6',
+              strokeWidth: 3,
+              selectable: false,
+              evented: false,
+            }
+          );
+          tempLineRef.current = previewLine;
+          canvas.add(previewLine);
           canvas.renderAll();
         }
         
@@ -2311,14 +2267,14 @@ export default function SchematicEditor({
     if (!fabricCanvas) return;
     
     if (!isDrawingConnection) {
-      // Start drawing a new connection line
+      // First click - start drawing a connection line
       setIsDrawingConnection(true);
       isDrawingConnectionRef.current = true;
       setStartSnapPoint({ x, y, meterId });
       setConnectionLinePoints([{ x, y }]);
       connectionLinePointsRef.current = [{ x, y }];
       
-      // Create starting node
+      // Create starting node marker
       const startNode = new Circle({
         left: x,
         top: y,
@@ -2335,14 +2291,15 @@ export default function SchematicEditor({
       fabricCanvas.add(startNode);
       fabricCanvas.renderAll();
       
-      toast.info("Click to add nodes, click another snap point to complete");
+      toast.info("Click another snap point on a different meter to complete");
     } else {
+      // Second click - complete the connection
       // Check if clicking on a different meter's snap point
       if (meterId !== startSnapPoint?.meterId) {
-        // Complete the connection
-        const finalPoints = [...connectionLinePoints, { x, y }];
+        // Create a straight line connection
+        const finalPoints = [startSnapPoint!, { x, y }];
         
-        // Create the final connection line
+        // Save the connection
         createConnectionWithPath(startSnapPoint!.meterId, meterId, finalPoints);
         
         // Clean up temporary drawing objects
@@ -2353,7 +2310,7 @@ export default function SchematicEditor({
         connectionNodesRef.current.forEach(node => fabricCanvas.remove(node));
         connectionNodesRef.current = [];
         
-        // Reset all drawing state (both state and refs)
+        // Reset all drawing state
         setIsDrawingConnection(false);
         isDrawingConnectionRef.current = false;
         setConnectionLinePoints([]);
@@ -2371,25 +2328,23 @@ export default function SchematicEditor({
   const createConnectionWithPath = async (fromMeterId: string, toMeterId: string, points: Array<{x: number, y: number}>) => {
     if (!fabricCanvas) return;
     
-    // Save each segment of the polyline as a separate line in schematic_lines
-    for (let i = 0; i < points.length - 1; i++) {
-      const { error } = await supabase
-        .from("schematic_lines")
-        .insert({
-          schematic_id: schematicId,
-          from_x: points[i].x,
-          from_y: points[i].y,
-          to_x: points[i + 1].x,
-          to_y: points[i + 1].y,
-          color: '#3b82f6',
-          stroke_width: 3
-        });
-      
-      if (error) {
-        toast.error("Failed to save connection segment");
-        console.error(error);
-        return;
-      }
+    // Save a single straight line segment
+    const { error } = await supabase
+      .from("schematic_lines")
+      .insert({
+        schematic_id: schematicId,
+        from_x: points[0].x,
+        from_y: points[0].y,
+        to_x: points[1].x,
+        to_y: points[1].y,
+        color: '#3b82f6',
+        stroke_width: 3
+      });
+    
+    if (error) {
+      toast.error("Failed to save connection line");
+      console.error(error);
+      return;
     }
     
     // Also save the meter connection relationship
