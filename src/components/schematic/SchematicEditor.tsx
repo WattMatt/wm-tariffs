@@ -1811,14 +1811,16 @@ export default function SchematicEditor({
           if (activeTool === 'connection') {
             const actualWidth = cardWidth * scaleX;
             const actualHeight = cardHeight * scaleY;
-            // Account for stroke width - stroke is drawn half inside, half outside
+            // Stroke is drawn half inside, half outside the object boundary
             const strokeOffset = strokeWidth / 2;
-            const snapPoints = calculateSnapPoints(
-              x - (actualWidth + strokeWidth) / 2,
-              y - (actualHeight + strokeWidth) / 2,
-              actualWidth + strokeWidth,
-              actualHeight + strokeWidth
-            );
+            
+            // Calculate snap points at outer edge of stroke (boundary line)
+            const snapPoints = {
+              top: { x: x, y: y - (actualHeight / 2) - strokeOffset },
+              right: { x: x + (actualWidth / 2) + strokeOffset, y: y },
+              bottom: { x: x, y: y + (actualHeight / 2) + strokeOffset },
+              left: { x: x - (actualWidth / 2) - strokeOffset, y: y }
+            };
             
             // Create small circles at each snap point
             Object.values(snapPoints).forEach(point => {
@@ -2077,14 +2079,17 @@ export default function SchematicEditor({
           if (activeTool === 'connection') {
             const actualWidth = cardWidth * baseScaleX * savedScaleX;
             const actualHeight = cardHeight * baseScaleY * savedScaleY;
-            // Account for stroke width - stroke is drawn half inside, half outside
+            // Stroke is drawn half inside, half outside the object boundary
             const currentStrokeWidth = isEditMode ? 4 : 3;
-            const snapPoints = calculateSnapPoints(
-              x - (actualWidth + currentStrokeWidth) / 2,
-              y - (actualHeight + currentStrokeWidth) / 2,
-              actualWidth + currentStrokeWidth,
-              actualHeight + currentStrokeWidth
-            );
+            const strokeOffset = currentStrokeWidth / 2;
+            
+            // Calculate snap points at outer edge of stroke (boundary line)
+            const snapPoints = {
+              top: { x: x, y: y - (actualHeight / 2) - strokeOffset },
+              right: { x: x + (actualWidth / 2) + strokeOffset, y: y },
+              bottom: { x: x, y: y + (actualHeight / 2) + strokeOffset },
+              left: { x: x - (actualWidth / 2) - strokeOffset, y: y }
+            };
             
             // Create small circles at each snap point
             Object.values(snapPoints).forEach(point => {
