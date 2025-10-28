@@ -564,28 +564,7 @@ export default function SchematicEditor({
       enableRetinaScaling: true, // Better control rendering on high-DPI displays
     });
 
-    // Mouse wheel: Always zoom (zoom to cursor position)
-    canvas.on('mouse:wheel', (opt) => {
-      const e = opt.e as WheelEvent;
-      e.preventDefault();
-      e.stopPropagation();
-      
-      // Scroll: Zoom in/out toward cursor
-      const delta = e.deltaY;
-      let zoom = canvas.getZoom();
-      zoom *= 0.999 ** delta;
-      
-      // Clamp zoom between 5% and 2000%
-      if (zoom > 20) zoom = 20;
-      if (zoom < 0.05) zoom = 0.05;
-      
-      // Zoom to cursor position
-      const pointer = canvas.getPointer(e);
-      canvas.zoomToPoint(pointer, zoom);
-      setZoom(zoom);
-    });
-
-    // Handle scroll/wheel events for navigation and zoom
+    // Handle scroll/wheel events for navigation and zoom - CONSISTENT ACROSS ALL MODES
     canvas.on('mouse:wheel', (opt) => {
       const evt = opt.e as WheelEvent;
       evt.preventDefault();
@@ -606,8 +585,6 @@ export default function SchematicEditor({
         canvas.zoomToPoint(point, newZoom);
         
         setZoom(newZoom);
-        const zoomPercent = Math.round(newZoom * 100);
-        toast(`Zoom: ${zoomPercent}%`, { duration: 800 });
       }
       // SHIFT + SCROLL: Pan left/right
       else if (evt.shiftKey) {
@@ -1679,20 +1656,6 @@ export default function SchematicEditor({
       toast.error("Failed to place meter on schematic");
     }
   };
-
-  useEffect(() => {
-    if (!fabricCanvas) return;
-
-    if (activeTool === 'meter') {
-      fabricCanvas.on('mouse:down', handleCanvasClick);
-    } else {
-      fabricCanvas.off('mouse:down', handleCanvasClick);
-    }
-
-    return () => {
-      fabricCanvas.off('mouse:down', handleCanvasClick);
-    };
-  }, [fabricCanvas, activeTool, meters, meterPositions]);
 
   const handleSave = async () => {
     setIsSaving(true);
