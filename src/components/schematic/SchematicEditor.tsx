@@ -500,6 +500,8 @@ export default function SchematicEditor({
   const [isEditMeterDialogOpen, setIsEditMeterDialogOpen] = useState(false);
   const [isConfirmMeterDialogOpen, setIsConfirmMeterDialogOpen] = useState(false);
   const [editingMeter, setEditingMeter] = useState<any>(null);
+  const [isViewMeterDialogOpen, setIsViewMeterDialogOpen] = useState(false);
+  const [viewingMeter, setViewingMeter] = useState<any>(null);
   
   // FABRIC.JS EVENT HANDLER PATTERN: Repositioning state + refs
   // These control the "Reposition & Rescale" feature where users redraw meter card bounds
@@ -1584,7 +1586,7 @@ export default function SchematicEditor({
             scaleY: baseScaleY * savedScaleY,
             hasControls: isEditMode,
             selectable: isEditMode,
-            hoverCursor: isEditMode ? 'move' : (activeTool === 'connection' ? 'pointer' : 'default'),
+            hoverCursor: isEditMode ? 'move' : 'pointer',
             lockRotation: true,
           });
           
@@ -1597,10 +1599,14 @@ export default function SchematicEditor({
             setIsEditMeterDialogOpen(true);
           });
 
-          // Single click for connection mode
+          // Single click for connection mode or viewing details
           img.on('mousedown', () => {
             if (activeTool === 'connection') {
               handleMeterClickForConnection(pos.meter_id, x, y);
+            } else if (!isEditMode && activeTool === 'select') {
+              // View meter details in normal mode
+              setViewingMeter(meter);
+              setIsViewMeterDialogOpen(true);
             }
           });
 
@@ -3147,6 +3153,77 @@ export default function SchematicEditor({
                 </Button>
               </div>
             </form>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* View Meter Details Dialog */}
+      <Dialog open={isViewMeterDialogOpen} onOpenChange={setIsViewMeterDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Meter Details</DialogTitle>
+          </DialogHeader>
+          {viewingMeter && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Meter Number</label>
+                  <p className="text-lg font-semibold">{viewingMeter.meter_number}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Name</label>
+                  <p className="text-lg font-semibold">{viewingMeter.name || 'N/A'}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Meter Type</label>
+                  <p className="text-lg capitalize">{viewingMeter.meter_type?.replace('_', ' ')}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Zone</label>
+                  <p className="text-lg capitalize">{viewingMeter.zone?.replace('_', ' ') || 'N/A'}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Area</label>
+                  <p className="text-lg">{viewingMeter.area ? `${viewingMeter.area} m²` : 'N/A'}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Rating</label>
+                  <p className="text-lg">{viewingMeter.rating || 'N/A'}</p>
+                </div>
+                <div className="col-span-2">
+                  <label className="text-sm font-medium text-muted-foreground">Cable Specification</label>
+                  <p className="text-base">{viewingMeter.cable_specification || 'N/A'}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Serial Number</label>
+                  <p className="text-lg">{viewingMeter.serial_number || 'N/A'}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">CT Type</label>
+                  <p className="text-lg">{viewingMeter.ct_type || 'N/A'}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Location</label>
+                  <p className="text-lg">{viewingMeter.location || 'N/A'}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Tariff</label>
+                  <p className="text-lg">{viewingMeter.tariff || 'N/A'}</p>
+                </div>
+                {viewingMeter.phase && (
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Phase</label>
+                    <p className="text-lg">{viewingMeter.phase}</p>
+                  </div>
+                )}
+                {viewingMeter.supply_level && (
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Supply Level</label>
+                    <p className="text-lg">{viewingMeter.supply_level}</p>
+                  </div>
+                )}
+              </div>
+            </div>
           )}
         </DialogContent>
       </Dialog>
