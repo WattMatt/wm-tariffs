@@ -98,6 +98,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import CsvImportDialog from "@/components/site/CsvImportDialog";
 import { MeterDataExtractor } from "./MeterDataExtractor";
 import { MeterFormFields } from "./MeterFormFields";
+import { MeterConnectionsManager } from "./MeterConnectionsManager";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 
 
@@ -482,6 +483,9 @@ export default function SchematicEditor({
   const [viewingMeter, setViewingMeter] = useState<any>(null);
   const [showUnconfirmed, setShowUnconfirmed] = useState(true);
   const [showConfirmed, setShowConfirmed] = useState(true);
+  const [isConnectionsDialogOpen, setIsConnectionsDialogOpen] = useState(false);
+  const [connectionStart, setConnectionStart] = useState<{ meterId: string; position: { x: number; y: number } } | null>(null);
+  const [meterConnections, setMeterConnections] = useState<any[]>([]);
   
   // FABRIC.JS EVENT HANDLER PATTERN: State + refs for complex interactions
   // State drives UI updates, refs provide current values to mouse event handlers
@@ -513,6 +517,7 @@ export default function SchematicEditor({
   useEffect(() => {
     fetchMeters();
     fetchMeterPositions();
+    fetchMeterConnections();
   }, [schematicId, siteId]);
 
   // FABRIC.JS EVENT HANDLER PATTERN: Sync activeTool state to ref
@@ -2114,6 +2119,29 @@ export default function SchematicEditor({
     setMeterPositions(data || []);
   };
 
+  const fetchMeterConnections = async () => {
+    const { data: siteMeters } = await supabase
+      .from('meters')
+      .select('id')
+      .eq('site_id', siteId);
+
+    if (!siteMeters) return;
+
+    const meterIds = siteMeters.map(m => m.id);
+
+    const { data, error } = await supabase
+      .from('meter_connections')
+      .select('*')
+      .or(`child_meter_id.in.(${meterIds.join(',')}),parent_meter_id.in.(${meterIds.join(',')})`);
+
+    if (error) {
+      console.error('Error fetching connections:', error);
+      return;
+    }
+
+    setMeterConnections(data || []);
+  };
+
 
   const handleCanvasClick = async (e: any) => {
     if (activeTool !== 'meter') return;
@@ -2872,6 +2900,9 @@ export default function SchematicEditor({
             onClick={() => {
               const newTool = activeTool === "connection" ? "select" : "connection";
               setActiveTool(newTool);
+              if (newTool === "connection") {
+                toast.info("Click snap points to draw connections between meters");
+              }
             }}
             disabled={!isEditMode}
             size="sm"
@@ -2879,6 +2910,16 @@ export default function SchematicEditor({
           >
             <Link2 className="w-4 h-4" />
             Draw Connections
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => setIsConnectionsDialogOpen(true)}
+            disabled={!isEditMode}
+            size="sm"
+            className="gap-2"
+          >
+            <Link2 className="w-4 h-4" />
+            Manage Connections
           </Button>
           <MeterDataExtractor
             siteId={siteId}
@@ -4009,6 +4050,13 @@ export default function SchematicEditor({
           }}
         />
       )}
+
+      <MeterConnectionsManager
+        open={isConnectionsDialogOpen}
+        onOpenChange={setIsConnectionsDialogOpen}
+        siteId={siteId}
+        schematicId={schematicId}
+      />
     </div>
   );
 }
