@@ -515,6 +515,9 @@ export default function SchematicEditor({
   const repositionStartPointRef = useRef<{ x: number; y: number } | null>(null);
   const isRepositionDraggingRef = useRef(false);
   
+  // Ref for drawnRegions to prevent stale closures in Fabric.js handlers
+  const drawnRegionsRef = useRef<typeof drawnRegions>([]);
+  
   // Legend visibility toggles
   const [legendVisibility, setLegendVisibility] = useState({
     bulk_meter: true,
@@ -574,6 +577,11 @@ export default function SchematicEditor({
     repositionStartPointRef.current = repositionStartPoint;
     isRepositionDraggingRef.current = isRepositionDragging;
   }, [repositioningMeter, repositionStartPoint, isRepositionDragging]);
+
+  // Sync drawnRegions to ref
+  useEffect(() => {
+    drawnRegionsRef.current = drawnRegions;
+  }, [drawnRegions]);
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -936,6 +944,42 @@ export default function SchematicEditor({
       // No other mouse:up handling needed since we removed all mouse interaction
     });
     
+    // Handle Shift+click selection of region rectangles
+    canvas.on('mouse:down', (opt) => {
+      const evt = opt.e as MouseEvent;
+      const target = opt.target;
+      
+      // Only handle Shift+click on rectangles with regionId
+      if (evt.shiftKey && target && target.type === 'rect' && (target as any).regionId) {
+        const regionId = (target as any).regionId;
+        const regionIndex = drawnRegionsRef.current.findIndex(r => r.id === regionId);
+        
+        if (regionIndex !== -1) {
+          setSelectedRegionIndices(prev => {
+            if (prev.includes(regionIndex)) {
+              // Deselect
+              (target as any).set({ stroke: '#3b82f6', strokeWidth: 2 });
+              canvas.renderAll();
+              const updated = prev.filter(i => i !== regionIndex);
+              toast.info(`Region deselected (${updated.length} selected)`);
+              return updated;
+            } else {
+              // Select
+              (target as any).set({ stroke: '#10b981', strokeWidth: 3 });
+              canvas.renderAll();
+              const updated = [...prev, regionIndex];
+              toast.info(`Region selected (${updated.length} selected)`);
+              return updated;
+            }
+          });
+          
+          // Prevent default selection behavior
+          evt.preventDefault();
+          evt.stopPropagation();
+        }
+      }
+    });
+
     // Handle rectangle resize and move - update region data AND meter card changes
     canvas.on('object:modified', (e) => {
       const obj = e.target;
@@ -2468,6 +2512,15 @@ export default function SchematicEditor({
               if (drawnRegions.length === 0) {
                 toast.info("First draw regions using the 'Draw Regions' button, then use this to select them with Shift+click", { duration: 5000 });
               } else if (selectedRegionIndices.length > 0) {
+                // Clear selection and reset visual styling
+                if (fabricCanvas) {
+                  fabricCanvas.getObjects().forEach((obj: any) => {
+                    if (obj.type === 'rect' && obj.regionId) {
+                      obj.set({ stroke: '#3b82f6', strokeWidth: 2 });
+                    }
+                  });
+                  fabricCanvas.renderAll();
+                }
                 setSelectedRegionIndices([]);
                 toast.info("Region selection cleared");
               } else {
