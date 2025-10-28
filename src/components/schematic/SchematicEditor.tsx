@@ -85,7 +85,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { Canvas as FabricCanvas, Circle, Line, Text, FabricImage, Rect, Polygon, util, Point } from "fabric";
+import { Canvas as FabricCanvas, Circle, Line, Text, FabricImage, Rect, Polygon, util, Point, Polyline } from "fabric";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -496,6 +496,13 @@ export default function SchematicEditor({
   const [selectedMeterIndex, setSelectedMeterIndex] = useState<number | null>(null);
   const [selectedMeterId, setSelectedMeterId] = useState<string | null>(null);
   const [selectedMeterIds, setSelectedMeterIds] = useState<string[]>([]); // For bulk selection with Shift+click
+  
+  // Line drawing state
+  const [isDrawingConnection, setIsDrawingConnection] = useState(false);
+  const [connectionLinePoints, setConnectionLinePoints] = useState<Array<{x: number, y: number}>>([]);
+  const [startSnapPoint, setStartSnapPoint] = useState<{x: number, y: number, meterId: string} | null>(null);
+  const tempLineRef = useRef<Polyline | null>(null);
+  const connectionNodesRef = useRef<Circle[]>([]);
   const [isSelectionMode, setIsSelectionMode] = useState(false); // Track whether selection mode is active
   const [zoom, setZoom] = useState(1);
   const [isEditMeterDialogOpen, setIsEditMeterDialogOpen] = useState(false);
@@ -615,6 +622,18 @@ export default function SchematicEditor({
   useEffect(() => {
     isEditModeRef.current = isEditMode;
   }, [isEditMode]);
+  
+  // Sync connection drawing state to refs for Fabric.js event handlers
+  const isDrawingConnectionRef = useRef(false);
+  const connectionLinePointsRef = useRef<Array<{x: number, y: number}>>([]);
+  
+  useEffect(() => {
+    isDrawingConnectionRef.current = isDrawingConnection;
+  }, [isDrawingConnection]);
+  
+  useEffect(() => {
+    connectionLinePointsRef.current = connectionLinePoints;
+  }, [connectionLinePoints]);
 
   // Update border colors when toggling edit mode
   useEffect(() => {
@@ -774,6 +793,55 @@ export default function SchematicEditor({
       
       console.log('mouse:down', { currentTool, hasTarget: !!target, targetType: target?.type, targetRegionId: (target as any)?.regionId, shiftKey: evt.shiftKey, isSelectionMode: isSelectionModeRef.current });
       
+      // Handle connection line drawing mode
+      if (isDrawingConnectionRef.current && currentTool === 'connection') {
+        // Check if clicking on a snap point (handled by snap point click handler)
+        if (target && (target as any).isSnapPoint) {
+          return; // Let the snap point handler deal with it
+        }
+        
+        // Otherwise, add a node at the click position
+        const pointer = canvas.getPointer(opt.e);
+        setConnectionLinePoints(prev => [...prev, { x: pointer.x, y: pointer.y }]);
+        
+        // Create a node marker
+        const node = new Circle({
+          left: pointer.x,
+          top: pointer.y,
+          radius: 6,
+          fill: '#ef4444',
+          stroke: '#ffffff',
+          strokeWidth: 2,
+          originX: 'center',
+          originY: 'center',
+          selectable: false,
+          evented: false,
+        });
+        connectionNodesRef.current.push(node);
+        canvas.add(node);
+        
+        // Update the temporary line
+        if (tempLineRef.current) {
+          canvas.remove(tempLineRef.current);
+        }
+        
+        const allPoints = [...connectionLinePoints, { x: pointer.x, y: pointer.y }];
+        
+        const tempLine = new Polyline(allPoints, {
+          stroke: '#3b82f6',
+          strokeWidth: 3,
+          selectable: false,
+          evented: false,
+          strokeDashArray: [5, 5],
+          fill: 'transparent',
+        });
+        tempLineRef.current = tempLine;
+        canvas.add(tempLine);
+        canvas.renderAll();
+        
+        return; // Don't proceed with other mouse:down logic
+      }
+      
       // Handle Shift+drag multi-select in selection mode (when shift pressed)
       if (evt.shiftKey && isSelectionModeRef.current) {
         const pointer = canvas.getPointer(opt.e);
@@ -894,6 +962,31 @@ export default function SchematicEditor({
     
     canvas.on('mouse:move', (opt) => {
       const evt = opt.e as MouseEvent;
+      
+      // Handle connection line drawing mode - show preview line
+      if (isDrawingConnectionRef.current && connectionLinePointsRef.current.length > 0) {
+        const pointer = canvas.getPointer(opt.e);
+        
+        // Update the temporary line preview
+        if (tempLineRef.current) {
+          canvas.remove(tempLineRef.current);
+        }
+        
+        const allPoints = [...connectionLinePointsRef.current, { x: pointer.x, y: pointer.y }];
+        
+        const tempLine = new Polyline(allPoints, {
+          stroke: '#3b82f6',
+          strokeWidth: 3,
+          selectable: false,
+          evented: false,
+          strokeDashArray: [5, 5],
+          fill: 'transparent',
+        });
+        tempLineRef.current = tempLine;
+        canvas.add(tempLine);
+        canvas.renderAll();
+        return;
+      }
       
       // Check if user is dragging with shift held and selection mode active
       // Enable shift-drag selection if they started with shift+click and are now moving
@@ -1835,6 +1928,16 @@ export default function SchematicEditor({
                 hoverCursor: 'crosshair'
               });
               (snapCircle as any).isSnapPoint = true;
+              (snapCircle as any).meterId = meter.id;
+              (snapCircle as any).snapPoint = point;
+              
+              // Add click handler for line drawing
+              snapCircle.on('mousedown', (e) => {
+                handleSnapPointClick(point.x, point.y, meter.id);
+                e.e.stopPropagation();
+                e.e.preventDefault();
+              });
+              
               fabricCanvas.add(snapCircle);
             });
           }
@@ -2099,6 +2202,16 @@ export default function SchematicEditor({
                 hoverCursor: 'crosshair'
               });
               (snapCircle as any).isSnapPoint = true;
+              (snapCircle as any).meterId = pos.meter_id;
+              (snapCircle as any).snapPoint = point;
+              
+              // Add click handler for line drawing
+              snapCircle.on('mousedown', (e) => {
+                handleSnapPointClick(point.x, point.y, pos.meter_id);
+                e.e.stopPropagation();
+                e.e.preventDefault();
+              });
+              
               fabricCanvas.add(snapCircle);
             });
           }
@@ -2154,6 +2267,91 @@ export default function SchematicEditor({
       .eq("schematic_id", schematicId);
     
     setLines(data || []);
+  };
+
+  const handleSnapPointClick = (x: number, y: number, meterId: string) => {
+    if (!fabricCanvas) return;
+    
+    if (!isDrawingConnection) {
+      // Start drawing a new connection line
+      setIsDrawingConnection(true);
+      setStartSnapPoint({ x, y, meterId });
+      setConnectionLinePoints([{ x, y }]);
+      
+      // Create starting node
+      const startNode = new Circle({
+        left: x,
+        top: y,
+        radius: 6,
+        fill: '#ef4444',
+        stroke: '#ffffff',
+        strokeWidth: 2,
+        originX: 'center',
+        originY: 'center',
+        selectable: false,
+        evented: false,
+      });
+      connectionNodesRef.current = [startNode];
+      fabricCanvas.add(startNode);
+      
+      toast.info("Click to add nodes, click another snap point to complete");
+    } else {
+      // Check if clicking on a different meter's snap point
+      if (meterId !== startSnapPoint?.meterId) {
+        // Complete the connection
+        const finalPoints = [...connectionLinePoints, { x, y }];
+        
+        // Create the final connection line
+        createConnectionWithPath(startSnapPoint!.meterId, meterId, finalPoints);
+        
+        // Clean up
+        if (tempLineRef.current) {
+          fabricCanvas.remove(tempLineRef.current);
+          tempLineRef.current = null;
+        }
+        connectionNodesRef.current.forEach(node => fabricCanvas.remove(node));
+        connectionNodesRef.current = [];
+        
+        setIsDrawingConnection(false);
+        setConnectionLinePoints([]);
+        setStartSnapPoint(null);
+        
+        toast.success("Connection created");
+      } else {
+        toast.error("Select a snap point on a different meter");
+      }
+    }
+  };
+  
+  const createConnectionWithPath = async (fromMeterId: string, toMeterId: string, points: Array<{x: number, y: number}>) => {
+    if (!fabricCanvas) return;
+    
+    // Store the path points in the database
+    const canvasWidth = fabricCanvas.getWidth();
+    const canvasHeight = fabricCanvas.getHeight();
+    
+    // Convert points to percentages for storage
+    const pathData = points.map(p => ({
+      x: (p.x / canvasWidth) * 100,
+      y: (p.y / canvasHeight) * 100
+    }));
+    
+    const { error } = await supabase
+      .from('meter_connections')
+      .insert({
+        parent_meter_id: fromMeterId,
+        child_meter_id: toMeterId,
+        connection_type: 'direct',
+      });
+    
+    if (error) {
+      toast.error("Failed to save connection");
+      console.error(error);
+    } else {
+      // Refresh the meter positions to trigger re-render
+      fetchLines();
+      fetchMeterPositions();
+    }
   };
 
   const handleMeterClickForConnection = (meterId: string, x: number, y: number) => {
