@@ -572,10 +572,10 @@ export default function SchematicEditor({
         });
       } else {
         // In other modes: restore selectability for all objects
-        fabricCanvas.selection = true;
+        fabricCanvas.selection = false; // Disable drag selection
         fabricCanvas.getObjects().forEach((obj: any) => {
-          obj.selectable = true;
-          obj.evented = true;
+          obj.selectable = false; // Prevent object dragging
+          obj.evented = true; // Keep events for click handling
         });
       }
       fabricCanvas.renderAll();
