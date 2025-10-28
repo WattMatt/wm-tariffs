@@ -119,6 +119,19 @@ interface MeterPosition {
 }
 
 
+// Helper function to calculate snap points for a meter card
+const calculateSnapPoints = (left: number, top: number, width: number, height: number) => {
+  const centerX = left + width / 2;
+  const centerY = top + height / 2;
+  
+  return {
+    top: { x: centerX, y: top },
+    right: { x: left + width, y: centerY },
+    bottom: { x: centerX, y: top + height },
+    left: { x: left, y: centerY }
+  };
+};
+
 // Helper function to create meter card as an image matching reference format
 async function createMeterCardImage(
   fields: Array<{ label: string; value: string }>,
@@ -386,8 +399,8 @@ export default function SchematicEditor({
   
   // FABRIC.JS EVENT HANDLER PATTERN: State + Ref for tool selection
   // State drives UI, ref provides current value to canvas event handlers
-  const [activeTool, setActiveTool] = useState<"select" | "meter" | "draw">("select");
-  const activeToolRef = useRef<"select" | "meter" | "draw">("select");
+  const [activeTool, setActiveTool] = useState<"select" | "meter" | "connection" | "draw">("select");
+  const activeToolRef = useRef<"select" | "meter" | "connection" | "draw">("select");
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [drawnRegions, setDrawnRegions] = useState<Array<{
     id: string;
@@ -1723,6 +1736,40 @@ export default function SchematicEditor({
 
           fabricCanvas.add(img);
           
+          // Add snap point indicators when in connection mode
+          if (activeTool === 'connection') {
+            const actualWidth = cardWidth * scaleX;
+            const actualHeight = cardHeight * scaleY;
+            const snapPoints = calculateSnapPoints(
+              x - actualWidth / 2,
+              y - actualHeight / 2,
+              actualWidth,
+              actualHeight
+            );
+            
+            // Create small circles at each snap point
+            Object.values(snapPoints).forEach(point => {
+              const snapCircle = new Circle({
+                left: point.x,
+                top: point.y,
+                radius: 8,
+                fill: '#3b82f6',
+                stroke: '#ffffff',
+                strokeWidth: 2,
+                originX: 'center',
+                originY: 'center',
+                selectable: false,
+                evented: true,
+                opacity: 0.9,
+                hoverCursor: 'crosshair'
+              });
+              (snapCircle as any).isSnapPoint = true;
+              (snapCircle as any).meterId = meter.id;
+              
+              fabricCanvas.add(snapCircle);
+            });
+          }
+          
           fabricCanvas.renderAll();
         };
       });
@@ -1952,6 +1999,40 @@ export default function SchematicEditor({
           }
 
           fabricCanvas.add(img);
+          
+          // Add snap point indicators when in connection mode
+          if (activeTool === 'connection') {
+            const actualWidth = cardWidth * baseScaleX * savedScaleX;
+            const actualHeight = cardHeight * baseScaleY * savedScaleY;
+            const snapPoints = calculateSnapPoints(
+              x - actualWidth / 2,
+              y - actualHeight / 2,
+              actualWidth,
+              actualHeight
+            );
+            
+            // Create small circles at each snap point
+            Object.values(snapPoints).forEach(point => {
+              const snapCircle = new Circle({
+                left: point.x,
+                top: point.y,
+                radius: 8,
+                fill: '#3b82f6',
+                stroke: '#ffffff',
+                strokeWidth: 2,
+                originX: 'center',
+                originY: 'center',
+                selectable: false,
+                evented: true,
+                opacity: 0.9,
+                hoverCursor: 'crosshair'
+              });
+              (snapCircle as any).isSnapPoint = true;
+              (snapCircle as any).meterId = pos.meter_id;
+              
+              fabricCanvas.add(snapCircle);
+            });
+          }
           
           fabricCanvas.renderAll();
         };
@@ -2751,8 +2832,11 @@ export default function SchematicEditor({
             Select {(selectedRegionIndices.length + selectedMeterIds.length) > 0 && `(${selectedRegionIndices.length + selectedMeterIds.length})`}
           </Button>
           <Button
-            variant="outline"
-            onClick={() => {}}
+            variant={activeTool === "connection" ? "default" : "outline"}
+            onClick={() => {
+              const newTool = activeTool === "connection" ? "select" : "connection";
+              setActiveTool(newTool);
+            }}
             disabled={!isEditMode}
             size="sm"
             className="gap-2"
