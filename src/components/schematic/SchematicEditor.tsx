@@ -2710,7 +2710,13 @@ export default function SchematicEditor({
               <div className="h-6 w-px bg-border" />
             </>
           )}
-          <Button onClick={handleScanAll} disabled={!isEditMode || isSaving} variant="outline" size="sm">
+          <Button 
+            onClick={handleScanAll} 
+            disabled={!isEditMode || isSaving || drawnRegions.length === 0} 
+            variant="outline" 
+            size="sm"
+            title={drawnRegions.length === 0 ? "Draw regions first to scan meters" : ""}
+          >
             <Scan className="w-4 h-4 mr-2" />
             {(() => {
               const buttonText = drawnRegions.length > 0 ? 'Scan All Regions' : 'Scan All Meters';
