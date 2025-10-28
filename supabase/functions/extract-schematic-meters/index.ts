@@ -123,14 +123,17 @@ METER DATA TO EXTRACT:
 6. serial_number (SERIAL): Exact number (e.g., "35779383")
 7. ct_type (CT): Format/ratio (e.g., "150/5A", "DOL")
 
-METER TYPE INFERENCE (automatic classification):
-- If meter_number contains "INCOMING", "COUNCIL", or "BULK" → meter_type: "bulk_meter"
-- If meter_number contains "CHECK" → meter_type: "check_meter"
-- Otherwise → meter_type: "tenant_meter"
+INTELLIGENT METER TYPE CLASSIFICATION (based on NAME field):
+Analyze the NAME field to automatically determine meter_type:
+- If NAME contains "MAIN", "INCOMING", "COUNCIL", "BULK", or "SUPPLY" → meter_type: "bulk_meter"
+- If NAME contains "CHECK" or "VERIFICATION" → meter_type: "check_meter"
+- Otherwise (tenant names, "VACANT", shop names, etc.) → meter_type: "tenant_meter"
 
-ZONE EXTRACTION:
-- If zone label visible (e.g., "MAIN BOARD 1", "MINI SUB 2"), extract it
-- Otherwise set zone to null
+INTELLIGENT ZONE CLASSIFICATION (based on meter_type):
+Automatically assign zone based on the determined meter_type:
+- If meter_type is "bulk_meter" → zone: "main_board"
+- If meter_type is "check_meter" → zone: "mini_sub"
+- If meter_type is "tenant_meter" → zone: null
 
 Return ONLY valid JSON with these exact fields. Use null for fields not visible.
 NO markdown, NO explanations.
@@ -218,28 +221,17 @@ CRITICAL DATA FIELDS (Zero error tolerance):
 7. ct_type (CT):
    - Exact format (e.g., "DOL", "150/5A", "300/5A")
 
-8. meter_type:
-   - "bulk_meter": Main incoming (labeled INCOMING/COUNCIL)
-   - "check_meter": Check meters (labeled CHECK METER/BULK CHECK)
-   - "tenant_meter": All other meters (DB-XX)
+8. INTELLIGENT METER TYPE CLASSIFICATION (based on NAME field):
+   Analyze the NAME field to automatically determine meter_type:
+   - If NAME contains "MAIN", "INCOMING", "COUNCIL", "BULK", or "SUPPLY" → meter_type: "bulk_meter"
+   - If NAME contains "CHECK" or "VERIFICATION" → meter_type: "check_meter"
+   - Otherwise (tenant names, "VACANT", shop names, etc.) → meter_type: "tenant_meter"
 
-9. zone (optional):
-   - If meter is within a MAIN BOARD ZONE, extract the zone identifier
-   - Main board zones have distinct visual characteristics:
-     * Framed by a LARGE RECTANGULAR BORDER (often purple/magenta color)
-     * Contains a THICK HORIZONTAL BAR inside representing the BUS BAR
-     * Zone label at top (e.g., "MAIN BOARD 1", "MAIN BOARD 3", "MB-1")
-     * Multiple meters/meter blocks positioned within this zone
-   - If meter is within such a zone, set zone to the zone label (e.g., "MAIN BOARD 3")
-   - If meter is standalone/not in a main board zone, set zone to null
-
-   - MINI SUB zones have these distinct visual features:
-     * Rectangular border/frame (similar to main boards but no thick bus bar)
-     * Contains TWO OVERLAPPING CIRCLES (transformer symbol) in the center/lower area
-     * Text label showing "MINI SUB X" and power rating (e.g., "MINI SUB 1 800kVA")
-     * Electrical connection lines at top and bottom (incoming/outgoing connections)
-     * May contain meters connected to this mini sub
-   - If meter is within a Mini Sub zone, set zone to the label (e.g., "MINI SUB 1")
+9. INTELLIGENT ZONE CLASSIFICATION (based on meter_type):
+   Automatically assign zone based on the determined meter_type:
+   - If meter_type is "bulk_meter" → zone: "main_board"
+   - If meter_type is "check_meter" → zone: "mini_sub"
+   - If meter_type is "tenant_meter" → zone: null
 
 POSITIONING (CRITICAL - This determines visual overlay accuracy):
 - position.x: Percentage from LEFT edge to meter box CENTER (0.0 = left edge, 100.0 = right edge)
