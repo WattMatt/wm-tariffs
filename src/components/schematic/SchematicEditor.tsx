@@ -2303,8 +2303,26 @@ export default function SchematicEditor({
             );
             
             // Calculate position percentages for this region
-            const xPercent = (region.x / imageWidth) * 100;
-            const yPercent = (region.y / imageHeight) * 100;
+            // Rectangles use top-left origin, but meter cards use center origin
+            // So we need to add half the card dimensions to center the position
+            const canvasWidth = fabricCanvas?.getWidth() || 1000;
+            const canvasHeight = fabricCanvas?.getHeight() || 1000;
+            
+            // Base meter card size is 200x140
+            const baseMeterWidth = 200;
+            const baseMeterHeight = 140;
+            
+            // Convert region dimensions to percentages
+            const regionWidthPercent = (region.displayWidth / canvasWidth) * 100;
+            const regionHeightPercent = (region.displayHeight / canvasHeight) * 100;
+            
+            // Calculate top-left corner as percentage
+            const topLeftXPercent = (region.x / imageWidth) * 100;
+            const topLeftYPercent = (region.y / imageHeight) * 100;
+            
+            // Adjust to center origin (add half the card dimensions)
+            const xPercent = topLeftXPercent + (regionWidthPercent / 2);
+            const yPercent = topLeftYPercent + (regionHeightPercent / 2);
             
             // Try to extract meter data
             let extractedMeterData: any = null;
@@ -2422,11 +2440,7 @@ export default function SchematicEditor({
             }
             
             // Calculate scale based on drawn rectangle size
-            // Base meter card size is 200x140
-            const baseMeterWidth = 200;
-            const baseMeterHeight = 140;
-            const canvasWidth = fabricCanvas?.getWidth() || 1000;
-            const canvasHeight = fabricCanvas?.getHeight() || 1000;
+            // (canvas dimensions and base meter size already declared above)
             
             // Convert region display dimensions to scale factors
             const scaleX = region.displayWidth / baseMeterWidth;
