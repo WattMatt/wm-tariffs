@@ -638,24 +638,45 @@ export default function SchematicEditor({
         const meter = meters.find(m => m.id === meterId);
         
         if (meter) {
-          const confirmationStatus = (meter as any).confirmation_status || 'unconfirmed';
-          let borderColor = '#ef4444'; // default red for unconfirmed
+          let borderColor = '#3b82f6'; // default blue
           
-          if (confirmationStatus === 'confirmed') {
-            borderColor = '#22c55e'; // green for confirmed
-          }
-          
-          // Set stroke properties based on edit mode
           if (isEditMode) {
+            // Edit mode: Show confirmation status colors
+            const confirmationStatus = (meter as any).confirmation_status || 'unconfirmed';
+            
+            if (confirmationStatus === 'confirmed') {
+              borderColor = '#22c55e'; // green for confirmed
+            } else {
+              borderColor = '#ef4444'; // red for unconfirmed
+            }
+            
             obj.set({
               stroke: borderColor,
               strokeWidth: 4
             });
           } else {
-            obj.set({
-              stroke: undefined,
-              strokeWidth: 0
-            });
+            // Normal mode: Show zone colors
+            const zone = meter.zone;
+            
+            if (zone === 'main_board') {
+              borderColor = '#9333ea'; // purple for Main Board
+              obj.set({
+                stroke: borderColor,
+                strokeWidth: 3
+              });
+            } else if (zone === 'mini_sub') {
+              borderColor = '#06b6d4'; // cyan for Mini Sub
+              obj.set({
+                stroke: borderColor,
+                strokeWidth: 3
+              });
+            } else {
+              // No zone: no border in normal mode
+              obj.set({
+                stroke: undefined,
+                strokeWidth: 0
+              });
+            }
           }
         }
       }
