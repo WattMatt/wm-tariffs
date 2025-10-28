@@ -350,6 +350,7 @@ export default function SchematicEditor({
   const [editingMeter, setEditingMeter] = useState<any>(null);
   const [repositioningMeter, setRepositioningMeter] = useState<{ meterId?: string, positionId?: string, meterIndex?: number, isSaved: boolean } | null>(null);
   const [repositionStartPoint, setRepositionStartPoint] = useState<{ x: number; y: number } | null>(null);
+  const [isRepositionDragging, setIsRepositionDragging] = useState(false);
   
   // Legend visibility toggles
   const [legendVisibility, setLegendVisibility] = useState({
@@ -446,6 +447,7 @@ export default function SchematicEditor({
       if (repositioningMeter && evt.button === 0) {
         const pointer = canvas.getPointer(opt.e);
         setRepositionStartPoint(pointer);
+        setIsRepositionDragging(false);
         evt.preventDefault();
         evt.stopPropagation();
         return;
@@ -646,26 +648,41 @@ export default function SchematicEditor({
       // REPOSITIONING MODE: Show preview rectangle
       if (repositioningMeter && repositionStartPoint) {
         const pointer = canvas.getPointer(opt.e);
-        const existingPreview = canvas.getObjects().find((obj: any) => obj.repositionPreview);
-        if (existingPreview) {
-          canvas.remove(existingPreview);
+        const currentX = pointer.x;
+        const currentY = pointer.y;
+
+        // Check if user has dragged enough (minimum 5 pixels)
+        const dragDistance = Math.sqrt(
+          Math.pow(currentX - repositionStartPoint.x, 2) + 
+          Math.pow(currentY - repositionStartPoint.y, 2)
+        );
+
+        if (dragDistance > 5) {
+          setIsRepositionDragging(true);
+
+          // Remove any existing preview rectangle
+          const existingPreview = canvas.getObjects().find((obj: any) => obj.repositionPreview);
+          if (existingPreview) {
+            canvas.remove(existingPreview);
+          }
+
+          // Draw preview rectangle
+          const previewRect = new Rect({
+            left: Math.min(repositionStartPoint.x, currentX),
+            top: Math.min(repositionStartPoint.y, currentY),
+            width: Math.abs(currentX - repositionStartPoint.x),
+            height: Math.abs(currentY - repositionStartPoint.y),
+            fill: 'rgba(34, 197, 94, 0.1)',
+            stroke: 'rgb(34, 197, 94)',
+            strokeWidth: 3,
+            strokeDashArray: [10, 5],
+            selectable: false,
+            evented: false,
+          });
+          (previewRect as any).repositionPreview = true;
+          canvas.add(previewRect);
+          canvas.renderAll();
         }
-        
-        const previewRect = new Rect({
-          left: Math.min(repositionStartPoint.x, pointer.x),
-          top: Math.min(repositionStartPoint.y, pointer.y),
-          width: Math.abs(pointer.x - repositionStartPoint.x),
-          height: Math.abs(pointer.y - repositionStartPoint.y),
-          fill: 'rgba(34, 197, 94, 0.1)',
-          stroke: 'rgb(34, 197, 94)',
-          strokeWidth: 3,
-          strokeDashArray: [10, 5],
-          selectable: false,
-          evented: false,
-        });
-        (previewRect as any).repositionPreview = true;
-        canvas.add(previewRect);
-        canvas.renderAll();
         return;
       }
       
@@ -740,6 +757,13 @@ export default function SchematicEditor({
       
       // REPOSITIONING MODE: Apply new position and scale
       if (repositioningMeter && repositionStartPoint) {
+        // Only apply changes if user actually dragged
+        if (!isRepositionDragging) {
+          // User just clicked without dragging, ignore
+          setRepositionStartPoint(null);
+          return;
+        }
+
         const pointer = canvas.getPointer(opt.e);
         const canvasWidth = canvas.getWidth();
         const canvasHeight = canvas.getHeight();
@@ -759,6 +783,7 @@ export default function SchematicEditor({
           }
           canvas.renderAll();
           setRepositionStartPoint(null);
+          setIsRepositionDragging(false);
           return;
         }
         
@@ -823,6 +848,7 @@ export default function SchematicEditor({
         
         setRepositioningMeter(null);
         setRepositionStartPoint(null);
+        setIsRepositionDragging(false);
         return;
       }
       
