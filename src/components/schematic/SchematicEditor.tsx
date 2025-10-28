@@ -3713,35 +3713,32 @@ export default function SchematicEditor({
         <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                {bulkEditMeterIds.length > 0 && (
-                  <>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      onClick={navigateToPreviousMeter}
-                      disabled={currentBulkEditIndex === 0}
-                    >
-                      <ChevronLeft className="w-4 h-4" />
-                    </Button>
-                    <span className="text-sm text-muted-foreground">
-                      {currentBulkEditIndex + 1} / {bulkEditMeterIds.length}
-                    </span>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      onClick={navigateToNextMeter}
-                      disabled={currentBulkEditIndex >= bulkEditMeterIds.length - 1}
-                    >
-                      <ChevronRight className="w-4 h-4" />
-                    </Button>
-                  </>
-                )}
-              </div>
               <DialogTitle>Edit Meter Details</DialogTitle>
-              <div className="w-24" /> {/* Spacer for centering title */}
+              {bulkEditMeterIds.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={navigateToPreviousMeter}
+                    disabled={currentBulkEditIndex === 0}
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </Button>
+                  <span className="text-sm text-muted-foreground">
+                    {currentBulkEditIndex + 1} / {bulkEditMeterIds.length}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={navigateToNextMeter}
+                    disabled={currentBulkEditIndex >= bulkEditMeterIds.length - 1}
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                </div>
+              )}
             </div>
           </DialogHeader>
           {editingMeter && (
