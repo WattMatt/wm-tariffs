@@ -92,7 +92,7 @@ import { Canvas as FabricCanvas, Circle, Line, Text, FabricImage, Rect, util, Po
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Save, Zap, Link2, Trash2, Move, Upload, Plus, ZoomIn, ZoomOut, Maximize2, Pencil, Scan, Check } from "lucide-react";
+import { Save, Zap, Link2, Trash2, Move, Upload, Plus, ZoomIn, ZoomOut, Maximize2, Pencil, Scan, Check, CheckSquare } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -395,8 +395,12 @@ export default function SchematicEditor({
   
   // FABRIC.JS EVENT HANDLER PATTERN: State + Ref for tool selection
   // State drives UI, ref provides current value to canvas event handlers
-  const [activeTool, setActiveTool] = useState<"select" | "meter" | "connection" | "move" | "draw">("select");
-  const activeToolRef = useRef<"select" | "meter" | "connection" | "move" | "draw">("select");
+  const [activeTool, setActiveTool] = useState<"select" | "meter" | "connection" | "move" | "draw" | "bulk">("select");
+  const activeToolRef = useRef<"select" | "meter" | "connection" | "move" | "draw" | "bulk">("select");
+  
+  // Bulk selection state for saved meter cards
+  const [selectedMeterCardIds, setSelectedMeterCardIds] = useState<string[]>([]);
+  const selectedMeterCardIdsRef = useRef<string[]>([]);
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [drawnRegions, setDrawnRegions] = useState<Array<{
     id: string;
@@ -482,7 +486,18 @@ export default function SchematicEditor({
     if (fabricCanvas && activeTool === 'draw') {
       fabricCanvas.selection = true;
     }
+    
+    // Clear bulk selection when exiting bulk mode
+    if (activeTool !== 'bulk') {
+      setSelectedMeterCardIds([]);
+      selectedMeterCardIdsRef.current = [];
+    }
   }, [activeTool, fabricCanvas]);
+  
+  // Sync bulk selection state to ref
+  useEffect(() => {
+    selectedMeterCardIdsRef.current = selectedMeterCardIds;
+  }, [selectedMeterCardIds]);
 
   // FABRIC.JS EVENT HANDLER PATTERN: Sync repositioning state to refs
   // Critical for the reposition feature - without this, mouse handlers use stale meter data
@@ -735,6 +750,39 @@ export default function SchematicEditor({
         }
       }
       
+      // BULK SELECT MODE: Handle clicking on meter cards to toggle selection
+      if (currentTool === 'bulk' && evt.button === 0 && target) {
+        const isMeterCard = (target as any).meterCardType && (target as any).meterId;
+        if (isMeterCard) {
+          const meterId = (target as any).meterId;
+          const currentSelection = selectedMeterCardIdsRef.current;
+          
+          if (currentSelection.includes(meterId)) {
+            // Deselect
+            setSelectedMeterCardIds(prev => prev.filter(id => id !== meterId));
+            target.set({
+              strokeWidth: 0,
+              borderColor: '#0e74dd',
+              cornerColor: '#0e74dd',
+            });
+          } else {
+            // Select
+            setSelectedMeterCardIds(prev => [...prev, meterId]);
+            target.set({
+              strokeWidth: 4,
+              stroke: 'hsl(142, 76%, 36%)',
+              borderColor: 'hsl(142, 76%, 36%)',
+              cornerColor: 'hsl(142, 76%, 36%)',
+            });
+          }
+          
+          canvas.renderAll();
+          evt.preventDefault();
+          evt.stopPropagation();
+          return;
+        }
+      }
+      
       // PANNING: Allow with middle button in ANY mode, or with left/right button in non-draw modes
       if (!target) {
         if (evt.button === 1) {
@@ -743,14 +791,14 @@ export default function SchematicEditor({
           lastX = evt.clientX;
           lastY = evt.clientY;
           canvas.selection = false;
-        } else if (currentTool !== 'draw' && (evt.button === 0 || evt.button === 2)) {
-          // Left/right button pans only in non-draw modes
+        } else if (currentTool !== 'draw' && currentTool !== 'bulk' && (evt.button === 0 || evt.button === 2)) {
+          // Left/right button pans only in non-draw/non-bulk modes
           isPanningLocal = true;
           lastX = evt.clientX;
           lastY = evt.clientY;
           canvas.selection = false;
-        } else if (currentTool === 'draw' && (evt.button === 0 || evt.button === 2) && (evt.shiftKey || evt.ctrlKey)) {
-          // In draw mode, allow panning with Shift+Click or Ctrl+Click
+        } else if ((currentTool === 'draw' || currentTool === 'bulk') && (evt.button === 0 || evt.button === 2) && (evt.shiftKey || evt.ctrlKey)) {
+          // In draw/bulk mode, allow panning with Shift+Click or Ctrl+Click
           isPanningLocal = true;
           lastX = evt.clientX;
           lastY = evt.clientY;
@@ -1281,41 +1329,47 @@ export default function SchematicEditor({
     };
   }, [schematicUrl]);
 
-  // ESCAPE KEY: Cancel repositioning mode
+  // ESCAPE KEY: Cancel repositioning mode or bulk selection
   // CRITICAL: Uses repositioningMeterRef to check current repositioning state
   // This ensures the handler can detect and cancel repositioning even when state has changed
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && repositioningMeterRef.current) {
-        e.preventDefault();
-        
-        // Restore opacity of all objects
-        if (fabricCanvas) {
-          fabricCanvas.getObjects().forEach((obj: any) => {
-            obj.set({ opacity: 1 });
-          });
+      if (e.key === 'Escape') {
+        if (repositioningMeterRef.current) {
+          e.preventDefault();
           
-          // Remove any preview rectangle
-          const existingPreview = fabricCanvas.getObjects().find((obj: any) => obj.repositionPreview);
-          if (existingPreview) {
-            fabricCanvas.remove(existingPreview);
+          // Restore opacity of all objects
+          if (fabricCanvas) {
+            fabricCanvas.getObjects().forEach((obj: any) => {
+              obj.set({ opacity: 1 });
+            });
+            
+            // Remove any preview rectangle
+            const existingPreview = fabricCanvas.getObjects().find((obj: any) => obj.repositionPreview);
+            if (existingPreview) {
+              fabricCanvas.remove(existingPreview);
+            }
+            
+            // Restore canvas state
+            fabricCanvas.selection = true;
+            fabricCanvas.defaultCursor = 'default';
+            fabricCanvas.renderAll();
           }
           
-          // Restore canvas state
-          fabricCanvas.selection = true;
-          fabricCanvas.defaultCursor = 'default';
-          fabricCanvas.renderAll();
+          // Clear repositioning state
+          setRepositioningMeter(null);
+          setRepositionStartPoint(null);
+          setIsRepositionDragging(false);
+          repositioningMeterRef.current = null;
+          repositionStartPointRef.current = null;
+          isRepositionDraggingRef.current = false;
+          
+          toast.info("Repositioning cancelled");
+        } else if (activeToolRef.current === 'bulk' && selectedMeterCardIdsRef.current.length > 0) {
+          e.preventDefault();
+          setSelectedMeterCardIds([]);
+          toast.info("Selection cleared");
         }
-        
-        // Clear repositioning state
-        setRepositioningMeter(null);
-        setRepositionStartPoint(null);
-        setIsRepositionDragging(false);
-        repositioningMeterRef.current = null;
-        repositionStartPointRef.current = null;
-        isRepositionDraggingRef.current = false;
-        
-        toast.info("Repositioning cancelled");
       }
     };
 
@@ -1597,6 +1651,9 @@ export default function SchematicEditor({
           const baseScaleX = cardWidth / imgElement.width;
           const baseScaleY = cardHeight / imgElement.height;
           
+          // Check if this meter is selected in bulk mode
+          const isSelected = selectedMeterCardIds.includes(pos.meter_id);
+          
           // Apply both base scale and saved scale
           const img = new FabricImage(imgElement, {
             left: x,
@@ -1606,12 +1663,22 @@ export default function SchematicEditor({
             scaleX: baseScaleX * savedScaleX,
             scaleY: baseScaleY * savedScaleY,
             hasControls: activeTool === 'move',
-            selectable: activeTool === 'move',
-            hoverCursor: activeTool === 'move' ? 'move' : (activeTool === 'connection' ? 'pointer' : 'default'),
+            selectable: activeTool === 'move' || activeTool === 'bulk',
+            hoverCursor: activeTool === 'move' ? 'move' : (activeTool === 'connection' || activeTool === 'bulk' ? 'pointer' : 'default'),
             lockRotation: true,
+            // Add selection styling for bulk mode
+            strokeWidth: isSelected ? 4 : 0,
+            stroke: isSelected ? 'hsl(142, 76%, 36%)' : undefined,
+            borderColor: isSelected ? 'hsl(142, 76%, 36%)' : '#0e74dd',
+            cornerColor: isSelected ? 'hsl(142, 76%, 36%)' : '#0e74dd',
+            cornerSize: 12,
+            transparentCorners: false,
           });
           
+          // Store metadata for identifying this card
           img.set('data', { meterId: pos.meter_id, positionId: pos.id });
+          (img as any).meterId = pos.meter_id;
+          (img as any).meterCardType = 'saved';
           
           img.on('mousedown', () => {
             if (activeTool === 'connection') {
@@ -1665,7 +1732,7 @@ export default function SchematicEditor({
     });
 
     fabricCanvas.renderAll();
-  }, [fabricCanvas, meterPositions, lines, meters, activeTool, extractedMeters, legendVisibility, selectedExtractedMeterIds]);
+  }, [fabricCanvas, meterPositions, lines, meters, activeTool, extractedMeters, legendVisibility, selectedExtractedMeterIds, selectedMeterCardIds]);
 
   const fetchMeters = async () => {
     const { data } = await supabase
@@ -2377,6 +2444,23 @@ export default function SchematicEditor({
           Move
         </Button>
         <Button
+          variant={activeTool === "bulk" ? "default" : "outline"}
+          onClick={() => {
+            if (activeTool === "bulk") {
+              setActiveTool("select");
+              toast.info("Bulk select mode disabled");
+            } else {
+              setActiveTool("bulk");
+              toast.info("Click on meter cards to select them for bulk actions", { duration: 4000 });
+            }
+          }}
+          disabled={!isEditMode}
+          size="sm"
+        >
+          <CheckSquare className="w-4 h-4 mr-2" />
+          Bulk Select {selectedMeterCardIds.length > 0 && `(${selectedMeterCardIds.length})`}
+        </Button>
+        <Button
           variant={activeTool === "connection" ? "default" : "outline"}
           onClick={() => setActiveTool("connection")}
           disabled={!isEditMode}
@@ -2385,6 +2469,50 @@ export default function SchematicEditor({
           <Link2 className="w-4 h-4 mr-2" />
           Connect
         </Button>
+        
+        {/* Bulk Actions - show when meters are selected */}
+        {selectedMeterCardIds.length > 0 && (
+          <>
+            <div className="h-6 w-px bg-border" />
+            <Button
+              onClick={async () => {
+                if (confirm(`Delete ${selectedMeterCardIds.length} selected meter(s)? This will remove them from the database.`)) {
+                  try {
+                    const { error } = await supabase
+                      .from('meter_positions')
+                      .delete()
+                      .in('meter_id', selectedMeterCardIds);
+                    
+                    if (error) throw error;
+                    
+                    toast.success(`${selectedMeterCardIds.length} meter(s) deleted successfully`);
+                    setSelectedMeterCardIds([]);
+                    fetchMeterPositions();
+                  } catch (error: any) {
+                    console.error('Error deleting meters:', error);
+                    toast.error(error.message || 'Failed to delete meters');
+                  }
+                }
+              }}
+              variant="destructive"
+              size="sm"
+              className="gap-2"
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete {selectedMeterCardIds.length}
+            </Button>
+            <Button
+              onClick={() => {
+                setSelectedMeterCardIds([]);
+                toast.info("Selection cleared");
+              }}
+              variant="outline"
+              size="sm"
+            >
+              Clear Selection
+            </Button>
+          </>
+        )}
       </div>
 
       {/* Legend and PDF Controls in two panes */}
