@@ -126,7 +126,7 @@ const calculateSnapPoints = (left: number, top: number, width: number, height: n
   const centerY = top + height / 2;
   
   return {
-    top: { x: centerX, y: top - height / 2 - snapRadius },
+    top: { x: centerX, y: top - height / 2 + snapRadius },
     right: { x: left + width + width, y: centerY },
     bottom: { x: centerX, y: top + height + height / 2 - snapRadius },
     left: { x: left - width, y: centerY }
