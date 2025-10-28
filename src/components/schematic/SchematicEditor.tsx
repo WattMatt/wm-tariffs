@@ -647,6 +647,9 @@ export default function SchematicEditor({
       // Only handle drawing if in draw mode
       if (currentTool !== 'draw') return;
       
+      // Don't start drawing if clicking on an existing rectangle (to move it)
+      if (opt.target && opt.target.type === 'rect' && (opt.target as any).regionId) return;
+      
       const pointer = canvas.getPointer(opt.e);
       isDrawing = true;
       startPoint = { x: pointer.x, y: pointer.y };
