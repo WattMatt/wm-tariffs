@@ -805,22 +805,11 @@ export default function SchematicEditor({
         }
       }
       
-      // PANNING: Allow with middle button in ANY mode, or with left/right button in non-draw modes
+      // PANNING: Consistent across ALL modes
+      // Middle button (button 1) always pans in any mode
+      // Shift+Click or Ctrl+Click with left/right button also enables panning in any mode
       if (!target) {
-        if (evt.button === 1) {
-          // Middle button always pans, even in draw mode
-          isPanningLocal = true;
-          lastX = evt.clientX;
-          lastY = evt.clientY;
-          canvas.selection = false;
-        } else if (currentTool !== 'draw' && currentTool !== 'bulk' && (evt.button === 0 || evt.button === 2)) {
-          // Left/right button pans only in non-draw/non-bulk modes
-          isPanningLocal = true;
-          lastX = evt.clientX;
-          lastY = evt.clientY;
-          canvas.selection = false;
-        } else if ((currentTool === 'draw' || currentTool === 'bulk') && (evt.button === 0 || evt.button === 2) && (evt.shiftKey || evt.ctrlKey)) {
-          // In draw/bulk mode, allow panning with Shift+Click or Ctrl+Click
+        if (evt.button === 1 || (evt.shiftKey || evt.ctrlKey)) {
           isPanningLocal = true;
           lastX = evt.clientX;
           lastY = evt.clientY;
