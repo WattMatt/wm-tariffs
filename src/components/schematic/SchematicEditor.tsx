@@ -92,7 +92,7 @@ import { Canvas as FabricCanvas, Circle, Line, Text, FabricImage, Rect, util, Po
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Save, Zap, Link2, Trash2, Move, Upload, Plus, ZoomIn, ZoomOut, Maximize2, Pencil, Scan, Check, CheckSquare } from "lucide-react";
+import { Save, Zap, Link2, Trash2, Move, Upload, Plus, ZoomIn, ZoomOut, Maximize2, Pencil, Scan, Check } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -218,23 +218,6 @@ async function renderMeterCardOnCanvas(
   canvasWidth: number,
   canvasHeight: number
 ): Promise<any> {
-  // Determine border color based on meter status
-  let borderColor = '#f59e0b'; // Orange/yellow for pending (needs review/unconfirmed)
-  if (meter.status === 'approved') {
-    borderColor = '#22c55e'; // Green for confirmed
-  } else if (meter.status === 'rejected') {
-    borderColor = '#ef4444'; // Red for rejected
-  } else if (meter.status === 'pending') {
-    borderColor = '#f59e0b'; // Orange for pending (needs review)
-  }
-  
-  console.log('Rendering meter card:', { 
-    meterNumber: meter.meter_number, 
-    status: meter.status, 
-    borderColor,
-    region: meter.extractedRegion 
-  });
-  
   // Create meter card image from meter data
   const fields = [
     { label: 'NO', value: meter.meter_number || 'N/A' },
@@ -244,7 +227,7 @@ async function renderMeterCardOnCanvas(
     { label: 'SERIAL', value: meter.serial_number || 'N/A' },
   ];
   
-  const meterCardDataUrl = await createMeterCardImage(fields, borderColor, 200, 140);
+  const meterCardDataUrl = await createMeterCardImage(fields, '#0e74dd', 200, 140);
   
   // Convert extracted region percentage to canvas pixels
   const region = meter.extractedRegion;
@@ -253,35 +236,15 @@ async function renderMeterCardOnCanvas(
     return null;
   }
   
-  // Get original image dimensions
-  const originalImageWidth = (canvas as any).originalImageWidth || canvasWidth;
-  const originalImageHeight = (canvas as any).originalImageHeight || canvasHeight;
-  
-  // Canvas scales uniformly, so use the same scale factor for both X and Y
-  const scale = canvasWidth / originalImageWidth;
-  
-  // Convert percentage → original image pixels → canvas pixels
-  const originalPixelX = (region.x / 100) * originalImageWidth;
-  const originalPixelY = (region.y / 100) * originalImageHeight;
-  const originalPixelWidth = (region.width / 100) * originalImageWidth;
-  const originalPixelHeight = (region.height / 100) * originalImageHeight;
-  
-  const left = originalPixelX * scale;
-  const top = originalPixelY * scale;
-  const targetWidth = originalPixelWidth * scale;
-  const targetHeight = originalPixelHeight * scale;
-  
-  console.log('Position calculation:', {
-    regionPercent: region,
-    originalPixels: { x: originalPixelX, y: originalPixelY, w: originalPixelWidth, h: originalPixelHeight },
-    scale,
-    canvasPixels: { left, top, width: targetWidth, height: targetHeight }
-  });
+  const left = (region.x / 100) * canvasWidth;
+  const top = (region.y / 100) * canvasWidth;
+  const targetWidth = (region.width / 100) * canvasWidth;
+  const targetHeight = (region.height / 100) * canvasHeight;
   
   // Calculate scale to match the drawn region size
   // Base card is 200x140
   const scaleX = targetWidth / 200;
-  const scaleYCard = targetHeight / 140;
+  const scaleY = targetHeight / 140;
   
   return new Promise((resolve) => {
     FabricImage.fromURL(meterCardDataUrl, {
@@ -291,30 +254,20 @@ async function renderMeterCardOnCanvas(
         left,
         top,
         scaleX,
-        scaleY: scaleYCard,
-        originX: 'left',
-        originY: 'top',
+        scaleY,
         selectable: true,
         hasControls: true,
         hasBorders: true,
         lockRotation: true,
-        cornerColor: borderColor,
+        cornerColor: '#0e74dd',
         cornerSize: 12,
         transparentCorners: false,
-        borderColor: borderColor,
+        borderColor: '#0e74dd',
       });
       
       // Store meter index for reference
       (img as any).meterIndex = meterIndex;
       (img as any).meterCardType = 'extracted';
-      
-      console.log('Final meter card render:', {
-        meterNumber: meter.meter_number,
-        position: { left, top },
-        scale: { scaleX, scaleY: scaleYCard },
-        targetSize: { width: targetWidth, height: targetHeight },
-        cardBaseSize: { width: 200, height: 140 }
-      });
       
       canvas.add(img);
       canvas.renderAll();
@@ -442,18 +395,8 @@ export default function SchematicEditor({
   
   // FABRIC.JS EVENT HANDLER PATTERN: State + Ref for tool selection
   // State drives UI, ref provides current value to canvas event handlers
-  const [activeTool, setActiveTool] = useState<"select" | "meter" | "connection" | "move" | "draw" | "bulk">("select");
-  const activeToolRef = useRef<"select" | "meter" | "connection" | "move" | "draw" | "bulk">("select");
-  
-  // Bulk selection state for saved meter cards
-  const [selectedMeterCardIds, setSelectedMeterCardIds] = useState<string[]>([]);
-  const selectedMeterCardIdsRef = useRef<string[]>([]);
-  
-  // Bulk selection drag state
-  const [bulkSelectStartPoint, setBulkSelectStartPoint] = useState<{ x: number; y: number } | null>(null);
-  const bulkSelectStartPointRef = useRef<{ x: number; y: number } | null>(null);
-  const [isBulkSelecting, setIsBulkSelecting] = useState(false);
-  const isBulkSelectingRef = useRef(false);
+  const [activeTool, setActiveTool] = useState<"select" | "meter" | "connection" | "move" | "draw">("select");
+  const activeToolRef = useRef<"select" | "meter" | "connection" | "move" | "draw">("select");
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [drawnRegions, setDrawnRegions] = useState<Array<{
     id: string;
@@ -539,27 +482,7 @@ export default function SchematicEditor({
     if (fabricCanvas && activeTool === 'draw') {
       fabricCanvas.selection = true;
     }
-    
-    // Clear bulk selection when exiting bulk mode
-    if (activeTool !== 'bulk') {
-      setSelectedMeterCardIds([]);
-      selectedMeterCardIdsRef.current = [];
-    }
   }, [activeTool, fabricCanvas]);
-  
-  // Sync bulk selection state to ref
-  useEffect(() => {
-    selectedMeterCardIdsRef.current = selectedMeterCardIds;
-  }, [selectedMeterCardIds]);
-  
-  // Sync bulk selection drag state to refs
-  useEffect(() => {
-    bulkSelectStartPointRef.current = bulkSelectStartPoint;
-  }, [bulkSelectStartPoint]);
-  
-  useEffect(() => {
-    isBulkSelectingRef.current = isBulkSelecting;
-  }, [isBulkSelecting]);
 
   // FABRIC.JS EVENT HANDLER PATTERN: Sync repositioning state to refs
   // Critical for the reposition feature - without this, mouse handlers use stale meter data
@@ -581,43 +504,36 @@ export default function SchematicEditor({
       enableRetinaScaling: true, // Better control rendering on high-DPI displays
     });
 
-    // Panning variables with movement tracking
-    let isPanningLocal = false;
-    let lastX = 0;
-    let lastY = 0;
-    let hasMoved = false;
-
-    // Mouse wheel: Different behaviors based on modifier keys
+    // Mouse wheel: Always zoom (zoom to cursor position)
     canvas.on('mouse:wheel', (opt) => {
       const e = opt.e as WheelEvent;
       e.preventDefault();
       e.stopPropagation();
       
+      // Scroll: Zoom in/out toward cursor
       const delta = e.deltaY;
+      let zoom = canvas.getZoom();
+      zoom *= 0.999 ** delta;
       
-      if (e.ctrlKey) {
-        // CTRL + SCROLL: Zoom in/out
-        let zoom = canvas.getZoom();
-        zoom *= 0.999 ** delta;
-        
-        // Clamp zoom between 5% and 2000%
-        if (zoom > 20) zoom = 20;
-        if (zoom < 0.05) zoom = 0.05;
-        
-        // Zoom to cursor position
-        const pointer = canvas.getPointer(e);
-        canvas.zoomToPoint(pointer, zoom);
-        setZoom(zoom);
-      } else if (e.shiftKey) {
-        // SHIFT + SCROLL: Pan left/right
-        const panAmount = delta * 0.5;
-        canvas.relativePan(new Point(-panAmount, 0));
-      } else {
-        // SCROLL alone: Pan up/down
-        const panAmount = delta * 0.5;
-        canvas.relativePan(new Point(0, -panAmount));
-      }
+      // Clamp zoom between 5% and 2000%
+      if (zoom > 20) zoom = 20;
+      if (zoom < 0.05) zoom = 0.05;
+      
+      // Zoom to cursor position
+      const pointer = canvas.getPointer(e);
+      canvas.zoomToPoint(pointer, zoom);
+      setZoom(zoom);
+      
+      // Show zoom percentage toast
+      const zoomPercent = Math.round(zoom * 100);
+      toast(`Zoom: ${zoomPercent}%`, { duration: 800 });
     });
+
+    // Panning variables with movement tracking
+    let isPanningLocal = false;
+    let lastX = 0;
+    let lastY = 0;
+    let hasMoved = false;
 
     canvas.on('mouse:down', (opt) => {
       const evt = opt.e as MouseEvent;
@@ -819,47 +735,26 @@ export default function SchematicEditor({
         }
       }
       
-      // BULK SELECT MODE: Handle clicking on meter cards to toggle selection OR start drag selection
-      if (currentTool === 'bulk' && evt.button === 0) {
-        if (target) {
-          const isMeterCard = (target as any).meterCardType && (target as any).meterId;
-          if (isMeterCard) {
-            const meterId = (target as any).meterId;
-            const currentSelection = selectedMeterCardIdsRef.current;
-            
-            if (currentSelection.includes(meterId)) {
-              // Deselect
-              setSelectedMeterCardIds(prev => prev.filter(id => id !== meterId));
-              target.set({
-                strokeWidth: 0,
-                borderColor: '#0e74dd',
-                cornerColor: '#0e74dd',
-              });
-            } else {
-              // Select
-              setSelectedMeterCardIds(prev => [...prev, meterId]);
-              target.set({
-                strokeWidth: 4,
-                stroke: 'hsl(142, 76%, 36%)',
-                borderColor: 'hsl(142, 76%, 36%)',
-                cornerColor: 'hsl(142, 76%, 36%)',
-              });
-            }
-            
-            canvas.renderAll();
-            evt.preventDefault();
-            evt.stopPropagation();
-            return;
-          }
-        } else if (!evt.shiftKey && !evt.ctrlKey) {
-          // Start drag selection on empty canvas
-          const pointer = canvas.getPointer(evt);
-          setBulkSelectStartPoint({ x: pointer.x, y: pointer.y });
-          bulkSelectStartPointRef.current = { x: pointer.x, y: pointer.y };
-          setIsBulkSelecting(false);
-          isBulkSelectingRef.current = false;
+      // PANNING: Allow with middle button in ANY mode, or with left/right button in non-draw modes
+      if (!target) {
+        if (evt.button === 1) {
+          // Middle button always pans, even in draw mode
+          isPanningLocal = true;
+          lastX = evt.clientX;
+          lastY = evt.clientY;
           canvas.selection = false;
-          return;
+        } else if (currentTool !== 'draw' && (evt.button === 0 || evt.button === 2)) {
+          // Left/right button pans only in non-draw modes
+          isPanningLocal = true;
+          lastX = evt.clientX;
+          lastY = evt.clientY;
+          canvas.selection = false;
+        } else if (currentTool === 'draw' && (evt.button === 0 || evt.button === 2) && (evt.shiftKey || evt.ctrlKey)) {
+          // In draw mode, allow panning with Shift+Click or Ctrl+Click
+          isPanningLocal = true;
+          lastX = evt.clientX;
+          lastY = evt.clientY;
+          canvas.selection = false;
         }
       }
     });
@@ -867,48 +762,6 @@ export default function SchematicEditor({
     canvas.on('mouse:move', (opt) => {
       // CRITICAL: Use activeToolRef.current to get current tool, not activeTool state
       const currentTool = activeToolRef.current;
-      
-      // BULK SELECT MODE: Show selection rectangle during drag
-      if (currentTool === 'bulk' && bulkSelectStartPointRef.current) {
-        const pointer = canvas.getPointer(opt.e);
-        const currentX = pointer.x;
-        const currentY = pointer.y;
-
-        // Check if user has dragged enough (minimum 5 pixels)
-        const dragDistance = Math.sqrt(
-          Math.pow(currentX - bulkSelectStartPointRef.current.x, 2) + 
-          Math.pow(currentY - bulkSelectStartPointRef.current.y, 2)
-        );
-
-        if (dragDistance > 5) {
-          isBulkSelectingRef.current = true;
-          setIsBulkSelecting(true);
-
-          // Remove any existing preview rectangle
-          const existingPreview = canvas.getObjects().find((obj: any) => obj.bulkSelectPreview);
-          if (existingPreview) {
-            canvas.remove(existingPreview);
-          }
-
-          // Draw preview rectangle
-          const previewRect = new Rect({
-            left: Math.min(bulkSelectStartPointRef.current.x, currentX),
-            top: Math.min(bulkSelectStartPointRef.current.y, currentY),
-            width: Math.abs(currentX - bulkSelectStartPointRef.current.x),
-            height: Math.abs(currentY - bulkSelectStartPointRef.current.y),
-            fill: 'rgba(14, 116, 221, 0.1)',
-            stroke: 'hsl(210, 100%, 45%)',
-            strokeWidth: 2,
-            strokeDashArray: [5, 5],
-            selectable: false,
-            evented: false,
-          });
-          (previewRect as any).bulkSelectPreview = true;
-          canvas.add(previewRect);
-          canvas.renderAll();
-        }
-        return;
-      }
       
       // REPOSITIONING MODE: Show preview rectangle
       // CRITICAL: Use refs to check current repositioning state, not stale state values
@@ -1021,73 +874,6 @@ export default function SchematicEditor({
 
     canvas.on('mouse:up', async (opt) => {
       const evt = opt.e as MouseEvent;
-      
-      // BULK SELECT MODE: Select all meter cards within selection rectangle
-      if (bulkSelectStartPointRef.current) {
-        // Only process if user actually dragged
-        if (isBulkSelectingRef.current) {
-          const pointer = canvas.getPointer(opt.e);
-          
-          // Remove preview rectangle
-          const existingPreview = canvas.getObjects().find((obj: any) => obj.bulkSelectPreview);
-          if (existingPreview) {
-            canvas.remove(existingPreview);
-          }
-          
-          // Calculate selection bounds
-          const selectionLeft = Math.min(bulkSelectStartPointRef.current.x, pointer.x);
-          const selectionTop = Math.min(bulkSelectStartPointRef.current.y, pointer.y);
-          const selectionRight = Math.max(bulkSelectStartPointRef.current.x, pointer.x);
-          const selectionBottom = Math.max(bulkSelectStartPointRef.current.y, pointer.y);
-          
-          // Find all meter cards that intersect with the selection rectangle
-          const selectedMeterIds: string[] = [];
-          canvas.getObjects().forEach((obj: any) => {
-            if (obj.meterCardType && obj.meterId) {
-              const objLeft = obj.left;
-              const objTop = obj.top;
-              const objRight = obj.left + obj.width * obj.scaleX;
-              const objBottom = obj.top + obj.height * obj.scaleY;
-              
-              // Check if rectangles intersect
-              const intersects = !(objRight < selectionLeft || 
-                                  objLeft > selectionRight || 
-                                  objBottom < selectionTop || 
-                                  objTop > selectionBottom);
-              
-              if (intersects) {
-                selectedMeterIds.push(obj.meterId);
-                // Apply selection styling
-                obj.set({
-                  strokeWidth: 4,
-                  stroke: 'hsl(142, 76%, 36%)',
-                  borderColor: 'hsl(142, 76%, 36%)',
-                  cornerColor: 'hsl(142, 76%, 36%)',
-                });
-              }
-            }
-          });
-          
-          if (selectedMeterIds.length > 0) {
-            setSelectedMeterCardIds(prev => {
-              // Merge with existing selection
-              const newSelection = [...new Set([...prev, ...selectedMeterIds])];
-              return newSelection;
-            });
-            toast.success(`Selected ${selectedMeterIds.length} meter(s)`);
-          }
-          
-          canvas.renderAll();
-        }
-        
-        // Reset bulk selection state
-        setBulkSelectStartPoint(null);
-        bulkSelectStartPointRef.current = null;
-        setIsBulkSelecting(false);
-        isBulkSelectingRef.current = false;
-        canvas.selection = true;
-        return;
-      }
       
       // REPOSITIONING MODE: Apply new position and scale
       // CRITICAL: Use refs to check current repositioning state and start point
@@ -1495,71 +1281,41 @@ export default function SchematicEditor({
     };
   }, [schematicUrl]);
 
-  // ESCAPE KEY: Cancel repositioning mode or bulk selection
+  // ESCAPE KEY: Cancel repositioning mode
   // CRITICAL: Uses repositioningMeterRef to check current repositioning state
   // This ensures the handler can detect and cancel repositioning even when state has changed
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (repositioningMeterRef.current) {
-          e.preventDefault();
-          
-          // Restore opacity of all objects
-          if (fabricCanvas) {
-            fabricCanvas.getObjects().forEach((obj: any) => {
-              obj.set({ opacity: 1 });
-            });
-            
-            // Remove any preview rectangle
-            const existingPreview = fabricCanvas.getObjects().find((obj: any) => obj.repositionPreview);
-            if (existingPreview) {
-              fabricCanvas.remove(existingPreview);
-            }
-            
-            // Restore canvas state
-            fabricCanvas.selection = true;
-            fabricCanvas.defaultCursor = 'default';
-            fabricCanvas.renderAll();
-          }
-          
-          // Clear repositioning state
-          setRepositioningMeter(null);
-          setRepositionStartPoint(null);
-          setIsRepositionDragging(false);
-          repositioningMeterRef.current = null;
-          repositionStartPointRef.current = null;
-          isRepositionDraggingRef.current = false;
-          
-          toast.info("Repositioning cancelled");
-        } else if (bulkSelectStartPointRef.current) {
-          // Cancel bulk selection drag if in progress
-          e.preventDefault();
-          const existingPreview = fabricCanvas?.getObjects().find((obj: any) => obj.bulkSelectPreview);
-          if (existingPreview) {
-            fabricCanvas?.remove(existingPreview);
-          }
-          setBulkSelectStartPoint(null);
-          bulkSelectStartPointRef.current = null;
-          setIsBulkSelecting(false);
-          isBulkSelectingRef.current = false;
-          fabricCanvas?.renderAll();
-          toast.info("Bulk selection cancelled");
-        } else if (activeToolRef.current === 'bulk' && selectedMeterCardIdsRef.current.length > 0) {
-          e.preventDefault();
-          setSelectedMeterCardIds([]);
-          // Clear visual selection from meter cards
-          fabricCanvas?.getObjects().forEach((obj: any) => {
-            if (obj.meterCardType) {
-              obj.set({
-                strokeWidth: 0,
-                borderColor: '#0e74dd',
-                cornerColor: '#0e74dd',
-              });
-            }
+      if (e.key === 'Escape' && repositioningMeterRef.current) {
+        e.preventDefault();
+        
+        // Restore opacity of all objects
+        if (fabricCanvas) {
+          fabricCanvas.getObjects().forEach((obj: any) => {
+            obj.set({ opacity: 1 });
           });
-          fabricCanvas?.renderAll();
-          toast.info("Selection cleared");
+          
+          // Remove any preview rectangle
+          const existingPreview = fabricCanvas.getObjects().find((obj: any) => obj.repositionPreview);
+          if (existingPreview) {
+            fabricCanvas.remove(existingPreview);
+          }
+          
+          // Restore canvas state
+          fabricCanvas.selection = true;
+          fabricCanvas.defaultCursor = 'default';
+          fabricCanvas.renderAll();
         }
+        
+        // Clear repositioning state
+        setRepositioningMeter(null);
+        setRepositionStartPoint(null);
+        setIsRepositionDragging(false);
+        repositioningMeterRef.current = null;
+        repositionStartPointRef.current = null;
+        isRepositionDraggingRef.current = false;
+        
+        toast.info("Repositioning cancelled");
       }
     };
 
@@ -1841,9 +1597,6 @@ export default function SchematicEditor({
           const baseScaleX = cardWidth / imgElement.width;
           const baseScaleY = cardHeight / imgElement.height;
           
-          // Check if this meter is selected in bulk mode
-          const isSelected = selectedMeterCardIds.includes(pos.meter_id);
-          
           // Apply both base scale and saved scale
           const img = new FabricImage(imgElement, {
             left: x,
@@ -1853,22 +1606,12 @@ export default function SchematicEditor({
             scaleX: baseScaleX * savedScaleX,
             scaleY: baseScaleY * savedScaleY,
             hasControls: activeTool === 'move',
-            selectable: activeTool === 'move' || activeTool === 'bulk',
-            hoverCursor: activeTool === 'move' ? 'move' : (activeTool === 'connection' || activeTool === 'bulk' ? 'pointer' : 'default'),
+            selectable: activeTool === 'move',
+            hoverCursor: activeTool === 'move' ? 'move' : (activeTool === 'connection' ? 'pointer' : 'default'),
             lockRotation: true,
-            // Add selection styling for bulk mode
-            strokeWidth: isSelected ? 4 : 0,
-            stroke: isSelected ? 'hsl(142, 76%, 36%)' : undefined,
-            borderColor: isSelected ? 'hsl(142, 76%, 36%)' : '#0e74dd',
-            cornerColor: isSelected ? 'hsl(142, 76%, 36%)' : '#0e74dd',
-            cornerSize: 12,
-            transparentCorners: false,
           });
           
-          // Store metadata for identifying this card
           img.set('data', { meterId: pos.meter_id, positionId: pos.id });
-          (img as any).meterId = pos.meter_id;
-          (img as any).meterCardType = 'saved';
           
           img.on('mousedown', () => {
             if (activeTool === 'connection') {
@@ -1922,7 +1665,7 @@ export default function SchematicEditor({
     });
 
     fabricCanvas.renderAll();
-  }, [fabricCanvas, meterPositions, lines, meters, activeTool, extractedMeters, legendVisibility, selectedExtractedMeterIds, selectedMeterCardIds]);
+  }, [fabricCanvas, meterPositions, lines, meters, activeTool, extractedMeters, legendVisibility, selectedExtractedMeterIds]);
 
   const fetchMeters = async () => {
     const { data } = await supabase
@@ -2445,10 +2188,43 @@ export default function SchematicEditor({
 
   return (
     <div className="space-y-4">
-      {/* First row: Main action buttons and Save/Edit buttons */}
+      {/* First row: Scan All and Select Regions with Save/Edit buttons */}
       <div className="flex gap-2 items-start justify-between">
-        {/* Left side: Main action buttons */}
+        {/* Left side: Scan buttons and selection badges */}
         <div className="flex gap-2 items-center flex-wrap flex-1">
+          {selectedExtractedMeterIds.length > 0 && (
+            <>
+              <Badge variant="secondary" className="px-3">
+                {selectedExtractedMeterIds.length} selected
+              </Badge>
+              <Button 
+                onClick={handleSelectAllMeters} 
+                variant="outline" 
+                size="sm"
+              >
+                {selectedExtractedMeterIds.length === extractedMeters.length ? 'Deselect All' : 'Select All'}
+              </Button>
+              <Button 
+                onClick={handleBulkApprove} 
+                variant="default" 
+                size="sm"
+                className="gap-2"
+              >
+                <Check className="w-4 h-4" />
+                Approve {selectedExtractedMeterIds.length}
+              </Button>
+              <Button 
+                onClick={handleBulkDelete} 
+                variant="destructive" 
+                size="sm"
+                className="gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete {selectedExtractedMeterIds.length}
+              </Button>
+              <div className="h-6 w-px bg-border" />
+            </>
+          )}
           <Button onClick={handleScanAll} disabled={!isEditMode || isSaving} variant="outline" size="sm">
             <Scan className="w-4 h-4 mr-2" />
             {(() => {
@@ -2497,23 +2273,21 @@ export default function SchematicEditor({
             Draw Regions {drawnRegions.length > 0 && `(${drawnRegions.length})`}
           </Button>
           <Button
-            variant={activeTool === "bulk" ? "default" : "outline"}
+            variant={selectedRegionIndices.length > 0 ? "default" : "outline"}
             onClick={() => {
-              if (activeTool === "bulk") {
-                setActiveTool("select");
-                setSelectedMeterCardIds([]);
-                toast.info("Bulk select mode disabled");
+              if (selectedRegionIndices.length > 0) {
+                setSelectedRegionIndices([]);
+                toast.info("Region selection cleared");
               } else {
-                setActiveTool("bulk");
-                toast.info("Click on meter cards to select them for bulk actions", { duration: 4000 });
+                toast.info("Shift+click on regions to select them", { duration: 4000 });
               }
             }}
-            disabled={!isEditMode}
+            disabled={!isEditMode || drawnRegions.length === 0}
             size="sm"
             className="gap-2"
           >
             <Scan className="w-4 h-4" />
-            Select Regions {selectedMeterCardIds.length > 0 && `(${selectedMeterCardIds.length})`}
+            Select Regions {selectedRegionIndices.length > 0 && `(${selectedRegionIndices.length})`}
           </Button>
           <MeterDataExtractor
             siteId={siteId}
@@ -2566,93 +2340,8 @@ export default function SchematicEditor({
         </div>
       </div>
 
-      {/* Selection controls row - appears when extracted meters are selected */}
-      {selectedExtractedMeterIds.length > 0 && (
-        <div className="flex gap-2 items-center flex-wrap bg-muted/30 p-2 rounded-lg border border-border">
-          <Badge variant="secondary" className="px-3">
-            {selectedExtractedMeterIds.length} selected
-          </Badge>
-          <Button 
-            onClick={handleSelectAllMeters} 
-            variant="outline" 
-            size="sm"
-          >
-            {selectedExtractedMeterIds.length === extractedMeters.length ? 'Deselect All' : 'Select All'}
-          </Button>
-          <Button 
-            onClick={handleBulkApprove} 
-            variant="default" 
-            size="sm"
-            className="gap-2"
-          >
-            <Check className="w-4 h-4" />
-            Approve {selectedExtractedMeterIds.length}
-          </Button>
-          <Button 
-            onClick={handleBulkDelete} 
-            variant="destructive" 
-            size="sm"
-            className="gap-2"
-          >
-            <Trash2 className="w-4 h-4" />
-            Delete {selectedExtractedMeterIds.length}
-          </Button>
-        </div>
-      )}
-
       {/* Second row: Action buttons */}
       <div className="flex gap-2 items-center flex-wrap">
-        <Button
-          variant={activeTool === "meter" ? "default" : "outline"}
-          onClick={() => {
-            if (activeTool === "meter") {
-              setActiveTool("select");
-              toast.info("Add Meter mode disabled");
-            } else {
-              setActiveTool("meter");
-              toast.info("Click on the schematic to add a meter");
-            }
-          }}
-          disabled={!isEditMode}
-          size="sm"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Add Meter
-        </Button>
-        <Button
-          variant={activeTool === "move" ? "default" : "outline"}
-          onClick={() => {
-            if (activeTool === "move") {
-              setActiveTool("select");
-              toast.info("Move mode disabled");
-            } else {
-              setActiveTool("move");
-              toast.info("Click on a meter card to reposition it");
-            }
-          }}
-          disabled={!isEditMode}
-          size="sm"
-        >
-          <Move className="w-4 h-4 mr-2" />
-          Move
-        </Button>
-        <Button
-          variant={activeTool === "connection" ? "default" : "outline"}
-          onClick={() => {
-            if (activeTool === "connection") {
-              setActiveTool("select");
-              toast.info("Connect mode disabled");
-            } else {
-              setActiveTool("connection");
-              toast.info("Click on meters to connect them");
-            }
-          }}
-          disabled={!isEditMode}
-          size="sm"
-        >
-          <Link2 className="w-4 h-4 mr-2" />
-          Connect
-        </Button>
         <Button onClick={handleClearLines} variant="destructive" size="sm" disabled={!isEditMode}>
           <Trash2 className="w-4 h-4 mr-2" />
           Clear Lines
@@ -2669,50 +2358,33 @@ export default function SchematicEditor({
             Clear Regions
           </Button>
         )}
-        
-        {/* Bulk Actions - show when meters are selected */}
-        {selectedMeterCardIds.length > 0 && (
-          <>
-            <div className="h-6 w-px bg-border" />
-            <Button
-              onClick={async () => {
-                if (confirm(`Delete ${selectedMeterCardIds.length} selected meter(s)? This will remove them from the database.`)) {
-                  try {
-                    const { error } = await supabase
-                      .from('meter_positions')
-                      .delete()
-                      .in('meter_id', selectedMeterCardIds);
-                    
-                    if (error) throw error;
-                    
-                    toast.success(`${selectedMeterCardIds.length} meter(s) deleted successfully`);
-                    setSelectedMeterCardIds([]);
-                    fetchMeterPositions();
-                  } catch (error: any) {
-                    console.error('Error deleting meters:', error);
-                    toast.error(error.message || 'Failed to delete meters');
-                  }
-                }
-              }}
-              variant="destructive"
-              size="sm"
-              className="gap-2"
-            >
-              <Trash2 className="w-4 h-4" />
-              Delete {selectedMeterCardIds.length}
-            </Button>
-            <Button
-              onClick={() => {
-                setSelectedMeterCardIds([]);
-                toast.info("Selection cleared");
-              }}
-              variant="outline"
-              size="sm"
-            >
-              Clear Selection
-            </Button>
-          </>
-        )}
+        <Button
+          variant={activeTool === "meter" ? "default" : "outline"}
+          onClick={() => setActiveTool("meter")}
+          disabled={!isEditMode}
+          size="sm"
+        >
+          <Plus className="w-4 h-4 mr-2" />
+          Add Meter
+        </Button>
+        <Button
+          variant={activeTool === "move" ? "default" : "outline"}
+          onClick={() => setActiveTool("move")}
+          disabled={!isEditMode}
+          size="sm"
+        >
+          <Move className="w-4 h-4 mr-2" />
+          Move
+        </Button>
+        <Button
+          variant={activeTool === "connection" ? "default" : "outline"}
+          onClick={() => setActiveTool("connection")}
+          disabled={!isEditMode}
+          size="sm"
+        >
+          <Link2 className="w-4 h-4 mr-2" />
+          Connect
+        </Button>
       </div>
 
       {/* Legend and PDF Controls in two panes */}
@@ -2806,6 +2478,10 @@ export default function SchematicEditor({
             <Badge variant="outline">
               <div className="w-3 h-3 rounded-full bg-[#16a34a] border-2 border-[#16a34a] mr-2" />
               Confirmed
+            </Badge>
+            <Badge variant="outline" className="bg-[#8b5cf6] text-white border-[#8b5cf6]">
+              <div className="w-3 h-3 rounded-full bg-white mr-2" />
+              Selected
             </Badge>
           </div>
           
