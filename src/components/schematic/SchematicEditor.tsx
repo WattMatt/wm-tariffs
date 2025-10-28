@@ -89,7 +89,7 @@ import { Canvas as FabricCanvas, Circle, Line, Text, FabricImage, Rect, Polygon,
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Save, Zap, Link2, Trash2, Upload, Plus, ZoomIn, ZoomOut, Maximize2, Pencil, Scan, Check, Edit } from "lucide-react";
+import { Save, Zap, Link2, Trash2, Upload, Plus, ZoomIn, ZoomOut, Maximize2, Pencil, Scan, Check, Edit, ChevronLeft, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -500,6 +500,8 @@ export default function SchematicEditor({
   const [zoom, setZoom] = useState(1);
   const [isEditMeterDialogOpen, setIsEditMeterDialogOpen] = useState(false);
   const [isBulkEditDialogOpen, setIsBulkEditDialogOpen] = useState(false);
+  const [currentBulkEditIndex, setCurrentBulkEditIndex] = useState(0);
+  const [bulkEditMeterIds, setBulkEditMeterIds] = useState<string[]>([]);
   const [isConfirmMeterDialogOpen, setIsConfirmMeterDialogOpen] = useState(false);
   const [editingMeter, setEditingMeter] = useState<any>(null);
   const [isViewMeterDialogOpen, setIsViewMeterDialogOpen] = useState(false);
@@ -2343,6 +2345,44 @@ export default function SchematicEditor({
     fabricCanvas.renderAll();
   };
 
+  const navigateToPreviousMeter = async () => {
+    if (bulkEditMeterIds.length === 0 || currentBulkEditIndex === 0) return;
+    
+    const newIndex = currentBulkEditIndex - 1;
+    const { data: meterData, error } = await supabase
+      .from('meters')
+      .select('*')
+      .eq('id', bulkEditMeterIds[newIndex])
+      .single();
+    
+    if (error || !meterData) {
+      toast.error('Failed to load meter');
+      return;
+    }
+    
+    setCurrentBulkEditIndex(newIndex);
+    setEditingMeter(meterData);
+  };
+
+  const navigateToNextMeter = async () => {
+    if (bulkEditMeterIds.length === 0 || currentBulkEditIndex >= bulkEditMeterIds.length - 1) return;
+    
+    const newIndex = currentBulkEditIndex + 1;
+    const { data: meterData, error } = await supabase
+      .from('meters')
+      .select('*')
+      .eq('id', bulkEditMeterIds[newIndex])
+      .single();
+    
+    if (error || !meterData) {
+      toast.error('Failed to load meter');
+      return;
+    }
+    
+    setCurrentBulkEditIndex(newIndex);
+    setEditingMeter(meterData);
+  };
+
 
   const handleUpdateMeter = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -2398,8 +2438,24 @@ export default function SchematicEditor({
     }
 
     toast.success('Meter saved and approved');
-    setIsEditMeterDialogOpen(false);
-    setEditingMeter(null);
+    
+    // If in bulk edit mode, move to next meter
+    if (bulkEditMeterIds.length > 0 && currentBulkEditIndex < bulkEditMeterIds.length - 1) {
+      await navigateToNextMeter();
+    } else if (bulkEditMeterIds.length > 0) {
+      // Last meter in bulk edit
+      toast.success(`All ${bulkEditMeterIds.length} meters saved and approved!`);
+      setIsEditMeterDialogOpen(false);
+      setEditingMeter(null);
+      setBulkEditMeterIds([]);
+      setCurrentBulkEditIndex(0);
+      setSelectedMeterIds([]);
+    } else {
+      // Single meter edit
+      setIsEditMeterDialogOpen(false);
+      setEditingMeter(null);
+    }
+    
     fetchMeters();
     fetchMeterPositions();
   };
@@ -3002,9 +3058,24 @@ export default function SchematicEditor({
               <Button
                 variant="default"
                 size="sm"
-                onClick={() => {
-                  // Open bulk edit dialog
-                  setIsBulkEditDialogOpen(true);
+                onClick={async () => {
+                  // Fetch all meter data for bulk editing
+                  const { data: metersData, error } = await supabase
+                    .from('meters')
+                    .select('*')
+                    .in('id', selectedMeterIds)
+                    .order('meter_number');
+                  
+                  if (error || !metersData || metersData.length === 0) {
+                    toast.error('Failed to load meters for editing');
+                    return;
+                  }
+                  
+                  // Set up bulk editing state
+                  setBulkEditMeterIds(metersData.map(m => m.id));
+                  setCurrentBulkEditIndex(0);
+                  setEditingMeter(metersData[0]);
+                  setIsEditMeterDialogOpen(true);
                 }}
                 className="gap-2"
               >
@@ -3598,10 +3669,47 @@ export default function SchematicEditor({
       </Dialog>
 
       {/* Edit Meter Dialog for Database Meters */}
-      <Dialog open={isEditMeterDialogOpen} onOpenChange={setIsEditMeterDialogOpen}>
+      <Dialog open={isEditMeterDialogOpen} onOpenChange={(open) => {
+        setIsEditMeterDialogOpen(open);
+        if (!open) {
+          setEditingMeter(null);
+          setBulkEditMeterIds([]);
+          setCurrentBulkEditIndex(0);
+        }
+      }}>
         <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
           <DialogHeader>
-            <DialogTitle>Edit Meter Details</DialogTitle>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                {bulkEditMeterIds.length > 0 && (
+                  <>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={navigateToPreviousMeter}
+                      disabled={currentBulkEditIndex === 0}
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </Button>
+                    <span className="text-sm text-muted-foreground">
+                      {currentBulkEditIndex + 1} / {bulkEditMeterIds.length}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={navigateToNextMeter}
+                      disabled={currentBulkEditIndex >= bulkEditMeterIds.length - 1}
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </Button>
+                  </>
+                )}
+              </div>
+              <DialogTitle>Edit Meter Details</DialogTitle>
+              <div className="w-24" /> {/* Spacer for centering title */}
+            </div>
           </DialogHeader>
           {editingMeter && (
             <form onSubmit={handleUpdateMeter} className="flex-1 flex flex-col min-h-0">
@@ -3711,6 +3819,8 @@ export default function SchematicEditor({
                   onClick={() => {
                     setIsEditMeterDialogOpen(false);
                     setEditingMeter(null);
+                    setBulkEditMeterIds([]);
+                    setCurrentBulkEditIndex(0);
                   }}
                 >
                   Cancel
@@ -3750,8 +3860,44 @@ export default function SchematicEditor({
                     }
                     
                     toast.success('Meter deleted successfully');
-                    setIsEditMeterDialogOpen(false);
-                    setEditingMeter(null);
+                    
+                    // If in bulk edit mode, handle navigation
+                    if (bulkEditMeterIds.length > 0) {
+                      // Remove the deleted meter from the list
+                      const updatedIds = bulkEditMeterIds.filter(id => id !== editingMeter.id);
+                      setBulkEditMeterIds(updatedIds);
+                      
+                      if (updatedIds.length === 0) {
+                        // No more meters to edit
+                        setIsEditMeterDialogOpen(false);
+                        setEditingMeter(null);
+                        setCurrentBulkEditIndex(0);
+                        setSelectedMeterIds([]);
+                      } else if (currentBulkEditIndex >= updatedIds.length) {
+                        // We were on the last meter, go to the new last meter
+                        const newIndex = updatedIds.length - 1;
+                        setCurrentBulkEditIndex(newIndex);
+                        const { data: nextMeterData } = await supabase
+                          .from('meters')
+                          .select('*')
+                          .eq('id', updatedIds[newIndex])
+                          .single();
+                        if (nextMeterData) setEditingMeter(nextMeterData);
+                      } else {
+                        // Load the next meter at the same index
+                        const { data: nextMeterData } = await supabase
+                          .from('meters')
+                          .select('*')
+                          .eq('id', updatedIds[currentBulkEditIndex])
+                          .single();
+                        if (nextMeterData) setEditingMeter(nextMeterData);
+                      }
+                    } else {
+                      // Single meter edit
+                      setIsEditMeterDialogOpen(false);
+                      setEditingMeter(null);
+                    }
+                    
                     fetchMeters();
                     fetchMeterPositions();
                   }}
