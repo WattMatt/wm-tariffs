@@ -3255,8 +3255,8 @@ export default function SchematicEditor({
             </Badge>
           </div>
           
-          {/* Bottom row - Extracted Meters Status (Always visible, greyed out when not applicable) */}
-          <div className={`flex gap-3 flex-wrap items-center transition-opacity ${extractedMeters.length === 0 ? 'opacity-40' : ''}`}>
+          {/* Bottom row - Extracted Meters Status */}
+          <div className="flex gap-3 flex-wrap items-center">
             <div className="text-xs font-medium text-muted-foreground mr-2 flex items-center">Extracted:</div>
             <Badge 
               variant="outline" 
