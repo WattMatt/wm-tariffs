@@ -530,298 +530,35 @@ export default function SchematicEditor({
       toast(`Zoom: ${zoomPercent}%`, { duration: 800 });
     });
 
-    // Panning variables with movement tracking
-    let isPanningLocal = false;
-    let lastX = 0;
-    let lastY = 0;
-    let hasMoved = false;
+    // Handle scroll/wheel events for navigation and zoom
+    canvas.on('mouse:wheel', (opt) => {
+      const evt = opt.e as WheelEvent;
+      evt.preventDefault();
+      evt.stopPropagation();
 
-    canvas.on('mouse:down', (opt) => {
-      const evt = opt.e as MouseEvent;
-      const target = opt.target;
+      const delta = evt.deltaY;
       
-      // CRITICAL: Use ref instead of state to get current tool
-      // State would be stale from when this handler was registered
-      const currentTool = activeToolRef.current;
-      
-      // Middle mouse button ALWAYS enables panning in ALL modes
-      if (evt.button === 1) {
-        isPanningLocal = true;
-        hasMoved = false;
-        lastX = evt.clientX;
-        lastY = evt.clientY;
-        canvas.selection = false;
-        canvas.defaultCursor = 'grab';
-        evt.preventDefault();
-        evt.stopPropagation();
-        return;
+      // CTRL + SCROLL: Zoom in/out
+      if (evt.ctrlKey || evt.metaKey) {
+        let newZoom = canvas.getZoom();
+        newZoom *= 0.999 ** delta;
+        
+        // Clamp zoom between 10% and 2000%
+        newZoom = Math.min(Math.max(0.1, newZoom), 20);
+        
+        // Zoom to cursor position
+        const point = new Point(evt.offsetX, evt.offsetY);
+        canvas.zoomToPoint(point, newZoom);
+        
+        setZoom(newZoom);
+        const zoomPercent = Math.round(newZoom * 100);
+        toast(`Zoom: ${zoomPercent}%`, { duration: 800 });
       }
-      
-      // REPOSITIONING MODE: Handle drawing new region for meter card
-      // CRITICAL: Use repositioningMeterRef.current instead of repositioningMeter state
-      // This ensures we check the CURRENT repositioning state, not stale captured value
-      if (repositioningMeterRef.current && evt.button === 0) {
-        const pointer = canvas.getPointer(opt.e);
-        setRepositionStartPoint(pointer);
-        repositionStartPointRef.current = pointer; // Update ref immediately for move handler
-        setIsRepositionDragging(false);
-        isRepositionDraggingRef.current = false;
-        evt.preventDefault();
-        evt.stopPropagation();
-        return;
-      }
-      
-      // DRAWING TOOL: Left-click for drawing regions (double-click approach)
-      if (currentTool === 'draw' && evt.button === 0) {
-        // Check if clicking on an existing region rectangle for resizing/moving
-        const isRegionRect = target && target.type === 'rect' && (target as any).regionId;
+      // SHIFT + SCROLL: Pan left/right
+      else if (evt.shiftKey) {
+        canvas.relativePan(new Point(-delta, 0));
         
-        if (isRegionRect) {
-          // Allow selecting and manipulating existing rectangles in draw mode
-          canvas.selection = true;
-          canvas.setActiveObject(target);
-          canvas.renderAll();
-          evt.preventDefault();
-          evt.stopPropagation();
-          return; // Let Fabric.js handle the selection
-        }
-        
-        const isInteractiveObject = target && target.type !== 'image';
-        if (!isInteractiveObject) {
-          const pointer = canvas.getPointer(opt.e);
-          
-          if (!drawStartPointRef.current) {
-            drawStartPointRef.current = { x: pointer.x, y: pointer.y };
-            
-            // Show a marker at start point
-            const marker = new Circle({
-              left: pointer.x,
-              top: pointer.y,
-              radius: 5,
-              fill: 'hsl(210, 100%, 45%)', // Primary blue
-              stroke: '#ffffff',
-              strokeWidth: 2,
-              selectable: false,
-              evented: false,
-              originX: 'center',
-              originY: 'center',
-            });
-            
-            canvas.add(marker);
-            startMarkerRef.current = marker;
-            canvas.renderAll();
-            toast.info('Click again to set the end point');
-            evt.preventDefault();
-            evt.stopPropagation();
-            return;
-          }
-          
-          // Second click - set end point and create persistent region
-          const startPoint = drawStartPointRef.current;
-          
-          const left = Math.min(startPoint.x, pointer.x);
-          const top = Math.min(startPoint.y, pointer.y);
-          const width = Math.abs(pointer.x - startPoint.x);
-          const height = Math.abs(pointer.y - startPoint.y);
-          
-          // Check if region is large enough
-          if (width < 20 || height < 20) {
-            toast.error('Region too small - draw a larger area');
-            // Clean up
-            if (startMarkerRef.current) {
-              canvas.remove(startMarkerRef.current);
-              startMarkerRef.current = null;
-            }
-            drawStartPointRef.current = null;
-            canvas.renderAll();
-            evt.preventDefault();
-            evt.stopPropagation();
-            return;
-          }
-          
-          // Clean up drawing markers BEFORE creating the rectangle
-          if (startMarkerRef.current) {
-            canvas.remove(startMarkerRef.current);
-            startMarkerRef.current = null;
-          }
-          // Remove preview rectangles
-          let objects = canvas.getObjects();
-          objects.forEach(obj => {
-            if ((obj as any).isPreview) {
-              canvas.remove(obj);
-            }
-          });
-          
-          const canvasWidth = canvas.getWidth();
-          const canvasHeight = canvas.getHeight();
-          
-          const rect = new Rect({
-            left,
-            top,
-            width,
-            height,
-            fill: 'rgba(14, 116, 221, 0.1)', // Primary blue with transparency
-            stroke: 'hsl(210, 100%, 45%)', // Primary blue
-            strokeWidth: 2,
-            selectable: true,
-            evented: true,
-            hasControls: true,
-            hasBorders: true,
-            lockMovementX: false,
-            lockMovementY: false,
-            hoverCursor: 'grab', // Open hand when hovering
-            moveCursor: 'grabbing', // Closed hand when dragging
-            cornerColor: 'hsl(210, 100%, 45%)',
-            cornerSize: 12,
-            transparentCorners: false,
-            lockRotation: true,
-            lockScalingFlip: true,
-            borderColor: 'hsl(210, 100%, 45%)',
-            cornerStyle: 'circle',
-            objectCaching: false, // Disable caching to prevent control positioning issues
-          });
-          
-          // Hide rotation control
-          rect.setControlsVisibility({ mtr: false });
-          
-          // Store region ID on the rect for later updates
-          (rect as any).regionId = `region-${Date.now()}-${drawnRegions.length + 1}`;
-          
-          canvas.add(rect);
-          rect.setCoords(); // Update control handle positions
-          canvas.renderAll();
-          
-          // Calculate region in ABSOLUTE pixels of the original image
-          // canvas.getPointer() already returns coordinates in canvas space (accounting for pan/zoom)
-          // We just need to scale from canvas display size to original image pixel size
-          const originalImageWidth = (canvas as any).originalImageWidth || canvasWidth;
-          const originalImageHeight = (canvas as any).originalImageHeight || canvasHeight;
-          
-          // Scale from canvas display space to original image pixel space
-          const scaleX = originalImageWidth / canvasWidth;
-          const scaleY = originalImageHeight / canvasHeight;
-          
-          const regionId = (rect as any).regionId;
-          const regionNumber = drawnRegions.length + 1;
-          const newRegion = {
-            id: regionId,
-            // Store as absolute pixels in original image space
-            x: left * scaleX,
-            y: top * scaleY,
-            width: width * scaleX,
-            height: height * scaleY,
-            imageWidth: originalImageWidth,
-            imageHeight: originalImageHeight,
-            // Also store display coordinates for canvas rendering
-            displayLeft: left,
-            displayTop: top,
-            displayWidth: width,
-            displayHeight: height,
-            fabricRect: rect,
-          };
-          
-          setDrawnRegions(prev => [...prev, newRegion]);
-          toast.success(`Region ${regionNumber} added`);
-          
-          // Enable canvas selection and select the new rectangle so it can be moved immediately
-          canvas.selection = true;
-          canvas.setActiveObject(rect);
-          canvas.renderAll();
-          
-          drawStartPointRef.current = null;
-          
-          evt.preventDefault();
-          evt.stopPropagation();
-          return;
-        }
-      }
-      
-      // PANNING: Allow with middle button in ANY mode, or with left/right button in non-draw modes
-      if (!target) {
-        if (evt.button === 1) {
-          // Middle button always pans, even in draw mode
-          isPanningLocal = true;
-          lastX = evt.clientX;
-          lastY = evt.clientY;
-          canvas.selection = false;
-        } else if (currentTool !== 'draw' && (evt.button === 0 || evt.button === 2)) {
-          // Left/right button pans only in non-draw modes
-          isPanningLocal = true;
-          lastX = evt.clientX;
-          lastY = evt.clientY;
-          canvas.selection = false;
-        } else if (currentTool === 'draw' && (evt.button === 0 || evt.button === 2) && (evt.shiftKey || evt.ctrlKey)) {
-          // In draw mode, allow panning with Shift+Click or Ctrl+Click
-          isPanningLocal = true;
-          lastX = evt.clientX;
-          lastY = evt.clientY;
-          canvas.selection = false;
-        }
-      }
-    });
-
-    canvas.on('mouse:move', (opt) => {
-      // CRITICAL: Use activeToolRef.current to get current tool, not activeTool state
-      const currentTool = activeToolRef.current;
-      
-      // REPOSITIONING MODE: Show preview rectangle
-      // CRITICAL: Use refs to check current repositioning state, not stale state values
-      if (repositioningMeterRef.current && repositionStartPointRef.current) {
-        const pointer = canvas.getPointer(opt.e);
-        const currentX = pointer.x;
-        const currentY = pointer.y;
-
-        // Check if user has dragged enough (minimum 5 pixels)
-        const dragDistance = Math.sqrt(
-          Math.pow(currentX - repositionStartPointRef.current.x, 2) + 
-          Math.pow(currentY - repositionStartPointRef.current.y, 2)
-        );
-
-        if (dragDistance > 5) {
-          isRepositionDraggingRef.current = true;
-          setIsRepositionDragging(true);
-
-          // Remove any existing preview rectangle
-          const existingPreview = canvas.getObjects().find((obj: any) => obj.repositionPreview);
-          if (existingPreview) {
-            canvas.remove(existingPreview);
-          }
-
-          // Draw preview rectangle
-          const previewRect = new Rect({
-            left: Math.min(repositionStartPointRef.current.x, currentX),
-            top: Math.min(repositionStartPointRef.current.y, currentY),
-            width: Math.abs(currentX - repositionStartPointRef.current.x),
-            height: Math.abs(currentY - repositionStartPointRef.current.y),
-            fill: 'rgba(34, 197, 94, 0.1)',
-            stroke: 'rgb(34, 197, 94)',
-            strokeWidth: 3,
-            strokeDashArray: [10, 5],
-            selectable: false,
-            evented: false,
-          });
-          (previewRect as any).repositionPreview = true;
-          canvas.add(previewRect);
-          canvas.renderAll();
-        }
-        return;
-      }
-      
-      if (isPanningLocal) {
-        const evt = opt.e as MouseEvent;
-        evt.preventDefault();
-        evt.stopPropagation();
-        
-        hasMoved = true;
-        canvas.defaultCursor = 'grabbing';
-        
-        const deltaX = evt.clientX - lastX;
-        const deltaY = evt.clientY - lastY;
-        
-        // Use built-in relativePan method
-        canvas.relativePan(new Point(deltaX, deltaY));
-        
-        // Update controls AFTER render completes
+        // Update controls after pan
         requestAnimationFrame(() => {
           const activeObj = canvas.getActiveObject();
           if (activeObj) {
@@ -829,47 +566,19 @@ export default function SchematicEditor({
             canvas.requestRenderAll();
           }
         });
-        
-        lastX = evt.clientX;
-        lastY = evt.clientY;
-        return;
       }
-      
-      // DRAWING MODE: Show preview rectangle from start point to current mouse position
-      // Only show preview if NOT panning
-      if (currentTool === 'draw' && drawStartPointRef.current && !drawingRectRef.current) {
-        const pointer = canvas.getPointer(opt.e);
-        const startPoint = drawStartPointRef.current;
+      // SCROLL alone: Pan up/down
+      else {
+        canvas.relativePan(new Point(0, -delta));
         
-        // Remove old preview if exists
-        const objects = canvas.getObjects();
-        const oldPreview = objects.find(obj => (obj as any).isPreview);
-        if (oldPreview) {
-          canvas.remove(oldPreview);
-        }
-        
-        // Create preview rectangle
-        const left = Math.min(startPoint.x, pointer.x);
-        const top = Math.min(startPoint.y, pointer.y);
-        const width = Math.abs(pointer.x - startPoint.x);
-        const height = Math.abs(pointer.y - startPoint.y);
-        
-        const preview = new Rect({
-          left,
-          top,
-          width,
-          height,
-          fill: 'rgba(14, 116, 221, 0.1)', // Primary blue with transparency
-          stroke: 'hsl(210, 100%, 45%)', // Primary blue
-          strokeWidth: 1,
-          strokeDashArray: [5, 5],
-          selectable: false,
-          evented: false,
+        // Update controls after pan
+        requestAnimationFrame(() => {
+          const activeObj = canvas.getActiveObject();
+          if (activeObj) {
+            activeObj.setCoords();
+            canvas.requestRenderAll();
+          }
         });
-        
-        (preview as any).isPreview = true;
-        canvas.add(preview);
-        canvas.renderAll();
       }
     });
 
@@ -981,20 +690,7 @@ export default function SchematicEditor({
         return;
       }
       
-      if (isPanningLocal) {
-        isPanningLocal = false;
-        canvas.selection = true;
-        canvas.defaultCursor = 'default';
-        
-        // Small timeout to prevent accidental clicks after panning
-        if (hasMoved) {
-          evt.preventDefault();
-          evt.stopPropagation();
-          setTimeout(() => {
-            hasMoved = false;
-          }, 50);
-        }
-      }
+      // No other mouse:up handling needed since we removed all mouse interaction
     });
     
     // Handle rectangle resize and move - update region data AND meter card changes
@@ -2225,9 +1921,6 @@ export default function SchematicEditor({
         <div className="flex gap-2 items-center flex-wrap flex-1">
           {selectedExtractedMeterIds.length > 0 && (
             <>
-              <Badge variant="secondary" className="px-3">
-                {selectedExtractedMeterIds.length} selected
-              </Badge>
               <Button 
                 onClick={handleSelectAllMeters} 
                 variant="outline" 
@@ -2293,7 +1986,7 @@ export default function SchematicEditor({
               } else {
                 // Enable draw mode
                 setActiveTool("draw");
-                toast.info("Left-click to draw regions. Hold middle mouse + drag to pan.", { duration: 4000 });
+                toast.info("Click to draw regions. Use SCROLL to pan, CTRL+SCROLL to zoom, SHIFT+SCROLL for horizontal.", { duration: 4000 });
               }
             }}
             disabled={!isEditMode}
@@ -2373,10 +2066,6 @@ export default function SchematicEditor({
 
       {/* Second row: Action buttons */}
       <div className="flex gap-2 items-center flex-wrap">
-        <Button onClick={handleClearLines} variant="destructive" size="sm" disabled={!isEditMode}>
-          <Trash2 className="w-4 h-4 mr-2" />
-          Clear Lines
-        </Button>
         {drawnRegions.length > 0 && (
           <Button
             variant="destructive"
@@ -2391,7 +2080,7 @@ export default function SchematicEditor({
         )}
         <Button
           variant={activeTool === "meter" ? "default" : "outline"}
-          onClick={() => setActiveTool("meter")}
+          onClick={() => setActiveTool(activeTool === "meter" ? "select" : "meter")}
           disabled={!isEditMode}
           size="sm"
         >
@@ -2400,7 +2089,7 @@ export default function SchematicEditor({
         </Button>
         <Button
           variant={activeTool === "move" ? "default" : "outline"}
-          onClick={() => setActiveTool("move")}
+          onClick={() => setActiveTool(activeTool === "move" ? "select" : "move")}
           disabled={!isEditMode}
           size="sm"
         >
@@ -2409,12 +2098,16 @@ export default function SchematicEditor({
         </Button>
         <Button
           variant={activeTool === "connection" ? "default" : "outline"}
-          onClick={() => setActiveTool("connection")}
+          onClick={() => setActiveTool(activeTool === "connection" ? "select" : "connection")}
           disabled={!isEditMode}
           size="sm"
         >
           <Link2 className="w-4 h-4 mr-2" />
           Connect
+        </Button>
+        <Button onClick={handleClearLines} variant="destructive" size="sm" disabled={!isEditMode}>
+          <Trash2 className="w-4 h-4 mr-2" />
+          Clear Lines
         </Button>
       </div>
 
