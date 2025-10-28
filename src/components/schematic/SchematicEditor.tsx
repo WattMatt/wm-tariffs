@@ -123,13 +123,12 @@ interface MeterPosition {
 const calculateSnapPoints = (left: number, top: number, width: number, height: number) => {
   const centerX = left + width / 2;
   const centerY = top + height / 2;
-  const snapRadius = 8; // Half width of the snap point circle
   
   return {
-    top: { x: centerX - snapRadius, y: top - height / 2 - snapRadius },
-    right: { x: left + width + width - snapRadius, y: centerY - snapRadius },
-    bottom: { x: centerX - snapRadius, y: top + height + height / 2 - snapRadius },
-    left: { x: left - width - snapRadius, y: centerY - snapRadius }
+    top: { x: centerX, y: top - height / 2 },
+    right: { x: left + width + width, y: centerY },
+    bottom: { x: centerX, y: top + height + height / 2 },
+    left: { x: left - width, y: centerY }
   };
 };
 
