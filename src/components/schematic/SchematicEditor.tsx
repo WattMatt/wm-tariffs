@@ -3601,9 +3601,6 @@ export default function SchematicEditor({
         <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle>Edit Meter Details</DialogTitle>
-            <DialogDescription>
-              Update the meter information
-            </DialogDescription>
           </DialogHeader>
           {editingMeter && (
             <form onSubmit={handleUpdateMeter} className="flex-1 flex flex-col min-h-0">
