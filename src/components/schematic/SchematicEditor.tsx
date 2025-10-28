@@ -647,19 +647,49 @@ export default function SchematicEditor({
       }
     });
 
-    // Mouse handlers for drawing rectangles when in draw mode
+    // Mouse handlers for drawing rectangles when in draw mode AND Shift+click selection
     let isDrawing = false;
     let startPoint: { x: number; y: number } | null = null;
     
     canvas.on('mouse:down', (opt) => {
       const currentTool = activeToolRef.current;
-      console.log('mouse:down', { currentTool, hasTarget: !!opt.target, targetType: opt.target?.type, targetRegionId: (opt.target as any)?.regionId });
+      const evt = opt.e as MouseEvent;
+      const target = opt.target;
+      
+      console.log('mouse:down', { currentTool, hasTarget: !!target, targetType: target?.type, targetRegionId: (target as any)?.regionId, shiftKey: evt.shiftKey });
+      
+      // Handle Shift+click selection of region rectangles (works in any mode)
+      if (evt.shiftKey && target && target.type === 'rect' && (target as any).regionId) {
+        const regionId = (target as any).regionId;
+        const regionIndex = drawnRegionsRef.current.findIndex(r => r.id === regionId);
+        
+        if (regionIndex !== -1) {
+          setSelectedRegionIndices(prev => {
+            if (prev.includes(regionIndex)) {
+              // Deselect
+              (target as any).set({ stroke: '#3b82f6', strokeWidth: 2 });
+              canvas.renderAll();
+              const updated = prev.filter(i => i !== regionIndex);
+              toast.info(`Region deselected (${updated.length} selected)`);
+              return updated;
+            } else {
+              // Select
+              (target as any).set({ stroke: '#10b981', strokeWidth: 3 });
+              canvas.renderAll();
+              const updated = [...prev, regionIndex];
+              toast.info(`Region selected (${updated.length} selected)`);
+              return updated;
+            }
+          });
+          return; // Don't proceed with other mouse:down logic
+        }
+      }
       
       // Only handle drawing if in draw mode
       if (currentTool !== 'draw') return;
       
       // Don't start drawing if clicking on an existing rectangle (to move it)
-      if (opt.target && opt.target.type === 'rect' && (opt.target as any).regionId) return;
+      if (target && target.type === 'rect' && (target as any).regionId) return;
       
       const pointer = canvas.getPointer(opt.e);
       isDrawing = true;
@@ -944,42 +974,6 @@ export default function SchematicEditor({
       // No other mouse:up handling needed since we removed all mouse interaction
     });
     
-    // Handle Shift+click selection of region rectangles
-    canvas.on('mouse:down', (opt) => {
-      const evt = opt.e as MouseEvent;
-      const target = opt.target;
-      
-      // Only handle Shift+click on rectangles with regionId
-      if (evt.shiftKey && target && target.type === 'rect' && (target as any).regionId) {
-        const regionId = (target as any).regionId;
-        const regionIndex = drawnRegionsRef.current.findIndex(r => r.id === regionId);
-        
-        if (regionIndex !== -1) {
-          setSelectedRegionIndices(prev => {
-            if (prev.includes(regionIndex)) {
-              // Deselect
-              (target as any).set({ stroke: '#3b82f6', strokeWidth: 2 });
-              canvas.renderAll();
-              const updated = prev.filter(i => i !== regionIndex);
-              toast.info(`Region deselected (${updated.length} selected)`);
-              return updated;
-            } else {
-              // Select
-              (target as any).set({ stroke: '#10b981', strokeWidth: 3 });
-              canvas.renderAll();
-              const updated = [...prev, regionIndex];
-              toast.info(`Region selected (${updated.length} selected)`);
-              return updated;
-            }
-          });
-          
-          // Prevent default selection behavior
-          evt.preventDefault();
-          evt.stopPropagation();
-        }
-      }
-    });
-
     // Handle rectangle resize and move - update region data AND meter card changes
     canvas.on('object:modified', (e) => {
       const obj = e.target;
