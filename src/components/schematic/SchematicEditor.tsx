@@ -2386,7 +2386,10 @@ export default function SchematicEditor({
     }
     
     setCurrentBulkEditIndex(newIndex);
-    setEditingMeter(meterData);
+    setEditingMeter({
+      ...meterData,
+      scannedImageSnippet: meterData.scanned_snippet_url || undefined
+    });
   };
 
   const navigateToNextMeter = async () => {
@@ -2405,7 +2408,10 @@ export default function SchematicEditor({
     }
     
     setCurrentBulkEditIndex(newIndex);
-    setEditingMeter(meterData);
+    setEditingMeter({
+      ...meterData,
+      scannedImageSnippet: meterData.scanned_snippet_url || undefined
+    });
   };
 
 
@@ -3096,10 +3102,13 @@ export default function SchematicEditor({
                     return;
                   }
                   
-                  // Set up bulk editing state
+                  // Set up bulk editing state and map scanned_snippet_url to scannedImageSnippet
                   setBulkEditMeterIds(metersData.map(m => m.id));
                   setCurrentBulkEditIndex(0);
-                  setEditingMeter(metersData[0]);
+                  setEditingMeter({
+                    ...metersData[0],
+                    scannedImageSnippet: metersData[0].scanned_snippet_url || undefined
+                  });
                   setIsEditMeterDialogOpen(true);
                 }}
                 className="gap-2"
