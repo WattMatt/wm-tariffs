@@ -2365,14 +2365,6 @@ export default function SchematicEditor({
               Selected
             </Badge>
           </div>
-          
-          {/* Help text for multi-select and navigation */}
-          {extractedMeters.length > 0 && (
-            <div className="text-xs text-muted-foreground italic space-y-1">
-              <div>💡 Tip: Shift+Click extracted meters to select multiple for bulk operations</div>
-              <div>🖱️ Navigation: Scroll (up/down), Shift+Scroll (left/right), Ctrl+Scroll (zoom)</div>
-            </div>
-          )}
         </div>
 
         {/* Right pane - PDF Zoom Controls */}
