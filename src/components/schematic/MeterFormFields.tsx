@@ -183,7 +183,6 @@ export function MeterFormFields({
             </SelectTrigger>
             <SelectContent className="bg-background z-50">
               <SelectItem value="unconfirmed">🔴 Unconfirmed</SelectItem>
-              <SelectItem value="needs_review">🟠 Needs Review</SelectItem>
               <SelectItem value="confirmed">🟢 Confirmed</SelectItem>
             </SelectContent>
           </Select>

@@ -1563,8 +1563,8 @@ export default function SchematicEditor({
             lockRotation: true,
             lockScalingX: true,
             lockScalingY: true,
-            stroke: borderColor,
-            strokeWidth: strokeWidth,
+            stroke: isEditMode ? borderColor : undefined,
+            strokeWidth: isEditMode ? strokeWidth : 0,
           });
           
           // Store the actual meter data
@@ -1685,11 +1685,9 @@ export default function SchematicEditor({
       let borderColor = '#3b82f6'; // default blue
       let categoryKey = 'other';
       
-      // Priority 1: Confirmation status colors (always visible)
+      // Priority 1: Confirmation status colors (only in edit mode)
       if (confirmationStatus === 'confirmed') {
         borderColor = '#22c55e'; // green for confirmed
-      } else if (confirmationStatus === 'needs_review') {
-        borderColor = '#f59e0b'; // amber/orange for needs review
       } else if (confirmationStatus === 'unconfirmed') {
         borderColor = '#ef4444'; // red for unconfirmed
       }
@@ -1765,8 +1763,8 @@ export default function SchematicEditor({
             selectable: isEditMode,
             hoverCursor: isEditMode ? 'move' : 'pointer',
             lockRotation: true,
-            stroke: borderColor,
-            strokeWidth: 4,
+            stroke: isEditMode ? borderColor : undefined,
+            strokeWidth: isEditMode ? 4 : 0,
           });
           
           img.set('data', { meterId: pos.meter_id, positionId: pos.id });
@@ -2397,7 +2395,7 @@ export default function SchematicEditor({
                   serial_number: extractedMeterData?.serial_number || null,
                   ct_type: extractedMeterData?.ct_type || null,
                   scanned_snippet_url: croppedImageUrl, // Save the snippet image
-                  confirmation_status: 'needs_review', // Re-scanned meters need review
+                  confirmation_status: 'unconfirmed', // Re-scanned meters are unconfirmed
                 })
                 .eq("id", existingMeter.id)
                 .select()
@@ -2981,10 +2979,6 @@ export default function SchematicEditor({
             <Badge variant="outline">
               <div className="w-3 h-3 rounded-full bg-[#dc2626] border-2 border-[#dc2626] mr-2" />
               Unconfirmed
-            </Badge>
-            <Badge variant="outline">
-              <div className="w-3 h-3 rounded-full bg-[#f59e0b] border-2 border-[#f59e0b] mr-2" />
-              Needs Review
             </Badge>
             <Badge variant="outline">
               <div className="w-3 h-3 rounded-full bg-[#16a34a] border-2 border-[#16a34a] mr-2" />
