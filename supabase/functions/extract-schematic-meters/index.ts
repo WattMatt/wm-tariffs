@@ -124,7 +124,7 @@ METER DATA TO EXTRACT:
 7. ct_type (CT): Format/ratio (e.g., "150/5A", "DOL")
 
 METER TYPE INFERENCE (automatic classification):
-- If meter_number contains "INCOMING", "COUNCIL", or "BULK" → meter_type: "bulk"
+- If meter_number contains "INCOMING", "COUNCIL", or "BULK" → meter_type: "bulk_meter"
 - If meter_number contains "CHECK" → meter_type: "check_meter"
 - Otherwise → meter_type: "submeter"
 
@@ -218,10 +218,10 @@ CRITICAL DATA FIELDS (Zero error tolerance):
 7. ct_type (CT):
    - Exact format (e.g., "DOL", "150/5A", "300/5A")
 
-8. meter_type:
-   - "council_bulk": Main incoming (labeled INCOMING/COUNCIL)
+8. meter_type (automatic classification):
+   - "bulk_meter": Main incoming meters (labeled INCOMING/COUNCIL/BULK)
    - "check_meter": Check meters (labeled CHECK METER/BULK CHECK)
-   - "distribution": All other meters (DB-XX)
+   - "submeter": All other meters (DB-XX and distribution meters)
 
 9. zone (optional):
    - If meter is within a MAIN BOARD ZONE, extract the zone identifier
