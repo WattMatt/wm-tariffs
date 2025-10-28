@@ -92,7 +92,7 @@ import { Canvas as FabricCanvas, Circle, Line, Text, FabricImage, Rect, Polygon,
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Save, Zap, Link2, Trash2, Upload, Plus, ZoomIn, ZoomOut, Maximize2, Pencil, Scan, Check } from "lucide-react";
+import { Save, Zap, Link2, Trash2, Upload, Plus, ZoomIn, ZoomOut, Maximize2, Pencil, Scan, Check, Edit } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -500,6 +500,7 @@ export default function SchematicEditor({
   const [isSelectionMode, setIsSelectionMode] = useState(false); // Track whether selection mode is active
   const [zoom, setZoom] = useState(1);
   const [isEditMeterDialogOpen, setIsEditMeterDialogOpen] = useState(false);
+  const [isBulkEditDialogOpen, setIsBulkEditDialogOpen] = useState(false);
   const [isConfirmMeterDialogOpen, setIsConfirmMeterDialogOpen] = useState(false);
   const [editingMeter, setEditingMeter] = useState<any>(null);
   const [isViewMeterDialogOpen, setIsViewMeterDialogOpen] = useState(false);
@@ -699,10 +700,11 @@ export default function SchematicEditor({
       const evt = opt.e as MouseEvent;
       const target = opt.target;
       
-      console.log('mouse:down', { currentTool, hasTarget: !!target, targetType: target?.type, targetRegionId: (target as any)?.regionId, shiftKey: evt.shiftKey });
+      console.log('mouse:down', { currentTool, hasTarget: !!target, targetType: target?.type, targetRegionId: (target as any)?.regionId, shiftKey: evt.shiftKey, isSelectionMode: isSelectionModeRef.current });
       
-      // Handle Shift+click selection (works in any mode)
-      if (evt.shiftKey && target) {
+      // Handle selection: Shift+click (works in any mode) OR single-click when selection mode is active
+      const shouldHandleSelection = (evt.shiftKey || isSelectionModeRef.current) && target;
+      if (shouldHandleSelection) {
         // Handle region rectangle selection
         if (target.type === 'rect' && (target as any).regionId) {
           const regionId = (target as any).regionId;
@@ -2621,7 +2623,7 @@ export default function SchematicEditor({
                 // Toggle selection mode
                 setIsSelectionMode(!isSelectionMode);
                 if (!isSelectionMode) {
-                  toast.info("Shift+click on regions or meter cards to select them", { duration: 4000 });
+                  toast.info("Click on regions or meter cards to select them", { duration: 4000 });
                 }
               }
             }}
@@ -2693,7 +2695,93 @@ export default function SchematicEditor({
         </div>
       </div>
 
-      {/* Second row: Action buttons */}
+      {/* Second row: Bulk Action buttons (visible when in selection mode with selected items) */}
+      {isSelectionMode && (selectedRegionIndices.length > 0 || selectedMeterIds.length > 0) && (
+        <div className="flex gap-2 items-center flex-wrap p-3 bg-muted rounded-lg border">
+          <span className="text-sm font-medium text-muted-foreground">
+            {selectedRegionIndices.length + selectedMeterIds.length} item(s) selected:
+          </span>
+          {selectedRegionIndices.length > 0 && (
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={async () => {
+                if (!confirm(`Delete ${selectedRegionIndices.length} selected region(s)?`)) return;
+                
+                if (fabricCanvas) {
+                  // Remove selected regions from canvas
+                  selectedRegionIndices.forEach(index => {
+                    const region = drawnRegions[index];
+                    if (region?.fabricRect) {
+                      fabricCanvas.remove(region.fabricRect);
+                    }
+                  });
+                  fabricCanvas.renderAll();
+                }
+                
+                // Remove from state
+                const updatedRegions = drawnRegions.filter((_, i) => !selectedRegionIndices.includes(i));
+                setDrawnRegions(updatedRegions);
+                setSelectedRegionIndices([]);
+                toast.success(`Deleted ${selectedRegionIndices.length} region(s)`);
+              }}
+              className="gap-2"
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete {selectedRegionIndices.length} Region(s)
+            </Button>
+          )}
+          {selectedMeterIds.length > 0 && (
+            <>
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => {
+                  // Open bulk edit dialog
+                  setIsBulkEditDialogOpen(true);
+                }}
+                className="gap-2"
+              >
+                <Edit className="w-4 h-4" />
+                Edit {selectedMeterIds.length} Meter(s)
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={async () => {
+                  if (!confirm(`Delete ${selectedMeterIds.length} selected meter(s)? This will also delete all associated readings and positions.`)) return;
+                  
+                  // Delete all selected meters
+                  for (const meterId of selectedMeterIds) {
+                    // Delete meter position
+                    await supabase
+                      .from('meter_positions')
+                      .delete()
+                      .eq('meter_id', meterId);
+                    
+                    // Delete meter
+                    await supabase
+                      .from('meters')
+                      .delete()
+                      .eq('id', meterId);
+                  }
+                  
+                  setSelectedMeterIds([]);
+                  await fetchMeters();
+                  await fetchMeterPositions();
+                  toast.success(`Deleted ${selectedMeterIds.length} meter(s)`);
+                }}
+                className="gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete {selectedMeterIds.length} Meter(s)
+              </Button>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Third row: Other Action buttons */}
       <div className="flex gap-2 items-center flex-wrap">
         {drawnRegions.length > 0 && (
           <Button
@@ -3347,6 +3435,121 @@ export default function SchematicEditor({
               </div>
             </form>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Edit Dialog for Multiple Meters */}
+      <Dialog open={isBulkEditDialogOpen} onOpenChange={setIsBulkEditDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Bulk Edit {selectedMeterIds.length} Meters</DialogTitle>
+            <DialogDescription>
+              Update common fields for all selected meters. Leave fields empty to keep existing values.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target as HTMLFormElement);
+            
+            const updates: any = {};
+            const zone = formData.get('zone');
+            const location = formData.get('location');
+            const tariff = formData.get('tariff');
+            const meter_type = formData.get('meter_type');
+            
+            if (zone) updates.zone = zone as string;
+            if (location) updates.location = location as string;
+            if (tariff) updates.tariff = tariff as string;
+            if (meter_type) updates.meter_type = meter_type as string;
+            
+            if (Object.keys(updates).length === 0) {
+              toast.error('Please fill in at least one field to update');
+              return;
+            }
+            
+            // Update all selected meters
+            for (const meterId of selectedMeterIds) {
+              const { error } = await supabase
+                .from('meters')
+                .update(updates)
+                .eq('id', meterId);
+                
+              if (error) {
+                console.error('Error updating meter:', error);
+                toast.error(`Failed to update some meters`);
+                return;
+              }
+            }
+            
+            toast.success(`Updated ${selectedMeterIds.length} meter(s)`);
+            setIsBulkEditDialogOpen(false);
+            setSelectedMeterIds([]);
+            fetchMeters();
+            fetchMeterPositions();
+          }} className="space-y-6">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="bulk_meter_type">Meter Type</Label>
+                <Select name="meter_type">
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select type (optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Keep existing</SelectItem>
+                    <SelectItem value="bulk_meter">Bulk Meter</SelectItem>
+                    <SelectItem value="check_meter">Check Meter</SelectItem>
+                    <SelectItem value="tenant_meter">Tenant Meter</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="bulk_zone">Zone</Label>
+                <Select name="zone">
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select zone (optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Keep existing</SelectItem>
+                    <SelectItem value="council_connection_zone">Council Connection Zone</SelectItem>
+                    <SelectItem value="main_board_zone">Main Board Zone</SelectItem>
+                    <SelectItem value="mini_sub_zone">Mini Sub Zone</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="bulk_location">Location</Label>
+                <Input 
+                  id="bulk_location"
+                  name="location" 
+                  placeholder="Leave empty to keep existing"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="bulk_tariff">Tariff</Label>
+                <Input 
+                  id="bulk_tariff"
+                  name="tariff" 
+                  placeholder="Leave empty to keep existing"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-2 justify-end">
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => setIsBulkEditDialogOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit">
+                Update {selectedMeterIds.length} Meter(s)
+              </Button>
+            </div>
+          </form>
         </DialogContent>
       </Dialog>
 
