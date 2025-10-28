@@ -2020,6 +2020,16 @@ export default function SchematicEditor({
             <Scan className="w-4 h-4" />
             Select Regions {selectedRegionIndices.length > 0 && `(${selectedRegionIndices.length})`}
           </Button>
+          <Button
+            variant={activeTool === "connection" ? "default" : "outline"}
+            onClick={() => setActiveTool(activeTool === "connection" ? "select" : "connection")}
+            disabled={!isEditMode}
+            size="sm"
+            className="gap-2"
+          >
+            <Link2 className="w-4 h-4" />
+            Draw Connections
+          </Button>
           <MeterDataExtractor
             siteId={siteId}
             schematicId={schematicId}
@@ -2093,15 +2103,6 @@ export default function SchematicEditor({
         >
           <Plus className="w-4 h-4 mr-2" />
           Add Meter
-        </Button>
-        <Button
-          variant={activeTool === "connection" ? "default" : "outline"}
-          onClick={() => setActiveTool(activeTool === "connection" ? "select" : "connection")}
-          disabled={!isEditMode}
-          size="sm"
-        >
-          <Link2 className="w-4 h-4 mr-2" />
-          Connect
         </Button>
         <Button onClick={handleClearLines} variant="destructive" size="sm" disabled={!isEditMode}>
           <Trash2 className="w-4 h-4 mr-2" />
