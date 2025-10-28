@@ -370,6 +370,7 @@ export type Database = {
           name: string | null
           phase: string | null
           rating: string | null
+          scanned_snippet_url: string | null
           serial_number: string | null
           site_id: string
           supply_description: string | null
@@ -394,6 +395,7 @@ export type Database = {
           name?: string | null
           phase?: string | null
           rating?: string | null
+          scanned_snippet_url?: string | null
           serial_number?: string | null
           site_id: string
           supply_description?: string | null
@@ -418,6 +420,7 @@ export type Database = {
           name?: string | null
           phase?: string | null
           rating?: string | null
+          scanned_snippet_url?: string | null
           serial_number?: string | null
           site_id?: string
           supply_description?: string | null

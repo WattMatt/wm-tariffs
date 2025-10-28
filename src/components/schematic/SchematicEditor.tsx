@@ -1673,7 +1673,11 @@ export default function SchematicEditor({
           // Add double-click handler to open edit dialog
           img.on('mousedblclick', () => {
             if (!isEditMode) return;
-            setEditingMeter(meter);
+            // Map scanned_snippet_url to scannedImageSnippet for the form
+            setEditingMeter({
+              ...meter,
+              scannedImageSnippet: meter.scanned_snippet_url || undefined
+            });
             setIsEditMeterDialogOpen(true);
           });
 
@@ -2207,7 +2211,7 @@ export default function SchematicEditor({
             if (existingMeter) {
               // Update existing meter with new data
               console.log(`Updating existing meter ${meterNumber}`);
-              const { data: updatedMeter, error: updateError } = await supabase
+              const { data: updatedMeter, error: updateError} = await supabase
                 .from("meters")
                 .update({
                   name: extractedMeterData?.name || "VACANT",
@@ -2218,6 +2222,7 @@ export default function SchematicEditor({
                   cable_specification: extractedMeterData?.cable_specification || null,
                   serial_number: extractedMeterData?.serial_number || null,
                   ct_type: extractedMeterData?.ct_type || null,
+                  scanned_snippet_url: croppedImageUrl, // Save the snippet image
                 })
                 .eq("id", existingMeter.id)
                 .select()
@@ -2248,6 +2253,7 @@ export default function SchematicEditor({
                   location: null,
                   tariff: null,
                   is_revenue_critical: false,
+                  scanned_snippet_url: croppedImageUrl, // Save the snippet image
                 })
                 .select()
                 .single();
