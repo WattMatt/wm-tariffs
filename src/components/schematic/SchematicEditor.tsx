@@ -3612,7 +3612,7 @@ export default function SchematicEditor({
                 {editingMeter.scannedImageSnippet && (
                   <div className="w-1/2 flex flex-col space-y-2 overflow-y-auto p-4 bg-muted rounded-lg border">
                     <Label className="text-sm font-semibold">Scanned Area from PDF</Label>
-                    <div className="border rounded overflow-hidden bg-white flex-1">
+                    <div className="border rounded overflow-hidden bg-white w-fit">
                       <img 
                         src={editingMeter.scannedImageSnippet} 
                         alt="Scanned meter region" 
