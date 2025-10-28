@@ -3730,24 +3730,12 @@ export default function SchematicEditor({
                 {editingMeter.scannedImageSnippet && (
                   <div className="w-1/2 flex flex-col p-4 min-h-0">
                     <Label className="text-sm font-semibold mb-2">Scanned Area from PDF</Label>
-                    <div className="border rounded overflow-hidden bg-white flex-1 min-h-0">
-                      <TransformWrapper
-                        initialScale={1}
-                        minScale={0.5}
-                        maxScale={4}
-                        centerOnInit={true}
-                      >
-                        <TransformComponent
-                          wrapperClass="!w-full !h-full"
-                          contentClass="!w-full !h-full"
-                        >
-                          <img 
-                            src={editingMeter.scannedImageSnippet} 
-                            alt="Scanned meter region" 
-                            className="w-full h-auto"
-                          />
-                        </TransformComponent>
-                      </TransformWrapper>
+                    <div className="border rounded overflow-auto bg-white flex-1 min-h-0">
+                      <img 
+                        src={editingMeter.scannedImageSnippet} 
+                        alt="Scanned meter region" 
+                        className="w-full h-auto"
+                      />
                     </div>
                   </div>
                 )}
