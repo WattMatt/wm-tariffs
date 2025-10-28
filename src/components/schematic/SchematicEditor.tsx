@@ -219,15 +219,13 @@ async function renderMeterCardOnCanvas(
   canvasHeight: number
 ): Promise<any> {
   // Determine border color based on meter status
-  let borderColor = '#ef4444'; // Red for unconfirmed/pending (default)
+  let borderColor = '#f59e0b'; // Orange/yellow for pending (needs review/unconfirmed)
   if (meter.status === 'approved') {
     borderColor = '#22c55e'; // Green for confirmed
-  } else if (meter.status === 'pending') {
-    borderColor = '#ef4444'; // Red for unconfirmed/pending
   } else if (meter.status === 'rejected') {
     borderColor = '#ef4444'; // Red for rejected
-  } else {
-    borderColor = '#f59e0b'; // Orange for needs review or any other status
+  } else if (meter.status === 'pending') {
+    borderColor = '#f59e0b'; // Orange for pending (needs review)
   }
   
   console.log('Rendering meter card:', { 
@@ -294,6 +292,8 @@ async function renderMeterCardOnCanvas(
         top,
         scaleX,
         scaleY: scaleYCard,
+        originX: 'left',
+        originY: 'top',
         selectable: true,
         hasControls: true,
         hasBorders: true,
@@ -307,6 +307,14 @@ async function renderMeterCardOnCanvas(
       // Store meter index for reference
       (img as any).meterIndex = meterIndex;
       (img as any).meterCardType = 'extracted';
+      
+      console.log('Final meter card render:', {
+        meterNumber: meter.meter_number,
+        position: { left, top },
+        scale: { scaleX, scaleY: scaleYCard },
+        targetSize: { width: targetWidth, height: targetHeight },
+        cardBaseSize: { width: 200, height: 140 }
+      });
       
       canvas.add(img);
       canvas.renderAll();
