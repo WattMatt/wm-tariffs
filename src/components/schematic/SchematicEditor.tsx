@@ -1752,14 +1752,17 @@ export default function SchematicEditor({
           img.on('mousedblclick', () => {
             console.log('Double-click on meter card:', { 
               isEditMode: isEditModeRef.current, 
-              meterNumber: meter.meter_number 
+              meterNumber: meter.meter_number,
+              scannedSnippetUrl: meter.scanned_snippet_url
             });
             if (!isEditModeRef.current) return;
             // Map scanned_snippet_url to scannedImageSnippet for the form
-            setEditingMeter({
+            const meterData = {
               ...meter,
               scannedImageSnippet: meter.scanned_snippet_url || undefined
-            });
+            };
+            console.log('Setting editing meter:', meterData);
+            setEditingMeter(meterData);
             setIsEditMeterDialogOpen(true);
           });
 
@@ -1767,8 +1770,8 @@ export default function SchematicEditor({
           img.on('mousedown', () => {
             if (activeTool === 'connection') {
               handleMeterClickForConnection(pos.meter_id, x, y);
-            } else if (!isEditMode && activeTool === 'select' && !isSelectionModeRef.current) {
-              // View meter details in normal mode (but not in selection mode)
+            } else if (!isEditModeRef.current && activeTool === 'select' && !isSelectionModeRef.current) {
+              // View meter details in normal mode (but not in selection mode or edit mode)
               setViewingMeter(meter);
               setIsViewMeterDialogOpen(true);
             }
