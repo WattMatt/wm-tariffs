@@ -534,27 +534,6 @@ export default function SchematicEditor({
       enableRetinaScaling: true, // Better control rendering on high-DPI displays
     });
 
-    // Mouse wheel: Always zoom (zoom to cursor position)
-    canvas.on('mouse:wheel', (opt) => {
-      const e = opt.e as WheelEvent;
-      e.preventDefault();
-      e.stopPropagation();
-      
-      // Scroll: Zoom in/out toward cursor
-      const delta = e.deltaY;
-      let zoom = canvas.getZoom();
-      zoom *= 0.999 ** delta;
-      
-      // Clamp zoom between 5% and 2000%
-      if (zoom > 20) zoom = 20;
-      if (zoom < 0.05) zoom = 0.05;
-      
-      // Zoom to cursor position
-      const pointer = canvas.getPointer(e);
-      canvas.zoomToPoint(pointer, zoom);
-      setZoom(zoom);
-    });
-
     // Panning variables with movement tracking
     let isPanningLocal = false;
     let lastX = 0;
@@ -803,14 +782,6 @@ export default function SchematicEditor({
           canvas.selection = false;
           return;
         }
-      }
-      
-      // PANNING: Only middle mouse button (button 1)
-      if (!target && evt.button === 1) {
-        isPanningLocal = true;
-        lastX = evt.clientX;
-        lastY = evt.clientY;
-        canvas.selection = false;
       }
     });
 
