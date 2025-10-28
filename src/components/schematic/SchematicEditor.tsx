@@ -122,7 +122,7 @@ interface MeterPosition {
 // Helper function to calculate snap points for a meter card
 const calculateSnapPoints = (left: number, top: number, width: number, height: number) => {
   const centerX = left + width * 2;
-  const centerY = top + height * 2;
+  const centerY = top + height / 2;
   
   return {
     top: { x: centerX, y: top },
