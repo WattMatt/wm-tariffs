@@ -928,59 +928,6 @@ export default function SchematicEditor({
     canvas.on('mouse:move', (opt) => {
       const evt = opt.e as MouseEvent;
       
-      // Handle cursor snapping and line preview when in connection mode
-      if (activeToolRef.current === 'connection') {
-        let pointer = canvas.getPointer(opt.e);
-        
-        // Check if cursor is near any snap point and snap to it
-        const snapThreshold = 15;
-        const snapPoints = canvas.getObjects().filter((obj: any) => obj.isSnapPoint);
-        let snappedPoint = null;
-        
-        for (const snapObj of snapPoints) {
-          const snapData = (snapObj as any).snapPoint;
-          if (snapData) {
-            const dx = pointer.x - snapData.x;
-            const dy = pointer.y - snapData.y;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            
-            if (distance < snapThreshold) {
-              snappedPoint = { x: snapData.x, y: snapData.y };
-              break;
-            }
-          }
-        }
-        
-        // If actively drawing a line, show straight line preview from start point to cursor
-        if (isDrawingConnectionRef.current && connectionLinePointsRef.current.length > 0) {
-          const targetPoint = snappedPoint || pointer;
-          const startPoint = connectionLinePointsRef.current[0];
-          
-          // Remove old preview line
-          if (tempLineRef.current) {
-            canvas.remove(tempLineRef.current);
-          }
-          
-          // Draw straight line from start to current position
-          const previewLine = new Line(
-            [startPoint.x, startPoint.y, targetPoint.x, targetPoint.y],
-            {
-              stroke: '#3b82f6',
-              strokeWidth: 3,
-              selectable: false,
-              evented: false,
-            }
-          );
-          tempLineRef.current = previewLine;
-          canvas.add(previewLine);
-          canvas.renderAll();
-        }
-        
-        // Always update cursor style based on snap
-        canvas.defaultCursor = snappedPoint ? 'crosshair' : 'default';
-        return;
-      }
-      
       // Check if user is dragging with shift held and selection mode active
       // Enable shift-drag selection if they started with shift+click and are now moving
       if (evt.shiftKey && isSelectionModeRef.current && startPoint && !isShiftDragSelecting) {
@@ -2267,78 +2214,30 @@ export default function SchematicEditor({
     if (!fabricCanvas) return;
     
     if (!isDrawingConnection) {
-      // First click - start drawing a connection line
+      // First click - start connection
       setIsDrawingConnection(true);
       isDrawingConnectionRef.current = true;
       setStartSnapPoint({ x, y, meterId });
-      setConnectionLinePoints([{ x, y }]);
-      connectionLinePointsRef.current = [{ x, y }];
-      
-      // Create starting node marker
-      const startNode = new Circle({
-        left: x,
-        top: y,
-        radius: 6,
-        fill: '#3b82f6',
-        stroke: '#ffffff',
-        strokeWidth: 2,
-        originX: 'center',
-        originY: 'center',
-        selectable: false,
-        evented: false,
-      });
-      connectionNodesRef.current = [startNode];
-      fabricCanvas.add(startNode);
-      fabricCanvas.renderAll();
       
       toast.info("Click another snap point on a different meter to complete");
     } else {
       // Second click - complete the connection
-      // STRICT CHECK: Must be a different meter
       if (meterId === startSnapPoint?.meterId) {
         toast.error("Cannot connect a meter to itself! Select a snap point on a DIFFERENT meter.");
-        return; // Exit early without creating connection
+        return;
       }
       
-      // Create a straight line connection
+      // Save the connection directly to database
       const finalPoints = [startSnapPoint!, { x, y }];
-      
-      // Add end node marker
-      const endNode = new Circle({
-        left: x,
-        top: y,
-        radius: 6,
-        fill: '#3b82f6',
-        stroke: '#ffffff',
-        strokeWidth: 2,
-        originX: 'center',
-        originY: 'center',
-        selectable: false,
-        evented: false,
-      });
-      fabricCanvas.add(endNode);
-      
-      // Convert the temporary line to a permanent line (if it exists)
-      if (tempLineRef.current) {
-        tempLineRef.current.set({
-          selectable: false,
-          evented: false,
-        });
-        tempLineRef.current = null; // Clear the ref but keep the line on canvas
-      }
-      
-      // Save the connection to database
       await createConnectionWithPath(startSnapPoint!.meterId, meterId, finalPoints);
       
-      // Reset drawing state without removing objects
-      connectionNodesRef.current = [];
+      // Reset drawing state
       setIsDrawingConnection(false);
       isDrawingConnectionRef.current = false;
       setConnectionLinePoints([]);
       connectionLinePointsRef.current = [];
       setStartSnapPoint(null);
       
-      fabricCanvas.renderAll();
       toast.success("Connection created");
     }
   };
@@ -2580,22 +2479,12 @@ export default function SchematicEditor({
   const cancelConnectionDrawing = () => {
     if (!fabricCanvas) return;
     
-    // Clean up temporary drawing objects
-    if (tempLineRef.current) {
-      fabricCanvas.remove(tempLineRef.current);
-      tempLineRef.current = null;
-    }
-    connectionNodesRef.current.forEach(node => fabricCanvas.remove(node));
-    connectionNodesRef.current = [];
-    
-    // Reset all drawing state (both state and refs)
+    // Reset all drawing state
     setIsDrawingConnection(false);
     isDrawingConnectionRef.current = false;
     setConnectionLinePoints([]);
     connectionLinePointsRef.current = [];
     setStartSnapPoint(null);
-    
-    fabricCanvas.renderAll();
   };
 
   const handleZoomIn = () => {
