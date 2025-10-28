@@ -975,14 +975,36 @@ export default function SchematicEditor({
       
       // Handle connection line drawing mode - show preview line
       if (isDrawingConnectionRef.current && connectionLinePointsRef.current.length > 0) {
-        const pointer = canvas.getPointer(opt.e);
+        let pointer = canvas.getPointer(opt.e);
+        
+        // Check if cursor is near any snap point and snap to it
+        const snapThreshold = 15;
+        const snapPoints = canvas.getObjects().filter((obj: any) => obj.isSnapPoint);
+        let snappedPoint = null;
+        
+        for (const snapObj of snapPoints) {
+          const snapData = (snapObj as any).snapPoint;
+          if (snapData) {
+            const dx = pointer.x - snapData.x;
+            const dy = pointer.y - snapData.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance < snapThreshold) {
+              snappedPoint = { x: snapData.x, y: snapData.y };
+              break;
+            }
+          }
+        }
+        
+        // Use snapped point if found, otherwise use cursor position
+        const targetPoint = snappedPoint || pointer;
         
         // Update the temporary line preview
         if (tempLineRef.current) {
           canvas.remove(tempLineRef.current);
         }
         
-        const allPoints = [...connectionLinePointsRef.current, { x: pointer.x, y: pointer.y }];
+        const allPoints = [...connectionLinePointsRef.current, targetPoint];
         
         const tempLine = new Polyline(allPoints, {
           stroke: '#3b82f6',
@@ -2285,8 +2307,10 @@ export default function SchematicEditor({
     if (!isDrawingConnection) {
       // Start drawing a new connection line
       setIsDrawingConnection(true);
+      isDrawingConnectionRef.current = true;
       setStartSnapPoint({ x, y, meterId });
       setConnectionLinePoints([{ x, y }]);
+      connectionLinePointsRef.current = [{ x, y }];
       
       // Create starting node
       const startNode = new Circle({
@@ -2301,7 +2325,7 @@ export default function SchematicEditor({
         selectable: false,
         evented: false,
       });
-       connectionNodesRef.current = [startNode];
+      connectionNodesRef.current = [startNode];
       fabricCanvas.add(startNode);
       fabricCanvas.renderAll();
       
@@ -2315,7 +2339,7 @@ export default function SchematicEditor({
         // Create the final connection line
         createConnectionWithPath(startSnapPoint!.meterId, meterId, finalPoints);
         
-        // Clean up
+        // Clean up temporary drawing objects
         if (tempLineRef.current) {
           fabricCanvas.remove(tempLineRef.current);
           tempLineRef.current = null;
@@ -2323,8 +2347,11 @@ export default function SchematicEditor({
         connectionNodesRef.current.forEach(node => fabricCanvas.remove(node));
         connectionNodesRef.current = [];
         
+        // Reset all drawing state (both state and refs)
         setIsDrawingConnection(false);
+        isDrawingConnectionRef.current = false;
         setConnectionLinePoints([]);
+        connectionLinePointsRef.current = [];
         setStartSnapPoint(null);
         
         fabricCanvas.renderAll();
@@ -2572,9 +2599,11 @@ export default function SchematicEditor({
     connectionNodesRef.current.forEach(node => fabricCanvas.remove(node));
     connectionNodesRef.current = [];
     
-    // Reset all drawing state
+    // Reset all drawing state (both state and refs)
     setIsDrawingConnection(false);
+    isDrawingConnectionRef.current = false;
     setConnectionLinePoints([]);
+    connectionLinePointsRef.current = [];
     setStartSnapPoint(null);
     
     fabricCanvas.renderAll();
