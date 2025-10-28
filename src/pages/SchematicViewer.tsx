@@ -417,7 +417,10 @@ export default function SchematicViewer() {
       return;
     }
     
-    // Middle mouse button ALWAYS enables panning
+    // Only allow panning in drawing mode
+    if (!isDrawingMode) return;
+    
+    // Middle mouse button enables panning
     if (e.button === 1) {
       e.preventDefault();
       setIsDragging(true);
