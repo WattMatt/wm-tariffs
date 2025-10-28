@@ -805,16 +805,12 @@ export default function SchematicEditor({
         }
       }
       
-      // PANNING: Consistent across ALL modes
-      // Middle button (button 1) always pans in any mode
-      // Shift+Click or Ctrl+Click with left/right button also enables panning in any mode
-      if (!target) {
-        if (evt.button === 1 || (evt.shiftKey || evt.ctrlKey)) {
-          isPanningLocal = true;
-          lastX = evt.clientX;
-          lastY = evt.clientY;
-          canvas.selection = false;
-        }
+      // PANNING: Only middle mouse button (button 1)
+      if (!target && evt.button === 1) {
+        isPanningLocal = true;
+        lastX = evt.clientX;
+        lastY = evt.clientY;
+        canvas.selection = false;
       }
     });
 
