@@ -30,11 +30,16 @@ export function MeterFormFields({
   scannedImageSnippet 
 }: MeterFormFieldsProps) {
   // Clean VERIFY: and NOT_VISIBLE prefixes from extracted data
-  const cleanValue = (value?: string) => {
-    return value?.replace('VERIFY:', '').replace('NOT_VISIBLE', '') || '';
+  const cleanValue = (value?: string | number) => {
+    if (value === null || value === undefined) return '';
+    const stringValue = String(value);
+    return stringValue.replace('VERIFY:', '').replace('NOT_VISIBLE', '');
   };
 
-  const hasNotVisible = (value?: string) => value?.includes('NOT_VISIBLE');
+  const hasNotVisible = (value?: string | number) => {
+    if (value === null || value === undefined) return false;
+    return String(value).includes('NOT_VISIBLE');
+  };
 
   return (
     <>
