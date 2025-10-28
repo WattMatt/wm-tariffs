@@ -740,6 +740,9 @@ export default function SchematicEditor({
             padding: 5,
           });
           
+          // Hide rotation control
+          permanentRect.setControlVisible('mtr', false);
+          
           (permanentRect as any).regionId = regionId;
           
           // Store region data
