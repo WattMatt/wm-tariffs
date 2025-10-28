@@ -526,6 +526,9 @@ export default function SchematicEditor({
   // Ref for selection mode to prevent stale closures in Fabric.js handlers
   const isSelectionModeRef = useRef(false);
   
+  // Ref for edit mode to prevent stale closures in Fabric.js handlers
+  const isEditModeRef = useRef(false);
+  
   // Legend visibility toggles
   const [legendVisibility, setLegendVisibility] = useState({
     bulk_meter: true,
@@ -600,6 +603,11 @@ export default function SchematicEditor({
   useEffect(() => {
     isSelectionModeRef.current = isSelectionMode;
   }, [isSelectionMode]);
+
+  // Sync isEditMode to ref
+  useEffect(() => {
+    isEditModeRef.current = isEditMode;
+  }, [isEditMode]);
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -1725,7 +1733,11 @@ export default function SchematicEditor({
           
           // Add double-click handler to open edit dialog
           img.on('mousedblclick', () => {
-            if (!isEditMode) return;
+            console.log('Double-click on meter card:', { 
+              isEditMode: isEditModeRef.current, 
+              meterNumber: meter.meter_number 
+            });
+            if (!isEditModeRef.current) return;
             // Map scanned_snippet_url to scannedImageSnippet for the form
             setEditingMeter({
               ...meter,
