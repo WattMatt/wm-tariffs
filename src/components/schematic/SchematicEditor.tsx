@@ -753,6 +753,7 @@ export default function SchematicEditor({
     // Mouse handlers for drawing rectangles when in draw mode AND Shift+click selection AND Shift+drag multi-select
     let isDrawing = false;
     let isShiftDragSelecting = false;
+    let shiftClickTarget: any = null; // Track target clicked with shift for deferred selection
     let startPoint: { x: number; y: number } | null = null;
     
     canvas.on('mouse:down', (opt) => {
@@ -762,16 +763,22 @@ export default function SchematicEditor({
       
       console.log('mouse:down', { currentTool, hasTarget: !!target, targetType: target?.type, targetRegionId: (target as any)?.regionId, shiftKey: evt.shiftKey, isSelectionMode: isSelectionModeRef.current });
       
-      // Handle Shift+drag multi-select (when shift pressed and clicking on empty space)
-      if (evt.shiftKey && !target && isSelectionModeRef.current) {
+      // Handle Shift+drag multi-select in selection mode (when shift pressed)
+      if (evt.shiftKey && isSelectionModeRef.current) {
         const pointer = canvas.getPointer(opt.e);
-        isShiftDragSelecting = true;
         startPoint = { x: pointer.x, y: pointer.y };
-        return;
+        shiftClickTarget = target; // Store the target for potential click-to-select
+        
+        // Only start shift-drag immediately if clicking on empty space or background
+        if (!target || (target as any).isBackgroundImage) {
+          isShiftDragSelecting = true;
+        }
+        // If clicking on a meter/region, wait to see if user drags (handled in mouse:move)
+        return; // Don't proceed with immediate selection toggle
       }
       
-      // Handle selection: Shift+click (works in any mode) OR single-click when selection mode is active
-      const shouldHandleSelection = (evt.shiftKey || isSelectionModeRef.current) && target;
+      // Handle selection: single-click when selection mode is active (but NOT shift-click, which is handled above)
+      const shouldHandleSelection = isSelectionModeRef.current && target && !evt.shiftKey;
       if (shouldHandleSelection) {
         // Handle region rectangle selection
         if (target.type === 'rect' && (target as any).regionId) {
@@ -875,6 +882,23 @@ export default function SchematicEditor({
     });
     
     canvas.on('mouse:move', (opt) => {
+      const evt = opt.e as MouseEvent;
+      
+      // Check if user is dragging with shift held and selection mode active
+      // Enable shift-drag selection if they started with shift+click and are now moving
+      if (evt.shiftKey && isSelectionModeRef.current && startPoint && !isShiftDragSelecting) {
+        const pointer = canvas.getPointer(opt.e);
+        const distance = Math.sqrt(
+          Math.pow(pointer.x - startPoint.x, 2) + Math.pow(pointer.y - startPoint.y, 2)
+        );
+        
+        // Start selection if moved more than 5 pixels (prevents accidental drags)
+        if (distance > 5) {
+          isShiftDragSelecting = true;
+          shiftClickTarget = null; // Clear click target since we're now dragging
+        }
+      }
+      
       // Handle shift+drag multi-select box
       if (isShiftDragSelecting && startPoint) {
         const pointer = canvas.getPointer(opt.e);
@@ -1028,9 +1052,91 @@ export default function SchematicEditor({
         
         isShiftDragSelecting = false;
         startPoint = null;
+        shiftClickTarget = null;
         canvas.renderAll();
         return;
       }
+      
+      // Handle shift+click (no drag) - toggle selection of the clicked target
+      if (evt.shiftKey && shiftClickTarget && !isShiftDragSelecting && isSelectionModeRef.current) {
+        const target = shiftClickTarget;
+        
+        // Handle region rectangle selection
+        if (target.type === 'rect' && (target as any).regionId) {
+          const regionId = (target as any).regionId;
+          const regionIndex = drawnRegionsRef.current.findIndex(r => r.id === regionId);
+          
+          if (regionIndex !== -1) {
+            setSelectedRegionIndices(prev => {
+              if (prev.includes(regionIndex)) {
+                // Deselect
+                (target as any).set({ stroke: '#3b82f6', strokeWidth: 2 });
+                canvas.renderAll();
+                const updated = prev.filter(i => i !== regionIndex);
+                toast.info(`Region deselected (${updated.length} selected)`);
+                return updated;
+              } else {
+                // Select
+                (target as any).set({ stroke: '#10b981', strokeWidth: 3 });
+                canvas.renderAll();
+                const updated = [...prev, regionIndex];
+                toast.info(`Region selected (${updated.length} selected)`);
+                return updated;
+              }
+            });
+          }
+        }
+        
+        // Handle meter card selection
+        if (target.type === 'image' && (target as any).data?.meterId) {
+          const meterId = (target as any).data.meterId;
+          
+          setSelectedMeterIds(prev => {
+            if (prev.includes(meterId)) {
+              // Deselect - remove selection rectangle
+              const selectionRect = canvas.getObjects().find((obj: any) => 
+                obj.type === 'rect' && obj.selectionMarker && obj.data?.meterId === meterId
+              );
+              if (selectionRect) {
+                canvas.remove(selectionRect);
+              }
+              canvas.renderAll();
+              const updated = prev.filter(id => id !== meterId);
+              toast.info(`Meter deselected (${updated.length} selected)`);
+              return updated;
+            } else {
+              // Select - add green selection rectangle overlay
+              const bounds = target.getBoundingRect();
+              const selectionRect = new Rect({
+                left: bounds.left,
+                top: bounds.top,
+                width: bounds.width,
+                height: bounds.height,
+                fill: 'transparent',
+                stroke: '#10b981',
+                strokeWidth: 4,
+                selectable: false,
+                evented: false,
+                data: { meterId: meterId }
+              });
+              (selectionRect as any).selectionMarker = true;
+              canvas.add(selectionRect);
+              canvas.renderAll();
+              const updated = [...prev, meterId];
+              toast.info(`Meter selected (${updated.length} selected)`);
+              return updated;
+            }
+          });
+        }
+        
+        shiftClickTarget = null;
+        startPoint = null;
+        canvas.renderAll();
+        return;
+      }
+      
+      // Clear shift click target if we get here
+      shiftClickTarget = null;
       
       // Handle rectangle drawing completion
       if (isDrawing && startPoint && activeToolRef.current === 'draw') {
