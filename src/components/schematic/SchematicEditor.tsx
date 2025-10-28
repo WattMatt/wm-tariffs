@@ -496,6 +496,7 @@ export default function SchematicEditor({
   }, [propExtractedMeters]);
   const [selectedMeterIndex, setSelectedMeterIndex] = useState<number | null>(null);
   const [selectedMeterId, setSelectedMeterId] = useState<string | null>(null);
+  const [selectedMeterIds, setSelectedMeterIds] = useState<string[]>([]); // For bulk selection with Shift+click
   const [zoom, setZoom] = useState(1);
   const [isEditMeterDialogOpen, setIsEditMeterDialogOpen] = useState(false);
   const [isConfirmMeterDialogOpen, setIsConfirmMeterDialogOpen] = useState(false);
@@ -517,6 +518,9 @@ export default function SchematicEditor({
   
   // Ref for drawnRegions to prevent stale closures in Fabric.js handlers
   const drawnRegionsRef = useRef<typeof drawnRegions>([]);
+  
+  // Ref for selected meter IDs to prevent stale closures in Fabric.js handlers
+  const selectedMeterIdsRef = useRef<string[]>([]);
   
   // Legend visibility toggles
   const [legendVisibility, setLegendVisibility] = useState({
@@ -582,6 +586,11 @@ export default function SchematicEditor({
   useEffect(() => {
     drawnRegionsRef.current = drawnRegions;
   }, [drawnRegions]);
+
+  // Sync selectedMeterIds to ref
+  useEffect(() => {
+    selectedMeterIdsRef.current = selectedMeterIds;
+  }, [selectedMeterIds]);
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -658,26 +667,61 @@ export default function SchematicEditor({
       
       console.log('mouse:down', { currentTool, hasTarget: !!target, targetType: target?.type, targetRegionId: (target as any)?.regionId, shiftKey: evt.shiftKey });
       
-      // Handle Shift+click selection of region rectangles (works in any mode)
-      if (evt.shiftKey && target && target.type === 'rect' && (target as any).regionId) {
-        const regionId = (target as any).regionId;
-        const regionIndex = drawnRegionsRef.current.findIndex(r => r.id === regionId);
+      // Handle Shift+click selection (works in any mode)
+      if (evt.shiftKey && target) {
+        // Handle region rectangle selection
+        if (target.type === 'rect' && (target as any).regionId) {
+          const regionId = (target as any).regionId;
+          const regionIndex = drawnRegionsRef.current.findIndex(r => r.id === regionId);
+          
+          if (regionIndex !== -1) {
+            setSelectedRegionIndices(prev => {
+              if (prev.includes(regionIndex)) {
+                // Deselect
+                (target as any).set({ stroke: '#3b82f6', strokeWidth: 2 });
+                canvas.renderAll();
+                const updated = prev.filter(i => i !== regionIndex);
+                toast.info(`Region deselected (${updated.length} selected)`);
+                return updated;
+              } else {
+                // Select
+                (target as any).set({ stroke: '#10b981', strokeWidth: 3 });
+                canvas.renderAll();
+                const updated = [...prev, regionIndex];
+                toast.info(`Region selected (${updated.length} selected)`);
+                return updated;
+              }
+            });
+            return; // Don't proceed with other mouse:down logic
+          }
+        }
         
-        if (regionIndex !== -1) {
-          setSelectedRegionIndices(prev => {
-            if (prev.includes(regionIndex)) {
+        // Handle meter card selection
+        if (target.type === 'image' && (target as any).data?.meterId) {
+          const meterId = (target as any).data.meterId;
+          
+          setSelectedMeterIds(prev => {
+            if (prev.includes(meterId)) {
               // Deselect
-              (target as any).set({ stroke: '#3b82f6', strokeWidth: 2 });
+              (target as any).set({ 
+                borderColor: 'transparent',
+                borderScaleFactor: 1,
+                borderOpacityWhenMoving: 0
+              });
               canvas.renderAll();
-              const updated = prev.filter(i => i !== regionIndex);
-              toast.info(`Region deselected (${updated.length} selected)`);
+              const updated = prev.filter(id => id !== meterId);
+              toast.info(`Meter deselected (${updated.length} selected)`);
               return updated;
             } else {
               // Select
-              (target as any).set({ stroke: '#10b981', strokeWidth: 3 });
+              (target as any).set({ 
+                borderColor: '#10b981',
+                borderScaleFactor: 3,
+                borderOpacityWhenMoving: 1
+              });
               canvas.renderAll();
-              const updated = [...prev, regionIndex];
-              toast.info(`Region selected (${updated.length} selected)`);
+              const updated = [...prev, meterId];
+              toast.info(`Meter selected (${updated.length} selected)`);
               return updated;
             }
           });
@@ -2507,32 +2551,40 @@ export default function SchematicEditor({
             Draw Regions {drawnRegions.length > 0 && `(${drawnRegions.length})`}
           </Button>
           <Button
-            variant={selectedRegionIndices.length > 0 ? "default" : "outline"}
+            variant={(selectedRegionIndices.length > 0 || selectedMeterIds.length > 0) ? "default" : "outline"}
             onClick={() => {
-              if (drawnRegions.length === 0) {
-                toast.info("First draw regions using the 'Draw Regions' button, then use this to select them with Shift+click", { duration: 5000 });
-              } else if (selectedRegionIndices.length > 0) {
-                // Clear selection and reset visual styling
+              const hasSelections = selectedRegionIndices.length > 0 || selectedMeterIds.length > 0;
+              
+              if (hasSelections) {
+                // Clear all selections and reset visual styling
                 if (fabricCanvas) {
                   fabricCanvas.getObjects().forEach((obj: any) => {
                     if (obj.type === 'rect' && obj.regionId) {
                       obj.set({ stroke: '#3b82f6', strokeWidth: 2 });
                     }
+                    if (obj.type === 'image' && obj.data?.meterId) {
+                      obj.set({ 
+                        borderColor: 'transparent',
+                        borderScaleFactor: 1,
+                        borderOpacityWhenMoving: 0
+                      });
+                    }
                   });
                   fabricCanvas.renderAll();
                 }
                 setSelectedRegionIndices([]);
-                toast.info("Region selection cleared");
+                setSelectedMeterIds([]);
+                toast.info("Selection cleared");
               } else {
-                toast.info("Shift+click on regions to select them", { duration: 4000 });
+                toast.info("Shift+click on regions or meter cards to select them", { duration: 4000 });
               }
             }}
             disabled={!isEditMode}
             size="sm"
             className="gap-2"
           >
-            <Scan className="w-4 h-4" />
-            Select Regions {selectedRegionIndices.length > 0 && `(${selectedRegionIndices.length})`}
+            <Check className="w-4 h-4" />
+            Select {(selectedRegionIndices.length + selectedMeterIds.length) > 0 && `(${selectedRegionIndices.length + selectedMeterIds.length})`}
           </Button>
           <Button
             variant={activeTool === "connection" ? "default" : "outline"}
