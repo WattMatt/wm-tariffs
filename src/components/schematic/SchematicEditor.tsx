@@ -780,6 +780,17 @@ export default function SchematicEditor({
       }
     });
 
+    // Handle keyboard events for canceling connection drawing
+    const handleKeyDown = (evt: KeyboardEvent) => {
+      if (evt.key === 'Escape' && isDrawingConnectionRef.current) {
+        evt.preventDefault();
+        cancelConnectionDrawing();
+        toast.info("Connection drawing cancelled");
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+
     // Mouse handlers for drawing rectangles when in draw mode AND Shift+click selection AND Shift+drag multi-select
     let isDrawing = false;
     let isShiftDragSelecting = false;
@@ -1638,6 +1649,7 @@ export default function SchematicEditor({
     });
 
     return () => {
+      window.removeEventListener('keydown', handleKeyDown);
       canvas.dispose();
     };
   }, [schematicUrl]);
@@ -2535,6 +2547,9 @@ export default function SchematicEditor({
   };
 
   const handleClearLines = async () => {
+    // Cancel any active connection drawing first
+    cancelConnectionDrawing();
+    
     const { error } = await supabase
       .from("schematic_lines")
       .delete()
@@ -2544,6 +2559,25 @@ export default function SchematicEditor({
       toast.success("All connections cleared");
       fetchLines();
     }
+  };
+  
+  const cancelConnectionDrawing = () => {
+    if (!fabricCanvas) return;
+    
+    // Clean up temporary drawing objects
+    if (tempLineRef.current) {
+      fabricCanvas.remove(tempLineRef.current);
+      tempLineRef.current = null;
+    }
+    connectionNodesRef.current.forEach(node => fabricCanvas.remove(node));
+    connectionNodesRef.current = [];
+    
+    // Reset all drawing state
+    setIsDrawingConnection(false);
+    setConnectionLinePoints([]);
+    setStartSnapPoint(null);
+    
+    fabricCanvas.renderAll();
   };
 
   const handleZoomIn = () => {
@@ -3189,7 +3223,14 @@ export default function SchematicEditor({
           </Button>
           <Button
             variant={activeTool === "connection" ? "default" : "outline"}
-            onClick={() => setActiveTool(activeTool === "connection" ? "select" : "connection")}
+            onClick={() => {
+              const newTool = activeTool === "connection" ? "select" : "connection";
+              if (activeTool === "connection") {
+                // Cancel any active drawing when turning off connection mode
+                cancelConnectionDrawing();
+              }
+              setActiveTool(newTool);
+            }}
             disabled={!isEditMode}
             size="sm"
             className="gap-2"
@@ -3236,6 +3277,7 @@ export default function SchematicEditor({
                 toast.success("Edit mode enabled");
               } else {
                 // Cancel edit mode and reset active tool
+                cancelConnectionDrawing();
                 setActiveTool("select");
                 toast.info("Edit mode cancelled - unsaved changes discarded");
               }
