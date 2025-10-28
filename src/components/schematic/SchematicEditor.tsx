@@ -3711,6 +3711,9 @@ export default function SchematicEditor({
         }
       }}>
         <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Edit Meter Details</DialogTitle>
+          </DialogHeader>
           {editingMeter && (
             <form onSubmit={handleUpdateMeter} className="flex-1 flex flex-col min-h-0">
               <div className="flex gap-4 flex-1 min-h-0 overflow-hidden">
@@ -3742,8 +3745,8 @@ export default function SchematicEditor({
                 
                 {/* Right Pane - Form Fields with Header */}
                 <div className={`${editingMeter.scannedImageSnippet ? 'w-1/2' : 'w-full'} flex flex-col min-h-0`}>
-                  <div className="flex items-center justify-between mb-4 px-4">
-                    <DialogTitle>Edit Meter Details</DialogTitle>
+                  <div className="flex items-center justify-between mb-4 px-4 pt-2">
+                    <h2 className="text-lg font-semibold">Edit Meter Details</h2>
                     {bulkEditMeterIds.length > 0 && (
                       <div className="flex items-center gap-2">
                         <Button
