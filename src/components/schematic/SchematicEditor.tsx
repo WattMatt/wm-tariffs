@@ -2397,10 +2397,12 @@ export default function SchematicEditor({
             Clear Regions
           </Button>
         )}
-        <Button onClick={handleClearLines} variant="destructive" size="sm" disabled={!isEditMode}>
-          <Trash2 className="w-4 h-4 mr-2" />
-          Clear Lines
-        </Button>
+        {activeTool === 'connection' && (
+          <Button onClick={handleClearLines} variant="destructive" size="sm" disabled={!isEditMode}>
+            <Trash2 className="w-4 h-4 mr-2" />
+            Clear Lines
+          </Button>
+        )}
       </div>
 
       {/* Legend and PDF Controls in two panes */}
