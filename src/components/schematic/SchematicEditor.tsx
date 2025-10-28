@@ -92,7 +92,7 @@ import { Canvas as FabricCanvas, Circle, Line, Text, FabricImage, Rect, util, Po
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Save, Zap, Link2, Trash2, Move, Upload, Plus, ZoomIn, ZoomOut, Maximize2, Pencil, Scan, Check } from "lucide-react";
+import { Save, Zap, Link2, Trash2, Upload, Plus, ZoomIn, ZoomOut, Maximize2, Pencil, Scan, Check } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -396,8 +396,8 @@ export default function SchematicEditor({
   
   // FABRIC.JS EVENT HANDLER PATTERN: State + Ref for tool selection
   // State drives UI, ref provides current value to canvas event handlers
-  const [activeTool, setActiveTool] = useState<"select" | "meter" | "connection" | "move" | "draw">("select");
-  const activeToolRef = useRef<"select" | "meter" | "connection" | "move" | "draw">("select");
+  const [activeTool, setActiveTool] = useState<"select" | "meter" | "connection" | "draw">("select");
+  const activeToolRef = useRef<"select" | "meter" | "connection" | "draw">("select");
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [drawnRegions, setDrawnRegions] = useState<Array<{
     id: string;
@@ -1157,16 +1157,9 @@ export default function SchematicEditor({
             meterData: meter 
           });
           
-          // Add selection handler
-          img.on('mousedown', (e) => {
-            if (e.e.shiftKey) {
-              handleToggleSelectMeter(capturedIndex);
-              e.e.stopPropagation();
-              e.e.preventDefault();
-            }
-          });
-
+          // Add double-click handler to open edit dialog
           img.on('mousedblclick', () => {
+            if (!isEditMode) return;
             const objectData = img.get('data') as any;
             const meterIndex = objectData.index;
             const meter = extractedMeters[meterIndex];
@@ -1180,6 +1173,16 @@ export default function SchematicEditor({
             setIsConfirmMeterDialogOpen(true);
           });
 
+          // Add shift+click multi-select handler
+          img.on('mousedown', (e) => {
+            if (e.e.shiftKey && isEditMode) {
+              handleToggleSelectMeter(capturedIndex);
+              e.e.stopPropagation();
+              e.e.preventDefault();
+            }
+          });
+
+          // Handle drag repositioning
           img.on('modified', () => {
             // Update position in extracted meters state
             const newX = ((img.left || 0) / canvasWidth) * 100;
@@ -1302,26 +1305,30 @@ export default function SchematicEditor({
             originY: 'center',
             scaleX: baseScaleX * savedScaleX,
             scaleY: baseScaleY * savedScaleY,
-            hasControls: activeTool === 'move',
-            selectable: activeTool === 'move',
-            hoverCursor: activeTool === 'move' ? 'move' : (activeTool === 'connection' ? 'pointer' : 'default'),
+            hasControls: isEditMode,
+            selectable: isEditMode,
+            hoverCursor: isEditMode ? 'move' : (activeTool === 'connection' ? 'pointer' : 'default'),
             lockRotation: true,
           });
           
           img.set('data', { meterId: pos.meter_id, positionId: pos.id });
           
+          // Add double-click handler to open edit dialog
+          img.on('mousedblclick', () => {
+            if (!isEditMode) return;
+            setEditingMeter(meter);
+            setIsEditMeterDialogOpen(true);
+          });
+
+          // Single click for connection mode
           img.on('mousedown', () => {
             if (activeTool === 'connection') {
               handleMeterClickForConnection(pos.meter_id, x, y);
-            } else if (activeTool === 'select') {
-              // Open edit dialog for this meter
-              setEditingMeter(meter);
-              setIsEditMeterDialogOpen(true);
             }
           });
 
-          // Handle dragging and scaling for move tool
-          if (activeTool === 'move') {
+          // Handle dragging and scaling in edit mode
+          if (isEditMode) {
             img.on('modified', async () => {
               // Convert pixel positions back to percentages for storage
               const canvasWidth = fabricCanvas.getWidth();
@@ -2086,15 +2093,6 @@ export default function SchematicEditor({
         >
           <Plus className="w-4 h-4 mr-2" />
           Add Meter
-        </Button>
-        <Button
-          variant={activeTool === "move" ? "default" : "outline"}
-          onClick={() => setActiveTool(activeTool === "move" ? "select" : "move")}
-          disabled={!isEditMode}
-          size="sm"
-        >
-          <Move className="w-4 h-4 mr-2" />
-          Move
         </Button>
         <Button
           variant={activeTool === "connection" ? "default" : "outline"}
