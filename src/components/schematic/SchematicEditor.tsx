@@ -2303,18 +2303,35 @@ export default function SchematicEditor({
       // Create a straight line connection
       const finalPoints = [startSnapPoint!, { x, y }];
       
-      // Save the connection
+      // Add end node marker
+      const endNode = new Circle({
+        left: x,
+        top: y,
+        radius: 6,
+        fill: '#3b82f6',
+        stroke: '#ffffff',
+        strokeWidth: 2,
+        originX: 'center',
+        originY: 'center',
+        selectable: false,
+        evented: false,
+      });
+      fabricCanvas.add(endNode);
+      
+      // Convert the temporary line to a permanent line (if it exists)
+      if (tempLineRef.current) {
+        tempLineRef.current.set({
+          selectable: false,
+          evented: false,
+        });
+        tempLineRef.current = null; // Clear the ref but keep the line on canvas
+      }
+      
+      // Save the connection to database
       await createConnectionWithPath(startSnapPoint!.meterId, meterId, finalPoints);
       
-      // Clean up temporary drawing objects
-      if (tempLineRef.current) {
-        fabricCanvas.remove(tempLineRef.current);
-        tempLineRef.current = null;
-      }
-      connectionNodesRef.current.forEach(node => fabricCanvas.remove(node));
+      // Reset drawing state without removing objects
       connectionNodesRef.current = [];
-      
-      // Reset all drawing state
       setIsDrawingConnection(false);
       isDrawingConnectionRef.current = false;
       setConnectionLinePoints([]);
