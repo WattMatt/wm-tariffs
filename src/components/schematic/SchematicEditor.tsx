@@ -352,6 +352,11 @@ export default function SchematicEditor({
   const [repositionStartPoint, setRepositionStartPoint] = useState<{ x: number; y: number } | null>(null);
   const [isRepositionDragging, setIsRepositionDragging] = useState(false);
   
+  // Refs for repositioning to avoid stale closures
+  const repositioningMeterRef = useRef<{ meterId?: string, positionId?: string, meterIndex?: number, isSaved: boolean } | null>(null);
+  const repositionStartPointRef = useRef<{ x: number; y: number } | null>(null);
+  const isRepositionDraggingRef = useRef(false);
+  
   // Legend visibility toggles
   const [legendVisibility, setLegendVisibility] = useState({
     bulk_meter: true,
@@ -381,6 +386,13 @@ export default function SchematicEditor({
       fabricCanvas.selection = true;
     }
   }, [activeTool, fabricCanvas]);
+
+  // Sync repositioning refs with state to avoid stale closures
+  useEffect(() => {
+    repositioningMeterRef.current = repositioningMeter;
+    repositionStartPointRef.current = repositionStartPoint;
+    isRepositionDraggingRef.current = isRepositionDragging;
+  }, [repositioningMeter, repositionStartPoint, isRepositionDragging]);
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -444,10 +456,12 @@ export default function SchematicEditor({
       }
       
       // REPOSITIONING MODE: Handle drawing new region for meter card
-      if (repositioningMeter && evt.button === 0) {
+      if (repositioningMeterRef.current && evt.button === 0) {
         const pointer = canvas.getPointer(opt.e);
         setRepositionStartPoint(pointer);
+        repositionStartPointRef.current = pointer;
         setIsRepositionDragging(false);
+        isRepositionDraggingRef.current = false;
         evt.preventDefault();
         evt.stopPropagation();
         return;
@@ -646,18 +660,19 @@ export default function SchematicEditor({
       const currentTool = activeToolRef.current;
       
       // REPOSITIONING MODE: Show preview rectangle
-      if (repositioningMeter && repositionStartPoint) {
+      if (repositioningMeterRef.current && repositionStartPointRef.current) {
         const pointer = canvas.getPointer(opt.e);
         const currentX = pointer.x;
         const currentY = pointer.y;
 
         // Check if user has dragged enough (minimum 5 pixels)
         const dragDistance = Math.sqrt(
-          Math.pow(currentX - repositionStartPoint.x, 2) + 
-          Math.pow(currentY - repositionStartPoint.y, 2)
+          Math.pow(currentX - repositionStartPointRef.current.x, 2) + 
+          Math.pow(currentY - repositionStartPointRef.current.y, 2)
         );
 
         if (dragDistance > 5) {
+          isRepositionDraggingRef.current = true;
           setIsRepositionDragging(true);
 
           // Remove any existing preview rectangle
@@ -668,10 +683,10 @@ export default function SchematicEditor({
 
           // Draw preview rectangle
           const previewRect = new Rect({
-            left: Math.min(repositionStartPoint.x, currentX),
-            top: Math.min(repositionStartPoint.y, currentY),
-            width: Math.abs(currentX - repositionStartPoint.x),
-            height: Math.abs(currentY - repositionStartPoint.y),
+            left: Math.min(repositionStartPointRef.current.x, currentX),
+            top: Math.min(repositionStartPointRef.current.y, currentY),
+            width: Math.abs(currentX - repositionStartPointRef.current.x),
+            height: Math.abs(currentY - repositionStartPointRef.current.y),
             fill: 'rgba(34, 197, 94, 0.1)',
             stroke: 'rgb(34, 197, 94)',
             strokeWidth: 3,
@@ -756,11 +771,12 @@ export default function SchematicEditor({
       const evt = opt.e as MouseEvent;
       
       // REPOSITIONING MODE: Apply new position and scale
-      if (repositioningMeter && repositionStartPoint) {
+      if (repositioningMeterRef.current && repositionStartPointRef.current) {
         // Only apply changes if user actually dragged
-        if (!isRepositionDragging) {
+        if (!isRepositionDraggingRef.current) {
           // User just clicked without dragging, ignore
           setRepositionStartPoint(null);
+          repositionStartPointRef.current = null;
           return;
         }
 
@@ -768,87 +784,92 @@ export default function SchematicEditor({
         const canvasWidth = canvas.getWidth();
         const canvasHeight = canvas.getHeight();
         
-        const regionLeft = Math.min(repositionStartPoint.x, pointer.x);
-        const regionTop = Math.min(repositionStartPoint.y, pointer.y);
-        const regionWidth = Math.abs(pointer.x - repositionStartPoint.x);
-        const regionHeight = Math.abs(pointer.y - repositionStartPoint.y);
+        // Remove preview rectangle
+        const existingPreview = canvas.getObjects().find((obj: any) => obj.repositionPreview);
+        if (existingPreview) {
+          canvas.remove(existingPreview);
+        }
         
-        // Check minimum size
-        if (regionWidth < 20 || regionHeight < 20) {
-          toast.error('Region too small - draw a larger area');
-          // Clean up preview
-          const existingPreview = canvas.getObjects().find((obj: any) => obj.repositionPreview);
-          if (existingPreview) {
-            canvas.remove(existingPreview);
-          }
+        // Check for zero-size rectangle
+        if (Math.abs(pointer.x - repositionStartPointRef.current.x) < 1 || 
+            Math.abs(pointer.y - repositionStartPointRef.current.y) < 1) {
+          toast.error("Rectangle too small. Please draw a larger area.");
+          fabricCanvas?.getObjects().forEach((obj: any) => {
+            obj.set({ opacity: 1 });
+          });
           canvas.renderAll();
           setRepositionStartPoint(null);
+          repositionStartPointRef.current = null;
           setIsRepositionDragging(false);
+          isRepositionDraggingRef.current = false;
           return;
         }
         
-        // Calculate new position and scale
-        const newXPercent = (regionLeft / canvasWidth) * 100;
-        const newYPercent = (regionTop / canvasHeight) * 100;
-        const baseCardWidth = 200;
-        const baseCardHeight = 140;
-        const newScaleX = regionWidth / baseCardWidth;
-        const newScaleY = regionHeight / baseCardHeight;
+        const newX = Math.min(repositionStartPointRef.current.x, pointer.x) / canvasWidth;
+        const newY = Math.min(repositionStartPointRef.current.y, pointer.y) / canvasHeight;
+        const newScaleX = Math.abs(pointer.x - repositionStartPointRef.current.x) / canvasWidth;
+        const newScaleY = Math.abs(pointer.y - repositionStartPointRef.current.y) / canvasHeight;
         
-        if (repositioningMeter.isSaved) {
-          // Update saved meter in database
-          const { error } = await supabase
-            .from("meter_positions")
-            .update({
-              x_position: newXPercent,
-              y_position: newYPercent,
-              scale_x: newScaleX,
-              scale_y: newScaleY,
-            })
-            .eq("id", repositioningMeter.positionId);
-          
-          if (!error) {
-            toast.success("Meter card repositioned and rescaled");
-            await fetchMeterPositions();
-          } else {
-            toast.error("Failed to update meter card");
-          }
-        } else {
-          // Update extracted meter in state
-          setExtractedMeters((prev) => {
-            const updated = [...prev];
-            const index = repositioningMeter.meterIndex!;
-            updated[index] = {
-              ...updated[index],
-              extractedRegion: {
-                x: newXPercent,
-                y: newYPercent,
-                width: (regionWidth / canvasWidth) * 100,
-                height: (regionHeight / canvasHeight) * 100,
-              },
-              position: { x: newXPercent, y: newYPercent },
-              scale_x: newScaleX,
-              scale_y: newScaleY,
-            };
-            onExtractedMetersUpdate?.(updated);
-            return updated;
-          });
-          
-          toast.success("Meter card repositioned and rescaled");
-        }
-        
-        // Restore visibility
-        canvas.getObjects().forEach((obj: any) => {
-          obj.set({ opacity: 1 });
-          if (obj.repositionPreview) {
-            canvas.remove(obj);
-          }
+        console.log('Updating meter position:', {
+          meterId: repositioningMeterRef.current.meterId,
+          positionId: repositioningMeterRef.current.positionId,
+          x: newX, y: newY,
+          scaleX: newScaleX, scaleY: newScaleY
         });
-        canvas.renderAll();
+        
+        // Update database
+        const updatePosition = async () => {
+          try {
+            const { error } = await supabase
+              .from('meter_positions')
+              .update({
+                x_position: newX,
+                y_position: newY,
+                scale_x: newScaleX,
+                scale_y: newScaleY,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', repositioningMeterRef.current!.positionId);
+            
+            if (error) throw error;
+            
+            toast.success("Meter position updated successfully!");
+            
+            // Restore opacity and refresh
+            fabricCanvas?.getObjects().forEach((obj: any) => {
+              obj.set({ opacity: 1 });
+            });
+            canvas.renderAll();
+            
+            // Refresh positions
+            await fetchMeterPositions();
+            
+          } catch (error: any) {
+            console.error('Error updating meter position:', error);
+            toast.error(error.message || "Failed to update meter position");
+            
+            // Restore opacity on error
+            fabricCanvas?.getObjects().forEach((obj: any) => {
+              obj.set({ opacity: 1 });
+            });
+            canvas.renderAll();
+          }
+        };
+        
+        updatePosition();
+        
+        // Restore canvas state
+        if (fabricCanvas) {
+          fabricCanvas.selection = true;
+          fabricCanvas.defaultCursor = 'default';
+        }
         
         setRepositioningMeter(null);
         setRepositionStartPoint(null);
         setIsRepositionDragging(false);
+        repositioningMeterRef.current = null;
+        repositionStartPointRef.current = null;
+        isRepositionDraggingRef.current = false;
         return;
       }
       
@@ -1152,6 +1173,48 @@ export default function SchematicEditor({
       canvas.dispose();
     };
   }, [schematicUrl]);
+
+  // Keyboard handler for ESC key to cancel repositioning
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && repositioningMeterRef.current) {
+        e.preventDefault();
+        
+        // Restore opacity of all objects
+        if (fabricCanvas) {
+          fabricCanvas.getObjects().forEach((obj: any) => {
+            obj.set({ opacity: 1 });
+          });
+          
+          // Remove any preview rectangle
+          const existingPreview = fabricCanvas.getObjects().find((obj: any) => obj.repositionPreview);
+          if (existingPreview) {
+            fabricCanvas.remove(existingPreview);
+          }
+          
+          // Restore canvas state
+          fabricCanvas.selection = true;
+          fabricCanvas.defaultCursor = 'default';
+          fabricCanvas.renderAll();
+        }
+        
+        // Clear repositioning state
+        setRepositioningMeter(null);
+        setRepositionStartPoint(null);
+        setIsRepositionDragging(false);
+        repositioningMeterRef.current = null;
+        repositionStartPointRef.current = null;
+        isRepositionDraggingRef.current = false;
+        
+        toast.info("Repositioning cancelled");
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [fabricCanvas]);
 
   // Update cursor when tool changes
   useEffect(() => {
@@ -2941,6 +3004,11 @@ export default function SchematicEditor({
                         positionId: position.id,
                         isSaved: true 
                       });
+                      // Disable canvas selection and change cursor
+                      if (fabricCanvas) {
+                        fabricCanvas.selection = false;
+                        fabricCanvas.defaultCursor = 'crosshair';
+                      }
                       // Dim other objects
                       fabricCanvas?.getObjects().forEach((obj: any) => {
                         const objData = obj.get('data');
