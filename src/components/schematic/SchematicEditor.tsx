@@ -3608,9 +3608,9 @@ export default function SchematicEditor({
               <div className="flex gap-4 flex-1 min-h-0 overflow-hidden">
                 {/* Left Pane - Scanned Area */}
                 {editingMeter.scannedImageSnippet && (
-                  <div className="w-1/2 flex flex-col space-y-2 overflow-y-auto p-4">
+                  <div className="w-1/2 flex flex-col space-y-2 p-4 h-full">
                     <Label className="text-sm font-semibold">Scanned Area from PDF</Label>
-                    <div className="border rounded overflow-hidden bg-white w-fit">
+                    <div className="border rounded overflow-hidden bg-white flex-1">
                       <TransformWrapper
                         initialScale={1}
                         minScale={0.5}
