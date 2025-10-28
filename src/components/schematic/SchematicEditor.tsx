@@ -973,8 +973,8 @@ export default function SchematicEditor({
     canvas.on('mouse:move', (opt) => {
       const evt = opt.e as MouseEvent;
       
-      // Handle connection line drawing mode - show preview line with cursor snapping
-      if (isDrawingConnectionRef.current && connectionLinePointsRef.current.length > 0) {
+      // Handle cursor snapping to snap points when in connection mode
+      if (activeToolRef.current === 'connection') {
         let pointer = canvas.getPointer(opt.e);
         
         // Check if cursor is near any snap point and snap to it
@@ -991,33 +991,37 @@ export default function SchematicEditor({
             
             if (distance < snapThreshold) {
               snappedPoint = { x: snapData.x, y: snapData.y };
-              // Change cursor to indicate snap
-              canvas.defaultCursor = 'crosshair';
               break;
             }
           }
         }
         
-        // Use snapped point if found, otherwise use cursor position
-        const targetPoint = snappedPoint || pointer;
-        
-        // Update the temporary line preview
-        if (tempLineRef.current) {
-          canvas.remove(tempLineRef.current);
+        // If actively drawing a line, show the preview
+        if (isDrawingConnectionRef.current && connectionLinePointsRef.current.length > 0) {
+          // Use snapped point if found, otherwise use cursor position
+          const targetPoint = snappedPoint || pointer;
+          
+          // Update the temporary line preview
+          if (tempLineRef.current) {
+            canvas.remove(tempLineRef.current);
+          }
+          
+          const allPoints = [...connectionLinePointsRef.current, targetPoint];
+          
+          const tempLine = new Polyline(allPoints, {
+            stroke: '#3b82f6',
+            strokeWidth: 3,
+            selectable: false,
+            evented: false,
+            fill: 'transparent',
+          });
+          tempLineRef.current = tempLine;
+          canvas.add(tempLine);
+          canvas.renderAll();
         }
         
-        const allPoints = [...connectionLinePointsRef.current, targetPoint];
-        
-        const tempLine = new Polyline(allPoints, {
-          stroke: '#3b82f6',
-          strokeWidth: 3,
-          selectable: false,
-          evented: false,
-          fill: 'transparent',
-        });
-        tempLineRef.current = tempLine;
-        canvas.add(tempLine);
-        canvas.renderAll();
+        // Always update cursor style based on snap
+        canvas.defaultCursor = snappedPoint ? 'crosshair' : 'default';
         return;
       }
       
