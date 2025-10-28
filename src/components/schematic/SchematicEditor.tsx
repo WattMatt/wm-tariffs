@@ -246,15 +246,29 @@ async function renderMeterCardOnCanvas(
     return null;
   }
   
-  const left = (region.x / 100) * canvasWidth;
-  const top = (region.y / 100) * canvasHeight; // FIXED: was using canvasWidth
-  const targetWidth = (region.width / 100) * canvasWidth;
-  const targetHeight = (region.height / 100) * canvasHeight;
+  // Get original image dimensions
+  const originalImageWidth = (canvas as any).originalImageWidth || canvasWidth;
+  const originalImageHeight = (canvas as any).originalImageHeight || canvasHeight;
+  
+  // Convert percentage → original image pixels → canvas pixels
+  const originalPixelX = (region.x / 100) * originalImageWidth;
+  const originalPixelY = (region.y / 100) * originalImageHeight;
+  const originalPixelWidth = (region.width / 100) * originalImageWidth;
+  const originalPixelHeight = (region.height / 100) * originalImageHeight;
+  
+  // Scale to current canvas size
+  const scale = canvasWidth / originalImageWidth;
+  const scaleY = canvasHeight / originalImageHeight;
+  
+  const left = originalPixelX * scale;
+  const top = originalPixelY * scaleY;
+  const targetWidth = originalPixelWidth * scale;
+  const targetHeight = originalPixelHeight * scaleY;
   
   // Calculate scale to match the drawn region size
   // Base card is 200x140
   const scaleX = targetWidth / 200;
-  const scaleY = targetHeight / 140;
+  const scaleYCard = targetHeight / 140;
   
   return new Promise((resolve) => {
     FabricImage.fromURL(meterCardDataUrl, {
@@ -264,7 +278,7 @@ async function renderMeterCardOnCanvas(
         left,
         top,
         scaleX,
-        scaleY,
+        scaleY: scaleYCard,
         selectable: true,
         hasControls: true,
         hasBorders: true,
