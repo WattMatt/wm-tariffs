@@ -474,26 +474,26 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
       const bulkMeters = meterData.filter((m) => m.meter_type === "bulk_meter");
       const checkMeters = meterData.filter((m) => m.meter_type === "check_meter");
       const otherMeters = meterData.filter((m) => m.meter_type === "other");
-      const submeters = meterData.filter((m) => m.meter_type === "submeter");
+      const tenantMeters = meterData.filter((m) => m.meter_type === "tenant_meter");
 
       const bulkTotal = bulkMeters.reduce((sum, m) => sum + m.totalKwh, 0);
       const otherTotal = otherMeters.reduce((sum, m) => sum + m.totalKwh, 0);
-      const submeterTotal = submeters.reduce((sum, m) => sum + m.totalKwh, 0);
+      const tenantTotal = tenantMeters.reduce((sum, m) => sum + m.totalKwh, 0);
       
       // Total supply = Bulk (from grid) + Other (e.g., solar generation)
       const totalSupply = bulkTotal + otherTotal;
-      const recoveryRate = totalSupply > 0 ? (submeterTotal / totalSupply) * 100 : 0;
-      const discrepancy = totalSupply - submeterTotal;
+      const recoveryRate = totalSupply > 0 ? (tenantTotal / totalSupply) * 100 : 0;
+      const discrepancy = totalSupply - tenantTotal;
 
       setReconciliationData({
         bulkMeters,
         checkMeters,
         otherMeters,
-        submeters,
+        tenantMeters,
         bulkTotal,
         otherTotal,
         totalSupply,
-        submeterTotal,
+        tenantTotal,
         recoveryRate,
         discrepancy,
       });

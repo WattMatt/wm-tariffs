@@ -37,7 +37,7 @@ export const QuickMeterDialog = ({
   const [newMeter, setNewMeter] = useState({
     meter_number: "",
     name: "",
-    meter_type: "submeter" as const,
+    meter_type: "tenant_meter" as const,
     area: "",
     rating: "",
     cable_specification: "",
@@ -185,7 +185,7 @@ export const QuickMeterDialog = ({
     setNewMeter({
       meter_number: "",
       name: "",
-      meter_type: "submeter",
+      meter_type: "tenant_meter",
       area: "",
       rating: "",
       cable_specification: "",
@@ -285,7 +285,7 @@ export const QuickMeterDialog = ({
                       <SelectContent>
                         <SelectItem value="bulk_meter">Bulk Meter</SelectItem>
                         <SelectItem value="check_meter">Check Meter</SelectItem>
-                        <SelectItem value="submeter">Submeter</SelectItem>
+                        <SelectItem value="tenant_meter">Tenant Meter</SelectItem>
                         <SelectItem value="other">Other</SelectItem>
                       </SelectContent>
                     </Select>

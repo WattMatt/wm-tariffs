@@ -112,7 +112,7 @@ export default function NegativeReadingsDetector({ siteId }: NegativeReadingsDet
     switch (type) {
       case "bulk_meter": return "Bulk Meter";
       case "check_meter": return "Check Meter";
-      case "submeter": return "Submeter";
+      case "tenant_meter": return "Tenant Meter";
       case "other": return "Other";
       default: return type;
     }

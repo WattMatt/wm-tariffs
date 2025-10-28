@@ -41,7 +41,7 @@ export default function MeterConnectionsDialog({ siteId, onClose }: MeterConnect
   const [isAdding, setIsAdding] = useState(false);
   const [childMeterId, setChildMeterId] = useState("");
   const [parentMeterId, setParentMeterId] = useState("");
-  const [connectionType, setConnectionType] = useState("submeter");
+  const [connectionType, setConnectionType] = useState("tenant_meter");
 
   useEffect(() => {
     fetchConnections();
@@ -123,7 +123,7 @@ export default function MeterConnectionsDialog({ siteId, onClose }: MeterConnect
 
   const getConnectionTypeBadge = (type: string) => {
     const colors: Record<string, string> = {
-      submeter: "bg-green-500",
+      tenant_meter: "bg-green-500",
       check_meter: "bg-orange-500",
       bulk_supply: "bg-red-500",
     };
@@ -193,7 +193,7 @@ export default function MeterConnectionsDialog({ siteId, onClose }: MeterConnect
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="submeter">Submeter</SelectItem>
+                      <SelectItem value="tenant_meter">Tenant Meter</SelectItem>
                       <SelectItem value="check_meter">Check Meter</SelectItem>
                       <SelectItem value="bulk_supply">Bulk Supply</SelectItem>
                     </SelectContent>

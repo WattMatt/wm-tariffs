@@ -148,14 +148,14 @@ export function MeterFormFields({
           <Label htmlFor={`${idPrefix}_meter_type`}>
             {showLocationAndTariff ? 'Meter Type' : 'METER TYPE'} *
           </Label>
-          <Select name="meter_type" required defaultValue={defaultValues.meter_type || 'submeter'}>
+          <Select name="meter_type" required defaultValue={defaultValues.meter_type || 'tenant_meter'}>
             <SelectTrigger className="bg-background">
               <SelectValue placeholder="Select meter type" />
             </SelectTrigger>
             <SelectContent className="bg-background z-50">
               <SelectItem value="bulk_meter">Bulk Meter{!showLocationAndTariff && ' (Main Incoming)'}</SelectItem>
               <SelectItem value="check_meter">Check Meter{!showLocationAndTariff && ' (Verification)'}</SelectItem>
-              <SelectItem value="submeter">Submeter</SelectItem>
+              <SelectItem value="tenant_meter">Tenant Meter</SelectItem>
               <SelectItem value="other">Other</SelectItem>
             </SelectContent>
           </Select>

@@ -341,17 +341,17 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
       const bulkMeters = meterData.filter((m) => m.meter_type === "bulk_meter");
       const checkMeters = meterData.filter((m) => m.meter_type === "check_meter");
       const otherMeters = meterData.filter((m) => m.meter_type === "other");
-      const submeters = meterData.filter((m) => m.meter_type === "submeter");
+      const tenantMeters = meterData.filter((m) => m.meter_type === "tenant_meter");
 
       const bulkTotal = bulkMeters.reduce((sum, m) => sum + m.totalKwh, 0);
       const otherTotal = otherMeters.reduce((sum, m) => sum + m.totalKwh, 0);
-      const submeterTotal = submeters.reduce((sum, m) => sum + m.totalKwh, 0);
+      const tenantTotal = tenantMeters.reduce((sum, m) => sum + m.totalKwh, 0);
       
       // Calculate total supply from CSV columns with SUM operation (not yet available at this point)
       // This will be calculated after column configs are processed
       const totalSupply = bulkTotal + otherTotal;
-      const recoveryRate = totalSupply > 0 ? (submeterTotal / totalSupply) * 100 : 0;
-      const discrepancy = totalSupply - submeterTotal;
+      const recoveryRate = totalSupply > 0 ? (tenantTotal / totalSupply) * 100 : 0;
+      const discrepancy = totalSupply - tenantTotal;
       const variancePercentage = totalSupply > 0 
         ? ((discrepancy / totalSupply) * 100).toFixed(2)
         : "0";
@@ -362,14 +362,14 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
         councilTotal: bulkTotal.toFixed(2),
         solarTotal: otherTotal.toFixed(2),
         totalSupply: totalSupply.toFixed(2),
-        distributionTotal: submeterTotal.toFixed(2),
+        distributionTotal: tenantTotal.toFixed(2),
         variance: discrepancy.toFixed(2),
         variancePercentage,
         recoveryRate: recoveryRate.toFixed(2),
         meterCount: meterData.length,
         councilBulkCount: bulkMeters.length,
         solarCount: otherMeters.length,
-        distributionCount: submeters.length,
+        distributionCount: tenantMeters.length,
         checkMeterCount: checkMeters.length,
         readingsPeriod: `${format(periodStart, "dd MMM yyyy")} - ${format(periodEnd, "dd MMM yyyy")}`,
         documentsAnalyzed: 0 // Will be updated after fetching documents
@@ -435,8 +435,8 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
         anomalies.push({
           type: "low_recovery",
           recoveryRate: recoveryRate.toFixed(2),
-          lostRevenue: (totalSupply - submeterTotal) * 2.5, // Estimate at R2.50/kWh
-          description: `Recovery rate of ${recoveryRate.toFixed(2)}% is below acceptable threshold of 90-95% - estimated revenue loss: R${((totalSupply - submeterTotal) * 2.5).toFixed(2)}`,
+          lostRevenue: (totalSupply - tenantTotal) * 2.5, // Estimate at R2.50/kWh
+          description: `Recovery rate of ${recoveryRate.toFixed(2)}% is below acceptable threshold of 90-95% - estimated revenue loss: R${((totalSupply - tenantTotal) * 2.5).toFixed(2)}`,
           severity: "HIGH"
         });
       }
@@ -452,8 +452,8 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
         });
       }
 
-      // Low: No readings on submeters (non-critical)
-      submeters.forEach(m => {
+      // Low: No readings on tenant meters (non-critical)
+      tenantMeters.forEach(m => {
         if (m.readingsCount === 0) {
           anomalies.push({
             type: "no_readings_distribution",

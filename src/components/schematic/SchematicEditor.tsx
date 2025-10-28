@@ -520,7 +520,7 @@ export default function SchematicEditor({
     main_board_zone: true,
     mini_sub_zone: true,
     council_connection_zone: true,
-    submeter: true,
+    tenant_meter: true,
     other: true
   });
 
@@ -1523,9 +1523,9 @@ export default function SchematicEditor({
       } else if (meterType.includes('check')) {
         borderColor = '#f59e0b'; // orange
         categoryKey = 'check_meter';
-      } else if (meterType.includes('sub')) {
+      } else if (meterType.includes('tenant')) {
         borderColor = '#10b981'; // green
-        categoryKey = 'submeter';
+        categoryKey = 'tenant_meter';
       }
       
       // Skip rendering if this category is hidden
@@ -1768,7 +1768,7 @@ export default function SchematicEditor({
       .insert({
         child_meter_id: childId,
         parent_meter_id: parentId,
-        connection_type: 'submeter'
+        connection_type: 'tenant_meter'
       });
 
     if (connError) {
@@ -2104,7 +2104,7 @@ export default function SchematicEditor({
             
             // Validate meter_type - use bulk_meter as default
             let meterType = extractedMeterData?.meter_type || "bulk_meter";
-            const validMeterTypes = ["bulk_meter", "check_meter", "submeter", "other"];
+            const validMeterTypes = ["bulk_meter", "check_meter", "tenant_meter", "other"];
             if (!validMeterTypes.includes(meterType)) {
               console.warn(`Invalid meter_type "${meterType}", defaulting to "bulk_meter"`);
               meterType = "bulk_meter";
@@ -2520,8 +2520,8 @@ export default function SchematicEditor({
             
             <Badge 
               variant="outline" 
-              className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.submeter ? 'opacity-40' : ''}`}
-              onClick={() => setLegendVisibility(prev => ({ ...prev, submeter: !prev.submeter }))}
+              className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.tenant_meter ? 'opacity-40' : ''}`}
+              onClick={() => setLegendVisibility(prev => ({ ...prev, tenant_meter: !prev.tenant_meter }))}
             >
               <div className="w-3 h-3 rounded-full bg-[#10b981] mr-2" />
               Tenant Meter
@@ -2675,7 +2675,7 @@ export default function SchematicEditor({
                   <SelectContent className="bg-background z-50">
                     <SelectItem value="bulk_meter">Bulk Meter</SelectItem>
                     <SelectItem value="check_meter">Check Meter</SelectItem>
-                    <SelectItem value="submeter">Submeter</SelectItem>
+                    <SelectItem value="tenant_meter">Tenant Meter</SelectItem>
                     <SelectItem value="other">Other</SelectItem>
                   </SelectContent>
                 </Select>
@@ -2914,14 +2914,14 @@ export default function SchematicEditor({
 
                   <div className="space-y-2">
                     <Label htmlFor="confirm_meter_type">METER TYPE *</Label>
-                    <Select name="meter_type" required defaultValue={extractedMeters[selectedMeterIndex].meter_type || 'submeter'}>
+                    <Select name="meter_type" required defaultValue={extractedMeters[selectedMeterIndex].meter_type || 'tenant_meter'}>
                       <SelectTrigger className="bg-background">
                         <SelectValue placeholder="Select meter type" />
                       </SelectTrigger>
                       <SelectContent className="bg-background z-50">
                         <SelectItem value="bulk_meter">Bulk Meter (Main Incoming)</SelectItem>
                         <SelectItem value="check_meter">Check Meter (Verification)</SelectItem>
-                        <SelectItem value="submeter">Submeter</SelectItem>
+                        <SelectItem value="tenant_meter">Tenant Meter</SelectItem>
                         <SelectItem value="other">Other</SelectItem>
                       </SelectContent>
                     </Select>
