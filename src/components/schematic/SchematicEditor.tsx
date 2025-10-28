@@ -1982,16 +1982,28 @@ export default function SchematicEditor({
       const meterType = meter?.meter_type || 'unknown';
       const zone = meter?.zone;
       
-      // Determine border color based on confirmation status (highest priority)
+      // Determine border color based on mode
       const confirmationStatus = (meter as any).confirmation_status || 'unconfirmed';
       let borderColor = '#3b82f6'; // default blue
       let categoryKey = 'other';
       
-      // Priority 1: Confirmation status colors (only in edit mode)
-      if (confirmationStatus === 'confirmed') {
-        borderColor = '#22c55e'; // green for confirmed
-      } else if (confirmationStatus === 'unconfirmed') {
-        borderColor = '#ef4444'; // red for unconfirmed
+      if (isEditMode) {
+        // Edit mode: Show confirmation status colors
+        if (confirmationStatus === 'confirmed') {
+          borderColor = '#22c55e'; // green for confirmed
+        } else {
+          borderColor = '#ef4444'; // red for unconfirmed
+        }
+      } else {
+        // Normal mode: Show zone colors
+        if (zone === 'main_board') {
+          borderColor = '#9333ea'; // purple for Main Board
+        } else if (zone === 'mini_sub') {
+          borderColor = '#06b6d4'; // cyan for Mini Sub
+        } else {
+          // No zone: no border in normal mode
+          borderColor = 'transparent';
+        }
       }
       
       // Determine category for legend (zones take priority for filtering)
@@ -2065,8 +2077,8 @@ export default function SchematicEditor({
             selectable: isEditMode,
             hoverCursor: isEditMode ? 'move' : 'pointer',
             lockRotation: true,
-            stroke: isEditMode ? borderColor : undefined,
-            strokeWidth: isEditMode ? 4 : 0,
+            stroke: borderColor,
+            strokeWidth: isEditMode ? 4 : 3,
           });
           
           img.set('data', { meterId: pos.meter_id, positionId: pos.id });
