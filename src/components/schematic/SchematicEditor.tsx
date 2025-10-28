@@ -3537,9 +3537,6 @@ export default function SchematicEditor({
                         className="w-full h-auto"
                       />
                     </div>
-                    <p className="text-xs text-muted-foreground italic">
-                      This is the exact region that was scanned from the PDF
-                    </p>
                   </div>
                 )}
                 
