@@ -3623,8 +3623,8 @@ export default function SchematicEditor({
                 )}
                 
                 {/* Right Pane - Form Fields */}
-                <div className={`${editingMeter.scannedImageSnippet ? 'w-1/2' : 'w-full'} overflow-y-auto pr-2`}>
-                  <MeterFormFields 
+                <div className={`${editingMeter.scannedImageSnippet ? 'w-1/2 pl-4 pr-4' : 'w-full'} overflow-y-auto`}>
+                  <MeterFormFields
                     key={editingMeter.id + '-' + (editingMeter.updated_at || Date.now())}
                     idPrefix="edit"
                     defaultValues={editingMeter}
