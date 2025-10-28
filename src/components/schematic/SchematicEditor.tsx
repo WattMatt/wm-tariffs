@@ -100,6 +100,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import CsvImportDialog from "@/components/site/CsvImportDialog";
 import { MeterDataExtractor } from "./MeterDataExtractor";
+import { MeterFormFields } from "./MeterFormFields";
 
 interface SchematicEditorProps {
   schematicId: string;
@@ -1926,6 +1927,36 @@ export default function SchematicEditor({
     fabricCanvas.renderAll();
   };
 
+  // Helper function to start repositioning mode for a meter
+  const startRepositioningMode = (meterData: { meterId?: string, positionId?: string, meterIndex?: number, isSaved: boolean }) => {
+    setRepositioningMeter(meterData);
+    
+    // Disable canvas selection and change cursor for drawing mode
+    if (fabricCanvas) {
+      fabricCanvas.selection = false;
+      fabricCanvas.defaultCursor = 'crosshair';
+    }
+    
+    // Dim other objects for visual clarity
+    fabricCanvas?.getObjects().forEach((obj: any) => {
+      if (meterData.meterIndex !== undefined) {
+        // For unsaved meters, compare against meter card object
+        const meterCard = meterCardObjects.get(meterData.meterIndex);
+        if (obj !== meterCard) {
+          obj.set({ opacity: 0.2 });
+        }
+      } else if (meterData.meterId) {
+        // For saved meters, compare against meterId in object data
+        const objData = obj.get('data');
+        if (!objData || objData.meterId !== meterData.meterId) {
+          obj.set({ opacity: 0.2 });
+        }
+      }
+    });
+    fabricCanvas?.renderAll();
+    toast.info("Draw a rectangle to reposition and rescale this meter card");
+  };
+
   const handleUpdateMeter = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingMeter) return;
@@ -2887,22 +2918,10 @@ export default function SchematicEditor({
                     onClick={() => {
                       setIsConfirmMeterDialogOpen(false);
                       if (selectedMeterIndex !== null) {
-                        // ACTIVATE REPOSITIONING MODE for extracted (unsaved) meter
-                        // State update will trigger useEffect that syncs to repositioningMeterRef
-                        // Canvas mouse handlers will then use ref to detect repositioning mode
-                        setRepositioningMeter({ 
+                        startRepositioningMode({ 
                           meterIndex: selectedMeterIndex,
                           isSaved: false 
                         });
-                        // Dim other objects for visual clarity
-                        fabricCanvas?.getObjects().forEach((obj: any) => {
-                          const meterCard = meterCardObjects.get(selectedMeterIndex);
-                          if (obj !== meterCard) {
-                            obj.set({ opacity: 0.2 });
-                          }
-                        });
-                        fabricCanvas?.renderAll();
-                        toast.info("Draw a rectangle to reposition and rescale this meter card");
                       }
                     }}
                     className="flex-1"
@@ -2957,150 +2976,12 @@ export default function SchematicEditor({
           </DialogHeader>
           {editingMeter && (
             <form onSubmit={handleUpdateMeter} className="space-y-6">
-              {/* Show scanned PDF snippet if available */}
-              {editingMeter.scannedImageSnippet && (
-                <div className="space-y-2 p-4 bg-muted rounded-lg border">
-                  <Label className="text-sm font-semibold">Scanned Area from PDF</Label>
-                  <div className="border rounded overflow-hidden bg-white">
-                    <img 
-                      src={editingMeter.scannedImageSnippet} 
-                      alt="Scanned meter region" 
-                      className="w-full h-auto"
-                    />
-                  </div>
-                  <p className="text-xs text-muted-foreground italic">
-                    This is the exact region that was scanned from the PDF
-                  </p>
-                </div>
-              )}
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="edit_meter_number">NO (Meter Number) *</Label>
-                  <Input 
-                    id="edit_meter_number" 
-                    name="meter_number" 
-                    required 
-                    defaultValue={editingMeter.meter_number}
-                    placeholder="DB-03" 
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="edit_name">NAME *</Label>
-                  <Input 
-                    id="edit_name" 
-                    name="name" 
-                    required 
-                    defaultValue={editingMeter.name || ''}
-                    placeholder="ACKERMANS" 
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="edit_area">AREA (m²)</Label>
-                  <Input 
-                    id="edit_area" 
-                    name="area" 
-                    type="number" 
-                    step="0.01" 
-                    defaultValue={editingMeter.area || ''}
-                    placeholder="406" 
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="edit_rating">RATING *</Label>
-                  <Input 
-                    id="edit_rating" 
-                    name="rating" 
-                    required 
-                    defaultValue={editingMeter.rating || ''}
-                    placeholder="100A TP" 
-                  />
-                </div>
-
-                <div className="space-y-2 col-span-2">
-                  <Label htmlFor="edit_cable_specification">CABLE *</Label>
-                  <Input 
-                    id="edit_cable_specification" 
-                    name="cable_specification" 
-                    required 
-                    defaultValue={editingMeter.cable_specification || ''}
-                    placeholder="4C x 50mm² ALU ECC CABLE" 
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="edit_serial_number">SERIAL *</Label>
-                  <Input 
-                    id="edit_serial_number" 
-                    name="serial_number" 
-                    required 
-                    defaultValue={editingMeter.serial_number || ''}
-                    placeholder="35777285" 
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="edit_ct_type">CT *</Label>
-                  <Input 
-                    id="edit_ct_type" 
-                    name="ct_type" 
-                    required 
-                    defaultValue={editingMeter.ct_type || ''}
-                    placeholder="DOL" 
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="edit_meter_type">Meter Type *</Label>
-                  <Select name="meter_type" required defaultValue={editingMeter.meter_type}>
-                    <SelectTrigger className="bg-background">
-                      <SelectValue placeholder="Select type" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-background z-50">
-                      <SelectItem value="council_bulk">Council Bulk Supply</SelectItem>
-                      <SelectItem value="check_meter">Check Meter</SelectItem>
-                      <SelectItem value="solar">Solar Generation</SelectItem>
-                      <SelectItem value="distribution">Distribution Meter</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="edit_zone">Zone</Label>
-                  <Select name="zone" defaultValue={editingMeter.zone || ''}>
-                    <SelectTrigger className="bg-background">
-                      <SelectValue placeholder="Select zone (optional)" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-background z-50">
-                      <SelectItem value="main_board">Main Board</SelectItem>
-                      <SelectItem value="mini_sub">Mini Sub</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="edit_location">Location</Label>
-                  <Input 
-                    id="edit_location" 
-                    name="location" 
-                    defaultValue={editingMeter.location || ''}
-                    placeholder="Building A, Floor 2" 
-                  />
-                </div>
-
-                <div className="space-y-2 col-span-2">
-                  <Label htmlFor="edit_tariff">Tariff</Label>
-                  <Input 
-                    id="edit_tariff" 
-                    name="tariff" 
-                    defaultValue={editingMeter.tariff || ''}
-                    placeholder="Business Standard" 
-                  />
-                </div>
-              </div>
+              <MeterFormFields 
+                idPrefix="edit"
+                defaultValues={editingMeter}
+                showLocationAndTariff={true}
+                scannedImageSnippet={editingMeter.scannedImageSnippet}
+              />
 
               <div className="flex gap-2">
                 <Button
@@ -3108,31 +2989,13 @@ export default function SchematicEditor({
                   variant="outline"
                   onClick={() => {
                     setIsEditMeterDialogOpen(false);
-                    // Find the position ID for this meter
                     const position = meterPositions.find(p => p.meter_id === editingMeter.id);
                     if (position) {
-                      // ACTIVATE REPOSITIONING MODE for saved meter
-                      // State update will trigger useEffect that syncs to repositioningMeterRef
-                      // Canvas mouse handlers will then use ref to detect repositioning mode
-                      setRepositioningMeter({ 
+                      startRepositioningMode({ 
                         meterId: editingMeter.id, 
                         positionId: position.id,
                         isSaved: true 
                       });
-                      // Disable canvas selection and change cursor for drawing mode
-                      if (fabricCanvas) {
-                        fabricCanvas.selection = false;
-                        fabricCanvas.defaultCursor = 'crosshair';
-                      }
-                      // Dim other objects for visual clarity
-                      fabricCanvas?.getObjects().forEach((obj: any) => {
-                        const objData = obj.get('data');
-                        if (!objData || objData.meterId !== editingMeter.id) {
-                          obj.set({ opacity: 0.2 });
-                        }
-                      });
-                      fabricCanvas?.renderAll();
-                      toast.info("Draw a rectangle to reposition and rescale this meter card");
                     }
                   }}
                   className="flex-1"
