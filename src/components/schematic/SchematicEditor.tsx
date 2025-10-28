@@ -53,9 +53,6 @@
  * EXAMPLES IN THIS COMPONENT:
  * ----------------------------
  * - activeTool / activeToolRef (lines ~307)
- * - repositioningMeter / repositioningMeterRef (lines ~351, ~356)
- * - repositionStartPoint / repositionStartPointRef (lines ~352, ~357)
- * - isRepositionDragging / isRepositionDraggingRef (lines ~353, ~358)
  * 
  * WHY THIS WORKS:
  * ---------------
@@ -507,17 +504,8 @@ export default function SchematicEditor({
   const [isViewMeterDialogOpen, setIsViewMeterDialogOpen] = useState(false);
   const [viewingMeter, setViewingMeter] = useState<any>(null);
   
-  // FABRIC.JS EVENT HANDLER PATTERN: Repositioning state + refs
-  // These control the "Reposition & Rescale" feature where users redraw meter card bounds
+  // FABRIC.JS EVENT HANDLER PATTERN: State + refs for complex interactions
   // State drives UI updates, refs provide current values to mouse event handlers
-  const [repositioningMeter, setRepositioningMeter] = useState<{ meterId?: string, positionId?: string, meterIndex?: number, isSaved: boolean } | null>(null);
-  const [repositionStartPoint, setRepositionStartPoint] = useState<{ x: number; y: number } | null>(null);
-  const [isRepositionDragging, setIsRepositionDragging] = useState(false);
-  
-  // Refs synced with repositioning state to prevent stale closures in Fabric.js handlers
-  const repositioningMeterRef = useRef<{ meterId?: string, positionId?: string, meterIndex?: number, isSaved: boolean } | null>(null);
-  const repositionStartPointRef = useRef<{ x: number; y: number } | null>(null);
-  const isRepositionDraggingRef = useRef(false);
   
   // Ref for drawnRegions to prevent stale closures in Fabric.js handlers
   const drawnRegionsRef = useRef<typeof drawnRegions>([]);
@@ -602,11 +590,6 @@ export default function SchematicEditor({
 
   // FABRIC.JS EVENT HANDLER PATTERN: Sync repositioning state to refs
   // Critical for the reposition feature - without this, mouse handlers use stale meter data
-  useEffect(() => {
-    repositioningMeterRef.current = repositioningMeter;
-    repositionStartPointRef.current = repositionStartPoint;
-    isRepositionDraggingRef.current = isRepositionDragging;
-  }, [repositioningMeter, repositionStartPoint, isRepositionDragging]);
 
   // Sync drawnRegions to ref
   useEffect(() => {
@@ -1252,111 +1235,6 @@ export default function SchematicEditor({
         return;
       }
       
-      // REPOSITIONING MODE: Apply new position and scale
-      // CRITICAL: Use refs to check current repositioning state and start point
-      // This ensures we have the latest values when completing the repositioning action
-      if (repositioningMeterRef.current && repositionStartPointRef.current) {
-        // Only apply changes if user actually dragged (checked via ref)
-        if (!isRepositionDraggingRef.current) {
-          // User just clicked without dragging, ignore
-          setRepositionStartPoint(null);
-          repositionStartPointRef.current = null;
-          return;
-        }
-
-        const pointer = canvas.getPointer(opt.e);
-        const canvasWidth = canvas.getWidth();
-        const canvasHeight = canvas.getHeight();
-        
-        // Remove preview rectangle
-        const existingPreview = canvas.getObjects().find((obj: any) => obj.repositionPreview);
-        if (existingPreview) {
-          canvas.remove(existingPreview);
-        }
-        
-        // Check for zero-size rectangle
-        if (Math.abs(pointer.x - repositionStartPointRef.current.x) < 1 || 
-            Math.abs(pointer.y - repositionStartPointRef.current.y) < 1) {
-          toast.error("Rectangle too small. Please draw a larger area.");
-          fabricCanvas?.getObjects().forEach((obj: any) => {
-            obj.set({ opacity: 1 });
-          });
-          canvas.renderAll();
-          setRepositionStartPoint(null);
-          repositionStartPointRef.current = null;
-          setIsRepositionDragging(false);
-          isRepositionDraggingRef.current = false;
-          return;
-        }
-        
-        const newX = Math.min(repositionStartPointRef.current.x, pointer.x) / canvasWidth;
-        const newY = Math.min(repositionStartPointRef.current.y, pointer.y) / canvasHeight;
-        const newScaleX = Math.abs(pointer.x - repositionStartPointRef.current.x) / canvasWidth;
-        const newScaleY = Math.abs(pointer.y - repositionStartPointRef.current.y) / canvasHeight;
-        
-        console.log('Updating meter position:', {
-          meterId: repositioningMeterRef.current.meterId,
-          positionId: repositioningMeterRef.current.positionId,
-          x: newX, y: newY,
-          scaleX: newScaleX, scaleY: newScaleY
-        });
-        
-        // Update database
-        const updatePosition = async () => {
-          try {
-            const { error } = await supabase
-              .from('meter_positions')
-              .update({
-                x_position: newX,
-                y_position: newY,
-                scale_x: newScaleX,
-                scale_y: newScaleY,
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', repositioningMeterRef.current!.positionId);
-            
-            if (error) throw error;
-            
-            toast.success("Meter position updated successfully!");
-            
-            // Restore opacity and refresh
-            fabricCanvas?.getObjects().forEach((obj: any) => {
-              obj.set({ opacity: 1 });
-            });
-            canvas.renderAll();
-            
-            // Refresh positions
-            await fetchMeterPositions();
-            
-          } catch (error: any) {
-            console.error('Error updating meter position:', error);
-            toast.error(error.message || "Failed to update meter position");
-            
-            // Restore opacity on error
-            fabricCanvas?.getObjects().forEach((obj: any) => {
-              obj.set({ opacity: 1 });
-            });
-            canvas.renderAll();
-          }
-        };
-        
-        updatePosition();
-        
-        // Restore canvas state
-        if (fabricCanvas) {
-          fabricCanvas.selection = true;
-          fabricCanvas.defaultCursor = 'default';
-        }
-        
-        setRepositioningMeter(null);
-        setRepositionStartPoint(null);
-        setIsRepositionDragging(false);
-        repositioningMeterRef.current = null;
-        repositionStartPointRef.current = null;
-        isRepositionDraggingRef.current = false;
-        return;
-      }
-      
       // No other mouse:up handling needed since we removed all mouse interaction
     });
     
@@ -1645,49 +1523,6 @@ export default function SchematicEditor({
     };
   }, [schematicUrl]);
 
-  // ESCAPE KEY: Cancel repositioning mode
-  // CRITICAL: Uses repositioningMeterRef to check current repositioning state
-  // This ensures the handler can detect and cancel repositioning even when state has changed
-  useEffect(() => {
-    const handleEscapeKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && repositioningMeterRef.current) {
-        e.preventDefault();
-        
-        // Restore opacity of all objects
-        if (fabricCanvas) {
-          fabricCanvas.getObjects().forEach((obj: any) => {
-            obj.set({ opacity: 1 });
-          });
-          
-          // Remove any preview rectangle
-          const existingPreview = fabricCanvas.getObjects().find((obj: any) => obj.repositionPreview);
-          if (existingPreview) {
-            fabricCanvas.remove(existingPreview);
-          }
-          
-          // Restore canvas state
-          fabricCanvas.selection = true;
-          fabricCanvas.defaultCursor = 'default';
-          fabricCanvas.renderAll();
-        }
-        
-        // Clear repositioning state
-        setRepositioningMeter(null);
-        setRepositionStartPoint(null);
-        setIsRepositionDragging(false);
-        repositioningMeterRef.current = null;
-        repositionStartPointRef.current = null;
-        isRepositionDraggingRef.current = false;
-        
-        toast.info("Repositioning cancelled");
-      }
-    };
-
-    window.addEventListener('keydown', handleEscapeKey);
-    return () => {
-      window.removeEventListener('keydown', handleEscapeKey);
-    };
-  }, [fabricCanvas]);
 
   // DELETE KEY: Remove selected meter card in edit mode
   useEffect(() => {
@@ -2507,35 +2342,6 @@ export default function SchematicEditor({
     fabricCanvas.renderAll();
   };
 
-  // Helper function to start repositioning mode for a meter
-  const startRepositioningMode = (meterData: { meterId?: string, positionId?: string, meterIndex?: number, isSaved: boolean }) => {
-    setRepositioningMeter(meterData);
-    
-    // Disable canvas selection and change cursor for drawing mode
-    if (fabricCanvas) {
-      fabricCanvas.selection = false;
-      fabricCanvas.defaultCursor = 'crosshair';
-    }
-    
-    // Dim other objects for visual clarity
-    fabricCanvas?.getObjects().forEach((obj: any) => {
-      if (meterData.meterIndex !== undefined) {
-        // For unsaved meters, compare against meter card object
-        const meterCard = meterCardObjects.get(meterData.meterIndex);
-        if (obj !== meterCard) {
-          obj.set({ opacity: 0.2 });
-        }
-      } else if (meterData.meterId) {
-        // For saved meters, compare against meterId in object data
-        const objData = obj.get('data');
-        if (!objData || objData.meterId !== meterData.meterId) {
-          obj.set({ opacity: 0.2 });
-        }
-      }
-    });
-    fabricCanvas?.renderAll();
-    toast.info("Draw a rectangle to reposition and rescale this meter card");
-  };
 
   const handleUpdateMeter = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -3753,22 +3559,6 @@ export default function SchematicEditor({
                 </div>
 
                 <div className="flex gap-2 pt-4 border-t">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      setIsConfirmMeterDialogOpen(false);
-                      if (selectedMeterIndex !== null) {
-                        startRepositioningMode({ 
-                          meterIndex: selectedMeterIndex,
-                          isSaved: false 
-                        });
-                      }
-                    }}
-                    className="flex-1"
-                  >
-                    Reposition & Rescale
-                  </Button>
                   <Button type="submit" className="flex-1 bg-green-600 hover:bg-green-700">
                     <Check className="h-4 w-4 mr-2" />
                     Confirm & Approve
@@ -3846,20 +3636,59 @@ export default function SchematicEditor({
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => {
-                    setIsEditMeterDialogOpen(false);
-                    const position = meterPositions.find(p => p.meter_id === editingMeter.id);
-                    if (position) {
-                      startRepositioningMode({ 
-                        meterId: editingMeter.id, 
-                        positionId: position.id,
-                        isSaved: true 
+                  onClick={async () => {
+                    if (!editingMeter.scannedImageSnippet) {
+                      toast.error('No scanned image available for re-extraction');
+                      return;
+                    }
+                    
+                    try {
+                      toast.info('Re-extracting meter data from image...');
+                      
+                      const { data, error } = await supabase.functions.invoke('extract-schematic-meters', {
+                        body: { 
+                          imageUrl: editingMeter.scannedImageSnippet,
+                          mode: 'extract-region',
+                          region: {
+                            x: 0,
+                            y: 0,
+                            width: 100,
+                            height: 100,
+                            imageWidth: 100,
+                            imageHeight: 100
+                          }
+                        }
                       });
+                      
+                      if (error) throw error;
+                      
+                      if (data?.meter) {
+                        // Update the editing meter with newly extracted data
+                        setEditingMeter({
+                          ...editingMeter,
+                          meter_number: data.meter.meter_number || editingMeter.meter_number,
+                          name: data.meter.name || editingMeter.name,
+                          area: data.meter.area || editingMeter.area,
+                          rating: data.meter.rating || editingMeter.rating,
+                          cable_specification: data.meter.cable_specification || editingMeter.cable_specification,
+                          serial_number: data.meter.serial_number || editingMeter.serial_number,
+                          ct_type: data.meter.ct_type || editingMeter.ct_type,
+                          meter_type: data.meter.meter_type || editingMeter.meter_type,
+                          zone: data.meter.zone || editingMeter.zone,
+                        });
+                        toast.success('Meter data re-extracted successfully!');
+                      } else {
+                        toast.error('No meter data found in image');
+                      }
+                    } catch (error: any) {
+                      console.error('Re-extraction error:', error);
+                      toast.error(error.message || 'Failed to re-extract meter data');
                     }
                   }}
                   className="flex-1"
+                  disabled={!editingMeter.scannedImageSnippet}
                 >
-                  Reposition & Rescale
+                  Re-extract Data
                 </Button>
                 <Button type="submit" className="flex-1">
                   Save
@@ -4109,18 +3938,6 @@ export default function SchematicEditor({
           )}
         </DialogContent>
       </Dialog>
-
-      {repositioningMeter && (
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-background/95 border-2 border-green-500 p-6 rounded-lg shadow-2xl z-50 text-center">
-          <h3 className="text-lg font-semibold mb-2">Reposition & Rescale Meter Card</h3>
-          <p className="text-muted-foreground mb-4">
-            Draw a rectangle around the desired area for this meter card.
-          </p>
-          <p className="text-sm text-muted-foreground">
-            Press <kbd className="px-2 py-1 bg-muted rounded">ESC</kbd> to cancel
-          </p>
-        </div>
-      )}
 
       {selectedMeterId && (
         <CsvImportDialog
