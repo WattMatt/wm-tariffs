@@ -725,7 +725,7 @@ export default function SchematicEditor({
             hasBorders: true,
             lockRotation: true,
             cornerStyle: 'circle',
-            cornerSize: 8,
+            cornerSize: 12,
             cornerColor: '#3b82f6',
             cornerStrokeColor: '#ffffff',
             transparentCorners: false,
@@ -733,6 +733,7 @@ export default function SchematicEditor({
             borderDashArray: [5, 5],
             hoverCursor: 'move',
             moveCursor: 'move',
+            padding: 0,
           });
           
           (permanentRect as any).regionId = regionId;
