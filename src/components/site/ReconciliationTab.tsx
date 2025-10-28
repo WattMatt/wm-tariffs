@@ -154,7 +154,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
         .from("meters")
         .select("id, meter_number, meter_type")
         .eq("site_id", siteId)
-        .eq("meter_type", "council_bulk");
+        .eq("meter_type", "bulk_meter");
 
       if (metersError || !bulkMeters || bulkMeters.length === 0) {
         toast.error("No bulk check meter found for this site");
@@ -471,29 +471,29 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
         })
       );
 
-      const councilBulk = meterData.filter((m) => m.meter_type === "council_bulk");
+      const bulkMeters = meterData.filter((m) => m.meter_type === "bulk_meter");
       const checkMeters = meterData.filter((m) => m.meter_type === "check_meter");
-      const solarMeters = meterData.filter((m) => m.meter_type === "solar");
-      const distribution = meterData.filter((m) => m.meter_type === "distribution");
+      const otherMeters = meterData.filter((m) => m.meter_type === "other");
+      const submeters = meterData.filter((m) => m.meter_type === "submeter");
 
-      const councilTotal = councilBulk.reduce((sum, m) => sum + m.totalKwh, 0);
-      const solarTotal = solarMeters.reduce((sum, m) => sum + m.totalKwh, 0);
-      const distributionTotal = distribution.reduce((sum, m) => sum + m.totalKwh, 0);
+      const bulkTotal = bulkMeters.reduce((sum, m) => sum + m.totalKwh, 0);
+      const otherTotal = otherMeters.reduce((sum, m) => sum + m.totalKwh, 0);
+      const submeterTotal = submeters.reduce((sum, m) => sum + m.totalKwh, 0);
       
-      // Total supply = Council (from grid) + Solar (on-site generation)
-      const totalSupply = councilTotal + solarTotal;
-      const recoveryRate = totalSupply > 0 ? (distributionTotal / totalSupply) * 100 : 0;
-      const discrepancy = totalSupply - distributionTotal;
+      // Total supply = Bulk (from grid) + Other (e.g., solar generation)
+      const totalSupply = bulkTotal + otherTotal;
+      const recoveryRate = totalSupply > 0 ? (submeterTotal / totalSupply) * 100 : 0;
+      const discrepancy = totalSupply - submeterTotal;
 
       setReconciliationData({
-        councilBulk,
+        bulkMeters,
         checkMeters,
-        solarMeters,
-        distribution,
-        councilTotal,
-        solarTotal,
+        otherMeters,
+        submeters,
+        bulkTotal,
+        otherTotal,
         totalSupply,
-        distributionTotal,
+        submeterTotal,
         recoveryRate,
         discrepancy,
       });

@@ -2102,12 +2102,12 @@ export default function SchematicEditor({
             // Create meter in database (with extracted data or empty)
             const meterNumber = extractedMeterData?.meter_number || `METER-${Date.now()}-${i}`;
             
-            // Validate meter_type - use council_bulk as default since submeter is not valid
-            let meterType = extractedMeterData?.meter_type || "council_bulk";
-            const validMeterTypes = ["council_bulk", "check_meter"];
+            // Validate meter_type - use bulk_meter as default
+            let meterType = extractedMeterData?.meter_type || "bulk_meter";
+            const validMeterTypes = ["bulk_meter", "check_meter", "submeter", "other"];
             if (!validMeterTypes.includes(meterType)) {
-              console.warn(`Invalid meter_type "${meterType}", defaulting to "council_bulk"`);
-              meterType = "council_bulk";
+              console.warn(`Invalid meter_type "${meterType}", defaulting to "bulk_meter"`);
+              meterType = "bulk_meter";
             }
             
             const { data: newMeter, error: meterError } = await supabase
@@ -2673,10 +2673,10 @@ export default function SchematicEditor({
                     <SelectValue placeholder="Select type" />
                   </SelectTrigger>
                   <SelectContent className="bg-background z-50">
-                    <SelectItem value="council_bulk">Council Bulk Supply</SelectItem>
+                    <SelectItem value="bulk_meter">Bulk Meter</SelectItem>
                     <SelectItem value="check_meter">Check Meter</SelectItem>
-                    <SelectItem value="solar">Solar Generation</SelectItem>
-                    <SelectItem value="distribution">Distribution Meter</SelectItem>
+                    <SelectItem value="submeter">Submeter</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -2914,15 +2914,15 @@ export default function SchematicEditor({
 
                   <div className="space-y-2">
                     <Label htmlFor="confirm_meter_type">METER TYPE *</Label>
-                    <Select name="meter_type" required defaultValue={extractedMeters[selectedMeterIndex].meter_type || 'distribution'}>
+                    <Select name="meter_type" required defaultValue={extractedMeters[selectedMeterIndex].meter_type || 'submeter'}>
                       <SelectTrigger className="bg-background">
                         <SelectValue placeholder="Select meter type" />
                       </SelectTrigger>
                       <SelectContent className="bg-background z-50">
-                        <SelectItem value="council_bulk">Council Bulk Supply (Main Incoming)</SelectItem>
+                        <SelectItem value="bulk_meter">Bulk Meter (Main Incoming)</SelectItem>
                         <SelectItem value="check_meter">Check Meter (Verification)</SelectItem>
-                        <SelectItem value="distribution">Distribution Meter</SelectItem>
-                        <SelectItem value="solar">Solar Generation</SelectItem>
+                        <SelectItem value="submeter">Submeter</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

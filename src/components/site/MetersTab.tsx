@@ -422,12 +422,14 @@ export default function MetersTab({ siteId }: MetersTabProps) {
 
   const getMeterTypeColor = (type: string) => {
     switch (type) {
-      case "council_bulk":
+      case "bulk_meter":
         return "bg-primary text-primary-foreground";
       case "check_meter":
         return "bg-warning text-warning-foreground";
-      case "distribution":
+      case "submeter":
         return "bg-accent text-accent-foreground";
+      case "other":
+        return "bg-muted text-muted-foreground";
       default:
         return "bg-muted text-muted-foreground";
     }
@@ -435,12 +437,14 @@ export default function MetersTab({ siteId }: MetersTabProps) {
 
   const getMeterTypeLabel = (type: string) => {
     switch (type) {
-      case "council_bulk":
-        return "Council Bulk";
+      case "bulk_meter":
+        return "Bulk Meter";
       case "check_meter":
         return "Check Meter";
-      case "distribution":
-        return "Distribution";
+      case "submeter":
+        return "Submeter";
+      case "other":
+        return "Other";
       default:
         return type;
     }
@@ -559,10 +563,10 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                       <SelectValue placeholder="Select type" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="council_bulk">Council Bulk Supply</SelectItem>
+                      <SelectItem value="bulk_meter">Bulk Meter</SelectItem>
                       <SelectItem value="check_meter">Check Meter</SelectItem>
-                      <SelectItem value="solar">Solar Generation</SelectItem>
-                      <SelectItem value="distribution">Distribution Meter</SelectItem>
+                      <SelectItem value="submeter">Submeter</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

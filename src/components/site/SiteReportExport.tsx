@@ -338,38 +338,38 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
       );
 
       // 4. Categorize meters by type
-      const councilBulk = meterData.filter((m) => m.meter_type === "council_bulk");
+      const bulkMeters = meterData.filter((m) => m.meter_type === "bulk_meter");
       const checkMeters = meterData.filter((m) => m.meter_type === "check_meter");
-      const solarMeters = meterData.filter((m) => m.meter_type === "solar");
-      const distribution = meterData.filter((m) => m.meter_type === "distribution");
+      const otherMeters = meterData.filter((m) => m.meter_type === "other");
+      const submeters = meterData.filter((m) => m.meter_type === "submeter");
 
-      const councilTotal = councilBulk.reduce((sum, m) => sum + m.totalKwh, 0);
-      const solarTotal = solarMeters.reduce((sum, m) => sum + m.totalKwh, 0);
-      const distributionTotal = distribution.reduce((sum, m) => sum + m.totalKwh, 0);
+      const bulkTotal = bulkMeters.reduce((sum, m) => sum + m.totalKwh, 0);
+      const otherTotal = otherMeters.reduce((sum, m) => sum + m.totalKwh, 0);
+      const submeterTotal = submeters.reduce((sum, m) => sum + m.totalKwh, 0);
       
       // Calculate total supply from CSV columns with SUM operation (not yet available at this point)
       // This will be calculated after column configs are processed
-      const totalSupply = councilTotal + solarTotal;
-      const recoveryRate = totalSupply > 0 ? (distributionTotal / totalSupply) * 100 : 0;
-      const discrepancy = totalSupply - distributionTotal;
+      const totalSupply = bulkTotal + otherTotal;
+      const recoveryRate = totalSupply > 0 ? (submeterTotal / totalSupply) * 100 : 0;
+      const discrepancy = totalSupply - submeterTotal;
       const variancePercentage = totalSupply > 0 
         ? ((discrepancy / totalSupply) * 100).toFixed(2)
         : "0";
 
       // 5. Prepare reconciliation data with enhanced categorization
       const reconciliationData = {
-        councilBulkMeters: councilBulk.map(m => `${m.meter_number} (${m.name})`).join(", ") || "N/A",
-        councilTotal: councilTotal.toFixed(2),
-        solarTotal: solarTotal.toFixed(2),
+        councilBulkMeters: bulkMeters.map(m => `${m.meter_number} (${m.name})`).join(", ") || "N/A",
+        councilTotal: bulkTotal.toFixed(2),
+        solarTotal: otherTotal.toFixed(2),
         totalSupply: totalSupply.toFixed(2),
-        distributionTotal: distributionTotal.toFixed(2),
+        distributionTotal: submeterTotal.toFixed(2),
         variance: discrepancy.toFixed(2),
         variancePercentage,
         recoveryRate: recoveryRate.toFixed(2),
         meterCount: meterData.length,
-        councilBulkCount: councilBulk.length,
-        solarCount: solarMeters.length,
-        distributionCount: distribution.length,
+        councilBulkCount: bulkMeters.length,
+        solarCount: otherMeters.length,
+        distributionCount: submeters.length,
         checkMeterCount: checkMeters.length,
         readingsPeriod: `${format(periodStart, "dd MMM yyyy")} - ${format(periodEnd, "dd MMM yyyy")}`,
         documentsAnalyzed: 0 // Will be updated after fetching documents
@@ -379,7 +379,7 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
       const anomalies: any[] = [];
 
       // Critical: No readings on bulk meters
-      councilBulk.forEach(m => {
+      bulkMeters.forEach(m => {
         if (m.readingsCount === 0) {
           anomalies.push({
             type: "no_readings_bulk",
@@ -435,8 +435,8 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
         anomalies.push({
           type: "low_recovery",
           recoveryRate: recoveryRate.toFixed(2),
-          lostRevenue: (totalSupply - distributionTotal) * 2.5, // Estimate at R2.50/kWh
-          description: `Recovery rate of ${recoveryRate.toFixed(2)}% is below acceptable threshold of 90-95% - estimated revenue loss: R${((totalSupply - distributionTotal) * 2.5).toFixed(2)}`,
+          lostRevenue: (totalSupply - submeterTotal) * 2.5, // Estimate at R2.50/kWh
+          description: `Recovery rate of ${recoveryRate.toFixed(2)}% is below acceptable threshold of 90-95% - estimated revenue loss: R${((totalSupply - submeterTotal) * 2.5).toFixed(2)}`,
           severity: "HIGH"
         });
       }
@@ -452,8 +452,8 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
         });
       }
 
-      // Low: No readings on distribution meters (non-critical)
-      distribution.forEach(m => {
+      // Low: No readings on submeters (non-critical)
+      submeters.forEach(m => {
         if (m.readingsCount === 0) {
           anomalies.push({
             type: "no_readings_distribution",

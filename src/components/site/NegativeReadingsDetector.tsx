@@ -110,10 +110,10 @@ export default function NegativeReadingsDetector({ siteId }: NegativeReadingsDet
 
   const getMeterTypeLabel = (type: string) => {
     switch (type) {
-      case "council_bulk": return "Council Bulk";
+      case "bulk_meter": return "Bulk Meter";
       case "check_meter": return "Check Meter";
-      case "solar": return "Solar";
-      case "distribution": return "Distribution";
+      case "submeter": return "Submeter";
+      case "other": return "Other";
       default: return type;
     }
   };
