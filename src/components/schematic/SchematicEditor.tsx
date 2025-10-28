@@ -1725,7 +1725,7 @@ export default function SchematicEditor({
           
           // Add double-click handler to open edit dialog
           img.on('mousedblclick', () => {
-            if (!isEditMode || isSelectionModeRef.current) return;
+            if (!isEditMode) return;
             // Map scanned_snippet_url to scannedImageSnippet for the form
             setEditingMeter({
               ...meter,
