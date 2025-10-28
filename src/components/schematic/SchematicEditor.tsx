@@ -479,6 +479,7 @@ export default function SchematicEditor({
   const drawingRectRef = useRef<any>(null);
   const drawStartPointRef = useRef<{ x: number; y: number } | null>(null);
   const startMarkerRef = useRef<any>(null);
+  const selectionBoxRef = useRef<any>(null); // For shift+drag multi-select box
   const [lines, setLines] = useState<SchematicLine[]>([]);
   const [meters, setMeters] = useState<any[]>([]);
   const [selectedMeterForConnection, setSelectedMeterForConnection] = useState<string | null>(null);
@@ -749,8 +750,9 @@ export default function SchematicEditor({
       }
     });
 
-    // Mouse handlers for drawing rectangles when in draw mode AND Shift+click selection
+    // Mouse handlers for drawing rectangles when in draw mode AND Shift+click selection AND Shift+drag multi-select
     let isDrawing = false;
+    let isShiftDragSelecting = false;
     let startPoint: { x: number; y: number } | null = null;
     
     canvas.on('mouse:down', (opt) => {
@@ -759,6 +761,14 @@ export default function SchematicEditor({
       const target = opt.target;
       
       console.log('mouse:down', { currentTool, hasTarget: !!target, targetType: target?.type, targetRegionId: (target as any)?.regionId, shiftKey: evt.shiftKey, isSelectionMode: isSelectionModeRef.current });
+      
+      // Handle Shift+drag multi-select (when shift pressed and clicking on empty space)
+      if (evt.shiftKey && !target && isSelectionModeRef.current) {
+        const pointer = canvas.getPointer(opt.e);
+        isShiftDragSelecting = true;
+        startPoint = { x: pointer.x, y: pointer.y };
+        return;
+      }
       
       // Handle selection: Shift+click (works in any mode) OR single-click when selection mode is active
       const shouldHandleSelection = (evt.shiftKey || isSelectionModeRef.current) && target;
@@ -865,6 +875,40 @@ export default function SchematicEditor({
     });
     
     canvas.on('mouse:move', (opt) => {
+      // Handle shift+drag multi-select box
+      if (isShiftDragSelecting && startPoint) {
+        const pointer = canvas.getPointer(opt.e);
+        
+        // Remove previous selection box
+        if (selectionBoxRef.current) {
+          canvas.remove(selectionBoxRef.current);
+        }
+        
+        // Create new selection box preview
+        const left = Math.min(startPoint.x, pointer.x);
+        const top = Math.min(startPoint.y, pointer.y);
+        const width = Math.abs(pointer.x - startPoint.x);
+        const height = Math.abs(pointer.y - startPoint.y);
+        
+        const selectionBox = new Rect({
+          left,
+          top,
+          width,
+          height,
+          fill: 'rgba(16, 185, 129, 0.1)',
+          stroke: '#10b981',
+          strokeWidth: 2,
+          strokeDashArray: [5, 5],
+          selectable: false,
+          evented: false,
+        });
+        
+        selectionBoxRef.current = selectionBox;
+        canvas.add(selectionBox);
+        canvas.renderAll();
+        return;
+      }
+      
       if (!isDrawing || !startPoint || activeToolRef.current !== 'draw') return;
       
       const pointer = canvas.getPointer(opt.e);
@@ -900,6 +944,93 @@ export default function SchematicEditor({
 
     canvas.on('mouse:up', async (opt) => {
       const evt = opt.e as MouseEvent;
+      
+      // Handle shift+drag multi-select completion
+      if (isShiftDragSelecting && startPoint) {
+        const pointer = canvas.getPointer(opt.e);
+        
+        // Calculate selection box dimensions
+        const left = Math.min(startPoint.x, pointer.x);
+        const top = Math.min(startPoint.y, pointer.y);
+        const width = Math.abs(pointer.x - startPoint.x);
+        const height = Math.abs(pointer.y - startPoint.y);
+        
+        // Find all meter cards that intersect with the selection box
+        const selectedMeterIdsInBox: string[] = [];
+        canvas.getObjects().forEach((obj: any) => {
+          if (obj.type === 'image' && obj.data?.meterId) {
+            const bounds = obj.getBoundingRect();
+            
+            // Check if meter card intersects with selection box
+            const intersects = !(
+              bounds.left + bounds.width < left ||
+              bounds.left > left + width ||
+              bounds.top + bounds.height < top ||
+              bounds.top > top + height
+            );
+            
+            if (intersects) {
+              selectedMeterIdsInBox.push(obj.data.meterId);
+            }
+          }
+        });
+        
+        // Add selection rectangles for newly selected meters
+        if (selectedMeterIdsInBox.length > 0) {
+          setSelectedMeterIds(prev => {
+            // Remove selection markers for deselected meters
+            const deselectedIds = prev.filter(id => !selectedMeterIdsInBox.includes(id));
+            deselectedIds.forEach(meterId => {
+              const selectionRect = canvas.getObjects().find((obj: any) => 
+                obj.type === 'rect' && obj.selectionMarker && obj.data?.meterId === meterId
+              );
+              if (selectionRect) {
+                canvas.remove(selectionRect);
+              }
+            });
+            
+            // Add selection markers for newly selected meters
+            const newSelections = selectedMeterIdsInBox.filter(id => !prev.includes(id));
+            newSelections.forEach(meterId => {
+              const meterObj = canvas.getObjects().find((obj: any) => 
+                obj.type === 'image' && obj.data?.meterId === meterId
+              );
+              if (meterObj) {
+                const bounds = meterObj.getBoundingRect();
+                const selectionRect = new Rect({
+                  left: bounds.left,
+                  top: bounds.top,
+                  width: bounds.width,
+                  height: bounds.height,
+                  fill: 'transparent',
+                  stroke: '#10b981',
+                  strokeWidth: 4,
+                  selectable: false,
+                  evented: false,
+                  data: { meterId: meterId }
+                });
+                (selectionRect as any).selectionMarker = true;
+                canvas.add(selectionRect);
+              }
+            });
+            
+            canvas.renderAll();
+            toast.info(`${selectedMeterIdsInBox.length} meter(s) selected`);
+            return selectedMeterIdsInBox;
+          });
+        }
+        
+        // Remove selection box
+        if (selectionBoxRef.current) {
+          canvas.remove(selectionBoxRef.current);
+          selectionBoxRef.current = null;
+        }
+        
+        isShiftDragSelecting = false;
+        startPoint = null;
+        canvas.renderAll();
+        return;
+      }
       
       // Handle rectangle drawing completion
       if (isDrawing && startPoint && activeToolRef.current === 'draw') {
@@ -2797,7 +2928,7 @@ export default function SchematicEditor({
                 // Toggle selection mode
                 setIsSelectionMode(!isSelectionMode);
                 if (!isSelectionMode) {
-                  toast.info("Click on regions or meter cards to select them", { duration: 4000 });
+                  toast.info("Click to select, or hold SHIFT and drag to select multiple meters", { duration: 4000 });
                 }
               }
             }}
