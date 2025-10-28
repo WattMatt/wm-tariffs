@@ -127,13 +127,15 @@ INTELLIGENT METER TYPE CLASSIFICATION (based on NAME field):
 Analyze the NAME field to automatically determine meter_type:
 - If NAME contains "MAIN", "INCOMING", "COUNCIL", "BULK", or "SUPPLY" → meter_type: "bulk_meter"
 - If NAME contains "CHECK" or "VERIFICATION" → meter_type: "check_meter"
+- If NAME contains "LOCAL", "PUMP", or "CENTRE" → meter_type: "other"
 - Otherwise (tenant names, "VACANT", shop names, etc.) → meter_type: "tenant_meter"
 
 INTELLIGENT ZONE CLASSIFICATION (based on meter_type):
 Automatically assign zone based on the determined meter_type:
-- If meter_type is "bulk_meter" → zone: "main_board"
-- If meter_type is "check_meter" → zone: "mini_sub"
-- If meter_type is "tenant_meter" → zone: null
+- If meter_type is "bulk_meter" → zone: "mini_sub"
+- If meter_type is "check_meter" → zone: "main_board"
+- If meter_type is "tenant_meter" → zone: "main_board"
+- If meter_type is "other" → zone: "main_board"
 
 Return ONLY valid JSON with these exact fields. Use null for fields not visible.
 NO markdown, NO explanations.
@@ -225,13 +227,15 @@ CRITICAL DATA FIELDS (Zero error tolerance):
    Analyze the NAME field to automatically determine meter_type:
    - If NAME contains "MAIN", "INCOMING", "COUNCIL", "BULK", or "SUPPLY" → meter_type: "bulk_meter"
    - If NAME contains "CHECK" or "VERIFICATION" → meter_type: "check_meter"
+   - If NAME contains "LOCAL", "PUMP", or "CENTRE" → meter_type: "other"
    - Otherwise (tenant names, "VACANT", shop names, etc.) → meter_type: "tenant_meter"
 
 9. INTELLIGENT ZONE CLASSIFICATION (based on meter_type):
    Automatically assign zone based on the determined meter_type:
-   - If meter_type is "bulk_meter" → zone: "main_board"
-   - If meter_type is "check_meter" → zone: "mini_sub"
-   - If meter_type is "tenant_meter" → zone: null
+   - If meter_type is "bulk_meter" → zone: "mini_sub"
+   - If meter_type is "check_meter" → zone: "main_board"
+   - If meter_type is "tenant_meter" → zone: "main_board"
+   - If meter_type is "other" → zone: "main_board"
 
 POSITIONING (CRITICAL - This determines visual overlay accuracy):
 - position.x: Percentage from LEFT edge to meter box CENTER (0.0 = left edge, 100.0 = right edge)
