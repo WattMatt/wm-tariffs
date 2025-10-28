@@ -627,6 +627,43 @@ export default function SchematicEditor({
     isEditModeRef.current = isEditMode;
   }, [isEditMode]);
 
+  // Update border colors when toggling edit mode
+  useEffect(() => {
+    if (!fabricCanvas || !meters.length) return;
+    
+    fabricCanvas.getObjects().forEach((obj: any) => {
+      // Only update meter card images (not rectangles, lines, etc.)
+      if (obj.type === 'image' && obj.data?.meterId) {
+        const meterId = obj.data.meterId;
+        const meter = meters.find(m => m.id === meterId);
+        
+        if (meter) {
+          const confirmationStatus = (meter as any).confirmation_status || 'unconfirmed';
+          let borderColor = '#ef4444'; // default red for unconfirmed
+          
+          if (confirmationStatus === 'confirmed') {
+            borderColor = '#22c55e'; // green for confirmed
+          }
+          
+          // Set stroke properties based on edit mode
+          if (isEditMode) {
+            obj.set({
+              stroke: borderColor,
+              strokeWidth: 4
+            });
+          } else {
+            obj.set({
+              stroke: undefined,
+              strokeWidth: 0
+            });
+          }
+        }
+      }
+    });
+    
+    fabricCanvas.renderAll();
+  }, [isEditMode, fabricCanvas, meters]);
+
   useEffect(() => {
     if (!canvasRef.current) return;
 
