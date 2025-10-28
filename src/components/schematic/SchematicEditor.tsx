@@ -1678,45 +1678,30 @@ export default function SchematicEditor({
       const meterType = meter?.meter_type || 'unknown';
       const zone = meter?.zone;
       
-      // Determine border color based on confirmation status first
+      // Determine border color based on confirmation status (highest priority)
       const confirmationStatus = (meter as any).confirmation_status || 'unconfirmed';
       let borderColor = '#3b82f6'; // default blue
       let categoryKey = 'other';
       
-      // Priority 1: Zone colors (highest priority)
-      if (zone === 'main_board') {
-        borderColor = '#9333ea'; // purple for Main Board zone
-        categoryKey = 'main_board_zone';
-      } else if (zone === 'mini_sub') {
-        borderColor = '#06b6d4'; // cyan for Mini Sub zone
-        categoryKey = 'mini_sub_zone';
-      } 
-      // Priority 2: Confirmation status colors
-      else if (confirmationStatus === 'confirmed') {
+      // Priority 1: Confirmation status colors (always visible)
+      if (confirmationStatus === 'confirmed') {
         borderColor = '#22c55e'; // green for confirmed
-        if (meterType.includes('bulk')) categoryKey = 'bulk_meter';
-        else if (meterType.includes('check')) categoryKey = 'check_meter';
-        else if (meterType.includes('tenant')) categoryKey = 'tenant_meter';
       } else if (confirmationStatus === 'needs_review') {
         borderColor = '#f59e0b'; // amber/orange for needs review
-        if (meterType.includes('bulk')) categoryKey = 'bulk_meter';
-        else if (meterType.includes('check')) categoryKey = 'check_meter';
-        else if (meterType.includes('tenant')) categoryKey = 'tenant_meter';
       } else if (confirmationStatus === 'unconfirmed') {
         borderColor = '#ef4444'; // red for unconfirmed
-        if (meterType.includes('bulk')) categoryKey = 'bulk_meter';
-        else if (meterType.includes('check')) categoryKey = 'check_meter';
-        else if (meterType.includes('tenant')) categoryKey = 'tenant_meter';
       }
-      // Priority 3: Meter type colors (fallback)
-      else if (meterType.includes('bulk')) {
-        borderColor = '#ef4444'; // red
+      
+      // Determine category for legend (zones take priority for filtering)
+      if (zone === 'main_board') {
+        categoryKey = 'main_board_zone';
+      } else if (zone === 'mini_sub') {
+        categoryKey = 'mini_sub_zone';
+      } else if (meterType.includes('bulk')) {
         categoryKey = 'bulk_meter';
       } else if (meterType.includes('check')) {
-        borderColor = '#f59e0b'; // orange
         categoryKey = 'check_meter';
       } else if (meterType.includes('tenant')) {
-        borderColor = '#10b981'; // green
         categoryKey = 'tenant_meter';
       }
       
