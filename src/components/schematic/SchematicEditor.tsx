@@ -548,11 +548,8 @@ export default function SchematicEditor({
       // State would be stale from when this handler was registered
       const currentTool = activeToolRef.current;
       
-      console.log('🖱️ Mouse down - button:', evt.button, 'buttons:', evt.buttons);
-      
       // Middle mouse button ALWAYS enables panning in ALL modes
       if (evt.button === 1) {
-        console.log('✅ Middle button detected - enabling panning');
         isPanningLocal = true;
         hasMoved = false;
         lastX = evt.clientX;
@@ -881,8 +878,6 @@ export default function SchematicEditor({
         const evt = opt.e as MouseEvent;
         evt.preventDefault();
         evt.stopPropagation();
-        
-        console.log('🔄 Panning - deltaX/Y:', evt.clientX - lastX, evt.clientY - lastY);
         
         hasMoved = true;
         canvas.defaultCursor = 'grabbing';
