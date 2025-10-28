@@ -1695,6 +1695,17 @@ export default function SchematicEditor({
 
     const handleDeleteKey = async (e: KeyboardEvent) => {
       if (!isEditMode) return;
+      
+      // Don't trigger delete if user is typing in an input field
+      const target = e.target as HTMLElement;
+      if (target && (
+        target.tagName === 'INPUT' || 
+        target.tagName === 'TEXTAREA' || 
+        target.isContentEditable
+      )) {
+        return;
+      }
+      
       if (e.key === 'Delete' || e.key === 'Backspace') {
         const activeObject = fabricCanvas.getActiveObject();
         if (activeObject && (activeObject as any).data) {
