@@ -1860,9 +1860,8 @@ export default function SchematicEditor({
           toast.success(`Scanned ${scanned.length} meters`);
         }
       } 
-      // Case B: Regions drawn - scan each region
+      // Case B: Regions drawn - scan each region and create meters
       else {
-        let allExtractedMeters: any[] = [];
         let successCount = 0;
         let errorCount = 0;
         
@@ -1875,7 +1874,7 @@ export default function SchematicEditor({
           // Update progress
           setExtractionProgress({ current: i + 1, total: drawnRegions.length });
           
-          // Ensure imageWidth and imageHeight are present (they might be missing from old regions)
+          // Ensure imageWidth and imageHeight are present
           const imageWidth = region.imageWidth || (fabricCanvas as any)?.originalImageWidth || 2000;
           const imageHeight = region.imageHeight || (fabricCanvas as any)?.originalImageHeight || 2000;
           
@@ -1893,80 +1892,109 @@ export default function SchematicEditor({
               schematicId
             );
             
-            const { data, error } = await supabase.functions.invoke('extract-schematic-meters', {
-              body: { 
-                imageUrl: croppedImageUrl, // Send cropped image instead of full image
-                filePath: null,
-                mode: 'extract-region',
-                region: {
-                  x: 0, // Cropped image starts at 0,0
-                  y: 0,
-                  width: region.width,
-                  height: region.height,
-                  imageWidth: region.width, // Cropped image dimensions
-                  imageHeight: region.height
-                }
-              }
-            });
+            // Calculate position percentages for this region
+            const xPercent = (region.x / imageWidth) * 100;
+            const yPercent = (region.y / imageHeight) * 100;
             
-            if (error) {
-              console.error(`Error scanning region ${i + 1}:`, error);
+            // Try to extract meter data
+            let extractedMeterData: any = null;
+            try {
+              const { data, error } = await supabase.functions.invoke('extract-schematic-meters', {
+                body: { 
+                  imageUrl: croppedImageUrl,
+                  filePath: null,
+                  mode: 'extract-region',
+                  region: {
+                    x: 0,
+                    y: 0,
+                    width: region.width,
+                    height: region.height,
+                    imageWidth: region.width,
+                    imageHeight: region.height
+                  }
+                }
+              });
+              
+              if (!error && data?.meter) {
+                extractedMeterData = data.meter;
+              }
+            } catch (extractError) {
+              console.warn(`AI extraction failed for region ${i + 1}, will create empty meter:`, extractError);
+            }
+            
+            // Create meter in database (with extracted data or empty)
+            const meterNumber = extractedMeterData?.meter_number || `METER-${Date.now()}-${i}`;
+            const { data: newMeter, error: meterError } = await supabase
+              .from("meters")
+              .insert({
+                site_id: siteId,
+                meter_number: meterNumber,
+                name: extractedMeterData?.name || "VACANT",
+                meter_type: extractedMeterData?.meter_type || "submeter",
+                zone: extractedMeterData?.zone || null,
+                area: extractedMeterData?.area ? parseFloat(extractedMeterData.area.replace('m²', '')) : null,
+                rating: extractedMeterData?.rating || null,
+                cable_specification: extractedMeterData?.cable_specification || null,
+                serial_number: extractedMeterData?.serial_number || null,
+                ct_type: extractedMeterData?.ct_type || null,
+                location: null,
+                tariff: null,
+                is_revenue_critical: false,
+              })
+              .select()
+              .single();
+            
+            if (meterError || !newMeter) {
+              console.error(`Failed to create meter for region ${i + 1}:`, meterError);
               errorCount++;
               continue;
             }
             
-            if (data && data.meter) {
-              console.log('📸 Scanned image URL:', croppedImageUrl);
-              const newMeter = {
-                ...data.meter,
-                status: 'pending' as const,
-                scannedImageSnippet: croppedImageUrl, // Store the cropped region image
-                position: {
-                  x: (region.x / imageWidth) * 100,
-                  y: (region.y / imageHeight) * 100
-                },
-                extractedRegion: {
-                  x: (region.x / imageWidth) * 100,
-                  y: (region.y / imageHeight) * 100,
-                  width: (region.width / imageWidth) * 100,
-                  height: (region.height / imageHeight) * 100
-                },
-                scale_x: 1,
-                scale_y: 1
-              };
-              allExtractedMeters.push(newMeter);
+            // Create meter position on schematic
+            const { error: posError } = await supabase
+              .from("meter_positions")
+              .insert({
+                schematic_id: schematicId,
+                meter_id: newMeter.id,
+                x_position: xPercent,
+                y_position: yPercent,
+                label: meterNumber,
+                scale_x: 1.0,
+                scale_y: 1.0
+              });
+            
+            if (posError) {
+              console.error(`Failed to create position for region ${i + 1}:`, posError);
+              errorCount++;
+            } else {
               successCount++;
+              if (extractedMeterData) {
+                toast.success(`Created meter ${meterNumber} with AI data`);
+              } else {
+                toast.info(`Created empty meter ${meterNumber} - edit to populate`);
+              }
             }
           } catch (err) {
-            console.error(`Failed to scan region ${i + 1}:`, err);
+            console.error(`Failed to process region ${i + 1}:`, err);
             errorCount++;
           }
         }
         
-        // Add all extracted meters to state
-        if (allExtractedMeters.length > 0) {
-          const updatedMeters = [...extractedMeters, ...allExtractedMeters];
-          setExtractedMeters(updatedMeters);
-          if (onExtractedMetersUpdate) {
-            onExtractedMetersUpdate(updatedMeters);
-          }
-        }
+        // Refresh meters and positions
+        await fetchMeters();
+        await fetchMeterPositions();
         
         // Show result toast
         if (successCount > 0 && errorCount === 0) {
-          toast.success(`Extracted ${successCount} meters from ${drawnRegions.length} regions`);
-          // Clear regions after successful extraction
+          toast.success(`Created ${successCount} meters from ${drawnRegions.length} regions`);
           handleClearRegions();
-          // Deactivate drawing mode after successful scan
           setActiveTool("select");
         } else if (successCount > 0 && errorCount > 0) {
-          toast.warning(`Extracted ${successCount} meters, ${errorCount} regions failed`);
-          // Clear regions after extraction (even with some errors)
+          toast.warning(`Created ${successCount} meters, ${errorCount} regions failed`);
           handleClearRegions();
-          // Deactivate drawing mode after scan
           setActiveTool("select");
         } else {
-          toast.error(`Failed to extract meters from all regions`);
+          toast.error(`Failed to create meters from all regions`);
         }
       }
     } catch (e) {
@@ -1974,7 +2002,7 @@ export default function SchematicEditor({
       toast.error('Scan failed');
     } finally {
       setIsSaving(false);
-      setExtractionProgress(null); // Reset progress
+      setExtractionProgress(null);
     }
   };
 
