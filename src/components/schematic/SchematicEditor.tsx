@@ -219,14 +219,23 @@ async function renderMeterCardOnCanvas(
   canvasHeight: number
 ): Promise<any> {
   // Determine border color based on meter status
-  let borderColor = '#ef4444'; // Red for unconfirmed (default)
+  let borderColor = '#ef4444'; // Red for unconfirmed/pending (default)
   if (meter.status === 'approved') {
     borderColor = '#22c55e'; // Green for confirmed
+  } else if (meter.status === 'pending') {
+    borderColor = '#ef4444'; // Red for unconfirmed/pending
   } else if (meter.status === 'rejected') {
     borderColor = '#ef4444'; // Red for rejected
   } else {
-    borderColor = '#f59e0b'; // Orange for needs review
+    borderColor = '#f59e0b'; // Orange for needs review or any other status
   }
+  
+  console.log('Rendering meter card:', { 
+    meterNumber: meter.meter_number, 
+    status: meter.status, 
+    borderColor,
+    region: meter.extractedRegion 
+  });
   
   // Create meter card image from meter data
   const fields = [
@@ -250,20 +259,26 @@ async function renderMeterCardOnCanvas(
   const originalImageWidth = (canvas as any).originalImageWidth || canvasWidth;
   const originalImageHeight = (canvas as any).originalImageHeight || canvasHeight;
   
+  // Canvas scales uniformly, so use the same scale factor for both X and Y
+  const scale = canvasWidth / originalImageWidth;
+  
   // Convert percentage → original image pixels → canvas pixels
   const originalPixelX = (region.x / 100) * originalImageWidth;
   const originalPixelY = (region.y / 100) * originalImageHeight;
   const originalPixelWidth = (region.width / 100) * originalImageWidth;
   const originalPixelHeight = (region.height / 100) * originalImageHeight;
   
-  // Scale to current canvas size
-  const scale = canvasWidth / originalImageWidth;
-  const scaleY = canvasHeight / originalImageHeight;
-  
   const left = originalPixelX * scale;
-  const top = originalPixelY * scaleY;
+  const top = originalPixelY * scale;
   const targetWidth = originalPixelWidth * scale;
-  const targetHeight = originalPixelHeight * scaleY;
+  const targetHeight = originalPixelHeight * scale;
+  
+  console.log('Position calculation:', {
+    regionPercent: region,
+    originalPixels: { x: originalPixelX, y: originalPixelY, w: originalPixelWidth, h: originalPixelHeight },
+    scale,
+    canvasPixels: { left, top, width: targetWidth, height: targetHeight }
+  });
   
   // Calculate scale to match the drawn region size
   // Base card is 200x140
