@@ -973,7 +973,7 @@ export default function SchematicEditor({
     canvas.on('mouse:move', (opt) => {
       const evt = opt.e as MouseEvent;
       
-      // Handle connection line drawing mode - show preview line
+      // Handle connection line drawing mode - show preview line with cursor snapping
       if (isDrawingConnectionRef.current && connectionLinePointsRef.current.length > 0) {
         let pointer = canvas.getPointer(opt.e);
         
@@ -991,6 +991,8 @@ export default function SchematicEditor({
             
             if (distance < snapThreshold) {
               snappedPoint = { x: snapData.x, y: snapData.y };
+              // Change cursor to indicate snap
+              canvas.defaultCursor = 'crosshair';
               break;
             }
           }
@@ -2365,32 +2367,42 @@ export default function SchematicEditor({
   const createConnectionWithPath = async (fromMeterId: string, toMeterId: string, points: Array<{x: number, y: number}>) => {
     if (!fabricCanvas) return;
     
-    // Store the path points in the database
-    const canvasWidth = fabricCanvas.getWidth();
-    const canvasHeight = fabricCanvas.getHeight();
+    // Save each segment of the polyline as a separate line in schematic_lines
+    for (let i = 0; i < points.length - 1; i++) {
+      const { error } = await supabase
+        .from("schematic_lines")
+        .insert({
+          schematic_id: schematicId,
+          from_x: points[i].x,
+          from_y: points[i].y,
+          to_x: points[i + 1].x,
+          to_y: points[i + 1].y,
+          color: '#3b82f6',
+          stroke_width: 3
+        });
+      
+      if (error) {
+        toast.error("Failed to save connection segment");
+        console.error(error);
+        return;
+      }
+    }
     
-    // Convert points to percentages for storage
-    const pathData = points.map(p => ({
-      x: (p.x / canvasWidth) * 100,
-      y: (p.y / canvasHeight) * 100
-    }));
-    
-    const { error } = await supabase
+    // Also save the meter connection relationship
+    const { error: connError } = await supabase
       .from('meter_connections')
       .insert({
-        parent_meter_id: fromMeterId,
-        child_meter_id: toMeterId,
+        parent_meter_id: toMeterId,
+        child_meter_id: fromMeterId,
         connection_type: 'direct',
       });
     
-    if (error) {
-      toast.error("Failed to save connection");
-      console.error(error);
-    } else {
-      // Refresh the meter positions to trigger re-render
-      fetchLines();
-      fetchMeterPositions();
+    if (connError) {
+      console.error("Failed to save meter connection:", connError);
     }
+    
+    // Refresh the lines to show the new connection
+    await fetchLines();
   };
 
   const handleMeterClickForConnection = (meterId: string, x: number, y: number) => {
