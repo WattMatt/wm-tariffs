@@ -53,88 +53,83 @@ export function MeterFormFields({
           />
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor={`${idPrefix}_name`}>NAME *</Label>
-          <Input 
-            id={`${idPrefix}_name`}
-            name="name" 
-            required 
-            defaultValue={cleanValue(defaultValues.name)}
-            placeholder="ACKERMANS"
-            className={hasNotVisible(defaultValues.name) ? 'border-orange-500' : ''}
-          />
-        </div>
+      <div className="space-y-2">
+        <Label htmlFor={`${idPrefix}_name`}>NAME</Label>
+        <Input 
+          id={`${idPrefix}_name`}
+          name="name" 
+          defaultValue={cleanValue(defaultValues.name)}
+          placeholder="ACKERMANS"
+          className={hasNotVisible(defaultValues.name) ? 'border-orange-500' : ''}
+        />
+      </div>
 
-        <div className="space-y-2">
-          <Label htmlFor={`${idPrefix}_area`}>AREA</Label>
-          <Input 
-            id={`${idPrefix}_area`}
-            name="area" 
-            defaultValue={cleanValue(defaultValues.area)}
-            placeholder="187m²"
-            className={hasNotVisible(defaultValues.area) ? 'border-orange-500' : ''}
-          />
-        </div>
+      <div className="space-y-2">
+        <Label htmlFor={`${idPrefix}_area`}>AREA</Label>
+        <Input 
+          id={`${idPrefix}_area`}
+          name="area" 
+          defaultValue={cleanValue(defaultValues.area)}
+          placeholder="187m²"
+          className={hasNotVisible(defaultValues.area) ? 'border-orange-500' : ''}
+        />
+      </div>
 
-        <div className="space-y-2">
-          <Label htmlFor={`${idPrefix}_rating`}>RATING *</Label>
-          <Input 
-            id={`${idPrefix}_rating`}
-            name="rating" 
-            required 
-            defaultValue={cleanValue(defaultValues.rating)}
-            placeholder="80A TP"
-          />
-        </div>
+      <div className="space-y-2">
+        <Label htmlFor={`${idPrefix}_rating`}>RATING</Label>
+        <Input 
+          id={`${idPrefix}_rating`}
+          name="rating" 
+          defaultValue={cleanValue(defaultValues.rating)}
+          placeholder="80A TP"
+        />
+      </div>
 
-        <div className="space-y-2 col-span-2">
-          <Label htmlFor={`${idPrefix}_cable_specification`}>
-            {showLocationAndTariff ? 'CABLE' : 'CABLE SPECIFICATION'} *
-          </Label>
-          <Input 
-            id={`${idPrefix}_cable_specification`}
-            name="cable_specification" 
-            required 
-            defaultValue={cleanValue(defaultValues.cable_specification)}
-            placeholder="4C x 16mm² ALU ECC CABLE"
-          />
-        </div>
+      <div className="space-y-2 col-span-2">
+        <Label htmlFor={`${idPrefix}_cable_specification`}>
+          {showLocationAndTariff ? 'CABLE' : 'CABLE SPECIFICATION'}
+        </Label>
+        <Input 
+          id={`${idPrefix}_cable_specification`}
+          name="cable_specification" 
+          defaultValue={cleanValue(defaultValues.cable_specification)}
+          placeholder="4C x 16mm² ALU ECC CABLE"
+        />
+      </div>
 
-        <div className="space-y-2">
-          <Label htmlFor={`${idPrefix}_serial_number`} className="flex items-center gap-2">
-            {showLocationAndTariff ? 'SERIAL' : 'SERIAL NUMBER'} * 
-            {!showLocationAndTariff && (
-              <Badge variant="destructive" className="text-xs">VERIFY TWICE</Badge>
-            )}
-          </Label>
-          <Input 
-            id={`${idPrefix}_serial_number`}
-            name="serial_number" 
-            required 
-            defaultValue={cleanValue(defaultValues.serial_number)}
-            placeholder="34020113A"
-            className={`font-mono text-lg ${!showLocationAndTariff ? 'border-red-300 focus:border-red-500' : ''} ${hasNotVisible(defaultValues.serial_number) ? 'border-orange-500' : ''}`}
-          />
-        </div>
+      <div className="space-y-2">
+        <Label htmlFor={`${idPrefix}_serial_number`} className="flex items-center gap-2">
+          {showLocationAndTariff ? 'SERIAL' : 'SERIAL NUMBER'}
+          {!showLocationAndTariff && (
+            <Badge variant="destructive" className="text-xs">VERIFY TWICE</Badge>
+          )}
+        </Label>
+        <Input 
+          id={`${idPrefix}_serial_number`}
+          name="serial_number" 
+          defaultValue={cleanValue(defaultValues.serial_number)}
+          placeholder="34020113A"
+          className={`font-mono text-lg ${!showLocationAndTariff ? 'border-red-300 focus:border-red-500' : ''} ${hasNotVisible(defaultValues.serial_number) ? 'border-orange-500' : ''}`}
+        />
+      </div>
 
-        <div className="space-y-2">
-          <Label htmlFor={`${idPrefix}_ct_type`}>
-            {showLocationAndTariff ? 'CT' : 'CT TYPE'} *
-          </Label>
-          <Input 
-            id={`${idPrefix}_ct_type`}
-            name="ct_type" 
-            required 
-            defaultValue={cleanValue(defaultValues.ct_type)}
-            placeholder="DOL or 150/5A"
-          />
-        </div>
+      <div className="space-y-2">
+        <Label htmlFor={`${idPrefix}_ct_type`}>
+          {showLocationAndTariff ? 'CT' : 'CT TYPE'}
+        </Label>
+        <Input 
+          id={`${idPrefix}_ct_type`}
+          name="ct_type" 
+          defaultValue={cleanValue(defaultValues.ct_type)}
+          placeholder="DOL or 150/5A"
+        />
+      </div>
 
-        <div className="space-y-2">
-          <Label htmlFor={`${idPrefix}_meter_type`}>
-            {showLocationAndTariff ? 'Meter Type' : 'METER TYPE'} *
-          </Label>
-          <Select name="meter_type" required defaultValue={defaultValues.meter_type || 'tenant_meter'}>
+      <div className="space-y-2">
+        <Label htmlFor={`${idPrefix}_meter_type`}>
+          {showLocationAndTariff ? 'Meter Type' : 'METER TYPE'}
+        </Label>
+        <Select name="meter_type" defaultValue={defaultValues.meter_type || 'tenant_meter'}>
             <SelectTrigger className="bg-background">
               <SelectValue placeholder="Select meter type" />
             </SelectTrigger>

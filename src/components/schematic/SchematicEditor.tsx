@@ -2418,7 +2418,30 @@ export default function SchematicEditor({
             }
             
             // Create meter in database (with extracted data or empty)
-            const meterNumber = extractedMeterData?.meter_number || `METER-${Date.now()}-${i}`;
+            // Generate a unique meter number if none was extracted
+            let meterNumber = extractedMeterData?.meter_number;
+            
+            if (!meterNumber) {
+              // Generate a unique meter number: Check existing meters and create sequential number
+              const { data: existingMeters } = await supabase
+                .from("meters")
+                .select("meter_number")
+                .eq("site_id", siteId)
+                .like("meter_number", "AUTO-%");
+              
+              // Find the next available AUTO-METER number
+              const autoNumbers = (existingMeters || [])
+                .map(m => {
+                  const match = m.meter_number.match(/AUTO-METER-(\d+)/);
+                  return match ? parseInt(match[1], 10) : 0;
+                })
+                .filter(n => n > 0);
+              
+              const nextNumber = autoNumbers.length > 0 ? Math.max(...autoNumbers) + 1 : 1;
+              meterNumber = `AUTO-METER-${String(nextNumber).padStart(3, '0')}`;
+              
+              toast.info(`No meter number found - generated ${meterNumber}`);
+            }
             
             // Validate meter_type - use bulk_meter as default
             let meterType = extractedMeterData?.meter_type || "bulk_meter";
