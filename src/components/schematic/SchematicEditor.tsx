@@ -2408,43 +2408,10 @@ export default function SchematicEditor({
 
   return (
     <div className="space-y-4">
-      {/* First row: Scan All and Select Regions with Save/Edit buttons */}
+      {/* First row: Main action buttons and Save/Edit buttons */}
       <div className="flex gap-2 items-start justify-between">
-        {/* Left side: Scan buttons and selection badges */}
+        {/* Left side: Main action buttons */}
         <div className="flex gap-2 items-center flex-wrap flex-1">
-          {selectedExtractedMeterIds.length > 0 && (
-            <>
-              <Badge variant="secondary" className="px-3">
-                {selectedExtractedMeterIds.length} selected
-              </Badge>
-              <Button 
-                onClick={handleSelectAllMeters} 
-                variant="outline" 
-                size="sm"
-              >
-                {selectedExtractedMeterIds.length === extractedMeters.length ? 'Deselect All' : 'Select All'}
-              </Button>
-              <Button 
-                onClick={handleBulkApprove} 
-                variant="default" 
-                size="sm"
-                className="gap-2"
-              >
-                <Check className="w-4 h-4" />
-                Approve {selectedExtractedMeterIds.length}
-              </Button>
-              <Button 
-                onClick={handleBulkDelete} 
-                variant="destructive" 
-                size="sm"
-                className="gap-2"
-              >
-                <Trash2 className="w-4 h-4" />
-                Delete {selectedExtractedMeterIds.length}
-              </Button>
-              <div className="h-6 w-px bg-border" />
-            </>
-          )}
           <Button onClick={handleScanAll} disabled={!isEditMode || isSaving} variant="outline" size="sm">
             <Scan className="w-4 h-4 mr-2" />
             {(() => {
@@ -2561,6 +2528,40 @@ export default function SchematicEditor({
           </Button>
         </div>
       </div>
+
+      {/* Selection controls row - appears when extracted meters are selected */}
+      {selectedExtractedMeterIds.length > 0 && (
+        <div className="flex gap-2 items-center flex-wrap bg-muted/30 p-2 rounded-lg border border-border">
+          <Badge variant="secondary" className="px-3">
+            {selectedExtractedMeterIds.length} selected
+          </Badge>
+          <Button 
+            onClick={handleSelectAllMeters} 
+            variant="outline" 
+            size="sm"
+          >
+            {selectedExtractedMeterIds.length === extractedMeters.length ? 'Deselect All' : 'Select All'}
+          </Button>
+          <Button 
+            onClick={handleBulkApprove} 
+            variant="default" 
+            size="sm"
+            className="gap-2"
+          >
+            <Check className="w-4 h-4" />
+            Approve {selectedExtractedMeterIds.length}
+          </Button>
+          <Button 
+            onClick={handleBulkDelete} 
+            variant="destructive" 
+            size="sm"
+            className="gap-2"
+          >
+            <Trash2 className="w-4 h-4" />
+            Delete {selectedExtractedMeterIds.length}
+          </Button>
+        </div>
+      )}
 
       {/* Second row: Action buttons */}
       <div className="flex gap-2 items-center flex-wrap">
