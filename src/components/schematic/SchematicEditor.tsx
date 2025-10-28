@@ -1182,10 +1182,6 @@ export default function SchematicEditor({
 
     setFabricCanvas(canvas);
 
-    return () => {
-      canvas.dispose();
-    };
-
     // Load background image
     FabricImage.fromURL(schematicUrl, {
       crossOrigin: 'anonymous'
