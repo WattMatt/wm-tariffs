@@ -218,6 +218,16 @@ async function renderMeterCardOnCanvas(
   canvasWidth: number,
   canvasHeight: number
 ): Promise<any> {
+  // Determine border color based on meter status
+  let borderColor = '#ef4444'; // Red for unconfirmed (default)
+  if (meter.status === 'approved') {
+    borderColor = '#22c55e'; // Green for confirmed
+  } else if (meter.status === 'rejected') {
+    borderColor = '#ef4444'; // Red for rejected
+  } else {
+    borderColor = '#f59e0b'; // Orange for needs review
+  }
+  
   // Create meter card image from meter data
   const fields = [
     { label: 'NO', value: meter.meter_number || 'N/A' },
@@ -227,7 +237,7 @@ async function renderMeterCardOnCanvas(
     { label: 'SERIAL', value: meter.serial_number || 'N/A' },
   ];
   
-  const meterCardDataUrl = await createMeterCardImage(fields, '#0e74dd', 200, 140);
+  const meterCardDataUrl = await createMeterCardImage(fields, borderColor, 200, 140);
   
   // Convert extracted region percentage to canvas pixels
   const region = meter.extractedRegion;
@@ -237,7 +247,7 @@ async function renderMeterCardOnCanvas(
   }
   
   const left = (region.x / 100) * canvasWidth;
-  const top = (region.y / 100) * canvasWidth;
+  const top = (region.y / 100) * canvasHeight; // FIXED: was using canvasWidth
   const targetWidth = (region.width / 100) * canvasWidth;
   const targetHeight = (region.height / 100) * canvasHeight;
   
@@ -259,10 +269,10 @@ async function renderMeterCardOnCanvas(
         hasControls: true,
         hasBorders: true,
         lockRotation: true,
-        cornerColor: '#0e74dd',
+        cornerColor: borderColor,
         cornerSize: 12,
         transparentCorners: false,
-        borderColor: '#0e74dd',
+        borderColor: borderColor,
       });
       
       // Store meter index for reference
