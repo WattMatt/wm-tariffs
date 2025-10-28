@@ -348,6 +348,8 @@ export default function SchematicEditor({
   const [isEditMeterDialogOpen, setIsEditMeterDialogOpen] = useState(false);
   const [isConfirmMeterDialogOpen, setIsConfirmMeterDialogOpen] = useState(false);
   const [editingMeter, setEditingMeter] = useState<any>(null);
+  const [repositioningMeter, setRepositioningMeter] = useState<{ meterId?: string, positionId?: string, meterIndex?: number, isSaved: boolean } | null>(null);
+  const [repositionStartPoint, setRepositionStartPoint] = useState<{ x: number; y: number } | null>(null);
   
   // Legend visibility toggles
   const [legendVisibility, setLegendVisibility] = useState({
@@ -435,6 +437,15 @@ export default function SchematicEditor({
         lastY = evt.clientY;
         canvas.selection = false;
         canvas.defaultCursor = 'grab';
+        evt.preventDefault();
+        evt.stopPropagation();
+        return;
+      }
+      
+      // REPOSITIONING MODE: Handle drawing new region for meter card
+      if (repositioningMeter && evt.button === 0) {
+        const pointer = canvas.getPointer(opt.e);
+        setRepositionStartPoint(pointer);
         evt.preventDefault();
         evt.stopPropagation();
         return;
@@ -632,6 +643,32 @@ export default function SchematicEditor({
     canvas.on('mouse:move', (opt) => {
       const currentTool = activeToolRef.current;
       
+      // REPOSITIONING MODE: Show preview rectangle
+      if (repositioningMeter && repositionStartPoint) {
+        const pointer = canvas.getPointer(opt.e);
+        const existingPreview = canvas.getObjects().find((obj: any) => obj.repositionPreview);
+        if (existingPreview) {
+          canvas.remove(existingPreview);
+        }
+        
+        const previewRect = new Rect({
+          left: Math.min(repositionStartPoint.x, pointer.x),
+          top: Math.min(repositionStartPoint.y, pointer.y),
+          width: Math.abs(pointer.x - repositionStartPoint.x),
+          height: Math.abs(pointer.y - repositionStartPoint.y),
+          fill: 'rgba(34, 197, 94, 0.1)',
+          stroke: 'rgb(34, 197, 94)',
+          strokeWidth: 3,
+          strokeDashArray: [10, 5],
+          selectable: false,
+          evented: false,
+        });
+        (previewRect as any).repositionPreview = true;
+        canvas.add(previewRect);
+        canvas.renderAll();
+        return;
+      }
+      
       if (isPanningLocal) {
         const evt = opt.e as MouseEvent;
         evt.preventDefault();
@@ -700,6 +737,94 @@ export default function SchematicEditor({
 
     canvas.on('mouse:up', async (opt) => {
       const evt = opt.e as MouseEvent;
+      
+      // REPOSITIONING MODE: Apply new position and scale
+      if (repositioningMeter && repositionStartPoint) {
+        const pointer = canvas.getPointer(opt.e);
+        const canvasWidth = canvas.getWidth();
+        const canvasHeight = canvas.getHeight();
+        
+        const regionLeft = Math.min(repositionStartPoint.x, pointer.x);
+        const regionTop = Math.min(repositionStartPoint.y, pointer.y);
+        const regionWidth = Math.abs(pointer.x - repositionStartPoint.x);
+        const regionHeight = Math.abs(pointer.y - repositionStartPoint.y);
+        
+        // Check minimum size
+        if (regionWidth < 20 || regionHeight < 20) {
+          toast.error('Region too small - draw a larger area');
+          // Clean up preview
+          const existingPreview = canvas.getObjects().find((obj: any) => obj.repositionPreview);
+          if (existingPreview) {
+            canvas.remove(existingPreview);
+          }
+          canvas.renderAll();
+          setRepositionStartPoint(null);
+          return;
+        }
+        
+        // Calculate new position and scale
+        const newXPercent = (regionLeft / canvasWidth) * 100;
+        const newYPercent = (regionTop / canvasHeight) * 100;
+        const baseCardWidth = 200;
+        const baseCardHeight = 140;
+        const newScaleX = regionWidth / baseCardWidth;
+        const newScaleY = regionHeight / baseCardHeight;
+        
+        if (repositioningMeter.isSaved) {
+          // Update saved meter in database
+          const { error } = await supabase
+            .from("meter_positions")
+            .update({
+              x_position: newXPercent,
+              y_position: newYPercent,
+              scale_x: newScaleX,
+              scale_y: newScaleY,
+            })
+            .eq("id", repositioningMeter.positionId);
+          
+          if (!error) {
+            toast.success("Meter card repositioned and rescaled");
+            await fetchMeterPositions();
+          } else {
+            toast.error("Failed to update meter card");
+          }
+        } else {
+          // Update extracted meter in state
+          setExtractedMeters((prev) => {
+            const updated = [...prev];
+            const index = repositioningMeter.meterIndex!;
+            updated[index] = {
+              ...updated[index],
+              extractedRegion: {
+                x: newXPercent,
+                y: newYPercent,
+                width: (regionWidth / canvasWidth) * 100,
+                height: (regionHeight / canvasHeight) * 100,
+              },
+              position: { x: newXPercent, y: newYPercent },
+              scale_x: newScaleX,
+              scale_y: newScaleY,
+            };
+            onExtractedMetersUpdate?.(updated);
+            return updated;
+          });
+          
+          toast.success("Meter card repositioned and rescaled");
+        }
+        
+        // Restore visibility
+        canvas.getObjects().forEach((obj: any) => {
+          obj.set({ opacity: 1 });
+          if (obj.repositionPreview) {
+            canvas.remove(obj);
+          }
+        });
+        canvas.renderAll();
+        
+        setRepositioningMeter(null);
+        setRepositionStartPoint(null);
+        return;
+      }
       
       if (isPanningLocal) {
         isPanningLocal = false;
@@ -2558,6 +2683,31 @@ export default function SchematicEditor({
                 </div>
 
                 <div className="flex gap-2 pt-4 border-t">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setIsConfirmMeterDialogOpen(false);
+                      if (selectedMeterIndex !== null) {
+                        setRepositioningMeter({ 
+                          meterIndex: selectedMeterIndex,
+                          isSaved: false 
+                        });
+                        // Dim other objects
+                        fabricCanvas?.getObjects().forEach((obj: any) => {
+                          const meterCard = meterCardObjects.get(selectedMeterIndex);
+                          if (obj !== meterCard) {
+                            obj.set({ opacity: 0.2 });
+                          }
+                        });
+                        fabricCanvas?.renderAll();
+                        toast.info("Draw a rectangle to reposition and rescale this meter card");
+                      }
+                    }}
+                    className="flex-1"
+                  >
+                    Reposition & Rescale
+                  </Button>
                   <Button type="submit" className="flex-1 bg-green-600 hover:bg-green-700">
                     <Check className="h-4 w-4 mr-2" />
                     Confirm & Approve
@@ -2752,6 +2902,34 @@ export default function SchematicEditor({
               </div>
 
               <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setIsEditMeterDialogOpen(false);
+                    // Find the position ID for this meter
+                    const position = meterPositions.find(p => p.meter_id === editingMeter.id);
+                    if (position) {
+                      setRepositioningMeter({ 
+                        meterId: editingMeter.id, 
+                        positionId: position.id,
+                        isSaved: true 
+                      });
+                      // Dim other objects
+                      fabricCanvas?.getObjects().forEach((obj: any) => {
+                        const objData = obj.get('data');
+                        if (!objData || objData.meterId !== editingMeter.id) {
+                          obj.set({ opacity: 0.2 });
+                        }
+                      });
+                      fabricCanvas?.renderAll();
+                      toast.info("Draw a rectangle to reposition and rescale this meter card");
+                    }
+                  }}
+                  className="flex-1"
+                >
+                  Reposition & Rescale
+                </Button>
                 <Button type="submit" className="flex-1">
                   Update Meter
                 </Button>
@@ -2814,6 +2992,18 @@ export default function SchematicEditor({
           )}
         </DialogContent>
       </Dialog>
+
+      {repositioningMeter && (
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-background/95 border-2 border-green-500 p-6 rounded-lg shadow-2xl z-50 text-center">
+          <h3 className="text-lg font-semibold mb-2">Reposition & Rescale Meter Card</h3>
+          <p className="text-muted-foreground mb-4">
+            Draw a rectangle around the desired area for this meter card.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Press <kbd className="px-2 py-1 bg-muted rounded">ESC</kbd> to cancel
+          </p>
+        </div>
+      )}
 
       {selectedMeterId && (
         <CsvImportDialog
