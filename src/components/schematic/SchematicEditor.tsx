@@ -523,6 +523,9 @@ export default function SchematicEditor({
   // Ref for selected meter IDs to prevent stale closures in Fabric.js handlers
   const selectedMeterIdsRef = useRef<string[]>([]);
   
+  // Ref for selection mode to prevent stale closures in Fabric.js handlers
+  const isSelectionModeRef = useRef(false);
+  
   // Legend visibility toggles
   const [legendVisibility, setLegendVisibility] = useState({
     bulk_meter: true,
@@ -592,6 +595,11 @@ export default function SchematicEditor({
   useEffect(() => {
     selectedMeterIdsRef.current = selectedMeterIds;
   }, [selectedMeterIds]);
+
+  // Sync isSelectionMode to ref
+  useEffect(() => {
+    isSelectionModeRef.current = isSelectionMode;
+  }, [isSelectionMode]);
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -1717,7 +1725,7 @@ export default function SchematicEditor({
           
           // Add double-click handler to open edit dialog
           img.on('mousedblclick', () => {
-            if (!isEditMode) return;
+            if (!isEditMode || isSelectionModeRef.current) return;
             // Map scanned_snippet_url to scannedImageSnippet for the form
             setEditingMeter({
               ...meter,
@@ -1730,8 +1738,8 @@ export default function SchematicEditor({
           img.on('mousedown', () => {
             if (activeTool === 'connection') {
               handleMeterClickForConnection(pos.meter_id, x, y);
-            } else if (!isEditMode && activeTool === 'select') {
-              // View meter details in normal mode
+            } else if (!isEditMode && activeTool === 'select' && !isSelectionModeRef.current) {
+              // View meter details in normal mode (but not in selection mode)
               setViewingMeter(meter);
               setIsViewMeterDialogOpen(true);
             }
