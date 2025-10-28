@@ -497,6 +497,7 @@ export default function SchematicEditor({
   const [selectedMeterIndex, setSelectedMeterIndex] = useState<number | null>(null);
   const [selectedMeterId, setSelectedMeterId] = useState<string | null>(null);
   const [selectedMeterIds, setSelectedMeterIds] = useState<string[]>([]); // For bulk selection with Shift+click
+  const [isSelectionMode, setIsSelectionMode] = useState(false); // Track whether selection mode is active
   const [zoom, setZoom] = useState(1);
   const [isEditMeterDialogOpen, setIsEditMeterDialogOpen] = useState(false);
   const [isConfirmMeterDialogOpen, setIsConfirmMeterDialogOpen] = useState(false);
@@ -2551,11 +2552,11 @@ export default function SchematicEditor({
             Draw Regions {drawnRegions.length > 0 && `(${drawnRegions.length})`}
           </Button>
           <Button
-            variant={(selectedRegionIndices.length > 0 || selectedMeterIds.length > 0) ? "default" : "outline"}
+            variant={isSelectionMode ? "default" : "outline"}
             onClick={() => {
               const hasSelections = selectedRegionIndices.length > 0 || selectedMeterIds.length > 0;
               
-              if (hasSelections) {
+              if (isSelectionMode && hasSelections) {
                 // Clear all selections and reset visual styling
                 if (fabricCanvas) {
                   fabricCanvas.getObjects().forEach((obj: any) => {
@@ -2574,9 +2575,14 @@ export default function SchematicEditor({
                 }
                 setSelectedRegionIndices([]);
                 setSelectedMeterIds([]);
+                setIsSelectionMode(false);
                 toast.info("Selection cleared");
               } else {
-                toast.info("Shift+click on regions or meter cards to select them", { duration: 4000 });
+                // Toggle selection mode
+                setIsSelectionMode(!isSelectionMode);
+                if (!isSelectionMode) {
+                  toast.info("Shift+click on regions or meter cards to select them", { duration: 4000 });
+                }
               }
             }}
             disabled={!isEditMode}
