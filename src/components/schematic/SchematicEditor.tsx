@@ -738,23 +738,34 @@ export default function SchematicEditor({
           
           setSelectedMeterIds(prev => {
             if (prev.includes(meterId)) {
-              // Deselect
-              (target as any).set({ 
-                borderColor: 'transparent',
-                borderScaleFactor: 1,
-                borderOpacityWhenMoving: 0
-              });
+              // Deselect - remove selection rectangle
+              const selectionRect = canvas.getObjects().find((obj: any) => 
+                obj.type === 'rect' && obj.selectionMarker && obj.data?.meterId === meterId
+              );
+              if (selectionRect) {
+                canvas.remove(selectionRect);
+              }
               canvas.renderAll();
               const updated = prev.filter(id => id !== meterId);
               toast.info(`Meter deselected (${updated.length} selected)`);
               return updated;
             } else {
-              // Select
-              (target as any).set({ 
-                borderColor: '#10b981',
-                borderScaleFactor: 3,
-                borderOpacityWhenMoving: 1
+              // Select - add green selection rectangle overlay
+              const bounds = target.getBoundingRect();
+              const selectionRect = new Rect({
+                left: bounds.left,
+                top: bounds.top,
+                width: bounds.width,
+                height: bounds.height,
+                fill: 'transparent',
+                stroke: '#10b981',
+                strokeWidth: 4,
+                selectable: false,
+                evented: false,
+                data: { meterId: meterId }
               });
+              (selectionRect as any).selectionMarker = true;
+              canvas.add(selectionRect);
               canvas.renderAll();
               const updated = [...prev, meterId];
               toast.info(`Meter selected (${updated.length} selected)`);
@@ -1781,7 +1792,54 @@ export default function SchematicEditor({
 
           // Handle dragging and scaling in edit mode
           if (isEditMode) {
+            // Update selection rectangle during movement
+            img.on('moving', () => {
+              const selectionRect = fabricCanvas.getObjects().find((obj: any) => 
+                obj.type === 'rect' && obj.selectionMarker && obj.data?.meterId === pos.meter_id
+              );
+              if (selectionRect) {
+                const bounds = img.getBoundingRect();
+                selectionRect.set({
+                  left: bounds.left,
+                  top: bounds.top,
+                  width: bounds.width,
+                  height: bounds.height
+                });
+              }
+            });
+            
+            // Update selection rectangle during scaling
+            img.on('scaling', () => {
+              const selectionRect = fabricCanvas.getObjects().find((obj: any) => 
+                obj.type === 'rect' && obj.selectionMarker && obj.data?.meterId === pos.meter_id
+              );
+              if (selectionRect) {
+                const bounds = img.getBoundingRect();
+                selectionRect.set({
+                  left: bounds.left,
+                  top: bounds.top,
+                  width: bounds.width,
+                  height: bounds.height
+                });
+              }
+            });
+            
             img.on('modified', async () => {
+              // Update selection rectangle after modification
+              const selectionRect = fabricCanvas.getObjects().find((obj: any) => 
+                obj.type === 'rect' && obj.selectionMarker && obj.data?.meterId === pos.meter_id
+              );
+              if (selectionRect) {
+                const bounds = img.getBoundingRect();
+                selectionRect.set({
+                  left: bounds.left,
+                  top: bounds.top,
+                  width: bounds.width,
+                  height: bounds.height
+                });
+                fabricCanvas.renderAll();
+              }
+              
               // Convert pixel positions back to percentages for storage
               const canvasWidth = fabricCanvas.getWidth();
               const canvasHeight = fabricCanvas.getHeight();
@@ -2605,12 +2663,9 @@ export default function SchematicEditor({
                     if (obj.type === 'rect' && obj.regionId) {
                       obj.set({ stroke: '#3b82f6', strokeWidth: 2 });
                     }
-                    if (obj.type === 'image' && obj.data?.meterId) {
-                      obj.set({ 
-                        borderColor: 'transparent',
-                        borderScaleFactor: 1,
-                        borderOpacityWhenMoving: 0
-                      });
+                    // Remove selection marker rectangles
+                    if (obj.type === 'rect' && obj.selectionMarker) {
+                      fabricCanvas.remove(obj);
                     }
                   });
                   fabricCanvas.renderAll();
@@ -2750,6 +2805,19 @@ export default function SchematicEditor({
                 size="sm"
                 onClick={async () => {
                   if (!confirm(`Delete ${selectedMeterIds.length} selected meter(s)? This will also delete all associated readings and positions.`)) return;
+                  
+                  // Remove selection rectangles from canvas
+                  if (fabricCanvas) {
+                    selectedMeterIds.forEach(meterId => {
+                      const selectionRect = fabricCanvas.getObjects().find((obj: any) => 
+                        obj.type === 'rect' && obj.selectionMarker && obj.data?.meterId === meterId
+                      );
+                      if (selectionRect) {
+                        fabricCanvas.remove(selectionRect);
+                      }
+                    });
+                    fabricCanvas.renderAll();
+                  }
                   
                   // Delete all selected meters
                   for (const meterId of selectedMeterIds) {
