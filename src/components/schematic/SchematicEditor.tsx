@@ -1988,9 +1988,7 @@ export default function SchematicEditor({
           });
           
           // Hide rotation control
-          if (isEditMode) {
-            img.setControlVisible('mtr', false);
-          }
+          img.setControlVisible('mtr', false);
           
           // Store the actual meter data
           img.set('data', { 
@@ -2213,9 +2211,7 @@ export default function SchematicEditor({
           });
           
           // Hide rotation control
-          if (isEditMode) {
-            img.setControlVisible('mtr', false);
-          }
+          img.setControlVisible('mtr', false);
           
           img.set('data', { meterId: pos.meter_id, positionId: pos.id });
           
