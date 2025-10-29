@@ -332,24 +332,30 @@ export function MeterConnectionsManager({ open, onOpenChange, siteId, schematicI
                       className="p-3 border rounded-lg space-y-2 hover:bg-accent/50 transition-colors"
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 space-y-2">
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <Badge variant="outline" className="text-xs">
+                        <div className="flex-1 space-y-3">
+                          {/* Parent meter row */}
+                          <div className="flex items-center justify-between gap-3">
+                            <Badge variant="outline" className="text-xs whitespace-nowrap">
                               {getMeterType(connection.parent_meter_id)}
                             </Badge>
-                            <ArrowRight className="h-3 w-3" />
-                            <Badge variant="outline" className="text-xs">
-                              {getMeterType(connection.child_meter_id)}
-                            </Badge>
+                            <span className="text-sm font-medium text-right flex-1">
+                              {getMeterLabel(connection.parent_meter_id)}
+                            </span>
                           </div>
                           
-                          <div className="space-y-1 pl-1">
-                            <div className="text-sm font-medium">
-                              {getMeterLabel(connection.parent_meter_id)}
-                            </div>
-                            <div className="text-sm text-muted-foreground">
+                          {/* Arrow row */}
+                          <div className="flex justify-center">
+                            <ArrowRight className="h-4 w-4 text-muted-foreground rotate-90" />
+                          </div>
+
+                          {/* Child meter row */}
+                          <div className="flex items-center justify-between gap-3">
+                            <Badge variant="outline" className="text-xs whitespace-nowrap">
+                              {getMeterType(connection.child_meter_id)}
+                            </Badge>
+                            <span className="text-sm text-right flex-1">
                               {getMeterLabel(connection.child_meter_id)}
-                            </div>
+                            </span>
                           </div>
                         </div>
 
