@@ -2234,11 +2234,14 @@ export default function SchematicEditor({
   useEffect(() => {
     if (!fabricCanvas) return;
     
-    // Clear all objects except the background schematic image
+    // Clear all objects except the background schematic image, connection lines, and connection nodes
     const objects = fabricCanvas.getObjects();
     objects.forEach(obj => {
-      // Keep only the marked background image
-      if (!(obj as any).isBackgroundImage) {
+      // Keep background image, connection lines, and connection nodes
+      const shouldKeep = (obj as any).isBackgroundImage || 
+                        (obj as any).isConnectionLine || 
+                        (obj as any).isConnectionNode;
+      if (!shouldKeep) {
         fabricCanvas.remove(obj);
       }
     });
