@@ -550,16 +550,22 @@ export default function SchematicEditor({
           }
         });
       } else {
-        // In other modes: restore selectability for all objects
-        fabricCanvas.selection = false; // Disable drag selection
+        // In other modes: disable drag selection box
+        fabricCanvas.selection = false;
         fabricCanvas.getObjects().forEach((obj: any) => {
-          obj.selectable = false; // Prevent object dragging
-          obj.evented = true; // Keep events for click handling
+          // Allow meter cards to be draggable in edit mode
+          if (obj.type === 'image' && obj.data?.meterId && isEditMode) {
+            obj.selectable = true;
+            obj.evented = true;
+          } else {
+            obj.selectable = false;
+            obj.evented = true; // Keep events for click handling
+          }
         });
       }
       fabricCanvas.renderAll();
     }
-  }, [activeTool, fabricCanvas]);
+  }, [activeTool, fabricCanvas, isEditMode]);
 
   // Update meter card selectability and controls when edit mode changes
   useEffect(() => {
