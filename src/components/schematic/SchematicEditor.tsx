@@ -498,7 +498,7 @@ export default function SchematicEditor({
   // FABRIC.JS EVENT HANDLER PATTERN: State + Ref for panning
   const [isPanning, setIsPanning] = useState(false);
   const isPanningRef = useRef(false);
-  const [lastPanPoint, setLastPanPoint] = useState<{ x: number; y: number } | null>(null);
+  const lastPanPointRef = useRef<{ x: number; y: number } | null>(null);
 
   // Sync extracted meters from props
   useEffect(() => {
@@ -946,9 +946,10 @@ export default function SchematicEditor({
       // Handle middle mouse button panning (button 1)
       if (evt.button === 1) {
         evt.preventDefault();
-        const pointer = canvas.getPointer(opt.e);
+        evt.stopPropagation();
         setIsPanning(true);
-        setLastPanPoint({ x: pointer.x, y: pointer.y });
+        lastPanPointRef.current = { x: evt.clientX, y: evt.clientY };
+        canvas.selection = false;
         canvas.defaultCursor = 'grabbing';
         canvas.requestRenderAll();
         return;
@@ -1425,14 +1426,18 @@ export default function SchematicEditor({
       let pointer = canvas.getPointer(opt.e);
       
       // Handle panning with middle mouse button
-      if (isPanningRef.current && lastPanPoint) {
+      if (isPanningRef.current && lastPanPointRef.current) {
+        evt.preventDefault();
+        evt.stopPropagation();
         const vpt = canvas.viewportTransform;
         if (vpt) {
-          vpt[4] += pointer.x - lastPanPoint.x;
-          vpt[5] += pointer.y - lastPanPoint.y;
+          const deltaX = evt.clientX - lastPanPointRef.current.x;
+          const deltaY = evt.clientY - lastPanPointRef.current.y;
+          vpt[4] += deltaX;
+          vpt[5] += deltaY;
           canvas.requestRenderAll();
         }
-        setLastPanPoint({ x: pointer.x, y: pointer.y });
+        lastPanPointRef.current = { x: evt.clientX, y: evt.clientY };
         return;
       }
       
@@ -1588,8 +1593,11 @@ export default function SchematicEditor({
       
       // Handle panning end
       if (isPanningRef.current) {
+        evt.preventDefault();
+        evt.stopPropagation();
         setIsPanning(false);
-        setLastPanPoint(null);
+        lastPanPointRef.current = null;
+        canvas.selection = true;
         canvas.defaultCursor = 'default';
         canvas.requestRenderAll();
         return;
