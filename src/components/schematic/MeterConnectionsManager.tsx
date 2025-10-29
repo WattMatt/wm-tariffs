@@ -129,20 +129,52 @@ export function MeterConnectionsManager({ open, onOpenChange, siteId, schematicI
     const connection = connections.find(c => c.id === connectionId);
     if (!connection) return;
 
-    // Delete associated schematic lines
-    const { error: linesError } = await supabase
-      .from('schematic_lines')
-      .delete()
-      .eq('schematic_id', schematicId)
-      .eq('line_type', 'connection')
-      .contains('metadata', { 
-        parent_meter_id: connection.parent_meter_id,
-        child_meter_id: connection.child_meter_id 
-      });
+    console.log('Deleting connection:', connection);
 
-    if (linesError) {
-      console.error('Error deleting schematic lines:', linesError);
-      // Continue anyway to delete the connection
+    // Delete associated schematic lines - find all lines for this connection
+    const { data: linesToDelete, error: fetchError } = await supabase
+      .from('schematic_lines')
+      .select('id')
+      .eq('schematic_id', schematicId)
+      .eq('line_type', 'connection');
+
+    if (fetchError) {
+      console.error('Error fetching schematic lines:', fetchError);
+    }
+
+    // Filter lines that match this connection in metadata
+    const lineIdsToDelete = linesToDelete?.filter((line: any) => {
+      // Need to fetch full records to check metadata
+      return true; // We'll delete by metadata filter instead
+    }).map(l => l.id) || [];
+
+    console.log('Deleting schematic lines for connection');
+
+    // Delete lines using RPC or direct filter on JSONB
+    // Since contains might not work, let's get all lines and filter in memory
+    const { data: allLines } = await supabase
+      .from('schematic_lines')
+      .select('*')
+      .eq('schematic_id', schematicId)
+      .eq('line_type', 'connection');
+
+    const matchingLines = allLines?.filter((line: any) => 
+      line.metadata?.parent_meter_id === connection.parent_meter_id &&
+      line.metadata?.child_meter_id === connection.child_meter_id
+    ) || [];
+
+    console.log('Found matching lines:', matchingLines.length);
+
+    // Delete each matching line
+    for (const line of matchingLines) {
+      const { error: deleteError } = await supabase
+        .from('schematic_lines')
+        .delete()
+        .eq('id', line.id);
+      
+      if (deleteError) {
+        console.error('Error deleting line:', deleteError);
+      }
     }
 
     // Delete the connection
@@ -156,6 +188,7 @@ export function MeterConnectionsManager({ open, onOpenChange, siteId, schematicI
       return;
     }
 
+    console.log('Connection and lines deleted successfully');
     toast.success('Connection and associated lines deleted');
     fetchConnections();
   };
