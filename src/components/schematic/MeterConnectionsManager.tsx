@@ -125,6 +125,27 @@ export function MeterConnectionsManager({ open, onOpenChange, siteId, schematicI
   };
 
   const handleDeleteConnection = async (connectionId: string) => {
+    // First, get the connection details to find associated lines
+    const connection = connections.find(c => c.id === connectionId);
+    if (!connection) return;
+
+    // Delete associated schematic lines
+    const { error: linesError } = await supabase
+      .from('schematic_lines')
+      .delete()
+      .eq('schematic_id', schematicId)
+      .eq('line_type', 'connection')
+      .contains('metadata', { 
+        parent_meter_id: connection.parent_meter_id,
+        child_meter_id: connection.child_meter_id 
+      });
+
+    if (linesError) {
+      console.error('Error deleting schematic lines:', linesError);
+      // Continue anyway to delete the connection
+    }
+
+    // Delete the connection
     const { error } = await supabase
       .from('meter_connections')
       .delete()
@@ -135,7 +156,7 @@ export function MeterConnectionsManager({ open, onOpenChange, siteId, schematicI
       return;
     }
 
-    toast.success('Connection deleted');
+    toast.success('Connection and associated lines deleted');
     fetchConnections();
   };
 

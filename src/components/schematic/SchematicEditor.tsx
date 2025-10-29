@@ -581,6 +581,30 @@ export default function SchematicEditor({
     fetchSchematicLines();
   }, [schematicId, siteId]);
 
+  // Real-time subscription for schematic_lines changes
+  useEffect(() => {
+    const channel = supabase
+      .channel('schematic-lines-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'schematic_lines',
+          filter: `schematic_id=eq.${schematicId}`
+        },
+        () => {
+          console.log('🔄 Schematic lines changed, refreshing...');
+          fetchSchematicLines();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [schematicId]);
+
   // FABRIC.JS EVENT HANDLER PATTERN: Sync activeTool state to ref
   // This ensures canvas event handlers always read the current tool selection
   useEffect(() => {
