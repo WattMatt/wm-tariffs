@@ -1045,8 +1045,6 @@ export default function SchematicEditor({
             top: pointer.y,
             radius: 6,
             fill: '#10b981',
-            stroke: '#ffffff',
-            strokeWidth: 2,
             originX: 'center',
             originY: 'center',
             selectable: false,
