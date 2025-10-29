@@ -937,6 +937,17 @@ export default function SchematicEditor({
     
     // Add to window with capture phase to intercept before Fabric.js
     window.addEventListener('mousedown', handleNativeMouseDown, true);
+    
+    // Add mouseup listener to handle pan end even if mouse is released outside canvas
+    const handleMouseUp = (e: MouseEvent) => {
+      if (e.button === 1 && isPanning) {
+        isPanning = false;
+        lastPanPosition = null;
+        canvas.selection = true;
+        console.log('🖐️ Middle mouse pan ended (window)');
+      }
+    };
+    window.addEventListener('mouseup', handleMouseUp);
 
     // Handle scroll/wheel events for navigation and zoom - CONSISTENT ACROSS ALL MODES
     canvas.on('mouse:wheel', (opt) => {
@@ -1000,6 +1011,8 @@ export default function SchematicEditor({
     let isShiftDragSelecting = false;
     let shiftClickTarget: any = null; // Track target clicked with shift for deferred selection
     let startPoint: { x: number; y: number } | null = null;
+    let isPanning = false;
+    let lastPanPosition: { x: number; y: number } | null = null;
     
     canvas.on('mouse:down', (opt) => {
       const currentTool = activeToolRef.current;
@@ -1017,6 +1030,14 @@ export default function SchematicEditor({
         buttons: evt.buttons
       });
       
+      // Handle middle mouse button for panning
+      if (evt.button === 1) {
+        isPanning = true;
+        lastPanPosition = { x: evt.clientX, y: evt.clientY };
+        canvas.selection = false; // Disable selection while panning
+        console.log('🖐️ Middle mouse pan started');
+        return;
+      }
       
       // Handle connection drawing mode with snap
       if (currentTool === 'connection') {
@@ -1488,6 +1509,18 @@ export default function SchematicEditor({
       const evt = opt.e as MouseEvent;
       let pointer = canvas.getPointer(opt.e);
       
+      // Handle middle mouse button panning
+      if (isPanning && lastPanPosition) {
+        const deltaX = evt.clientX - lastPanPosition.x;
+        const deltaY = evt.clientY - lastPanPosition.y;
+        
+        canvas.relativePan(new Point(deltaX, deltaY));
+        
+        lastPanPosition = { x: evt.clientX, y: evt.clientY };
+        canvas.renderAll();
+        return;
+      }
+      
       // Show/update indicator when spacebar is held
       if (isSpacebarPressedRef.current) {
         const currentColor = indicatorColorRef.current;
@@ -1672,6 +1705,15 @@ export default function SchematicEditor({
 
     canvas.on('mouse:up', async (opt) => {
       const evt = opt.e as MouseEvent;
+      
+      // Handle middle mouse button pan end
+      if (evt.button === 1 && isPanning) {
+        isPanning = false;
+        lastPanPosition = null;
+        canvas.selection = true; // Re-enable selection
+        console.log('🖐️ Middle mouse pan ended');
+        return;
+      }
       
       // Handle shift+drag multi-select completion
       if (isShiftDragSelecting && startPoint) {
@@ -2431,6 +2473,7 @@ export default function SchematicEditor({
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
       window.removeEventListener('mousedown', handleNativeMouseDown, true);
+      window.removeEventListener('mouseup', handleMouseUp);
       canvas.dispose();
     };
   }, [schematicUrl]);
