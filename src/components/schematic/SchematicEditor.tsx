@@ -875,6 +875,87 @@ export default function SchematicEditor({
       if (currentTool === 'connection') {
         let pointer = canvas.getPointer(opt.e);
         
+        // Check if clicking on an existing connection line (to add a node)
+        if (!connectionStartRef.current && target && (target as any).isConnectionLine) {
+          const line = target as Line;
+          const lineCoords = line.calcLinePoints();
+          
+          // Apply snap to create node at click position
+          const snappedPoint = findNearestSnapPoint(canvas, pointer, 15);
+          if (snappedPoint) {
+            pointer = new Point(snappedPoint.x, snappedPoint.y);
+          }
+          
+          // Get the line's start and end points
+          const x1 = line.x1 || 0;
+          const y1 = line.y1 || 0;
+          const x2 = line.x2 || 0;
+          const y2 = line.y2 || 0;
+          
+          // Remove the original line
+          canvas.remove(line);
+          
+          // Create two new line segments
+          const line1 = new Line(
+            [x1, y1, pointer.x, pointer.y],
+            {
+              stroke: '#0ea5e9',
+              strokeWidth: 3,
+              selectable: false,
+              evented: true,
+              hoverCursor: 'crosshair',
+            }
+          );
+          (line1 as any).isConnectionLine = true;
+          
+          const line2 = new Line(
+            [pointer.x, pointer.y, x2, y2],
+            {
+              stroke: '#0ea5e9',
+              strokeWidth: 3,
+              selectable: false,
+              evented: true,
+              hoverCursor: 'crosshair',
+            }
+          );
+          (line2 as any).isConnectionLine = true;
+          
+          // Add lines above background
+          const objects = canvas.getObjects();
+          const backgroundIndex = objects.findIndex(obj => (obj as any).isBackgroundImage);
+          if (backgroundIndex !== -1) {
+            canvas.insertAt(backgroundIndex + 1, line1);
+            canvas.insertAt(backgroundIndex + 2, line2);
+          } else {
+            canvas.add(line1, line2);
+          }
+          
+          // Create draggable node at the split point
+          const node = new Circle({
+            left: pointer.x,
+            top: pointer.y,
+            radius: 8,
+            fill: '#0ea5e9',
+            stroke: '#ffffff',
+            strokeWidth: 2,
+            originX: 'center',
+            originY: 'center',
+            selectable: true,
+            evented: true,
+            hasControls: false,
+            hasBorders: false,
+            hoverCursor: 'move',
+          });
+          (node as any).isConnectionNode = true;
+          (node as any).connectedLines = [line1, line2]; // Store references to connected lines
+          
+          canvas.add(node);
+          canvas.renderAll();
+          
+          toast.success('Node added to line');
+          return;
+        }
+        
         // Apply snap-to-point logic (15px threshold)
         const snappedPoint = findNearestSnapPoint(canvas, pointer, 15);
         if (snappedPoint) {
@@ -917,7 +998,8 @@ export default function SchematicEditor({
               stroke: '#0ea5e9',
               strokeWidth: 3,
               selectable: false,
-              evented: false,
+              evented: true,
+              hoverCursor: 'crosshair',
             }
           );
           (connectionLine as any).isConnectionLine = true;
@@ -1621,7 +1703,35 @@ export default function SchematicEditor({
       }
     });
     
-    // No need for object:moving handler since we removed labels
+    // Handle connection node movement - update connected lines
+    canvas.on('object:moving', (opt) => {
+      if (!opt.target) return;
+      
+      // Handle connection node movement
+      if ((opt.target as any).isConnectionNode) {
+        const node = opt.target as Circle;
+        const connectedLines = (node as any).connectedLines as Line[];
+        
+        if (connectedLines && connectedLines.length > 0) {
+          connectedLines.forEach((line, index) => {
+            if (index === 0) {
+              // First line: update end point to node position
+              line.set({
+                x2: node.left,
+                y2: node.top
+              });
+            } else {
+              // Second line: update start point to node position
+              line.set({
+                x1: node.left,
+                y1: node.top
+              });
+            }
+          });
+          canvas.renderAll();
+        }
+      }
+    });
     
     // Function to handle extraction from a drawn region
     const handleExtractFromRegion = async (canvas: FabricCanvas, rect: any) => {
