@@ -4224,13 +4224,14 @@ export default function SchematicEditor({
 
       {/* Third row: Other Action buttons */}
       <div className="flex gap-2 items-center flex-wrap">
-        {drawnRegions.length > 0 && (
+        {activeTool === "draw" && (
           <>
             <Button 
               onClick={handleScanAll} 
-              disabled={!isEditMode || isSaving} 
+              disabled={!isEditMode || isSaving || drawnRegions.length === 0} 
               variant="outline" 
               size="sm"
+              title={drawnRegions.length === 0 ? "Draw regions first to scan" : ""}
             >
               <Scan className="w-4 h-4 mr-2" />
               {(() => {
@@ -4246,7 +4247,7 @@ export default function SchematicEditor({
             <Button
               variant="destructive"
               onClick={handleClearRegions}
-              disabled={!isEditMode}
+              disabled={!isEditMode || drawnRegions.length === 0}
               size="sm"
               className="gap-2"
             >
