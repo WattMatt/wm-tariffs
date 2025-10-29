@@ -3655,8 +3655,12 @@ export default function SchematicEditor({
                 setIsSelectionMode(false);
                 toast.info("Selection cleared");
               } else {
-                // Toggle selection mode
+                // Toggle selection mode and reset other tools
                 setIsSelectionMode(!isSelectionMode);
+                // Reset activeTool to "select" if coming from another mode
+                if (activeTool !== "select") {
+                  setActiveTool("select");
+                }
                 if (!isSelectionMode) {
                   toast.info("Click to select, or hold SHIFT and drag to select multiple meters", { duration: 4000 });
                 }
@@ -3674,7 +3678,9 @@ export default function SchematicEditor({
             onClick={() => {
               const newTool = activeTool === "connection" ? "select" : "connection";
               setActiveTool(newTool);
+              // Disable selection mode when entering connection mode
               if (newTool === "connection") {
+                setIsSelectionMode(false);
                 toast.info("Click snap points to draw connections between meters");
               }
             }}
