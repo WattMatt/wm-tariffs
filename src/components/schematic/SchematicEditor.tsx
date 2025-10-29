@@ -1326,6 +1326,27 @@ export default function SchematicEditor({
         return; // Don't proceed with immediate selection toggle
       }
       
+      // Handle clicking on empty space in selection mode - clear all selections
+      if (isSelectionModeRef.current && (!target || (target as any).isBackgroundImage) && !evt.shiftKey) {
+        // Clear all selections
+        if (canvas) {
+          canvas.getObjects().forEach((obj: any) => {
+            if (obj.type === 'rect' && obj.regionId) {
+              obj.set({ stroke: '#3b82f6', strokeWidth: 2 });
+            }
+            // Remove selection marker rectangles
+            if (obj.type === 'rect' && obj.selectionMarker) {
+              canvas.remove(obj);
+            }
+          });
+          canvas.renderAll();
+        }
+        setSelectedRegionIndices([]);
+        setSelectedMeterIds([]);
+        setSelectedConnectionKeys([]);
+        return;
+      }
+      
       // Handle selection: single-click when selection mode is active (but NOT shift-click, which is handled above)
       const shouldHandleSelection = isSelectionModeRef.current && target && !evt.shiftKey;
       if (shouldHandleSelection) {
@@ -3308,6 +3329,7 @@ export default function SchematicEditor({
               setSelectedConnectionKeys([connectionKey]);
             }
             toast.info(`Connection ${e.e.shiftKey ? 'toggled' : 'selected'}`);
+            e.e.stopPropagation();
           }
         });
         lineSegments.push(lineSegment);
@@ -3353,7 +3375,7 @@ export default function SchematicEditor({
         
         // Add click handler for selecting connections in select mode
         node.on('mousedown', (e: any) => {
-          if (activeToolRef.current === 'select' && isSelectionModeRef.current && isEndpoint) {
+          if (activeToolRef.current === 'select' && isSelectionModeRef.current) {
             if (e.e.shiftKey) {
               // Shift key: toggle selection
               setSelectedConnectionKeys(prev => 
@@ -3366,6 +3388,7 @@ export default function SchematicEditor({
               setSelectedConnectionKeys([connectionKey]);
             }
             toast.info(`Connection ${e.e.shiftKey ? 'toggled' : 'selected'}`);
+            e.e.stopPropagation();
           }
         });
         
