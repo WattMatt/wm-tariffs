@@ -1129,8 +1129,8 @@ export default function SchematicEditor({
                     to_x: allPoints[i + 1].x,
                     to_y: allPoints[i + 1].y,
                     line_type: 'connection',
-                    color: '#000000',
-                    stroke_width: 2,
+                    color: '#0ea5e9',
+                    stroke_width: 3,
                     metadata: {
                       parent_meter_id: connectionStartRef.current!.meterId,
                       child_meter_id: snappedPoint.meterId,
@@ -2818,8 +2818,8 @@ export default function SchematicEditor({
         const lineSegment = new Line(
           [lineData.from_x, lineData.from_y, lineData.to_x, lineData.to_y],
           {
-            stroke: lineData.color || '#000000',
-            strokeWidth: lineData.stroke_width || 2,
+            stroke: lineData.color || '#0ea5e9',
+            strokeWidth: lineData.stroke_width || 3,
             selectable: false,
             evented: true,
             hoverCursor: 'crosshair',
@@ -2827,15 +2827,8 @@ export default function SchematicEditor({
         );
         (lineSegment as any).isConnectionLine = true;
         lineSegments.push(lineSegment);
-        
-        // Add line above background but below other objects
-        const objects = fabricCanvas.getObjects();
-        const backgroundIndex = objects.findIndex(obj => (obj as any).isBackgroundImage);
-        if (backgroundIndex !== -1) {
-          fabricCanvas.insertAt(backgroundIndex + 1, lineSegment);
-        } else {
-          fabricCanvas.add(lineSegment);
-        }
+        fabricCanvas.add(lineSegment);
+        fabricCanvas.sendObjectToBack(lineSegment);
 
         // Collect unique node positions
         if (index === 0) {
@@ -2851,7 +2844,7 @@ export default function SchematicEditor({
           left: pos.x,
           top: pos.y,
           radius: 5,
-          fill: '#000000',
+          fill: '#0ea5e9',
           stroke: '#ffffff',
           strokeWidth: 2,
           originX: 'center',
