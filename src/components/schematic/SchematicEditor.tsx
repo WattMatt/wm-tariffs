@@ -4198,82 +4198,8 @@ export default function SchematicEditor({
       </div>
 
       {/* Second row: Bulk Action buttons (visible when in selection mode with selected items) */}
-      {isSelectionMode && (selectedRegionIndices.length > 0 || selectedMeterIds.length > 0) && (
+      {isSelectionMode && (selectedRegionIndices.length > 0 || selectedMeterIds.length > 0 || selectedConnectionKeys.length > 0) && (
         <div className="flex gap-2 items-center flex-wrap">
-          {selectedRegionIndices.length > 0 && (
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={async () => {
-                if (!confirm(`Delete ${selectedRegionIndices.length} selected region(s)?`)) return;
-                
-                if (fabricCanvas) {
-                  // Remove selected regions from canvas
-                  selectedRegionIndices.forEach(index => {
-                    const region = drawnRegions[index];
-                    if (region?.fabricRect) {
-                      fabricCanvas.remove(region.fabricRect);
-                    }
-                  });
-                  fabricCanvas.renderAll();
-                }
-                
-                // Remove from state
-                const updatedRegions = drawnRegions.filter((_, i) => !selectedRegionIndices.includes(i));
-                setDrawnRegions(updatedRegions);
-                setSelectedRegionIndices([]);
-                toast.success(`Deleted ${selectedRegionIndices.length} region(s)`);
-              }}
-              className="gap-2"
-            >
-              <Trash2 className="w-4 h-4" />
-              Delete {selectedRegionIndices.length} Region(s)
-            </Button>
-          )}
-          {selectedConnectionKeys.length > 0 && (
-            <>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={async () => {
-                  if (!confirm(`Delete ${selectedConnectionKeys.length} connection(s)? All line segments will be removed.`)) return;
-                  
-                  for (const connectionKey of selectedConnectionKeys) {
-                    // Find all line segments for this connection
-                    const linesToDelete = schematicLines.filter(line => {
-                      const key = `${line.metadata?.parent_meter_id}-${line.metadata?.child_meter_id}`;
-                      return key === connectionKey;
-                    });
-                    
-                    // Delete all line segments
-                    for (const line of linesToDelete) {
-                      await supabase
-                        .from('schematic_lines')
-                        .delete()
-                        .eq('id', line.id);
-                    }
-                    
-                    // Also delete from meter_connections table
-                    const [parentId, childId] = connectionKey.split('-');
-                    await supabase
-                      .from('meter_connections')
-                      .delete()
-                      .match({ parent_meter_id: parentId, child_meter_id: childId });
-                  }
-                  
-                  toast.success(`Deleted ${selectedConnectionKeys.length} connection(s)`);
-                  setSelectedConnectionKeys([]);
-                  fetchSchematicLines();
-                  fetchMeterConnections();
-                }}
-                className="gap-2"
-              >
-                <Trash2 className="w-4 h-4" />
-                Delete {selectedConnectionKeys.length} Connection(s)
-              </Button>
-              <div className="h-6 w-px bg-border" />
-            </>
-          )}
           {selectedMeterIds.length > 0 && (
             <>
               <Button
@@ -4306,52 +4232,98 @@ export default function SchematicEditor({
                 <Edit className="w-4 h-4" />
                 Edit
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={async () => {
-                  if (!confirm(`Delete ${selectedMeterIds.length} selected meter(s)? This will also delete all associated readings and positions.`)) return;
-                  
-                  // Remove selection rectangles from canvas
-                  if (fabricCanvas) {
-                    selectedMeterIds.forEach(meterId => {
-                      const selectionRect = fabricCanvas.getObjects().find((obj: any) => 
-                        obj.type === 'rect' && obj.selectionMarker && obj.data?.meterId === meterId
-                      );
-                      if (selectionRect) {
-                        fabricCanvas.remove(selectionRect);
-                      }
-                    });
-                    fabricCanvas.renderAll();
-                  }
-                  
-                  // Delete all selected meters
-                  for (const meterId of selectedMeterIds) {
-                    // Delete meter position
-                    await supabase
-                      .from('meter_positions')
-                      .delete()
-                      .eq('meter_id', meterId);
-                    
-                    // Delete meter
-                    await supabase
-                      .from('meters')
-                      .delete()
-                      .eq('id', meterId);
-                  }
-                  
-                  setSelectedMeterIds([]);
-                  await fetchMeters();
-                  await fetchMeterPositions();
-                  toast.success(`Deleted ${selectedMeterIds.length} meter(s)`);
-                }}
-                className="gap-2"
-              >
-                <Trash2 className="w-4 h-4" />
-                Delete
-              </Button>
+              <div className="h-6 w-px bg-border" />
             </>
           )}
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={async () => {
+              // Build confirmation message based on what's selected
+              const parts = [];
+              if (selectedRegionIndices.length > 0) parts.push(`${selectedRegionIndices.length} region(s)`);
+              if (selectedConnectionKeys.length > 0) parts.push(`${selectedConnectionKeys.length} connection(s)`);
+              if (selectedMeterIds.length > 0) parts.push(`${selectedMeterIds.length} meter(s)`);
+              
+              const message = `Delete ${parts.join(', ')}?${selectedMeterIds.length > 0 ? ' This will also delete all associated readings and positions.' : ''}`;
+              if (!confirm(message)) return;
+              
+              // Delete regions
+              if (selectedRegionIndices.length > 0 && fabricCanvas) {
+                selectedRegionIndices.forEach(index => {
+                  const region = drawnRegions[index];
+                  if (region?.fabricRect) {
+                    fabricCanvas.remove(region.fabricRect);
+                  }
+                });
+                const updatedRegions = drawnRegions.filter((_, i) => !selectedRegionIndices.includes(i));
+                setDrawnRegions(updatedRegions);
+                setSelectedRegionIndices([]);
+              }
+              
+              // Delete connections
+              if (selectedConnectionKeys.length > 0) {
+                for (const connectionKey of selectedConnectionKeys) {
+                  const linesToDelete = schematicLines.filter(line => {
+                    const key = `${line.metadata?.parent_meter_id}-${line.metadata?.child_meter_id}`;
+                    return key === connectionKey;
+                  });
+                  
+                  for (const line of linesToDelete) {
+                    await supabase
+                      .from('schematic_lines')
+                      .delete()
+                      .eq('id', line.id);
+                  }
+                  
+                  const [parentId, childId] = connectionKey.split('-');
+                  await supabase
+                    .from('meter_connections')
+                    .delete()
+                    .match({ parent_meter_id: parentId, child_meter_id: childId });
+                }
+                setSelectedConnectionKeys([]);
+                fetchSchematicLines();
+                fetchMeterConnections();
+              }
+              
+              // Delete meters
+              if (selectedMeterIds.length > 0) {
+                if (fabricCanvas) {
+                  selectedMeterIds.forEach(meterId => {
+                    const selectionRect = fabricCanvas.getObjects().find((obj: any) => 
+                      obj.type === 'rect' && obj.selectionMarker && obj.data?.meterId === meterId
+                    );
+                    if (selectionRect) {
+                      fabricCanvas.remove(selectionRect);
+                    }
+                  });
+                }
+                
+                for (const meterId of selectedMeterIds) {
+                  await supabase
+                    .from('meter_positions')
+                    .delete()
+                    .eq('meter_id', meterId);
+                  
+                  await supabase
+                    .from('meters')
+                    .delete()
+                    .eq('id', meterId);
+                }
+                setSelectedMeterIds([]);
+                await fetchMeters();
+                await fetchMeterPositions();
+              }
+              
+              if (fabricCanvas) fabricCanvas.renderAll();
+              toast.success(`Deleted ${parts.join(', ')}`);
+            }}
+            className="gap-2"
+          >
+            <Trash2 className="w-4 h-4" />
+            Delete
+          </Button>
         </div>
       )}
 
