@@ -332,27 +332,24 @@ export function MeterConnectionsManager({ open, onOpenChange, siteId, schematicI
                       className="p-3 border rounded-lg space-y-2 hover:bg-accent/50 transition-colors"
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 space-y-1">
-                          <div className="flex items-center gap-2">
+                        <div className="flex-1 space-y-2">
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
                             <Badge variant="outline" className="text-xs">
                               {getMeterType(connection.parent_meter_id)}
                             </Badge>
-                            <span className="text-sm font-medium">
-                              {getMeterLabel(connection.parent_meter_id)}
-                            </span>
-                          </div>
-                          
-                          <div className="flex items-center gap-2 pl-4">
-                            <ArrowRight className="h-3 w-3 text-muted-foreground" />
-                          </div>
-
-                          <div className="flex items-center gap-2">
+                            <ArrowRight className="h-3 w-3" />
                             <Badge variant="outline" className="text-xs">
                               {getMeterType(connection.child_meter_id)}
                             </Badge>
-                            <span className="text-sm">
+                          </div>
+                          
+                          <div className="space-y-1 pl-1">
+                            <div className="text-sm font-medium">
+                              {getMeterLabel(connection.parent_meter_id)}
+                            </div>
+                            <div className="text-sm text-muted-foreground">
                               {getMeterLabel(connection.child_meter_id)}
-                            </span>
+                            </div>
                           </div>
                         </div>
 
