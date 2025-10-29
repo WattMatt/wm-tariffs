@@ -2436,6 +2436,7 @@ export default function SchematicEditor({
           }
 
           fabricCanvas.add(img);
+          fabricCanvas.bringObjectToFront(img);
           
           // Add snap point indicators when in connection mode
           if (activeTool === 'connection') {
@@ -2701,6 +2702,7 @@ export default function SchematicEditor({
           }
 
           fabricCanvas.add(img);
+          fabricCanvas.bringObjectToFront(img);
           
           // Add snap point indicators when in connection mode
           if (activeTool === 'connection') {
