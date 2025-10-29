@@ -572,6 +572,10 @@ export default function SchematicEditor({
             hasControls: isEditMode,
             hoverCursor: isEditMode ? 'move' : 'pointer'
           });
+          // Hide rotation control in edit mode
+          if (isEditMode) {
+            obj.setControlVisible('mtr', false);
+          }
         }
       });
       fabricCanvas.renderAll();
