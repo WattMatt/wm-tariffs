@@ -945,10 +945,12 @@ export default function SchematicEditor({
           const line = target as Line;
           const lineCoords = line.calcLinePoints();
           
-          // Apply snap to create node at click position
-          const snappedPoint = findNearestSnapPoint(canvas, pointer, 15);
-          if (snappedPoint) {
-            pointer = new Point(snappedPoint.x, snappedPoint.y);
+          // Apply snap to create node at click position (unless Shift is held)
+          if (!evt.shiftKey) {
+            const snappedPoint = findNearestSnapPoint(canvas, pointer, 15);
+            if (snappedPoint) {
+              pointer = new Point(snappedPoint.x, snappedPoint.y);
+            }
           }
           
           // Get the line's start and end points
@@ -1057,7 +1059,10 @@ export default function SchematicEditor({
           toast.info('Click to add nodes, or click a meter connection point to finish');
         } else {
           // Subsequent clicks - check if ending on a snap point
-          if (snappedPoint && snappedPoint.meterId !== connectionStartRef.current.meterId) {
+          // Allow bypassing snap with Shift key
+          const shouldSnap = snappedPoint && !evt.shiftKey;
+          
+          if (shouldSnap && snappedPoint.meterId !== connectionStartRef.current.meterId) {
             // Complete the connection on a different meter's snap point
             pointer = new Point(snappedPoint.x, snappedPoint.y);
             
@@ -1217,8 +1222,8 @@ export default function SchematicEditor({
             canvas.renderAll();
             
             toast.success('Connection created');
-          } else if (!snappedPoint) {
-            // Add intermediate node (not on a snap point)
+          } else if (!shouldSnap) {
+            // Add intermediate node (not on a snap point or Shift is held to bypass snap)
             // Apply 45-degree angle snapping when Shift is held
             if (evt.shiftKey) {
               const lastPoint = connectionPointsRef.current.length > 0 
@@ -1959,6 +1964,64 @@ export default function SchematicEditor({
             }
           });
           canvas.renderAll();
+        }
+      }
+    });
+    
+    // Handle double-click on intermediate nodes to delete them
+    canvas.on('mouse:dblclick', async (opt) => {
+      const currentTool = activeToolRef.current;
+      const target = opt.target;
+      
+      // Only allow in connection mode
+      if (currentTool !== 'connection') return;
+      
+      // Check if double-clicking on a connection node
+      if (target && (target as any).isConnectionNode) {
+        const node = target as Circle;
+        const connectedLines = (node as any).connectedLines as Line[];
+        
+        // Only delete intermediate nodes (those with 2 connected lines)
+        if (connectedLines && connectedLines.length === 2) {
+          const line1 = connectedLines[0];
+          const line2 = connectedLines[1];
+          
+          // Get the endpoints of the merged line
+          const x1 = line1.x1 || 0;
+          const y1 = line1.y1 || 0;
+          const x2 = line2.x2 || 0;
+          const y2 = line2.y2 || 0;
+          
+          // Create a new merged line
+          const mergedLine = new Line(
+            [x1, y1, x2, y2],
+            {
+              stroke: line1.stroke || '#000000',
+              strokeWidth: line1.strokeWidth || 2,
+              selectable: false,
+              evented: true,
+              hoverCursor: 'crosshair',
+            }
+          );
+          (mergedLine as any).isConnectionLine = true;
+          
+          // Remove old lines and node from canvas
+          canvas.remove(line1);
+          canvas.remove(line2);
+          canvas.remove(node);
+          
+          // Add merged line
+          const backgroundIndex = canvas.getObjects().findIndex(obj => (obj as any).isBackgroundImage);
+          if (backgroundIndex !== -1) {
+            canvas.insertAt(backgroundIndex + 1, mergedLine);
+          } else {
+            canvas.add(mergedLine);
+          }
+          
+          canvas.renderAll();
+          toast.success('Node deleted and lines merged');
+          
+          // Note: Database updates would need to be implemented based on how lines are tracked
         }
       }
     });
