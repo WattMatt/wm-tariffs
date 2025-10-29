@@ -4259,6 +4259,16 @@ export default function SchematicEditor({
         {activeTool === "connection" && (
           <>
             <Button
+              variant="outline"
+              onClick={() => setIsConnectionsDialogOpen(true)}
+              disabled={!isEditMode}
+              size="sm"
+              className="gap-2"
+            >
+              <Link2 className="w-4 h-4" />
+              Manage
+            </Button>
+            <Button
               variant="destructive"
               onClick={async () => {
                 const { error } = await supabase
@@ -4281,16 +4291,6 @@ export default function SchematicEditor({
             >
               <Trash2 className="w-4 h-4" />
               Clear Lines
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => setIsConnectionsDialogOpen(true)}
-              disabled={!isEditMode}
-              size="sm"
-              className="gap-2"
-            >
-              <Link2 className="w-4 h-4" />
-              Manage
             </Button>
           </>
         )}
