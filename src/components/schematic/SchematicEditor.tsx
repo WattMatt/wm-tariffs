@@ -2827,8 +2827,15 @@ export default function SchematicEditor({
         );
         (lineSegment as any).isConnectionLine = true;
         lineSegments.push(lineSegment);
-        fabricCanvas.add(lineSegment);
-        fabricCanvas.sendObjectToBack(lineSegment);
+        
+        // Add line above background but below other objects
+        const objects = fabricCanvas.getObjects();
+        const backgroundIndex = objects.findIndex(obj => (obj as any).isBackgroundImage);
+        if (backgroundIndex !== -1) {
+          fabricCanvas.insertAt(backgroundIndex + 1, lineSegment);
+        } else {
+          fabricCanvas.add(lineSegment);
+        }
 
         // Collect unique node positions
         if (index === 0) {
