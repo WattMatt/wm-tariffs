@@ -510,6 +510,7 @@ export default function SchematicEditor({
   const [connectionStart, setConnectionStart] = useState<{ meterId: string; position: { x: number; y: number } } | null>(null);
   const [connectionPoints, setConnectionPoints] = useState<Array<{ meterId: string; position: { x: number; y: number } }>>([]);
   const [meterConnections, setMeterConnections] = useState<any[]>([]);
+  const [schematicLines, setSchematicLines] = useState<any[]>([]);
   const connectionLineRef = useRef<Line | Polyline | null>(null);
   const connectionStartNodeRef = useRef<Circle | null>(null);
   const connectionNodesRef = useRef<Circle[]>([]);
@@ -549,6 +550,7 @@ export default function SchematicEditor({
     fetchMeters();
     fetchMeterPositions();
     fetchMeterConnections();
+    fetchSchematicLines();
   }, [schematicId, siteId]);
 
   // FABRIC.JS EVENT HANDLER PATTERN: Sync activeTool state to ref
@@ -1071,6 +1073,65 @@ export default function SchematicEditor({
               
               canvas.add(node);
             });
+            
+            // Save connection to database
+            const saveConnection = async () => {
+              try {
+                // 1. Save meter connection relationship
+                const { error: connectionError } = await supabase
+                  .from('meter_connections')
+                  .insert({
+                    parent_meter_id: connectionStartRef.current!.meterId,
+                    child_meter_id: snappedPoint.meterId,
+                    connection_type: 'electrical'
+                  });
+                
+                if (connectionError) {
+                  console.error('Error saving meter connection:', connectionError);
+                  toast.error('Failed to save meter connection');
+                  return;
+                }
+                
+                // 2. Save line segments with node positions
+                const lineData = [];
+                for (let i = 0; i < allPoints.length - 1; i++) {
+                  lineData.push({
+                    schematic_id: schematicId,
+                    from_x: allPoints[i].x,
+                    from_y: allPoints[i].y,
+                    to_x: allPoints[i + 1].x,
+                    to_y: allPoints[i + 1].y,
+                    line_type: 'connection',
+                    color: '#0ea5e9',
+                    stroke_width: 3,
+                    metadata: {
+                      parent_meter_id: connectionStartRef.current!.meterId,
+                      child_meter_id: snappedPoint.meterId,
+                      node_index: i
+                    }
+                  });
+                }
+                
+                const { error: linesError } = await supabase
+                  .from('schematic_lines')
+                  .insert(lineData);
+                
+                if (linesError) {
+                  console.error('Error saving line segments:', linesError);
+                  toast.error('Failed to save line geometry');
+                  return;
+                }
+                
+                // Refresh connections
+                await fetchMeterConnections();
+                await fetchSchematicLines();
+              } catch (error) {
+                console.error('Error saving connection:', error);
+                toast.error('Failed to save connection');
+              }
+            };
+            
+            saveConnection();
             
             // Clean up intermediate nodes
             connectionNodesRef.current.forEach(node => canvas.remove(node));
@@ -2657,9 +2718,24 @@ export default function SchematicEditor({
     setMeterConnections(data || []);
   };
 
+  const fetchSchematicLines = async () => {
+    const { data, error } = await supabase
+      .from('schematic_lines')
+      .select('*')
+      .eq('schematic_id', schematicId)
+      .eq('line_type', 'connection');
+
+    if (error) {
+      console.error('Error fetching schematic lines:', error);
+      return;
+    }
+
+    setSchematicLines(data || []);
+  };
+
   // Render connection lines on canvas when connections or positions change
   useEffect(() => {
-    if (!fabricCanvas || !meterConnections.length || !meterPositions.length) return;
+    if (!fabricCanvas || !schematicLines.length) return;
 
     // Remove existing connection lines and nodes
     fabricCanvas.getObjects().forEach((obj: any) => {
@@ -2668,82 +2744,86 @@ export default function SchematicEditor({
       }
     });
 
-    // Render each connection
-    meterConnections.forEach(connection => {
-      const parentPos = meterPositions.find(p => p.meter_id === connection.parent_meter_id);
-      const childPos = meterPositions.find(p => p.meter_id === connection.child_meter_id);
+    // Group line segments by connection (parent_meter_id + child_meter_id)
+    const connectionGroups = new Map<string, any[]>();
+    schematicLines.forEach(line => {
+      const parentId = line.metadata?.parent_meter_id;
+      const childId = line.metadata?.child_meter_id;
+      if (!parentId || !childId) return;
+      
+      const key = `${parentId}-${childId}`;
+      if (!connectionGroups.has(key)) {
+        connectionGroups.set(key, []);
+      }
+      connectionGroups.get(key)!.push(line);
+    });
 
-      if (!parentPos || !childPos) return;
-
-      // Find the meter card objects to get their snap points
-      let parentSnapPoint: { x: number; y: number } | null = null;
-      let childSnapPoint: { x: number; y: number } | null = null;
-
-      fabricCanvas.getObjects().forEach((obj: any) => {
-        if (obj.type === 'image' && obj.data?.meterId === connection.parent_meter_id) {
-          const bounds = obj.getBoundingRect();
-          const snapPoints = calculateSnapPoints(bounds.left, bounds.top, bounds.width, bounds.height);
-          parentSnapPoint = snapPoints.bottom; // Use bottom snap point as default
-        }
-        if (obj.type === 'image' && obj.data?.meterId === connection.child_meter_id) {
-          const bounds = obj.getBoundingRect();
-          const snapPoints = calculateSnapPoints(bounds.left, bounds.top, bounds.width, bounds.height);
-          childSnapPoint = snapPoints.top; // Use top snap point as default
-        }
-      });
-
-      if (!parentSnapPoint || !childSnapPoint) return;
-
-      // Create connection line
-      const connectionLine = new Line(
-        [parentSnapPoint.x, parentSnapPoint.y, childSnapPoint.x, childSnapPoint.y],
-        {
-          stroke: '#0ea5e9',
-          strokeWidth: 3,
-          selectable: false,
-          evented: false,
-        }
+    // Render each connection group
+    connectionGroups.forEach((lines, connectionKey) => {
+      // Sort by node_index to ensure correct order
+      const sortedLines = lines.sort((a, b) => 
+        (a.metadata?.node_index || 0) - (b.metadata?.node_index || 0)
       );
-      (connectionLine as any).isConnectionLine = true;
-      (connectionLine as any).parentMeterId = connection.parent_meter_id;
-      (connectionLine as any).childMeterId = connection.child_meter_id;
 
-      const startNode = new Circle({
-        left: parentSnapPoint.x,
-        top: parentSnapPoint.y,
-        radius: 5,
-        fill: '#0ea5e9',
-        stroke: '#ffffff',
-        strokeWidth: 2,
-        originX: 'center',
-        originY: 'center',
-        selectable: false,
-        evented: false,
+      const lineSegments: Line[] = [];
+      const nodePositions: Array<{ x: number; y: number }> = [];
+
+      // Create line segments and collect node positions
+      sortedLines.forEach((lineData, index) => {
+        const lineSegment = new Line(
+          [lineData.from_x, lineData.from_y, lineData.to_x, lineData.to_y],
+          {
+            stroke: lineData.color || '#0ea5e9',
+            strokeWidth: lineData.stroke_width || 3,
+            selectable: false,
+            evented: true,
+            hoverCursor: 'crosshair',
+          }
+        );
+        (lineSegment as any).isConnectionLine = true;
+        lineSegments.push(lineSegment);
+        fabricCanvas.add(lineSegment);
+        fabricCanvas.sendObjectToBack(lineSegment);
+
+        // Collect unique node positions
+        if (index === 0) {
+          nodePositions.push({ x: lineData.from_x, y: lineData.from_y });
+        }
+        nodePositions.push({ x: lineData.to_x, y: lineData.to_y });
       });
-      (startNode as any).isConnectionNode = true;
 
-      const endNode = new Circle({
-        left: childSnapPoint.x,
-        top: childSnapPoint.y,
-        radius: 5,
-        fill: '#0ea5e9',
-        stroke: '#ffffff',
-        strokeWidth: 2,
-        originX: 'center',
-        originY: 'center',
-        selectable: false,
-        evented: false,
+      // Create nodes at all positions
+      nodePositions.forEach((pos, index) => {
+        const isEndpoint = index === 0 || index === nodePositions.length - 1;
+        const node = new Circle({
+          left: pos.x,
+          top: pos.y,
+          radius: 5,
+          fill: '#0ea5e9',
+          stroke: '#ffffff',
+          strokeWidth: 2,
+          originX: 'center',
+          originY: 'center',
+          selectable: !isEndpoint,
+          evented: !isEndpoint,
+          hasControls: false,
+          hasBorders: false,
+          hoverCursor: isEndpoint ? 'default' : 'move',
+        });
+        (node as any).isConnectionNode = true;
+        
+        // Store references to connected line segments
+        const connectedLines: Line[] = [];
+        if (index > 0) connectedLines.push(lineSegments[index - 1]);
+        if (index < nodePositions.length - 1) connectedLines.push(lineSegments[index]);
+        (node as any).connectedLines = connectedLines;
+        
+        fabricCanvas.add(node);
       });
-      (endNode as any).isConnectionNode = true;
-
-      fabricCanvas.add(connectionLine);
-      fabricCanvas.sendObjectToBack(connectionLine); // Send line behind meter cards
-      fabricCanvas.add(startNode);
-      fabricCanvas.add(endNode);
     });
 
     fabricCanvas.renderAll();
-  }, [fabricCanvas, meterConnections, meterPositions]);
+  }, [fabricCanvas, schematicLines]);
 
 
   const handleCanvasClick = async (e: any) => {
