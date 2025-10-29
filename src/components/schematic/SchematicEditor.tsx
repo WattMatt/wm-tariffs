@@ -486,7 +486,8 @@ export default function SchematicEditor({
   const drawStartPointRef = useRef<{ x: number; y: number } | null>(null);
   const startMarkerRef = useRef<any>(null);
   const selectionBoxRef = useRef<any>(null); // For shift+drag multi-select box
-  const panIndicatorRef = useRef<any>(null); // Pink circle for middle mouse button
+  const panIndicatorRef = useRef<any>(null); // Pink circle for spacebar
+  const isSpacebarPressedRef = useRef<boolean>(false);
   const [meters, setMeters] = useState<any[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [extractionProgress, setExtractionProgress] = useState<{ current: number; total: number } | null>(null);
@@ -863,6 +864,31 @@ export default function SchematicEditor({
       preserveObjectStacking: true,
     });
 
+    // Keyboard event handlers for spacebar indicator
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code === 'Space' && !isSpacebarPressedRef.current) {
+        isSpacebarPressedRef.current = true;
+        console.log('🎯 Spacebar pressed!');
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space') {
+        isSpacebarPressedRef.current = false;
+        console.log('🎯 Spacebar released!');
+        
+        // Remove indicator when spacebar is released
+        if (panIndicatorRef.current) {
+          canvas.remove(panIndicatorRef.current);
+          panIndicatorRef.current = null;
+          canvas.renderAll();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+
     // Handle scroll/wheel events for navigation and zoom - CONSISTENT ACROSS ALL MODES
     canvas.on('mouse:wheel', (opt) => {
       const evt = opt.e as WheelEvent;
@@ -941,39 +967,6 @@ export default function SchematicEditor({
         button: evt.button,
         buttons: evt.buttons
       });
-      
-      // Handle middle mouse button - show pink indicator circle
-      if (evt.button === 1) {
-        console.log('🎯 Middle mouse button detected!');
-        const pointer = canvas.getPointer(opt.e);
-        const vpt = canvas.viewportTransform;
-        if (!vpt) return;
-        
-        // Check if pointer is within canvas bounds
-        const canvasWidth = canvas.getWidth();
-        const canvasHeight = canvas.getHeight();
-        
-        if (pointer.x >= 0 && pointer.x <= canvasWidth && pointer.y >= 0 && pointer.y <= canvasHeight) {
-          // Create pink circle indicator
-          const indicator = new Circle({
-            left: pointer.x,
-            top: pointer.y,
-            radius: 15,
-            fill: 'rgba(236, 72, 153, 0.3)',
-            stroke: '#ec4899',
-            strokeWidth: 3,
-            originX: 'center',
-            originY: 'center',
-            selectable: false,
-            evented: false,
-          });
-          
-          panIndicatorRef.current = indicator;
-          canvas.add(indicator);
-          canvas.renderAll();
-        }
-        return;
-      }
       
       // Handle connection drawing mode with snap
       if (currentTool === 'connection') {
@@ -1445,16 +1438,27 @@ export default function SchematicEditor({
       const evt = opt.e as MouseEvent;
       let pointer = canvas.getPointer(opt.e);
       
-      // Update pink indicator position if middle mouse button is held
-      if (panIndicatorRef.current) {
-        const canvasWidth = canvas.getWidth();
-        const canvasHeight = canvas.getHeight();
-        
-        // Hide indicator if mouse leaves canvas bounds
-        if (pointer.x < 0 || pointer.x > canvasWidth || pointer.y < 0 || pointer.y > canvasHeight) {
-          canvas.remove(panIndicatorRef.current);
-          panIndicatorRef.current = null;
+      // Show/update pink indicator when spacebar is held
+      if (isSpacebarPressedRef.current) {
+        if (!panIndicatorRef.current) {
+          // Create pink circle indicator
+          const indicator = new Circle({
+            left: pointer.x,
+            top: pointer.y,
+            radius: 15,
+            fill: 'rgba(236, 72, 153, 0.3)',
+            stroke: '#ec4899',
+            strokeWidth: 3,
+            originX: 'center',
+            originY: 'center',
+            selectable: false,
+            evented: false,
+          });
+          
+          panIndicatorRef.current = indicator;
+          canvas.add(indicator);
         } else {
+          // Update position
           panIndicatorRef.current.set({
             left: pointer.x,
             top: pointer.y,
@@ -1612,13 +1616,6 @@ export default function SchematicEditor({
 
     canvas.on('mouse:up', async (opt) => {
       const evt = opt.e as MouseEvent;
-      
-      // Remove pink indicator if middle mouse button is released
-      if (evt.button === 1 && panIndicatorRef.current) {
-        canvas.remove(panIndicatorRef.current);
-        panIndicatorRef.current = null;
-        canvas.renderAll();
-      }
       
       // Handle shift+drag multi-select completion
       if (isShiftDragSelecting && startPoint) {
@@ -2375,6 +2372,8 @@ export default function SchematicEditor({
     });
 
     return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
       canvas.dispose();
     };
   }, [schematicUrl]);
