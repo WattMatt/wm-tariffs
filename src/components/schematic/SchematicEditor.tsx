@@ -528,6 +528,7 @@ export default function SchematicEditor({
   const [isBulkEditDialogOpen, setIsBulkEditDialogOpen] = useState(false);
   const [currentBulkEditIndex, setCurrentBulkEditIndex] = useState(0);
   const [bulkEditMeterIds, setBulkEditMeterIds] = useState<string[]>([]);
+  const [selectedConnectionKey, setSelectedConnectionKey] = useState<string | null>(null);
   const [isConfirmMeterDialogOpen, setIsConfirmMeterDialogOpen] = useState(false);
   const [editingMeter, setEditingMeter] = useState<any>(null);
   const [isViewMeterDialogOpen, setIsViewMeterDialogOpen] = useState(false);
@@ -934,6 +935,23 @@ export default function SchematicEditor({
       // Handle connection drawing mode with snap
       if (currentTool === 'connection') {
         let pointer = canvas.getPointer(opt.e);
+        
+        // Handle connection line selection (single click without active drawing)
+        if (!connectionStartRef.current && target && ((target as any).isConnectionLine || (target as any).isConnectionNode)) {
+          const clickedConnectionKey = (target as any).connectionKey;
+          
+          if (clickedConnectionKey) {
+            // Toggle selection
+            if (selectedConnectionKey === clickedConnectionKey) {
+              setSelectedConnectionKey(null);
+              toast.info('Connection deselected');
+            } else {
+              setSelectedConnectionKey(clickedConnectionKey);
+              toast.info('Connection selected');
+            }
+            return;
+          }
+        }
         
         // Skip if clicking on a connection node (to allow dragging)
         if (target && (target as any).isConnectionNode && (target as any).connectedLines) {
@@ -3068,10 +3086,11 @@ export default function SchematicEditor({
 
       // Create line segments and collect node positions
       sortedLines.forEach((lineData, index) => {
+        const isSelected = connectionKey === selectedConnectionKey;
         const lineSegment = new Line(
           [lineData.from_x, lineData.from_y, lineData.to_x, lineData.to_y],
           {
-            stroke: lineData.color || '#000000',
+            stroke: isSelected ? '#ef4444' : (lineData.color || '#000000'),
             strokeWidth: lineData.stroke_width || 2,
             selectable: false,
             evented: true,
@@ -3079,6 +3098,7 @@ export default function SchematicEditor({
           }
         );
         (lineSegment as any).isConnectionLine = true;
+        (lineSegment as any).connectionKey = connectionKey;
         lineSegments.push(lineSegment);
         
         // Add line above background
@@ -3086,6 +3106,11 @@ export default function SchematicEditor({
           fabricCanvas.insertAt(backgroundIndex + 1, lineSegment);
         } else {
           fabricCanvas.add(lineSegment);
+        }
+        
+        // Bring selected connection to front
+        if (isSelected) {
+          fabricCanvas.bringObjectToFront(lineSegment);
         }
 
         // Collect unique node positions
@@ -3098,11 +3123,12 @@ export default function SchematicEditor({
       // Create nodes at all positions
       nodePositions.forEach((pos, index) => {
         const isEndpoint = index === 0 || index === nodePositions.length - 1;
+        const isSelected = connectionKey === selectedConnectionKey;
         const node = new Circle({
           left: pos.x,
           top: pos.y,
           radius: 5,
-          fill: '#000000',
+          fill: isSelected ? '#ef4444' : '#000000',
           originX: 'center',
           originY: 'center',
           selectable: !isEndpoint,
@@ -3112,6 +3138,7 @@ export default function SchematicEditor({
           hoverCursor: isEndpoint ? 'default' : 'move',
         });
         (node as any).isConnectionNode = true;
+        (node as any).connectionKey = connectionKey;
         
         // Store references to connected line segments
         const connectedLines: Line[] = [];
@@ -3120,11 +3147,16 @@ export default function SchematicEditor({
         (node as any).connectedLines = connectedLines;
         
         fabricCanvas.add(node);
+        
+        // Bring selected connection nodes to front
+        if (isSelected) {
+          fabricCanvas.bringObjectToFront(node);
+        }
       });
     });
 
     fabricCanvas.renderAll();
-  }, [fabricCanvas, schematicLines]);
+  }, [fabricCanvas, schematicLines, selectedConnectionKey]);
 
 
   const handleCanvasClick = async (e: any) => {
