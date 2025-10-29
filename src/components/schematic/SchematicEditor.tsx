@@ -486,10 +486,6 @@ export default function SchematicEditor({
   const drawStartPointRef = useRef<{ x: number; y: number } | null>(null);
   const startMarkerRef = useRef<any>(null);
   const selectionBoxRef = useRef<any>(null); // For shift+drag multi-select box
-  const panIndicatorRef = useRef<any>(null); // Pink/yellow circle for spacebar
-  const isSpacebarPressedRef = useRef<boolean>(false);
-  const [indicatorColor, setIndicatorColor] = useState<'pink' | 'yellow'>('pink');
-  const indicatorColorRef = useRef<'pink' | 'yellow'>('pink');
   const isPanningRef = useRef(false);
   const lastPanPositionRef = useRef<{ x: number; y: number } | null>(null);
   const [meters, setMeters] = useState<any[]>([]);
@@ -500,11 +496,6 @@ export default function SchematicEditor({
   const [isCsvDialogOpen, setIsCsvDialogOpen] = useState(false);
   const [extractedMeters, setExtractedMeters] = useState<any[]>(propExtractedMeters);
   const [meterCardObjects, setMeterCardObjects] = useState<Map<number, any>>(new Map()); // Maps meter index to Fabric object
-
-  // Sync indicator color to ref for Fabric.js event handlers
-  useEffect(() => {
-    indicatorColorRef.current = indicatorColor;
-  }, [indicatorColor]);
 
   // Sync extracted meters from props
   useEffect(() => {
@@ -872,31 +863,6 @@ export default function SchematicEditor({
       controlsAboveOverlay: true,
       preserveObjectStacking: true,
     });
-
-    // Keyboard event handler for spacebar indicator
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.code === 'Space' && !isSpacebarPressedRef.current) {
-        isSpacebarPressedRef.current = true;
-        console.log('🎯 Spacebar pressed!');
-      }
-    };
-
-    const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.code === 'Space') {
-        isSpacebarPressedRef.current = false;
-        console.log('🎯 Spacebar released!');
-        
-        // Remove indicator when spacebar is released
-        if (panIndicatorRef.current) {
-          canvas.remove(panIndicatorRef.current);
-          panIndicatorRef.current = null;
-          canvas.renderAll();
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
     
     // Add native mousedown listener with capture to intercept middle mouse button
     const handleNativeMouseDown = (e: MouseEvent) => {
@@ -904,46 +870,10 @@ export default function SchematicEditor({
         e.preventDefault();
         e.stopPropagation();
         
-        console.log('🖱️ Native middle mouse down:', {
-          spacebarPressed: isSpacebarPressedRef.current,
-          clientX: e.clientX,
-          clientY: e.clientY
-        });
-        
-        if (isSpacebarPressedRef.current) {
-          // Spacebar + middle mouse = toggle color
-          console.log('🎨 Middle mouse + spacebar - toggling color');
-          setIndicatorColor(prev => {
-            const newColor = prev === 'pink' ? 'yellow' : 'pink';
-            console.log('Color changing from', prev, 'to', newColor);
-            
-            // Update existing indicator if visible
-            if (panIndicatorRef.current) {
-              const colors = {
-                pink: { fill: 'rgba(236, 72, 153, 0.3)', stroke: '#ec4899' },
-                yellow: { fill: 'rgba(234, 179, 8, 0.3)', stroke: '#eab308' }
-              };
-              
-              panIndicatorRef.current.set({
-                fill: colors[newColor].fill,
-                stroke: colors[newColor].stroke
-              });
-              canvas.renderAll();
-              console.log('✅ Indicator updated to', newColor);
-            }
-            return newColor;
-          });
-        } else {
-          // Middle mouse alone = start panning
-          isPanningRef.current = true;
-          lastPanPositionRef.current = { x: e.clientX, y: e.clientY };
-          canvas.selection = false;
-          console.log('🖐️ Middle mouse pan started', {
-            clientX: e.clientX,
-            clientY: e.clientY,
-            isPanning: isPanningRef.current
-          });
-        }
+        // Middle mouse button starts panning
+        isPanningRef.current = true;
+        lastPanPositionRef.current = { x: e.clientX, y: e.clientY };
+        canvas.selection = false;
       }
     };
     
@@ -951,15 +881,10 @@ export default function SchematicEditor({
     
     // Add mouseup listener to handle pan end even if mouse is released outside canvas
     const handleMouseUp = (e: MouseEvent) => {
-      console.log('🖱️ Window mouseup:', { 
-        button: e.button, 
-        isPanning: isPanningRef.current 
-      });
       if (e.button === 1 && isPanningRef.current) {
         isPanningRef.current = false;
         lastPanPositionRef.current = null;
         canvas.selection = true;
-        console.log('🖐️ Middle mouse pan ended (window)');
       }
     };
     window.addEventListener('mouseup', handleMouseUp);
@@ -1032,22 +957,9 @@ export default function SchematicEditor({
       const evt = opt.e as MouseEvent;
       const target = opt.target;
       
-      console.log('mouse:down', { 
-        currentTool, 
-        hasTarget: !!target, 
-        targetType: target?.type, 
-        targetRegionId: (target as any)?.regionId, 
-        shiftKey: evt.shiftKey, 
-        isSelectionMode: isSelectionModeRef.current,
-        button: evt.button,
-        buttons: evt.buttons,
-        spacebarPressed: isSpacebarPressedRef.current
-      });
-      
       // Middle mouse button is handled by native window listener
       // to prevent browser default behavior
       if (evt.button === 1) {
-        console.log('👆 Canvas saw middle mouse, but it\'s handled by window listener');
         return;
       }
       
@@ -1526,55 +1438,11 @@ export default function SchematicEditor({
         const deltaX = evt.clientX - lastPanPositionRef.current.x;
         const deltaY = evt.clientY - lastPanPositionRef.current.y;
         
-        console.log('🖐️ Panning - mouse move', {
-          isPanning: isPanningRef.current,
-          deltaX,
-          deltaY,
-          currentPos: { x: evt.clientX, y: evt.clientY },
-          lastPos: lastPanPositionRef.current,
-          buttons: evt.buttons
-        });
-        
         canvas.relativePan(new Point(deltaX, deltaY));
         
         lastPanPositionRef.current = { x: evt.clientX, y: evt.clientY };
         canvas.renderAll();
         return;
-      }
-      
-      // Show/update indicator when spacebar is held
-      if (isSpacebarPressedRef.current) {
-        const currentColor = indicatorColorRef.current;
-        const colors = {
-          pink: { fill: 'rgba(236, 72, 153, 0.3)', stroke: '#ec4899' },
-          yellow: { fill: 'rgba(234, 179, 8, 0.3)', stroke: '#eab308' }
-        };
-        
-        if (!panIndicatorRef.current) {
-          // Create indicator with current color
-          const indicator = new Circle({
-            left: pointer.x,
-            top: pointer.y,
-            radius: 15,
-            fill: colors[currentColor].fill,
-            stroke: colors[currentColor].stroke,
-            strokeWidth: 3,
-            originX: 'center',
-            originY: 'center',
-            selectable: false,
-            evented: false,
-          });
-          
-          panIndicatorRef.current = indicator;
-          canvas.add(indicator);
-        } else {
-          // Update position
-          panIndicatorRef.current.set({
-            left: pointer.x,
-            top: pointer.y,
-          });
-        }
-        canvas.renderAll();
       }
       
       // Handle connection line preview with snap
@@ -2491,8 +2359,6 @@ export default function SchematicEditor({
     });
 
     return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
       window.removeEventListener('mousedown', handleNativeMouseDown, true);
       window.removeEventListener('mouseup', handleMouseUp);
       canvas.dispose();
