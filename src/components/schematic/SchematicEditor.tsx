@@ -4430,19 +4430,42 @@ export default function SchematicEditor({
                   // Clear all connections
                   if (!confirm('Clear all connections?')) return;
                   
-                  const { error } = await supabase
+                  // Delete all schematic lines
+                  const { error: linesError } = await supabase
                     .from('schematic_lines')
                     .delete()
                     .eq('schematic_id', schematicId);
 
-                  if (error) {
-                    console.error('Error clearing lines:', error);
+                  if (linesError) {
+                    console.error('Error clearing lines:', linesError);
                     toast.error('Failed to clear lines');
                     return;
                   }
 
+                  // Delete all meter connections for this site
+                  // First get all meters for this site
+                  const { data: siteMeters } = await supabase
+                    .from('meters')
+                    .select('id')
+                    .eq('site_id', siteId);
+
+                  if (siteMeters && siteMeters.length > 0) {
+                    const meterIds = siteMeters.map(m => m.id);
+                    
+                    // Delete all connections involving any of these meters
+                    const { error: connectionsError } = await supabase
+                      .from('meter_connections')
+                      .delete()
+                      .or(`child_meter_id.in.(${meterIds.join(',')}),parent_meter_id.in.(${meterIds.join(',')})`);
+                    
+                    if (connectionsError) {
+                      console.error('Error clearing connections:', connectionsError);
+                    }
+                  }
+
                   await fetchSchematicLines();
-                  toast.success('All lines cleared');
+                  await fetchMeterConnections();
+                  toast.success('All connections cleared');
                 }
               }}
               disabled={!isEditMode}
