@@ -4398,26 +4398,59 @@ export default function SchematicEditor({
             <Button
               variant="outline"
               onClick={async () => {
-                const { error } = await supabase
-                  .from('schematic_lines')
-                  .delete()
-                  .eq('schematic_id', schematicId);
+                if (selectedConnectionKeys.length > 0) {
+                  // Delete only selected connections
+                  if (!confirm(`Delete ${selectedConnectionKeys.length} selected connection(s)?`)) return;
+                  
+                  for (const connectionKey of selectedConnectionKeys) {
+                    const linesToDelete = schematicLines.filter(line => {
+                      const key = `${line.metadata?.parent_meter_id}-${line.metadata?.child_meter_id}`;
+                      return key === connectionKey;
+                    });
+                    
+                    for (const line of linesToDelete) {
+                      await supabase
+                        .from('schematic_lines')
+                        .delete()
+                        .eq('id', line.id);
+                    }
+                    
+                    const [parentId, childId] = connectionKey.split('-');
+                    await supabase
+                      .from('meter_connections')
+                      .delete()
+                      .match({ parent_meter_id: parentId, child_meter_id: childId });
+                  }
+                  
+                  setSelectedConnectionKeys([]);
+                  await fetchSchematicLines();
+                  await fetchMeterConnections();
+                  toast.success(`Deleted ${selectedConnectionKeys.length} connection(s)`);
+                } else {
+                  // Clear all connections
+                  if (!confirm('Clear all connections?')) return;
+                  
+                  const { error } = await supabase
+                    .from('schematic_lines')
+                    .delete()
+                    .eq('schematic_id', schematicId);
 
-                if (error) {
-                  console.error('Error clearing lines:', error);
-                  toast.error('Failed to clear lines');
-                  return;
+                  if (error) {
+                    console.error('Error clearing lines:', error);
+                    toast.error('Failed to clear lines');
+                    return;
+                  }
+
+                  await fetchSchematicLines();
+                  toast.success('All lines cleared');
                 }
-
-                await fetchSchematicLines();
-                toast.success('All lines cleared');
               }}
               disabled={!isEditMode}
               size="sm"
               className="gap-2"
             >
               <Trash2 className="w-4 h-4" />
-              Clear Lines
+              {selectedConnectionKeys.length > 0 ? 'Delete' : 'Clear'}
             </Button>
           </>
         )}
