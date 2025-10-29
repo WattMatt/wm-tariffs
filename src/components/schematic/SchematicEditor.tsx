@@ -486,6 +486,8 @@ export default function SchematicEditor({
   const [isConnectionsDialogOpen, setIsConnectionsDialogOpen] = useState(false);
   const [connectionStart, setConnectionStart] = useState<{ meterId: string; position: { x: number; y: number } } | null>(null);
   const [meterConnections, setMeterConnections] = useState<any[]>([]);
+  const connectionLineRef = useRef<Line | null>(null);
+  const connectionStartNodeRef = useRef<Circle | null>(null);
   
   // FABRIC.JS EVENT HANDLER PATTERN: State + refs for complex interactions
   // State drives UI updates, refs provide current values to mouse event handlers
@@ -759,6 +761,162 @@ export default function SchematicEditor({
       
       console.log('mouse:down', { currentTool, hasTarget: !!target, targetType: target?.type, targetRegionId: (target as any)?.regionId, shiftKey: evt.shiftKey, isSelectionMode: isSelectionModeRef.current });
       
+      // Handle connection drawing mode
+      if (currentTool === 'connection') {
+        const pointer = canvas.getPointer(opt.e);
+        
+        // Find nearest snap point
+        const snappedPoint = findNearestSnapPoint(canvas, pointer, 15);
+        
+        if (snappedPoint) {
+          // Find which meter this snap point belongs to
+          let snapMeterId: string | null = null;
+          canvas.getObjects().forEach((obj: any) => {
+            if (obj.isSnapPoint && obj.type === 'circle') {
+              const distance = Math.sqrt(
+                Math.pow(obj.left - snappedPoint.x, 2) + Math.pow(obj.top - snappedPoint.y, 2)
+              );
+              if (distance < 1 && obj.meterId) {
+                snapMeterId = obj.meterId;
+              }
+            }
+          });
+          
+          if (!snapMeterId) {
+            toast.error('Click on a meter snap point to start connection');
+            return;
+          }
+          
+          if (!connectionStart) {
+            // Start a new connection
+            setConnectionStart({ 
+              meterId: snapMeterId, 
+              position: snappedPoint 
+            });
+            
+            // Create start node marker
+            const startNode = new Circle({
+              left: snappedPoint.x,
+              top: snappedPoint.y,
+              radius: 6,
+              fill: '#10b981',
+              stroke: '#ffffff',
+              strokeWidth: 2,
+              originX: 'center',
+              originY: 'center',
+              selectable: false,
+              evented: false,
+            });
+            connectionStartNodeRef.current = startNode;
+            canvas.add(startNode);
+            canvas.renderAll();
+            
+            toast.info('Click another snap point to complete connection');
+          } else {
+            // Complete the connection
+            if (snapMeterId === connectionStart.meterId) {
+              toast.error('Cannot connect a meter to itself');
+              // Clean up
+              if (connectionStartNodeRef.current) {
+                canvas.remove(connectionStartNodeRef.current);
+                connectionStartNodeRef.current = null;
+              }
+              if (connectionLineRef.current) {
+                canvas.remove(connectionLineRef.current);
+                connectionLineRef.current = null;
+              }
+              setConnectionStart(null);
+              canvas.renderAll();
+              return;
+            }
+            
+            // Create permanent connection line with nodes
+            const connectionLine = new Line(
+              [connectionStart.position.x, connectionStart.position.y, snappedPoint.x, snappedPoint.y],
+              {
+                stroke: '#0ea5e9',
+                strokeWidth: 3,
+                selectable: false,
+                evented: false,
+              }
+            );
+            (connectionLine as any).isConnectionLine = true;
+            (connectionLine as any).parentMeterId = connectionStart.meterId;
+            (connectionLine as any).childMeterId = snapMeterId;
+            
+            const startNode = new Circle({
+              left: connectionStart.position.x,
+              top: connectionStart.position.y,
+              radius: 5,
+              fill: '#0ea5e9',
+              stroke: '#ffffff',
+              strokeWidth: 2,
+              originX: 'center',
+              originY: 'center',
+              selectable: false,
+              evented: false,
+            });
+            (startNode as any).isConnectionNode = true;
+            
+            const endNode = new Circle({
+              left: snappedPoint.x,
+              top: snappedPoint.y,
+              radius: 5,
+              fill: '#0ea5e9',
+              stroke: '#ffffff',
+              strokeWidth: 2,
+              originX: 'center',
+              originY: 'center',
+              selectable: false,
+              evented: false,
+            });
+            (endNode as any).isConnectionNode = true;
+            
+            canvas.add(connectionLine);
+            canvas.add(startNode);
+            canvas.add(endNode);
+            
+            // Save to database
+            (async () => {
+              const { error } = await supabase
+                .from('meter_connections')
+                .insert({
+                  parent_meter_id: connectionStart.meterId,
+                  child_meter_id: snapMeterId,
+                  connection_type: 'electrical'
+                });
+              
+              if (error) {
+                console.error('Failed to save connection:', error);
+                toast.error('Failed to save connection');
+                canvas.remove(connectionLine);
+                canvas.remove(startNode);
+                canvas.remove(endNode);
+              } else {
+                toast.success('Connection created');
+                fetchMeterConnections();
+              }
+              canvas.renderAll();
+            })();
+            
+            // Clean up preview
+            if (connectionStartNodeRef.current) {
+              canvas.remove(connectionStartNodeRef.current);
+              connectionStartNodeRef.current = null;
+            }
+            if (connectionLineRef.current) {
+              canvas.remove(connectionLineRef.current);
+              connectionLineRef.current = null;
+            }
+            setConnectionStart(null);
+            canvas.renderAll();
+          }
+        } else {
+          toast.error('Click on a meter snap point');
+        }
+        return;
+      }
+      
       // Handle Shift+drag multi-select in selection mode (when shift pressed)
       if (evt.shiftKey && isSelectionModeRef.current) {
         const pointer = canvas.getPointer(opt.e);
@@ -880,6 +1038,35 @@ export default function SchematicEditor({
     canvas.on('mouse:move', (opt) => {
       const evt = opt.e as MouseEvent;
       let pointer = canvas.getPointer(opt.e);
+      
+      // Handle connection line preview
+      if (activeToolRef.current === 'connection' && connectionStart) {
+        // Remove previous preview line
+        if (connectionLineRef.current) {
+          canvas.remove(connectionLineRef.current);
+        }
+        
+        // Find nearest snap point for end position
+        const snappedPoint = findNearestSnapPoint(canvas, pointer, 15);
+        const endPoint = snappedPoint || pointer;
+        
+        // Create preview line
+        const previewLine = new Line(
+          [connectionStart.position.x, connectionStart.position.y, endPoint.x, endPoint.y],
+          {
+            stroke: '#10b981',
+            strokeWidth: 2,
+            strokeDashArray: [5, 5],
+            selectable: false,
+            evented: false,
+          }
+        );
+        
+        connectionLineRef.current = previewLine;
+        canvas.add(previewLine);
+        canvas.renderAll();
+        return;
+      }
       
       // Apply snap-to-point logic when in connection mode
       if (activeToolRef.current === 'connection') {
@@ -2141,6 +2328,93 @@ export default function SchematicEditor({
 
     setMeterConnections(data || []);
   };
+
+  // Render connection lines on canvas when connections or positions change
+  useEffect(() => {
+    if (!fabricCanvas || !meterConnections.length || !meterPositions.length) return;
+
+    // Remove existing connection lines and nodes
+    fabricCanvas.getObjects().forEach((obj: any) => {
+      if (obj.isConnectionLine || obj.isConnectionNode) {
+        fabricCanvas.remove(obj);
+      }
+    });
+
+    // Render each connection
+    meterConnections.forEach(connection => {
+      const parentPos = meterPositions.find(p => p.meter_id === connection.parent_meter_id);
+      const childPos = meterPositions.find(p => p.meter_id === connection.child_meter_id);
+
+      if (!parentPos || !childPos) return;
+
+      // Find the meter card objects to get their snap points
+      let parentSnapPoint: { x: number; y: number } | null = null;
+      let childSnapPoint: { x: number; y: number } | null = null;
+
+      fabricCanvas.getObjects().forEach((obj: any) => {
+        if (obj.type === 'image' && obj.data?.meterId === connection.parent_meter_id) {
+          const bounds = obj.getBoundingRect();
+          const snapPoints = calculateSnapPoints(bounds.left, bounds.top, bounds.width, bounds.height);
+          parentSnapPoint = snapPoints.bottom; // Use bottom snap point as default
+        }
+        if (obj.type === 'image' && obj.data?.meterId === connection.child_meter_id) {
+          const bounds = obj.getBoundingRect();
+          const snapPoints = calculateSnapPoints(bounds.left, bounds.top, bounds.width, bounds.height);
+          childSnapPoint = snapPoints.top; // Use top snap point as default
+        }
+      });
+
+      if (!parentSnapPoint || !childSnapPoint) return;
+
+      // Create connection line
+      const connectionLine = new Line(
+        [parentSnapPoint.x, parentSnapPoint.y, childSnapPoint.x, childSnapPoint.y],
+        {
+          stroke: '#0ea5e9',
+          strokeWidth: 3,
+          selectable: false,
+          evented: false,
+        }
+      );
+      (connectionLine as any).isConnectionLine = true;
+      (connectionLine as any).parentMeterId = connection.parent_meter_id;
+      (connectionLine as any).childMeterId = connection.child_meter_id;
+
+      const startNode = new Circle({
+        left: parentSnapPoint.x,
+        top: parentSnapPoint.y,
+        radius: 5,
+        fill: '#0ea5e9',
+        stroke: '#ffffff',
+        strokeWidth: 2,
+        originX: 'center',
+        originY: 'center',
+        selectable: false,
+        evented: false,
+      });
+      (startNode as any).isConnectionNode = true;
+
+      const endNode = new Circle({
+        left: childSnapPoint.x,
+        top: childSnapPoint.y,
+        radius: 5,
+        fill: '#0ea5e9',
+        stroke: '#ffffff',
+        strokeWidth: 2,
+        originX: 'center',
+        originY: 'center',
+        selectable: false,
+        evented: false,
+      });
+      (endNode as any).isConnectionNode = true;
+
+      fabricCanvas.add(connectionLine);
+      fabricCanvas.add(startNode);
+      fabricCanvas.add(endNode);
+    });
+
+    fabricCanvas.renderAll();
+  }, [fabricCanvas, meterConnections, meterPositions]);
 
 
   const handleCanvasClick = async (e: any) => {
