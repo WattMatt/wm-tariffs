@@ -481,6 +481,12 @@ export default function SchematicEditor({
       } else {
         fabricCanvas.defaultCursor = 'default';
         fabricCanvas.hoverCursor = 'move';
+        
+        // Clean up snap highlight when exiting connection mode
+        const existingHighlight = fabricCanvas.getObjects().find((obj: any) => obj.isSnapHighlight);
+        if (existingHighlight) {
+          fabricCanvas.remove(existingHighlight);
+        }
       }
       fabricCanvas.renderAll();
     }
@@ -950,10 +956,16 @@ export default function SchematicEditor({
             });
           }
           
-          // Clean up preview
+          // Clean up preview and snap highlight
           if (connectionLineRef.current) {
             canvas.remove(connectionLineRef.current);
             connectionLineRef.current = null;
+          }
+          
+          // Remove snap highlight if exists
+          const existingHighlight = canvas.getObjects().find((obj: any) => obj.isSnapHighlight);
+          if (existingHighlight) {
+            canvas.remove(existingHighlight);
           }
           
           setConnectionStart(null);
@@ -1091,8 +1103,32 @@ export default function SchematicEditor({
       if (activeToolRef.current === 'connection' && connectionStartRef.current) {
         // Apply snap-to-point logic (15px threshold)
         const snappedPoint = findNearestSnapPoint(canvas, pointer, 15);
+        
+        // Remove previous snap highlight
+        const existingHighlight = canvas.getObjects().find((obj: any) => obj.isSnapHighlight);
+        if (existingHighlight) {
+          canvas.remove(existingHighlight);
+        }
+        
+        // Add visual feedback when snapping
         if (snappedPoint) {
           pointer = new Point(snappedPoint.x, snappedPoint.y);
+          
+          // Create a highlight circle at the snap point
+          const highlight = new Circle({
+            left: snappedPoint.x,
+            top: snappedPoint.y,
+            radius: 12,
+            fill: 'transparent',
+            stroke: '#10b981',
+            strokeWidth: 3,
+            originX: 'center',
+            originY: 'center',
+            selectable: false,
+            evented: false,
+          });
+          (highlight as any).isSnapHighlight = true;
+          canvas.add(highlight);
         }
         
         // Remove previous preview line
