@@ -300,6 +300,9 @@ async function renderMeterCardOnCanvas(
         borderColor: '#0e74dd',
       });
       
+      // Hide rotation control
+      img.setControlVisible('mtr', false);
+      
       // Store meter index for reference
       (img as any).meterIndex = meterIndex;
       (img as any).meterCardType = 'extracted';
@@ -1976,6 +1979,11 @@ export default function SchematicEditor({
             strokeWidth: isEditMode ? strokeWidth : 0,
           });
           
+          // Hide rotation control
+          if (isEditMode) {
+            img.setControlVisible('mtr', false);
+          }
+          
           // Store the actual meter data
           img.set('data', { 
             type: 'extracted', 
@@ -2195,6 +2203,11 @@ export default function SchematicEditor({
             stroke: borderColor,
             strokeWidth: isEditMode ? 4 : 3,
           });
+          
+          // Hide rotation control
+          if (isEditMode) {
+            img.setControlVisible('mtr', false);
+          }
           
           img.set('data', { meterId: pos.meter_id, positionId: pos.id });
           
