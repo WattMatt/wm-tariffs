@@ -898,11 +898,18 @@ export default function SchematicEditor({
     
     // Add native mousedown listener to capture middle mouse button
     const handleNativeMouseDown = (e: MouseEvent) => {
+      console.log('🖱️ Native mousedown:', { 
+        button: e.button, 
+        buttons: e.buttons,
+        spacebarPressed: isSpacebarPressedRef.current 
+      });
+      
       if (e.button === 1 && isSpacebarPressedRef.current) {
         e.preventDefault();
         console.log('🎨 Middle mouse button detected + spacebar - toggling color');
         setIndicatorColor(prev => {
           const newColor = prev === 'pink' ? 'yellow' : 'pink';
+          console.log('Color changing from', prev, 'to', newColor);
           
           // Update existing indicator if visible
           if (panIndicatorRef.current) {
@@ -916,6 +923,9 @@ export default function SchematicEditor({
               stroke: colors[newColor].stroke
             });
             canvas.renderAll();
+            console.log('✅ Indicator updated to', newColor);
+          } else {
+            console.log('⚠️ No indicator to update');
           }
           
           return newColor;
