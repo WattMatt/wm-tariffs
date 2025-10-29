@@ -1035,7 +1035,12 @@ export default function SchematicEditor({
         isPanning = true;
         lastPanPosition = { x: evt.clientX, y: evt.clientY };
         canvas.selection = false; // Disable selection while panning
-        console.log('🖐️ Middle mouse pan started');
+        console.log('🖐️ Middle mouse pan started', {
+          button: evt.button,
+          clientX: evt.clientX,
+          clientY: evt.clientY,
+          isPanning
+        });
         return;
       }
       
@@ -1514,6 +1519,15 @@ export default function SchematicEditor({
         const deltaX = evt.clientX - lastPanPosition.x;
         const deltaY = evt.clientY - lastPanPosition.y;
         
+        console.log('🖐️ Panning - mouse move', {
+          isPanning,
+          deltaX,
+          deltaY,
+          currentPos: { x: evt.clientX, y: evt.clientY },
+          lastPos: lastPanPosition,
+          buttons: evt.buttons
+        });
+        
         canvas.relativePan(new Point(deltaX, deltaY));
         
         lastPanPosition = { x: evt.clientX, y: evt.clientY };
@@ -1711,7 +1725,7 @@ export default function SchematicEditor({
         isPanning = false;
         lastPanPosition = null;
         canvas.selection = true; // Re-enable selection
-        console.log('🖐️ Middle mouse pan ended');
+        console.log('🖐️ Middle mouse pan ended', { button: evt.button, wasPanning: true });
         return;
       }
       
