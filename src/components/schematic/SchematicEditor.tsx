@@ -975,9 +975,9 @@ export default function SchematicEditor({
         buttons: evt.buttons
       });
       
-      // Handle left click while spacebar is held - toggle indicator color
-      if (evt.button === 0 && isSpacebarPressedRef.current) {
-        console.log('🎨 Left click + spacebar - toggling color');
+      // Handle center mouse button while spacebar is held - toggle indicator color
+      if (evt.button === 1 && isSpacebarPressedRef.current) {
+        console.log('🎨 Center mouse button + spacebar - toggling color');
         setIndicatorColor(prev => {
           const newColor = prev === 'pink' ? 'yellow' : 'pink';
           
