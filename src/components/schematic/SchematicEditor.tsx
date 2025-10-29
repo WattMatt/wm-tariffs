@@ -4236,7 +4236,7 @@ export default function SchematicEditor({
             </>
           )}
           <Button
-            variant="destructive"
+            variant="outline"
             size="sm"
             onClick={async () => {
               // Build confirmation message based on what's selected
