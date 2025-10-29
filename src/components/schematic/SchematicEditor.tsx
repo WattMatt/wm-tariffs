@@ -486,8 +486,10 @@ export default function SchematicEditor({
   const drawStartPointRef = useRef<{ x: number; y: number } | null>(null);
   const startMarkerRef = useRef<any>(null);
   const selectionBoxRef = useRef<any>(null); // For shift+drag multi-select box
-  const panIndicatorRef = useRef<any>(null); // Pink circle for spacebar
+  const panIndicatorRef = useRef<any>(null); // Pink/yellow circle for spacebar
   const isSpacebarPressedRef = useRef<boolean>(false);
+  const [indicatorColor, setIndicatorColor] = useState<'pink' | 'yellow'>('pink');
+  const indicatorColorRef = useRef<'pink' | 'yellow'>('pink');
   const [meters, setMeters] = useState<any[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [extractionProgress, setExtractionProgress] = useState<{ current: number; total: number } | null>(null);
@@ -496,6 +498,11 @@ export default function SchematicEditor({
   const [isCsvDialogOpen, setIsCsvDialogOpen] = useState(false);
   const [extractedMeters, setExtractedMeters] = useState<any[]>(propExtractedMeters);
   const [meterCardObjects, setMeterCardObjects] = useState<Map<number, any>>(new Map()); // Maps meter index to Fabric object
+
+  // Sync indicator color to ref for Fabric.js event handlers
+  useEffect(() => {
+    indicatorColorRef.current = indicatorColor;
+  }, [indicatorColor]);
 
   // Sync extracted meters from props
   useEffect(() => {
@@ -968,6 +975,28 @@ export default function SchematicEditor({
         buttons: evt.buttons
       });
       
+      // Handle middle mouse button - toggle indicator color
+      if (evt.button === 1) {
+        console.log('🎯 Middle mouse button - toggling color');
+        setIndicatorColor(prev => prev === 'pink' ? 'yellow' : 'pink');
+        
+        // Update existing indicator if visible
+        if (panIndicatorRef.current) {
+          const newColor = indicatorColorRef.current === 'pink' ? 'yellow' : 'pink';
+          const colors = {
+            pink: { fill: 'rgba(236, 72, 153, 0.3)', stroke: '#ec4899' },
+            yellow: { fill: 'rgba(234, 179, 8, 0.3)', stroke: '#eab308' }
+          };
+          
+          panIndicatorRef.current.set({
+            fill: colors[newColor].fill,
+            stroke: colors[newColor].stroke
+          });
+          canvas.renderAll();
+        }
+        return;
+      }
+      
       // Handle connection drawing mode with snap
       if (currentTool === 'connection') {
         let pointer = canvas.getPointer(opt.e);
@@ -1438,16 +1467,22 @@ export default function SchematicEditor({
       const evt = opt.e as MouseEvent;
       let pointer = canvas.getPointer(opt.e);
       
-      // Show/update pink indicator when spacebar is held
+      // Show/update indicator when spacebar is held
       if (isSpacebarPressedRef.current) {
+        const currentColor = indicatorColorRef.current;
+        const colors = {
+          pink: { fill: 'rgba(236, 72, 153, 0.3)', stroke: '#ec4899' },
+          yellow: { fill: 'rgba(234, 179, 8, 0.3)', stroke: '#eab308' }
+        };
+        
         if (!panIndicatorRef.current) {
-          // Create pink circle indicator
+          // Create indicator with current color
           const indicator = new Circle({
             left: pointer.x,
             top: pointer.y,
             radius: 15,
-            fill: 'rgba(236, 72, 153, 0.3)',
-            stroke: '#ec4899',
+            fill: colors[currentColor].fill,
+            stroke: colors[currentColor].stroke,
             strokeWidth: 3,
             originX: 'center',
             originY: 'center',
