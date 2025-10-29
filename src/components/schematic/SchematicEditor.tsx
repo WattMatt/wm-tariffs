@@ -494,6 +494,9 @@ export default function SchematicEditor({
   const connectionStartNodeRef = useRef<Circle | null>(null);
   const connectionNodesRef = useRef<Circle[]>([]);
   
+  // Ref for connectionStart to prevent stale closures in Fabric.js handlers
+  const connectionStartRef = useRef<{ meterId: string; position: { x: number; y: number } } | null>(null);
+  
   // FABRIC.JS EVENT HANDLER PATTERN: State + refs for complex interactions
   // State drives UI updates, refs provide current values to mouse event handlers
   
@@ -566,6 +569,12 @@ export default function SchematicEditor({
       fabricCanvas.renderAll();
     }
   }, [activeTool, fabricCanvas, isEditMode]);
+
+  // FABRIC.JS EVENT HANDLER PATTERN: Sync connectionStart state to ref
+  // This ensures canvas event handlers always read the current connection start
+  useEffect(() => {
+    connectionStartRef.current = connectionStart;
+  }, [connectionStart]);
 
   // Update meter card selectability and controls when edit mode changes
   useEffect(() => {
@@ -846,7 +855,7 @@ export default function SchematicEditor({
       if (currentTool === 'connection') {
         const pointer = canvas.getPointer(opt.e);
         
-        if (!connectionStart) {
+        if (!connectionStartRef.current) {
           // First click - start the line
           setConnectionStart({ 
             meterId: '', // Not tied to specific meter
@@ -873,7 +882,7 @@ export default function SchematicEditor({
           toast.info('Click second point to complete line');
         } else {
           // Second click - complete the line
-          const startPos = connectionStart.position;
+          const startPos = connectionStartRef.current.position;
           
           // Create permanent line
           const connectionLine = new Line(
@@ -1052,7 +1061,7 @@ export default function SchematicEditor({
       let pointer = canvas.getPointer(opt.e);
       
       // Handle connection line preview - SIMPLIFIED
-      if (activeToolRef.current === 'connection' && connectionStart) {
+      if (activeToolRef.current === 'connection' && connectionStartRef.current) {
         // Remove previous preview line
         if (connectionLineRef.current) {
           canvas.remove(connectionLineRef.current);
@@ -1060,7 +1069,7 @@ export default function SchematicEditor({
         
         // Create preview line from start to current pointer
         const previewLine = new Line(
-          [connectionStart.position.x, connectionStart.position.y, pointer.x, pointer.y],
+          [connectionStartRef.current.position.x, connectionStartRef.current.position.y, pointer.x, pointer.y],
           {
             stroke: '#10b981',
             strokeWidth: 2,
