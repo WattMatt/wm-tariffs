@@ -977,6 +977,7 @@ export default function SchematicEditor({
       
       // Handle center mouse button while spacebar is held - toggle indicator color
       if (evt.button === 1 && isSpacebarPressedRef.current) {
+        evt.preventDefault(); // Prevent browser's default middle-click behavior
         console.log('🎨 Center mouse button + spacebar - toggling color');
         setIndicatorColor(prev => {
           const newColor = prev === 'pink' ? 'yellow' : 'pink';
