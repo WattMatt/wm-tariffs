@@ -1186,18 +1186,30 @@ export default function SchematicEditor({
               try {
                 console.log('💾 Saving connection:', { parentMeterId, childMeterId, pointsCount: allPoints.length });
                 
-                // 1. Save meter connection relationship
-                const { error: connectionError } = await supabase
+                // 1. Check if meter connection already exists
+                const { data: existingConnection } = await supabase
                   .from('meter_connections')
-                  .insert({
-                    parent_meter_id: parentMeterId,
-                    child_meter_id: childMeterId
-                  });
+                  .select('id')
+                  .eq('parent_meter_id', parentMeterId)
+                  .eq('child_meter_id', childMeterId)
+                  .maybeSingle();
                 
-                if (connectionError) {
-                  console.error('❌ Error saving meter connection:', connectionError);
-                  toast.error('Failed to save meter connection: ' + connectionError.message);
-                  return;
+                // Only insert if connection doesn't exist
+                if (!existingConnection) {
+                  const { error: connectionError } = await supabase
+                    .from('meter_connections')
+                    .insert({
+                      parent_meter_id: parentMeterId,
+                      child_meter_id: childMeterId
+                    });
+                  
+                  if (connectionError) {
+                    console.error('❌ Error saving meter connection:', connectionError);
+                    toast.error('Failed to save meter connection: ' + connectionError.message);
+                    return;
+                  }
+                } else {
+                  console.log('ℹ️ Meter connection already exists, adding visual line only');
                 }
                 
                 console.log('✅ Meter connection saved');
