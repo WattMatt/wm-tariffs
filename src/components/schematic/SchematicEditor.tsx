@@ -826,28 +826,34 @@ export default function SchematicEditor({
       if (currentTool === 'connection') {
         const pointer = canvas.getPointer(opt.e);
         
-        // Find nearest snap point
-        const snappedPoint = findNearestSnapPoint(canvas, pointer, 15);
+        // Check if clicking directly on a snap point circle
+        let snappedPoint: { x: number; y: number } | null = null;
+        let snapMeterId: string | null = null;
         
-        if (snappedPoint) {
-          // Find which meter this snap point belongs to
-          let snapMeterId: string | null = null;
-          canvas.getObjects().forEach((obj: any) => {
-            if (obj.isSnapPoint && obj.type === 'circle') {
-              const distance = Math.sqrt(
-                Math.pow(obj.left - snappedPoint.x, 2) + Math.pow(obj.top - snappedPoint.y, 2)
-              );
-              if (distance < 1 && obj.meterId) {
-                snapMeterId = obj.meterId;
+        if (target && (target as any).isSnapPoint && target.type === 'circle') {
+          // Direct click on snap point
+          snappedPoint = { x: (target as any).left, y: (target as any).top };
+          snapMeterId = (target as any).meterId;
+        } else {
+          // Find nearest snap point
+          snappedPoint = findNearestSnapPoint(canvas, pointer, 15);
+          
+          if (snappedPoint) {
+            // Find which meter this snap point belongs to
+            canvas.getObjects().forEach((obj: any) => {
+              if (obj.isSnapPoint && obj.type === 'circle') {
+                const distance = Math.sqrt(
+                  Math.pow(obj.left - snappedPoint.x, 2) + Math.pow(obj.top - snappedPoint.y, 2)
+                );
+                if (distance < 1 && obj.meterId) {
+                  snapMeterId = obj.meterId;
+                }
               }
-            }
-          });
-          
-          if (!snapMeterId) {
-            toast.error('Click on a meter snap point to start connection');
-            return;
+            });
           }
-          
+        }
+        
+        if (snappedPoint && snapMeterId) {
           // Check if clicking on a point in the current path
           const clickedExistingPoint = connectionPoints.find(p => 
             Math.sqrt(Math.pow(p.position.x - snappedPoint.x, 2) + Math.pow(p.position.y - snappedPoint.y, 2)) < 5
