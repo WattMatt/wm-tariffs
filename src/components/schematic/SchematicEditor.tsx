@@ -875,6 +875,11 @@ export default function SchematicEditor({
       if (currentTool === 'connection') {
         let pointer = canvas.getPointer(opt.e);
         
+        // Skip if clicking on a connection node (to allow dragging)
+        if (target && (target as any).isConnectionNode && (target as any).connectedLines) {
+          return;
+        }
+        
         // Check if clicking on an existing connection line (to add a node)
         if (!connectionStartRef.current && target && (target as any).isConnectionLine) {
           const line = target as Line;
@@ -934,7 +939,7 @@ export default function SchematicEditor({
           const node = new Circle({
             left: pointer.x,
             top: pointer.y,
-            radius: 8,
+            radius: 5,
             fill: '#0ea5e9',
             stroke: '#ffffff',
             strokeWidth: 2,
