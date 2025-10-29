@@ -244,7 +244,6 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
           *,
           parent_connections:meter_connections!meter_connections_child_meter_id_fkey(
             parent_meter_id,
-            connection_type,
             parent_meter:meters!meter_connections_parent_meter_id_fkey(
               meter_number,
               name
@@ -252,7 +251,6 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
           ),
           child_connections:meter_connections!meter_connections_parent_meter_id_fkey(
             child_meter_id,
-            connection_type,
             child_meter:meters!meter_connections_child_meter_id_fkey(
               meter_number,
               name

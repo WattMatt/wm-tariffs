@@ -20,7 +20,6 @@ interface Connection {
   id?: string;
   parent_meter_id: string;
   child_meter_id: string;
-  connection_type: string;
 }
 
 interface MeterConnectionsManagerProps {
@@ -34,9 +33,7 @@ export function MeterConnectionsManager({ open, onOpenChange, siteId, schematicI
   const [meters, setMeters] = useState<MeterData[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [loading, setLoading] = useState(false);
-  const [newConnection, setNewConnection] = useState<Partial<Connection>>({
-    connection_type: 'electrical'
-  });
+  const [newConnection, setNewConnection] = useState<Partial<Connection>>({});
 
   useEffect(() => {
     if (open) {
@@ -112,8 +109,7 @@ export function MeterConnectionsManager({ open, onOpenChange, siteId, schematicI
       .from('meter_connections')
       .insert({
         parent_meter_id: newConnection.parent_meter_id,
-        child_meter_id: newConnection.child_meter_id,
-        connection_type: newConnection.connection_type || 'electrical'
+        child_meter_id: newConnection.child_meter_id
       });
 
     if (error) {
@@ -123,7 +119,7 @@ export function MeterConnectionsManager({ open, onOpenChange, siteId, schematicI
     }
 
     toast.success('Connection created');
-    setNewConnection({ connection_type: 'electrical' });
+    setNewConnection({});
     fetchConnections();
     setLoading(false);
   };
@@ -252,24 +248,7 @@ export function MeterConnectionsManager({ open, onOpenChange, siteId, schematicI
                 </Select>
               </div>
 
-              <div>
-                <Label>Connection Type</Label>
-                <Select
-                  value={newConnection.connection_type}
-                  onValueChange={(value) => setNewConnection({ ...newConnection, connection_type: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="electrical">Electrical</SelectItem>
-                    <SelectItem value="metering">Metering</SelectItem>
-                    <SelectItem value="logical">Logical</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <Button 
+              <Button
                 onClick={handleAddConnection} 
                 disabled={loading || !newConnection.parent_meter_id || !newConnection.child_meter_id}
                 className="w-full"
@@ -311,9 +290,6 @@ export function MeterConnectionsManager({ open, onOpenChange, siteId, schematicI
                           
                           <div className="flex items-center gap-2 pl-4">
                             <ArrowRight className="h-3 w-3 text-muted-foreground" />
-                            <span className="text-xs text-muted-foreground">
-                              {connection.connection_type}
-                            </span>
                           </div>
 
                           <div className="flex items-center gap-2">

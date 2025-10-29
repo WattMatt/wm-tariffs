@@ -29,7 +29,6 @@ interface Connection {
   id: string;
   child_meter_id: string;
   parent_meter_id: string;
-  connection_type: string;
   child_meter: any;
   parent_meter: any;
 }
@@ -41,7 +40,6 @@ export default function MeterConnectionsDialog({ siteId, onClose }: MeterConnect
   const [isAdding, setIsAdding] = useState(false);
   const [childMeterId, setChildMeterId] = useState("");
   const [parentMeterId, setParentMeterId] = useState("");
-  const [connectionType, setConnectionType] = useState("tenant_meter");
 
   useEffect(() => {
     fetchConnections();
@@ -90,8 +88,7 @@ export default function MeterConnectionsDialog({ siteId, onClose }: MeterConnect
       .from("meter_connections")
       .insert({
         child_meter_id: childMeterId,
-        parent_meter_id: parentMeterId,
-        connection_type: connectionType,
+        parent_meter_id: parentMeterId
       });
 
     if (error) {
@@ -121,19 +118,6 @@ export default function MeterConnectionsDialog({ siteId, onClose }: MeterConnect
     fetchConnections();
   };
 
-  const getConnectionTypeBadge = (type: string) => {
-    const colors: Record<string, string> = {
-      tenant_meter: "bg-green-500",
-      check_meter: "bg-orange-500",
-      bulk_supply: "bg-red-500",
-    };
-
-    return (
-      <Badge className={colors[type] || "bg-blue-500"}>
-        {type.replace('_', ' ')}
-      </Badge>
-    );
-  };
 
   return (
     <Dialog open={true} onOpenChange={onClose}>
@@ -185,20 +169,6 @@ export default function MeterConnectionsDialog({ siteId, onClose }: MeterConnect
                     </SelectContent>
                   </Select>
                 </div>
-
-                <div>
-                  <label className="text-sm mb-2 block">Connection Type</label>
-                  <Select value={connectionType} onValueChange={setConnectionType}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="tenant_meter">Tenant Meter</SelectItem>
-                      <SelectItem value="check_meter">Check Meter</SelectItem>
-                      <SelectItem value="bulk_supply">Bulk Supply</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
               </div>
               <div className="flex gap-2">
                 <Button onClick={handleAddConnection} className="flex-1">
@@ -225,7 +195,6 @@ export default function MeterConnectionsDialog({ siteId, onClose }: MeterConnect
                   <TableHead>Child Meter</TableHead>
                   <TableHead className="text-center">→</TableHead>
                   <TableHead>Parent Meter</TableHead>
-                  <TableHead>Type</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -250,9 +219,6 @@ export default function MeterConnectionsDialog({ siteId, onClose }: MeterConnect
                           {conn.parent_meter?.meter_type}
                         </p>
                       </div>
-                    </TableCell>
-                    <TableCell>
-                      {getConnectionTypeBadge(conn.connection_type)}
                     </TableCell>
                     <TableCell className="text-right">
                       <Button

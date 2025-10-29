@@ -1082,8 +1082,7 @@ export default function SchematicEditor({
                   .from('meter_connections')
                   .insert({
                     parent_meter_id: connectionStartRef.current!.meterId,
-                    child_meter_id: snappedPoint.meterId,
-                    connection_type: 'submeter'
+                    child_meter_id: snappedPoint.meterId
                   });
                 
                 if (connectionError) {

@@ -45,7 +45,6 @@ interface MeterConnection {
   id: string;
   child_meter_id: string;
   parent_meter_id: string;
-  connection_type: string;
 }
 
 interface ExtractedMeterData {
@@ -890,16 +889,6 @@ export default function SchematicViewer() {
                                 
                                 if (!childPos || !parentPos || !imageRef.current) return null;
                                 
-                                // Get connection color based on type
-                                const getConnectionColor = (type: string) => {
-                                  switch (type) {
-                                    case 'direct_feed': return '#10b981'; // green
-                                    case 'sub_distribution': return '#3b82f6'; // blue
-                                    case 'backup': return '#f59e0b'; // orange
-                                    default: return '#6b7280'; // gray
-                                  }
-                                };
-                                
                                 return (
                                   <line
                                     key={connection.id}
@@ -907,9 +896,8 @@ export default function SchematicViewer() {
                                     y1={`${childPos.y_position}%`}
                                     x2={`${parentPos.x_position}%`}
                                     y2={`${parentPos.y_position}%`}
-                                    stroke={getConnectionColor(connection.connection_type)}
+                                    stroke="#3b82f6"
                                     strokeWidth="3"
-                                    strokeDasharray={connection.connection_type === 'backup' ? '8,4' : 'none'}
                                     opacity="0.7"
                                   />
                                 );
@@ -1032,15 +1020,6 @@ export default function SchematicViewer() {
                                 
                                 if (!childPos || !parentPos || !imageRef.current) return null;
                                 
-                                const getConnectionColor = (type: string) => {
-                                  switch (type) {
-                                    case 'direct_feed': return '#10b981';
-                                    case 'sub_distribution': return '#3b82f6';
-                                    case 'backup': return '#f59e0b';
-                                    default: return '#6b7280';
-                                  }
-                                };
-                                
                                 return (
                                   <line
                                     key={connection.id}
@@ -1048,9 +1027,8 @@ export default function SchematicViewer() {
                                     y1={`${childPos.y_position}%`}
                                     x2={`${parentPos.x_position}%`}
                                     y2={`${parentPos.y_position}%`}
-                                    stroke={getConnectionColor(connection.connection_type)}
+                                    stroke="#3b82f6"
                                     strokeWidth="3"
-                                    strokeDasharray={connection.connection_type === 'backup' ? '8,4' : 'none'}
                                     opacity="0.7"
                                   />
                                 );

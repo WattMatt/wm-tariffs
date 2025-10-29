@@ -130,7 +130,6 @@ export type Database = {
       meter_connections: {
         Row: {
           child_meter_id: string
-          connection_type: string
           created_at: string | null
           id: string
           parent_meter_id: string
@@ -138,7 +137,6 @@ export type Database = {
         }
         Insert: {
           child_meter_id: string
-          connection_type: string
           created_at?: string | null
           id?: string
           parent_meter_id: string
@@ -146,7 +144,6 @@ export type Database = {
         }
         Update: {
           child_meter_id?: string
-          connection_type?: string
           created_at?: string | null
           id?: string
           parent_meter_id?: string
