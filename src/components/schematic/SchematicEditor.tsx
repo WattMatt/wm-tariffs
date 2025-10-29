@@ -272,7 +272,7 @@ async function renderMeterCardOnCanvas(
   }
   
   const left = (region.x / 100) * canvasWidth;
-  const top = (region.y / 100) * canvasHeight;
+  const top = (region.y / 100) * canvasWidth;
   const targetWidth = (region.width / 100) * canvasWidth;
   const targetHeight = (region.height / 100) * canvasHeight;
   
@@ -2105,8 +2105,8 @@ export default function SchematicEditor({
           const img = new FabricImage(imgElement, {
             left: x,
             top: y,
-            originX: 'left',
-            originY: 'top',
+            originX: 'center',
+            originY: 'center',
             scaleX: baseScaleX * savedScaleX,
             scaleY: baseScaleY * savedScaleY,
             hasControls: isEditMode,
