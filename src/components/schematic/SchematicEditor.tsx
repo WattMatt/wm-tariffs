@@ -486,6 +486,7 @@ export default function SchematicEditor({
   const drawStartPointRef = useRef<{ x: number; y: number } | null>(null);
   const startMarkerRef = useRef<any>(null);
   const selectionBoxRef = useRef<any>(null); // For shift+drag multi-select box
+  const panIndicatorRef = useRef<any>(null); // Pink circle for middle mouse button
   const [meters, setMeters] = useState<any[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [extractionProgress, setExtractionProgress] = useState<{ current: number; total: number } | null>(null);
@@ -931,6 +932,30 @@ export default function SchematicEditor({
       const target = opt.target;
       
       console.log('mouse:down', { currentTool, hasTarget: !!target, targetType: target?.type, targetRegionId: (target as any)?.regionId, shiftKey: evt.shiftKey, isSelectionMode: isSelectionModeRef.current });
+      
+      // Handle middle mouse button - show pink indicator circle
+      if (evt.button === 1) {
+        const pointer = canvas.getPointer(opt.e);
+        
+        // Create pink circle indicator
+        const indicator = new Circle({
+          left: pointer.x,
+          top: pointer.y,
+          radius: 15,
+          fill: 'rgba(236, 72, 153, 0.3)',
+          stroke: '#ec4899',
+          strokeWidth: 3,
+          originX: 'center',
+          originY: 'center',
+          selectable: false,
+          evented: false,
+        });
+        
+        panIndicatorRef.current = indicator;
+        canvas.add(indicator);
+        canvas.renderAll();
+        return;
+      }
       
       // Handle connection drawing mode with snap
       if (currentTool === 'connection') {
@@ -1402,6 +1427,15 @@ export default function SchematicEditor({
       const evt = opt.e as MouseEvent;
       let pointer = canvas.getPointer(opt.e);
       
+      // Update pink indicator position if middle mouse button is held
+      if (panIndicatorRef.current) {
+        panIndicatorRef.current.set({
+          left: pointer.x,
+          top: pointer.y,
+        });
+        canvas.renderAll();
+      }
+      
       // Handle connection line preview with snap
       if (activeToolRef.current === 'connection' && connectionStartRef.current) {
         // Apply snap-to-point logic (15px threshold)
@@ -1551,6 +1585,13 @@ export default function SchematicEditor({
 
     canvas.on('mouse:up', async (opt) => {
       const evt = opt.e as MouseEvent;
+      
+      // Remove pink indicator if middle mouse button is released
+      if (evt.button === 1 && panIndicatorRef.current) {
+        canvas.remove(panIndicatorRef.current);
+        panIndicatorRef.current = null;
+        canvas.renderAll();
+      }
       
       // Handle shift+drag multi-select completion
       if (isShiftDragSelecting && startPoint) {
