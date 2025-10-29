@@ -4108,9 +4108,6 @@ export default function SchematicEditor({
       {/* Second row: Bulk Action buttons (visible when in selection mode with selected items) */}
       {isSelectionMode && (selectedRegionIndices.length > 0 || selectedMeterIds.length > 0) && (
         <div className="flex gap-2 items-center flex-wrap">
-          <span className="text-sm font-medium text-muted-foreground">
-            {selectedRegionIndices.length + selectedMeterIds.length} item(s) selected:
-          </span>
           {selectedRegionIndices.length > 0 && (
             <Button
               variant="destructive"
@@ -4171,7 +4168,7 @@ export default function SchematicEditor({
                 className="gap-2"
               >
                 <Edit className="w-4 h-4" />
-                Edit {selectedMeterIds.length} Meter(s)
+                Edit
               </Button>
               <Button
                 variant="destructive"
@@ -4215,7 +4212,7 @@ export default function SchematicEditor({
                 className="gap-2"
               >
                 <Trash2 className="w-4 h-4" />
-                Delete {selectedMeterIds.length} Meter(s)
+                Delete
               </Button>
             </>
           )}
