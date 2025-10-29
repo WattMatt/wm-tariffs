@@ -884,6 +884,7 @@ export default function SchematicEditor({
                 (connectionLine as any).parentMeterId = startMeterId;
                 (connectionLine as any).childMeterId = endMeterId;
                 canvas.add(connectionLine);
+                canvas.sendObjectToBack(connectionLine); // Send line behind meter cards
               }
               
               // Create permanent nodes at all points
@@ -903,6 +904,9 @@ export default function SchematicEditor({
                 (permanentNode as any).isConnectionNode = true;
                 canvas.add(permanentNode);
               });
+              
+              // Render immediately
+              canvas.renderAll();
               
               // Save to database
               (async () => {
@@ -2501,6 +2505,7 @@ export default function SchematicEditor({
       (endNode as any).isConnectionNode = true;
 
       fabricCanvas.add(connectionLine);
+      fabricCanvas.sendObjectToBack(connectionLine); // Send line behind meter cards
       fabricCanvas.add(startNode);
       fabricCanvas.add(endNode);
     });
