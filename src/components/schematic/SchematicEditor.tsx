@@ -494,11 +494,6 @@ export default function SchematicEditor({
   const [isCsvDialogOpen, setIsCsvDialogOpen] = useState(false);
   const [extractedMeters, setExtractedMeters] = useState<any[]>(propExtractedMeters);
   const [meterCardObjects, setMeterCardObjects] = useState<Map<number, any>>(new Map()); // Maps meter index to Fabric object
-  
-  // FABRIC.JS EVENT HANDLER PATTERN: State + Ref for panning
-  const [isPanning, setIsPanning] = useState(false);
-  const isPanningRef = useRef(false);
-  const lastPanPointRef = useRef<{ x: number; y: number } | null>(null);
 
   // Sync extracted meters from props
   useEffect(() => {
@@ -661,12 +656,6 @@ export default function SchematicEditor({
   useEffect(() => {
     connectionPointsRef.current = connectionPoints;
   }, [connectionPoints]);
-  
-  // FABRIC.JS EVENT HANDLER PATTERN: Sync isPanning state to ref
-  // This ensures canvas event handlers always read the current panning state
-  useEffect(() => {
-    isPanningRef.current = isPanning;
-  }, [isPanning]);
 
   // Update meter card selectability and controls when edit mode changes
   useEffect(() => {
@@ -941,19 +930,7 @@ export default function SchematicEditor({
       const evt = opt.e as MouseEvent;
       const target = opt.target;
       
-      console.log('mouse:down', { currentTool, hasTarget: !!target, targetType: target?.type, targetRegionId: (target as any)?.regionId, shiftKey: evt.shiftKey, isSelectionMode: isSelectionModeRef.current, button: evt.button });
-      
-      // Handle middle mouse button panning (button 1)
-      if (evt.button === 1) {
-        evt.preventDefault();
-        evt.stopPropagation();
-        setIsPanning(true);
-        lastPanPointRef.current = { x: evt.clientX, y: evt.clientY };
-        canvas.selection = false;
-        canvas.defaultCursor = 'grabbing';
-        canvas.requestRenderAll();
-        return;
-      }
+      console.log('mouse:down', { currentTool, hasTarget: !!target, targetType: target?.type, targetRegionId: (target as any)?.regionId, shiftKey: evt.shiftKey, isSelectionMode: isSelectionModeRef.current });
       
       // Handle connection drawing mode with snap
       if (currentTool === 'connection') {
@@ -1425,22 +1402,6 @@ export default function SchematicEditor({
       const evt = opt.e as MouseEvent;
       let pointer = canvas.getPointer(opt.e);
       
-      // Handle panning with middle mouse button
-      if (isPanningRef.current && lastPanPointRef.current) {
-        evt.preventDefault();
-        evt.stopPropagation();
-        const vpt = canvas.viewportTransform;
-        if (vpt) {
-          const deltaX = evt.clientX - lastPanPointRef.current.x;
-          const deltaY = evt.clientY - lastPanPointRef.current.y;
-          vpt[4] += deltaX;
-          vpt[5] += deltaY;
-          canvas.requestRenderAll();
-        }
-        lastPanPointRef.current = { x: evt.clientX, y: evt.clientY };
-        return;
-      }
-      
       // Handle connection line preview with snap
       if (activeToolRef.current === 'connection' && connectionStartRef.current) {
         // Apply snap-to-point logic (15px threshold)
@@ -1590,18 +1551,6 @@ export default function SchematicEditor({
 
     canvas.on('mouse:up', async (opt) => {
       const evt = opt.e as MouseEvent;
-      
-      // Handle panning end
-      if (isPanningRef.current) {
-        evt.preventDefault();
-        evt.stopPropagation();
-        setIsPanning(false);
-        lastPanPointRef.current = null;
-        canvas.selection = true;
-        canvas.defaultCursor = 'default';
-        canvas.requestRenderAll();
-        return;
-      }
       
       // Handle shift+drag multi-select completion
       if (isShiftDragSelecting && startPoint) {
