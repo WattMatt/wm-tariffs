@@ -2621,7 +2621,7 @@ export default function SchematicEditor({
 
           // Handle dragging and scaling in edit mode
           if (isEditMode) {
-            // Update selection rectangle during movement
+            // Update selection rectangle and connection lines during movement
             img.on('moving', () => {
               const selectionRect = fabricCanvas.getObjects().find((obj: any) => 
                 obj.type === 'rect' && obj.selectionMarker && obj.data?.meterId === pos.meter_id
@@ -2635,6 +2635,86 @@ export default function SchematicEditor({
                   height: bounds.height
                 });
               }
+              
+              // Update connection lines connected to this meter
+              const currentX = img.left || 0;
+              const currentY = img.top || 0;
+              const actualWidth = cardWidth * baseScaleX * savedScaleX;
+              const actualHeight = cardHeight * baseScaleY * savedScaleY;
+              
+              // Calculate new snap points based on current position
+              const snapPoints = calculateSnapPoints(
+                currentX - actualWidth / 2,
+                currentY - actualHeight / 2,
+                actualWidth,
+                actualHeight
+              );
+              
+              // Find and update all connection lines attached to this meter
+              fabricCanvas.getObjects().forEach((obj: any) => {
+                if (obj.isConnectionLine) {
+                  const lineMetadata = schematicLines.find(line => 
+                    line.from_x === obj.x1 && line.from_y === obj.y1 &&
+                    line.to_x === obj.x2 && line.to_y === obj.y2
+                  );
+                  
+                  if (lineMetadata?.metadata) {
+                    const parentId = lineMetadata.metadata.parent_meter_id;
+                    const childId = lineMetadata.metadata.child_meter_id;
+                    const nodeIndex = lineMetadata.metadata.node_index || 0;
+                    
+                    // Check if this line is connected to the meter being moved
+                    if (parentId === pos.meter_id && nodeIndex === 0) {
+                      // This is the first segment from this meter, update start point
+                      obj.set({ x1: snapPoints.bottom.x, y1: snapPoints.bottom.y });
+                    } else if (childId === pos.meter_id) {
+                      // This line ends at this meter, check if it's the last segment
+                      const allSegments = schematicLines.filter(line =>
+                        line.metadata?.parent_meter_id === parentId &&
+                        line.metadata?.child_meter_id === childId
+                      );
+                      const maxIndex = Math.max(...allSegments.map(s => s.metadata?.node_index || 0));
+                      
+                      if (nodeIndex === maxIndex) {
+                        // Last segment, update end point
+                        obj.set({ x2: snapPoints.top.x, y2: snapPoints.top.y });
+                      }
+                    }
+                  }
+                }
+                
+                // Update connection nodes that are endpoints
+                if (obj.isConnectionNode && obj.connectedLines) {
+                  obj.connectedLines.forEach((line: any) => {
+                    const lineMetadata = schematicLines.find(l => 
+                      l.from_x === line.x1 && l.from_y === line.y1 &&
+                      l.to_x === line.x2 && l.to_y === line.y2
+                    );
+                    
+                    if (lineMetadata?.metadata) {
+                      const parentId = lineMetadata.metadata.parent_meter_id;
+                      const childId = lineMetadata.metadata.child_meter_id;
+                      const nodeIndex = lineMetadata.metadata.node_index || 0;
+                      
+                      if (parentId === pos.meter_id && nodeIndex === 0) {
+                        obj.set({ left: snapPoints.bottom.x, top: snapPoints.bottom.y });
+                      } else if (childId === pos.meter_id) {
+                        const allSegments = schematicLines.filter(line =>
+                          line.metadata?.parent_meter_id === parentId &&
+                          line.metadata?.child_meter_id === childId
+                        );
+                        const maxIndex = Math.max(...allSegments.map(s => s.metadata?.node_index || 0));
+                        
+                        if (nodeIndex === maxIndex) {
+                          obj.set({ left: snapPoints.top.x, top: snapPoints.top.y });
+                        }
+                      }
+                    }
+                  });
+                }
+              });
+              
+              fabricCanvas.renderAll();
             });
             
             // Update selection rectangle during scaling
@@ -2693,6 +2773,73 @@ export default function SchematicEditor({
                 .eq('id', pos.id);
 
               if (!error) {
+                // Update connection line positions in database
+                const currentX = img.left || 0;
+                const currentY = img.top || 0;
+                const actualWidth = cardWidth * baseScaleX * savedScaleX;
+                const actualHeight = cardHeight * baseScaleY * savedScaleY;
+                
+                const snapPoints = calculateSnapPoints(
+                  currentX - actualWidth / 2,
+                  currentY - actualHeight / 2,
+                  actualWidth,
+                  actualHeight
+                );
+                
+                // Find all schematic lines connected to this meter
+                const linesToUpdate: any[] = [];
+                schematicLines.forEach(line => {
+                  const parentId = line.metadata?.parent_meter_id;
+                  const childId = line.metadata?.child_meter_id;
+                  const nodeIndex = line.metadata?.node_index || 0;
+                  
+                  if (parentId === pos.meter_id && nodeIndex === 0) {
+                    // First segment from this meter
+                    linesToUpdate.push({
+                      id: line.id,
+                      from_x: snapPoints.bottom.x,
+                      from_y: snapPoints.bottom.y
+                    });
+                  } else if (childId === pos.meter_id) {
+                    // Check if it's the last segment to this meter
+                    const allSegments = schematicLines.filter(l =>
+                      l.metadata?.parent_meter_id === parentId &&
+                      l.metadata?.child_meter_id === childId
+                    );
+                    const maxIndex = Math.max(...allSegments.map(s => s.metadata?.node_index || 0));
+                    
+                    if (nodeIndex === maxIndex) {
+                      linesToUpdate.push({
+                        id: line.id,
+                        to_x: snapPoints.top.x,
+                        to_y: snapPoints.top.y
+                      });
+                    }
+                  }
+                });
+                
+                // Update all affected lines in database
+                for (const lineUpdate of linesToUpdate) {
+                  const updateData: any = {};
+                  if (lineUpdate.from_x !== undefined) {
+                    updateData.from_x = lineUpdate.from_x;
+                    updateData.from_y = lineUpdate.from_y;
+                  }
+                  if (lineUpdate.to_x !== undefined) {
+                    updateData.to_x = lineUpdate.to_x;
+                    updateData.to_y = lineUpdate.to_y;
+                  }
+                  
+                  await supabase
+                    .from('schematic_lines')
+                    .update(updateData)
+                    .eq('id', lineUpdate.id);
+                }
+                
+                if (linesToUpdate.length > 0) {
+                  await fetchSchematicLines();
+                }
+                
                 toast.success('Meter card updated');
                 fetchMeterPositions();
               } else {
