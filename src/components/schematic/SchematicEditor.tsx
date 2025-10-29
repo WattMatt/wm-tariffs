@@ -524,6 +524,8 @@ export default function SchematicEditor({
   const [selectedMeterIds, setSelectedMeterIds] = useState<string[]>([]); // For bulk selection with Shift+click
   const [isSelectionMode, setIsSelectionMode] = useState(false); // Track whether selection mode is active
   const [zoom, setZoom] = useState(1);
+  const [isPanning, setIsPanning] = useState(false);
+  const isPanningRef = useRef(false);
   const [isEditMeterDialogOpen, setIsEditMeterDialogOpen] = useState(false);
   const [isBulkEditDialogOpen, setIsBulkEditDialogOpen] = useState(false);
   const [currentBulkEditIndex, setCurrentBulkEditIndex] = useState(0);
@@ -656,6 +658,11 @@ export default function SchematicEditor({
   useEffect(() => {
     connectionPointsRef.current = connectionPoints;
   }, [connectionPoints]);
+
+  // Sync isPanningRef with isPanning state
+  useEffect(() => {
+    isPanningRef.current = isPanning;
+  }, [isPanning]);
 
   // Update meter card selectability and controls when edit mode changes
   useEffect(() => {
@@ -862,60 +869,28 @@ export default function SchematicEditor({
       preserveObjectStacking: true,
     });
 
-    // Handle scroll/wheel events for navigation and zoom - CONSISTENT ACROSS ALL MODES
+    // Handle scroll/wheel events for smooth zoom towards cursor - CONSISTENT ACROSS ALL MODES
     canvas.on('mouse:wheel', (opt) => {
       const evt = opt.e as WheelEvent;
       evt.preventDefault();
       evt.stopPropagation();
 
       const delta = evt.deltaY;
+      let newZoom = canvas.getZoom();
       
-      // CTRL + SCROLL: Zoom in/out with fixed step-based multiplier
-      if (evt.ctrlKey || evt.metaKey) {
-        let newZoom = canvas.getZoom();
-        
-        // Use consistent zoom steps: 1.1 for zoom in (delta < 0), 0.9 for zoom out (delta > 0)
-        // This provides smooth, predictable zoom regardless of device or scroll speed
-        const zoomStep = delta < 0 ? 1.1 : 0.9;
-        newZoom *= zoomStep;
-        
-        // Clamp zoom between 25% and 400% for usability
-        newZoom = Math.min(Math.max(0.25, newZoom), 4);
-        
-        // Zoom to cursor position using original event coordinates (not affected by snap logic)
-        const point = new Point(evt.offsetX, evt.offsetY);
-        canvas.zoomToPoint(point, newZoom);
-        
-        setZoom(newZoom);
-      }
-      // SHIFT + SCROLL: Pan left/right with dampening for smooth control
-      else if (evt.shiftKey) {
-        // Apply dampening multiplier (0.5) for smoother pan speed across devices
-        canvas.relativePan(new Point(-delta * 0.5, 0));
-        
-        // Update controls after pan
-        requestAnimationFrame(() => {
-          const activeObj = canvas.getActiveObject();
-          if (activeObj) {
-            activeObj.setCoords();
-            canvas.requestRenderAll();
-          }
-        });
-      }
-      // SCROLL alone: Pan up/down with dampening for smooth control
-      else {
-        // Apply dampening multiplier (0.5) for smoother pan speed across devices
-        canvas.relativePan(new Point(0, -delta * 0.5));
-        
-        // Update controls after pan
-        requestAnimationFrame(() => {
-          const activeObj = canvas.getActiveObject();
-          if (activeObj) {
-            activeObj.setCoords();
-            canvas.requestRenderAll();
-          }
-        });
-      }
+      // Smooth zoom with 1.1x factor (zoom in when scrolling up, zoom out when scrolling down)
+      // deltaY > 0 means scroll down (zoom out), deltaY < 0 means scroll up (zoom in)
+      const zoomFactor = delta > 0 ? 1 / 1.1 : 1.1;
+      newZoom *= zoomFactor;
+      
+      // Clamp zoom between 0.1x (10%) and 20x (2000%) for maximum flexibility
+      newZoom = Math.max(0.1, Math.min(newZoom, 20));
+      
+      // Zoom towards cursor position for intuitive zoom experience
+      const point = new Point(evt.offsetX, evt.offsetY);
+      canvas.zoomToPoint(point, newZoom);
+      
+      setZoom(newZoom);
     });
 
 
@@ -924,11 +899,23 @@ export default function SchematicEditor({
     let isShiftDragSelecting = false;
     let shiftClickTarget: any = null; // Track target clicked with shift for deferred selection
     let startPoint: { x: number; y: number } | null = null;
+    let lastPanPoint: { x: number; y: number } | null = null;
     
     canvas.on('mouse:down', (opt) => {
       const currentTool = activeToolRef.current;
       const evt = opt.e as MouseEvent;
       const target = opt.target;
+      
+      // Handle middle mouse button for panning (button 1)
+      if (evt.button === 1) {
+        evt.preventDefault();
+        isPanningRef.current = true;
+        setIsPanning(true);
+        lastPanPoint = canvas.getPointer(opt.e);
+        canvas.defaultCursor = 'grabbing';
+        canvas.renderAll();
+        return;
+      }
       
       console.log('mouse:down', { currentTool, hasTarget: !!target, targetType: target?.type, targetRegionId: (target as any)?.regionId, shiftKey: evt.shiftKey, isSelectionMode: isSelectionModeRef.current });
       
@@ -1402,6 +1389,26 @@ export default function SchematicEditor({
       const evt = opt.e as MouseEvent;
       let pointer = canvas.getPointer(opt.e);
       
+      // Handle panning with middle mouse button
+      if (isPanningRef.current && lastPanPoint) {
+        const currentPointer = canvas.getPointer(opt.e);
+        const deltaX = currentPointer.x - lastPanPoint.x;
+        const deltaY = currentPointer.y - lastPanPoint.y;
+        
+        canvas.relativePan(new Point(deltaX, deltaY));
+        lastPanPoint = currentPointer;
+        
+        // Update controls after pan
+        requestAnimationFrame(() => {
+          const activeObj = canvas.getActiveObject();
+          if (activeObj) {
+            activeObj.setCoords();
+            canvas.requestRenderAll();
+          }
+        });
+        return;
+      }
+      
       // Handle connection line preview with snap
       if (activeToolRef.current === 'connection' && connectionStartRef.current) {
         // Apply snap-to-point logic (15px threshold)
@@ -1551,6 +1558,16 @@ export default function SchematicEditor({
 
     canvas.on('mouse:up', async (opt) => {
       const evt = opt.e as MouseEvent;
+      
+      // Handle middle mouse button release
+      if (evt.button === 1 || isPanningRef.current) {
+        isPanningRef.current = false;
+        setIsPanning(false);
+        lastPanPoint = null;
+        canvas.defaultCursor = activeToolRef.current === 'connection' ? 'crosshair' : 'default';
+        canvas.renderAll();
+        return;
+      }
       
       // Handle shift+drag multi-select completion
       if (isShiftDragSelecting && startPoint) {
@@ -3357,7 +3374,7 @@ export default function SchematicEditor({
 
   const handleZoomIn = () => {
     if (!fabricCanvas) return;
-    const newZoom = Math.min(zoom * 1.2, 10);
+    const newZoom = Math.min(zoom * 1.2, 20);
     fabricCanvas.setZoom(newZoom);
     setZoom(newZoom);
     fabricCanvas.renderAll();
@@ -3365,18 +3382,40 @@ export default function SchematicEditor({
 
   const handleZoomOut = () => {
     if (!fabricCanvas) return;
-    const newZoom = Math.max(zoom * 0.8, 0.5);
+    const newZoom = Math.max(zoom * 0.8, 0.1);
     fabricCanvas.setZoom(newZoom);
     setZoom(newZoom);
     fabricCanvas.renderAll();
   };
 
   const handleResetZoom = () => {
-    if (!fabricCanvas) return;
-    fabricCanvas.setZoom(1);
-    fabricCanvas.viewportTransform = [1, 0, 0, 1, 0, 0];
-    setZoom(1);
+    if (!fabricCanvas || !canvasRef.current) return;
+    
+    // Get container dimensions
+    const containerWidth = canvasRef.current.parentElement?.clientWidth || 1400;
+    const containerHeight = canvasRef.current.parentElement?.clientHeight || 900;
+    
+    // Get canvas content dimensions
+    const contentWidth = fabricCanvas.width || 1400;
+    const contentHeight = fabricCanvas.height || 900;
+    
+    // Calculate zoom to fit content with 95% padding
+    const fitZoom = Math.min(
+      containerWidth / contentWidth,
+      containerHeight / contentHeight
+    ) * 0.95;
+    
+    // Calculate center offset
+    const fitOffsetX = (containerWidth - contentWidth * fitZoom) / 2;
+    const fitOffsetY = (containerHeight - contentHeight * fitZoom) / 2;
+    
+    // Apply the fit-to-screen transform
+    fabricCanvas.setZoom(fitZoom);
+    fabricCanvas.viewportTransform = [fitZoom, 0, 0, fitZoom, fitOffsetX, fitOffsetY];
+    setZoom(fitZoom);
     fabricCanvas.renderAll();
+    
+    toast.success('View reset to fit screen');
   };
 
   const navigateToPreviousMeter = async () => {
