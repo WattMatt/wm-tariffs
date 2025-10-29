@@ -1615,8 +1615,9 @@ export default function SchematicEditor({
         const width = Math.abs(pointer.x - startPoint.x);
         const height = Math.abs(pointer.y - startPoint.y);
         
-        // Find all meter cards that intersect with the selection box
+        // Find all meter cards and connections that intersect with the selection box
         const selectedMeterIdsInBox: string[] = [];
+        const selectedConnectionKeysInBox: string[] = [];
         canvas.getObjects().forEach((obj: any) => {
           if (obj.type === 'image' && obj.data?.meterId) {
             const bounds = obj.getBoundingRect();
@@ -1631,6 +1632,41 @@ export default function SchematicEditor({
             
             if (intersects) {
               selectedMeterIdsInBox.push(obj.data.meterId);
+            }
+          }
+          
+          // Check if connection lines intersect with selection box
+          if (obj.type === 'line' && (obj as any).isConnectionLine) {
+            const line = obj as Line;
+            const x1 = line.x1 || 0;
+            const y1 = line.y1 || 0;
+            const x2 = line.x2 || 0;
+            const y2 = line.y2 || 0;
+            
+            // Check if line intersects with selection box (simplified: check if any endpoint is inside)
+            const point1Inside = x1 >= left && x1 <= left + width && y1 >= top && y1 <= top + height;
+            const point2Inside = x2 >= left && x2 <= left + width && y2 >= top && y2 <= top + height;
+            
+            if (point1Inside || point2Inside) {
+              const connectionKey = (obj as any).connectionKey;
+              if (connectionKey && !selectedConnectionKeysInBox.includes(connectionKey)) {
+                selectedConnectionKeysInBox.push(connectionKey);
+              }
+            }
+          }
+          
+          // Check if connection nodes intersect with selection box
+          if (obj.type === 'circle' && (obj as any).isConnectionNode) {
+            const node = obj as Circle;
+            const nodeX = node.left || 0;
+            const nodeY = node.top || 0;
+            
+            // Check if node is inside selection box
+            if (nodeX >= left && nodeX <= left + width && nodeY >= top && nodeY <= top + height) {
+              const connectionKey = (obj as any).connectionKey;
+              if (connectionKey && !selectedConnectionKeysInBox.includes(connectionKey)) {
+                selectedConnectionKeysInBox.push(connectionKey);
+              }
             }
           }
         });
@@ -1675,9 +1711,22 @@ export default function SchematicEditor({
             });
             
             canvas.renderAll();
-            toast.info(`${selectedMeterIdsInBox.length} meter(s) selected`);
             return selectedMeterIdsInBox;
           });
+        }
+        
+        // Add selected connections
+        if (selectedConnectionKeysInBox.length > 0) {
+          setSelectedConnectionKeys(prev => {
+            const combined = [...new Set([...prev, ...selectedConnectionKeysInBox])];
+            return combined;
+          });
+        }
+        
+        // Show toast with total selections
+        const totalSelected = selectedMeterIdsInBox.length + selectedConnectionKeysInBox.length;
+        if (totalSelected > 0) {
+          toast.info(`Selected ${selectedMeterIdsInBox.length} meter(s) and ${selectedConnectionKeysInBox.length} connection(s)`);
         }
         
         // Remove selection box
