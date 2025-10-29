@@ -871,35 +871,11 @@ export default function SchematicEditor({
       preserveObjectStacking: true,
     });
 
-    // Keyboard event handlers for spacebar indicator and color toggle
+    // Keyboard event handler for spacebar indicator
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.code === 'Space' && !isSpacebarPressedRef.current) {
         isSpacebarPressedRef.current = true;
         console.log('🎯 Spacebar pressed!');
-      }
-      
-      // Toggle color with "C" key
-      if (e.code === 'KeyC') {
-        console.log('🎨 C key pressed - toggling color');
-        setIndicatorColor(prev => {
-          const newColor = prev === 'pink' ? 'yellow' : 'pink';
-          
-          // Update existing indicator if visible
-          if (panIndicatorRef.current) {
-            const colors = {
-              pink: { fill: 'rgba(236, 72, 153, 0.3)', stroke: '#ec4899' },
-              yellow: { fill: 'rgba(234, 179, 8, 0.3)', stroke: '#eab308' }
-            };
-            
-            panIndicatorRef.current.set({
-              fill: colors[newColor].fill,
-              stroke: colors[newColor].stroke
-            });
-            canvas.renderAll();
-          }
-          
-          return newColor;
-        });
       }
     };
 
@@ -998,6 +974,31 @@ export default function SchematicEditor({
         button: evt.button,
         buttons: evt.buttons
       });
+      
+      // Handle left click while spacebar is held - toggle indicator color
+      if (evt.button === 0 && isSpacebarPressedRef.current) {
+        console.log('🎨 Left click + spacebar - toggling color');
+        setIndicatorColor(prev => {
+          const newColor = prev === 'pink' ? 'yellow' : 'pink';
+          
+          // Update existing indicator if visible
+          if (panIndicatorRef.current) {
+            const colors = {
+              pink: { fill: 'rgba(236, 72, 153, 0.3)', stroke: '#ec4899' },
+              yellow: { fill: 'rgba(234, 179, 8, 0.3)', stroke: '#eab308' }
+            };
+            
+            panIndicatorRef.current.set({
+              fill: colors[newColor].fill,
+              stroke: colors[newColor].stroke
+            });
+            canvas.renderAll();
+          }
+          
+          return newColor;
+        });
+        return;
+      }
       
       // Handle connection drawing mode with snap
       if (currentTool === 'connection') {
