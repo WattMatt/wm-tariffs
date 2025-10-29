@@ -4024,8 +4024,9 @@ export default function SchematicEditor({
                   toast.info("Region drawing disabled");
                 }
               } else {
-                // Enable draw mode
+                // Enable draw mode and disable selection mode
                 setActiveTool("draw");
+                setIsSelectionMode(false);
                 toast.info("Click to draw regions. Use SCROLL to pan, CTRL+SCROLL to zoom, SHIFT+SCROLL for horizontal.", { duration: 4000 });
               }
             }}
