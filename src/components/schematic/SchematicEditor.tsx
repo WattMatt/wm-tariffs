@@ -139,8 +139,8 @@ const findNearestSnapPoint = (
   canvas: FabricCanvas,
   pointer: { x: number; y: number },
   threshold: number = 10
-): { x: number; y: number } | null => {
-  let nearestPoint: { x: number; y: number } | null = null;
+): { x: number; y: number; meterId: string } | null => {
+  let nearestPoint: { x: number; y: number; meterId: string } | null = null;
   let minDistance = threshold;
   
   // Find all snap point circles on the canvas
@@ -155,7 +155,7 @@ const findNearestSnapPoint = (
       
       if (distance < minDistance) {
         minDistance = distance;
-        nearestPoint = { x: snapX, y: snapY };
+        nearestPoint = { x: snapX, y: snapY, meterId: obj.meterId };
       }
     }
   });
@@ -963,14 +963,18 @@ export default function SchematicEditor({
         
         // Apply snap-to-point logic (15px threshold)
         const snappedPoint = findNearestSnapPoint(canvas, pointer, 15);
-        if (snappedPoint) {
-          pointer = new Point(snappedPoint.x, snappedPoint.y);
-        }
         
         if (!connectionStartRef.current) {
-          // First click - start the line
+          // First click - start the line (only on snap point)
+          if (!snappedPoint) {
+            toast.error('Please click on a meter connection point');
+            return;
+          }
+          
+          pointer = new Point(snappedPoint.x, snappedPoint.y);
+          
           setConnectionStart({ 
-            meterId: '', // Not tied to specific meter
+            meterId: snappedPoint.meterId,
             position: pointer 
           });
           
@@ -993,7 +997,19 @@ export default function SchematicEditor({
           
           toast.info('Click second point to complete line');
         } else {
-          // Second click - complete the line
+          // Second click - complete the line (only on snap point)
+          if (!snappedPoint) {
+            toast.error('Please click on a meter connection point');
+            return;
+          }
+          
+          // Check if trying to connect to the same meter card
+          if (snappedPoint.meterId === connectionStartRef.current.meterId) {
+            toast.error('Cannot connect a meter to itself');
+            return;
+          }
+          
+          pointer = new Point(snappedPoint.x, snappedPoint.y);
           const startPos = connectionStartRef.current.position;
           
           // Create permanent line
