@@ -4224,35 +4224,36 @@ export default function SchematicEditor({
 
       {/* Third row: Other Action buttons */}
       <div className="flex gap-2 items-center flex-wrap">
-        <Button 
-          onClick={handleScanAll} 
-          disabled={!isEditMode || isSaving || drawnRegions.length === 0} 
-          variant="outline" 
-          size="sm"
-          title={drawnRegions.length === 0 ? "Draw regions first to scan meters" : ""}
-        >
-          <Scan className="w-4 h-4 mr-2" />
-          {(() => {
-            const buttonText = drawnRegions.length > 0 ? 'Scan Regions' : 'Scan Meters';
-            if (extractionProgress) {
-              return `${buttonText} (${extractionProgress.current}/${extractionProgress.total})`;
-            } else if (isSaving) {
-              return 'Scanning...';
-            }
-            return buttonText;
-          })()}
-        </Button>
         {drawnRegions.length > 0 && (
-          <Button
-            variant="destructive"
-            onClick={handleClearRegions}
-            disabled={!isEditMode}
-            size="sm"
-            className="gap-2"
-          >
-            <Trash2 className="w-4 h-4" />
-            Clear Regions
-          </Button>
+          <>
+            <Button 
+              onClick={handleScanAll} 
+              disabled={!isEditMode || isSaving} 
+              variant="outline" 
+              size="sm"
+            >
+              <Scan className="w-4 h-4 mr-2" />
+              {(() => {
+                const buttonText = 'Scan Regions';
+                if (extractionProgress) {
+                  return `${buttonText} (${extractionProgress.current}/${extractionProgress.total})`;
+                } else if (isSaving) {
+                  return 'Scanning...';
+                }
+                return buttonText;
+              })()}
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleClearRegions}
+              disabled={!isEditMode}
+              size="sm"
+              className="gap-2"
+            >
+              <Trash2 className="w-4 h-4" />
+              Clear Regions
+            </Button>
+          </>
         )}
         {activeTool === "connection" && (
           <>
