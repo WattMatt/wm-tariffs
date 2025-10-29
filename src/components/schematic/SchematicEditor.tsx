@@ -1043,7 +1043,7 @@ export default function SchematicEditor({
           const startNode = new Circle({
             left: pointer.x,
             top: pointer.y,
-            radius: 6,
+            radius: 5,
             fill: '#10b981',
             originX: 'center',
             originY: 'center',
