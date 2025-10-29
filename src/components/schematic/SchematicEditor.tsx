@@ -1054,8 +1054,8 @@ export default function SchematicEditor({
               const lineSegment = new Line(
                 [allPoints[i].x, allPoints[i].y, allPoints[i + 1].x, allPoints[i + 1].y],
                 {
-                  stroke: '#0ea5e9',
-                  strokeWidth: 3,
+                  stroke: '#000000',
+                  strokeWidth: 2,
                   selectable: false,
                   evented: true,
                   hoverCursor: 'crosshair',
@@ -1080,7 +1080,7 @@ export default function SchematicEditor({
                 left: point.x,
                 top: point.y,
                 radius: 5,
-                fill: '#0ea5e9',
+                fill: '#000000',
                 stroke: '#ffffff',
                 strokeWidth: 2,
                 originX: 'center',
@@ -2804,6 +2804,9 @@ export default function SchematicEditor({
       }
     });
 
+    // Find background image index for proper layering
+    const backgroundIndex = fabricCanvas.getObjects().findIndex(obj => (obj as any).isBackgroundImage);
+
     // Group line segments by connection (parent_meter_id + child_meter_id)
     const connectionGroups = new Map<string, any[]>();
     schematicLines.forEach(line => {
@@ -2833,8 +2836,8 @@ export default function SchematicEditor({
         const lineSegment = new Line(
           [lineData.from_x, lineData.from_y, lineData.to_x, lineData.to_y],
           {
-            stroke: lineData.color || '#0ea5e9',
-            strokeWidth: lineData.stroke_width || 3,
+            stroke: lineData.color || '#000000',
+            strokeWidth: lineData.stroke_width || 2,
             selectable: false,
             evented: true,
             hoverCursor: 'crosshair',
@@ -2842,8 +2845,13 @@ export default function SchematicEditor({
         );
         (lineSegment as any).isConnectionLine = true;
         lineSegments.push(lineSegment);
-        fabricCanvas.add(lineSegment);
-        fabricCanvas.sendObjectToBack(lineSegment);
+        
+        // Add line above background
+        if (backgroundIndex !== -1) {
+          fabricCanvas.insertAt(backgroundIndex + 1, lineSegment);
+        } else {
+          fabricCanvas.add(lineSegment);
+        }
 
         // Collect unique node positions
         if (index === 0) {
@@ -2859,7 +2867,7 @@ export default function SchematicEditor({
           left: pos.x,
           top: pos.y,
           radius: 5,
-          fill: '#0ea5e9',
+          fill: '#000000',
           stroke: '#ffffff',
           strokeWidth: 2,
           originX: 'center',
