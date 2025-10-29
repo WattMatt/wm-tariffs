@@ -931,10 +931,20 @@ export default function SchematicEditor({
       const evt = opt.e as MouseEvent;
       const target = opt.target;
       
-      console.log('mouse:down', { currentTool, hasTarget: !!target, targetType: target?.type, targetRegionId: (target as any)?.regionId, shiftKey: evt.shiftKey, isSelectionMode: isSelectionModeRef.current });
+      console.log('mouse:down', { 
+        currentTool, 
+        hasTarget: !!target, 
+        targetType: target?.type, 
+        targetRegionId: (target as any)?.regionId, 
+        shiftKey: evt.shiftKey, 
+        isSelectionMode: isSelectionModeRef.current,
+        button: evt.button,
+        buttons: evt.buttons
+      });
       
       // Handle middle mouse button - show pink indicator circle
       if (evt.button === 1) {
+        console.log('🎯 Middle mouse button detected!');
         const pointer = canvas.getPointer(opt.e);
         const vpt = canvas.viewportTransform;
         if (!vpt) return;
