@@ -898,7 +898,58 @@ export default function SchematicEditor({
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
     
-    // Note: Middle mouse button handling moved to canvas events below
+    // Add native mousedown listener to handle middle mouse button (both color toggle and panning)
+    const handleNativeMouseDown = (e: MouseEvent) => {
+      console.log('🖱️ Native mousedown:', { 
+        button: e.button, 
+        buttons: e.buttons,
+        spacebarPressed: isSpacebarPressedRef.current,
+        isPanning: isPanningRef.current,
+        target: e.target
+      });
+      
+      if (e.button === 1) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        if (isSpacebarPressedRef.current) {
+          // Spacebar + middle mouse = toggle color
+          console.log('🎨 Middle mouse + spacebar - toggling color');
+          setIndicatorColor(prev => {
+            const newColor = prev === 'pink' ? 'yellow' : 'pink';
+            console.log('Color changing from', prev, 'to', newColor);
+            
+            // Update existing indicator if visible
+            if (panIndicatorRef.current) {
+              const colors = {
+                pink: { fill: 'rgba(236, 72, 153, 0.3)', stroke: '#ec4899' },
+                yellow: { fill: 'rgba(234, 179, 8, 0.3)', stroke: '#eab308' }
+              };
+              
+              panIndicatorRef.current.set({
+                fill: colors[newColor].fill,
+                stroke: colors[newColor].stroke
+              });
+              canvas.renderAll();
+              console.log('✅ Indicator updated to', newColor);
+            }
+            return newColor;
+          });
+        } else {
+          // Middle mouse alone = start panning
+          isPanningRef.current = true;
+          lastPanPositionRef.current = { x: e.clientX, y: e.clientY };
+          canvas.selection = false;
+          console.log('🖐️ Middle mouse pan started', {
+            clientX: e.clientX,
+            clientY: e.clientY
+          });
+        }
+      }
+    };
+    
+    // Add to window with capture phase to intercept before Fabric.js
+    window.addEventListener('mousedown', handleNativeMouseDown, true);
     
     // Add mouseup listener to handle pan end even if mouse is released outside canvas
     const handleMouseUp = (e: MouseEvent) => {
@@ -995,43 +1046,10 @@ export default function SchematicEditor({
         spacebarPressed: isSpacebarPressedRef.current
       });
       
-      // Handle middle mouse button
+      // Middle mouse button is handled by window listener above, skip here
       if (evt.button === 1) {
-        if (isSpacebarPressedRef.current) {
-          // Spacebar + middle mouse = toggle color
-          console.log('🎨 Middle mouse + spacebar - toggling color');
-          setIndicatorColor(prev => {
-            const newColor = prev === 'pink' ? 'yellow' : 'pink';
-            console.log('Color changing from', prev, 'to', newColor);
-            
-            // Update existing indicator if visible
-            if (panIndicatorRef.current) {
-              const colors = {
-                pink: { fill: 'rgba(236, 72, 153, 0.3)', stroke: '#ec4899' },
-                yellow: { fill: 'rgba(234, 179, 8, 0.3)', stroke: '#eab308' }
-              };
-              
-              panIndicatorRef.current.set({
-                fill: colors[newColor].fill,
-                stroke: colors[newColor].stroke
-              });
-              canvas.renderAll();
-              console.log('✅ Indicator updated to', newColor);
-            }
-            return newColor;
-          });
-          return;
-        } else {
-          // Middle mouse alone = start panning
-          isPanningRef.current = true;
-          lastPanPositionRef.current = { x: evt.clientX, y: evt.clientY };
-          canvas.selection = false;
-          console.log('🖐️ Middle mouse pan started', {
-            clientX: evt.clientX,
-            clientY: evt.clientY
-          });
-          return;
-        }
+        console.log('⏭️ Skipping middle mouse in canvas handler (handled by window)');
+        return;
       }
       
       // Handle connection drawing mode with snap
@@ -2476,6 +2494,7 @@ export default function SchematicEditor({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('mousedown', handleNativeMouseDown, true);
       window.removeEventListener('mouseup', handleMouseUp);
       canvas.dispose();
     };
