@@ -4141,7 +4141,7 @@ export default function SchematicEditor({
           {selectedMeterIds.length > 0 && (
             <>
               <Button
-                variant="default"
+                variant="outline"
                 size="sm"
                 onClick={async () => {
                   // Fetch all meter data for bulk editing
@@ -4171,7 +4171,7 @@ export default function SchematicEditor({
                 Edit
               </Button>
               <Button
-                variant="destructive"
+                variant="outline"
                 size="sm"
                 onClick={async () => {
                   if (!confirm(`Delete ${selectedMeterIds.length} selected meter(s)? This will also delete all associated readings and positions.`)) return;
@@ -4242,7 +4242,7 @@ export default function SchematicEditor({
               })()}
             </Button>
             <Button
-              variant="destructive"
+              variant="outline"
               onClick={handleClearRegions}
               disabled={!isEditMode || drawnRegions.length === 0}
               size="sm"
@@ -4266,7 +4266,7 @@ export default function SchematicEditor({
               Manage
             </Button>
             <Button
-              variant="destructive"
+              variant="outline"
               onClick={async () => {
                 const { error } = await supabase
                   .from('schematic_lines')
