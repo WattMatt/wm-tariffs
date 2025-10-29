@@ -936,24 +936,32 @@ export default function SchematicEditor({
       // Handle middle mouse button - show pink indicator circle
       if (evt.button === 1) {
         const pointer = canvas.getPointer(opt.e);
+        const vpt = canvas.viewportTransform;
+        if (!vpt) return;
         
-        // Create pink circle indicator
-        const indicator = new Circle({
-          left: pointer.x,
-          top: pointer.y,
-          radius: 15,
-          fill: 'rgba(236, 72, 153, 0.3)',
-          stroke: '#ec4899',
-          strokeWidth: 3,
-          originX: 'center',
-          originY: 'center',
-          selectable: false,
-          evented: false,
-        });
+        // Check if pointer is within canvas bounds
+        const canvasWidth = canvas.getWidth();
+        const canvasHeight = canvas.getHeight();
         
-        panIndicatorRef.current = indicator;
-        canvas.add(indicator);
-        canvas.renderAll();
+        if (pointer.x >= 0 && pointer.x <= canvasWidth && pointer.y >= 0 && pointer.y <= canvasHeight) {
+          // Create pink circle indicator
+          const indicator = new Circle({
+            left: pointer.x,
+            top: pointer.y,
+            radius: 15,
+            fill: 'rgba(236, 72, 153, 0.3)',
+            stroke: '#ec4899',
+            strokeWidth: 3,
+            originX: 'center',
+            originY: 'center',
+            selectable: false,
+            evented: false,
+          });
+          
+          panIndicatorRef.current = indicator;
+          canvas.add(indicator);
+          canvas.renderAll();
+        }
         return;
       }
       
@@ -1429,10 +1437,19 @@ export default function SchematicEditor({
       
       // Update pink indicator position if middle mouse button is held
       if (panIndicatorRef.current) {
-        panIndicatorRef.current.set({
-          left: pointer.x,
-          top: pointer.y,
-        });
+        const canvasWidth = canvas.getWidth();
+        const canvasHeight = canvas.getHeight();
+        
+        // Hide indicator if mouse leaves canvas bounds
+        if (pointer.x < 0 || pointer.x > canvasWidth || pointer.y < 0 || pointer.y > canvasHeight) {
+          canvas.remove(panIndicatorRef.current);
+          panIndicatorRef.current = null;
+        } else {
+          panIndicatorRef.current.set({
+            left: pointer.x,
+            top: pointer.y,
+          });
+        }
         canvas.renderAll();
       }
       
