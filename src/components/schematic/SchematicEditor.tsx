@@ -896,8 +896,15 @@ export default function SchematicEditor({
           );
           (connectionLine as any).isConnectionLine = true;
           
-          canvas.add(connectionLine);
-          canvas.sendObjectToBack(connectionLine);
+          // Add line above background but below other objects
+          const objects = canvas.getObjects();
+          const backgroundIndex = objects.findIndex(obj => (obj as any).isBackgroundImage);
+          if (backgroundIndex !== -1) {
+            canvas.insertAt(backgroundIndex + 1, connectionLine);
+          } else {
+            canvas.add(connectionLine);
+            canvas.sendObjectToBack(connectionLine);
+          }
           
           // Create end node
           const endNode = new Circle({
