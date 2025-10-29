@@ -531,7 +531,7 @@ export default function SchematicEditor({
   const [isBulkEditDialogOpen, setIsBulkEditDialogOpen] = useState(false);
   const [currentBulkEditIndex, setCurrentBulkEditIndex] = useState(0);
   const [bulkEditMeterIds, setBulkEditMeterIds] = useState<string[]>([]);
-  const [selectedConnectionKey, setSelectedConnectionKey] = useState<string | null>(null);
+  const [selectedConnectionKeys, setSelectedConnectionKeys] = useState<string[]>([]);
   const [isConfirmMeterDialogOpen, setIsConfirmMeterDialogOpen] = useState(false);
   const [editingMeter, setEditingMeter] = useState<any>(null);
   const [isViewMeterDialogOpen, setIsViewMeterDialogOpen] = useState(false);
@@ -974,11 +974,11 @@ export default function SchematicEditor({
           
           if (clickedConnectionKey) {
             // Toggle selection
-            if (selectedConnectionKey === clickedConnectionKey) {
-              setSelectedConnectionKey(null);
+            if (selectedConnectionKeys.includes(clickedConnectionKey)) {
+              setSelectedConnectionKeys(prev => prev.filter(k => k !== clickedConnectionKey));
               toast.info('Connection deselected');
             } else {
-              setSelectedConnectionKey(clickedConnectionKey);
+              setSelectedConnectionKeys([...selectedConnectionKeys, clickedConnectionKey]);
               toast.info('Connection selected');
             }
             return;
@@ -3230,7 +3230,7 @@ export default function SchematicEditor({
 
       // Create line segments and collect node positions
       sortedLines.forEach((lineData, index) => {
-        const isSelected = connectionKey === selectedConnectionKey;
+        const isSelected = selectedConnectionKeys.includes(connectionKey);
         const lineSegment = new Line(
           [lineData.from_x, lineData.from_y, lineData.to_x, lineData.to_y],
           {
@@ -3245,10 +3245,20 @@ export default function SchematicEditor({
         (lineSegment as any).connectionKey = connectionKey;
         
         // Add click handler for selecting connections in select mode
-        lineSegment.on('mousedown', () => {
+        lineSegment.on('mousedown', (e: any) => {
           if (activeToolRef.current === 'select' && isSelectionModeRef.current) {
-            setSelectedConnectionKey(connectionKey);
-            toast.info("Connection selected - click Delete to remove");
+            if (e.e.shiftKey) {
+              // Shift key: toggle selection
+              setSelectedConnectionKeys(prev => 
+                prev.includes(connectionKey) 
+                  ? prev.filter(k => k !== connectionKey)
+                  : [...prev, connectionKey]
+              );
+            } else {
+              // No shift: replace selection
+              setSelectedConnectionKeys([connectionKey]);
+            }
+            toast.info(`Connection ${e.e.shiftKey ? 'toggled' : 'selected'}`);
           }
         });
         lineSegments.push(lineSegment);
@@ -3275,7 +3285,7 @@ export default function SchematicEditor({
       // Create nodes at all positions
       nodePositions.forEach((pos, index) => {
         const isEndpoint = index === 0 || index === nodePositions.length - 1;
-        const isSelected = connectionKey === selectedConnectionKey;
+        const isSelected = selectedConnectionKeys.includes(connectionKey);
         const node = new Circle({
           left: pos.x,
           top: pos.y,
@@ -3293,10 +3303,20 @@ export default function SchematicEditor({
         (node as any).connectionKey = connectionKey;
         
         // Add click handler for selecting connections in select mode
-        node.on('mousedown', () => {
-          if (activeToolRef.current === 'select' && isSelectionModeRef.current) {
-            setSelectedConnectionKey(connectionKey);
-            toast.info("Connection selected - click Delete to remove");
+        node.on('mousedown', (e: any) => {
+          if (activeToolRef.current === 'select' && isSelectionModeRef.current && isEndpoint) {
+            if (e.e.shiftKey) {
+              // Shift key: toggle selection
+              setSelectedConnectionKeys(prev => 
+                prev.includes(connectionKey) 
+                  ? prev.filter(k => k !== connectionKey)
+                  : [...prev, connectionKey]
+              );
+            } else {
+              // No shift: replace selection
+              setSelectedConnectionKeys([connectionKey]);
+            }
+            toast.info(`Connection ${e.e.shiftKey ? 'toggled' : 'selected'}`);
           }
         });
         
@@ -3316,7 +3336,7 @@ export default function SchematicEditor({
     });
 
     fabricCanvas.renderAll();
-  }, [fabricCanvas, schematicLines, selectedConnectionKey]);
+  }, [fabricCanvas, schematicLines, selectedConnectionKeys]);
 
 
   const handleCanvasClick = async (e: any) => {
@@ -3983,7 +4003,7 @@ export default function SchematicEditor({
           <Button
             variant={isSelectionMode ? "default" : "outline"}
             onClick={() => {
-              const hasSelections = selectedRegionIndices.length > 0 || selectedMeterIds.length > 0 || selectedConnectionKey;
+              const hasSelections = selectedRegionIndices.length > 0 || selectedMeterIds.length > 0 || selectedConnectionKeys.length > 0;
               
               if (isSelectionMode && hasSelections) {
                 // Clear all selections and reset visual styling
@@ -4001,7 +4021,7 @@ export default function SchematicEditor({
                 }
                 setSelectedRegionIndices([]);
                 setSelectedMeterIds([]);
-                setSelectedConnectionKey(null);
+                setSelectedConnectionKeys([]);
                 setIsSelectionMode(false);
                 toast.info("Selection cleared");
               } else {
@@ -4021,7 +4041,7 @@ export default function SchematicEditor({
             className="gap-2"
           >
             <Check className="w-4 h-4" />
-            Select {(selectedRegionIndices.length + selectedMeterIds.length + (selectedConnectionKey ? 1 : 0)) > 0 && `(${selectedRegionIndices.length + selectedMeterIds.length + (selectedConnectionKey ? 1 : 0)})`}
+            Select {(selectedRegionIndices.length + selectedMeterIds.length + selectedConnectionKeys.length) > 0 && `(${selectedRegionIndices.length + selectedMeterIds.length + selectedConnectionKeys.length})`}
           </Button>
           <Button
             variant={activeTool === "draw" ? "default" : "outline"}
@@ -4161,44 +4181,46 @@ export default function SchematicEditor({
               Delete {selectedRegionIndices.length} Region(s)
             </Button>
           )}
-          {selectedConnectionKey && (
+          {selectedConnectionKeys.length > 0 && (
             <>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={async () => {
-                  if (!confirm('Delete this connection? All line segments will be removed.')) return;
+                  if (!confirm(`Delete ${selectedConnectionKeys.length} connection(s)? All line segments will be removed.`)) return;
                   
-                  // Find all line segments for this connection
-                  const linesToDelete = schematicLines.filter(line => {
-                    const key = `${line.metadata?.parent_meter_id}-${line.metadata?.child_meter_id}`;
-                    return key === selectedConnectionKey;
-                  });
-                  
-                  // Delete all line segments
-                  for (const line of linesToDelete) {
+                  for (const connectionKey of selectedConnectionKeys) {
+                    // Find all line segments for this connection
+                    const linesToDelete = schematicLines.filter(line => {
+                      const key = `${line.metadata?.parent_meter_id}-${line.metadata?.child_meter_id}`;
+                      return key === connectionKey;
+                    });
+                    
+                    // Delete all line segments
+                    for (const line of linesToDelete) {
+                      await supabase
+                        .from('schematic_lines')
+                        .delete()
+                        .eq('id', line.id);
+                    }
+                    
+                    // Also delete from meter_connections table
+                    const [parentId, childId] = connectionKey.split('-');
                     await supabase
-                      .from('schematic_lines')
+                      .from('meter_connections')
                       .delete()
-                      .eq('id', line.id);
+                      .match({ parent_meter_id: parentId, child_meter_id: childId });
                   }
                   
-                  // Also delete from meter_connections table
-                  const [parentId, childId] = selectedConnectionKey.split('-');
-                  await supabase
-                    .from('meter_connections')
-                    .delete()
-                    .match({ parent_meter_id: parentId, child_meter_id: childId });
-                  
-                  toast.success('Connection deleted');
-                  setSelectedConnectionKey(null);
+                  toast.success(`Deleted ${selectedConnectionKeys.length} connection(s)`);
+                  setSelectedConnectionKeys([]);
                   fetchSchematicLines();
                   fetchMeterConnections();
                 }}
                 className="gap-2"
               >
                 <Trash2 className="w-4 h-4" />
-                Delete Connection
+                Delete {selectedConnectionKeys.length} Connection(s)
               </Button>
               <div className="h-6 w-px bg-border" />
             </>
