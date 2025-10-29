@@ -89,7 +89,7 @@ import { Canvas as FabricCanvas, Circle, Line, Text, FabricImage, Rect, Polygon,
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Save, Zap, Link2, Trash2, Upload, Plus, ZoomIn, ZoomOut, Maximize2, Pencil, Scan, Check, Edit, ChevronLeft, ChevronRight } from "lucide-react";
+import { Save, Zap, Link2, Trash2, Upload, Plus, ZoomIn, ZoomOut, Maximize2, Pencil, Scan, Check, Edit, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -526,6 +526,7 @@ export default function SchematicEditor({
   const [selectedMeterIds, setSelectedMeterIds] = useState<string[]>([]); // For bulk selection with Shift+click
   const [isSelectionMode, setIsSelectionMode] = useState(false); // Track whether selection mode is active
   const [zoom, setZoom] = useState(1);
+  const [isCanvasReady, setIsCanvasReady] = useState(false);
   const [isEditMeterDialogOpen, setIsEditMeterDialogOpen] = useState(false);
   const [isBulkEditDialogOpen, setIsBulkEditDialogOpen] = useState(false);
   const [currentBulkEditIndex, setCurrentBulkEditIndex] = useState(0);
@@ -2323,6 +2324,7 @@ export default function SchematicEditor({
     });
 
     setFabricCanvas(canvas);
+    setIsCanvasReady(false);
 
     // Load background image
     FabricImage.fromURL(schematicUrl, {
@@ -2356,6 +2358,9 @@ export default function SchematicEditor({
       canvas.add(img);
       canvas.sendObjectToBack(img);
       canvas.renderAll();
+      
+      // Mark canvas as ready after image is loaded and canvas is resized
+      setIsCanvasReady(true);
     });
 
     return () => {
@@ -4412,8 +4417,16 @@ export default function SchematicEditor({
         </div>
       </div>
 
-      <div className="border border-border rounded-lg overflow-hidden shadow-lg">
+      <div className="border border-border rounded-lg overflow-hidden shadow-lg relative">
         <canvas ref={canvasRef} />
+        {!isCanvasReady && (
+          <div className="absolute inset-0 flex items-center justify-center bg-muted/50">
+            <div className="text-center">
+              <Loader2 className="w-8 h-8 animate-spin mx-auto mb-2" />
+              <p className="text-sm text-muted-foreground">Loading schematic...</p>
+            </div>
+          </div>
+        )}
       </div>
 
       {meterPositions.length > 0 && (
