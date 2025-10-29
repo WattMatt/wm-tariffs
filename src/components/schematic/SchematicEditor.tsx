@@ -471,6 +471,20 @@ export default function SchematicEditor({
   useEffect(() => {
     setExtractedMeters(propExtractedMeters);
   }, [propExtractedMeters]);
+  
+  // Set cursor to crosshair when in connection mode
+  useEffect(() => {
+    if (fabricCanvas) {
+      if (activeTool === 'connection') {
+        fabricCanvas.defaultCursor = 'crosshair';
+        fabricCanvas.hoverCursor = 'crosshair';
+      } else {
+        fabricCanvas.defaultCursor = 'default';
+        fabricCanvas.hoverCursor = 'move';
+      }
+      fabricCanvas.renderAll();
+    }
+  }, [activeTool, fabricCanvas]);
   const [selectedMeterIndex, setSelectedMeterIndex] = useState<number | null>(null);
   const [selectedMeterId, setSelectedMeterId] = useState<string | null>(null);
   const [selectedMeterIds, setSelectedMeterIds] = useState<string[]>([]); // For bulk selection with Shift+click
@@ -851,9 +865,15 @@ export default function SchematicEditor({
       
       console.log('mouse:down', { currentTool, hasTarget: !!target, targetType: target?.type, targetRegionId: (target as any)?.regionId, shiftKey: evt.shiftKey, isSelectionMode: isSelectionModeRef.current });
       
-      // Handle connection drawing mode - SIMPLIFIED
+      // Handle connection drawing mode with snap
       if (currentTool === 'connection') {
-        const pointer = canvas.getPointer(opt.e);
+        let pointer = canvas.getPointer(opt.e);
+        
+        // Apply snap-to-point logic (15px threshold)
+        const snappedPoint = findNearestSnapPoint(canvas, pointer, 15);
+        if (snappedPoint) {
+          pointer = new Point(snappedPoint.x, snappedPoint.y);
+        }
         
         if (!connectionStartRef.current) {
           // First click - start the line
@@ -1067,14 +1087,20 @@ export default function SchematicEditor({
       const evt = opt.e as MouseEvent;
       let pointer = canvas.getPointer(opt.e);
       
-      // Handle connection line preview - SIMPLIFIED
+      // Handle connection line preview with snap
       if (activeToolRef.current === 'connection' && connectionStartRef.current) {
+        // Apply snap-to-point logic (15px threshold)
+        const snappedPoint = findNearestSnapPoint(canvas, pointer, 15);
+        if (snappedPoint) {
+          pointer = new Point(snappedPoint.x, snappedPoint.y);
+        }
+        
         // Remove previous preview line
         if (connectionLineRef.current) {
           canvas.remove(connectionLineRef.current);
         }
         
-        // Create preview line from start to current pointer
+        // Create preview line from start to current (snapped) pointer
         const previewLine = new Line(
           [connectionStartRef.current.position.x, connectionStartRef.current.position.y, pointer.x, pointer.y],
           {
@@ -1090,14 +1116,6 @@ export default function SchematicEditor({
         canvas.add(previewLine);
         canvas.renderAll();
         return;
-      }
-      
-      // Apply snap-to-point logic when in connection mode
-      if (activeToolRef.current === 'connection') {
-        const snappedPoint = findNearestSnapPoint(canvas, pointer, 10);
-        if (snappedPoint) {
-          pointer = new Point(snappedPoint.x, snappedPoint.y);
-        }
       }
       
       // Check if user is dragging with shift held and selection mode active
