@@ -1129,8 +1129,8 @@ export default function SchematicEditor({
                     to_x: allPoints[i + 1].x,
                     to_y: allPoints[i + 1].y,
                     line_type: 'connection',
-                    color: '#0ea5e9',
-                    stroke_width: 3,
+                    color: '#000000',
+                    stroke_width: 2,
                     metadata: {
                       parent_meter_id: connectionStartRef.current!.meterId,
                       child_meter_id: snappedPoint.meterId,
@@ -2818,8 +2818,8 @@ export default function SchematicEditor({
         const lineSegment = new Line(
           [lineData.from_x, lineData.from_y, lineData.to_x, lineData.to_y],
           {
-            stroke: lineData.color || '#0ea5e9',
-            strokeWidth: lineData.stroke_width || 3,
+            stroke: lineData.color || '#000000',
+            strokeWidth: lineData.stroke_width || 2,
             selectable: false,
             evented: true,
             hoverCursor: 'crosshair',
@@ -2844,7 +2844,7 @@ export default function SchematicEditor({
           left: pos.x,
           top: pos.y,
           radius: 5,
-          fill: '#0ea5e9',
+          fill: '#000000',
           stroke: '#ffffff',
           strokeWidth: 2,
           originX: 'center',
