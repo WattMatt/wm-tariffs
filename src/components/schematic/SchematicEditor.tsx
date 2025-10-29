@@ -895,6 +895,35 @@ export default function SchematicEditor({
 
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
+    
+    // Add native mousedown listener to capture middle mouse button
+    const handleNativeMouseDown = (e: MouseEvent) => {
+      if (e.button === 1 && isSpacebarPressedRef.current) {
+        e.preventDefault();
+        console.log('🎨 Middle mouse button detected + spacebar - toggling color');
+        setIndicatorColor(prev => {
+          const newColor = prev === 'pink' ? 'yellow' : 'pink';
+          
+          // Update existing indicator if visible
+          if (panIndicatorRef.current) {
+            const colors = {
+              pink: { fill: 'rgba(236, 72, 153, 0.3)', stroke: '#ec4899' },
+              yellow: { fill: 'rgba(234, 179, 8, 0.3)', stroke: '#eab308' }
+            };
+            
+            panIndicatorRef.current.set({
+              fill: colors[newColor].fill,
+              stroke: colors[newColor].stroke
+            });
+            canvas.renderAll();
+          }
+          
+          return newColor;
+        });
+      }
+    };
+    
+    canvasRef.current.addEventListener('mousedown', handleNativeMouseDown);
 
     // Handle scroll/wheel events for navigation and zoom - CONSISTENT ACROSS ALL MODES
     canvas.on('mouse:wheel', (opt) => {
@@ -975,31 +1004,6 @@ export default function SchematicEditor({
         buttons: evt.buttons
       });
       
-      // Handle center mouse button while spacebar is held - toggle indicator color
-      if (evt.button === 1 && isSpacebarPressedRef.current) {
-        evt.preventDefault(); // Prevent browser's default middle-click behavior
-        console.log('🎨 Center mouse button + spacebar - toggling color');
-        setIndicatorColor(prev => {
-          const newColor = prev === 'pink' ? 'yellow' : 'pink';
-          
-          // Update existing indicator if visible
-          if (panIndicatorRef.current) {
-            const colors = {
-              pink: { fill: 'rgba(236, 72, 153, 0.3)', stroke: '#ec4899' },
-              yellow: { fill: 'rgba(234, 179, 8, 0.3)', stroke: '#eab308' }
-            };
-            
-            panIndicatorRef.current.set({
-              fill: colors[newColor].fill,
-              stroke: colors[newColor].stroke
-            });
-            canvas.renderAll();
-          }
-          
-          return newColor;
-        });
-        return;
-      }
       
       // Handle connection drawing mode with snap
       if (currentTool === 'connection') {
@@ -2413,6 +2417,9 @@ export default function SchematicEditor({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
+      if (canvasRef.current) {
+        canvasRef.current.removeEventListener('mousedown', handleNativeMouseDown);
+      }
       canvas.dispose();
     };
   }, [schematicUrl]);
