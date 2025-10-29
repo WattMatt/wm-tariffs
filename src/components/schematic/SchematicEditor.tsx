@@ -1102,22 +1102,30 @@ export default function SchematicEditor({
               canvas.add(node);
             });
             
+            // Capture connection data before async operations
+            const parentMeterId = connectionStartRef.current!.meterId;
+            const childMeterId = snappedPoint.meterId;
+            
             // Save connection to database
             const saveConnection = async () => {
               try {
+                console.log('💾 Saving connection:', { parentMeterId, childMeterId, pointsCount: allPoints.length });
+                
                 // 1. Save meter connection relationship
                 const { error: connectionError } = await supabase
                   .from('meter_connections')
                   .insert({
-                    parent_meter_id: connectionStartRef.current!.meterId,
-                    child_meter_id: snappedPoint.meterId
+                    parent_meter_id: parentMeterId,
+                    child_meter_id: childMeterId
                   });
                 
                 if (connectionError) {
-                  console.error('Error saving meter connection:', connectionError);
-                  toast.error('Failed to save meter connection');
+                  console.error('❌ Error saving meter connection:', connectionError);
+                  toast.error('Failed to save meter connection: ' + connectionError.message);
                   return;
                 }
+                
+                console.log('✅ Meter connection saved');
                 
                 // 2. Save line segments with node positions
                 const lineData = [];
@@ -1129,35 +1137,42 @@ export default function SchematicEditor({
                     to_x: allPoints[i + 1].x,
                     to_y: allPoints[i + 1].y,
                     line_type: 'connection',
-                    color: '#0ea5e9',
-                    stroke_width: 3,
+                    color: '#000000',
+                    stroke_width: 2,
                     metadata: {
-                      parent_meter_id: connectionStartRef.current!.meterId,
-                      child_meter_id: snappedPoint.meterId,
+                      parent_meter_id: parentMeterId,
+                      child_meter_id: childMeterId,
                       node_index: i
                     }
                   });
                 }
+                
+                console.log('📊 Saving line segments:', lineData.length);
                 
                 const { error: linesError } = await supabase
                   .from('schematic_lines')
                   .insert(lineData);
                 
                 if (linesError) {
-                  console.error('Error saving line segments:', linesError);
-                  toast.error('Failed to save line geometry');
+                  console.error('❌ Error saving line segments:', linesError);
+                  toast.error('Failed to save line geometry: ' + linesError.message);
                   return;
                 }
+                
+                console.log('✅ Line segments saved');
                 
                 // Refresh connections
                 await fetchMeterConnections();
                 await fetchSchematicLines();
+                
+                toast.success('Connection saved successfully');
               } catch (error) {
-                console.error('Error saving connection:', error);
-                toast.error('Failed to save connection');
+                console.error('❌ Error saving connection:', error);
+                toast.error('Failed to save connection: ' + (error as Error).message);
               }
             };
             
+            // Execute save (don't await to avoid blocking UI)
             saveConnection();
             
             // Clean up intermediate nodes
