@@ -3238,11 +3238,19 @@ export default function SchematicEditor({
             strokeWidth: lineData.stroke_width || 2,
             selectable: false,
             evented: true,
-            hoverCursor: 'crosshair',
+            hoverCursor: 'pointer',
           }
         );
         (lineSegment as any).isConnectionLine = true;
         (lineSegment as any).connectionKey = connectionKey;
+        
+        // Add click handler for selecting connections in select mode
+        lineSegment.on('mousedown', () => {
+          if (activeToolRef.current === 'select' && isSelectionModeRef.current) {
+            setSelectedConnectionKey(connectionKey);
+            toast.info("Connection selected - click Delete to remove");
+          }
+        });
         lineSegments.push(lineSegment);
         
         // Add line above background
@@ -3276,13 +3284,21 @@ export default function SchematicEditor({
           originX: 'center',
           originY: 'center',
           selectable: !isEndpoint,
-          evented: !isEndpoint,
+          evented: true,
           hasControls: false,
           hasBorders: false,
-          hoverCursor: isEndpoint ? 'default' : 'move',
+          hoverCursor: isEndpoint ? 'pointer' : 'move',
         });
         (node as any).isConnectionNode = true;
         (node as any).connectionKey = connectionKey;
+        
+        // Add click handler for selecting connections in select mode
+        node.on('mousedown', () => {
+          if (activeToolRef.current === 'select' && isSelectionModeRef.current) {
+            setSelectedConnectionKey(connectionKey);
+            toast.info("Connection selected - click Delete to remove");
+          }
+        });
         
         // Store references to connected line segments
         const connectedLines: Line[] = [];
@@ -3967,7 +3983,7 @@ export default function SchematicEditor({
           <Button
             variant={isSelectionMode ? "default" : "outline"}
             onClick={() => {
-              const hasSelections = selectedRegionIndices.length > 0 || selectedMeterIds.length > 0;
+              const hasSelections = selectedRegionIndices.length > 0 || selectedMeterIds.length > 0 || selectedConnectionKey;
               
               if (isSelectionMode && hasSelections) {
                 // Clear all selections and reset visual styling
@@ -3985,6 +4001,7 @@ export default function SchematicEditor({
                 }
                 setSelectedRegionIndices([]);
                 setSelectedMeterIds([]);
+                setSelectedConnectionKey(null);
                 setIsSelectionMode(false);
                 toast.info("Selection cleared");
               } else {
@@ -3995,7 +4012,7 @@ export default function SchematicEditor({
                   setActiveTool("select");
                 }
                 if (!isSelectionMode) {
-                  toast.info("Click to select, or hold SHIFT and drag to select multiple meters", { duration: 4000 });
+                  toast.info("Click to select meters or connections, hold SHIFT and drag for multiple", { duration: 4000 });
                 }
               }
             }}
@@ -4004,7 +4021,7 @@ export default function SchematicEditor({
             className="gap-2"
           >
             <Check className="w-4 h-4" />
-            Select {(selectedRegionIndices.length + selectedMeterIds.length) > 0 && `(${selectedRegionIndices.length + selectedMeterIds.length})`}
+            Select {(selectedRegionIndices.length + selectedMeterIds.length + (selectedConnectionKey ? 1 : 0)) > 0 && `(${selectedRegionIndices.length + selectedMeterIds.length + (selectedConnectionKey ? 1 : 0)})`}
           </Button>
           <Button
             variant={activeTool === "draw" ? "default" : "outline"}
@@ -4143,6 +4160,48 @@ export default function SchematicEditor({
               <Trash2 className="w-4 h-4" />
               Delete {selectedRegionIndices.length} Region(s)
             </Button>
+          )}
+          {selectedConnectionKey && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  if (!confirm('Delete this connection? All line segments will be removed.')) return;
+                  
+                  // Find all line segments for this connection
+                  const linesToDelete = schematicLines.filter(line => {
+                    const key = `${line.metadata?.parent_meter_id}-${line.metadata?.child_meter_id}`;
+                    return key === selectedConnectionKey;
+                  });
+                  
+                  // Delete all line segments
+                  for (const line of linesToDelete) {
+                    await supabase
+                      .from('schematic_lines')
+                      .delete()
+                      .eq('id', line.id);
+                  }
+                  
+                  // Also delete from meter_connections table
+                  const [parentId, childId] = selectedConnectionKey.split('-');
+                  await supabase
+                    .from('meter_connections')
+                    .delete()
+                    .match({ parent_meter_id: parentId, child_meter_id: childId });
+                  
+                  toast.success('Connection deleted');
+                  setSelectedConnectionKey(null);
+                  fetchSchematicLines();
+                  fetchMeterConnections();
+                }}
+                className="gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete Connection
+              </Button>
+              <div className="h-6 w-px bg-border" />
+            </>
           )}
           {selectedMeterIds.length > 0 && (
             <>
