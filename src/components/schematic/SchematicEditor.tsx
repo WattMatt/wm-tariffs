@@ -3898,6 +3898,7 @@ export default function SchematicEditor({
                 return;
               }
 
+              await fetchSchematicLines();
               toast.success('All lines cleared');
             }}
             disabled={!isEditMode}
