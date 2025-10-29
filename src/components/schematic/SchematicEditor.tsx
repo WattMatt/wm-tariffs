@@ -588,6 +588,52 @@ export default function SchematicEditor({
     }
   }, [isEditMode, fabricCanvas]);
 
+  // Add/remove snap points when connection tool is activated/deactivated
+  useEffect(() => {
+    if (!fabricCanvas) return;
+
+    // Remove all existing snap points
+    const objectsToRemove: any[] = [];
+    fabricCanvas.getObjects().forEach((obj: any) => {
+      if (obj.isSnapPoint) {
+        objectsToRemove.push(obj);
+      }
+    });
+    objectsToRemove.forEach(obj => fabricCanvas.remove(obj));
+
+    // Add snap points if in connection mode
+    if (activeTool === 'connection') {
+      fabricCanvas.getObjects().forEach((obj: any) => {
+        if (obj.type === 'image' && obj.data?.meterId) {
+          const bounds = obj.getBoundingRect();
+          const snapPoints = calculateSnapPoints(bounds.left, bounds.top, bounds.width, bounds.height);
+          
+          Object.values(snapPoints).forEach((point: any) => {
+            const snapCircle = new Circle({
+              left: point.x,
+              top: point.y,
+              radius: 8,
+              fill: '#3b82f6',
+              originX: 'center',
+              originY: 'center',
+              selectable: false,
+              evented: true,
+              opacity: 0.9,
+              hoverCursor: 'crosshair'
+            });
+            (snapCircle as any).isSnapPoint = true;
+            (snapCircle as any).meterId = obj.data.meterId;
+            
+            fabricCanvas.add(snapCircle);
+          });
+        }
+      });
+    }
+
+    fabricCanvas.renderAll();
+  }, [activeTool, fabricCanvas]);
+
+
   // FABRIC.JS EVENT HANDLER PATTERN: Sync repositioning state to refs
   // Critical for the reposition feature - without this, mouse handlers use stale meter data
 
