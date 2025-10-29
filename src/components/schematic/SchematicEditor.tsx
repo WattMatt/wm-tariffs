@@ -3691,31 +3691,6 @@ export default function SchematicEditor({
             <Link2 className="w-4 h-4" />
             Draw Connections
           </Button>
-          {activeTool === "connection" && (
-            <Button
-              variant="destructive"
-              onClick={async () => {
-                const { error } = await supabase
-                  .from('schematic_lines')
-                  .delete()
-                  .eq('schematic_id', schematicId);
-
-                if (error) {
-                  console.error('Error clearing lines:', error);
-                  toast.error('Failed to clear lines');
-                  return;
-                }
-
-                toast.success('All lines cleared');
-              }}
-              disabled={!isEditMode}
-              size="sm"
-              className="gap-2"
-            >
-              <Trash2 className="w-4 h-4" />
-              Clear Lines
-            </Button>
-          )}
           <Button
             variant="outline"
             onClick={() => setIsConnectionsDialogOpen(true)}
@@ -3906,6 +3881,31 @@ export default function SchematicEditor({
           >
             <Trash2 className="w-4 h-4" />
             Clear Regions
+          </Button>
+        )}
+        {activeTool === "connection" && (
+          <Button
+            variant="destructive"
+            onClick={async () => {
+              const { error } = await supabase
+                .from('schematic_lines')
+                .delete()
+                .eq('schematic_id', schematicId);
+
+              if (error) {
+                console.error('Error clearing lines:', error);
+                toast.error('Failed to clear lines');
+                return;
+              }
+
+              toast.success('All lines cleared');
+            }}
+            disabled={!isEditMode}
+            size="sm"
+            className="gap-2"
+          >
+            <Trash2 className="w-4 h-4" />
+            Clear Lines
           </Button>
         )}
       </div>
