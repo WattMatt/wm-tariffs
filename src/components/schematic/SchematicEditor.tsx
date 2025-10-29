@@ -4232,7 +4232,6 @@ export default function SchematicEditor({
                 <Edit className="w-4 h-4" />
                 Edit
               </Button>
-              <div className="h-6 w-px bg-border" />
             </>
           )}
           <Button
