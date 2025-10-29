@@ -601,6 +601,26 @@ export default function SchematicEditor({
     });
     objectsToRemove.forEach(obj => fabricCanvas.remove(obj));
 
+    // Clear connection state when switching away from connection mode
+    if (activeTool !== 'connection') {
+      // Clean up any preview nodes and lines
+      connectionNodesRef.current.forEach(node => fabricCanvas.remove(node));
+      connectionNodesRef.current = [];
+      
+      if (connectionLineRef.current) {
+        fabricCanvas.remove(connectionLineRef.current);
+        connectionLineRef.current = null;
+      }
+      
+      if (connectionStartNodeRef.current) {
+        fabricCanvas.remove(connectionStartNodeRef.current);
+        connectionStartNodeRef.current = null;
+      }
+      
+      setConnectionPoints([]);
+      setConnectionStart(null);
+    }
+
     // Add snap points if in connection mode
     if (activeTool === 'connection') {
       fabricCanvas.getObjects().forEach((obj: any) => {
