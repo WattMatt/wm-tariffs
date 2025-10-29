@@ -490,6 +490,8 @@ export default function SchematicEditor({
   const isSpacebarPressedRef = useRef<boolean>(false);
   const [indicatorColor, setIndicatorColor] = useState<'pink' | 'yellow'>('pink');
   const indicatorColorRef = useRef<'pink' | 'yellow'>('pink');
+  const isPanningRef = useRef(false);
+  const lastPanPositionRef = useRef<{ x: number; y: number } | null>(null);
   const [meters, setMeters] = useState<any[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [extractionProgress, setExtractionProgress] = useState<{ current: number; total: number } | null>(null);
@@ -902,9 +904,11 @@ export default function SchematicEditor({
         button: e.button, 
         buttons: e.buttons,
         spacebarPressed: isSpacebarPressedRef.current,
+        isPanning: isPanningRef.current,
         target: e.target
       });
       
+      // Only intercept middle mouse + spacebar for color toggle
       if (e.button === 1 && isSpacebarPressedRef.current) {
         e.preventDefault();
         e.stopPropagation();
@@ -940,9 +944,13 @@ export default function SchematicEditor({
     
     // Add mouseup listener to handle pan end even if mouse is released outside canvas
     const handleMouseUp = (e: MouseEvent) => {
-      if (e.button === 1 && isPanning) {
-        isPanning = false;
-        lastPanPosition = null;
+      console.log('🖱️ Window mouseup:', { 
+        button: e.button, 
+        isPanning: isPanningRef.current 
+      });
+      if (e.button === 1 && isPanningRef.current) {
+        isPanningRef.current = false;
+        lastPanPositionRef.current = null;
         canvas.selection = true;
         console.log('🖐️ Middle mouse pan ended (window)');
       }
@@ -1011,8 +1019,6 @@ export default function SchematicEditor({
     let isShiftDragSelecting = false;
     let shiftClickTarget: any = null; // Track target clicked with shift for deferred selection
     let startPoint: { x: number; y: number } | null = null;
-    let isPanning = false;
-    let lastPanPosition: { x: number; y: number } | null = null;
     
     canvas.on('mouse:down', (opt) => {
       const currentTool = activeToolRef.current;
@@ -1027,19 +1033,20 @@ export default function SchematicEditor({
         shiftKey: evt.shiftKey, 
         isSelectionMode: isSelectionModeRef.current,
         button: evt.button,
-        buttons: evt.buttons
+        buttons: evt.buttons,
+        spacebarPressed: isSpacebarPressedRef.current
       });
       
-      // Handle middle mouse button for panning
-      if (evt.button === 1) {
-        isPanning = true;
-        lastPanPosition = { x: evt.clientX, y: evt.clientY };
+      // Handle middle mouse button for panning (but not if spacebar is pressed - that's for color toggle)
+      if (evt.button === 1 && !isSpacebarPressedRef.current) {
+        isPanningRef.current = true;
+        lastPanPositionRef.current = { x: evt.clientX, y: evt.clientY };
         canvas.selection = false; // Disable selection while panning
         console.log('🖐️ Middle mouse pan started', {
           button: evt.button,
           clientX: evt.clientX,
           clientY: evt.clientY,
-          isPanning
+          isPanning: isPanningRef.current
         });
         return;
       }
@@ -1515,22 +1522,22 @@ export default function SchematicEditor({
       let pointer = canvas.getPointer(opt.e);
       
       // Handle middle mouse button panning
-      if (isPanning && lastPanPosition) {
-        const deltaX = evt.clientX - lastPanPosition.x;
-        const deltaY = evt.clientY - lastPanPosition.y;
+      if (isPanningRef.current && lastPanPositionRef.current) {
+        const deltaX = evt.clientX - lastPanPositionRef.current.x;
+        const deltaY = evt.clientY - lastPanPositionRef.current.y;
         
         console.log('🖐️ Panning - mouse move', {
-          isPanning,
+          isPanning: isPanningRef.current,
           deltaX,
           deltaY,
           currentPos: { x: evt.clientX, y: evt.clientY },
-          lastPos: lastPanPosition,
+          lastPos: lastPanPositionRef.current,
           buttons: evt.buttons
         });
         
         canvas.relativePan(new Point(deltaX, deltaY));
         
-        lastPanPosition = { x: evt.clientX, y: evt.clientY };
+        lastPanPositionRef.current = { x: evt.clientX, y: evt.clientY };
         canvas.renderAll();
         return;
       }
@@ -1721,9 +1728,9 @@ export default function SchematicEditor({
       const evt = opt.e as MouseEvent;
       
       // Handle middle mouse button pan end
-      if (evt.button === 1 && isPanning) {
-        isPanning = false;
-        lastPanPosition = null;
+      if (evt.button === 1 && isPanningRef.current) {
+        isPanningRef.current = false;
+        lastPanPositionRef.current = null;
         canvas.selection = true; // Re-enable selection
         console.log('🖐️ Middle mouse pan ended', { button: evt.button, wasPanning: true });
         return;
