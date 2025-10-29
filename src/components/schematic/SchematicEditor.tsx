@@ -1998,9 +1998,10 @@ export default function SchematicEditor({
       if (target && (target as any).isConnectionNode) {
         const node = target as Circle;
         const connectedLines = (node as any).connectedLines as Line[];
+        const connectionKey = (node as any).connectionKey;
         
         // Only delete intermediate nodes (those with 2 connected lines)
-        if (connectedLines && connectedLines.length === 2) {
+        if (connectedLines && connectedLines.length === 2 && connectionKey) {
           const line1 = connectedLines[0];
           const line2 = connectedLines[1];
           
@@ -2010,39 +2011,123 @@ export default function SchematicEditor({
           const x2 = line2.x2 || 0;
           const y2 = line2.y2 || 0;
           
-          // Create a new merged line
-          const mergedLine = new Line(
-            [x1, y1, x2, y2],
-            {
-              stroke: line1.stroke || '#000000',
-              strokeWidth: line1.strokeWidth || 2,
-              selectable: false,
-              evented: true,
-              hoverCursor: 'crosshair',
+          try {
+            // Parse connectionKey to get parent and child meter IDs
+            const [parentMeterId, childMeterId] = connectionKey.split('-');
+            
+            // Fetch all line segments for this connection
+            const { data: allLines, error: fetchError } = await supabase
+              .from('schematic_lines')
+              .select('*')
+              .eq('schematic_id', schematicId)
+              .eq('line_type', 'connection');
+            
+            if (fetchError) throw fetchError;
+            
+            // Filter to get lines for this specific connection and sort by node_index
+            const connectionLines = (allLines || [])
+              .filter((line: any) => 
+                line.metadata?.parent_meter_id === parentMeterId &&
+                line.metadata?.child_meter_id === childMeterId
+              )
+              .sort((a: any, b: any) => 
+                (a.metadata?.node_index || 0) - (b.metadata?.node_index || 0)
+              );
+            
+            // Find the two line segments to be merged by matching coordinates
+            let line1Index = -1;
+            let line2Index = -1;
+            
+            for (let i = 0; i < connectionLines.length - 1; i++) {
+              const lineA = connectionLines[i];
+              const lineB = connectionLines[i + 1];
+              
+              // Check if these two consecutive lines match our canvas lines
+              // line1 ends at the node, line2 starts at the node
+              const matchesLine1 = Math.abs(lineA.to_x - node.left!) < 0.1 && 
+                                   Math.abs(lineA.to_y - node.top!) < 0.1;
+              const matchesLine2 = Math.abs(lineB.from_x - node.left!) < 0.1 && 
+                                   Math.abs(lineB.from_y - node.top!) < 0.1;
+              
+              if (matchesLine1 && matchesLine2) {
+                line1Index = i;
+                line2Index = i + 1;
+                break;
+              }
             }
-          );
-          (mergedLine as any).isConnectionLine = true;
-          
-          // Remove old lines and node from canvas
-          canvas.remove(line1);
-          canvas.remove(line2);
-          canvas.remove(node);
-          
-          // Add merged line
-          const backgroundIndex = canvas.getObjects().findIndex(obj => (obj as any).isBackgroundImage);
-          if (backgroundIndex !== -1) {
-            canvas.insertAt(backgroundIndex + 1, mergedLine);
-          } else {
-            canvas.add(mergedLine);
+            
+            if (line1Index === -1 || line2Index === -1) {
+              throw new Error('Could not find matching line segments in database');
+            }
+            
+            const dbLine1 = connectionLines[line1Index];
+            const dbLine2 = connectionLines[line2Index];
+            
+            // Delete the two old line segments
+            const { error: deleteError } = await supabase
+              .from('schematic_lines')
+              .delete()
+              .in('id', [dbLine1.id, dbLine2.id]);
+            
+            if (deleteError) throw deleteError;
+            
+            // Insert the new merged line segment
+            const { error: insertError } = await supabase
+              .from('schematic_lines')
+              .insert({
+                schematic_id: schematicId,
+                from_x: x1,
+                from_y: y1,
+                to_x: x2,
+                to_y: y2,
+                line_type: 'connection',
+                color: dbLine1.color || '#000000',
+                stroke_width: dbLine1.stroke_width || 2,
+                metadata: {
+                  parent_meter_id: parentMeterId,
+                  child_meter_id: childMeterId,
+                  node_index: typeof dbLine1.metadata === 'object' && dbLine1.metadata && 'node_index' in dbLine1.metadata 
+                    ? (dbLine1.metadata.node_index as number) 
+                    : 0
+                }
+              });
+            
+            if (insertError) throw insertError;
+            
+            // Update node_index for remaining segments after the deleted ones
+            for (let i = line2Index + 1; i < connectionLines.length; i++) {
+              const lineToUpdate = connectionLines[i];
+              const currentMetadata = typeof lineToUpdate.metadata === 'object' && lineToUpdate.metadata 
+                ? lineToUpdate.metadata 
+                : {};
+              const currentNodeIndex = 'node_index' in currentMetadata 
+                ? (currentMetadata.node_index as number) 
+                : 0;
+              const newNodeIndex = currentNodeIndex - 1;
+              
+              await supabase
+                .from('schematic_lines')
+                .update({
+                  metadata: {
+                    ...currentMetadata,
+                    node_index: newNodeIndex
+                  }
+                })
+                .eq('id', lineToUpdate.id);
+            }
+            
+            // Refresh the schematic lines to update the canvas
+            await fetchSchematicLines();
+            
+            toast.success('Node deleted and database updated');
+          } catch (error) {
+            console.error('Error deleting node:', error);
+            toast.error('Failed to delete node: ' + (error as Error).message);
           }
-          
-          canvas.renderAll();
-          toast.success('Node deleted and lines merged');
-          
-          // Note: Database updates would need to be implemented based on how lines are tracked
         }
       }
     });
+    
     
     // Function to handle extraction from a drawn region
     const handleExtractFromRegion = async (canvas: FabricCanvas, rect: any) => {
