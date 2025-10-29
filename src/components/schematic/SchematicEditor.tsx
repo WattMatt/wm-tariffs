@@ -163,6 +163,34 @@ const findNearestSnapPoint = (
   return nearestPoint;
 };
 
+// Helper function to snap a point to 45-degree angle increments
+const snapToAngle = (
+  fromPoint: { x: number; y: number },
+  toPoint: { x: number; y: number }
+): { x: number; y: number } => {
+  const dx = toPoint.x - fromPoint.x;
+  const dy = toPoint.y - fromPoint.y;
+  const distance = Math.sqrt(dx * dx + dy * dy);
+  
+  // Calculate current angle in radians
+  const currentAngle = Math.atan2(dy, dx);
+  
+  // Convert to degrees
+  const currentAngleDeg = currentAngle * (180 / Math.PI);
+  
+  // Snap to nearest 45-degree increment
+  const snappedAngleDeg = Math.round(currentAngleDeg / 45) * 45;
+  
+  // Convert back to radians
+  const snappedAngle = snappedAngleDeg * (Math.PI / 180);
+  
+  // Calculate new position at the snapped angle
+  return {
+    x: fromPoint.x + Math.cos(snappedAngle) * distance,
+    y: fromPoint.y + Math.sin(snappedAngle) * distance
+  };
+};
+
 // Helper function to create meter card as an image matching reference format
 async function createMeterCardImage(
   fields: Array<{ label: string; value: string }>,
@@ -1156,6 +1184,16 @@ export default function SchematicEditor({
             toast.success('Connection created');
           } else if (!snappedPoint) {
             // Add intermediate node (not on a snap point)
+            // Apply 45-degree angle snapping when Shift is held
+            if (evt.shiftKey) {
+              const lastPoint = connectionPointsRef.current.length > 0 
+                ? connectionPointsRef.current[connectionPointsRef.current.length - 1].position
+                : connectionStartRef.current.position;
+              
+              const snappedAnglePoint = snapToAngle(lastPoint, pointer);
+              pointer = new Point(snappedAnglePoint.x, snappedAnglePoint.y);
+            }
+            
             const newPoint = { meterId: '', position: pointer };
             setConnectionPoints([...connectionPointsRef.current, newPoint]);
             
@@ -1336,6 +1374,14 @@ export default function SchematicEditor({
           });
           (highlight as any).isSnapHighlight = true;
           canvas.add(highlight);
+        } else if (evt.shiftKey) {
+          // Apply 45-degree angle snapping when Shift is held and not on a snap point
+          const lastPoint = connectionPointsRef.current.length > 0 
+            ? connectionPointsRef.current[connectionPointsRef.current.length - 1].position
+            : connectionStartRef.current.position;
+          
+          const snappedAnglePoint = snapToAngle(lastPoint, pointer);
+          pointer = new Point(snappedAnglePoint.x, snappedAnglePoint.y);
         }
         
         // Remove previous preview line
