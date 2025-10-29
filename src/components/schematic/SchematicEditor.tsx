@@ -1083,7 +1083,7 @@ export default function SchematicEditor({
                   .insert({
                     parent_meter_id: connectionStartRef.current!.meterId,
                     child_meter_id: snappedPoint.meterId,
-                    connection_type: 'electrical'
+                    connection_type: 'submeter'
                   });
                 
                 if (connectionError) {
