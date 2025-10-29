@@ -510,12 +510,13 @@ export default function SchematicEditor({
   const [connectionStart, setConnectionStart] = useState<{ meterId: string; position: { x: number; y: number } } | null>(null);
   const [connectionPoints, setConnectionPoints] = useState<Array<{ meterId: string; position: { x: number; y: number } }>>([]);
   const [meterConnections, setMeterConnections] = useState<any[]>([]);
-  const connectionLineRef = useRef<Line | null>(null);
+  const connectionLineRef = useRef<Line | Polyline | null>(null);
   const connectionStartNodeRef = useRef<Circle | null>(null);
   const connectionNodesRef = useRef<Circle[]>([]);
   
   // Ref for connectionStart to prevent stale closures in Fabric.js handlers
   const connectionStartRef = useRef<{ meterId: string; position: { x: number; y: number } } | null>(null);
+  const connectionPointsRef = useRef<Array<{ meterId: string; position: { x: number; y: number } }>>([]);
   
   // FABRIC.JS EVENT HANDLER PATTERN: State + refs for complex interactions
   // State drives UI updates, refs provide current values to mouse event handlers
@@ -595,6 +596,11 @@ export default function SchematicEditor({
   useEffect(() => {
     connectionStartRef.current = connectionStart;
   }, [connectionStart]);
+
+  // Sync connectionPointsRef with connectionPoints state
+  useEffect(() => {
+    connectionPointsRef.current = connectionPoints;
+  }, [connectionPoints]);
 
   // Update meter card selectability and controls when edit mode changes
   useEffect(() => {
@@ -977,6 +983,7 @@ export default function SchematicEditor({
             meterId: snappedPoint.meterId,
             position: pointer 
           });
+          setConnectionPoints([]);
           
           // Create start node marker
           const startNode = new Circle({
@@ -995,87 +1002,124 @@ export default function SchematicEditor({
           canvas.add(startNode);
           canvas.renderAll();
           
-          toast.info('Click second point to complete line');
+          toast.info('Click to add nodes, or click a meter connection point to finish');
         } else {
-          // Second click - complete the line (only on snap point)
-          if (!snappedPoint) {
-            toast.error('Please click on a meter connection point');
-            return;
-          }
-          
-          // Check if trying to connect to the same meter card
-          if (snappedPoint.meterId === connectionStartRef.current.meterId) {
-            toast.error('Cannot connect a meter to itself');
-            return;
-          }
-          
-          pointer = new Point(snappedPoint.x, snappedPoint.y);
-          const startPos = connectionStartRef.current.position;
-          
-          // Create permanent line
-          const connectionLine = new Line(
-            [startPos.x, startPos.y, pointer.x, pointer.y],
-            {
-              stroke: '#0ea5e9',
-              strokeWidth: 3,
-              selectable: false,
-              evented: true,
-              hoverCursor: 'crosshair',
+          // Subsequent clicks - check if ending on a snap point
+          if (snappedPoint && snappedPoint.meterId !== connectionStartRef.current.meterId) {
+            // Complete the connection on a different meter's snap point
+            pointer = new Point(snappedPoint.x, snappedPoint.y);
+            
+            // Get all points: start + intermediate + end
+            const allPoints = [
+              connectionStartRef.current.position,
+              ...connectionPointsRef.current.map(p => p.position),
+              pointer
+            ];
+            
+            // Create line segments between consecutive points
+            const backgroundIndex = canvas.getObjects().findIndex(obj => (obj as any).isBackgroundImage);
+            const lineSegments: Line[] = [];
+            
+            for (let i = 0; i < allPoints.length - 1; i++) {
+              const lineSegment = new Line(
+                [allPoints[i].x, allPoints[i].y, allPoints[i + 1].x, allPoints[i + 1].y],
+                {
+                  stroke: '#0ea5e9',
+                  strokeWidth: 3,
+                  selectable: false,
+                  evented: true,
+                  hoverCursor: 'crosshair',
+                }
+              );
+              (lineSegment as any).isConnectionLine = true;
+              lineSegments.push(lineSegment);
+              
+              // Add line above background
+              if (backgroundIndex !== -1) {
+                canvas.insertAt(backgroundIndex + 1 + i, lineSegment);
+              } else {
+                canvas.add(lineSegment);
+                canvas.sendObjectToBack(lineSegment);
+              }
             }
-          );
-          (connectionLine as any).isConnectionLine = true;
-          
-          // Add line above background but below other objects
-          const objects = canvas.getObjects();
-          const backgroundIndex = objects.findIndex(obj => (obj as any).isBackgroundImage);
-          if (backgroundIndex !== -1) {
-            canvas.insertAt(backgroundIndex + 1, connectionLine);
-          } else {
-            canvas.add(connectionLine);
-            canvas.sendObjectToBack(connectionLine);
-          }
-          
-          // Create end node
-          const endNode = new Circle({
-            left: pointer.x,
-            top: pointer.y,
-            radius: 5,
-            fill: '#0ea5e9',
-            stroke: '#ffffff',
-            strokeWidth: 2,
-            originX: 'center',
-            originY: 'center',
-            selectable: false,
-            evented: false,
-          });
-          (endNode as any).isConnectionNode = true;
-          canvas.add(endNode);
-          
-          // Update start node appearance
-          if (connectionStartNodeRef.current) {
-            connectionStartNodeRef.current.set({
-              radius: 5,
-              fill: '#0ea5e9'
+            
+            // Create nodes at all points with references to connected line segments
+            allPoints.forEach((point, index) => {
+              const isEndpoint = index === 0 || index === allPoints.length - 1;
+              const node = new Circle({
+                left: point.x,
+                top: point.y,
+                radius: 5,
+                fill: '#0ea5e9',
+                stroke: '#ffffff',
+                strokeWidth: 2,
+                originX: 'center',
+                originY: 'center',
+                selectable: !isEndpoint,
+                evented: !isEndpoint,
+                hasControls: false,
+                hasBorders: false,
+                hoverCursor: isEndpoint ? 'default' : 'move',
+              });
+              (node as any).isConnectionNode = true;
+              
+              // Store references to connected line segments
+              const connectedLines: Line[] = [];
+              if (index > 0) connectedLines.push(lineSegments[index - 1]); // Line coming in
+              if (index < allPoints.length - 1) connectedLines.push(lineSegments[index]); // Line going out
+              (node as any).connectedLines = connectedLines;
+              
+              canvas.add(node);
             });
+            
+            // Clean up intermediate nodes
+            connectionNodesRef.current.forEach(node => canvas.remove(node));
+            connectionNodesRef.current = [];
+            
+            // Clean up preview line
+            if (connectionLineRef.current) {
+              canvas.remove(connectionLineRef.current);
+              connectionLineRef.current = null;
+            }
+            
+            // Remove snap highlight if exists
+            const existingHighlight = canvas.getObjects().find((obj: any) => obj.isSnapHighlight);
+            if (existingHighlight) {
+              canvas.remove(existingHighlight);
+            }
+            
+            setConnectionStart(null);
+            setConnectionPoints([]);
+            connectionStartNodeRef.current = null;
+            canvas.renderAll();
+            
+            toast.success('Connection created');
+          } else if (!snappedPoint) {
+            // Add intermediate node (not on a snap point)
+            const newPoint = { meterId: '', position: pointer };
+            setConnectionPoints([...connectionPointsRef.current, newPoint]);
+            
+            // Create intermediate node marker
+            const intermediateNode = new Circle({
+              left: pointer.x,
+              top: pointer.y,
+              radius: 5,
+              fill: '#f59e0b',
+              stroke: '#ffffff',
+              strokeWidth: 2,
+              originX: 'center',
+              originY: 'center',
+              selectable: false,
+              evented: false,
+            });
+            connectionNodesRef.current.push(intermediateNode);
+            canvas.add(intermediateNode);
+            canvas.renderAll();
+            
+            toast.info('Node added. Click to continue or click a meter point to finish');
+          } else if (snappedPoint.meterId === connectionStartRef.current.meterId) {
+            toast.error('Cannot connect a meter to itself');
           }
-          
-          // Clean up preview and snap highlight
-          if (connectionLineRef.current) {
-            canvas.remove(connectionLineRef.current);
-            connectionLineRef.current = null;
-          }
-          
-          // Remove snap highlight if exists
-          const existingHighlight = canvas.getObjects().find((obj: any) => obj.isSnapHighlight);
-          if (existingHighlight) {
-            canvas.remove(existingHighlight);
-          }
-          
-          setConnectionStart(null);
-          connectionStartNodeRef.current = null;
-          canvas.renderAll();
-          
-          toast.success('Line created');
         }
         return;
       }
@@ -1239,17 +1283,24 @@ export default function SchematicEditor({
           canvas.remove(connectionLineRef.current);
         }
         
-        // Create preview line from start to current (snapped) pointer
-        const previewLine = new Line(
-          [connectionStartRef.current.position.x, connectionStartRef.current.position.y, pointer.x, pointer.y],
-          {
-            stroke: '#10b981',
-            strokeWidth: 2,
-            strokeDashArray: [5, 5],
-            selectable: false,
-            evented: false,
-          }
-        );
+        // Create preview polyline through all points
+        const allPoints = [
+          connectionStartRef.current.position,
+          ...connectionPointsRef.current.map(p => p.position),
+          pointer
+        ];
+        
+        // Flatten points for polyline
+        const points = allPoints.map(p => new Point(p.x, p.y));
+        
+        const previewLine = new Polyline(points, {
+          stroke: '#10b981',
+          strokeWidth: 2,
+          strokeDashArray: [5, 5],
+          fill: '',
+          selectable: false,
+          evented: false,
+        });
         
         connectionLineRef.current = previewLine;
         canvas.add(previewLine);
@@ -1734,19 +1785,36 @@ export default function SchematicEditor({
         const connectedLines = (node as any).connectedLines as Line[];
         
         if (connectedLines && connectedLines.length > 0) {
+          // For a node with connections:
+          // - connectedLines[0] is the line coming IN (node is at x2, y2)
+          // - connectedLines[1] is the line going OUT (node is at x1, y1)
           connectedLines.forEach((line, index) => {
-            if (index === 0) {
-              // First line: update end point to node position
-              line.set({
-                x2: node.left,
-                y2: node.top
-              });
+            if (connectedLines.length === 1) {
+              // Node has only one connection (could be start or end)
+              // Check which end the node is at
+              const distToStart = Math.sqrt(
+                Math.pow((line.x1 || 0) - node.left!, 2) + 
+                Math.pow((line.y1 || 0) - node.top!, 2)
+              );
+              const distToEnd = Math.sqrt(
+                Math.pow((line.x2 || 0) - node.left!, 2) + 
+                Math.pow((line.y2 || 0) - node.top!, 2)
+              );
+              
+              if (distToEnd < distToStart) {
+                line.set({ x2: node.left, y2: node.top });
+              } else {
+                line.set({ x1: node.left, y1: node.top });
+              }
             } else {
-              // Second line: update start point to node position
-              line.set({
-                x1: node.left,
-                y1: node.top
-              });
+              // Node has two connections (intermediate node)
+              if (index === 0) {
+                // First line: node is at end
+                line.set({ x2: node.left, y2: node.top });
+              } else {
+                // Second line: node is at start
+                line.set({ x1: node.left, y1: node.top });
+              }
             }
           });
           canvas.renderAll();
