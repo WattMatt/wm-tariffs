@@ -896,16 +896,18 @@ export default function SchematicEditor({
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
     
-    // Add native mousedown listener to capture middle mouse button
+    // Add native mousedown listener to capture middle mouse button (on window with capture)
     const handleNativeMouseDown = (e: MouseEvent) => {
       console.log('🖱️ Native mousedown:', { 
         button: e.button, 
         buttons: e.buttons,
-        spacebarPressed: isSpacebarPressedRef.current 
+        spacebarPressed: isSpacebarPressedRef.current,
+        target: e.target
       });
       
       if (e.button === 1 && isSpacebarPressedRef.current) {
         e.preventDefault();
+        e.stopPropagation();
         console.log('🎨 Middle mouse button detected + spacebar - toggling color');
         setIndicatorColor(prev => {
           const newColor = prev === 'pink' ? 'yellow' : 'pink';
@@ -933,7 +935,8 @@ export default function SchematicEditor({
       }
     };
     
-    canvasRef.current.addEventListener('mousedown', handleNativeMouseDown);
+    // Add to window with capture phase to intercept before Fabric.js
+    window.addEventListener('mousedown', handleNativeMouseDown, true);
 
     // Handle scroll/wheel events for navigation and zoom - CONSISTENT ACROSS ALL MODES
     canvas.on('mouse:wheel', (opt) => {
@@ -2427,9 +2430,7 @@ export default function SchematicEditor({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
-      if (canvasRef.current) {
-        canvasRef.current.removeEventListener('mousedown', handleNativeMouseDown);
-      }
+      window.removeEventListener('mousedown', handleNativeMouseDown, true);
       canvas.dispose();
     };
   }, [schematicUrl]);
