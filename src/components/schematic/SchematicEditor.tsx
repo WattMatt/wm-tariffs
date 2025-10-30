@@ -4627,7 +4627,7 @@ export default function SchematicEditor({
             {/* Zones */}
             <Badge 
               variant="outline" 
-              className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.council_connection_zone ? 'opacity-40' : ''}`}
+              className={`cursor-pointer transition-all hover:scale-105 select-none ${!legendVisibility.council_connection_zone ? 'opacity-40' : ''}`}
               onClick={() => setLegendVisibility(prev => ({ ...prev, council_connection_zone: !prev.council_connection_zone }))}
               onDoubleClick={() => {
                 const isOnlyActive = legendVisibility.council_connection_zone && 
@@ -4664,7 +4664,7 @@ export default function SchematicEditor({
             
             <Badge 
               variant="outline" 
-              className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.mini_sub_zone ? 'opacity-40' : ''}`}
+              className={`cursor-pointer transition-all hover:scale-105 select-none ${!legendVisibility.mini_sub_zone ? 'opacity-40' : ''}`}
               onClick={() => setLegendVisibility(prev => ({ ...prev, mini_sub_zone: !prev.mini_sub_zone }))}
               onDoubleClick={() => {
                 const isOnlyActive = legendVisibility.mini_sub_zone && 
@@ -4701,7 +4701,7 @@ export default function SchematicEditor({
             
             <Badge 
               variant="outline" 
-              className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.main_board_zone ? 'opacity-40' : ''}`}
+              className={`cursor-pointer transition-all hover:scale-105 select-none ${!legendVisibility.main_board_zone ? 'opacity-40' : ''}`}
               onClick={() => setLegendVisibility(prev => ({ ...prev, main_board_zone: !prev.main_board_zone }))}
               onDoubleClick={() => {
                 const isOnlyActive = legendVisibility.main_board_zone && 
@@ -4741,7 +4741,7 @@ export default function SchematicEditor({
             {/* Meters */}
             <Badge 
               variant="outline" 
-              className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.bulk_meter ? 'opacity-40' : ''}`}
+              className={`cursor-pointer transition-all hover:scale-105 select-none ${!legendVisibility.bulk_meter ? 'opacity-40' : ''}`}
               onClick={() => setLegendVisibility(prev => ({ ...prev, bulk_meter: !prev.bulk_meter }))}
               onDoubleClick={() => {
                 const isOnlyActive = legendVisibility.bulk_meter && 
@@ -4778,7 +4778,7 @@ export default function SchematicEditor({
             
             <Badge 
               variant="outline" 
-              className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.check_meter ? 'opacity-40' : ''}`}
+              className={`cursor-pointer transition-all hover:scale-105 select-none ${!legendVisibility.check_meter ? 'opacity-40' : ''}`}
               onClick={() => setLegendVisibility(prev => ({ ...prev, check_meter: !prev.check_meter }))}
               onDoubleClick={() => {
                 const isOnlyActive = legendVisibility.check_meter && 
@@ -4815,7 +4815,7 @@ export default function SchematicEditor({
             
             <Badge 
               variant="outline" 
-              className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.tenant_meter ? 'opacity-40' : ''}`}
+              className={`cursor-pointer transition-all hover:scale-105 select-none ${!legendVisibility.tenant_meter ? 'opacity-40' : ''}`}
               onClick={() => setLegendVisibility(prev => ({ ...prev, tenant_meter: !prev.tenant_meter }))}
               onDoubleClick={() => {
                 const isOnlyActive = legendVisibility.tenant_meter && 
@@ -4852,7 +4852,7 @@ export default function SchematicEditor({
             
             <Badge 
               variant="outline" 
-              className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.other ? 'opacity-40' : ''}`}
+              className={`cursor-pointer transition-all hover:scale-105 select-none ${!legendVisibility.other ? 'opacity-40' : ''}`}
               onClick={() => setLegendVisibility(prev => ({ ...prev, other: !prev.other }))}
               onDoubleClick={() => {
                 const isOnlyActive = legendVisibility.other && 
@@ -4892,7 +4892,7 @@ export default function SchematicEditor({
             {/* Extracted Meters Status */}
             <Badge 
               variant="outline" 
-              className={`cursor-pointer transition-all ${!showUnconfirmed ? 'opacity-40' : 'hover:bg-muted'}`}
+              className={`cursor-pointer transition-all select-none ${!showUnconfirmed ? 'opacity-40' : 'hover:bg-muted'}`}
               onClick={() => setShowUnconfirmed(!showUnconfirmed)}
               onDoubleClick={() => {
                 if (showUnconfirmed && !showConfirmed) {
@@ -4909,7 +4909,7 @@ export default function SchematicEditor({
             </Badge>
             <Badge 
               variant="outline" 
-              className={`cursor-pointer transition-all ${!showConfirmed ? 'opacity-40' : 'hover:bg-muted'}`}
+              className={`cursor-pointer transition-all select-none ${!showConfirmed ? 'opacity-40' : 'hover:bg-muted'}`}
               onClick={() => setShowConfirmed(!showConfirmed)}
               onDoubleClick={() => {
                 if (showConfirmed && !showUnconfirmed) {
