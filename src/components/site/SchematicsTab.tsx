@@ -193,18 +193,20 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
 
     setIsDeleting(true);
     try {
-      // First, delete associated meter positions
-      const { error: positionsError } = await supabase
-        .from("meter_positions")
-        .delete()
-        .eq("schematic_id", schematicToDelete.id);
+      // Call database function to clean up meter positions, connections, lines, and snippets
+      const { data: cleanupResult, error: cleanupError } = await supabase.rpc(
+        "delete_schematic_meters",
+        { schematic_uuid: schematicToDelete.id }
+      );
 
-      if (positionsError) {
-        console.error("Error deleting meter positions:", positionsError);
-        // Continue anyway, non-critical
+      if (cleanupError) {
+        console.error("Error cleaning up schematic data:", cleanupError);
+        throw cleanupError;
       }
 
-      // Delete the files from storage
+      console.log("Cleanup results:", cleanupResult);
+
+      // Delete the schematic files from storage
       const filesToDelete = [schematicToDelete.file_path];
       if (schematicToDelete.converted_image_path) {
         filesToDelete.push(schematicToDelete.converted_image_path);
@@ -227,7 +229,7 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
 
       if (dbError) throw dbError;
 
-      toast.success("Schematic deleted successfully");
+      toast.success("Schematic and all associated data deleted successfully");
       fetchSchematics();
     } catch (error: any) {
       console.error("Error deleting schematic:", error);
