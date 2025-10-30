@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, Gauge, Upload, Pencil, Trash2, Database, Trash, Settings2 } from "lucide-react";
+import { Plus, Gauge, Upload, Pencil, Trash2, Database, Trash, Eye } from "lucide-react";
 import { toast } from "sonner";
 import CsvImportDialog from "./CsvImportDialog";
 import MeterReadingsView from "./MeterReadingsView";
@@ -923,9 +923,9 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                             setParseMeterNumber(meter.meter_number);
                             setParseDialogOpen(true);
                           }}
-                          title="Parse CSV data"
+                          title="Preview & configure"
                         >
-                          <Settings2 className="w-4 h-4" />
+                          <Eye className="w-4 h-4" />
                         </Button>
                       </div>
                     </TableCell>
