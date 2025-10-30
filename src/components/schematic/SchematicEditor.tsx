@@ -4212,7 +4212,7 @@ export default function SchematicEditor({
             Save
           </Button>
           <Button
-            variant={isEditMode ? "default" : "outline"}
+            variant="outline"
             onClick={() => {
               setIsEditMode(!isEditMode);
               if (!isEditMode) {
