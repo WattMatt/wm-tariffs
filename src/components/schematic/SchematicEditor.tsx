@@ -165,8 +165,12 @@ const addAtLayer = (
   const backgroundIndex = getBackgroundIndex(canvas);
   
   if (backgroundIndex === -1) {
-    // No background: just add normally
-    canvas.add(object);
+    // No background yet: if adding background (layer 0), insert at start; otherwise add normally
+    if (layer === Z_LAYERS.BACKGROUND) {
+      canvas.insertAt(0, object);
+    } else {
+      canvas.add(object);
+    }
     return;
   }
   
