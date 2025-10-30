@@ -4688,28 +4688,6 @@ export default function SchematicEditor({
         )}
       </div>
 
-      {meterPositions.length > 0 && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-          {meterPositions.map((pos) => {
-            const meter = meters.find(m => m.id === pos.meter_id);
-            return (
-              <Button
-                key={pos.id}
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setSelectedMeterId(meter?.id);
-                  setIsCsvDialogOpen(true);
-                }}
-                className="justify-between"
-              >
-                <span className="font-mono text-xs">{meter?.meter_number}</span>
-                <Upload className="w-3 h-3" />
-              </Button>
-            );
-          })}
-        </div>
-      )}
 
       <Dialog open={isAddMeterDialogOpen} onOpenChange={setIsAddMeterDialogOpen}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
