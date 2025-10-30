@@ -4,7 +4,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Wand2 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 interface MeterFormFieldsProps {
   idPrefix: string;
@@ -20,16 +21,26 @@ interface MeterFormFieldsProps {
     zone?: string;
     location?: string;
     tariff?: string;
+    tariff_structure_id?: string;
     confirmation_status?: string;
   };
   showLocationAndTariff?: boolean;
+  siteId?: string;
+}
+
+interface TariffStructure {
+  id: string;
+  name: string;
+  tariff_type: string;
 }
 
 export function MeterFormFields({ 
   idPrefix, 
   defaultValues, 
-  showLocationAndTariff = false
+  showLocationAndTariff = false,
+  siteId
 }: MeterFormFieldsProps) {
+  const [tariffStructures, setTariffStructures] = useState<TariffStructure[]>([]);
   // Clean VERIFY: and NOT_VISIBLE prefixes from extracted data
   const cleanValue = (value?: string | number) => {
     if (value === null || value === undefined) return '';
@@ -44,6 +55,36 @@ export function MeterFormFields({
 
   // State for meter number to allow button to update it
   const [meterNumber, setMeterNumber] = useState(cleanValue(defaultValues.meter_number));
+
+  // Fetch tariff structures for the site's supply authority
+  useEffect(() => {
+    if (!siteId || !showLocationAndTariff) return;
+
+    const fetchTariffStructures = async () => {
+      // First get the site's supply authority
+      const { data: siteData } = await supabase
+        .from('sites')
+        .select('supply_authority_id')
+        .eq('id', siteId)
+        .single();
+
+      if (!siteData?.supply_authority_id) return;
+
+      // Then fetch active tariff structures for that supply authority
+      const { data: tariffs } = await supabase
+        .from('tariff_structures')
+        .select('id, name, tariff_type')
+        .eq('supply_authority_id', siteData.supply_authority_id)
+        .eq('active', true)
+        .order('name');
+
+      if (tariffs) {
+        setTariffStructures(tariffs);
+      }
+    };
+
+    fetchTariffStructures();
+  }, [siteId, showLocationAndTariff]);
 
   // Generate meter number based on name
   const generateMeterNumber = () => {
@@ -243,12 +284,25 @@ export function MeterFormFields({
 
             <div className="space-y-2 col-span-2">
               <Label htmlFor={`${idPrefix}_tariff`}>Tariff</Label>
-              <Input 
-                id={`${idPrefix}_tariff`}
-                name="tariff" 
-                defaultValue={defaultValues.tariff || ''}
-                placeholder="Business Standard" 
-              />
+              <Select 
+                name="tariff_structure_id" 
+                defaultValue={defaultValues.tariff_structure_id || ''}
+              >
+                <SelectTrigger className="bg-background">
+                  <SelectValue placeholder="Select tariff structure" />
+                </SelectTrigger>
+                <SelectContent className="bg-background z-50">
+                  {tariffStructures.length === 0 ? (
+                    <SelectItem value="" disabled>No tariffs available</SelectItem>
+                  ) : (
+                    tariffStructures.map((tariff) => (
+                      <SelectItem key={tariff.id} value={tariff.id}>
+                        {tariff.name} ({tariff.tariff_type})
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
             </div>
           </>
         )}

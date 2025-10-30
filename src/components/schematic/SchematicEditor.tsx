@@ -3688,6 +3688,8 @@ export default function SchematicEditor({
       ct_type: formData.get('ct_type') as string,
       meter_type: formData.get('meter_type') as string,
       zone: formData.get('zone') as string || null,
+      location: formData.get('location') as string || null,
+      tariff_structure_id: formData.get('tariff_structure_id') as string || null,
       confirmation_status: 'confirmed', // Automatically approve on save
     };
 
@@ -5415,6 +5417,7 @@ export default function SchematicEditor({
                       idPrefix="edit"
                       defaultValues={editingMeter}
                       showLocationAndTariff={true}
+                      siteId={siteId}
                     />
                   </div>
                 </div>
