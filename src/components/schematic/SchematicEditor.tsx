@@ -4629,15 +4629,34 @@ export default function SchematicEditor({
               variant="outline" 
               className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.council_connection_zone ? 'opacity-40' : ''}`}
               onClick={() => setLegendVisibility(prev => ({ ...prev, council_connection_zone: !prev.council_connection_zone }))}
-              onDoubleClick={() => setLegendVisibility({
-                bulk_meter: false,
-                check_meter: false,
-                main_board_zone: false,
-                mini_sub_zone: false,
-                council_connection_zone: true,
-                tenant_meter: false,
-                other: false
-              })}
+              onDoubleClick={() => {
+                const isOnlyActive = legendVisibility.council_connection_zone && 
+                  !legendVisibility.bulk_meter && !legendVisibility.check_meter && 
+                  !legendVisibility.main_board_zone && !legendVisibility.mini_sub_zone && 
+                  !legendVisibility.tenant_meter && !legendVisibility.other;
+                
+                if (isOnlyActive) {
+                  setLegendVisibility({
+                    bulk_meter: true,
+                    check_meter: true,
+                    main_board_zone: true,
+                    mini_sub_zone: true,
+                    council_connection_zone: true,
+                    tenant_meter: true,
+                    other: true
+                  });
+                } else {
+                  setLegendVisibility({
+                    bulk_meter: false,
+                    check_meter: false,
+                    main_board_zone: false,
+                    mini_sub_zone: false,
+                    council_connection_zone: true,
+                    tenant_meter: false,
+                    other: false
+                  });
+                }
+              }}
             >
               <div className="w-3 h-3 rounded-full bg-[#ec4899] mr-2" />
               Council Connection
@@ -4647,15 +4666,34 @@ export default function SchematicEditor({
               variant="outline" 
               className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.mini_sub_zone ? 'opacity-40' : ''}`}
               onClick={() => setLegendVisibility(prev => ({ ...prev, mini_sub_zone: !prev.mini_sub_zone }))}
-              onDoubleClick={() => setLegendVisibility({
-                bulk_meter: false,
-                check_meter: false,
-                main_board_zone: false,
-                mini_sub_zone: true,
-                council_connection_zone: false,
-                tenant_meter: false,
-                other: false
-              })}
+              onDoubleClick={() => {
+                const isOnlyActive = legendVisibility.mini_sub_zone && 
+                  !legendVisibility.bulk_meter && !legendVisibility.check_meter && 
+                  !legendVisibility.main_board_zone && !legendVisibility.council_connection_zone && 
+                  !legendVisibility.tenant_meter && !legendVisibility.other;
+                
+                if (isOnlyActive) {
+                  setLegendVisibility({
+                    bulk_meter: true,
+                    check_meter: true,
+                    main_board_zone: true,
+                    mini_sub_zone: true,
+                    council_connection_zone: true,
+                    tenant_meter: true,
+                    other: true
+                  });
+                } else {
+                  setLegendVisibility({
+                    bulk_meter: false,
+                    check_meter: false,
+                    main_board_zone: false,
+                    mini_sub_zone: true,
+                    council_connection_zone: false,
+                    tenant_meter: false,
+                    other: false
+                  });
+                }
+              }}
             >
               <div className="w-3 h-3 rounded-full bg-[#06b6d4] mr-2" />
               Mini Sub
@@ -4665,15 +4703,34 @@ export default function SchematicEditor({
               variant="outline" 
               className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.main_board_zone ? 'opacity-40' : ''}`}
               onClick={() => setLegendVisibility(prev => ({ ...prev, main_board_zone: !prev.main_board_zone }))}
-              onDoubleClick={() => setLegendVisibility({
-                bulk_meter: false,
-                check_meter: false,
-                main_board_zone: true,
-                mini_sub_zone: false,
-                council_connection_zone: false,
-                tenant_meter: false,
-                other: false
-              })}
+              onDoubleClick={() => {
+                const isOnlyActive = legendVisibility.main_board_zone && 
+                  !legendVisibility.bulk_meter && !legendVisibility.check_meter && 
+                  !legendVisibility.mini_sub_zone && !legendVisibility.council_connection_zone && 
+                  !legendVisibility.tenant_meter && !legendVisibility.other;
+                
+                if (isOnlyActive) {
+                  setLegendVisibility({
+                    bulk_meter: true,
+                    check_meter: true,
+                    main_board_zone: true,
+                    mini_sub_zone: true,
+                    council_connection_zone: true,
+                    tenant_meter: true,
+                    other: true
+                  });
+                } else {
+                  setLegendVisibility({
+                    bulk_meter: false,
+                    check_meter: false,
+                    main_board_zone: true,
+                    mini_sub_zone: false,
+                    council_connection_zone: false,
+                    tenant_meter: false,
+                    other: false
+                  });
+                }
+              }}
             >
               <div className="w-3 h-3 rounded-full bg-[#9333ea] mr-2" />
               Main Board
@@ -4686,15 +4743,34 @@ export default function SchematicEditor({
               variant="outline" 
               className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.bulk_meter ? 'opacity-40' : ''}`}
               onClick={() => setLegendVisibility(prev => ({ ...prev, bulk_meter: !prev.bulk_meter }))}
-              onDoubleClick={() => setLegendVisibility({
-                bulk_meter: true,
-                check_meter: false,
-                main_board_zone: false,
-                mini_sub_zone: false,
-                council_connection_zone: false,
-                tenant_meter: false,
-                other: false
-              })}
+              onDoubleClick={() => {
+                const isOnlyActive = legendVisibility.bulk_meter && 
+                  !legendVisibility.check_meter && !legendVisibility.main_board_zone && 
+                  !legendVisibility.mini_sub_zone && !legendVisibility.council_connection_zone && 
+                  !legendVisibility.tenant_meter && !legendVisibility.other;
+                
+                if (isOnlyActive) {
+                  setLegendVisibility({
+                    bulk_meter: true,
+                    check_meter: true,
+                    main_board_zone: true,
+                    mini_sub_zone: true,
+                    council_connection_zone: true,
+                    tenant_meter: true,
+                    other: true
+                  });
+                } else {
+                  setLegendVisibility({
+                    bulk_meter: true,
+                    check_meter: false,
+                    main_board_zone: false,
+                    mini_sub_zone: false,
+                    council_connection_zone: false,
+                    tenant_meter: false,
+                    other: false
+                  });
+                }
+              }}
             >
               <div className="w-3 h-3 rounded-full bg-[#ef4444] mr-2" />
               Bulk Meter
@@ -4704,15 +4780,34 @@ export default function SchematicEditor({
               variant="outline" 
               className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.check_meter ? 'opacity-40' : ''}`}
               onClick={() => setLegendVisibility(prev => ({ ...prev, check_meter: !prev.check_meter }))}
-              onDoubleClick={() => setLegendVisibility({
-                bulk_meter: false,
-                check_meter: true,
-                main_board_zone: false,
-                mini_sub_zone: false,
-                council_connection_zone: false,
-                tenant_meter: false,
-                other: false
-              })}
+              onDoubleClick={() => {
+                const isOnlyActive = legendVisibility.check_meter && 
+                  !legendVisibility.bulk_meter && !legendVisibility.main_board_zone && 
+                  !legendVisibility.mini_sub_zone && !legendVisibility.council_connection_zone && 
+                  !legendVisibility.tenant_meter && !legendVisibility.other;
+                
+                if (isOnlyActive) {
+                  setLegendVisibility({
+                    bulk_meter: true,
+                    check_meter: true,
+                    main_board_zone: true,
+                    mini_sub_zone: true,
+                    council_connection_zone: true,
+                    tenant_meter: true,
+                    other: true
+                  });
+                } else {
+                  setLegendVisibility({
+                    bulk_meter: false,
+                    check_meter: true,
+                    main_board_zone: false,
+                    mini_sub_zone: false,
+                    council_connection_zone: false,
+                    tenant_meter: false,
+                    other: false
+                  });
+                }
+              }}
             >
               <div className="w-3 h-3 rounded-full bg-[#f59e0b] mr-2" />
               Check Meter
@@ -4722,15 +4817,34 @@ export default function SchematicEditor({
               variant="outline" 
               className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.tenant_meter ? 'opacity-40' : ''}`}
               onClick={() => setLegendVisibility(prev => ({ ...prev, tenant_meter: !prev.tenant_meter }))}
-              onDoubleClick={() => setLegendVisibility({
-                bulk_meter: false,
-                check_meter: false,
-                main_board_zone: false,
-                mini_sub_zone: false,
-                council_connection_zone: false,
-                tenant_meter: true,
-                other: false
-              })}
+              onDoubleClick={() => {
+                const isOnlyActive = legendVisibility.tenant_meter && 
+                  !legendVisibility.bulk_meter && !legendVisibility.check_meter && 
+                  !legendVisibility.main_board_zone && !legendVisibility.mini_sub_zone && 
+                  !legendVisibility.council_connection_zone && !legendVisibility.other;
+                
+                if (isOnlyActive) {
+                  setLegendVisibility({
+                    bulk_meter: true,
+                    check_meter: true,
+                    main_board_zone: true,
+                    mini_sub_zone: true,
+                    council_connection_zone: true,
+                    tenant_meter: true,
+                    other: true
+                  });
+                } else {
+                  setLegendVisibility({
+                    bulk_meter: false,
+                    check_meter: false,
+                    main_board_zone: false,
+                    mini_sub_zone: false,
+                    council_connection_zone: false,
+                    tenant_meter: true,
+                    other: false
+                  });
+                }
+              }}
             >
               <div className="w-3 h-3 rounded-full bg-[#10b981] mr-2" />
               Tenant Meter
@@ -4740,15 +4854,34 @@ export default function SchematicEditor({
               variant="outline" 
               className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.other ? 'opacity-40' : ''}`}
               onClick={() => setLegendVisibility(prev => ({ ...prev, other: !prev.other }))}
-              onDoubleClick={() => setLegendVisibility({
-                bulk_meter: false,
-                check_meter: false,
-                main_board_zone: false,
-                mini_sub_zone: false,
-                council_connection_zone: false,
-                tenant_meter: false,
-                other: true
-              })}
+              onDoubleClick={() => {
+                const isOnlyActive = legendVisibility.other && 
+                  !legendVisibility.bulk_meter && !legendVisibility.check_meter && 
+                  !legendVisibility.main_board_zone && !legendVisibility.mini_sub_zone && 
+                  !legendVisibility.council_connection_zone && !legendVisibility.tenant_meter;
+                
+                if (isOnlyActive) {
+                  setLegendVisibility({
+                    bulk_meter: true,
+                    check_meter: true,
+                    main_board_zone: true,
+                    mini_sub_zone: true,
+                    council_connection_zone: true,
+                    tenant_meter: true,
+                    other: true
+                  });
+                } else {
+                  setLegendVisibility({
+                    bulk_meter: false,
+                    check_meter: false,
+                    main_board_zone: false,
+                    mini_sub_zone: false,
+                    council_connection_zone: false,
+                    tenant_meter: false,
+                    other: true
+                  });
+                }
+              }}
             >
               <div className="w-3 h-3 rounded-full bg-[#3b82f6] mr-2" />
               Other
@@ -4762,8 +4895,13 @@ export default function SchematicEditor({
               className={`cursor-pointer transition-all ${!showUnconfirmed ? 'opacity-40' : 'hover:bg-muted'}`}
               onClick={() => setShowUnconfirmed(!showUnconfirmed)}
               onDoubleClick={() => {
-                setShowUnconfirmed(true);
-                setShowConfirmed(false);
+                if (showUnconfirmed && !showConfirmed) {
+                  setShowUnconfirmed(true);
+                  setShowConfirmed(true);
+                } else {
+                  setShowUnconfirmed(true);
+                  setShowConfirmed(false);
+                }
               }}
             >
               <div className="w-3 h-3 rounded-full bg-[#dc2626] border-2 border-[#dc2626] mr-2" />
@@ -4774,8 +4912,13 @@ export default function SchematicEditor({
               className={`cursor-pointer transition-all ${!showConfirmed ? 'opacity-40' : 'hover:bg-muted'}`}
               onClick={() => setShowConfirmed(!showConfirmed)}
               onDoubleClick={() => {
-                setShowUnconfirmed(false);
-                setShowConfirmed(true);
+                if (showConfirmed && !showUnconfirmed) {
+                  setShowUnconfirmed(true);
+                  setShowConfirmed(true);
+                } else {
+                  setShowUnconfirmed(false);
+                  setShowConfirmed(true);
+                }
               }}
             >
               <div className="w-3 h-3 rounded-full bg-[#16a34a] border-2 border-[#16a34a] mr-2" />
