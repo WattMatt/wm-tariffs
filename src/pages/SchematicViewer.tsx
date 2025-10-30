@@ -883,6 +883,19 @@ export default function SchematicViewer() {
                                 zIndex: 20
                               }}
                             >
+                              <defs>
+                                <marker
+                                  id="arrowhead"
+                                  markerWidth="10"
+                                  markerHeight="10"
+                                  refX="9"
+                                  refY="3"
+                                  orient="auto"
+                                  markerUnits="strokeWidth"
+                                >
+                                  <path d="M0,0 L0,6 L9,3 z" fill="#3b82f6" />
+                                </marker>
+                              </defs>
                               {meterConnections.map((connection) => {
                                 const childPos = meterPositions.find(p => p.meter_id === connection.child_meter_id);
                                 const parentPos = meterPositions.find(p => p.meter_id === connection.parent_meter_id);
@@ -899,6 +912,11 @@ export default function SchematicViewer() {
                                     stroke="#3b82f6"
                                     strokeWidth="3"
                                     opacity="0.7"
+                                    strokeDasharray="10 5"
+                                    markerEnd="url(#arrowhead)"
+                                    style={{
+                                      animation: 'dash-flow 1s linear infinite'
+                                    }}
                                   />
                                 );
                               })}
@@ -1014,6 +1032,19 @@ export default function SchematicViewer() {
                                 zIndex: 20
                               }}
                             >
+                              <defs>
+                                <marker
+                                  id="arrowhead-img"
+                                  markerWidth="10"
+                                  markerHeight="10"
+                                  refX="9"
+                                  refY="3"
+                                  orient="auto"
+                                  markerUnits="strokeWidth"
+                                >
+                                  <path d="M0,0 L0,6 L9,3 z" fill="#3b82f6" />
+                                </marker>
+                              </defs>
                               {meterConnections.map((connection) => {
                                 const childPos = meterPositions.find(p => p.meter_id === connection.child_meter_id);
                                 const parentPos = meterPositions.find(p => p.meter_id === connection.parent_meter_id);
@@ -1030,6 +1061,11 @@ export default function SchematicViewer() {
                                     stroke="#3b82f6"
                                     strokeWidth="3"
                                     opacity="0.7"
+                                    strokeDasharray="10 5"
+                                    markerEnd="url(#arrowhead-img)"
+                                    style={{
+                                      animation: 'dash-flow 1s linear infinite'
+                                    }}
                                   />
                                 );
                               })}
