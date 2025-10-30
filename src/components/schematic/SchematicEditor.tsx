@@ -4221,6 +4221,27 @@ export default function SchematicEditor({
               } else {
                 // Cancel edit mode and reset active tool
                 setActiveTool("select");
+                
+                // Clear all selections and reset visual styling
+                if (fabricCanvas) {
+                  fabricCanvas.getObjects().forEach((obj: any) => {
+                    if (obj.type === 'rect' && obj.regionId) {
+                      obj.set({ stroke: '#3b82f6', strokeWidth: 2 });
+                    }
+                    // Remove selection marker rectangles
+                    if (obj.type === 'rect' && obj.selectionMarker) {
+                      fabricCanvas.remove(obj);
+                    }
+                  });
+                  fabricCanvas.renderAll();
+                }
+                
+                // Clear all selection arrays
+                setSelectedRegionIndices([]);
+                setSelectedMeterIds([]);
+                setSelectedConnectionKeys([]);
+                setIsSelectionMode(false);
+                
                 toast.info("Edit mode cancelled - unsaved changes discarded");
               }
             }}
