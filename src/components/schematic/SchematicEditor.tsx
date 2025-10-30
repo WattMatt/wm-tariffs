@@ -359,8 +359,8 @@ async function renderMeterCardOnCanvas(
       (img as any).meterCardType = 'extracted';
       
       canvas.add(img);
-      canvas.bringObjectToFront(img);
       ensureBackgroundAtBottom(canvas);
+      canvas.bringObjectToFront(img);
       canvas.renderAll();
       resolve(img);
     });
@@ -2779,8 +2779,8 @@ export default function SchematicEditor({
           }
 
           fabricCanvas.add(img);
-          fabricCanvas.bringObjectToFront(img);
           ensureBackgroundAtBottom(fabricCanvas);
+          fabricCanvas.bringObjectToFront(img);
           
           // Add snap point indicators when in connection mode
           if (activeTool === 'connection') {
@@ -3194,8 +3194,8 @@ export default function SchematicEditor({
           }
 
           fabricCanvas.add(img);
-          fabricCanvas.bringObjectToFront(img);
           ensureBackgroundAtBottom(fabricCanvas);
+          fabricCanvas.bringObjectToFront(img);
           
           // Add snap point indicators when in connection mode
           if (activeTool === 'connection') {
