@@ -3544,7 +3544,7 @@ export default function SchematicEditor({
 
   const handleZoomOut = () => {
     if (!fabricCanvas) return;
-    const newZoom = Math.max(zoom * 0.8, 0.5);
+    const newZoom = Math.max(zoom * 0.8, 0.05);
     fabricCanvas.setZoom(newZoom);
     setZoom(newZoom);
     fabricCanvas.renderAll();

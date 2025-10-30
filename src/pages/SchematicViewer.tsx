@@ -376,8 +376,8 @@ export default function SchematicViewer() {
       const zoomStep = delta < 0 ? 1.1 : 0.9;
       let newZoom = zoom * zoomStep;
       
-      // Clamp zoom between 50% and 1000% for usability
-      newZoom = Math.min(Math.max(0.5, newZoom), 10);
+      // Clamp zoom between 5% and 1000% for usability
+      newZoom = Math.min(Math.max(0.05, newZoom), 10);
       
       if (containerRef.current && imageRef.current) {
         const containerRect = containerRef.current.getBoundingClientRect();
