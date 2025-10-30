@@ -91,6 +91,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Save, Zap, Link2, Trash2, Upload, Plus, ZoomIn, ZoomOut, Maximize2, Pencil, Scan, Check, Edit, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -4618,11 +4619,10 @@ export default function SchematicEditor({
       {/* Legend and PDF Controls in two panes */}
       <div className="flex gap-4 mb-2">
         {/* Left pane - Legends */}
-        <div className="flex-1 space-y-3 p-2">
-          {/* Top row - Zones */}
+        <div className="flex-1 p-2">
+          {/* Single horizontal row with all legends and separators */}
           <div className="flex gap-3 flex-wrap items-center">
-            <div className="text-xs font-medium text-muted-foreground mr-2 flex items-center">Zones:</div>
-            
+            {/* Zones */}
             <Badge 
               variant="outline" 
               className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.council_connection_zone ? 'opacity-40' : ''}`}
@@ -4649,12 +4649,10 @@ export default function SchematicEditor({
               <div className="w-3 h-3 rounded-full bg-[#9333ea] mr-2" />
               Main Board
             </Badge>
-          </div>
-          
-          {/* Middle row - Meters */}
-          <div className="flex gap-3 flex-wrap items-center">
-            <div className="text-xs font-medium text-muted-foreground mr-2 flex items-center">Meters:</div>
             
+            <Separator orientation="vertical" className="h-6 mx-1" />
+            
+            {/* Meters */}
             <Badge 
               variant="outline" 
               className={`cursor-pointer transition-all hover:scale-105 ${!legendVisibility.bulk_meter ? 'opacity-40' : ''}`}
@@ -4690,11 +4688,10 @@ export default function SchematicEditor({
               <div className="w-3 h-3 rounded-full bg-[#3b82f6] mr-2" />
               Other
             </Badge>
-          </div>
-          
-          {/* Bottom row - Extracted Meters Status */}
-          <div className="flex gap-3 flex-wrap items-center">
-            <div className="text-xs font-medium text-muted-foreground mr-2 flex items-center">Extracted:</div>
+            
+            <Separator orientation="vertical" className="h-6 mx-1" />
+            
+            {/* Extracted Meters Status */}
             <Badge 
               variant="outline" 
               className={`cursor-pointer transition-all ${!showUnconfirmed ? 'opacity-40' : 'hover:bg-muted'}`}
