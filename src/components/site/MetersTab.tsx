@@ -81,6 +81,7 @@ export default function MetersTab({ siteId }: MetersTabProps) {
   const [selectedMeterIds, setSelectedMeterIds] = useState<Set<string>>(new Set());
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [isBulkCsvDeleting, setIsBulkCsvDeleting] = useState(false);
+  const [csvDeletionProgress, setCsvDeletionProgress] = useState({ filesDeleted: 0, totalMeters: 0, processedMeters: 0 });
 
   useEffect(() => {
     fetchMeters();
@@ -517,21 +518,41 @@ export default function MetersTab({ siteId }: MetersTabProps) {
     if (!confirmed) return;
     
     setIsBulkCsvDeleting(true);
+    setCsvDeletionProgress({ filesDeleted: 0, totalMeters: selectedMeterIds.size, processedMeters: 0 });
     
     try {
       const meterIds = Array.from(selectedMeterIds);
+      const batchSize = 5; // Process 5 meters at a time for progress updates
+      let totalFilesDeleted = 0;
+      let totalReadingsDeleted = 0;
+      let totalProcessed = 0;
       
-      // Use edge function to handle batch deletion
-      const { data, error } = await supabase.functions.invoke('delete-meter-data', {
-        body: { meterIds }
-      });
-      
-      if (error) throw error;
-      if (!data.success) throw new Error(data.error || 'Deletion failed');
+      // Process in batches to show progress
+      for (let i = 0; i < meterIds.length; i += batchSize) {
+        const batch = meterIds.slice(i, i + batchSize);
+        
+        const { data, error } = await supabase.functions.invoke('delete-meter-data', {
+          body: { meterIds: batch }
+        });
+        
+        if (error) throw error;
+        if (!data.success) throw new Error(data.error || 'Deletion failed');
+        
+        totalFilesDeleted += data.filesDeleted || 0;
+        totalReadingsDeleted += data.readingsDeleted || 0;
+        totalProcessed += data.metersProcessed || 0;
+        
+        // Update progress
+        setCsvDeletionProgress({
+          filesDeleted: totalFilesDeleted,
+          totalMeters: selectedMeterIds.size,
+          processedMeters: totalProcessed
+        });
+      }
       
       toast.success(
-        `Successfully deleted CSV data for ${data.metersProcessed} meter${data.metersProcessed !== 1 ? 's' : ''}: ` +
-        `${data.filesDeleted} file${data.filesDeleted !== 1 ? 's' : ''} and ${data.readingsDeleted.toLocaleString()} reading${data.readingsDeleted !== 1 ? 's' : ''} removed`,
+        `Successfully deleted CSV data for ${totalProcessed} meter${totalProcessed !== 1 ? 's' : ''}: ` +
+        `${totalFilesDeleted} file${totalFilesDeleted !== 1 ? 's' : ''} and ${totalReadingsDeleted.toLocaleString()} reading${totalReadingsDeleted !== 1 ? 's' : ''} removed`,
         { duration: 5000 }
       );
       
@@ -543,6 +564,7 @@ export default function MetersTab({ siteId }: MetersTabProps) {
       toast.error("Failed to delete CSV data: " + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       setIsBulkCsvDeleting(false);
+      setCsvDeletionProgress({ filesDeleted: 0, totalMeters: 0, processedMeters: 0 });
     }
   };
 
@@ -563,7 +585,9 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                 className="gap-2"
               >
                 <Database className="w-4 h-4" />
-                Delete CSV Data ({selectedMeterIds.size})
+                {isBulkCsvDeleting 
+                  ? `Deleting... (${csvDeletionProgress.filesDeleted} files, ${csvDeletionProgress.processedMeters}/${csvDeletionProgress.totalMeters} meters)` 
+                  : `Delete CSV Data (${selectedMeterIds.size})`}
               </Button>
               <Button
                 variant="outline"
