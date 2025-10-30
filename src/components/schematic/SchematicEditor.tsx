@@ -935,8 +935,8 @@ export default function SchematicEditor({
         const zoomStep = delta < 0 ? 1.1 : 0.9;
         newZoom *= zoomStep;
         
-        // Clamp zoom between 25% and 400% for usability
-        newZoom = Math.min(Math.max(0.25, newZoom), 4);
+        // Clamp zoom between 5% and 1000% for usability
+        newZoom = Math.min(Math.max(0.05, newZoom), 10);
         
         // Zoom to cursor position using original event coordinates (not affected by snap logic)
         const point = new Point(evt.offsetX, evt.offsetY);
