@@ -1278,13 +1278,23 @@ export default function SchematicEditor({
                 
                 // 2. Save line segments with node positions
                 const lineData = [];
+                // Get canvas dimensions for percentage conversion
+                const canvasWidth = canvas.getWidth();
+                const canvasHeight = canvas.getHeight();
+                
                 for (let i = 0; i < allPoints.length - 1; i++) {
+                  // Convert pixel coordinates to percentages (like meter cards)
+                  const fromXPercent = (allPoints[i].x / canvasWidth) * 100;
+                  const fromYPercent = (allPoints[i].y / canvasHeight) * 100;
+                  const toXPercent = (allPoints[i + 1].x / canvasWidth) * 100;
+                  const toYPercent = (allPoints[i + 1].y / canvasHeight) * 100;
+                  
                   lineData.push({
                     schematic_id: schematicId,
-                    from_x: allPoints[i].x,
-                    from_y: allPoints[i].y,
-                    to_x: allPoints[i + 1].x,
-                    to_y: allPoints[i + 1].y,
+                    from_x: fromXPercent,
+                    from_y: fromYPercent,
+                    to_x: toXPercent,
+                    to_y: toYPercent,
                     line_type: 'connection',
                     color: '#000000',
                     stroke_width: 2,
@@ -2156,6 +2166,44 @@ export default function SchematicEditor({
         });
         
         toast.success('Meter card position/size updated');
+      }
+      
+      // Handle connection node position updates
+      if (obj && obj.type === 'circle' && (obj as any).isConnectionNode) {
+        const node = obj as Circle;
+        const connectedLines = (node as any).connectedLines as Line[];
+        
+        if (connectedLines && connectedLines.length > 0) {
+          const canvasWidth = canvas.getWidth();
+          const canvasHeight = canvas.getHeight();
+          
+          // Update database for each connected line
+          connectedLines.forEach(async (line) => {
+            const lineId = (line as any).lineId;
+            if (!lineId) return;
+            
+            // Convert pixel coordinates to percentages
+            const fromXPercent = ((line.x1 || 0) / canvasWidth) * 100;
+            const fromYPercent = ((line.y1 || 0) / canvasHeight) * 100;
+            const toXPercent = ((line.x2 || 0) / canvasWidth) * 100;
+            const toYPercent = ((line.y2 || 0) / canvasHeight) * 100;
+            
+            // Update the database
+            const { error } = await supabase
+              .from('schematic_lines')
+              .update({
+                from_x: fromXPercent,
+                from_y: fromYPercent,
+                to_x: toXPercent,
+                to_y: toYPercent,
+              })
+              .eq('id', lineId);
+            
+            if (error) {
+              console.error('Error updating connection node position:', error);
+            }
+          });
+        }
       }
     });
     
@@ -3474,10 +3522,21 @@ export default function SchematicEditor({
       const nodePositions: Array<{ x: number; y: number }> = [];
 
       // Create line segments and collect node positions
+      // Get canvas dimensions for percentage to pixel conversion
+      const canvasWidth = fabricCanvas.getWidth();
+      const canvasHeight = fabricCanvas.getHeight();
+      
       sortedLines.forEach((lineData, index) => {
         const isSelected = selectedConnectionKeys.includes(connectionKey);
+        
+        // Convert percentage coordinates to pixels (like meter cards)
+        const fromX = (lineData.from_x / 100) * canvasWidth;
+        const fromY = (lineData.from_y / 100) * canvasHeight;
+        const toX = (lineData.to_x / 100) * canvasWidth;
+        const toY = (lineData.to_y / 100) * canvasHeight;
+        
         const lineSegment = new Line(
-          [lineData.from_x, lineData.from_y, lineData.to_x, lineData.to_y],
+          [fromX, fromY, toX, toY],
           {
             stroke: isSelected ? '#ef4444' : (lineData.color || '#000000'),
             strokeWidth: lineData.stroke_width || 6,
@@ -3488,6 +3547,7 @@ export default function SchematicEditor({
         );
         (lineSegment as any).isConnectionLine = true;
         (lineSegment as any).connectionKey = connectionKey;
+        (lineSegment as any).lineId = lineData.id; // Store line ID for database updates
         
         // Add click handler for selecting connections in select mode
         lineSegment.on('mousedown', (e: any) => {
@@ -3521,11 +3581,11 @@ export default function SchematicEditor({
           fabricCanvas.bringObjectToFront(lineSegment);
         }
 
-        // Collect unique node positions
+        // Collect unique node positions (already converted to pixels)
         if (index === 0) {
-          nodePositions.push({ x: lineData.from_x, y: lineData.from_y });
+          nodePositions.push({ x: fromX, y: fromY });
         }
-        nodePositions.push({ x: lineData.to_x, y: lineData.to_y });
+        nodePositions.push({ x: toX, y: toY });
       });
 
       // Create nodes at all positions
