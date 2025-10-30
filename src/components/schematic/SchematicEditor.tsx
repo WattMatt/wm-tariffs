@@ -3446,6 +3446,20 @@ export default function SchematicEditor({
       return;
     }
 
+    // Calculate scale factors based on current canvas dimensions vs stored reference
+    // Connections are stored with coordinates from when they were created
+    // We need to scale them to match the current canvas size
+    const currentCanvasWidth = fabricCanvas.getWidth();
+    const currentCanvasHeight = fabricCanvas.getHeight();
+    
+    // Use 1400x900 as reference size (the default canvas size connections were likely created on)
+    const referenceWidth = 1400;
+    const referenceHeight = 900;
+    
+    // Calculate scale factor from reference size to current size
+    const scaleX = currentCanvasWidth / referenceWidth;
+    const scaleY = currentCanvasHeight / referenceHeight;
+
     // Find background image index for proper layering
     const backgroundIndex = fabricCanvas.getObjects().findIndex(obj => (obj as any).isBackgroundImage);
 
@@ -3476,8 +3490,15 @@ export default function SchematicEditor({
       // Create line segments and collect node positions
       sortedLines.forEach((lineData, index) => {
         const isSelected = selectedConnectionKeys.includes(connectionKey);
+        
+        // Scale connection coordinates to match current canvas size
+        const scaledFromX = lineData.from_x * scaleX;
+        const scaledFromY = lineData.from_y * scaleY;
+        const scaledToX = lineData.to_x * scaleX;
+        const scaledToY = lineData.to_y * scaleY;
+        
         const lineSegment = new Line(
-          [lineData.from_x, lineData.from_y, lineData.to_x, lineData.to_y],
+          [scaledFromX, scaledFromY, scaledToX, scaledToY],
           {
             stroke: isSelected ? '#ef4444' : (lineData.color || '#000000'),
             strokeWidth: lineData.stroke_width || 6,
@@ -3521,11 +3542,11 @@ export default function SchematicEditor({
           fabricCanvas.bringObjectToFront(lineSegment);
         }
 
-        // Collect unique node positions
+        // Collect unique node positions (scaled)
         if (index === 0) {
-          nodePositions.push({ x: lineData.from_x, y: lineData.from_y });
+          nodePositions.push({ x: scaledFromX, y: scaledFromY });
         }
-        nodePositions.push({ x: lineData.to_x, y: lineData.to_y });
+        nodePositions.push({ x: scaledToX, y: scaledToY });
       });
 
       // Create nodes at all positions
