@@ -69,38 +69,17 @@ Deno.serve(async (req) => {
       console.log(`Deleted ${deletedFilesCount} files from storage`);
     }
 
-    // Step 3: Delete meter readings in batches to avoid timeout
-    const batchSize = 5000;
-    let totalReadingsDeleted = 0;
-    let hasMore = true;
+    // Step 3: Delete meter readings using database function with extended timeout
+    const { data: deleteResult, error: deleteError } = await supabase
+      .rpc('delete_meter_readings_by_ids', { p_meter_ids: meterIds });
 
-    while (hasMore) {
-      const { error: deleteError, count } = await supabase
-        .from('meter_readings')
-        .delete({ count: 'exact' })
-        .in('meter_id', meterIds)
-        .limit(batchSize);
-
-      if (deleteError) {
-        console.error('Readings delete error:', deleteError);
-        throw new Error(`Failed to delete readings: ${deleteError.message}`);
-      }
-
-      const deletedCount = count || 0;
-      totalReadingsDeleted += deletedCount;
-
-      console.log(`Batch deleted: ${deletedCount} readings (total: ${totalReadingsDeleted})`);
-
-      // If we deleted less than batch size, we're done
-      if (deletedCount < batchSize) {
-        hasMore = false;
-      }
-
-      // Small delay to prevent overwhelming the database
-      if (hasMore) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
+    if (deleteError) {
+      console.error('Readings delete error:', deleteError);
+      throw new Error(`Failed to delete readings: ${deleteError.message}`);
     }
+
+    const totalReadingsDeleted = deleteResult?.[0]?.total_deleted || 0;
+    console.log(`Successfully deleted ${totalReadingsDeleted} meter readings`);
 
     // Step 4: Delete CSV file metadata
     const { error: csvError } = await supabase
