@@ -119,69 +119,6 @@ interface MeterPosition {
   label: string;
 }
 
-// ==================================================================================
-// Z-ORDER LAYER MANAGEMENT
-// ==================================================================================
-// Defines the stacking order of elements on the canvas (bottom to top):
-// 1. Background PDF Image (layer 0)
-// 2. Connection Lines (layer 1+)
-// 3. Connection Nodes (layer 1000+)
-// 4. Meter Cards (layer 2000+)
-// 5. Snap Point Indicators (layer 3000+)
-// 6. Temporary Elements (layer 4000+)
-
-const Z_LAYERS = {
-  BACKGROUND: 0,           // Background PDF image
-  CONNECTION_LINES: 1,     // Connection lines start here
-  CONNECTION_NODES: 1000,  // Connection nodes above all lines
-  METER_CARDS: 2000,       // Meter cards above nodes
-  SNAP_INDICATORS: 3000,   // Snap point indicators above meter cards
-  TEMPORARY: 4000,         // Temporary elements (selection boxes, previews) at top
-};
-
-/**
- * Finds the index of the background image in the canvas
- * @param canvas - The Fabric.js canvas instance
- * @returns The index of the background image, or -1 if not found
- */
-const getBackgroundIndex = (canvas: FabricCanvas): number => {
-  const objects = canvas.getObjects();
-  return objects.findIndex(obj => (obj as any).isBackgroundImage);
-};
-
-/**
- * Adds an object to the canvas at a specific z-layer
- * Ensures consistent stacking order relative to the background image
- * 
- * @param canvas - The Fabric.js canvas instance
- * @param object - The Fabric.js object to add
- * @param layer - The z-layer offset (from Z_LAYERS constants)
- */
-const addAtLayer = (
-  canvas: FabricCanvas, 
-  object: any, 
-  layer: number
-) => {
-  const backgroundIndex = getBackgroundIndex(canvas);
-  
-  if (backgroundIndex === -1) {
-    // No background yet: if adding background (layer 0), insert at start; otherwise add normally
-    if (layer === Z_LAYERS.BACKGROUND) {
-      canvas.insertAt(0, object);
-    } else {
-      canvas.add(object);
-    }
-    return;
-  }
-  
-  // Insert at background index + layer offset
-  const targetIndex = backgroundIndex + layer;
-  const currentLength = canvas.getObjects().length;
-  
-  // Clamp to valid range
-  const safeIndex = Math.min(targetIndex, currentLength);
-  canvas.insertAt(safeIndex, object);
-};
 
 // Helper function to calculate snap points for a meter card
 const calculateSnapPoints = (left: number, top: number, width: number, height: number) => {
@@ -398,7 +335,7 @@ async function renderMeterCardOnCanvas(
       (img as any).meterIndex = meterIndex;
       (img as any).meterCardType = 'extracted';
       
-      addAtLayer(canvas, img, Z_LAYERS.METER_CARDS);
+      canvas.add(img);
       canvas.renderAll();
       resolve(img);
     });
@@ -558,13 +495,7 @@ export default function SchematicEditor({
   const [pendingMeterPosition, setPendingMeterPosition] = useState<{ x: number; y: number } | null>(null);
   const [isCsvDialogOpen, setIsCsvDialogOpen] = useState(false);
   const [extractedMeters, setExtractedMeters] = useState<any[]>(propExtractedMeters);
-  const extractedMetersRef = useRef<any[]>(propExtractedMeters);
   const [meterCardObjects, setMeterCardObjects] = useState<Map<number, any>>(new Map()); // Maps meter index to Fabric object
-
-  // Sync extracted meters ref with state
-  useEffect(() => {
-    extractedMetersRef.current = extractedMeters;
-  }, [extractedMeters]);
 
   // Sync extracted meters from props
   useEffect(() => {
@@ -806,7 +737,7 @@ export default function SchematicEditor({
             (snapCircle as any).isSnapPoint = true;
             (snapCircle as any).meterId = obj.data.meterId;
             
-            addAtLayer(fabricCanvas, snapCircle, Z_LAYERS.SNAP_INDICATORS);
+            fabricCanvas.add(snapCircle);
           });
         }
       });
@@ -967,19 +898,23 @@ export default function SchematicEditor({
 
       const delta = evt.deltaY;
       
-      // CTRL + SCROLL: Pan up/down with dampening for smooth control
+      // CTRL + SCROLL: Zoom in/out with fixed step-based multiplier
       if (evt.ctrlKey || evt.metaKey) {
-        // Apply dampening multiplier (0.5) for smoother pan speed across devices
-        canvas.relativePan(new Point(0, -delta * 0.5));
+        let newZoom = canvas.getZoom();
         
-        // Update controls after pan
-        requestAnimationFrame(() => {
-          const activeObj = canvas.getActiveObject();
-          if (activeObj) {
-            activeObj.setCoords();
-            canvas.requestRenderAll();
-          }
-        });
+        // Use consistent zoom steps: 1.1 for zoom in (delta < 0), 0.9 for zoom out (delta > 0)
+        // This provides smooth, predictable zoom regardless of device or scroll speed
+        const zoomStep = delta < 0 ? 1.1 : 0.9;
+        newZoom *= zoomStep;
+        
+        // Clamp zoom between 25% and 400% for usability
+        newZoom = Math.min(Math.max(0.25, newZoom), 4);
+        
+        // Zoom to cursor position using original event coordinates (not affected by snap logic)
+        const point = new Point(evt.offsetX, evt.offsetY);
+        canvas.zoomToPoint(point, newZoom);
+        
+        setZoom(newZoom);
       }
       // SHIFT + SCROLL: Pan left/right with dampening for smooth control
       else if (evt.shiftKey) {
@@ -995,23 +930,19 @@ export default function SchematicEditor({
           }
         });
       }
-      // SCROLL alone: Zoom in/out with fixed step-based multiplier
+      // SCROLL alone: Pan up/down with dampening for smooth control
       else {
-        let newZoom = canvas.getZoom();
+        // Apply dampening multiplier (0.5) for smoother pan speed across devices
+        canvas.relativePan(new Point(0, -delta * 0.5));
         
-        // Use consistent zoom steps: 1.1 for zoom in (delta < 0), 0.9 for zoom out (delta > 0)
-        // This provides smooth, predictable zoom regardless of device or scroll speed
-        const zoomStep = delta < 0 ? 1.1 : 0.9;
-        newZoom *= zoomStep;
-        
-        // Clamp zoom between 50% and 1000% for usability
-        newZoom = Math.min(Math.max(0.5, newZoom), 10);
-        
-        // Zoom to cursor position using original event coordinates (not affected by snap logic)
-        const point = new Point(evt.offsetX, evt.offsetY);
-        canvas.zoomToPoint(point, newZoom);
-        
-        setZoom(newZoom);
+        // Update controls after pan
+        requestAnimationFrame(() => {
+          const activeObj = canvas.getActiveObject();
+          if (activeObj) {
+            activeObj.setCoords();
+            canvas.requestRenderAll();
+          }
+        });
       }
     });
 
@@ -1109,8 +1040,12 @@ export default function SchematicEditor({
           // Add lines above background
           const objects = canvas.getObjects();
           const backgroundIndex = objects.findIndex(obj => (obj as any).isBackgroundImage);
-          addAtLayer(canvas, line1, Z_LAYERS.CONNECTION_LINES);
-          addAtLayer(canvas, line2, Z_LAYERS.CONNECTION_LINES + 1);
+          if (backgroundIndex !== -1) {
+            canvas.insertAt(backgroundIndex + 1, line1);
+            canvas.insertAt(backgroundIndex + 2, line2);
+          } else {
+            canvas.add(line1, line2);
+          }
           
           // Create draggable node at the split point
           const node = new Circle({
@@ -1131,7 +1066,7 @@ export default function SchematicEditor({
           (node as any).isConnectionNode = true;
           (node as any).connectedLines = [line1, line2]; // Store references to connected lines
           
-          addAtLayer(canvas, node, Z_LAYERS.CONNECTION_NODES);
+          canvas.add(node);
           canvas.renderAll();
           
           toast.success('Node added to line');
@@ -1168,7 +1103,7 @@ export default function SchematicEditor({
             evented: false,
           });
           connectionStartNodeRef.current = startNode;
-          addAtLayer(canvas, startNode, Z_LAYERS.CONNECTION_NODES);
+          canvas.add(startNode);
           canvas.renderAll();
           
           toast.info('Click to add nodes, or click a meter connection point to finish');
@@ -1207,7 +1142,12 @@ export default function SchematicEditor({
               lineSegments.push(lineSegment);
               
               // Add line above background
-              addAtLayer(canvas, lineSegment, Z_LAYERS.CONNECTION_LINES + i);
+              if (backgroundIndex !== -1) {
+                canvas.insertAt(backgroundIndex + 1 + i, lineSegment);
+              } else {
+                canvas.add(lineSegment);
+                canvas.sendObjectToBack(lineSegment);
+              }
             }
             
             // Create nodes at all points with references to connected line segments
@@ -1234,7 +1174,7 @@ export default function SchematicEditor({
               if (index < allPoints.length - 1) connectedLines.push(lineSegments[index]); // Line going out
               (node as any).connectedLines = connectedLines;
               
-            addAtLayer(canvas, node, Z_LAYERS.CONNECTION_NODES);
+              canvas.add(node);
             });
             
             // Capture connection data before async operations
@@ -1373,7 +1313,7 @@ export default function SchematicEditor({
               evented: false,
             });
             connectionNodesRef.current.push(intermediateNode);
-            addAtLayer(canvas, intermediateNode, Z_LAYERS.CONNECTION_NODES);
+            canvas.add(intermediateNode);
             canvas.renderAll();
             
             toast.info('Node added. Click to continue or click a meter point to finish');
@@ -1482,7 +1422,7 @@ export default function SchematicEditor({
                 data: { meterId: meterId }
               });
               (selectionRect as any).selectionMarker = true;
-              addAtLayer(canvas, selectionRect, Z_LAYERS.TEMPORARY);
+              canvas.add(selectionRect);
               canvas.renderAll();
               const updated = [...prev, meterId];
               toast.info(`Meter selected (${updated.length} selected)`);
@@ -1517,7 +1457,7 @@ export default function SchematicEditor({
         evented: false,
       });
       startMarkerRef.current = marker;
-      addAtLayer(canvas, marker, Z_LAYERS.TEMPORARY);
+      canvas.add(marker);
       
       // Store start point in ref
       drawStartPointRef.current = startPoint;
@@ -1568,7 +1508,7 @@ export default function SchematicEditor({
             evented: false,
           });
           (highlight as any).isSnapHighlight = true;
-          addAtLayer(canvas, highlight, Z_LAYERS.TEMPORARY);
+          canvas.add(highlight);
         } else if (evt.shiftKey) {
           // Apply 45-degree angle snapping when Shift is held and not on a snap point
           const lastPoint = connectionPointsRef.current.length > 0 
@@ -1604,7 +1544,7 @@ export default function SchematicEditor({
         });
         
         connectionLineRef.current = previewLine;
-        addAtLayer(canvas, previewLine, Z_LAYERS.TEMPORARY);
+        canvas.add(previewLine);
         canvas.renderAll();
         return;
       }
@@ -1650,7 +1590,7 @@ export default function SchematicEditor({
         });
         
         selectionBoxRef.current = selectionBox;
-        addAtLayer(canvas, selectionBox, Z_LAYERS.TEMPORARY);
+        canvas.add(selectionBox);
         canvas.renderAll();
         return;
       }
@@ -1682,7 +1622,7 @@ export default function SchematicEditor({
       });
       
       drawingRectRef.current = rect;
-      addAtLayer(canvas, rect, Z_LAYERS.TEMPORARY);
+      canvas.add(rect);
       canvas.renderAll();
     });
 
@@ -1799,7 +1739,7 @@ export default function SchematicEditor({
                   data: { meterId: meterId }
                 });
                 (selectionRect as any).selectionMarker = true;
-                addAtLayer(canvas, selectionRect, Z_LAYERS.TEMPORARY);
+                canvas.add(selectionRect);
               }
             });
             
@@ -1898,7 +1838,7 @@ export default function SchematicEditor({
                 data: { meterId: meterId }
               });
               (selectionRect as any).selectionMarker = true;
-              addAtLayer(canvas, selectionRect, Z_LAYERS.TEMPORARY);
+              canvas.add(selectionRect);
               canvas.renderAll();
               const updated = [...prev, meterId];
               toast.info(`Meter selected (${updated.length} selected)`);
@@ -2006,9 +1946,7 @@ export default function SchematicEditor({
             startMarkerRef.current = null;
           }
           
-          // Add region above background image (similar to connection lines)
-          const backgroundIndex = canvas.getObjects().findIndex(obj => (obj as any).isBackgroundImage);
-          addAtLayer(canvas, permanentRect, Z_LAYERS.TEMPORARY);
+          canvas.add(permanentRect);
           canvas.renderAll();
           
           toast.success('Region drawn successfully');
@@ -2499,7 +2437,8 @@ export default function SchematicEditor({
       });
       // Mark as background image
       (img as any).isBackgroundImage = true;
-      addAtLayer(canvas, img, Z_LAYERS.BACKGROUND);
+      canvas.add(img);
+      canvas.sendObjectToBack(img);
       canvas.renderAll();
       
       // Mark canvas as ready after image is loaded and canvas is resized
@@ -2747,7 +2686,7 @@ export default function SchematicEditor({
             if (!isEditMode) return;
             const objectData = img.get('data') as any;
             const meterIndex = objectData.index;
-            const meter = extractedMetersRef.current[meterIndex];
+            const meter = extractedMeters[meterIndex];
             console.log('🔍 Opening dialog for meter:', {
               index: meterIndex,
               hasScannedSnippet: !!meter?.scannedImageSnippet,
@@ -2773,7 +2712,7 @@ export default function SchematicEditor({
             const newX = ((img.left || 0) / canvasWidth) * 100;
             const newY = ((img.top || 0) / canvasHeight) * 100;
             
-            const updatedMeters = [...extractedMetersRef.current];
+            const updatedMeters = [...extractedMeters];
             updatedMeters[capturedIndex] = {
               ...updatedMeters[capturedIndex],
               position: { x: newX, y: newY },
@@ -2800,10 +2739,11 @@ export default function SchematicEditor({
               originX: 'left',
               originY: 'top',
             });
-            addAtLayer(fabricCanvas, border, Z_LAYERS.TEMPORARY);
+            fabricCanvas.add(border);
           }
 
-          addAtLayer(fabricCanvas, img, Z_LAYERS.METER_CARDS);
+          fabricCanvas.add(img);
+          fabricCanvas.bringObjectToFront(img);
           
           // Add snap point indicators when in connection mode
           if (activeTool === 'connection') {
@@ -2833,7 +2773,7 @@ export default function SchematicEditor({
               (snapCircle as any).isSnapPoint = true;
               (snapCircle as any).meterId = meter.id;
               
-              addAtLayer(fabricCanvas, snapCircle, Z_LAYERS.SNAP_INDICATORS);
+              fabricCanvas.add(snapCircle);
             });
           }
           
@@ -3215,7 +3155,8 @@ export default function SchematicEditor({
             });
           }
 
-          addAtLayer(fabricCanvas, img, Z_LAYERS.METER_CARDS);
+          fabricCanvas.add(img);
+          fabricCanvas.bringObjectToFront(img);
           
           // Add snap point indicators when in connection mode
           if (activeTool === 'connection') {
@@ -3245,7 +3186,7 @@ export default function SchematicEditor({
               (snapCircle as any).isSnapPoint = true;
               (snapCircle as any).meterId = pos.meter_id;
               
-              addAtLayer(fabricCanvas, snapCircle, Z_LAYERS.SNAP_INDICATORS);
+              fabricCanvas.add(snapCircle);
             });
           }
           
@@ -3255,7 +3196,7 @@ export default function SchematicEditor({
     });
 
     fabricCanvas.renderAll();
-  }, [fabricCanvas, meterPositions, meters, activeTool, extractedMeters, legendVisibility, selectedExtractedMeterIds, zoom, isEditMode, showUnconfirmed, showConfirmed]);
+  }, [fabricCanvas, meterPositions, meters, activeTool, extractedMeters, legendVisibility, selectedExtractedMeterIds]);
 
   const fetchMeters = async () => {
     const { data } = await supabase
@@ -3406,7 +3347,16 @@ export default function SchematicEditor({
         lineSegments.push(lineSegment);
         
         // Add line above background
-        addAtLayer(fabricCanvas, lineSegment, Z_LAYERS.CONNECTION_LINES + index);
+        if (backgroundIndex !== -1) {
+          fabricCanvas.insertAt(backgroundIndex + 1, lineSegment);
+        } else {
+          fabricCanvas.add(lineSegment);
+        }
+        
+        // Bring selected connection to front
+        if (isSelected) {
+          fabricCanvas.bringObjectToFront(lineSegment);
+        }
 
         // Collect unique node positions
         if (index === 0) {
@@ -3460,7 +3410,12 @@ export default function SchematicEditor({
         if (index < nodePositions.length - 1) connectedLines.push(lineSegments[index]);
         (node as any).connectedLines = connectedLines;
         
-        addAtLayer(fabricCanvas, node, Z_LAYERS.CONNECTION_NODES);
+        fabricCanvas.add(node);
+        
+        // Bring selected connection nodes to front
+        if (isSelected) {
+          fabricCanvas.bringObjectToFront(node);
+        }
       });
     });
 
@@ -3581,7 +3536,7 @@ export default function SchematicEditor({
 
   const handleZoomIn = () => {
     if (!fabricCanvas) return;
-    const newZoom = Math.min(zoom * 1.25, 10);
+    const newZoom = Math.min(zoom * 1.2, 10);
     fabricCanvas.setZoom(newZoom);
     setZoom(newZoom);
     fabricCanvas.renderAll();
@@ -3589,7 +3544,7 @@ export default function SchematicEditor({
 
   const handleZoomOut = () => {
     if (!fabricCanvas) return;
-    const newZoom = Math.max(zoom * 0.75, 0.5);
+    const newZoom = Math.max(zoom * 0.8, 0.5);
     fabricCanvas.setZoom(newZoom);
     setZoom(newZoom);
     fabricCanvas.renderAll();
@@ -4198,7 +4153,7 @@ export default function SchematicEditor({
                 // Enable draw mode and disable selection mode
                 setActiveTool("draw");
                 setIsSelectionMode(false);
-                toast.info("Click to draw regions. Use SCROLL to zoom, CTRL+SCROLL to pan, SHIFT+SCROLL for horizontal.", { duration: 4000 });
+                toast.info("Click to draw regions. Use SCROLL to pan, CTRL+SCROLL to zoom, SHIFT+SCROLL for horizontal.", { duration: 4000 });
               }
             }}
             disabled={!isEditMode}
@@ -4257,7 +4212,7 @@ export default function SchematicEditor({
             Save
           </Button>
           <Button
-            variant="outline"
+            variant={isEditMode ? "default" : "outline"}
             onClick={() => {
               setIsEditMode(!isEditMode);
               if (!isEditMode) {
@@ -4266,27 +4221,6 @@ export default function SchematicEditor({
               } else {
                 // Cancel edit mode and reset active tool
                 setActiveTool("select");
-                
-                // Clear all selections and reset visual styling
-                if (fabricCanvas) {
-                  fabricCanvas.getObjects().forEach((obj: any) => {
-                    if (obj.type === 'rect' && obj.regionId) {
-                      obj.set({ stroke: '#3b82f6', strokeWidth: 2 });
-                    }
-                    // Remove selection marker rectangles
-                    if (obj.type === 'rect' && obj.selectionMarker) {
-                      fabricCanvas.remove(obj);
-                    }
-                  });
-                  fabricCanvas.renderAll();
-                }
-                
-                // Clear all selection arrays
-                setSelectedRegionIndices([]);
-                setSelectedMeterIds([]);
-                setSelectedConnectionKeys([]);
-                setIsSelectionMode(false);
-                
                 toast.info("Edit mode cancelled - unsaved changes discarded");
               }
             }}
@@ -4390,7 +4324,6 @@ export default function SchematicEditor({
               // Delete meters
               if (selectedMeterIds.length > 0) {
                 if (fabricCanvas) {
-                  // Remove selection markers
                   selectedMeterIds.forEach(meterId => {
                     const selectionRect = fabricCanvas.getObjects().find((obj: any) => 
                       obj.type === 'rect' && obj.selectionMarker && obj.data?.meterId === meterId
@@ -4398,58 +4331,15 @@ export default function SchematicEditor({
                     if (selectionRect) {
                       fabricCanvas.remove(selectionRect);
                     }
-                    
-                    // Remove the meter image from canvas
-                    const meterImage = fabricCanvas.getObjects().find((obj: any) => 
-                      obj.type === 'image' && obj.data?.meterId === meterId
-                    );
-                    if (meterImage) {
-                      fabricCanvas.remove(meterImage);
-                    }
                   });
                 }
                 
                 for (const meterId of selectedMeterIds) {
-                  // Delete all connections where this meter is parent or child
-                  await supabase
-                    .from('meter_connections')
-                    .delete()
-                    .or(`parent_meter_id.eq.${meterId},child_meter_id.eq.${meterId}`);
-                  
-                  // Fetch and delete schematic lines associated with this meter
-                  const { data: linesToDelete } = await supabase
-                    .from('schematic_lines')
-                    .select('id')
-                    .eq('schematic_id', schematicId);
-                  
-                  if (linesToDelete) {
-                    for (const line of linesToDelete) {
-                      const { data: fullLine } = await supabase
-                        .from('schematic_lines')
-                        .select('*')
-                        .eq('id', line.id)
-                        .single();
-                      
-                      if (fullLine?.metadata && typeof fullLine.metadata === 'object') {
-                        const metadata = fullLine.metadata as any;
-                        if (metadata.parent_meter_id === meterId || 
-                            metadata.child_meter_id === meterId) {
-                          await supabase
-                            .from('schematic_lines')
-                            .delete()
-                            .eq('id', line.id);
-                        }
-                      }
-                    }
-                  }
-                  
-                  // Delete meter positions
                   await supabase
                     .from('meter_positions')
                     .delete()
                     .eq('meter_id', meterId);
                   
-                  // Delete the meter itself
                   await supabase
                     .from('meters')
                     .delete()
@@ -4458,8 +4348,6 @@ export default function SchematicEditor({
                 setSelectedMeterIds([]);
                 await fetchMeters();
                 await fetchMeterPositions();
-                await fetchSchematicLines();
-                await fetchMeterConnections();
               }
               
               if (fabricCanvas) fabricCanvas.renderAll();
@@ -4721,7 +4609,7 @@ export default function SchematicEditor({
         </div>
       </div>
 
-      <div className="border border-border rounded-lg overflow-hidden shadow-lg relative max-h-[calc(100vh-300px)]">
+      <div className="border border-border rounded-lg overflow-hidden shadow-lg relative">
         <canvas ref={canvasRef} />
         {!isCanvasReady && (
           <div className="absolute inset-0 flex items-center justify-center bg-muted/50">
@@ -4733,6 +4621,28 @@ export default function SchematicEditor({
         )}
       </div>
 
+      {meterPositions.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          {meterPositions.map((pos) => {
+            const meter = meters.find(m => m.id === pos.meter_id);
+            return (
+              <Button
+                key={pos.id}
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setSelectedMeterId(meter?.id);
+                  setIsCsvDialogOpen(true);
+                }}
+                className="justify-between"
+              >
+                <span className="font-mono text-xs">{meter?.meter_number}</span>
+                <Upload className="w-3 h-3" />
+              </Button>
+            );
+          })}
+        </div>
+      )}
 
       <Dialog open={isAddMeterDialogOpen} onOpenChange={setIsAddMeterDialogOpen}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">

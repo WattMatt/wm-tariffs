@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -9,14 +10,9 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, FileText, Upload, Eye, Network, Trash2, ArrowLeft, RefreshCw } from "lucide-react";
+import { Plus, FileText, Upload, Eye, Network, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { pdfjs } from 'react-pdf';
 import MeterConnectionsDialog from "@/components/schematic/MeterConnectionsDialog";
-import SchematicEditor from "@/components/schematic/SchematicEditor";
-
-// Set up PDF.js worker
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 interface Schematic {
   id: string;
@@ -35,6 +31,7 @@ interface SchematicsTabProps {
 }
 
 export default function SchematicsTab({ siteId }: SchematicsTabProps) {
+  const navigate = useNavigate();
   const [schematics, setSchematics] = useState<Schematic[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -44,9 +41,6 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
   const [schematicToDelete, setSchematicToDelete] = useState<Schematic | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isFetching, setIsFetching] = useState(true);
-  const [viewingSchematic, setViewingSchematic] = useState<Schematic | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [convertingSchematicId, setConvertingSchematicId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchSchematics();
@@ -91,47 +85,19 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
     setIsFetching(false);
   };
 
-  const validateAndSetFile = (file: File) => {
-    const validTypes = ["application/pdf", "image/png", "image/jpeg", "image/svg+xml"];
-    if (!validTypes.includes(file.type)) {
-      toast.error("Invalid file type. Please upload PDF, PNG, JPG, or SVG");
-      return false;
-    }
-    if (file.size > 52428800) {
-      toast.error("File size must be less than 50MB");
-      return false;
-    }
-    setSelectedFile(file);
-    return true;
-  };
-
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      validateAndSetFile(file);
-    }
-  };
-
-  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-  };
-
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-
-    const file = e.dataTransfer.files?.[0];
-    if (file) {
-      validateAndSetFile(file);
+      const validTypes = ["application/pdf", "image/png", "image/jpeg", "image/svg+xml"];
+      if (!validTypes.includes(file.type)) {
+        toast.error("Invalid file type. Please upload PDF, PNG, JPG, or SVG");
+        return;
+      }
+      if (file.size > 52428800) {
+        toast.error("File size must be less than 50MB");
+        return;
+      }
+      setSelectedFile(file);
     }
   };
 
@@ -178,9 +144,27 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
 
       toast.success("Schematic uploaded successfully");
       
-      // Automatically convert PDF to image client-side
-      if (selectedFile.type === "application/pdf") {
-        convertPdfToImage(schematicData.id, fileName);
+      // Auto-convert PDF to image
+      if (selectedFile.type === "application/pdf" && schematicData) {
+        toast.info("Converting PDF to image for faster viewing...");
+        
+        // Trigger conversion in background (don't wait for it)
+        supabase.functions
+          .invoke('convert-pdf-to-image', {
+            body: { 
+              schematicId: schematicData.id, 
+              filePath: fileName 
+            }
+          })
+          .then(({ data, error }) => {
+            if (error) {
+              console.error('PDF conversion failed:', error);
+              toast.error('PDF conversion failed, but file is uploaded');
+            } else {
+              toast.success('PDF converted to image successfully');
+              fetchSchematics(); // Refresh to show converted status
+            }
+          });
       }
 
       setIsDialogOpen(false);
@@ -199,97 +183,6 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
     return "📋";
   };
 
-  const convertPdfToImage = async (schematicId: string, filePath: string) => {
-    setConvertingSchematicId(schematicId);
-    try {
-      console.log('Starting client-side PDF to image conversion...');
-      toast.info('Converting PDF to image...');
-      
-      // Get public URL for the PDF
-      const { data: { publicUrl } } = supabase.storage
-        .from("schematics")
-        .getPublicUrl(filePath);
-
-      // Load the PDF
-      const loadingTask = pdfjs.getDocument(publicUrl);
-      const pdf = await loadingTask.promise;
-      
-      console.log('PDF loaded, converting first page...');
-      
-      // Get the first page
-      const page = await pdf.getPage(1);
-      
-      // Set scale for high quality
-      const scale = 2.0;
-      const viewport = page.getViewport({ scale });
-      
-      // Create canvas
-      const canvas = document.createElement('canvas');
-      const context = canvas.getContext('2d');
-      
-      if (!context) {
-        throw new Error('Could not get canvas context');
-      }
-      
-      canvas.height = viewport.height;
-      canvas.width = viewport.width;
-      
-      // Render PDF page to canvas
-      const renderContext = {
-        canvasContext: context,
-        viewport: viewport,
-        canvas: canvas
-      };
-      await page.render(renderContext).promise;
-      
-      console.log('PDF rendered to canvas, uploading image...');
-      
-      // Convert canvas to blob
-      const blob = await new Promise<Blob>((resolve, reject) => {
-        canvas.toBlob((b) => {
-          if (b) resolve(b);
-          else reject(new Error('Failed to create blob'));
-        }, 'image/png', 1.0);
-      });
-
-      // Generate image path
-      const imagePath = `${filePath.replace('.pdf', '')}_converted.png`;
-
-      // Upload the converted image
-      const { error: uploadError } = await supabase.storage
-        .from("schematics")
-        .upload(imagePath, blob, {
-          contentType: 'image/png',
-          upsert: true,
-        });
-
-      if (uploadError) {
-        console.error('Error uploading converted image:', uploadError);
-        throw uploadError;
-      }
-
-      // Update the schematic record
-      const { error: updateError } = await supabase
-        .from("schematics")
-        .update({ converted_image_path: imagePath })
-        .eq("id", schematicId);
-
-      if (updateError) {
-        console.error('Error updating schematic record:', updateError);
-        throw updateError;
-      }
-
-      console.log('PDF converted successfully');
-      toast.success('PDF converted to image');
-      fetchSchematics();
-    } catch (error) {
-      console.error('Error converting PDF:', error);
-      toast.error('Failed to convert PDF to image');
-    } finally {
-      setConvertingSchematicId(null);
-    }
-  };
-
   const handleDeleteClick = (schematic: Schematic) => {
     setSchematicToDelete(schematic);
     setDeleteDialogOpen(true);
@@ -300,20 +193,18 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
 
     setIsDeleting(true);
     try {
-      // Call database function to clean up meter positions, connections, lines, and snippets
-      const { data: cleanupResult, error: cleanupError } = await supabase.rpc(
-        "delete_schematic_meters",
-        { schematic_uuid: schematicToDelete.id }
-      );
+      // First, delete associated meter positions
+      const { error: positionsError } = await supabase
+        .from("meter_positions")
+        .delete()
+        .eq("schematic_id", schematicToDelete.id);
 
-      if (cleanupError) {
-        console.error("Error cleaning up schematic data:", cleanupError);
-        throw cleanupError;
+      if (positionsError) {
+        console.error("Error deleting meter positions:", positionsError);
+        // Continue anyway, non-critical
       }
 
-      console.log("Cleanup results:", cleanupResult);
-
-      // Delete the schematic files from storage
+      // Delete the files from storage
       const filesToDelete = [schematicToDelete.file_path];
       if (schematicToDelete.converted_image_path) {
         filesToDelete.push(schematicToDelete.converted_image_path);
@@ -336,7 +227,7 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
 
       if (dbError) throw dbError;
 
-      toast.success("Schematic and all associated data deleted successfully");
+      toast.success("Schematic deleted successfully");
       fetchSchematics();
     } catch (error: any) {
       console.error("Error deleting schematic:", error);
@@ -347,32 +238,6 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
       setSchematicToDelete(null);
     }
   };
-
-  // If viewing a schematic, show the editor instead
-  if (viewingSchematic) {
-    const { data: { publicUrl } } = supabase.storage
-      .from("schematics")
-      .getPublicUrl(viewingSchematic.converted_image_path || viewingSchematic.file_path);
-
-    return (
-      <div className="space-y-4">
-        <Button
-          variant="outline"
-          onClick={() => setViewingSchematic(null)}
-          className="gap-2"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Back to Schematics List
-        </Button>
-        <SchematicEditor 
-          schematicId={viewingSchematic.id} 
-          schematicUrl={publicUrl}
-          siteId={siteId}
-          filePath={viewingSchematic.file_path}
-        />
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
@@ -428,16 +293,7 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
 
               <div className="space-y-2">
                 <Label htmlFor="file">File Upload</Label>
-                <div 
-                  className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
-                    isDragging 
-                      ? 'border-primary bg-primary/5' 
-                      : 'border-border hover:border-primary'
-                  }`}
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                >
+                <div className="border-2 border-dashed border-border rounded-lg p-6 text-center hover:border-primary transition-colors">
                   <Upload className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
                   <Input
                     id="file"
@@ -554,21 +410,10 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        {schematic.file_type === "application/pdf" && !schematic.converted_image_path && (
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            onClick={() => convertPdfToImage(schematic.id, schematic.file_path)}
-                            disabled={convertingSchematicId === schematic.id}
-                            title="Convert PDF to Image"
-                          >
-                            <RefreshCw className={`w-4 h-4 ${convertingSchematicId === schematic.id ? 'animate-spin' : ''}`} />
-                          </Button>
-                        )}
                         <Button
                           variant="outline"
                           size="icon"
-                          onClick={() => setViewingSchematic(schematic)}
+                          onClick={() => navigate(`/schematics/${schematic.id}`)}
                         >
                           <Eye className="w-4 h-4" />
                         </Button>
