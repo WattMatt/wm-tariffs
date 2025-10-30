@@ -554,7 +554,13 @@ export default function SchematicEditor({
   const [pendingMeterPosition, setPendingMeterPosition] = useState<{ x: number; y: number } | null>(null);
   const [isCsvDialogOpen, setIsCsvDialogOpen] = useState(false);
   const [extractedMeters, setExtractedMeters] = useState<any[]>(propExtractedMeters);
+  const extractedMetersRef = useRef<any[]>(propExtractedMeters);
   const [meterCardObjects, setMeterCardObjects] = useState<Map<number, any>>(new Map()); // Maps meter index to Fabric object
+
+  // Sync extracted meters ref with state
+  useEffect(() => {
+    extractedMetersRef.current = extractedMeters;
+  }, [extractedMeters]);
 
   // Sync extracted meters from props
   useEffect(() => {
@@ -2738,7 +2744,7 @@ export default function SchematicEditor({
             if (!isEditMode) return;
             const objectData = img.get('data') as any;
             const meterIndex = objectData.index;
-            const meter = extractedMeters[meterIndex];
+            const meter = extractedMetersRef.current[meterIndex];
             console.log('🔍 Opening dialog for meter:', {
               index: meterIndex,
               hasScannedSnippet: !!meter?.scannedImageSnippet,
@@ -2764,7 +2770,7 @@ export default function SchematicEditor({
             const newX = ((img.left || 0) / canvasWidth) * 100;
             const newY = ((img.top || 0) / canvasHeight) * 100;
             
-            const updatedMeters = [...extractedMeters];
+            const updatedMeters = [...extractedMetersRef.current];
             updatedMeters[capturedIndex] = {
               ...updatedMeters[capturedIndex],
               position: { x: newX, y: newY },
