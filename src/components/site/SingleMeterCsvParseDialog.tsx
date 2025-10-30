@@ -18,12 +18,13 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Settings2, Play, Eye } from "lucide-react";
+import { Settings2, Play, Eye, MapPin } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useNavigate } from "react-router-dom";
 import {
   Table,
   TableBody,
@@ -70,6 +71,7 @@ export default function SingleMeterCsvParseDialog({
   meterNumber,
   onParseComplete,
 }: SingleMeterCsvParseDialogProps) {
+  const navigate = useNavigate();
   const [csvFiles, setCsvFiles] = useState<CsvFile[]>([]);
   const [selectedFile, setSelectedFile] = useState<CsvFile | null>(null);
   const [separator, setSeparator] = useState<string>("tab");
@@ -223,6 +225,31 @@ export default function SingleMeterCsvParseDialog({
 
   const getColumnName = (idx: number) => {
     return columnMapping.renamedHeaders?.[idx] || previewData?.headers[idx] || `Column ${idx + 1}`;
+  };
+
+  const handleViewOnSchematic = async () => {
+    try {
+      // Find schematic that contains this meter
+      const { data: meterPosition, error } = await supabase
+        .from('meter_positions')
+        .select('schematic_id')
+        .eq('meter_id', meterId)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (!meterPosition) {
+        toast.error("This meter is not yet placed on any schematic");
+        return;
+      }
+
+      // Navigate to schematic with meter highlighted
+      navigate(`/schematics/${meterPosition.schematic_id}?meterId=${meterId}`);
+      onClose();
+    } catch (err: any) {
+      console.error("Failed to navigate to schematic:", err);
+      toast.error("Failed to find meter on schematic");
+    }
   };
 
   return (
@@ -560,18 +587,29 @@ export default function SingleMeterCsvParseDialog({
           </ScrollArea>
         </Tabs>
 
-        <div className="flex justify-end gap-2 pt-4 border-t">
-          <Button variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            onClick={handleParse}
-            disabled={!selectedFile || !previewData || isParsing}
+        <div className="flex justify-between items-center pt-4 border-t">
+          <Button 
+            variant="outline" 
+            onClick={handleViewOnSchematic}
             className="gap-2"
           >
-            <Play className="w-4 h-4" />
-            {isParsing ? "Parsing..." : "Parse & Import"}
+            <MapPin className="w-4 h-4" />
+            View on Schematic
           </Button>
+          
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleParse}
+              disabled={!selectedFile || !previewData || isParsing}
+              className="gap-2"
+            >
+              <Play className="w-4 h-4" />
+              {isParsing ? "Parsing..." : "Parse & Import"}
+            </Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

@@ -83,6 +83,7 @@ export default function SchematicViewer() {
   const [meterPositions, setMeterPositions] = useState<MeterPosition[]>([]);
   const [meterConnections, setMeterConnections] = useState<MeterConnection[]>([]);
   const [editMode, setEditMode] = useState(true);
+  const [highlightedMeterId, setHighlightedMeterId] = useState<string | null>(null);
   const [extractedMeters, setExtractedMeters] = useState<ExtractedMeterData[]>([]);
   const [selectedMeterIndex, setSelectedMeterIndex] = useState<number | null>(null);
   const [convertedImageUrl, setConvertedImageUrl] = useState<string | null>(null);
@@ -117,6 +118,17 @@ export default function SchematicViewer() {
     if (id) {
       fetchSchematic();
       fetchMeterPositions();
+      
+      // Check for highlighted meter ID in URL search params
+      const searchParams = new URLSearchParams(window.location.search);
+      const meterId = searchParams.get('meterId');
+      if (meterId) {
+        setHighlightedMeterId(meterId);
+        // Clear the parameter after reading it
+        searchParams.delete('meterId');
+        const newUrl = `${window.location.pathname}${searchParams.toString() ? '?' + searchParams.toString() : ''}`;
+        window.history.replaceState({}, '', newUrl);
+      }
     }
   }, [id]);
 
@@ -905,27 +917,34 @@ export default function SchematicViewer() {
                             </svg>
 
                             {/* Existing Meter Position Markers */}
-                            {meterPositions.map((position) => (
-                              <div
-                                key={position.id}
-                                className="meter-marker absolute rounded-full border-3 border-white shadow-lg flex items-center justify-center cursor-pointer hover:scale-110 transition-all"
-                                style={{
-                                  left: `${position.x_position}%`,
-                                  top: `${position.y_position}%`,
-                                  transform: "translate(-50%, -50%)",
-                                  transformOrigin: 'center center',
-                                  width: '28px',
-                                  height: '28px',
-                                  backgroundColor: position.meters?.meter_type === 'council_bulk' ? 'hsl(var(--primary))' :
-                                                  position.meters?.meter_type === 'check_meter' ? '#f59e0b' :
-                                                  '#8b5cf6',
-                                  zIndex: 30,
-                                }}
-                                title={`${position.meters?.meter_number} - ${position.label || ""}`}
-                              >
-                                <span className="text-[9px] font-bold text-white leading-none">{position.meters?.meter_number?.substring(0, 3)}</span>
-                              </div>
-                            ))}
+                            {meterPositions.map((position) => {
+                              const isHighlighted = position.meter_id === highlightedMeterId;
+                              return (
+                                <div
+                                  key={position.id}
+                                  className={`meter-marker absolute rounded-full border-3 shadow-lg flex items-center justify-center cursor-pointer transition-all ${
+                                    isHighlighted ? 'animate-pulse scale-125 ring-4 ring-yellow-400' : 'hover:scale-110'
+                                  }`}
+                                  style={{
+                                    left: `${position.x_position}%`,
+                                    top: `${position.y_position}%`,
+                                    transform: "translate(-50%, -50%)",
+                                    transformOrigin: 'center center',
+                                    width: '28px',
+                                    height: '28px',
+                                    backgroundColor: isHighlighted ? '#eab308' : 
+                                                    position.meters?.meter_type === 'council_bulk' ? 'hsl(var(--primary))' :
+                                                    position.meters?.meter_type === 'check_meter' ? '#f59e0b' :
+                                                    '#8b5cf6',
+                                    borderColor: isHighlighted ? '#fef08a' : 'white',
+                                    zIndex: isHighlighted ? 40 : 30,
+                                  }}
+                                  title={`${position.meters?.meter_number} - ${position.label || ""}`}
+                                >
+                                  <span className="text-[9px] font-bold text-white leading-none">{position.meters?.meter_number?.substring(0, 3)}</span>
+                                </div>
+                              );
+                            })}
                             
                             {/* Detected Rectangle Overlays - Color coded for data availability */}
                             {detectedRectangles.map((rect) => (
@@ -1036,27 +1055,34 @@ export default function SchematicViewer() {
                             </svg>
 
                             {/* Meter markers for regular images */}
-                            {meterPositions.map((position) => (
-                              <div
-                                key={position.id}
-                                className="meter-marker absolute rounded-full border-3 border-white shadow-lg flex items-center justify-center cursor-pointer hover:scale-110 transition-all"
-                                style={{
-                                  left: `${position.x_position}%`,
-                                  top: `${position.y_position}%`,
-                                  transform: "translate(-50%, -50%)",
-                                  transformOrigin: 'center center',
-                                  width: '28px',
-                                  height: '28px',
-                                  backgroundColor: position.meters?.meter_type === 'council_bulk' ? 'hsl(var(--primary))' :
-                                                  position.meters?.meter_type === 'check_meter' ? '#f59e0b' :
-                                                  '#8b5cf6',
-                                  zIndex: 30,
-                                }}
-                                title={`${position.meters?.meter_number} - ${position.label || ""}`}
-                              >
-                                <span className="text-[9px] font-bold text-white leading-none">{position.meters?.meter_number?.substring(0, 3)}</span>
-                              </div>
-                            ))}
+                            {meterPositions.map((position) => {
+                              const isHighlighted = position.meter_id === highlightedMeterId;
+                              return (
+                                <div
+                                  key={position.id}
+                                  className={`meter-marker absolute rounded-full border-3 shadow-lg flex items-center justify-center cursor-pointer transition-all ${
+                                    isHighlighted ? 'animate-pulse scale-125 ring-4 ring-yellow-400' : 'hover:scale-110'
+                                  }`}
+                                  style={{
+                                    left: `${position.x_position}%`,
+                                    top: `${position.y_position}%`,
+                                    transform: "translate(-50%, -50%)",
+                                    transformOrigin: 'center center',
+                                    width: '28px',
+                                    height: '28px',
+                                    backgroundColor: isHighlighted ? '#eab308' : 
+                                                    position.meters?.meter_type === 'council_bulk' ? 'hsl(var(--primary))' :
+                                                    position.meters?.meter_type === 'check_meter' ? '#f59e0b' :
+                                                    '#8b5cf6',
+                                    borderColor: isHighlighted ? '#fef08a' : 'white',
+                                    zIndex: isHighlighted ? 40 : 30,
+                                  }}
+                                  title={`${position.meters?.meter_number} - ${position.label || ""}`}
+                                >
+                                  <span className="text-[9px] font-bold text-white leading-none">{position.meters?.meter_number?.substring(0, 3)}</span>
+                                </div>
+                              );
+                            })}
                           </div>
                         )}
                       </div>
