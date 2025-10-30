@@ -1946,7 +1946,13 @@ export default function SchematicEditor({
             startMarkerRef.current = null;
           }
           
-          canvas.add(permanentRect);
+          // Add region above background image (similar to connection lines)
+          const backgroundIndex = canvas.getObjects().findIndex(obj => (obj as any).isBackgroundImage);
+          if (backgroundIndex !== -1) {
+            canvas.insertAt(backgroundIndex + 1, permanentRect);
+          } else {
+            canvas.add(permanentRect);
+          }
           canvas.renderAll();
           
           toast.success('Region drawn successfully');
