@@ -2893,6 +2893,14 @@ export default function SchematicEditor({
       if (!legendVisibility[categoryKey as keyof typeof legendVisibility]) {
         return;
       }
+      
+      // Skip rendering based on confirmation status toggles
+      if (confirmationStatus === 'confirmed' && !showConfirmed) {
+        return;
+      }
+      if (confirmationStatus !== 'confirmed' && !showUnconfirmed) {
+        return;
+      }
 
       // Convert percentage positions to pixel positions for canvas
       const canvasWidth = fabricCanvas.getWidth();
@@ -3253,7 +3261,7 @@ export default function SchematicEditor({
     });
 
     fabricCanvas.renderAll();
-  }, [fabricCanvas, meterPositions, meters, activeTool, extractedMeters, legendVisibility, selectedExtractedMeterIds]);
+  }, [fabricCanvas, meterPositions, meters, activeTool, extractedMeters, legendVisibility, selectedExtractedMeterIds, showConfirmed, showUnconfirmed]);
 
   const fetchMeters = async () => {
     const { data } = await supabase
