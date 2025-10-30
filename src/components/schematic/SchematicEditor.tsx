@@ -985,8 +985,8 @@ export default function SchematicEditor({
           }
         }
         
-        // Skip if clicking on a connection node (to allow dragging)
-        if (target && (target as any).isConnectionNode && (target as any).connectedLines) {
+        // Skip if clicking on a connection node (to allow dragging) - UNLESS in connection mode
+        if (target && (target as any).isConnectionNode && (target as any).connectedLines && currentTool !== 'connection') {
           return;
         }
         
@@ -1074,7 +1074,17 @@ export default function SchematicEditor({
         }
         
         // Apply snap-to-point logic (15px threshold)
-        const snappedPoint = findNearestSnapPoint(canvas, pointer, 15);
+        // When clicking on a connection node in connection mode, check if there's a snap point underneath
+        let snappedPoint = findNearestSnapPoint(canvas, pointer, 15);
+        
+        // If clicking on a connection node in connection mode, override to allow snap point connection
+        if (currentTool === 'connection' && target && (target as any).isConnectionNode) {
+          // Try to find snap point at this exact location (smaller threshold for precision)
+          const snapAtNode = findNearestSnapPoint(canvas, pointer, 8);
+          if (snapAtNode) {
+            snappedPoint = snapAtNode;
+          }
+        }
         
         if (!connectionStartRef.current) {
           // First click - start the line (only on snap point)
@@ -1161,7 +1171,7 @@ export default function SchematicEditor({
                 originX: 'center',
                 originY: 'center',
                 selectable: !isEndpoint,
-                evented: !isEndpoint,
+                evented: !isEndpoint, // Only intermediate nodes are evented for dragging
                 hasControls: false,
                 hasBorders: false,
                 hoverCursor: isEndpoint ? 'default' : 'move',
