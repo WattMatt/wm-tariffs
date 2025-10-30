@@ -2412,23 +2412,18 @@ export default function SchematicEditor({
     FabricImage.fromURL(schematicUrl, {
       crossOrigin: 'anonymous'
     }).then((img) => {
-      // Use a small delay to ensure container is fully rendered
       requestAnimationFrame(() => {
         const container = canvasRef.current?.parentElement;
         const containerWidth = container?.clientWidth || 1400;
         
-        // Use full container width (no padding subtraction)
-        const maxWidth = containerWidth;
-        const maxHeight = 900;
+        // Use full container width without height constraint
         const imgWidth = img.width!;
         const imgHeight = img.height!;
         
-        // Scale to fit container width while maintaining aspect ratio
-        const scale = Math.min(maxWidth / imgWidth, maxHeight / imgHeight);
-        const canvasWidth = imgWidth * scale;
+        // Scale to use full container width
+        const scale = containerWidth / imgWidth;
+        const canvasWidth = containerWidth;
         const canvasHeight = imgHeight * scale;
-        
-        console.log('Canvas sizing:', { containerWidth, maxWidth, imgWidth, imgHeight, scale, canvasWidth, canvasHeight });
         
         // Store original image dimensions for region coordinate conversion
         (canvas as any).originalImageWidth = imgWidth;
