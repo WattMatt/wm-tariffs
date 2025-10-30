@@ -11,8 +11,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { Plus, FileText, Upload, Eye, Network, Trash2, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
+import { pdfjs } from 'react-pdf';
 import MeterConnectionsDialog from "@/components/schematic/MeterConnectionsDialog";
 import SchematicEditor from "@/components/schematic/SchematicEditor";
+
+// Set up PDF.js worker
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 interface Schematic {
   id: string;
@@ -173,8 +177,10 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
 
       toast.success("Schematic uploaded successfully");
       
-      // Note: PDF to image conversion is handled client-side by PdfToImageConverter component
-      // Server-side conversion is disabled due to Deno canvas library compatibility issues
+      // Automatically convert PDF to image client-side
+      if (selectedFile.type === "application/pdf") {
+        convertPdfToImage(schematicData.id, fileName);
+      }
 
       setIsDialogOpen(false);
       setSelectedFile(null);
@@ -190,6 +196,92 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
     if (type === "application/pdf") return "📄";
     if (type.startsWith("image/")) return "🖼️";
     return "📋";
+  };
+
+  const convertPdfToImage = async (schematicId: string, filePath: string) => {
+    try {
+      console.log('Starting client-side PDF to image conversion...');
+      
+      // Get public URL for the PDF
+      const { data: { publicUrl } } = supabase.storage
+        .from("schematics")
+        .getPublicUrl(filePath);
+
+      // Load the PDF
+      const loadingTask = pdfjs.getDocument(publicUrl);
+      const pdf = await loadingTask.promise;
+      
+      console.log('PDF loaded, converting first page...');
+      
+      // Get the first page
+      const page = await pdf.getPage(1);
+      
+      // Set scale for high quality
+      const scale = 2.0;
+      const viewport = page.getViewport({ scale });
+      
+      // Create canvas
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      
+      if (!context) {
+        throw new Error('Could not get canvas context');
+      }
+      
+      canvas.height = viewport.height;
+      canvas.width = viewport.width;
+      
+      // Render PDF page to canvas
+      const renderContext = {
+        canvasContext: context,
+        viewport: viewport,
+        canvas: canvas
+      };
+      await page.render(renderContext).promise;
+      
+      console.log('PDF rendered to canvas, uploading image...');
+      
+      // Convert canvas to blob
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob((b) => {
+          if (b) resolve(b);
+          else reject(new Error('Failed to create blob'));
+        }, 'image/png', 1.0);
+      });
+
+      // Generate image path
+      const imagePath = `${filePath.replace('.pdf', '')}_converted.png`;
+
+      // Upload the converted image
+      const { error: uploadError } = await supabase.storage
+        .from("schematics")
+        .upload(imagePath, blob, {
+          contentType: 'image/png',
+          upsert: true,
+        });
+
+      if (uploadError) {
+        console.error('Error uploading converted image:', uploadError);
+        throw uploadError;
+      }
+
+      // Update the schematic record
+      const { error: updateError } = await supabase
+        .from("schematics")
+        .update({ converted_image_path: imagePath })
+        .eq("id", schematicId);
+
+      if (updateError) {
+        console.error('Error updating schematic record:', updateError);
+        throw updateError;
+      }
+
+      console.log('PDF converted successfully');
+      toast.success('PDF converted to image');
+    } catch (error) {
+      console.error('Error converting PDF:', error);
+      toast.error('Failed to convert PDF to image');
+    }
   };
 
   const handleDeleteClick = (schematic: Schematic) => {
