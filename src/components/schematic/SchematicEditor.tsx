@@ -935,8 +935,8 @@ export default function SchematicEditor({
         const zoomStep = delta < 0 ? 1.1 : 0.9;
         newZoom *= zoomStep;
         
-        // Clamp zoom between 50% and 500% for usability
-        newZoom = Math.min(Math.max(0.5, newZoom), 5);
+        // Clamp zoom between 50% and 1000% for usability
+        newZoom = Math.min(Math.max(0.5, newZoom), 10);
         
         // Zoom to cursor position using original event coordinates (not affected by snap logic)
         const point = new Point(evt.offsetX, evt.offsetY);
@@ -3536,7 +3536,7 @@ export default function SchematicEditor({
 
   const handleZoomIn = () => {
     if (!fabricCanvas) return;
-    const newZoom = Math.min(zoom * 1.25, 5);
+    const newZoom = Math.min(zoom * 1.25, 10);
     fabricCanvas.setZoom(newZoom);
     setZoom(newZoom);
     fabricCanvas.renderAll();
