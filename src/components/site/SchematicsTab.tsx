@@ -9,7 +9,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, FileText, Upload, Eye, Network, Trash2, ArrowLeft } from "lucide-react";
+import { Plus, FileText, Upload, Eye, Network, Trash2, ArrowLeft, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { pdfjs } from 'react-pdf';
 import MeterConnectionsDialog from "@/components/schematic/MeterConnectionsDialog";
@@ -46,6 +46,7 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
   const [isFetching, setIsFetching] = useState(true);
   const [viewingSchematic, setViewingSchematic] = useState<Schematic | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [convertingSchematicId, setConvertingSchematicId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchSchematics();
@@ -199,8 +200,10 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
   };
 
   const convertPdfToImage = async (schematicId: string, filePath: string) => {
+    setConvertingSchematicId(schematicId);
     try {
       console.log('Starting client-side PDF to image conversion...');
+      toast.info('Converting PDF to image...');
       
       // Get public URL for the PDF
       const { data: { publicUrl } } = supabase.storage
@@ -278,9 +281,12 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
 
       console.log('PDF converted successfully');
       toast.success('PDF converted to image');
+      fetchSchematics();
     } catch (error) {
       console.error('Error converting PDF:', error);
       toast.error('Failed to convert PDF to image');
+    } finally {
+      setConvertingSchematicId(null);
     }
   };
 
@@ -548,6 +554,17 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
+                        {schematic.file_type === "application/pdf" && !schematic.converted_image_path && (
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => convertPdfToImage(schematic.id, schematic.file_path)}
+                            disabled={convertingSchematicId === schematic.id}
+                            title="Convert PDF to Image"
+                          >
+                            <RefreshCw className={`w-4 h-4 ${convertingSchematicId === schematic.id ? 'animate-spin' : ''}`} />
+                          </Button>
+                        )}
                         <Button
                           variant="outline"
                           size="icon"
