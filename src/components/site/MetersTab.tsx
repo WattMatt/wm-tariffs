@@ -616,93 +616,86 @@ export default function MetersTab({ siteId }: MetersTabProps) {
             <DialogHeader>
               <DialogTitle>{editingMeter ? "Edit Meter" : "Add New Meter"}</DialogTitle>
               <DialogDescription>
-                {editingMeter ? "Update meter details" : "Register a new electrical meter with all required details"}
+                {editingMeter ? "Update meter details" : "Register a new electrical meter"}
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="meter_number">NO (Meter Number) *</Label>
+                  <Label htmlFor="meter_number">NO (Meter Number)</Label>
                   <Input 
                     id="meter_number" 
                     name="meter_number" 
-                    required 
                     placeholder="DB-03"
                     defaultValue={editingMeter?.meter_number}
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="name">NAME *</Label>
+                  <Label htmlFor="name">NAME</Label>
                   <Input 
                     id="name" 
                     name="name" 
-                    required 
                     placeholder="ACKERMANS"
                     defaultValue={editingMeter?.name || ""}
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="area">AREA (m²) *</Label>
+                  <Label htmlFor="area">AREA (m²)</Label>
                   <Input 
                     id="area" 
                     name="area" 
                     type="number" 
                     step="0.01" 
-                    required 
                     placeholder="406"
                     defaultValue={editingMeter?.area || ""}
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="rating">BREAKER SIZE (RATING) *</Label>
+                  <Label htmlFor="rating">BREAKER SIZE (RATING)</Label>
                   <Input 
                     id="rating" 
                     name="rating" 
-                    required 
                     placeholder="100A TP"
                     defaultValue={editingMeter?.rating || ""}
                   />
                 </div>
 
                 <div className="space-y-2 col-span-2">
-                  <Label htmlFor="cable_specification">CABLE *</Label>
+                  <Label htmlFor="cable_specification">CABLE</Label>
                   <Input 
                     id="cable_specification" 
                     name="cable_specification" 
-                    required 
                     placeholder="4C x 50mm² ALU ECC CABLE"
                     defaultValue={editingMeter?.cable_specification || ""}
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="serial_number">SERIAL *</Label>
+                  <Label htmlFor="serial_number">SERIAL</Label>
                   <Input 
                     id="serial_number" 
                     name="serial_number" 
-                    required 
                     placeholder="35777285"
                     defaultValue={editingMeter?.serial_number || ""}
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="ct_type">CT *</Label>
+                  <Label htmlFor="ct_type">CT</Label>
                   <Input 
                     id="ct_type" 
                     name="ct_type" 
-                    required 
                     placeholder="DOL"
                     defaultValue={editingMeter?.ct_type || ""}
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="meter_type">Meter Type *</Label>
-                  <Select name="meter_type" required defaultValue={editingMeter?.meter_type}>
+                  <Label htmlFor="meter_type">Meter Type</Label>
+                  <Select name="meter_type" defaultValue={editingMeter?.meter_type}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select type" />
                     </SelectTrigger>
