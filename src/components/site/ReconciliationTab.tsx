@@ -491,6 +491,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
         otherMeters,
         tenantMeters,
         bulkTotal,
+        councilTotal: bulkTotal, // Grid supply (alias for bulkTotal)
         otherTotal,
         totalSupply,
         tenantTotal,
@@ -603,10 +604,10 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
     if (!reconciliationData) return;
 
     const allMeters = [
-      ...reconciliationData.councilBulk,
+      ...reconciliationData.bulkMeters,
       ...reconciliationData.checkMeters,
-      ...reconciliationData.solarMeters,
-      ...reconciliationData.distribution,
+      ...reconciliationData.otherMeters,
+      ...reconciliationData.tenantMeters,
     ];
 
     for (const meter of allMeters) {
