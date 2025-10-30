@@ -23,6 +23,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table,
   TableBody,
@@ -74,6 +75,7 @@ export default function SingleMeterCsvParseDialog({
   const [separator, setSeparator] = useState<string>("tab");
   const [headerRowNumber, setHeaderRowNumber] = useState<string>("1");
   const [previewData, setPreviewData] = useState<{ rows: string[][], headers: string[] } | null>(null);
+  const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({});
   const [columnMapping, setColumnMapping] = useState<ColumnMapping>({
     dateColumn: "0",
     timeColumn: "1",
@@ -151,6 +153,13 @@ export default function SingleMeterCsvParseDialog({
       const headers = rows[headerIdx] || [];
       const dataRows = rows.slice(headerIdx + 1);
 
+      // Initialize visible columns
+      const initialVisibility: Record<string, boolean> = {};
+      headers.forEach((_, idx) => {
+        initialVisibility[idx.toString()] = true;
+      });
+      setVisibleColumns(initialVisibility);
+
       setPreviewData({ headers, rows: dataRows });
       toast.success("Preview loaded");
     } catch (err: any) {
@@ -226,15 +235,15 @@ export default function SingleMeterCsvParseDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="config" className="flex-1 overflow-hidden flex flex-col">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="config">Configuration</TabsTrigger>
-            <TabsTrigger value="columns">Column Mapping</TabsTrigger>
+        <Tabs defaultValue="parse" className="flex-1 overflow-hidden flex flex-col">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="parse">Parsing Configuration</TabsTrigger>
             <TabsTrigger value="preview">Preview</TabsTrigger>
           </TabsList>
 
           <ScrollArea className="flex-1">
-            <TabsContent value="config" className="space-y-4 p-4">
+            <TabsContent value="parse" className="space-y-4 p-4">
+              {/* File Selection Card */}
               <Card>
                 <CardHeader>
                   <CardTitle className="text-sm">File Selection</CardTitle>
@@ -243,7 +252,7 @@ export default function SingleMeterCsvParseDialog({
                   <div className="space-y-2">
                     <Label>CSV File</Label>
                     <Select
-                      value={selectedFile?.id}
+                      value={selectedFile?.id || ""}
                       onValueChange={(value) => {
                         const file = csvFiles.find(f => f.id === value);
                         if (file) {
@@ -254,10 +263,10 @@ export default function SingleMeterCsvParseDialog({
                         }
                       }}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className="bg-background">
                         <SelectValue placeholder="Select a CSV file" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="bg-background z-50">
                         {csvFiles.map((file) => (
                           <SelectItem key={file.id} value={file.id}>
                             <div className="flex items-center gap-2">
@@ -276,14 +285,30 @@ export default function SingleMeterCsvParseDialog({
                     </Select>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <Button onClick={loadPreview} disabled={!selectedFile || isLoading} className="w-full gap-2">
+                    <Eye className="w-4 h-4" />
+                    {isLoading ? "Loading..." : "Load Preview"}
+                  </Button>
+                </CardContent>
+              </Card>
+
+              {/* File Interpretation Section */}
+              <Card className="bg-muted/30">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Settings2 className="w-4 h-4" />
+                    File Interpretation
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 border rounded-md bg-muted/20">
                     <div className="space-y-2">
-                      <Label>Separator</Label>
+                      <Label>Column Separator</Label>
                       <Select value={separator} onValueChange={setSeparator}>
-                        <SelectTrigger>
+                        <SelectTrigger className="bg-background">
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="bg-background z-50">
                           <SelectItem value="tab">Tab</SelectItem>
                           <SelectItem value="comma">Comma (,)</SelectItem>
                           <SelectItem value="semicolon">Semicolon (;)</SelectItem>
@@ -299,146 +324,188 @@ export default function SingleMeterCsvParseDialog({
                         min="1"
                         value={headerRowNumber}
                         onChange={(e) => setHeaderRowNumber(e.target.value)}
+                        className="bg-background"
                       />
                     </div>
                   </div>
-
-                  <Button onClick={loadPreview} disabled={!selectedFile || isLoading} className="w-full gap-2">
-                    <Eye className="w-4 h-4" />
-                    Load Preview
-                  </Button>
                 </CardContent>
               </Card>
-            </TabsContent>
 
-            <TabsContent value="columns" className="space-y-4 p-4">
-              {!previewData ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  Load a preview first to configure column mapping
-                </div>
-              ) : (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-sm">Column Configuration</CardTitle>
+              {/* Column Interpretation Section */}
+              {previewData && (
+                <Card className="bg-muted/30">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <Settings2 className="w-4 h-4" />
+                      Column Interpretation
+                    </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>Date Column</Label>
-                        <Select
-                          value={columnMapping.dateColumn.toString()}
-                          onValueChange={(value) => setColumnMapping(prev => ({ ...prev, dateColumn: value }))}
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {previewData.headers.map((header, idx) => (
-                              <SelectItem key={idx} value={idx.toString()}>
-                                {getColumnName(idx)}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>Time Column</Label>
-                        <Select
-                          value={columnMapping.timeColumn.toString()}
-                          onValueChange={(value) => setColumnMapping(prev => ({ ...prev, timeColumn: value }))}
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="-1">None (combined with date)</SelectItem>
-                            {previewData.headers.map((header, idx) => (
-                              <SelectItem key={idx} value={idx.toString()}>
-                                {getColumnName(idx)}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>kWh Value Column</Label>
-                        <Select
-                          value={columnMapping.valueColumn.toString()}
-                          onValueChange={(value) => setColumnMapping(prev => ({ ...prev, valueColumn: value }))}
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {previewData.headers.map((header, idx) => (
-                              <SelectItem key={idx} value={idx.toString()}>
-                                {getColumnName(idx)}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>kVA Value Column (Optional)</Label>
-                        <Select
-                          value={columnMapping.kvaColumn.toString()}
-                          onValueChange={(value) => setColumnMapping(prev => ({ ...prev, kvaColumn: value }))}
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="-1">None</SelectItem>
-                            {previewData.headers.map((header, idx) => (
-                              <SelectItem key={idx} value={idx.toString()}>
-                                {getColumnName(idx)}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-
-                    <div className="space-y-4 pt-4 border-t">
-                      <Label>Column Data Types</Label>
-                      <div className="grid gap-2">
-                        {previewData.headers.map((header, idx) => (
-                          <div key={idx} className="flex items-center gap-4">
-                            <div className="flex-1">
-                              <Input
-                                value={columnMapping.renamedHeaders?.[idx] || header}
-                                onChange={(e) => setColumnMapping(prev => ({
-                                  ...prev,
-                                  renamedHeaders: { ...prev.renamedHeaders, [idx]: e.target.value }
-                                }))}
-                                placeholder={`Column ${idx + 1} name`}
+                    <div className="p-4 border rounded-md bg-muted/20 space-y-4">
+                      {/* Individual Column Cards */}
+                      {previewData.headers.map((header, idx) => {
+                        const displayName = columnMapping.renamedHeaders?.[idx] || header || `Column ${idx + 1}`;
+                        const columnId = idx.toString();
+                        const currentDataType = columnMapping.columnDataTypes?.[columnId] || 'string';
+                        
+                        return (
+                          <div key={idx} className="p-3 border rounded-md bg-background">
+                            <div className="flex items-start gap-3">
+                              <Checkbox
+                                checked={visibleColumns[columnId] !== false}
+                                onCheckedChange={(checked) => {
+                                  setVisibleColumns(prev => ({
+                                    ...prev,
+                                    [columnId]: checked === true
+                                  }));
+                                }}
+                                className="shrink-0 mt-6"
                               />
-                            </div>
-                            <div className="w-32">
-                              <Select
-                                value={columnMapping.columnDataTypes?.[idx] || 'string'}
-                                onValueChange={(value: any) => setColumnMapping(prev => ({
-                                  ...prev,
-                                  columnDataTypes: { ...prev.columnDataTypes, [idx]: value }
-                                }))}
-                              >
-                                <SelectTrigger>
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="datetime">DateTime</SelectItem>
-                                  <SelectItem value="float">Float</SelectItem>
-                                  <SelectItem value="int">Integer</SelectItem>
-                                  <SelectItem value="string">String</SelectItem>
-                                  <SelectItem value="boolean">Boolean</SelectItem>
-                                </SelectContent>
-                              </Select>
+                              <div className="flex-1">
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                  <div>
+                                    <Label className="text-xs mb-1">Column Name</Label>
+                                    <Input
+                                      value={displayName}
+                                      onChange={(e) => {
+                                        setColumnMapping(prev => ({
+                                          ...prev,
+                                          renamedHeaders: {
+                                            ...prev.renamedHeaders,
+                                            [idx]: e.target.value
+                                          }
+                                        }));
+                                      }}
+                                      className="h-8 text-xs"
+                                      placeholder="Column name"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label className="text-xs mb-1">Data Type</Label>
+                                    <Select
+                                      value={currentDataType}
+                                      onValueChange={(type: 'datetime' | 'string' | 'int' | 'float' | 'boolean') => {
+                                        setColumnMapping(prev => ({
+                                          ...prev,
+                                          columnDataTypes: {
+                                            ...prev.columnDataTypes,
+                                            [columnId]: type
+                                          }
+                                        }));
+                                      }}
+                                    >
+                                      <SelectTrigger className="h-8 text-xs bg-background">
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent className="bg-background z-50">
+                                        <SelectItem value="datetime">DateTime</SelectItem>
+                                        <SelectItem value="string">String</SelectItem>
+                                        <SelectItem value="int">Integer</SelectItem>
+                                        <SelectItem value="float">Float</SelectItem>
+                                        <SelectItem value="boolean">Boolean</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                  <div>
+                                    <Label className="text-xs mb-1">Split Column By</Label>
+                                    <Select value="none" disabled>
+                                      <SelectTrigger className="h-8 text-xs bg-background">
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent className="bg-background z-50">
+                                        <SelectItem value="none">No Split</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                </div>
+                              </div>
                             </div>
                           </div>
-                        ))}
+                        );
+                      })}
+
+                      {/* Special Column Assignments */}
+                      <div className="pt-4 mt-4 border-t">
+                        <Label className="text-sm font-semibold mb-3 block">Special Column Assignments</Label>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label className="text-xs">Date Column</Label>
+                            <Select
+                              value={columnMapping.dateColumn.toString()}
+                              onValueChange={(value) => setColumnMapping(prev => ({ ...prev, dateColumn: value }))}
+                            >
+                              <SelectTrigger className="h-8 text-xs bg-background">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent className="bg-background z-50">
+                                {previewData.headers.map((header, idx) => (
+                                  <SelectItem key={idx} value={idx.toString()}>
+                                    {getColumnName(idx)}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label className="text-xs">Time Column</Label>
+                            <Select
+                              value={columnMapping.timeColumn.toString()}
+                              onValueChange={(value) => setColumnMapping(prev => ({ ...prev, timeColumn: value }))}
+                            >
+                              <SelectTrigger className="h-8 text-xs bg-background">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent className="bg-background z-50">
+                                <SelectItem value="-1">None (combined with date)</SelectItem>
+                                {previewData.headers.map((header, idx) => (
+                                  <SelectItem key={idx} value={idx.toString()}>
+                                    {getColumnName(idx)}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label className="text-xs">kWh Value Column</Label>
+                            <Select
+                              value={columnMapping.valueColumn.toString()}
+                              onValueChange={(value) => setColumnMapping(prev => ({ ...prev, valueColumn: value }))}
+                            >
+                              <SelectTrigger className="h-8 text-xs bg-background">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent className="bg-background z-50">
+                                {previewData.headers.map((header, idx) => (
+                                  <SelectItem key={idx} value={idx.toString()}>
+                                    {getColumnName(idx)}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label className="text-xs">kVA Value Column (Optional)</Label>
+                            <Select
+                              value={columnMapping.kvaColumn.toString()}
+                              onValueChange={(value) => setColumnMapping(prev => ({ ...prev, kvaColumn: value }))}
+                            >
+                              <SelectTrigger className="h-8 text-xs bg-background">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent className="bg-background z-50">
+                                <SelectItem value="-1">None</SelectItem>
+                                {previewData.headers.map((header, idx) => (
+                                  <SelectItem key={idx} value={idx.toString()}>
+                                    {getColumnName(idx)}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </CardContent>
