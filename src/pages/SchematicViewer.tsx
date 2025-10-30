@@ -923,7 +923,7 @@ export default function SchematicViewer() {
                                 <div
                                   key={position.id}
                                   className={`meter-marker absolute rounded-full border-3 shadow-lg flex items-center justify-center cursor-pointer transition-all ${
-                                    isHighlighted ? 'animate-pulse scale-125 ring-4 ring-yellow-400' : 'hover:scale-110'
+                                    isHighlighted ? '' : 'hover:scale-110'
                                   }`}
                                   style={{
                                     left: `${position.x_position}%`,
@@ -932,11 +932,11 @@ export default function SchematicViewer() {
                                     transformOrigin: 'center center',
                                     width: '28px',
                                     height: '28px',
-                                    backgroundColor: isHighlighted ? '#eab308' : 
-                                                    position.meters?.meter_type === 'council_bulk' ? 'hsl(var(--primary))' :
+                                    backgroundColor: position.meters?.meter_type === 'council_bulk' ? 'hsl(var(--primary))' :
                                                     position.meters?.meter_type === 'check_meter' ? '#f59e0b' :
                                                     '#8b5cf6',
-                                    borderColor: isHighlighted ? '#fef08a' : 'white',
+                                    borderColor: isHighlighted ? '#10b981' : 'white',
+                                    borderWidth: isHighlighted ? '3px' : '2px',
                                     zIndex: isHighlighted ? 40 : 30,
                                   }}
                                   title={`${position.meters?.meter_number} - ${position.label || ""}`}
@@ -1061,7 +1061,7 @@ export default function SchematicViewer() {
                                 <div
                                   key={position.id}
                                   className={`meter-marker absolute rounded-full border-3 shadow-lg flex items-center justify-center cursor-pointer transition-all ${
-                                    isHighlighted ? 'animate-pulse scale-125 ring-4 ring-yellow-400' : 'hover:scale-110'
+                                    isHighlighted ? '' : 'hover:scale-110'
                                   }`}
                                   style={{
                                     left: `${position.x_position}%`,
@@ -1070,11 +1070,11 @@ export default function SchematicViewer() {
                                     transformOrigin: 'center center',
                                     width: '28px',
                                     height: '28px',
-                                    backgroundColor: isHighlighted ? '#eab308' : 
-                                                    position.meters?.meter_type === 'council_bulk' ? 'hsl(var(--primary))' :
+                                    backgroundColor: position.meters?.meter_type === 'council_bulk' ? 'hsl(var(--primary))' :
                                                     position.meters?.meter_type === 'check_meter' ? '#f59e0b' :
                                                     '#8b5cf6',
-                                    borderColor: isHighlighted ? '#fef08a' : 'white',
+                                    borderColor: isHighlighted ? '#10b981' : 'white',
+                                    borderWidth: isHighlighted ? '3px' : '2px',
                                     zIndex: isHighlighted ? 40 : 30,
                                   }}
                                   title={`${position.meters?.meter_number} - ${position.label || ""}`}
