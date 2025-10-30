@@ -567,9 +567,9 @@ Deno.serve(async (req) => {
       ].join('\n');
       
       // Generate parsed file path
-      const originalFileName = filePath.split('/').pop()?.replace('.csv', '') || 'parsed';
+      const originalFileName = actualFilePath.split('/').pop()?.replace('.csv', '') || 'parsed';
       const parsedFileName = `${originalFileName}_parsed.csv`;
-      const tempParsedPath = filePath.replace(fileName, `parsed/${parsedFileName}`);
+      const tempParsedPath = actualFilePath.replace(fileName, `parsed/${parsedFileName}`);
       
       // Upload parsed CSV to storage
       const { error: uploadError } = await supabase.storage
@@ -589,11 +589,11 @@ Deno.serve(async (req) => {
       console.error('Error storing parsed CSV:', parseStoreError);
     }
 
-    // Update the tracking table with parse results
+    // Update the tracking table with parse results only if we got here successfully
     const { error: updateError } = await supabase
       .from('meter_csv_files')
       .update({
-        parse_status: 'parsed',
+        parse_status: readings.length > 0 ? 'parsed' : 'error',
         parsed_at: new Date().toISOString(),
         readings_inserted: readings.length,
         duplicates_skipped: skipped,
@@ -602,7 +602,7 @@ Deno.serve(async (req) => {
         parsed_file_path: parsedFilePath,
         column_mapping: columnMapping
       })
-      .eq('file_path', filePath);
+      .eq('file_path', actualFilePath);
 
     if (updateError) {
       console.error('Failed to update file tracking:', updateError);
@@ -625,21 +625,26 @@ Deno.serve(async (req) => {
   } catch (error: any) {
     console.error('Function error:', error);
     
-    // Update tracking table with error status if we have the filePath
+    // Update tracking table with error status
     try {
       const body = await req.clone().json();
-      if (body.filePath) {
+      const pathToUpdate = body.csvFileId ? body.csvFileId : body.filePath;
+      if (pathToUpdate) {
         const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
         const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
         const errorSupabase = createClient(supabaseUrl, supabaseKey);
         
-        await errorSupabase
-          .from('meter_csv_files')
-          .update({
-            parse_status: 'error',
-            error_message: error?.message || String(error)
-          })
-          .eq('file_path', body.filePath);
+        const updateQuery = body.csvFileId 
+          ? errorSupabase.from('meter_csv_files').update({
+              parse_status: 'error',
+              error_message: error?.message || String(error)
+            }).eq('id', body.csvFileId)
+          : errorSupabase.from('meter_csv_files').update({
+              parse_status: 'error',
+              error_message: error?.message || String(error)
+            }).eq('file_path', body.filePath);
+        
+        await updateQuery;
       }
     } catch (updateErr) {
       console.error('Failed to update error status:', updateErr);

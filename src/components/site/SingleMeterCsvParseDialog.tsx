@@ -196,7 +196,10 @@ export default function SingleMeterCsvParseDialog({
         body: { 
           csvFileId: selectedFile.id,
           meterId,
-          separator,
+          separator: separator === "tab" ? "\t" : 
+                     separator === "comma" ? "," : 
+                     separator === "semicolon" ? ";" : 
+                     separator === "space" ? " " : "\t",
           headerRowNumber: parseInt(headerRowNumber),
           columnMapping
         }
