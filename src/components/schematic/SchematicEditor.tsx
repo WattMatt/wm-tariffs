@@ -219,7 +219,7 @@ async function createMeterCardImage(
   
   // Main outer border
   ctx.strokeStyle = '#000000';
-  ctx.lineWidth = 3;
+  ctx.lineWidth = 6;
   ctx.strokeRect(0, 0, baseWidth, baseHeight);
   
   // Draw each row
@@ -3364,7 +3364,7 @@ export default function SchematicEditor({
           [lineData.from_x, lineData.from_y, lineData.to_x, lineData.to_y],
           {
             stroke: isSelected ? '#ef4444' : (lineData.color || '#000000'),
-            strokeWidth: lineData.stroke_width || 2,
+            strokeWidth: lineData.stroke_width || 6,
             selectable: false,
             evented: true,
             hoverCursor: 'pointer',
@@ -3419,7 +3419,7 @@ export default function SchematicEditor({
         const node = new Circle({
           left: pos.x,
           top: pos.y,
-          radius: 5,
+          radius: 12,
           fill: isSelected ? '#ef4444' : '#000000',
           originX: 'center',
           originY: 'center',
