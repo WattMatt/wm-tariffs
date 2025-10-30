@@ -2495,8 +2495,7 @@ export default function SchematicEditor({
       });
       // Mark as background image
       (img as any).isBackgroundImage = true;
-      canvas.add(img);
-      canvas.sendObjectToBack(img);
+      addAtLayer(canvas, img, Z_LAYERS.BACKGROUND);
       canvas.renderAll();
       
       // Mark canvas as ready after image is loaded and canvas is resized
