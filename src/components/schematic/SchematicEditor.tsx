@@ -3574,8 +3574,19 @@ export default function SchematicEditor({
     await Promise.all(updates);
     toast.success("Schematic saved successfully");
     setIsSaving(false);
+    
+    // Reset edit mode and all selection states
     setIsEditMode(false);
     setActiveTool("select");
+    activeToolRef.current = "select";
+    setIsSelectionMode(false);
+    setIsDrawingMode(false);
+    
+    // Clear all selections
+    setSelectedExtractedMeterIds([]);
+    setSelectedMeterIds([]);
+    setSelectedRegionIndices([]);
+    setSelectedConnectionKeys([]);
   };
 
 
