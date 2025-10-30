@@ -4765,7 +4765,13 @@ export default function SchematicEditor({
         </div>
       )}
 
-      <Dialog open={isAddMeterDialogOpen} onOpenChange={setIsAddMeterDialogOpen}>
+      <Dialog open={isAddMeterDialogOpen} onOpenChange={(open) => {
+        setIsAddMeterDialogOpen(open);
+        if (!open) {
+          setActiveTool("select");
+          activeToolRef.current = "select";
+        }
+      }}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add Meter to Schematic</DialogTitle>
@@ -4869,7 +4875,13 @@ export default function SchematicEditor({
       </Dialog>
 
       {/* Meter Confirmation Dialog for Extracted Meters */}
-      <Dialog open={isConfirmMeterDialogOpen} onOpenChange={setIsConfirmMeterDialogOpen}>
+      <Dialog open={isConfirmMeterDialogOpen} onOpenChange={(open) => {
+        setIsConfirmMeterDialogOpen(open);
+        if (!open) {
+          setActiveTool("select");
+          activeToolRef.current = "select";
+        }
+      }}>
         <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -5142,6 +5154,8 @@ export default function SchematicEditor({
           setEditingMeter(null);
           setBulkEditMeterIds([]);
           setCurrentBulkEditIndex(0);
+          setActiveTool("select");
+          activeToolRef.current = "select";
         }
       }}>
         <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
@@ -5367,7 +5381,13 @@ export default function SchematicEditor({
       </Dialog>
 
       {/* Bulk Edit Dialog for Multiple Meters */}
-      <Dialog open={isBulkEditDialogOpen} onOpenChange={setIsBulkEditDialogOpen}>
+      <Dialog open={isBulkEditDialogOpen} onOpenChange={(open) => {
+        setIsBulkEditDialogOpen(open);
+        if (!open) {
+          setActiveTool("select");
+          activeToolRef.current = "select";
+        }
+      }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Bulk Edit {selectedMeterIds.length} Meters</DialogTitle>
@@ -5482,7 +5502,13 @@ export default function SchematicEditor({
       </Dialog>
 
       {/* View Meter Details Dialog */}
-      <Dialog open={isViewMeterDialogOpen} onOpenChange={setIsViewMeterDialogOpen}>
+      <Dialog open={isViewMeterDialogOpen} onOpenChange={(open) => {
+        setIsViewMeterDialogOpen(open);
+        if (!open) {
+          setActiveTool("select");
+          activeToolRef.current = "select";
+        }
+      }}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Meter Details</DialogTitle>
