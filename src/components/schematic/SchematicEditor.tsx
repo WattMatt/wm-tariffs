@@ -4718,7 +4718,7 @@ export default function SchematicEditor({
         </div>
       </div>
 
-      <div className="border border-border rounded-lg overflow-hidden shadow-lg relative">
+      <div className="border border-border rounded-lg overflow-hidden shadow-lg relative max-h-[calc(100vh-300px)]">
         <canvas ref={canvasRef} />
         {!isCanvasReady && (
           <div className="absolute inset-0 flex items-center justify-center bg-muted/50">
