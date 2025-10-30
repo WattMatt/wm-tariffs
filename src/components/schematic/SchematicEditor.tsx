@@ -4914,19 +4914,27 @@ export default function SchematicEditor({
             <Badge 
               variant="outline" 
               className={`cursor-pointer transition-all select-none ${
-                meters.every((m: any) => m.confirmation_status === 'confirmed') 
+                (() => {
+                  const positionedMeterIds = meterPositions.map((pos: any) => pos.meter_id);
+                  const positionedMeters = meters.filter((m: any) => positionedMeterIds.includes(m.id));
+                  return positionedMeters.length > 0 && positionedMeters.every((m: any) => m.confirmation_status === 'confirmed');
+                })()
                   ? 'opacity-40 cursor-not-allowed' 
                   : !showUnconfirmed 
                     ? 'opacity-40' 
                     : 'hover:bg-muted'
               }`}
               onClick={() => {
-                if (!meters.every((m: any) => m.confirmation_status === 'confirmed')) {
+                const positionedMeterIds = meterPositions.map((pos: any) => pos.meter_id);
+                const positionedMeters = meters.filter((m: any) => positionedMeterIds.includes(m.id));
+                if (!(positionedMeters.length > 0 && positionedMeters.every((m: any) => m.confirmation_status === 'confirmed'))) {
                   setShowUnconfirmed(!showUnconfirmed);
                 }
               }}
               onDoubleClick={() => {
-                if (!meters.every((m: any) => m.confirmation_status === 'confirmed')) {
+                const positionedMeterIds = meterPositions.map((pos: any) => pos.meter_id);
+                const positionedMeters = meters.filter((m: any) => positionedMeterIds.includes(m.id));
+                if (!(positionedMeters.length > 0 && positionedMeters.every((m: any) => m.confirmation_status === 'confirmed'))) {
                   if (showUnconfirmed && !showConfirmed) {
                     setShowUnconfirmed(true);
                     setShowConfirmed(true);
@@ -4943,19 +4951,27 @@ export default function SchematicEditor({
             <Badge 
               variant="outline" 
               className={`cursor-pointer transition-all select-none ${
-                meters.every((m: any) => m.confirmation_status === 'confirmed') 
+                (() => {
+                  const positionedMeterIds = meterPositions.map((pos: any) => pos.meter_id);
+                  const positionedMeters = meters.filter((m: any) => positionedMeterIds.includes(m.id));
+                  return positionedMeters.length > 0 && positionedMeters.every((m: any) => m.confirmation_status === 'confirmed');
+                })()
                   ? 'opacity-40 cursor-not-allowed' 
                   : !showConfirmed 
                     ? 'opacity-40' 
                     : 'hover:bg-muted'
               }`}
               onClick={() => {
-                if (!meters.every((m: any) => m.confirmation_status === 'confirmed')) {
+                const positionedMeterIds = meterPositions.map((pos: any) => pos.meter_id);
+                const positionedMeters = meters.filter((m: any) => positionedMeterIds.includes(m.id));
+                if (!(positionedMeters.length > 0 && positionedMeters.every((m: any) => m.confirmation_status === 'confirmed'))) {
                   setShowConfirmed(!showConfirmed);
                 }
               }}
               onDoubleClick={() => {
-                if (!meters.every((m: any) => m.confirmation_status === 'confirmed')) {
+                const positionedMeterIds = meterPositions.map((pos: any) => pos.meter_id);
+                const positionedMeters = meters.filter((m: any) => positionedMeterIds.includes(m.id));
+                if (!(positionedMeters.length > 0 && positionedMeters.every((m: any) => m.confirmation_status === 'confirmed'))) {
                   if (showConfirmed && !showUnconfirmed) {
                     setShowUnconfirmed(true);
                     setShowConfirmed(true);
