@@ -2412,8 +2412,9 @@ export default function SchematicEditor({
     FabricImage.fromURL(schematicUrl, {
       crossOrigin: 'anonymous'
     }).then((img) => {
-      // Resize canvas to match image aspect ratio, maintaining max dimensions
-      const maxWidth = 1400;
+      // Get container width for responsive sizing
+      const containerWidth = canvasRef.current?.parentElement?.clientWidth || 1400;
+      const maxWidth = Math.max(containerWidth - 40, 800); // Use container width minus padding, minimum 800px
       const maxHeight = 900;
       const imgWidth = img.width!;
       const imgHeight = img.height!;
