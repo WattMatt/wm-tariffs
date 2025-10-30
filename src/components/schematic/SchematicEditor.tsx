@@ -2032,9 +2032,9 @@ export default function SchematicEditor({
         const scaleX = img.scaleX || 1;
         const scaleY = img.scaleY || 1;
         
-        // Calculate width/height of card in canvas pixels
-        const cardWidth = 200 * scaleX;
-        const cardHeight = 140 * scaleY;
+        // Calculate width/height of card in canvas pixels using actual element dimensions
+        const cardWidth = (img.width || 200) * scaleX;
+        const cardHeight = (img.height || 140) * scaleY;
         
         // Convert to percentages relative to original image
         const positionXPercent = (left / canvasWidth) * 100;
