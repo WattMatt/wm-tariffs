@@ -4345,6 +4345,7 @@ export default function SchematicEditor({
               // Delete meters
               if (selectedMeterIds.length > 0) {
                 if (fabricCanvas) {
+                  // Remove selection markers
                   selectedMeterIds.forEach(meterId => {
                     const selectionRect = fabricCanvas.getObjects().find((obj: any) => 
                       obj.type === 'rect' && obj.selectionMarker && obj.data?.meterId === meterId
@@ -4352,15 +4353,38 @@ export default function SchematicEditor({
                     if (selectionRect) {
                       fabricCanvas.remove(selectionRect);
                     }
+                    
+                    // Remove the meter image from canvas
+                    const meterImage = fabricCanvas.getObjects().find((obj: any) => 
+                      obj.type === 'image' && obj.data?.meterId === meterId
+                    );
+                    if (meterImage) {
+                      fabricCanvas.remove(meterImage);
+                    }
                   });
                 }
                 
                 for (const meterId of selectedMeterIds) {
+                  // Delete all connections where this meter is parent or child
+                  await supabase
+                    .from('meter_connections')
+                    .delete()
+                    .or(`parent_meter_id.eq.${meterId},child_meter_id.eq.${meterId}`);
+                  
+                  // Delete all schematic lines associated with this meter
+                  await supabase
+                    .from('schematic_lines')
+                    .delete()
+                    .eq('schematic_id', schematicId)
+                    .or(`metadata->>parent_meter_id.eq.${meterId},metadata->>child_meter_id.eq.${meterId}`);
+                  
+                  // Delete meter positions
                   await supabase
                     .from('meter_positions')
                     .delete()
                     .eq('meter_id', meterId);
                   
+                  // Delete the meter itself
                   await supabase
                     .from('meters')
                     .delete()
@@ -4369,6 +4393,8 @@ export default function SchematicEditor({
                 setSelectedMeterIds([]);
                 await fetchMeters();
                 await fetchMeterPositions();
+                await fetchSchematicLines();
+                await fetchMeterConnections();
               }
               
               if (fabricCanvas) fabricCanvas.renderAll();
