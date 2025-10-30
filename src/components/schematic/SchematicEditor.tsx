@@ -3479,7 +3479,7 @@ export default function SchematicEditor({
 
   // Render connection lines on canvas when connections or positions change
   useEffect(() => {
-    if (!fabricCanvas || !schematicLines.length) return;
+    if (!fabricCanvas) return;
 
     // Remove existing connection lines and nodes
     fabricCanvas.getObjects().forEach((obj: any) => {
@@ -3488,8 +3488,8 @@ export default function SchematicEditor({
       }
     });
     
-    // If connections are hidden, just return after removing them
-    if (!showConnections) {
+    // If no connections or connections are hidden, just return after removing them
+    if (!schematicLines.length || !showConnections) {
       fabricCanvas.renderAll();
       return;
     }
