@@ -815,7 +815,7 @@ export default function SchematicEditor({
                 strokeWidth: 3
               });
             } else if (zone === 'council') {
-              borderColor = '#f59e0b'; // amber for Council
+              borderColor = '#ec4899'; // pink for Council
               obj.set({
                 stroke: borderColor,
                 strokeWidth: 3
@@ -2865,7 +2865,7 @@ export default function SchematicEditor({
         } else if (zone === 'mini_sub') {
           borderColor = '#06b6d4'; // cyan for Mini Sub
         } else if (zone === 'council') {
-          borderColor = '#f59e0b'; // amber for Council
+          borderColor = '#ec4899'; // pink for Council
         } else {
           // No zone: no border in normal mode
           borderColor = 'transparent';
@@ -4679,7 +4679,7 @@ export default function SchematicEditor({
                 }
               }}
             >
-              <div className="w-3 h-3 rounded-full bg-[#f59e0b] mr-2" />
+              <div className="w-3 h-3 rounded-full bg-[#ec4899] mr-2" />
               Council
             </Badge>
             
