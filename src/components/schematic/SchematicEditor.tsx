@@ -3419,7 +3419,7 @@ export default function SchematicEditor({
         const node = new Circle({
           left: pos.x,
           top: pos.y,
-          radius: 12,
+          radius: 6,
           fill: isSelected ? '#ef4444' : '#000000',
           originX: 'center',
           originY: 'center',
