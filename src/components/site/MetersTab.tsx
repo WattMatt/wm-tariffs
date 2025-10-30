@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -9,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, Gauge, Upload, Pencil, Trash2, Database, Trash, Eye } from "lucide-react";
+import { Plus, Gauge, Upload, Pencil, Trash2, Database, Trash, Eye, MapPin } from "lucide-react";
 import { toast } from "sonner";
 import CsvImportDialog from "./CsvImportDialog";
 import MeterReadingsView from "./MeterReadingsView";
@@ -58,6 +59,7 @@ interface MetersTabProps {
 }
 
 export default function MetersTab({ siteId }: MetersTabProps) {
+  const navigate = useNavigate();
   const [meters, setMeters] = useState<Meter[]>([]);
   const [tariffStructures, setTariffStructures] = useState<TariffStructure[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -572,6 +574,30 @@ export default function MetersTab({ siteId }: MetersTabProps) {
     }
   };
 
+  const handleViewOnSchematic = async (meterId: string) => {
+    try {
+      // Find schematic that contains this meter
+      const { data: meterPosition, error } = await supabase
+        .from('meter_positions')
+        .select('schematic_id')
+        .eq('meter_id', meterId)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (!meterPosition) {
+        toast.error("This meter is not yet placed on any schematic");
+        return;
+      }
+
+      // Navigate to schematic with meter highlighted
+      navigate(`/schematics/${meterPosition.schematic_id}?meterId=${meterId}`);
+    } catch (err: any) {
+      console.error("Failed to navigate to schematic:", err);
+      toast.error("Failed to find meter on schematic");
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-2">
@@ -926,6 +952,14 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                           title="Preview & configure"
                         >
                           <Eye className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleViewOnSchematic(meter.id)}
+                          title="View on schematic"
+                        >
+                          <MapPin className="w-4 h-4" />
                         </Button>
                       </div>
                     </TableCell>
