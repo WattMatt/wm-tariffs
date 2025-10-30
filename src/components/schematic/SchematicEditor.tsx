@@ -2450,7 +2450,7 @@ export default function SchematicEditor({
       window.removeEventListener('mouseup', handleMouseUp);
       canvas.dispose();
     };
-  }, []); // Only initialize once on mount
+  }, [schematicUrl]);
 
 
   // DELETE KEY: Remove selected meter card in edit mode
