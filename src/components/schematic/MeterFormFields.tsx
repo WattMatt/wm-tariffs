@@ -293,7 +293,7 @@ export function MeterFormFields({
                 </SelectTrigger>
                 <SelectContent className="bg-background z-50">
                   {tariffStructures.length === 0 ? (
-                    <SelectItem value="" disabled>No tariffs available</SelectItem>
+                    <SelectItem value="none" disabled>No tariffs available</SelectItem>
                   ) : (
                     tariffStructures.map((tariff) => (
                       <SelectItem key={tariff.id} value={tariff.id}>

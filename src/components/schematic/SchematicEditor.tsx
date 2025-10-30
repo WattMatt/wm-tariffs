@@ -5640,7 +5640,7 @@ export default function SchematicEditor({
                     <SelectValue placeholder="Select type (optional)" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Keep existing</SelectItem>
+                    <SelectItem value="keep_existing">Keep existing</SelectItem>
                     <SelectItem value="bulk_meter">Bulk Meter</SelectItem>
                     <SelectItem value="check_meter">Check Meter</SelectItem>
                     <SelectItem value="tenant_meter">Tenant Meter</SelectItem>
@@ -5655,7 +5655,7 @@ export default function SchematicEditor({
                     <SelectValue placeholder="Select zone (optional)" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Keep existing</SelectItem>
+                    <SelectItem value="keep_existing">Keep existing</SelectItem>
                     <SelectItem value="council_connection_zone">Council Connection Zone</SelectItem>
                     <SelectItem value="main_board_zone">Main Board Zone</SelectItem>
                     <SelectItem value="mini_sub_zone">Mini Sub Zone</SelectItem>
