@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, Gauge, Upload, Pencil, Trash2, Database, Trash, Eye, MapPin } from "lucide-react";
+import { Plus, Gauge, Upload, Pencil, Trash2, Database, Trash, Eye, MapPin, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { toast } from "sonner";
 import CsvImportDialog from "./CsvImportDialog";
 import MeterReadingsView from "./MeterReadingsView";
@@ -88,6 +88,8 @@ export default function MetersTab({ siteId }: MetersTabProps) {
   const [parseDialogOpen, setParseDialogOpen] = useState(false);
   const [parseMeterId, setParseMeterId] = useState<string | null>(null);
   const [parseMeterNumber, setParseMeterNumber] = useState<string>("");
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
   useEffect(() => {
     fetchMeters();
@@ -598,6 +600,52 @@ export default function MetersTab({ siteId }: MetersTabProps) {
     }
   };
 
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
+
+  const getSortedMeters = () => {
+    if (!sortColumn) return meters;
+
+    return [...meters].sort((a, b) => {
+      let aValue: any = a[sortColumn as keyof Meter];
+      let bValue: any = b[sortColumn as keyof Meter];
+
+      // Handle null/undefined values
+      if (aValue === null || aValue === undefined) return 1;
+      if (bValue === null || bValue === undefined) return -1;
+
+      // Convert to strings for comparison if needed
+      if (typeof aValue === 'string') aValue = aValue.toLowerCase();
+      if (typeof bValue === 'string') bValue = bValue.toLowerCase();
+
+      if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+  };
+
+  const SortableHeader = ({ column, children }: { column: string; children: React.ReactNode }) => (
+    <TableHead 
+      className="cursor-pointer hover:bg-muted/50 transition-colors select-none"
+      onClick={() => handleSort(column)}
+    >
+      <div className="flex items-center gap-2">
+        {children}
+        {sortColumn === column ? (
+          sortDirection === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />
+        ) : (
+          <ArrowUpDown className="w-4 h-4 opacity-30" />
+        )}
+      </div>
+    </TableHead>
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-2">
@@ -831,18 +879,18 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                       aria-label="Select all meters"
                     />
                   </TableHead>
-                  <TableHead>NO</TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Area</TableHead>
-                  <TableHead>Rating</TableHead>
-                  <TableHead>Serial</TableHead>
+                  <SortableHeader column="meter_number">NO</SortableHeader>
+                  <SortableHeader column="name">Name</SortableHeader>
+                  <SortableHeader column="meter_type">Type</SortableHeader>
+                  <SortableHeader column="area">Area</SortableHeader>
+                  <SortableHeader column="rating">Rating</SortableHeader>
+                  <SortableHeader column="serial_number">Serial</SortableHeader>
                   <TableHead>Status</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {meters.map((meter) => (
+                {getSortedMeters().map((meter) => (
                   <TableRow key={meter.id}>
                     <TableCell>
                       <Checkbox
@@ -914,7 +962,7 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                     <TableCell>
                       <div className="flex gap-2">
                         <Button
-                          variant="ghost"
+                          variant="outline"
                           size="sm"
                           onClick={() => handleEdit(meter)}
                           title="Edit meter"
@@ -922,7 +970,7 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                           <Pencil className="w-4 h-4" />
                         </Button>
                         <Button
-                          variant="ghost"
+                          variant="outline"
                           size="sm"
                           onClick={() => setDeletingMeterId(meter.id)}
                           title="Delete meter"
