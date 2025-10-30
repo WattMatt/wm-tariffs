@@ -4371,12 +4371,32 @@ export default function SchematicEditor({
                     .delete()
                     .or(`parent_meter_id.eq.${meterId},child_meter_id.eq.${meterId}`);
                   
-                  // Delete all schematic lines associated with this meter
-                  await supabase
+                  // Fetch and delete schematic lines associated with this meter
+                  const { data: linesToDelete } = await supabase
                     .from('schematic_lines')
-                    .delete()
-                    .eq('schematic_id', schematicId)
-                    .or(`metadata->>parent_meter_id.eq.${meterId},metadata->>child_meter_id.eq.${meterId}`);
+                    .select('id')
+                    .eq('schematic_id', schematicId);
+                  
+                  if (linesToDelete) {
+                    for (const line of linesToDelete) {
+                      const { data: fullLine } = await supabase
+                        .from('schematic_lines')
+                        .select('*')
+                        .eq('id', line.id)
+                        .single();
+                      
+                      if (fullLine?.metadata && typeof fullLine.metadata === 'object') {
+                        const metadata = fullLine.metadata as any;
+                        if (metadata.parent_meter_id === meterId || 
+                            metadata.child_meter_id === meterId) {
+                          await supabase
+                            .from('schematic_lines')
+                            .delete()
+                            .eq('id', line.id);
+                        }
+                      }
+                    }
+                  }
                   
                   // Delete meter positions
                   await supabase
