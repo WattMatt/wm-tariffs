@@ -41,6 +41,7 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isFetching, setIsFetching] = useState(true);
   const [viewingSchematic, setViewingSchematic] = useState<Schematic | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   useEffect(() => {
     fetchSchematics();
@@ -85,19 +86,47 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
     setIsFetching(false);
   };
 
+  const validateAndSetFile = (file: File) => {
+    const validTypes = ["application/pdf", "image/png", "image/jpeg", "image/svg+xml"];
+    if (!validTypes.includes(file.type)) {
+      toast.error("Invalid file type. Please upload PDF, PNG, JPG, or SVG");
+      return false;
+    }
+    if (file.size > 52428800) {
+      toast.error("File size must be less than 50MB");
+      return false;
+    }
+    setSelectedFile(file);
+    return true;
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const validTypes = ["application/pdf", "image/png", "image/jpeg", "image/svg+xml"];
-      if (!validTypes.includes(file.type)) {
-        toast.error("Invalid file type. Please upload PDF, PNG, JPG, or SVG");
-        return;
-      }
-      if (file.size > 52428800) {
-        toast.error("File size must be less than 50MB");
-        return;
-      }
-      setSelectedFile(file);
+      validateAndSetFile(file);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      validateAndSetFile(file);
     }
   };
 
@@ -301,7 +330,16 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
 
               <div className="space-y-2">
                 <Label htmlFor="file">File Upload</Label>
-                <div className="border-2 border-dashed border-border rounded-lg p-6 text-center hover:border-primary transition-colors">
+                <div 
+                  className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+                    isDragging 
+                      ? 'border-primary bg-primary/5' 
+                      : 'border-border hover:border-primary'
+                  }`}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                >
                   <Upload className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
                   <Input
                     id="file"
