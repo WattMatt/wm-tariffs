@@ -898,23 +898,19 @@ export default function SchematicEditor({
 
       const delta = evt.deltaY;
       
-      // CTRL + SCROLL: Zoom in/out with fixed step-based multiplier
+      // CTRL + SCROLL: Pan up/down with dampening for smooth control
       if (evt.ctrlKey || evt.metaKey) {
-        let newZoom = canvas.getZoom();
+        // Apply dampening multiplier (0.5) for smoother pan speed across devices
+        canvas.relativePan(new Point(0, -delta * 0.5));
         
-        // Use consistent zoom steps: 1.1 for zoom in (delta < 0), 0.9 for zoom out (delta > 0)
-        // This provides smooth, predictable zoom regardless of device or scroll speed
-        const zoomStep = delta < 0 ? 1.1 : 0.9;
-        newZoom *= zoomStep;
-        
-        // Clamp zoom between 25% and 400% for usability
-        newZoom = Math.min(Math.max(0.25, newZoom), 4);
-        
-        // Zoom to cursor position using original event coordinates (not affected by snap logic)
-        const point = new Point(evt.offsetX, evt.offsetY);
-        canvas.zoomToPoint(point, newZoom);
-        
-        setZoom(newZoom);
+        // Update controls after pan
+        requestAnimationFrame(() => {
+          const activeObj = canvas.getActiveObject();
+          if (activeObj) {
+            activeObj.setCoords();
+            canvas.requestRenderAll();
+          }
+        });
       }
       // SHIFT + SCROLL: Pan left/right with dampening for smooth control
       else if (evt.shiftKey) {
@@ -930,19 +926,23 @@ export default function SchematicEditor({
           }
         });
       }
-      // SCROLL alone: Pan up/down with dampening for smooth control
+      // SCROLL alone: Zoom in/out with fixed step-based multiplier
       else {
-        // Apply dampening multiplier (0.5) for smoother pan speed across devices
-        canvas.relativePan(new Point(0, -delta * 0.5));
+        let newZoom = canvas.getZoom();
         
-        // Update controls after pan
-        requestAnimationFrame(() => {
-          const activeObj = canvas.getActiveObject();
-          if (activeObj) {
-            activeObj.setCoords();
-            canvas.requestRenderAll();
-          }
-        });
+        // Use consistent zoom steps: 1.1 for zoom in (delta < 0), 0.9 for zoom out (delta > 0)
+        // This provides smooth, predictable zoom regardless of device or scroll speed
+        const zoomStep = delta < 0 ? 1.1 : 0.9;
+        newZoom *= zoomStep;
+        
+        // Clamp zoom between 25% and 400% for usability
+        newZoom = Math.min(Math.max(0.25, newZoom), 4);
+        
+        // Zoom to cursor position using original event coordinates (not affected by snap logic)
+        const point = new Point(evt.offsetX, evt.offsetY);
+        canvas.zoomToPoint(point, newZoom);
+        
+        setZoom(newZoom);
       }
     });
 
@@ -4153,7 +4153,7 @@ export default function SchematicEditor({
                 // Enable draw mode and disable selection mode
                 setActiveTool("draw");
                 setIsSelectionMode(false);
-                toast.info("Click to draw regions. Use SCROLL to pan, CTRL+SCROLL to zoom, SHIFT+SCROLL for horizontal.", { duration: 4000 });
+                toast.info("Click to draw regions. Use SCROLL to zoom, CTRL+SCROLL to pan, SHIFT+SCROLL for horizontal.", { duration: 4000 });
               }
             }}
             disabled={!isEditMode}
