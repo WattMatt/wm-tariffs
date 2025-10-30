@@ -66,6 +66,8 @@ export function MeterFormFields({
       generatedNumber = 'MB-';
     } else if (zone === 'mini_sub') {
       generatedNumber = 'MS-';
+    } else if (zone === 'council') {
+      generatedNumber = 'C-';
     }
     
     // Determine prefix based on meter type and name
@@ -209,6 +211,7 @@ export function MeterFormFields({
             <SelectContent className="bg-background z-50">
               <SelectItem value="main_board">Main Board</SelectItem>
               <SelectItem value="mini_sub">Mini Sub</SelectItem>
+              <SelectItem value="council">Council</SelectItem>
             </SelectContent>
           </Select>
         </div>
