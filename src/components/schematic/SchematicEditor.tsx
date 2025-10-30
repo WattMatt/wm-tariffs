@@ -4280,40 +4280,37 @@ export default function SchematicEditor({
       {/* Second row: Bulk Action buttons (visible when in selection mode with selected items) */}
       {isSelectionMode && (selectedRegionIndices.length > 0 || selectedMeterIds.length > 0 || selectedConnectionKeys.length > 0) && (
         <div className="flex gap-2 items-center flex-wrap">
-          {selectedMeterIds.length > 0 && (
-            <>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={async () => {
-                  // Fetch all meter data for bulk editing
-                  const { data: metersData, error } = await supabase
-                    .from('meters')
-                    .select('*')
-                    .in('id', selectedMeterIds)
-                    .order('meter_number');
-                  
-                  if (error || !metersData || metersData.length === 0) {
-                    toast.error('Failed to load meters for editing');
-                    return;
-                  }
-                  
-                  // Set up bulk editing state and map scanned_snippet_url to scannedImageSnippet
-                  setBulkEditMeterIds(metersData.map(m => m.id));
-                  setCurrentBulkEditIndex(0);
-                  setEditingMeter({
-                    ...metersData[0],
-                    scannedImageSnippet: metersData[0].scanned_snippet_url || undefined
-                  });
-                  setIsEditMeterDialogOpen(true);
-                }}
-                className="gap-2"
-              >
-                <Edit className="w-4 h-4" />
-                Edit
-              </Button>
-            </>
-          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              // Fetch all meter data for bulk editing
+              const { data: metersData, error } = await supabase
+                .from('meters')
+                .select('*')
+                .in('id', selectedMeterIds)
+                .order('meter_number');
+              
+              if (error || !metersData || metersData.length === 0) {
+                toast.error('Failed to load meters for editing');
+                return;
+              }
+              
+              // Set up bulk editing state and map scanned_snippet_url to scannedImageSnippet
+              setBulkEditMeterIds(metersData.map(m => m.id));
+              setCurrentBulkEditIndex(0);
+              setEditingMeter({
+                ...metersData[0],
+                scannedImageSnippet: metersData[0].scanned_snippet_url || undefined
+              });
+              setIsEditMeterDialogOpen(true);
+            }}
+            disabled={selectedMeterIds.length === 0 || selectedConnectionKeys.length > 0 || selectedRegionIndices.length > 0}
+            className="gap-2"
+          >
+            <Edit className="w-4 h-4" />
+            Edit {selectedMeterIds.length > 0 && `(${selectedMeterIds.length})`}
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -4343,6 +4340,17 @@ export default function SchematicEditor({
               // Delete connections
               if (selectedConnectionKeys.length > 0) {
                 for (const connectionKey of selectedConnectionKeys) {
+                  // Remove visual lines from canvas
+                  if (fabricCanvas) {
+                    const linesToRemove = fabricCanvas.getObjects().filter((obj: any) => {
+                      if (obj.type !== 'line') return false;
+                      const lineKey = `${obj.data?.parent_meter_id}-${obj.data?.child_meter_id}`;
+                      return lineKey === connectionKey;
+                    });
+                    linesToRemove.forEach(line => fabricCanvas.remove(line));
+                  }
+                  
+                  // Delete from database - schematic lines
                   const linesToDelete = schematicLines.filter(line => {
                     const key = `${line.metadata?.parent_meter_id}-${line.metadata?.child_meter_id}`;
                     return key === connectionKey;
@@ -4355,6 +4363,7 @@ export default function SchematicEditor({
                       .eq('id', line.id);
                   }
                   
+                  // Delete from database - meter connections
                   const [parentId, childId] = connectionKey.split('-');
                   await supabase
                     .from('meter_connections')
@@ -4362,29 +4371,53 @@ export default function SchematicEditor({
                     .match({ parent_meter_id: parentId, child_meter_id: childId });
                 }
                 setSelectedConnectionKeys([]);
-                fetchSchematicLines();
-                fetchMeterConnections();
+                await fetchSchematicLines();
+                await fetchMeterConnections();
               }
               
               // Delete meters
               if (selectedMeterIds.length > 0) {
                 if (fabricCanvas) {
                   selectedMeterIds.forEach(meterId => {
+                    // Remove selection rectangle
                     const selectionRect = fabricCanvas.getObjects().find((obj: any) => 
                       obj.type === 'rect' && obj.selectionMarker && obj.data?.meterId === meterId
                     );
                     if (selectionRect) {
                       fabricCanvas.remove(selectionRect);
                     }
+                    
+                    // Remove meter card image
+                    const meterCard = fabricCanvas.getObjects().find((obj: any) => 
+                      obj.type === 'image' && obj.data?.meterId === meterId
+                    );
+                    if (meterCard) {
+                      fabricCanvas.remove(meterCard);
+                    }
+                    
+                    // Remove any snap point indicators
+                    const snapPoints = fabricCanvas.getObjects().filter((obj: any) => 
+                      obj.data?.snapPoint && obj.data?.meterId === meterId
+                    );
+                    snapPoints.forEach(sp => fabricCanvas.remove(sp));
                   });
                 }
                 
                 for (const meterId of selectedMeterIds) {
+                  // Delete meter positions for this schematic
                   await supabase
                     .from('meter_positions')
                     .delete()
-                    .eq('meter_id', meterId);
+                    .eq('meter_id', meterId)
+                    .eq('schematic_id', schematicId);
                   
+                  // Delete meter connections where this meter is involved
+                  await supabase
+                    .from('meter_connections')
+                    .delete()
+                    .or(`parent_meter_id.eq.${meterId},child_meter_id.eq.${meterId}`);
+                  
+                  // Delete the meter itself (this does NOT delete CSVs or documents)
                   await supabase
                     .from('meters')
                     .delete()
@@ -4393,6 +4426,7 @@ export default function SchematicEditor({
                 setSelectedMeterIds([]);
                 await fetchMeters();
                 await fetchMeterPositions();
+                await fetchMeterConnections();
               }
               
               if (fabricCanvas) fabricCanvas.renderAll();
@@ -4401,7 +4435,7 @@ export default function SchematicEditor({
             className="gap-2"
           >
             <Trash2 className="w-4 h-4" />
-            Delete
+            Delete ({selectedRegionIndices.length + selectedMeterIds.length + selectedConnectionKeys.length})
           </Button>
         </div>
       )}
