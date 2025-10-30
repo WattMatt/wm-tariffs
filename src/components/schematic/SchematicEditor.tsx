@@ -4387,6 +4387,35 @@ export default function SchematicEditor({
               
               // Delete meters
               if (selectedMeterIds.length > 0) {
+                // First, fetch meter data to get snippet URLs for deletion
+                const { data: metersToDelete, error: fetchError } = await supabase
+                  .from('meters')
+                  .select('id, scanned_snippet_url')
+                  .in('id', selectedMeterIds);
+                
+                if (!fetchError && metersToDelete) {
+                  // Delete snippet images from storage
+                  for (const meter of metersToDelete) {
+                    if (meter.scanned_snippet_url) {
+                      try {
+                        // Extract path from URL: https://[project].supabase.co/storage/v1/object/public/meter-snippets/[path]
+                        const snippetPath = meter.scanned_snippet_url.split('/meter-snippets/')[1];
+                        if (snippetPath) {
+                          const { error: storageError } = await supabase.storage
+                            .from('meter-snippets')
+                            .remove([snippetPath]);
+                          
+                          if (storageError) {
+                            console.error('Error deleting snippet:', storageError);
+                          }
+                        }
+                      } catch (err) {
+                        console.error('Error parsing snippet URL:', err);
+                      }
+                    }
+                  }
+                }
+                
                 if (fabricCanvas) {
                   selectedMeterIds.forEach(meterId => {
                     // Remove selection rectangle
