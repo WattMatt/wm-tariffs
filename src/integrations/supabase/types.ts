@@ -957,6 +957,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      delete_schematic_meters: {
+        Args: { schematic_uuid: string }
+        Returns: {
+          deleted_connections: number
+          deleted_meters: number
+          deleted_positions: number
+        }[]
+      }
       delete_site_readings: {
         Args: { p_site_id: string }
         Returns: {
