@@ -120,6 +120,29 @@ interface MeterPosition {
 }
 
 
+// Helper function to ensure background image stays at the very bottom
+const ensureBackgroundAtBottom = (canvas: FabricCanvas) => {
+  const backgroundImg = canvas.getObjects().find(obj => (obj as any).isBackgroundImage);
+  if (backgroundImg) {
+    canvas.sendObjectToBack(backgroundImg);
+  }
+};
+
+// Helper function to add objects above the background image
+const addObjectAboveBackground = (canvas: FabricCanvas, obj: any) => {
+  const objects = canvas.getObjects();
+  const backgroundIndex = objects.findIndex(obj => (obj as any).isBackgroundImage);
+  
+  if (backgroundIndex !== -1) {
+    canvas.insertAt(backgroundIndex + 1, obj);
+  } else {
+    canvas.add(obj);
+  }
+  
+  // Ensure background stays at bottom
+  ensureBackgroundAtBottom(canvas);
+};
+
 // Helper function to calculate snap points for a meter card
 const calculateSnapPoints = (left: number, top: number, width: number, height: number) => {
   const snapRadius = 8; // Half the width of the snap point circle
@@ -336,6 +359,7 @@ async function renderMeterCardOnCanvas(
       (img as any).meterCardType = 'extracted';
       
       canvas.add(img);
+      ensureBackgroundAtBottom(canvas);
       canvas.renderAll();
       resolve(img);
     });
@@ -738,6 +762,7 @@ export default function SchematicEditor({
             (snapCircle as any).meterId = obj.data.meterId;
             
             fabricCanvas.add(snapCircle);
+            ensureBackgroundAtBottom(fabricCanvas);
           });
         }
       });
@@ -1067,6 +1092,7 @@ export default function SchematicEditor({
           (node as any).connectedLines = [line1, line2]; // Store references to connected lines
           
           canvas.add(node);
+          ensureBackgroundAtBottom(canvas);
           canvas.renderAll();
           
           toast.success('Node added to line');
@@ -1103,7 +1129,7 @@ export default function SchematicEditor({
             evented: false,
           });
           connectionStartNodeRef.current = startNode;
-          canvas.add(startNode);
+          addObjectAboveBackground(canvas, startNode);
           canvas.renderAll();
           
           toast.info('Click to add nodes, or click a meter connection point to finish');
@@ -1174,7 +1200,8 @@ export default function SchematicEditor({
               if (index < allPoints.length - 1) connectedLines.push(lineSegments[index]); // Line going out
               (node as any).connectedLines = connectedLines;
               
-              canvas.add(node);
+            canvas.add(node);
+            ensureBackgroundAtBottom(canvas);
             });
             
             // Capture connection data before async operations
@@ -1313,7 +1340,7 @@ export default function SchematicEditor({
               evented: false,
             });
             connectionNodesRef.current.push(intermediateNode);
-            canvas.add(intermediateNode);
+            addObjectAboveBackground(canvas, intermediateNode);
             canvas.renderAll();
             
             toast.info('Node added. Click to continue or click a meter point to finish');
@@ -1422,7 +1449,7 @@ export default function SchematicEditor({
                 data: { meterId: meterId }
               });
               (selectionRect as any).selectionMarker = true;
-              canvas.add(selectionRect);
+              addObjectAboveBackground(canvas, selectionRect);
               canvas.renderAll();
               const updated = [...prev, meterId];
               toast.info(`Meter selected (${updated.length} selected)`);
@@ -1457,7 +1484,7 @@ export default function SchematicEditor({
         evented: false,
       });
       startMarkerRef.current = marker;
-      canvas.add(marker);
+      addObjectAboveBackground(canvas, marker);
       
       // Store start point in ref
       drawStartPointRef.current = startPoint;
@@ -1508,7 +1535,7 @@ export default function SchematicEditor({
             evented: false,
           });
           (highlight as any).isSnapHighlight = true;
-          canvas.add(highlight);
+          addObjectAboveBackground(canvas, highlight);
         } else if (evt.shiftKey) {
           // Apply 45-degree angle snapping when Shift is held and not on a snap point
           const lastPoint = connectionPointsRef.current.length > 0 
@@ -1544,7 +1571,7 @@ export default function SchematicEditor({
         });
         
         connectionLineRef.current = previewLine;
-        canvas.add(previewLine);
+        addObjectAboveBackground(canvas, previewLine);
         canvas.renderAll();
         return;
       }
@@ -1590,7 +1617,7 @@ export default function SchematicEditor({
         });
         
         selectionBoxRef.current = selectionBox;
-        canvas.add(selectionBox);
+        addObjectAboveBackground(canvas, selectionBox);
         canvas.renderAll();
         return;
       }
@@ -1622,7 +1649,7 @@ export default function SchematicEditor({
       });
       
       drawingRectRef.current = rect;
-      canvas.add(rect);
+      addObjectAboveBackground(canvas, rect);
       canvas.renderAll();
     });
 
@@ -1739,7 +1766,7 @@ export default function SchematicEditor({
                   data: { meterId: meterId }
                 });
                 (selectionRect as any).selectionMarker = true;
-                canvas.add(selectionRect);
+                addObjectAboveBackground(canvas, selectionRect);
               }
             });
             
@@ -1838,7 +1865,7 @@ export default function SchematicEditor({
                 data: { meterId: meterId }
               });
               (selectionRect as any).selectionMarker = true;
-              canvas.add(selectionRect);
+              addObjectAboveBackground(canvas, selectionRect);
               canvas.renderAll();
               const updated = [...prev, meterId];
               toast.info(`Meter selected (${updated.length} selected)`);
@@ -2445,6 +2472,7 @@ export default function SchematicEditor({
       (img as any).isBackgroundImage = true;
       canvas.add(img);
       canvas.sendObjectToBack(img);
+      ensureBackgroundAtBottom(canvas);
       canvas.renderAll();
       
       // Mark canvas as ready after image is loaded and canvas is resized
@@ -2750,6 +2778,7 @@ export default function SchematicEditor({
 
           fabricCanvas.add(img);
           fabricCanvas.bringObjectToFront(img);
+          ensureBackgroundAtBottom(fabricCanvas);
           
           // Add snap point indicators when in connection mode
           if (activeTool === 'connection') {
@@ -2780,6 +2809,7 @@ export default function SchematicEditor({
               (snapCircle as any).meterId = meter.id;
               
               fabricCanvas.add(snapCircle);
+              ensureBackgroundAtBottom(fabricCanvas);
             });
           }
           
@@ -3163,6 +3193,7 @@ export default function SchematicEditor({
 
           fabricCanvas.add(img);
           fabricCanvas.bringObjectToFront(img);
+          ensureBackgroundAtBottom(fabricCanvas);
           
           // Add snap point indicators when in connection mode
           if (activeTool === 'connection') {
@@ -3193,6 +3224,7 @@ export default function SchematicEditor({
               (snapCircle as any).meterId = pos.meter_id;
               
               fabricCanvas.add(snapCircle);
+              ensureBackgroundAtBottom(fabricCanvas);
             });
           }
           
@@ -3417,6 +3449,7 @@ export default function SchematicEditor({
         (node as any).connectedLines = connectedLines;
         
         fabricCanvas.add(node);
+        ensureBackgroundAtBottom(fabricCanvas);
         
         // Bring selected connection nodes to front
         if (isSelected) {
