@@ -225,7 +225,7 @@ export default function MetersTab({ siteId }: MetersTabProps) {
       serial_number: formData.get("serial_number") as string,
       ct_type: formData.get("ct_type") as string,
       tariff: formData.get("tariff") as string,
-      tariff_structure_id: tariffStructureId === "none" ? null : tariffStructureId,
+      tariff_structure_id: (!tariffStructureId || tariffStructureId === "none" || tariffStructureId === "") ? null : tariffStructureId,
       is_revenue_critical: isRevenueCritical,
     };
 
@@ -794,7 +794,7 @@ export default function MetersTab({ siteId }: MetersTabProps) {
 
                 <div className="space-y-2 col-span-2">
                   <Label htmlFor="tariff_structure_id">Tariff Structure</Label>
-                  <Select name="tariff_structure_id" defaultValue={editingMeter?.tariff_structure_id || undefined}>
+                  <Select name="tariff_structure_id" defaultValue={editingMeter?.tariff_structure_id || "none"}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select tariff structure (optional)" />
                     </SelectTrigger>
