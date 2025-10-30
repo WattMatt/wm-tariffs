@@ -2412,39 +2412,46 @@ export default function SchematicEditor({
     FabricImage.fromURL(schematicUrl, {
       crossOrigin: 'anonymous'
     }).then((img) => {
-      // Get container width for responsive sizing
-      const container = canvasRef.current?.parentElement;
-      const containerWidth = container?.clientWidth || 1400;
-      const maxWidth = containerWidth; // Use full container width
-      const maxHeight = 900;
-      const imgWidth = img.width!;
-      const imgHeight = img.height!;
-      
-      const scale = Math.min(maxWidth / imgWidth, maxHeight / imgHeight);
-      const canvasWidth = imgWidth * scale;
-      const canvasHeight = imgHeight * scale;
-      
-      // Store original image dimensions for region coordinate conversion
-      (canvas as any).originalImageWidth = imgWidth;
-      (canvas as any).originalImageHeight = imgHeight;
-      
-      canvas.setDimensions({ width: canvasWidth, height: canvasHeight });
-      
-      img.scale(scale);
-      img.set({ 
-        left: 0, 
-        top: 0,
-        selectable: false,
-        evented: false,
+      // Use a small delay to ensure container is fully rendered
+      requestAnimationFrame(() => {
+        const container = canvasRef.current?.parentElement;
+        const containerWidth = container?.clientWidth || 1400;
+        
+        // Use full container width (no padding subtraction)
+        const maxWidth = containerWidth;
+        const maxHeight = 900;
+        const imgWidth = img.width!;
+        const imgHeight = img.height!;
+        
+        // Scale to fit container width while maintaining aspect ratio
+        const scale = Math.min(maxWidth / imgWidth, maxHeight / imgHeight);
+        const canvasWidth = imgWidth * scale;
+        const canvasHeight = imgHeight * scale;
+        
+        console.log('Canvas sizing:', { containerWidth, maxWidth, imgWidth, imgHeight, scale, canvasWidth, canvasHeight });
+        
+        // Store original image dimensions for region coordinate conversion
+        (canvas as any).originalImageWidth = imgWidth;
+        (canvas as any).originalImageHeight = imgHeight;
+        
+        canvas.setDimensions({ width: canvasWidth, height: canvasHeight });
+        
+        img.scale(scale);
+        img.set({ 
+          left: 0, 
+          top: 0,
+          selectable: false,
+          evented: false,
+        });
+        // Mark as background image
+        (img as any).isBackgroundImage = true;
+        canvas.add(img);
+        canvas.sendObjectToBack(img);
+        canvas.renderAll();
+        
+        // Mark canvas as ready after image is loaded and canvas is resized
+        setIsCanvasReady(true);
       });
-      // Mark as background image
-      (img as any).isBackgroundImage = true;
-      canvas.add(img);
-      canvas.sendObjectToBack(img);
-      canvas.renderAll();
-      
-      // Mark canvas as ready after image is loaded and canvas is resized
-      setIsCanvasReady(true);
     });
 
     return () => {
