@@ -80,6 +80,7 @@ export default function MetersTab({ siteId }: MetersTabProps) {
   const [isSingleUploadOpen, setIsSingleUploadOpen] = useState(false);
   const [selectedMeterIds, setSelectedMeterIds] = useState<Set<string>>(new Set());
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [isBulkCsvDeleting, setIsBulkCsvDeleting] = useState(false);
 
   useEffect(() => {
     fetchMeters();
@@ -500,6 +501,82 @@ export default function MetersTab({ siteId }: MetersTabProps) {
     }
   };
 
+  const handleBulkDeleteCsvData = async () => {
+    if (selectedMeterIds.size === 0) return;
+    
+    const confirmed = window.confirm(
+      `Delete all CSV data for ${selectedMeterIds.size} selected meter${selectedMeterIds.size !== 1 ? 's' : ''}?\n\n` +
+      `This will permanently remove:\n` +
+      `• All CSV files from storage\n` +
+      `• All meter readings from database\n` +
+      `• All CSV file metadata\n\n` +
+      `The meters themselves will NOT be deleted.\n\n` +
+      `This action cannot be undone.`
+    );
+    
+    if (!confirmed) return;
+    
+    setIsBulkCsvDeleting(true);
+    
+    try {
+      const meterIds = Array.from(selectedMeterIds);
+      
+      // Step 1: Get all CSV file paths for selected meters
+      const { data: csvFiles, error: fetchError } = await supabase
+        .from('meter_csv_files')
+        .select('file_path')
+        .in('meter_id', meterIds);
+      
+      if (fetchError) throw fetchError;
+      
+      const filePaths = csvFiles?.map(f => f.file_path) || [];
+      
+      // Step 2: Delete files from storage (if any exist)
+      let deletedFilesCount = 0;
+      if (filePaths.length > 0) {
+        const { data: deleteData, error: deleteError } = await supabase.functions.invoke('delete-meter-csvs', {
+          body: { filePaths }
+        });
+        
+        if (deleteError) throw deleteError;
+        if (!deleteData.success) throw new Error(deleteData.error || 'File deletion failed');
+        
+        deletedFilesCount = deleteData.deletedCount;
+      }
+      
+      // Step 3: Delete meter readings
+      const { error: readingsError } = await supabase
+        .from('meter_readings')
+        .delete()
+        .in('meter_id', meterIds);
+      
+      if (readingsError) throw readingsError;
+      
+      // Step 4: Delete CSV file metadata
+      const { error: csvError } = await supabase
+        .from('meter_csv_files')
+        .delete()
+        .in('meter_id', meterIds);
+      
+      if (csvError) throw csvError;
+      
+      toast.success(
+        `Successfully deleted CSV data for ${selectedMeterIds.size} meter${selectedMeterIds.size !== 1 ? 's' : ''}: ` +
+        `${deletedFilesCount} file${deletedFilesCount !== 1 ? 's' : ''} removed from storage`,
+        { duration: 5000 }
+      );
+      
+      setSelectedMeterIds(new Set());
+      fetchMeters();
+      
+    } catch (error) {
+      console.error('Error deleting CSV data:', error);
+      toast.error("Failed to delete CSV data: " + (error instanceof Error ? error.message : 'Unknown error'));
+    } finally {
+      setIsBulkCsvDeleting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-2">
@@ -509,15 +586,26 @@ export default function MetersTab({ siteId }: MetersTabProps) {
         </div>
         <div className="flex gap-2">
           {selectedMeterIds.size > 0 && (
-            <Button
-              variant="destructive"
-              onClick={handleBulkDelete}
-              disabled={isBulkDeleting}
-              className="gap-2"
-            >
-              <Trash className="w-4 h-4" />
-              Delete {selectedMeterIds.size} Selected
-            </Button>
+            <>
+              <Button
+                variant="outline"
+                onClick={handleBulkDeleteCsvData}
+                disabled={isBulkCsvDeleting}
+                className="gap-2"
+              >
+                <Database className="w-4 h-4" />
+                Delete CSV Data ({selectedMeterIds.size})
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleBulkDelete}
+                disabled={isBulkDeleting}
+                className="gap-2"
+              >
+                <Trash className="w-4 h-4" />
+                Delete {selectedMeterIds.size} Selected
+              </Button>
+            </>
           )}
           <CsvBulkIngestionTool siteId={siteId} onDataChange={fetchMeters} />
           <Dialog open={isDialogOpen} onOpenChange={handleCloseDialog}>
