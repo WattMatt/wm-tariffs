@@ -747,7 +747,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
 
           <Button onClick={handlePreview} disabled={isLoadingPreview || !dateFrom || !dateTo} className="w-full">
             <Eye className="mr-2 h-4 w-4" />
-            {isLoadingPreview ? "Loading Preview..." : "Preview Bulk Meter Data"}
+            {isLoadingPreview ? "Loading Preview..." : "Preview Site Reconciliation"}
           </Button>
         </CardContent>
       </Card>
