@@ -9,12 +9,13 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, Gauge, Upload, Pencil, Trash2, Database, Trash } from "lucide-react";
+import { Plus, Gauge, Upload, Pencil, Trash2, Database, Trash, Settings2 } from "lucide-react";
 import { toast } from "sonner";
 import CsvImportDialog from "./CsvImportDialog";
 import MeterReadingsView from "./MeterReadingsView";
 import CsvBulkIngestionTool from "./CsvBulkIngestionTool";
 import SingleCsvUploadDialog from "./SingleCsvUploadDialog";
+import SingleMeterCsvParseDialog from "./SingleMeterCsvParseDialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -82,6 +83,9 @@ export default function MetersTab({ siteId }: MetersTabProps) {
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [isBulkCsvDeleting, setIsBulkCsvDeleting] = useState(false);
   const [csvDeletionProgress, setCsvDeletionProgress] = useState({ filesDeleted: 0, totalMeters: 0, processedMeters: 0 });
+  const [parseDialogOpen, setParseDialogOpen] = useState(false);
+  const [parseMeterId, setParseMeterId] = useState<string | null>(null);
+  const [parseMeterNumber, setParseMeterNumber] = useState<string>("");
 
   useEffect(() => {
     fetchMeters();
@@ -918,6 +922,18 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                         >
                           <Upload className="w-4 h-4" />
                         </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setParseMeterId(meter.id);
+                            setParseMeterNumber(meter.meter_number);
+                            setParseDialogOpen(true);
+                          }}
+                          title="Parse CSV data"
+                        >
+                          <Settings2 className="w-4 h-4" />
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -949,6 +965,20 @@ export default function MetersTab({ siteId }: MetersTabProps) {
         }}
         meterId={viewReadingsMeterId || ""}
         meterNumber={viewReadingsMeterNumber}
+      />
+
+      <SingleMeterCsvParseDialog
+        isOpen={parseDialogOpen}
+        onClose={() => {
+          setParseDialogOpen(false);
+          setParseMeterId(null);
+          setParseMeterNumber("");
+        }}
+        meterId={parseMeterId || ""}
+        meterNumber={parseMeterNumber}
+        onParseComplete={() => {
+          fetchMeters();
+        }}
       />
 
       <Dialog open={isRawCsvViewOpen} onOpenChange={setIsRawCsvViewOpen}>
