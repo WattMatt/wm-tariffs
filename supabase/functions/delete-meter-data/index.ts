@@ -39,66 +39,70 @@ Deno.serve(async (req) => {
 
     console.log(`Starting deletion for ${meterIds.length} meters`);
 
-    // Step 1: Get all CSV file paths for these meters
-    const { data: csvFiles, error: fetchError } = await supabase
-      .from('meter_csv_files')
-      .select('file_path')
-      .in('meter_id', meterIds);
-    
-    if (fetchError) {
-      console.error('CSV files fetch error:', fetchError);
-      throw new Error(`Failed to fetch CSV files: ${fetchError.message}`);
-    }
+    let totalFilesDeleted = 0;
+    let totalReadingsDeleted = 0;
 
-    const filePaths = csvFiles?.map(f => f.file_path) || [];
-    console.log(`Found ${filePaths.length} CSV files to delete`);
+    // Process each meter individually to avoid timeouts
+    for (const meterId of meterIds) {
+      console.log(`Processing meter: ${meterId}`);
 
-    // Step 2: Delete files from storage (if any exist)
-    let deletedFilesCount = 0;
-    if (filePaths.length > 0) {
-      const { data, error } = await supabase.storage
-        .from('meter-csvs')
-        .remove(filePaths);
-
-      if (error) {
-        console.error('Storage deletion error:', error);
-        throw new Error(`Failed to delete files from storage: ${error.message}`);
+      // Step 1: Get CSV file paths for this meter
+      const { data: csvFiles, error: fetchError } = await supabase
+        .from('meter_csv_files')
+        .select('file_path')
+        .eq('meter_id', meterId);
+      
+      if (fetchError) {
+        console.error(`CSV files fetch error for meter ${meterId}:`, fetchError);
+        continue; // Continue with next meter instead of failing completely
       }
 
-      deletedFilesCount = filePaths.length;
-      console.log(`Deleted ${deletedFilesCount} files from storage`);
+      const filePaths = csvFiles?.map(f => f.file_path) || [];
+      
+      // Step 2: Delete files from storage (if any exist)
+      if (filePaths.length > 0) {
+        const { error } = await supabase.storage
+          .from('meter-csvs')
+          .remove(filePaths);
+
+        if (error) {
+          console.error(`Storage deletion error for meter ${meterId}:`, error);
+        } else {
+          totalFilesDeleted += filePaths.length;
+          console.log(`Deleted ${filePaths.length} files for meter ${meterId}`);
+        }
+      }
+
+      // Step 3: Delete meter readings for this meter
+      const { data: deleteResult, error: deleteError } = await supabase
+        .rpc('delete_meter_readings_by_ids', { p_meter_ids: [meterId] });
+
+      if (deleteError) {
+        console.error(`Readings delete error for meter ${meterId}:`, deleteError);
+      } else {
+        const readingsDeleted = deleteResult?.[0]?.total_deleted || 0;
+        totalReadingsDeleted += readingsDeleted;
+        console.log(`Deleted ${readingsDeleted} readings for meter ${meterId}`);
+      }
+
+      // Step 4: Delete CSV file metadata for this meter
+      const { error: csvError } = await supabase
+        .from('meter_csv_files')
+        .delete()
+        .eq('meter_id', meterId);
+
+      if (csvError) {
+        console.error(`CSV metadata delete error for meter ${meterId}:`, csvError);
+      }
     }
 
-    // Step 3: Delete meter readings using database function with extended timeout
-    const { data: deleteResult, error: deleteError } = await supabase
-      .rpc('delete_meter_readings_by_ids', { p_meter_ids: meterIds });
-
-    if (deleteError) {
-      console.error('Readings delete error:', deleteError);
-      throw new Error(`Failed to delete readings: ${deleteError.message}`);
-    }
-
-    const totalReadingsDeleted = deleteResult?.[0]?.total_deleted || 0;
-    console.log(`Successfully deleted ${totalReadingsDeleted} meter readings`);
-
-    // Step 4: Delete CSV file metadata
-    const { error: csvError } = await supabase
-      .from('meter_csv_files')
-      .delete()
-      .in('meter_id', meterIds);
-
-    if (csvError) {
-      console.error('CSV metadata delete error:', csvError);
-      throw new Error(`Failed to delete CSV metadata: ${csvError.message}`);
-    }
-
-    console.log(`Successfully deleted all data for ${meterIds.length} meters`);
+    console.log(`Successfully processed ${meterIds.length} meters`);
 
     return new Response(
       JSON.stringify({ 
         success: true,
         metersProcessed: meterIds.length,
-        filesDeleted: deletedFilesCount,
+        filesDeleted: totalFilesDeleted,
         readingsDeleted: totalReadingsDeleted
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
