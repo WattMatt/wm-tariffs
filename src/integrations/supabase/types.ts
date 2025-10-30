@@ -964,6 +964,7 @@ export type Database = {
           deleted_lines: number
           deleted_meters: number
           deleted_positions: number
+          deleted_snippets: number
         }[]
       }
       delete_site_readings: {
