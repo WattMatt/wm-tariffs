@@ -472,21 +472,32 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
           </AlertDialogContent>
         </AlertDialog>
 
-        {/* Schematic Viewer Dialog */}
-        <Dialog open={!!viewingSchematic} onOpenChange={() => setViewingSchematic(null)}>
-          <DialogContent className="max-w-[98vw] w-full h-[98vh] p-0">
-            <div className="h-full w-full">
-              {viewingSchematic && schematicUrl && (
-                <SchematicEditor
-                  schematicId={viewingSchematic.id}
-                  schematicUrl={schematicUrl}
-                  siteId={siteId}
-                  filePath={viewingSchematic.converted_image_path || viewingSchematic.file_path}
-                />
-              )}
+        {/* Inline Schematic Viewer */}
+        {viewingSchematic && schematicUrl && (
+          <div className="mt-6 border rounded-lg overflow-hidden">
+            <div className="flex items-center justify-between p-4 bg-muted">
+              <h3 className="font-semibold">{viewingSchematic.name}</h3>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setViewingSchematic(null);
+                  setSchematicUrl("");
+                }}
+              >
+                Close Viewer
+              </Button>
             </div>
-          </DialogContent>
-        </Dialog>
+            <div className="h-[600px]">
+              <SchematicEditor
+                schematicId={viewingSchematic.id}
+                schematicUrl={schematicUrl}
+                siteId={siteId}
+                filePath={viewingSchematic.converted_image_path || viewingSchematic.file_path}
+              />
+            </div>
+          </div>
+        )}
       </div>
     );
   }
