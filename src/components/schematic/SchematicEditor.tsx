@@ -2713,8 +2713,8 @@ export default function SchematicEditor({
             lockRotation: true,
             lockScalingX: true,
             lockScalingY: true,
-            stroke: isEditMode ? borderColor : undefined,
-            strokeWidth: isEditMode ? strokeWidth : 0,
+            stroke: borderColor,
+            strokeWidth: strokeWidth,
           });
           
           // Hide rotation control
