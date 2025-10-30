@@ -262,14 +262,15 @@ export default function SingleMeterCsvParseDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="parse" className="flex-1 overflow-hidden flex flex-col">
-          <TabsList className="grid w-full grid-cols-2">
+        <Tabs defaultValue="parse" className="flex-1 overflow-hidden flex flex-col min-h-0">
+          <TabsList className="grid w-full grid-cols-2 shrink-0">
             <TabsTrigger value="parse">Parsing Configuration</TabsTrigger>
             <TabsTrigger value="preview">Preview</TabsTrigger>
           </TabsList>
 
-          <ScrollArea className="flex-1">
-            <TabsContent value="parse" className="space-y-4 p-4">
+          <div className="flex-1 overflow-hidden">
+            <ScrollArea className="h-full">
+              <TabsContent value="parse" className="space-y-4 p-4 mt-0">
               {/* File Selection Card */}
               <Card>
                 <CardHeader>
@@ -538,9 +539,9 @@ export default function SingleMeterCsvParseDialog({
                   </CardContent>
                 </Card>
               )}
-            </TabsContent>
+              </TabsContent>
 
-            <TabsContent value="preview" className="space-y-4 p-4">
+              <TabsContent value="preview" className="space-y-4 p-4 mt-0">
               {!previewData ? (
                 <div className="text-center py-8 text-muted-foreground">
                   Load a preview first to see the data
@@ -583,8 +584,9 @@ export default function SingleMeterCsvParseDialog({
                   </CardContent>
                 </Card>
               )}
-            </TabsContent>
-          </ScrollArea>
+              </TabsContent>
+            </ScrollArea>
+          </div>
         </Tabs>
 
         <div className="flex justify-between items-center pt-4 border-t">
