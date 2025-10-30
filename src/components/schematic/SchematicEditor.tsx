@@ -359,6 +359,7 @@ async function renderMeterCardOnCanvas(
       (img as any).meterCardType = 'extracted';
       
       canvas.add(img);
+      canvas.bringObjectToFront(img);
       ensureBackgroundAtBottom(canvas);
       canvas.renderAll();
       resolve(img);
@@ -2774,6 +2775,7 @@ export default function SchematicEditor({
               originY: 'top',
             });
             fabricCanvas.add(border);
+            ensureBackgroundAtBottom(fabricCanvas);
           }
 
           fabricCanvas.add(img);
@@ -3233,6 +3235,8 @@ export default function SchematicEditor({
       });
     });
 
+    // Ensure background is at the very bottom after all objects are added
+    ensureBackgroundAtBottom(fabricCanvas);
     fabricCanvas.renderAll();
   }, [fabricCanvas, meterPositions, meters, activeTool, extractedMeters, legendVisibility, selectedExtractedMeterIds]);
 
@@ -3458,6 +3462,8 @@ export default function SchematicEditor({
       });
     });
 
+    // Ensure background stays at bottom after adding all connection lines
+    ensureBackgroundAtBottom(fabricCanvas);
     fabricCanvas.renderAll();
   }, [fabricCanvas, schematicLines, selectedConnectionKeys]);
 
