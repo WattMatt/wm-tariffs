@@ -2771,23 +2771,21 @@ export default function SchematicEditor({
             toast.success('Meter position updated');
           });
 
-          // Add border overlay if selected
-          if (isSelected) {
-            const border = new Rect({
-              left: x,
-              top: y,
-              width: cardWidth,
-              height: cardHeight,
-              fill: 'transparent',
-              stroke: borderColor,
-              strokeWidth: strokeWidth,
-              selectable: false,
-              evented: false,
-              originX: 'left',
-              originY: 'top',
-            });
-            fabricCanvas.add(border);
-          }
+          // Add border overlay for consistent stroke width
+          const border = new Rect({
+            left: x,
+            top: y,
+            width: cardWidth,
+            height: cardHeight,
+            fill: 'transparent',
+            stroke: borderColor,
+            strokeWidth: strokeWidth,
+            selectable: false,
+            evented: false,
+            originX: 'left',
+            originY: 'top',
+          });
+          fabricCanvas.add(border);
 
           fabricCanvas.add(img);
           fabricCanvas.bringObjectToFront(img);
