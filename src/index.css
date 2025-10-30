@@ -7,12 +7,6 @@ All colors MUST be HSL.
 */
 
 @layer base {
-  @keyframes dash-flow {
-    to {
-      stroke-dashoffset: -15;
-    }
-  }
-
   :root {
     --background: 220 25% 98%;
     --foreground: 220 40% 10%;
