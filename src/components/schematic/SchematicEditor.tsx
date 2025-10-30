@@ -4913,15 +4913,27 @@ export default function SchematicEditor({
             {/* Extracted Meters Status */}
             <Badge 
               variant="outline" 
-              className={`cursor-pointer transition-all select-none ${!showUnconfirmed ? 'opacity-40' : 'hover:bg-muted'}`}
-              onClick={() => setShowUnconfirmed(!showUnconfirmed)}
+              className={`cursor-pointer transition-all select-none ${
+                meters.every((m: any) => m.confirmation_status === 'confirmed') 
+                  ? 'opacity-40 cursor-not-allowed' 
+                  : !showUnconfirmed 
+                    ? 'opacity-40' 
+                    : 'hover:bg-muted'
+              }`}
+              onClick={() => {
+                if (!meters.every((m: any) => m.confirmation_status === 'confirmed')) {
+                  setShowUnconfirmed(!showUnconfirmed);
+                }
+              }}
               onDoubleClick={() => {
-                if (showUnconfirmed && !showConfirmed) {
-                  setShowUnconfirmed(true);
-                  setShowConfirmed(true);
-                } else {
-                  setShowUnconfirmed(true);
-                  setShowConfirmed(false);
+                if (!meters.every((m: any) => m.confirmation_status === 'confirmed')) {
+                  if (showUnconfirmed && !showConfirmed) {
+                    setShowUnconfirmed(true);
+                    setShowConfirmed(true);
+                  } else {
+                    setShowUnconfirmed(true);
+                    setShowConfirmed(false);
+                  }
                 }
               }}
             >
@@ -4930,15 +4942,27 @@ export default function SchematicEditor({
             </Badge>
             <Badge 
               variant="outline" 
-              className={`cursor-pointer transition-all select-none ${!showConfirmed ? 'opacity-40' : 'hover:bg-muted'}`}
-              onClick={() => setShowConfirmed(!showConfirmed)}
+              className={`cursor-pointer transition-all select-none ${
+                meters.every((m: any) => m.confirmation_status === 'confirmed') 
+                  ? 'opacity-40 cursor-not-allowed' 
+                  : !showConfirmed 
+                    ? 'opacity-40' 
+                    : 'hover:bg-muted'
+              }`}
+              onClick={() => {
+                if (!meters.every((m: any) => m.confirmation_status === 'confirmed')) {
+                  setShowConfirmed(!showConfirmed);
+                }
+              }}
               onDoubleClick={() => {
-                if (showConfirmed && !showUnconfirmed) {
-                  setShowUnconfirmed(true);
-                  setShowConfirmed(true);
-                } else {
-                  setShowUnconfirmed(false);
-                  setShowConfirmed(true);
+                if (!meters.every((m: any) => m.confirmation_status === 'confirmed')) {
+                  if (showConfirmed && !showUnconfirmed) {
+                    setShowUnconfirmed(true);
+                    setShowConfirmed(true);
+                  } else {
+                    setShowUnconfirmed(false);
+                    setShowConfirmed(true);
+                  }
                 }
               }}
             >
