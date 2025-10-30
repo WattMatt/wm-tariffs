@@ -1351,33 +1351,30 @@ export default function SchematicEditor({
         
         // Only start drag selection immediately if clicking on empty space or background
         if (!target || (target as any).isBackgroundImage) {
+          // Clear all selections when clicking on empty space
+          if (canvas) {
+            canvas.getObjects().forEach((obj: any) => {
+              if (obj.type === 'rect' && obj.regionId) {
+                obj.set({ stroke: '#3b82f6', strokeWidth: 2 });
+              }
+              // Remove selection marker rectangles
+              if (obj.type === 'rect' && obj.selectionMarker) {
+                canvas.remove(obj);
+              }
+            });
+            canvas.renderAll();
+          }
+          setSelectedRegionIndices([]);
+          setSelectedMeterIds([]);
+          setSelectedConnectionKeys([]);
+          
           isDragSelecting = true;
-          return; // Don't proceed with clearing selections yet
+          return;
         }
         // If clicking on a meter/region, wait to see if user drags (handled in mouse:move)
         return; // Don't proceed with immediate selection toggle
       }
       
-      // This block is now unreachable as we handle background clicks above
-      if (false && isSelectionModeRef.current && (!target || (target as any).isBackgroundImage)) {
-        // Clear all selections
-        if (canvas) {
-          canvas.getObjects().forEach((obj: any) => {
-            if (obj.type === 'rect' && obj.regionId) {
-              obj.set({ stroke: '#3b82f6', strokeWidth: 2 });
-            }
-            // Remove selection marker rectangles
-            if (obj.type === 'rect' && obj.selectionMarker) {
-              canvas.remove(obj);
-            }
-          });
-          canvas.renderAll();
-        }
-        setSelectedRegionIndices([]);
-        setSelectedMeterIds([]);
-        setSelectedConnectionKeys([]);
-        return;
-      }
       
       // Handle selection: single-click when selection mode is active
       const shouldHandleSelection = isSelectionModeRef.current && target;
