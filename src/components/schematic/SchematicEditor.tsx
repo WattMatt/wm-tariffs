@@ -2673,7 +2673,7 @@ export default function SchematicEditor({
         fillColor = '#fff7ed';
       }
       
-      const strokeWidth = isSelected ? 4 : 3;
+      const strokeWidth = isSelected ? 8 : 6;
       
       const rowHeight = cardHeight / 7;
 
@@ -2938,7 +2938,7 @@ export default function SchematicEditor({
             hoverCursor: isEditMode ? 'move' : 'pointer',
             lockRotation: true,
             stroke: borderColor,
-            strokeWidth: isEditMode ? 4 : 3,
+            strokeWidth: isEditMode ? 8 : 6,
           });
           
           // Hide rotation control
