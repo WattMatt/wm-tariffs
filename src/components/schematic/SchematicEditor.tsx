@@ -89,7 +89,7 @@ import { Canvas as FabricCanvas, Circle, Line, Text, FabricImage, Rect, Polygon,
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Save, Zap, Link2, Trash2, Upload, Plus, ZoomIn, ZoomOut, Maximize2, Pencil, Scan, Check, Edit, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { Save, Zap, Link2, Trash2, Upload, Plus, ZoomIn, ZoomOut, Maximize2, Pencil, Scan, Check, Edit, ChevronLeft, ChevronRight, Loader2, ImageIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -539,6 +539,8 @@ export default function SchematicEditor({
   const [viewingMeter, setViewingMeter] = useState<any>(null);
   const [showUnconfirmed, setShowUnconfirmed] = useState(true);
   const [showConfirmed, setShowConfirmed] = useState(true);
+  const [showConnections, setShowConnections] = useState(true);
+  const [showBackground, setShowBackground] = useState(true);
   const [isConnectionsDialogOpen, setIsConnectionsDialogOpen] = useState(false);
   const [connectionStart, setConnectionStart] = useState<{ meterId: string; position: { x: number; y: number } } | null>(null);
   const [connectionPoints, setConnectionPoints] = useState<Array<{ meterId: string; position: { x: number; y: number } }>>([]);
@@ -3337,6 +3339,12 @@ export default function SchematicEditor({
         fabricCanvas.remove(obj);
       }
     });
+    
+    // If connections are hidden, just return after removing them
+    if (!showConnections) {
+      fabricCanvas.renderAll();
+      return;
+    }
 
     // Find background image index for proper layering
     const backgroundIndex = fabricCanvas.getObjects().findIndex(obj => (obj as any).isBackgroundImage);
@@ -3475,7 +3483,20 @@ export default function SchematicEditor({
     });
 
     fabricCanvas.renderAll();
-  }, [fabricCanvas, schematicLines, selectedConnectionKeys]);
+  }, [fabricCanvas, schematicLines, selectedConnectionKeys, showConnections]);
+
+  // Toggle background visibility
+  useEffect(() => {
+    if (!fabricCanvas) return;
+    
+    fabricCanvas.getObjects().forEach((obj: any) => {
+      if (obj.isBackgroundImage) {
+        obj.set({ visible: showBackground });
+      }
+    });
+    
+    fabricCanvas.renderAll();
+  }, [fabricCanvas, showBackground]);
 
 
   const handleCanvasClick = async (e: any) => {
@@ -4984,6 +5005,28 @@ export default function SchematicEditor({
             >
               <div className="w-3 h-3 rounded-full bg-[#16a34a] border-2 border-[#16a34a] mr-2" />
               Confirmed
+            </Badge>
+            
+            <Separator orientation="vertical" className="h-6 mx-1" />
+            
+            {/* Connections Visibility Toggle */}
+            <Badge 
+              variant="outline" 
+              className={`cursor-pointer transition-all hover:scale-105 select-none ${!showConnections ? 'opacity-40' : 'hover:bg-muted'}`}
+              onClick={() => setShowConnections(!showConnections)}
+            >
+              <Link2 className="w-3 h-3 mr-2" />
+              Connections
+            </Badge>
+            
+            {/* Background Visibility Toggle */}
+            <Badge 
+              variant="outline" 
+              className={`cursor-pointer transition-all hover:scale-105 select-none ${!showBackground ? 'opacity-40' : 'hover:bg-muted'}`}
+              onClick={() => setShowBackground(!showBackground)}
+            >
+              <ImageIcon className="w-3 h-3 mr-2" />
+              Background
             </Badge>
           </div>
         </div>
