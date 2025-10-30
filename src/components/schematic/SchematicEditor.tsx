@@ -814,6 +814,12 @@ export default function SchematicEditor({
                 stroke: borderColor,
                 strokeWidth: 3
               });
+            } else if (zone === 'council') {
+              borderColor = '#f59e0b'; // amber for Council
+              obj.set({
+                stroke: borderColor,
+                strokeWidth: 3
+              });
             } else {
               // No zone: no border in normal mode
               obj.set({
@@ -2858,6 +2864,8 @@ export default function SchematicEditor({
           borderColor = '#9333ea'; // purple for Main Board
         } else if (zone === 'mini_sub') {
           borderColor = '#06b6d4'; // cyan for Mini Sub
+        } else if (zone === 'council') {
+          borderColor = '#f59e0b'; // amber for Council
         } else {
           // No zone: no border in normal mode
           borderColor = 'transparent';
@@ -2869,6 +2877,8 @@ export default function SchematicEditor({
         categoryKey = 'main_board_zone';
       } else if (zone === 'mini_sub') {
         categoryKey = 'mini_sub_zone';
+      } else if (zone === 'council') {
+        categoryKey = 'council_connection_zone';
       } else if (meterType.includes('bulk')) {
         categoryKey = 'bulk_meter';
       } else if (meterType.includes('check')) {
@@ -2905,7 +2915,7 @@ export default function SchematicEditor({
 
       // Add zone field if present
       if (zone) {
-        const zoneName = zone === 'main_board' ? 'MAIN BOARD' : zone === 'mini_sub' ? 'MINI SUB' : zone;
+        const zoneName = zone === 'main_board' ? 'MAIN BOARD' : zone === 'mini_sub' ? 'MINI SUB' : zone === 'council' ? 'COUNCIL' : zone;
         fields.splice(2, 0, { label: 'ZONE:', value: zoneName });
       }
 
@@ -4669,7 +4679,7 @@ export default function SchematicEditor({
                 }
               }}
             >
-              <div className="w-3 h-3 rounded-full bg-[#ec4899] mr-2" />
+              <div className="w-3 h-3 rounded-full bg-[#f59e0b] mr-2" />
               Council
             </Badge>
             
