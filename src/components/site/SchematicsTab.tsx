@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -13,6 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Plus, FileText, Upload, Eye, Network, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import MeterConnectionsDialog from "@/components/schematic/MeterConnectionsDialog";
+import SchematicEditor from "@/components/schematic/SchematicEditor";
 
 interface Schematic {
   id: string;
@@ -31,7 +31,6 @@ interface SchematicsTabProps {
 }
 
 export default function SchematicsTab({ siteId }: SchematicsTabProps) {
-  const navigate = useNavigate();
   const [schematics, setSchematics] = useState<Schematic[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -41,6 +40,8 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
   const [schematicToDelete, setSchematicToDelete] = useState<Schematic | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isFetching, setIsFetching] = useState(true);
+  const [viewingSchematic, setViewingSchematic] = useState<Schematic | null>(null);
+  const [schematicUrl, setSchematicUrl] = useState<string>("");
 
   useEffect(() => {
     fetchSchematics();
@@ -413,7 +414,16 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
                         <Button
                           variant="outline"
                           size="icon"
-                          onClick={() => navigate(`/schematics/${schematic.id}`)}
+                          onClick={async () => {
+                            // Get the schematic URL
+                            const path = schematic.converted_image_path || schematic.file_path;
+                            const { data } = supabase.storage
+                              .from("schematics")
+                              .getPublicUrl(path);
+                            
+                            setSchematicUrl(data.publicUrl);
+                            setViewingSchematic(schematic);
+                          }}
                         >
                           <Eye className="w-4 h-4" />
                         </Button>
@@ -461,6 +471,22 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* Schematic Viewer Dialog */}
+        <Dialog open={!!viewingSchematic} onOpenChange={() => setViewingSchematic(null)}>
+          <DialogContent className="max-w-[98vw] w-full h-[98vh] p-0">
+            <div className="h-full w-full">
+              {viewingSchematic && schematicUrl && (
+                <SchematicEditor
+                  schematicId={viewingSchematic.id}
+                  schematicUrl={schematicUrl}
+                  siteId={siteId}
+                  filePath={viewingSchematic.converted_image_path || viewingSchematic.file_path}
+                />
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }
