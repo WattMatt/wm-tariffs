@@ -866,20 +866,6 @@ export default function SchematicEditor({
       preserveObjectStacking: true,
     });
     
-    // Global mousemove handler for panning
-    const handleGlobalMouseMove = (e: MouseEvent) => {
-      if (isPanningRef.current && lastPanPositionRef.current) {
-        e.preventDefault();
-        const deltaX = e.clientX - lastPanPositionRef.current.x;
-        const deltaY = e.clientY - lastPanPositionRef.current.y;
-        
-        canvas.relativePan(new Point(deltaX, deltaY));
-        
-        lastPanPositionRef.current = { x: e.clientX, y: e.clientY };
-        canvas.renderAll();
-      }
-    };
-    
     // Add native mousedown listener with capture to intercept middle mouse button
     const handleNativeMouseDown = (e: MouseEvent) => {
       if (e.button === 1) {
@@ -890,9 +876,6 @@ export default function SchematicEditor({
         isPanningRef.current = true;
         lastPanPositionRef.current = { x: e.clientX, y: e.clientY };
         canvas.selection = false;
-        
-        // Add global mousemove listener for panning that works even outside the window
-        window.addEventListener('mousemove', handleGlobalMouseMove);
       }
     };
     
@@ -904,9 +887,6 @@ export default function SchematicEditor({
         isPanningRef.current = false;
         lastPanPositionRef.current = null;
         canvas.selection = true;
-        
-        // Remove global mousemove listener
-        window.removeEventListener('mousemove', handleGlobalMouseMove);
       }
     };
     window.addEventListener('mouseup', handleMouseUp);
@@ -1505,8 +1485,15 @@ export default function SchematicEditor({
       const evt = opt.e as MouseEvent;
       let pointer = canvas.getPointer(opt.e);
       
-      // Skip canvas mouse:move handling if panning (handled by global listener now)
-      if (isPanningRef.current) {
+      // Handle middle mouse button panning
+      if (isPanningRef.current && lastPanPositionRef.current) {
+        const deltaX = evt.clientX - lastPanPositionRef.current.x;
+        const deltaY = evt.clientY - lastPanPositionRef.current.y;
+        
+        canvas.relativePan(new Point(deltaX, deltaY));
+        
+        lastPanPositionRef.current = { x: evt.clientX, y: evt.clientY };
+        canvas.renderAll();
         return;
       }
       
@@ -2508,7 +2495,6 @@ export default function SchematicEditor({
     return () => {
       window.removeEventListener('mousedown', handleNativeMouseDown, true);
       window.removeEventListener('mouseup', handleMouseUp);
-      window.removeEventListener('mousemove', handleGlobalMouseMove);
       canvas.dispose();
     };
   }, [schematicUrl]);
