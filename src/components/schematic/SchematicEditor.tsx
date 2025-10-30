@@ -1599,7 +1599,7 @@ export default function SchematicEditor({
           top,
           width,
           height,
-          fill: 'rgba(16, 185, 129, 0.1)',
+          fill: 'rgba(16, 185, 129, 0.2)',
           stroke: '#10b981',
           strokeWidth: 2,
           strokeDashArray: [5, 5],
