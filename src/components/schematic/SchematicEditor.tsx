@@ -485,7 +485,7 @@ export default function SchematicEditor({
   const drawingRectRef = useRef<any>(null);
   const drawStartPointRef = useRef<{ x: number; y: number } | null>(null);
   const startMarkerRef = useRef<any>(null);
-  const selectionBoxRef = useRef<any>(null); // For shift+drag multi-select box
+  const selectionBoxRef = useRef<any>(null); // For drag multi-select box
   const isPanningRef = useRef(false);
   const lastPanPositionRef = useRef<{ x: number; y: number } | null>(null);
   const [meters, setMeters] = useState<any[]>([]);
@@ -947,10 +947,10 @@ export default function SchematicEditor({
     });
 
 
-    // Mouse handlers for drawing rectangles when in draw mode AND Shift+click selection AND Shift+drag multi-select
+    // Mouse handlers for drawing rectangles when in draw mode AND drag multi-select
     let isDrawing = false;
-    let isShiftDragSelecting = false;
-    let shiftClickTarget: any = null; // Track target clicked with shift for deferred selection
+    let isDragSelecting = false;
+    let clickTarget: any = null; // Track target clicked for deferred selection
     let startPoint: { x: number; y: number } | null = null;
     
     canvas.on('mouse:down', (opt) => {
@@ -1324,22 +1324,23 @@ export default function SchematicEditor({
         return;
       }
       
-      // Handle Shift+drag multi-select in selection mode (when shift pressed)
-      if (evt.shiftKey && isSelectionModeRef.current) {
+      // Handle drag multi-select in selection mode
+      if (isSelectionModeRef.current) {
         const pointer = canvas.getPointer(opt.e);
         startPoint = { x: pointer.x, y: pointer.y };
-        shiftClickTarget = target; // Store the target for potential click-to-select
+        clickTarget = target; // Store the target for potential click-to-select
         
-        // Only start shift-drag immediately if clicking on empty space or background
+        // Only start drag selection immediately if clicking on empty space or background
         if (!target || (target as any).isBackgroundImage) {
-          isShiftDragSelecting = true;
+          isDragSelecting = true;
+          return; // Don't proceed with clearing selections yet
         }
         // If clicking on a meter/region, wait to see if user drags (handled in mouse:move)
         return; // Don't proceed with immediate selection toggle
       }
       
-      // Handle clicking on empty space in selection mode - clear all selections
-      if (isSelectionModeRef.current && (!target || (target as any).isBackgroundImage) && !evt.shiftKey) {
+      // This block is now unreachable as we handle background clicks above
+      if (false && isSelectionModeRef.current && (!target || (target as any).isBackgroundImage)) {
         // Clear all selections
         if (canvas) {
           canvas.getObjects().forEach((obj: any) => {
@@ -1359,8 +1360,8 @@ export default function SchematicEditor({
         return;
       }
       
-      // Handle selection: single-click when selection mode is active (but NOT shift-click, which is handled above)
-      const shouldHandleSelection = isSelectionModeRef.current && target && !evt.shiftKey;
+      // Handle selection: single-click when selection mode is active
+      const shouldHandleSelection = isSelectionModeRef.current && target;
       if (shouldHandleSelection) {
         // Handle region rectangle selection
         if (target.type === 'rect' && (target as any).regionId) {
@@ -1549,22 +1550,22 @@ export default function SchematicEditor({
         return;
       }
       
-      // Check if user is dragging with shift held and selection mode active
-      // Enable shift-drag selection if they started with shift+click and are now moving
-      if (evt.shiftKey && isSelectionModeRef.current && startPoint && !isShiftDragSelecting) {
+      // Check if user is dragging in selection mode
+      // Enable drag selection if they started with click and are now moving
+      if (isSelectionModeRef.current && startPoint && !isDragSelecting) {
         const distance = Math.sqrt(
           Math.pow(pointer.x - startPoint.x, 2) + Math.pow(pointer.y - startPoint.y, 2)
         );
         
         // Start selection if moved more than 5 pixels (prevents accidental drags)
         if (distance > 5) {
-          isShiftDragSelecting = true;
-          shiftClickTarget = null; // Clear click target since we're now dragging
+          isDragSelecting = true;
+          clickTarget = null; // Clear click target since we're now dragging
         }
       }
       
-      // Handle shift+drag multi-select box
-      if (isShiftDragSelecting && startPoint) {
+      // Handle drag multi-select box
+      if (isDragSelecting && startPoint) {
         // Remove previous selection box
         if (selectionBoxRef.current) {
           canvas.remove(selectionBoxRef.current);
@@ -1638,8 +1639,8 @@ export default function SchematicEditor({
         return;
       }
       
-      // Handle shift+drag multi-select completion
-      if (isShiftDragSelecting && startPoint) {
+      // Handle drag multi-select completion
+      if (isDragSelecting && startPoint) {
         const pointer = canvas.getPointer(opt.e);
         
         // Calculate selection box dimensions
@@ -1768,16 +1769,41 @@ export default function SchematicEditor({
           selectionBoxRef.current = null;
         }
         
-        isShiftDragSelecting = false;
+        isDragSelecting = false;
         startPoint = null;
-        shiftClickTarget = null;
+        clickTarget = null;
         canvas.renderAll();
         return;
       }
       
-      // Handle shift+click (no drag) - toggle selection of the clicked target
-      if (evt.shiftKey && shiftClickTarget && !isShiftDragSelecting && isSelectionModeRef.current) {
-        const target = shiftClickTarget;
+      // Handle click (no drag) on empty space - clear all selections
+      if (clickTarget && (!clickTarget.type || (clickTarget as any).isBackgroundImage) && !isDragSelecting && isSelectionModeRef.current) {
+        // Clear all selections
+        if (canvas) {
+          canvas.getObjects().forEach((obj: any) => {
+            if (obj.type === 'rect' && obj.regionId) {
+              obj.set({ stroke: '#3b82f6', strokeWidth: 2 });
+            }
+            // Remove selection marker rectangles
+            if (obj.type === 'rect' && obj.selectionMarker) {
+              canvas.remove(obj);
+            }
+          });
+          canvas.renderAll();
+        }
+        setSelectedRegionIndices([]);
+        setSelectedMeterIds([]);
+        setSelectedConnectionKeys([]);
+        
+        clickTarget = null;
+        startPoint = null;
+        canvas.renderAll();
+        return;
+      }
+      
+      // Handle click (no drag) - toggle selection of the clicked target
+      if (clickTarget && !isDragSelecting && isSelectionModeRef.current) {
+        const target = clickTarget;
         
         // Handle region rectangle selection
         if (target.type === 'rect' && (target as any).regionId) {
@@ -1847,14 +1873,14 @@ export default function SchematicEditor({
           });
         }
         
-        shiftClickTarget = null;
+        clickTarget = null;
         startPoint = null;
         canvas.renderAll();
         return;
       }
       
-      // Clear shift click target if we get here
-      shiftClickTarget = null;
+      // Clear click target if we get here
+      clickTarget = null;
       
       // Handle rectangle drawing completion
       if (isDrawing && startPoint && activeToolRef.current === 'draw') {
