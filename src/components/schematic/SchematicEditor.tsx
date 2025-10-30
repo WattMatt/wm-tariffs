@@ -4217,13 +4217,28 @@ export default function SchematicEditor({
           <Button
             variant="outline"
             onClick={() => {
-              setIsEditMode(!isEditMode);
               if (!isEditMode) {
+                setIsEditMode(true);
                 setActiveTool("select");
                 toast.success("Edit mode enabled");
               } else {
-                // Cancel edit mode and reset active tool
+                // Cancel edit mode and reset all selections
+                setIsEditMode(false);
                 setActiveTool("select");
+                activeToolRef.current = "select";
+                
+                // Clear all selections
+                setSelectedExtractedMeterIds([]);
+                setSelectedMeterIds([]);
+                setSelectedRegionIndices([]);
+                setSelectedConnectionKeys([]);
+                
+                // Deselect all canvas objects
+                if (fabricCanvas) {
+                  fabricCanvas.discardActiveObject();
+                  fabricCanvas.renderAll();
+                }
+                
                 toast.info("Edit mode cancelled - unsaved changes discarded");
               }
             }}
