@@ -521,48 +521,17 @@ export default function MetersTab({ siteId }: MetersTabProps) {
     try {
       const meterIds = Array.from(selectedMeterIds);
       
-      // Step 1: Get all CSV file paths for selected meters
-      const { data: csvFiles, error: fetchError } = await supabase
-        .from('meter_csv_files')
-        .select('file_path')
-        .in('meter_id', meterIds);
+      // Use edge function to handle batch deletion
+      const { data, error } = await supabase.functions.invoke('delete-meter-data', {
+        body: { meterIds }
+      });
       
-      if (fetchError) throw fetchError;
-      
-      const filePaths = csvFiles?.map(f => f.file_path) || [];
-      
-      // Step 2: Delete files from storage (if any exist)
-      let deletedFilesCount = 0;
-      if (filePaths.length > 0) {
-        const { data: deleteData, error: deleteError } = await supabase.functions.invoke('delete-meter-csvs', {
-          body: { filePaths }
-        });
-        
-        if (deleteError) throw deleteError;
-        if (!deleteData.success) throw new Error(deleteData.error || 'File deletion failed');
-        
-        deletedFilesCount = deleteData.deletedCount;
-      }
-      
-      // Step 3: Delete meter readings
-      const { error: readingsError } = await supabase
-        .from('meter_readings')
-        .delete()
-        .in('meter_id', meterIds);
-      
-      if (readingsError) throw readingsError;
-      
-      // Step 4: Delete CSV file metadata
-      const { error: csvError } = await supabase
-        .from('meter_csv_files')
-        .delete()
-        .in('meter_id', meterIds);
-      
-      if (csvError) throw csvError;
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error || 'Deletion failed');
       
       toast.success(
-        `Successfully deleted CSV data for ${selectedMeterIds.size} meter${selectedMeterIds.size !== 1 ? 's' : ''}: ` +
-        `${deletedFilesCount} file${deletedFilesCount !== 1 ? 's' : ''} removed from storage`,
+        `Successfully deleted CSV data for ${data.metersProcessed} meter${data.metersProcessed !== 1 ? 's' : ''}: ` +
+        `${data.filesDeleted} file${data.filesDeleted !== 1 ? 's' : ''} and ${data.readingsDeleted.toLocaleString()} reading${data.readingsDeleted !== 1 ? 's' : ''} removed`,
         { duration: 5000 }
       );
       
