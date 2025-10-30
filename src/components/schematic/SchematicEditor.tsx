@@ -457,7 +457,9 @@ export default function SchematicEditor({
   onExtractedMetersUpdate 
 }: SchematicEditorProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [fabricCanvas, setFabricCanvas] = useState<FabricCanvas | null>(null);
+  const [canvasDimensions, setCanvasDimensions] = useState({ width: 1400, height: 900 });
   const [isEditMode, setIsEditMode] = useState(false);
   
   // FABRIC.JS EVENT HANDLER PATTERN: State + Ref for tool selection
@@ -860,12 +862,44 @@ export default function SchematicEditor({
     fabricCanvas.renderAll();
   }, [showConfirmed, showUnconfirmed, fabricCanvas, meters]);
 
+  // Track container size and update canvas dimensions responsively
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    const updateCanvasSize = () => {
+      if (!containerRef.current) return;
+      
+      const containerWidth = containerRef.current.clientWidth;
+      // Maintain 16:10 aspect ratio (close to original 1400:900)
+      const containerHeight = Math.round(containerWidth * (900 / 1400));
+      
+      setCanvasDimensions({
+        width: containerWidth,
+        height: containerHeight
+      });
+    };
+
+    // Initial size calculation
+    updateCanvasSize();
+
+    // Create ResizeObserver to track container size changes
+    const resizeObserver = new ResizeObserver(() => {
+      updateCanvasSize();
+    });
+
+    resizeObserver.observe(containerRef.current);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, []);
+
   useEffect(() => {
     if (!canvasRef.current) return;
 
     const canvas = new FabricCanvas(canvasRef.current, {
-      width: 1400,
-      height: 900,
+      width: canvasDimensions.width,
+      height: canvasDimensions.height,
       backgroundColor: "#f8f9fa",
       selection: true,
       renderOnAddRemove: true,
@@ -2506,6 +2540,56 @@ export default function SchematicEditor({
       canvas.dispose();
     };
   }, [schematicUrl]);
+
+  // Resize canvas when dimensions change (without reinitializing)
+  useEffect(() => {
+    if (!fabricCanvas || !isCanvasReady) return;
+
+    const currentWidth = fabricCanvas.getWidth();
+    const currentHeight = fabricCanvas.getHeight();
+    
+    // Calculate scale factors
+    const scaleX = canvasDimensions.width / currentWidth;
+    const scaleY = canvasDimensions.height / currentHeight;
+
+    // Resize canvas
+    fabricCanvas.setDimensions({
+      width: canvasDimensions.width,
+      height: canvasDimensions.height
+    });
+
+    // Scale all objects proportionally
+    fabricCanvas.getObjects().forEach((obj: any) => {
+      if (obj.left !== undefined && obj.top !== undefined) {
+        obj.set({
+          left: obj.left * scaleX,
+          top: obj.top * scaleY,
+        });
+        
+        // Scale object size if it has dimensions
+        if (obj.scaleX !== undefined) {
+          obj.set({ scaleX: obj.scaleX * scaleX });
+        }
+        if (obj.scaleY !== undefined) {
+          obj.set({ scaleY: obj.scaleY * scaleY });
+        }
+        
+        // Handle line objects specially
+        if (obj.type === 'line') {
+          obj.set({
+            x1: (obj.x1 || 0) * scaleX,
+            y1: (obj.y1 || 0) * scaleY,
+            x2: (obj.x2 || 0) * scaleX,
+            y2: (obj.y2 || 0) * scaleY,
+          });
+        }
+        
+        obj.setCoords();
+      }
+    });
+
+    fabricCanvas.renderAll();
+  }, [canvasDimensions, fabricCanvas, isCanvasReady]);
 
 
   // DELETE KEY: Remove selected meter card in edit mode
@@ -5066,8 +5150,8 @@ export default function SchematicEditor({
         </div>
       </div>
 
-      <div className="border border-border rounded-lg overflow-hidden shadow-lg relative">
-        <canvas ref={canvasRef} className="block max-w-full" />
+      <div ref={containerRef} className="w-full border border-border rounded-lg overflow-hidden shadow-lg relative">
+        <canvas ref={canvasRef} className="block w-full" />
         {!isCanvasReady && (
           <div className="absolute inset-0 flex items-center justify-center bg-muted/50">
             <div className="text-center">
