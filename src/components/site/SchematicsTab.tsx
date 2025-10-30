@@ -144,28 +144,8 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
 
       toast.success("Schematic uploaded successfully");
       
-      // Auto-convert PDF to image
-      if (selectedFile.type === "application/pdf" && schematicData) {
-        toast.info("Converting PDF to image for faster viewing...");
-        
-        // Trigger conversion in background (don't wait for it)
-        supabase.functions
-          .invoke('convert-pdf-to-image', {
-            body: { 
-              schematicId: schematicData.id, 
-              filePath: fileName 
-            }
-          })
-          .then(({ data, error }) => {
-            if (error) {
-              console.error('PDF conversion failed:', error);
-              toast.error('PDF conversion failed, but file is uploaded');
-            } else {
-              toast.success('PDF converted to image successfully');
-              fetchSchematics(); // Refresh to show converted status
-            }
-          });
-      }
+      // Note: PDF to image conversion is handled client-side by PdfToImageConverter component
+      // Server-side conversion is disabled due to Deno canvas library compatibility issues
 
       setIsDialogOpen(false);
       setSelectedFile(null);
