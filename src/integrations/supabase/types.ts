@@ -961,6 +961,7 @@ export type Database = {
         Args: { schematic_uuid: string }
         Returns: {
           deleted_connections: number
+          deleted_lines: number
           deleted_meters: number
           deleted_positions: number
         }[]
