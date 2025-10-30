@@ -16,6 +16,7 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const { 
+      csvFileId,
       meterId, 
       filePath, 
       separator = "\t", 
@@ -25,16 +26,36 @@ Deno.serve(async (req) => {
       columnMapping = null 
     } = await req.json();
 
-    console.log(`Processing CSV for meter ${meterId} from ${filePath} with separator "${separator}", dateFormat "${dateFormat}", timeInterval ${timeInterval} minutes, headerRowNumber: ${headerRowNumber}`);
+    // If csvFileId is provided but not filePath, fetch it from the database
+    let actualFilePath = filePath;
+    if (csvFileId && !actualFilePath) {
+      const { data: csvFile, error: fetchError } = await supabase
+        .from('meter_csv_files')
+        .select('file_path')
+        .eq('id', csvFileId)
+        .single();
+      
+      if (fetchError || !csvFile) {
+        throw new Error(`Failed to fetch CSV file record: ${fetchError?.message || 'File not found'}`);
+      }
+      
+      actualFilePath = csvFile.file_path;
+    }
+
+    if (!actualFilePath) {
+      throw new Error('No file path provided and could not fetch from csvFileId');
+    }
+
+    console.log(`Processing CSV for meter ${meterId} from ${actualFilePath} with separator "${separator}", dateFormat "${dateFormat}", timeInterval ${timeInterval} minutes, headerRowNumber: ${headerRowNumber}`);
     console.log('Column Mapping:', JSON.stringify(columnMapping, null, 2));
 
     // Extract filename from path
-    const fileName = filePath.split('/').pop() || 'unknown.csv';
+    const fileName = actualFilePath.split('/').pop() || 'unknown.csv';
 
     // Download CSV from storage
     const { data: fileData, error: downloadError } = await supabase.storage
       .from('meter-csvs')
-      .download(filePath);
+      .download(actualFilePath);
 
     if (downloadError) {
       console.error('Download error:', downloadError);
