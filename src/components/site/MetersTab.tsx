@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, Gauge, Upload, Pencil, Trash2, Database } from "lucide-react";
+import { Plus, Gauge, Upload, Pencil, Trash2, Database, Trash } from "lucide-react";
 import { toast } from "sonner";
 import CsvImportDialog from "./CsvImportDialog";
 import MeterReadingsView from "./MeterReadingsView";
@@ -78,6 +78,8 @@ export default function MetersTab({ siteId }: MetersTabProps) {
   const [singleUploadMeterId, setSingleUploadMeterId] = useState<string | null>(null);
   const [singleUploadMeterNumber, setSingleUploadMeterNumber] = useState<string>("");
   const [isSingleUploadOpen, setIsSingleUploadOpen] = useState(false);
+  const [selectedMeterIds, setSelectedMeterIds] = useState<Set<string>>(new Set());
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
   useEffect(() => {
     fetchMeters();
@@ -449,6 +451,55 @@ export default function MetersTab({ siteId }: MetersTabProps) {
     }
   };
 
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedMeterIds(new Set(meters.map(m => m.id)));
+    } else {
+      setSelectedMeterIds(new Set());
+    }
+  };
+
+  const handleSelectMeter = (meterId: string, checked: boolean) => {
+    const newSelection = new Set(selectedMeterIds);
+    if (checked) {
+      newSelection.add(meterId);
+    } else {
+      newSelection.delete(meterId);
+    }
+    setSelectedMeterIds(newSelection);
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedMeterIds.size === 0) return;
+    
+    const confirmed = window.confirm(
+      `Are you sure you want to delete ${selectedMeterIds.size} meter${selectedMeterIds.size !== 1 ? 's' : ''}? This action cannot be undone and will also delete all associated readings and connections.`
+    );
+    
+    if (!confirmed) return;
+    
+    setIsBulkDeleting(true);
+    
+    try {
+      const { error } = await supabase
+        .from("meters")
+        .delete()
+        .in("id", Array.from(selectedMeterIds));
+
+      if (error) {
+        toast.error("Failed to delete meters");
+      } else {
+        toast.success(`Successfully deleted ${selectedMeterIds.size} meter${selectedMeterIds.size !== 1 ? 's' : ''}`);
+        setSelectedMeterIds(new Set());
+        fetchMeters();
+      }
+    } catch (error) {
+      toast.error("An error occurred while deleting meters");
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-2">
@@ -457,6 +508,17 @@ export default function MetersTab({ siteId }: MetersTabProps) {
           <p className="text-muted-foreground">Manage meters for this site</p>
         </div>
         <div className="flex gap-2">
+          {selectedMeterIds.size > 0 && (
+            <Button
+              variant="destructive"
+              onClick={handleBulkDelete}
+              disabled={isBulkDeleting}
+              className="gap-2"
+            >
+              <Trash className="w-4 h-4" />
+              Delete {selectedMeterIds.size} Selected
+            </Button>
+          )}
           <CsvBulkIngestionTool siteId={siteId} onDataChange={fetchMeters} />
           <Dialog open={isDialogOpen} onOpenChange={handleCloseDialog}>
             <DialogTrigger asChild>
@@ -658,6 +720,13 @@ export default function MetersTab({ siteId }: MetersTabProps) {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-12">
+                    <Checkbox
+                      checked={selectedMeterIds.size === meters.length && meters.length > 0}
+                      onCheckedChange={handleSelectAll}
+                      aria-label="Select all meters"
+                    />
+                  </TableHead>
                   <TableHead>NO</TableHead>
                   <TableHead>Name</TableHead>
                   <TableHead>Type</TableHead>
@@ -671,6 +740,13 @@ export default function MetersTab({ siteId }: MetersTabProps) {
               <TableBody>
                 {meters.map((meter) => (
                   <TableRow key={meter.id}>
+                    <TableCell>
+                      <Checkbox
+                        checked={selectedMeterIds.has(meter.id)}
+                        onCheckedChange={(checked) => handleSelectMeter(meter.id, checked as boolean)}
+                        aria-label={`Select meter ${meter.meter_number}`}
+                      />
+                    </TableCell>
                     <TableCell className="font-mono font-medium">{meter.meter_number}</TableCell>
                     <TableCell>
                       <div>
