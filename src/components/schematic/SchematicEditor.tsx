@@ -2874,24 +2874,32 @@ export default function SchematicEditor({
         }
       }
       
-      // Determine category for legend (zones take priority for filtering)
+      // Determine zone category
+      let zoneCategory: string | null = null;
       if (zone === 'main_board') {
-        categoryKey = 'main_board_zone';
+        zoneCategory = 'main_board_zone';
       } else if (zone === 'mini_sub') {
-        categoryKey = 'mini_sub_zone';
+        zoneCategory = 'mini_sub_zone';
       } else if (zone === 'council') {
-        categoryKey = 'council_connection_zone';
-      } else if (meterType.includes('bulk')) {
-        categoryKey = 'bulk_meter';
-      } else if (meterType.includes('check')) {
-        categoryKey = 'check_meter';
-      } else if (meterType.includes('tenant')) {
-        categoryKey = 'tenant_meter';
+        zoneCategory = 'council_connection_zone';
       }
       
-      // Skip rendering if this category is hidden
-      if (!legendVisibility[categoryKey as keyof typeof legendVisibility]) {
-        return;
+      // Determine meter type category
+      let meterTypeCategory: string = 'other';
+      if (meterType.includes('bulk')) {
+        meterTypeCategory = 'bulk_meter';
+      } else if (meterType.includes('check')) {
+        meterTypeCategory = 'check_meter';
+      } else if (meterType.includes('tenant')) {
+        meterTypeCategory = 'tenant_meter';
+      }
+      
+      // Apply both filters: meter must pass zone filter (if it has a zone) AND meter type filter
+      if (zoneCategory && !legendVisibility[zoneCategory as keyof typeof legendVisibility]) {
+        return; // Zone filter hides it
+      }
+      if (!legendVisibility[meterTypeCategory as keyof typeof legendVisibility]) {
+        return; // Meter type filter hides it
       }
       
       // Skip rendering based on confirmation status toggles
