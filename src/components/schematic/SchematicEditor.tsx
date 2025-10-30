@@ -985,9 +985,15 @@ export default function SchematicEditor({
           }
         }
         
-        // Skip if clicking on a connection node (to allow dragging) - UNLESS in connection mode
-        if (target && (target as any).isConnectionNode && (target as any).connectedLines && currentTool !== 'connection') {
-          return;
+        // Skip if clicking on a connection node (to allow dragging)
+        if (target && (target as any).isConnectionNode && (target as any).connectedLines) {
+          // In connection mode, don't select the node - just use it as a connection point
+          if (currentTool === 'connection') {
+            // Continue processing for connection endpoint
+          } else {
+            // In other modes, allow dragging
+            return;
+          }
         }
         
         // Check if clicking on an existing connection line (to add a node)
@@ -1084,6 +1090,9 @@ export default function SchematicEditor({
           if (snapAtNode) {
             snappedPoint = snapAtNode;
           }
+          // Deselect the node so it doesn't get selected during connection drawing
+          canvas.discardActiveObject();
+          canvas.renderAll();
         }
         
         if (!connectionStartRef.current) {
