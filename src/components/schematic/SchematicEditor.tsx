@@ -4657,7 +4657,7 @@ export default function SchematicEditor({
               }}
             >
               <div className="w-3 h-3 rounded-full bg-[#ec4899] mr-2" />
-              Council Connection
+              Council
             </Badge>
             
             <Badge 
