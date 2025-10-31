@@ -624,6 +624,16 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
       
       const isInSelectionMode = selectionModeRef.current;
       
+      // MIDDLE MOUSE BUTTON: Always enables panning (highest priority)
+      if (evt.button === 1) {
+        evt.preventDefault();
+        isPanningLocal = true;
+        lastX = evt.clientX;
+        lastY = evt.clientY;
+        canvas.selection = false;
+        return;
+      }
+      
       // SELECTION MODE: Handle two-click region drawing
       if (isInSelectionMode && evt.button === 0) {
         const isInteractiveObject = target && target.type !== 'image';
