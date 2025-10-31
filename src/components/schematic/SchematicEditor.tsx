@@ -541,6 +541,7 @@ export default function SchematicEditor({
   const [viewingMeter, setViewingMeter] = useState<any>(null);
   const [showUnconfirmed, setShowUnconfirmed] = useState(true);
   const [showConfirmed, setShowConfirmed] = useState(true);
+  const [showMeterCards, setShowMeterCards] = useState(true);
   const [showConnections, setShowConnections] = useState(true);
   const [showBackground, setShowBackground] = useState(true);
   const [isConnectionsDialogOpen, setIsConnectionsDialogOpen] = useState(false);
@@ -839,7 +840,7 @@ export default function SchematicEditor({
     fabricCanvas.renderAll();
   }, [isEditMode, fabricCanvas, meters]);
 
-  // Control visibility based on confirmation status filters
+  // Control visibility based on confirmation status filters and meter cards toggle
   useEffect(() => {
     if (!fabricCanvas || !meters.length) return;
     
@@ -851,8 +852,9 @@ export default function SchematicEditor({
         if (meter) {
           const confirmationStatus = (meter as any).confirmation_status || 'unconfirmed';
           const shouldShow = 
-            (confirmationStatus === 'confirmed' && showConfirmed) ||
-            (confirmationStatus === 'unconfirmed' && showUnconfirmed);
+            showMeterCards &&
+            ((confirmationStatus === 'confirmed' && showConfirmed) ||
+            (confirmationStatus === 'unconfirmed' && showUnconfirmed));
           
           obj.set({ visible: shouldShow });
         }
@@ -860,7 +862,7 @@ export default function SchematicEditor({
     });
     
     fabricCanvas.renderAll();
-  }, [showConfirmed, showUnconfirmed, fabricCanvas, meters]);
+  }, [showMeterCards, showConfirmed, showUnconfirmed, fabricCanvas, meters]);
 
   // Track container size and update canvas dimensions responsively
   useEffect(() => {
@@ -5168,6 +5170,16 @@ export default function SchematicEditor({
             </Badge>
             
             <Separator orientation="vertical" className="h-6 mx-1" />
+            
+            {/* Meter Cards Visibility Toggle */}
+            <Badge 
+              variant="outline" 
+              className={`cursor-pointer transition-all hover:scale-105 select-none ${!showMeterCards ? 'opacity-40' : 'hover:bg-muted'}`}
+              onClick={() => setShowMeterCards(!showMeterCards)}
+            >
+              <ImageIcon className="w-3 h-3 mr-2" />
+              Meter Cards
+            </Badge>
             
             {/* Connections Visibility Toggle */}
             <Badge 
