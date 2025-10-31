@@ -128,11 +128,6 @@ export default function SchematicViewer() {
         searchParams.delete('meterId');
         const newUrl = `${window.location.pathname}${searchParams.toString() ? '?' + searchParams.toString() : ''}`;
         window.history.replaceState({}, '', newUrl);
-        
-        // Clear highlight after 5 seconds
-        setTimeout(() => {
-          setHighlightedMeterId(null);
-        }, 5000);
       }
     }
   }, [id]);
@@ -855,6 +850,7 @@ export default function SchematicViewer() {
                       onMouseMove={handleMouseMove}
                       onMouseUp={handleMouseUp}
                       onMouseLeave={handleMouseLeave}
+                      onClick={() => setHighlightedMeterId(null)}
                     >
                     <div 
                       className="absolute inset-0 flex items-center justify-center"
