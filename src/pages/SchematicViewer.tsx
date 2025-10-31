@@ -123,6 +123,7 @@ export default function SchematicViewer() {
       const searchParams = new URLSearchParams(window.location.search);
       const meterId = searchParams.get('meterId');
       if (meterId) {
+        console.log('🎯 Setting highlighted meter ID from URL:', meterId);
         setHighlightedMeterId(meterId);
         // Clear the parameter after reading it
         searchParams.delete('meterId');
@@ -131,6 +132,25 @@ export default function SchematicViewer() {
       }
     }
   }, [id]);
+
+  // Auto-scroll to highlighted meter when positions are loaded
+  useEffect(() => {
+    if (highlightedMeterId && meterPositions.length > 0) {
+      const highlightedPosition = meterPositions.find(p => p.meter_id === highlightedMeterId);
+      if (highlightedPosition) {
+        console.log('✅ Found highlighted meter position:', highlightedPosition);
+        // Give time for render, then scroll into view
+        setTimeout(() => {
+          const highlightElement = document.querySelector(`[key="highlight-${highlightedPosition.id}"]`);
+          if (highlightElement) {
+            highlightElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }, 100);
+      } else {
+        console.warn('⚠️ Highlighted meter ID not found in positions:', highlightedMeterId);
+      }
+    }
+  }, [highlightedMeterId, meterPositions]);
 
   // Fetch connections after schematic is loaded
   useEffect(() => {
