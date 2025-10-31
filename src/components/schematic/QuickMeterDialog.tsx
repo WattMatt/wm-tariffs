@@ -333,11 +333,23 @@ export const QuickMeterDialog = ({
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label>Serial Number</Label>
-                    <Input
-                      value={newMeter.serial_number}
-                      onChange={(e) => setNewMeter({ ...newMeter, serial_number: e.target.value })}
-                      placeholder="e.g., 35777285"
-                    />
+                    <div className="flex gap-2">
+                      <Input
+                        value={newMeter.serial_number}
+                        onChange={(e) => setNewMeter({ ...newMeter, serial_number: e.target.value })}
+                        placeholder="e.g., 35777285"
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setNewMeter({ ...newMeter, serial_number: 'Virtual' })}
+                        className="shrink-0"
+                        title="Set serial number as Virtual"
+                      >
+                        Virtual
+                      </Button>
+                    </div>
                   </div>
                   <div>
                     <Label>CT Type</Label>

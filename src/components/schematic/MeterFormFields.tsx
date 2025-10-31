@@ -205,13 +205,28 @@ export function MeterFormFields({
             <Badge variant="destructive" className="text-xs">VERIFY TWICE</Badge>
           )}
         </Label>
-        <Input 
-          id={`${idPrefix}_serial_number`}
-          name="serial_number" 
-          defaultValue={cleanValue(defaultValues.serial_number)}
-          placeholder="34020113A"
-          className={`font-mono text-lg ${!showLocationAndTariff ? 'border-red-300 focus:border-red-500' : ''} ${hasNotVisible(defaultValues.serial_number) ? 'border-orange-500' : ''}`}
-        />
+        <div className="flex gap-2">
+          <Input 
+            id={`${idPrefix}_serial_number`}
+            name="serial_number" 
+            defaultValue={cleanValue(defaultValues.serial_number)}
+            placeholder="34020113A"
+            className={`font-mono text-lg ${!showLocationAndTariff ? 'border-red-300 focus:border-red-500' : ''} ${hasNotVisible(defaultValues.serial_number) ? 'border-orange-500' : ''}`}
+          />
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              const serialInput = document.getElementById(`${idPrefix}_serial_number`) as HTMLInputElement;
+              if (serialInput) serialInput.value = 'Virtual';
+            }}
+            className="shrink-0"
+            title="Set serial number as Virtual"
+          >
+            Virtual
+          </Button>
+        </div>
       </div>
 
       <div className="space-y-2">
