@@ -917,6 +917,28 @@ export default function SchematicViewer() {
                               })}
                             </svg>
 
+                            {/* Highlight Rectangle Overlays */}
+                            {meterPositions.map((position) => {
+                              const isHighlighted = position.meter_id === highlightedMeterId;
+                              if (!isHighlighted) return null;
+                              return (
+                                <div
+                                  key={`highlight-${position.id}`}
+                                  className="absolute rounded-lg border-4 pointer-events-none animate-pulse"
+                                  style={{
+                                    left: `${position.x_position}%`,
+                                    top: `${position.y_position}%`,
+                                    transform: "translate(-50%, -50%)",
+                                    width: '80px',
+                                    height: '60px',
+                                    borderColor: '#10b981',
+                                    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                                    zIndex: 45,
+                                  }}
+                                />
+                              );
+                            })}
+
                             {/* Existing Meter Position Markers */}
                             {meterPositions.map((position) => {
                               const isHighlighted = position.meter_id === highlightedMeterId;
@@ -936,9 +958,9 @@ export default function SchematicViewer() {
                                     backgroundColor: position.meters?.meter_type === 'council_bulk' ? 'hsl(var(--primary))' :
                                                     position.meters?.meter_type === 'check_meter' ? '#f59e0b' :
                                                     '#8b5cf6',
-                                    borderColor: isHighlighted ? '#10b981' : 'white',
-                                    borderWidth: isHighlighted ? '3px' : '2px',
-                                    zIndex: isHighlighted ? 40 : 30,
+                                    borderColor: 'white',
+                                    borderWidth: '2px',
+                                    zIndex: isHighlighted ? 50 : 30,
                                   }}
                                   title={`${position.meters?.meter_number} - ${position.label || ""}`}
                                 >
@@ -1055,6 +1077,28 @@ export default function SchematicViewer() {
                               })}
                             </svg>
 
+                            {/* Highlight Rectangle Overlays */}
+                            {meterPositions.map((position) => {
+                              const isHighlighted = position.meter_id === highlightedMeterId;
+                              if (!isHighlighted) return null;
+                              return (
+                                <div
+                                  key={`highlight-${position.id}`}
+                                  className="absolute rounded-lg border-4 pointer-events-none animate-pulse"
+                                  style={{
+                                    left: `${position.x_position}%`,
+                                    top: `${position.y_position}%`,
+                                    transform: "translate(-50%, -50%)",
+                                    width: '80px',
+                                    height: '60px',
+                                    borderColor: '#10b981',
+                                    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                                    zIndex: 45,
+                                  }}
+                                />
+                              );
+                            })}
+
                             {/* Meter markers for regular images */}
                             {meterPositions.map((position) => {
                               const isHighlighted = position.meter_id === highlightedMeterId;
@@ -1074,9 +1118,9 @@ export default function SchematicViewer() {
                                     backgroundColor: position.meters?.meter_type === 'council_bulk' ? 'hsl(var(--primary))' :
                                                     position.meters?.meter_type === 'check_meter' ? '#f59e0b' :
                                                     '#8b5cf6',
-                                    borderColor: isHighlighted ? '#10b981' : 'white',
-                                    borderWidth: isHighlighted ? '3px' : '2px',
-                                    zIndex: isHighlighted ? 40 : 30,
+                                    borderColor: 'white',
+                                    borderWidth: '2px',
+                                    zIndex: isHighlighted ? 50 : 30,
                                   }}
                                   title={`${position.meters?.meter_number} - ${position.label || ""}`}
                                 >
