@@ -954,7 +954,7 @@ export default function SchematicViewer() {
                                     height: '60px',
                                     borderColor: '#10b981',
                                     backgroundColor: 'rgba(16, 185, 129, 0.15)',
-                                    zIndex: 9999,
+                                    zIndex: 48,
                                   }}
                                 />
                               );
@@ -1115,7 +1115,7 @@ export default function SchematicViewer() {
                                     height: '60px',
                                     borderColor: '#10b981',
                                     backgroundColor: 'rgba(16, 185, 129, 0.15)',
-                                    zIndex: 9999,
+                                    zIndex: 48,
                                   }}
                                 />
                               );
