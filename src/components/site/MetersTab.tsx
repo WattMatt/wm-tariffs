@@ -7,10 +7,11 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, Gauge, Upload, Pencil, Trash2, Database, Trash, Eye, MapPin, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { Plus, Gauge, Upload, Pencil, Trash2, Database, Trash, Eye, MapPin, ArrowUpDown, ArrowUp, ArrowDown, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import CsvImportDialog from "./CsvImportDialog";
 import MeterReadingsView from "./MeterReadingsView";
@@ -749,12 +750,59 @@ export default function MetersTab({ siteId }: MetersTabProps) {
 
                 <div className="space-y-2">
                   <Label htmlFor="serial_number">SERIAL</Label>
-                  <Input 
-                    id="serial_number" 
-                    name="serial_number" 
-                    placeholder="35777285"
-                    defaultValue={editingMeter?.serial_number || ""}
-                  />
+                  <div className="relative">
+                    <Input 
+                      id="serial_number" 
+                      name="serial_number" 
+                      placeholder="35777285"
+                      defaultValue={editingMeter?.serial_number || ""}
+                      className="pr-10"
+                    />
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                          title="Quick select serial number"
+                        >
+                          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-40 p-2" align="end">
+                        <div className="space-y-1">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="w-full justify-start"
+                            onClick={() => {
+                              const serialInput = document.getElementById('serial_number') as HTMLInputElement;
+                              if (serialInput) serialInput.value = 'Virtual';
+                            }}
+                          >
+                            Virtual
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="w-full justify-start"
+                            onClick={() => {
+                              const serialInput = document.getElementById('serial_number') as HTMLInputElement;
+                              if (serialInput) {
+                                serialInput.value = '';
+                                serialInput.focus();
+                              }
+                            }}
+                          >
+                            Custom
+                          </Button>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
                 </div>
 
                 <div className="space-y-2">
