@@ -941,6 +941,7 @@ export default function SchematicViewer() {
                             {meterPositions.map((position) => {
                               const isHighlighted = position.meter_id === highlightedMeterId;
                               if (!isHighlighted) return null;
+                              console.log('🎨 Rendering highlight for meter:', position.meter_id);
                               return (
                                 <div
                                   key={`highlight-${position.id}`}
@@ -953,7 +954,7 @@ export default function SchematicViewer() {
                                     height: '60px',
                                     borderColor: '#10b981',
                                     backgroundColor: 'rgba(16, 185, 129, 0.15)',
-                                    zIndex: 45,
+                                    zIndex: 9999,
                                   }}
                                 />
                               );
@@ -1101,6 +1102,7 @@ export default function SchematicViewer() {
                             {meterPositions.map((position) => {
                               const isHighlighted = position.meter_id === highlightedMeterId;
                               if (!isHighlighted) return null;
+                              console.log('🎨 Rendering highlight for meter (image):', position.meter_id);
                               return (
                                 <div
                                   key={`highlight-${position.id}`}
@@ -1113,7 +1115,7 @@ export default function SchematicViewer() {
                                     height: '60px',
                                     borderColor: '#10b981',
                                     backgroundColor: 'rgba(16, 185, 129, 0.15)',
-                                    zIndex: 45,
+                                    zIndex: 9999,
                                   }}
                                 />
                               );
