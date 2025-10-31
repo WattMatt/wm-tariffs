@@ -1286,7 +1286,21 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                   </div>
                   
                   {/* Canvas */}
-                  <div className="flex-1 flex items-center justify-center p-4 overflow-auto">
+                  <div 
+                    className="flex-1 flex items-center justify-center p-4 overflow-hidden"
+                    onMouseDown={(e) => {
+                      // Prevent default middle button behavior (auto-scroll)
+                      if (e.button === 1) {
+                        e.preventDefault();
+                      }
+                    }}
+                    onContextMenu={(e) => {
+                      // Prevent context menu when panning with right button
+                      if (fabricCanvas) {
+                        e.preventDefault();
+                      }
+                    }}
+                  >
                     {documentImageUrl ? (
                       <canvas ref={canvasRef} />
                     ) : (
