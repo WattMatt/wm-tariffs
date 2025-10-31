@@ -3882,6 +3882,10 @@ export default function SchematicEditor({
       toast.info(`Generated meter number: ${meterNumber}`);
     }
     
+    // Get tariff_structure_id and ensure it's valid UUID or null
+    const tariffValue = formData.get('tariff_structure_id') as string;
+    const isValidUUID = tariffValue && tariffValue !== 'none' && tariffValue.length === 36 && tariffValue.includes('-');
+    
     const updatedData = {
       meter_number: meterNumber,
       name: formData.get('name') as string,
@@ -3893,7 +3897,7 @@ export default function SchematicEditor({
       meter_type: formData.get('meter_type') as string,
       zone: formData.get('zone') as string || null,
       location: formData.get('location') as string || null,
-      tariff_structure_id: formData.get('tariff_structure_id') as string || null,
+      tariff_structure_id: isValidUUID ? tariffValue : null,
       confirmation_status: 'confirmed', // Automatically approve on save
     };
 

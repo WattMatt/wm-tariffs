@@ -286,21 +286,18 @@ export function MeterFormFields({
               <Label htmlFor={`${idPrefix}_tariff`}>Tariff</Label>
               <Select 
                 name="tariff_structure_id" 
-                defaultValue={defaultValues.tariff_structure_id || ''}
+                defaultValue={defaultValues.tariff_structure_id || 'none'}
               >
                 <SelectTrigger className="bg-background">
                   <SelectValue placeholder="Select tariff structure" />
                 </SelectTrigger>
                 <SelectContent className="bg-background z-50">
-                  {tariffStructures.length === 0 ? (
-                    <SelectItem value="none" disabled>No tariffs available</SelectItem>
-                  ) : (
-                    tariffStructures.map((tariff) => (
-                      <SelectItem key={tariff.id} value={tariff.id}>
-                        {tariff.name} ({tariff.tariff_type})
-                      </SelectItem>
-                    ))
-                  )}
+                  <SelectItem value="none">No tariff (optional)</SelectItem>
+                  {tariffStructures.map((tariff) => (
+                    <SelectItem key={tariff.id} value={tariff.id}>
+                      {tariff.name} ({tariff.tariff_type})
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
