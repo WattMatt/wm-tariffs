@@ -3907,7 +3907,15 @@ export default function SchematicEditor({
       .eq('id', editingMeter.id);
 
     if (error) {
-      toast.error('Failed to save meter');
+      console.error('Error updating meter:', error);
+      
+      // Check for duplicate meter number error
+      if (error.code === '23505' && error.message.includes('meters_site_id_meter_number_key')) {
+        const meterNumber = formData.get('meter_number');
+        toast.error(`Meter number "${meterNumber}" already exists for this site. Please use a unique meter number.`);
+      } else {
+        toast.error('Failed to save meter');
+      }
       return;
     }
 
