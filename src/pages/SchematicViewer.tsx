@@ -123,7 +123,6 @@ export default function SchematicViewer() {
       const searchParams = new URLSearchParams(window.location.search);
       const meterId = searchParams.get('meterId');
       if (meterId) {
-        console.log('🎯 Setting highlighted meter ID from URL:', meterId);
         setHighlightedMeterId(meterId);
         // Clear the parameter after reading it
         searchParams.delete('meterId');
@@ -132,25 +131,6 @@ export default function SchematicViewer() {
       }
     }
   }, [id]);
-
-  // Auto-scroll to highlighted meter when positions are loaded
-  useEffect(() => {
-    if (highlightedMeterId && meterPositions.length > 0) {
-      const highlightedPosition = meterPositions.find(p => p.meter_id === highlightedMeterId);
-      if (highlightedPosition) {
-        console.log('✅ Found highlighted meter position:', highlightedPosition);
-        // Give time for render, then scroll into view
-        setTimeout(() => {
-          const highlightElement = document.querySelector(`[key="highlight-${highlightedPosition.id}"]`);
-          if (highlightElement) {
-            highlightElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          }
-        }, 100);
-      } else {
-        console.warn('⚠️ Highlighted meter ID not found in positions:', highlightedMeterId);
-      }
-    }
-  }, [highlightedMeterId, meterPositions]);
 
   // Fetch connections after schematic is loaded
   useEffect(() => {
@@ -870,7 +850,6 @@ export default function SchematicViewer() {
                       onMouseMove={handleMouseMove}
                       onMouseUp={handleMouseUp}
                       onMouseLeave={handleMouseLeave}
-                      onClick={() => setHighlightedMeterId(null)}
                     >
                     <div 
                       className="absolute inset-0 flex items-center justify-center"
@@ -956,39 +935,14 @@ export default function SchematicViewer() {
                                     backgroundColor: position.meters?.meter_type === 'council_bulk' ? 'hsl(var(--primary))' :
                                                     position.meters?.meter_type === 'check_meter' ? '#f59e0b' :
                                                     '#8b5cf6',
-                                    borderColor: 'white',
-                                    borderWidth: '2px',
+                                    borderColor: isHighlighted ? '#10b981' : 'white',
+                                    borderWidth: isHighlighted ? '3px' : '2px',
+                                    zIndex: isHighlighted ? 40 : 30,
                                   }}
                                   title={`${position.meters?.meter_number} - ${position.label || ""}`}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setHighlightedMeterId(position.meter_id);
-                                  }}
                                 >
                                   <span className="text-[9px] font-bold text-white leading-none">{position.meters?.meter_number?.substring(0, 3)}</span>
                                 </div>
-                              );
-                            })}
-
-                            {/* Highlight Rectangle Overlays - rendered after markers to appear on top */}
-                            {meterPositions.map((position) => {
-                              const isHighlighted = position.meter_id === highlightedMeterId;
-                              if (!isHighlighted) return null;
-                              console.log('🎨 Rendering highlight for meter:', position.meter_id);
-                              return (
-                                <div
-                                  key={`highlight-${position.id}`}
-                                  className="absolute rounded-lg border-4 pointer-events-none animate-pulse"
-                                  style={{
-                                    left: `${position.x_position}%`,
-                                    top: `${position.y_position}%`,
-                                    transform: "translate(-50%, -50%)",
-                                    width: '80px',
-                                    height: '60px',
-                                    borderColor: '#10b981',
-                                    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-                                  }}
-                                />
                               );
                             })}
                             
@@ -1119,39 +1073,14 @@ export default function SchematicViewer() {
                                     backgroundColor: position.meters?.meter_type === 'council_bulk' ? 'hsl(var(--primary))' :
                                                     position.meters?.meter_type === 'check_meter' ? '#f59e0b' :
                                                     '#8b5cf6',
-                                    borderColor: 'white',
-                                    borderWidth: '2px',
+                                    borderColor: isHighlighted ? '#10b981' : 'white',
+                                    borderWidth: isHighlighted ? '3px' : '2px',
+                                    zIndex: isHighlighted ? 40 : 30,
                                   }}
                                   title={`${position.meters?.meter_number} - ${position.label || ""}`}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setHighlightedMeterId(position.meter_id);
-                                  }}
                                 >
                                   <span className="text-[9px] font-bold text-white leading-none">{position.meters?.meter_number?.substring(0, 3)}</span>
                                 </div>
-                              );
-                            })}
-
-                            {/* Highlight Rectangle Overlays - rendered after markers to appear on top */}
-                            {meterPositions.map((position) => {
-                              const isHighlighted = position.meter_id === highlightedMeterId;
-                              if (!isHighlighted) return null;
-                              console.log('🎨 Rendering highlight for meter (image):', position.meter_id);
-                              return (
-                                <div
-                                  key={`highlight-${position.id}`}
-                                  className="absolute rounded-lg border-4 pointer-events-none animate-pulse"
-                                  style={{
-                                    left: `${position.x_position}%`,
-                                    top: `${position.y_position}%`,
-                                    transform: "translate(-50%, -50%)",
-                                    width: '80px',
-                                    height: '60px',
-                                    borderColor: '#10b981',
-                                    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-                                  }}
-                                />
                               );
                             })}
                           </div>
