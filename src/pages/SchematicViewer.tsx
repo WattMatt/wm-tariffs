@@ -960,6 +960,10 @@ export default function SchematicViewer() {
                                     borderWidth: '2px',
                                   }}
                                   title={`${position.meters?.meter_number} - ${position.label || ""}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setHighlightedMeterId(position.meter_id);
+                                  }}
                                 >
                                   <span className="text-[9px] font-bold text-white leading-none">{position.meters?.meter_number?.substring(0, 3)}</span>
                                 </div>
@@ -1119,6 +1123,10 @@ export default function SchematicViewer() {
                                     borderWidth: '2px',
                                   }}
                                   title={`${position.meters?.meter_number} - ${position.label || ""}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setHighlightedMeterId(position.meter_id);
+                                  }}
                                 >
                                   <span className="text-[9px] font-bold text-white leading-none">{position.meters?.meter_number?.substring(0, 3)}</span>
                                 </div>
