@@ -575,6 +575,9 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
       width: 800,
       height: 600,
       backgroundColor: "#f8f9fa",
+      stopContextMenu: true,
+      fireRightClick: true,
+      fireMiddleClick: true,
     });
 
     // Load the document image
@@ -1286,21 +1289,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                   </div>
                   
                   {/* Canvas */}
-                  <div 
-                    className="flex-1 flex items-center justify-center p-4 overflow-hidden"
-                    onMouseDown={(e) => {
-                      // Prevent default middle button behavior (auto-scroll)
-                      if (e.button === 1) {
-                        e.preventDefault();
-                      }
-                    }}
-                    onContextMenu={(e) => {
-                      // Prevent context menu when panning with right button
-                      if (fabricCanvas) {
-                        e.preventDefault();
-                      }
-                    }}
-                  >
+                  <div className="flex-1 flex items-center justify-center p-4 overflow-hidden">
                     {documentImageUrl ? (
                       <canvas ref={canvasRef} />
                     ) : (
