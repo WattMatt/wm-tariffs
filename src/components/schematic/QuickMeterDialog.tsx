@@ -4,10 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Search, Plus, Loader2 } from "lucide-react";
+import { Search, Plus, Loader2, ChevronDown } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface QuickMeterDialogProps {
@@ -333,22 +334,48 @@ export const QuickMeterDialog = ({
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label>Serial Number</Label>
-                    <div className="flex gap-2">
+                    <div className="relative">
                       <Input
                         value={newMeter.serial_number}
                         onChange={(e) => setNewMeter({ ...newMeter, serial_number: e.target.value })}
                         placeholder="e.g., 35777285"
+                        className="pr-10"
                       />
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setNewMeter({ ...newMeter, serial_number: 'Virtual' })}
-                        className="shrink-0"
-                        title="Set serial number as Virtual"
-                      >
-                        Virtual
-                      </Button>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                            title="Quick select serial number"
+                          >
+                            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-40 p-2" align="end">
+                          <div className="space-y-1">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="w-full justify-start"
+                              onClick={() => setNewMeter({ ...newMeter, serial_number: 'Virtual' })}
+                            >
+                              Virtual
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="w-full justify-start"
+                              onClick={() => setNewMeter({ ...newMeter, serial_number: '' })}
+                            >
+                              Custom
+                            </Button>
+                          </div>
+                        </PopoverContent>
+                      </Popover>
                     </div>
                   </div>
                   <div>

@@ -3,7 +3,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Wand2 } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Wand2, ChevronDown } from "lucide-react";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -205,27 +206,58 @@ export function MeterFormFields({
             <Badge variant="destructive" className="text-xs">VERIFY TWICE</Badge>
           )}
         </Label>
-        <div className="flex gap-2">
+        <div className="relative">
           <Input 
             id={`${idPrefix}_serial_number`}
             name="serial_number" 
             defaultValue={cleanValue(defaultValues.serial_number)}
             placeholder="34020113A"
-            className={`font-mono text-lg ${!showLocationAndTariff ? 'border-red-300 focus:border-red-500' : ''} ${hasNotVisible(defaultValues.serial_number) ? 'border-orange-500' : ''}`}
+            className={`font-mono text-lg pr-10 ${!showLocationAndTariff ? 'border-red-300 focus:border-red-500' : ''} ${hasNotVisible(defaultValues.serial_number) ? 'border-orange-500' : ''}`}
           />
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              const serialInput = document.getElementById(`${idPrefix}_serial_number`) as HTMLInputElement;
-              if (serialInput) serialInput.value = 'Virtual';
-            }}
-            className="shrink-0"
-            title="Set serial number as Virtual"
-          >
-            Virtual
-          </Button>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                title="Quick select serial number"
+              >
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-40 p-2" align="end">
+              <div className="space-y-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="w-full justify-start"
+                  onClick={() => {
+                    const serialInput = document.getElementById(`${idPrefix}_serial_number`) as HTMLInputElement;
+                    if (serialInput) serialInput.value = 'Virtual';
+                  }}
+                >
+                  Virtual
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="w-full justify-start"
+                  onClick={() => {
+                    const serialInput = document.getElementById(`${idPrefix}_serial_number`) as HTMLInputElement;
+                    if (serialInput) {
+                      serialInput.value = '';
+                      serialInput.focus();
+                    }
+                  }}
+                >
+                  Custom
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
 
