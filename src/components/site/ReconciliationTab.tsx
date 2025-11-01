@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { CalendarIcon, Download, Eye, FileDown } from "lucide-react";
 import { format } from "date-fns";
@@ -731,25 +731,51 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                 <SelectValue placeholder="Select a meter" />
               </SelectTrigger>
               <SelectContent>
-                {availableMeters.map((meter) => (
-                  <SelectItem
-                    key={meter.id}
-                    value={meter.id}
-                    disabled={!meter.hasData}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span>{meter.meter_number}</span>
-                      <span className="text-muted-foreground">
-                        ({meter.meter_type.replace(/_/g, " ")})
-                      </span>
-                      {!meter.hasData && (
-                        <Badge variant="outline" className="text-xs">
-                          No data
-                        </Badge>
-                      )}
-                    </div>
-                  </SelectItem>
-                ))}
+                {(() => {
+                  // Group meters by type
+                  const groupedMeters = availableMeters.reduce((acc, meter) => {
+                    if (!acc[meter.meter_type]) {
+                      acc[meter.meter_type] = [];
+                    }
+                    acc[meter.meter_type].push(meter);
+                    return acc;
+                  }, {} as Record<string, typeof availableMeters>);
+
+                  // Sort meter types for consistent display
+                  const meterTypeOrder = ['bulk_meter', 'check_meter', 'distribution', 'tenant_meter', 'solar_meter'];
+                  const sortedTypes = Object.keys(groupedMeters).sort((a, b) => {
+                    const indexA = meterTypeOrder.indexOf(a);
+                    const indexB = meterTypeOrder.indexOf(b);
+                    if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+                    if (indexA !== -1) return -1;
+                    if (indexB !== -1) return 1;
+                    return a.localeCompare(b);
+                  });
+
+                  return sortedTypes.map((meterType) => (
+                    <SelectGroup key={meterType}>
+                      <SelectLabel>
+                        {meterType.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}
+                      </SelectLabel>
+                      {groupedMeters[meterType].map((meter) => (
+                        <SelectItem
+                          key={meter.id}
+                          value={meter.id}
+                          disabled={!meter.hasData}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span>{meter.meter_number}</span>
+                            {!meter.hasData && (
+                              <Badge variant="outline" className="text-xs">
+                                No data
+                              </Badge>
+                            )}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  ));
+                })()}
               </SelectContent>
             </Select>
             {selectedMeterId && (
