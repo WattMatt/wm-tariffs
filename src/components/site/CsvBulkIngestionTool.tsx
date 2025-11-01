@@ -1300,6 +1300,16 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
 
                 {files.filter(f => f.status === "pending").map((fileItem, index) => {
                   const actualIndex = files.indexOf(fileItem);
+                  
+                  // Get available meters for this file (exclude meters assigned to OTHER pending files)
+                  const assignedMeterIds = files
+                    .filter((f, idx) => f.status === "pending" && idx !== actualIndex && f.meterId)
+                    .map(f => f.meterId);
+                  
+                  const availableMeters = meters.filter(meter => 
+                    !assignedMeterIds.includes(meter.id) || meter.id === fileItem.meterId
+                  );
+                  
                   return (
                     <Collapsible key={actualIndex}>
                       <Card className="border-border/50">
@@ -1335,9 +1345,13 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
                               <PopoverContent className="w-[300px] p-0">
                                 <Command>
                                   <CommandInput placeholder="Search by meter number..." />
-                                  <CommandEmpty>No meter found.</CommandEmpty>
+                                  <CommandEmpty>
+                                    {availableMeters.length === 0 
+                                      ? "All meters are already assigned to other files."
+                                      : "No meter found."}
+                                  </CommandEmpty>
                                   <CommandGroup className="max-h-[300px] overflow-auto">
-                                    {meters.map((meter) => (
+                                    {availableMeters.map((meter) => (
                                       <CommandItem
                                         key={meter.id}
                                         value={`${meter.meter_number} ${meter.serial_number || ''} ${meter.name || ''}`}
