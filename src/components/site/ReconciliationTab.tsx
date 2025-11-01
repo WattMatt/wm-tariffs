@@ -38,6 +38,64 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
   const [isDateToOpen, setIsDateToOpen] = useState(false);
   const [earliestDate, setEarliestDate] = useState<string | null>(null);
   const [latestDate, setLatestDate] = useState<string | null>(null);
+  const [selectedMeterId, setSelectedMeterId] = useState<string | null>(null);
+  const [availableMeters, setAvailableMeters] = useState<Array<{
+    id: string;
+    meter_number: string;
+    meter_type: string;
+    hasData: boolean;
+  }>>([]);
+
+  // Fetch available meters with CSV data
+  useEffect(() => {
+    const fetchAvailableMeters = async () => {
+      try {
+        // Get all meters for this site
+        const { data: meters, error: metersError } = await supabase
+          .from("meters")
+          .select("id, meter_number, meter_type")
+          .eq("site_id", siteId)
+          .order("meter_number");
+
+        if (metersError || !meters) {
+          console.error("Error fetching meters:", metersError);
+          return;
+        }
+
+        // Check which meters have CSV files uploaded
+        const metersWithData = await Promise.all(
+          meters.map(async (meter) => {
+            const { data: csvFiles } = await supabase
+              .from("meter_csv_files")
+              .select("id")
+              .eq("meter_id", meter.id)
+              .limit(1);
+
+            return {
+              ...meter,
+              hasData: csvFiles && csvFiles.length > 0,
+            };
+          })
+        );
+
+        setAvailableMeters(metersWithData);
+
+        // Auto-select first meter with data, or bulk meter if available
+        const bulkMeter = metersWithData.find(m => m.meter_type === "bulk_meter" && m.hasData);
+        const firstMeterWithData = metersWithData.find(m => m.hasData);
+        
+        if (bulkMeter) {
+          setSelectedMeterId(bulkMeter.id);
+        } else if (firstMeterWithData) {
+          setSelectedMeterId(firstMeterWithData.id);
+        }
+      } catch (error) {
+        console.error("Error fetching available meters:", error);
+      }
+    };
+
+    fetchAvailableMeters();
+  }, [siteId]);
 
   // Fetch earliest and latest dates from database
   useEffect(() => {
@@ -146,29 +204,34 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
       return;
     }
 
+    if (!selectedMeterId) {
+      toast.error("Please select a meter to preview");
+      return;
+    }
+
     setIsLoadingPreview(true);
 
     try {
-      // Fetch bulk check meter
-      const { data: bulkMeters, error: metersError } = await supabase
+      // Fetch the selected meter
+      const { data: meterData, error: meterError } = await supabase
         .from("meters")
         .select("id, meter_number, meter_type")
-        .eq("site_id", siteId)
-        .eq("meter_type", "bulk_meter");
+        .eq("id", selectedMeterId)
+        .single();
 
-      if (metersError || !bulkMeters || bulkMeters.length === 0) {
-        toast.error("No bulk check meter found for this site");
+      if (meterError || !meterData) {
+        toast.error("Failed to fetch selected meter");
         setIsLoadingPreview(false);
         return;
       }
 
-      const bulkMeter = bulkMeters[0];
+      const selectedMeter = meterData;
 
       // Fetch column mapping from CSV file
       const { data: csvFile, error: csvError } = await supabase
         .from("meter_csv_files")
         .select("column_mapping")
-        .eq("meter_id", bulkMeter.id)
+        .eq("meter_id", selectedMeter.id)
         .not("column_mapping", "is", null)
         .order("parsed_at", { ascending: false })
         .limit(1)
@@ -194,7 +257,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
         const { data: pageData, error: readingsError } = await supabase
           .from("meter_readings")
           .select("*")
-          .eq("meter_id", bulkMeter.id)
+          .eq("meter_id", selectedMeter.id)
           .gte("reading_timestamp", fullDateTimeFrom)
           .lte("reading_timestamp", fullDateTimeTo)
           .order("reading_timestamp", { ascending: true })
@@ -224,7 +287,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
       }
 
       // Debug: Log actual number of readings fetched
-      console.log(`Preview: Fetched ${readings.length} readings for bulk meter ${bulkMeter.meter_number}`);
+      console.log(`Preview: Fetched ${readings.length} readings for meter ${selectedMeter.meter_number}`);
 
       // Extract available columns from column_mapping configuration
       const availableColumns = new Set<string>();
@@ -276,7 +339,8 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
       });
 
       setPreviewData({
-        meterNumber: bulkMeter.meter_number,
+        meterNumber: selectedMeter.meter_number,
+        meterType: selectedMeter.meter_type,
         totalReadings: readings.length,
         firstReading: readings[0],
         lastReading: readings[readings.length - 1],
@@ -657,6 +721,44 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label>Meter to Preview</Label>
+            <Select
+              value={selectedMeterId || ""}
+              onValueChange={setSelectedMeterId}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select a meter" />
+              </SelectTrigger>
+              <SelectContent>
+                {availableMeters.map((meter) => (
+                  <SelectItem
+                    key={meter.id}
+                    value={meter.id}
+                    disabled={!meter.hasData}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span>{meter.meter_number}</span>
+                      <span className="text-muted-foreground">
+                        ({meter.meter_type.replace(/_/g, " ")})
+                      </span>
+                      {!meter.hasData && (
+                        <Badge variant="outline" className="text-xs">
+                          No data
+                        </Badge>
+                      )}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {selectedMeterId && (
+              <p className="text-sm text-muted-foreground">
+                Selected: {availableMeters.find(m => m.id === selectedMeterId)?.meter_number}
+              </p>
+            )}
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>From Date & Time</Label>
@@ -745,9 +847,9 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
             </div>
           </div>
 
-          <Button onClick={handlePreview} disabled={isLoadingPreview || !dateFrom || !dateTo} className="w-full">
+          <Button onClick={handlePreview} disabled={isLoadingPreview || !dateFrom || !dateTo || !selectedMeterId} className="w-full">
             <Eye className="mr-2 h-4 w-4" />
-            {isLoadingPreview ? "Loading Preview..." : "Preview Bulk Meter Data"}
+            {isLoadingPreview ? "Loading Preview..." : "Preview Meter Data"}
           </Button>
         </CardContent>
       </Card>
@@ -756,7 +858,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
         <Card className="border-border/50 bg-accent/5">
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
-              <span>Bulk Check Meter Preview - {previewData.meterNumber}</span>
+              <span>Meter Data Preview - {previewData.meterNumber} ({previewData.meterType?.replace(/_/g, " ")})</span>
               <Badge variant="outline">{previewData.totalReadings} readings</Badge>
             </CardTitle>
           </CardHeader>
