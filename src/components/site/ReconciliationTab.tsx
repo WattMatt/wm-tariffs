@@ -80,16 +80,20 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
           console.error("Error fetching connections:", connectionsError);
         }
 
-        // Build a map of parent -> children
-        const parentChildMap = new Map<string, string[]>();
-        const childParentMap = new Map<string, string>();
+        // Build maps: parent_meter -> child_meter (tenant -> check)
+        // In this system, tenant meters feed INTO check meters
+        // So child_meter is the check meter, parent_meter is the tenant
+        const checkToTenants = new Map<string, string[]>(); // check meter -> tenant meters feeding into it
+        const tenantToCheck = new Map<string, string>(); // tenant meter -> its check meter
         
         (connections || []).forEach(conn => {
-          if (!parentChildMap.has(conn.parent_meter_id)) {
-            parentChildMap.set(conn.parent_meter_id, []);
+          // conn.child_meter_id is the check meter
+          // conn.parent_meter_id is the tenant meter feeding into it
+          if (!checkToTenants.has(conn.child_meter_id)) {
+            checkToTenants.set(conn.child_meter_id, []);
           }
-          parentChildMap.get(conn.parent_meter_id)!.push(conn.child_meter_id);
-          childParentMap.set(conn.child_meter_id, conn.parent_meter_id);
+          checkToTenants.get(conn.child_meter_id)!.push(conn.parent_meter_id);
+          tenantToCheck.set(conn.parent_meter_id, conn.child_meter_id);
         });
 
         // Check which meters have CSV files uploaded
@@ -108,7 +112,10 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
           })
         );
 
-        // Define type hierarchy order
+        // Create a map for quick lookup
+        const meterMap = new Map(metersWithData.map(m => [m.id, m]));
+
+        // Define type hierarchy order for sorting
         const typeOrder: { [key: string]: number } = {
           'bulk_meter': 0,
           'check_meter': 1,
@@ -116,73 +123,63 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
           'other_meter': 3
         };
 
-        // Calculate indent level for each meter based on hierarchy
-        const getIndentLevel = (meterId: string, visited = new Set<string>()): number => {
-          if (visited.has(meterId)) return 0; // Prevent infinite loops
-          visited.add(meterId);
-          
-          const parentId = childParentMap.get(meterId);
-          if (!parentId) return 0; // No parent, top level
-          
-          return 1 + getIndentLevel(parentId, visited);
-        };
-
-        // Recursive function to build hierarchical list
-        const buildHierarchy = (meterId: string, result: typeof metersWithData): void => {
-          const meter = metersWithData.find(m => m.id === meterId);
-          if (!meter) return;
-          
-          result.push(meter);
-          
-          // Get children and sort them by type order, then by meter number
-          const children = parentChildMap.get(meterId) || [];
-          const sortedChildren = children
-            .map(childId => metersWithData.find(m => m.id === childId))
-            .filter((m): m is typeof metersWithData[0] => m !== undefined)
-            .sort((a, b) => {
-              const typeOrderA = typeOrder[a.meter_type] ?? 999;
-              const typeOrderB = typeOrder[b.meter_type] ?? 999;
-              
-              if (typeOrderA !== typeOrderB) {
-                return typeOrderA - typeOrderB;
-              }
-              
-              return a.meter_number.localeCompare(b.meter_number);
-            });
-          
-          // Recursively add children
-          sortedChildren.forEach(child => {
-            buildHierarchy(child.id, result);
-          });
-        };
-
-        // Find root meters (those without parents) and sort by type
-        const rootMeters = metersWithData
-          .filter(m => !childParentMap.has(m.id))
-          .sort((a, b) => {
-            const typeOrderA = typeOrder[a.meter_type] ?? 999;
-            const typeOrderB = typeOrder[b.meter_type] ?? 999;
-            
-            if (typeOrderA !== typeOrderB) {
-              return typeOrderA - typeOrderB;
-            }
-            
-            return a.meter_number.localeCompare(b.meter_number);
-          });
-
-        // Build the hierarchical list starting from roots
+        // Build the hierarchical list
         const sortedMeters: typeof metersWithData = [];
-        rootMeters.forEach(root => {
-          buildHierarchy(root.id, sortedMeters);
-        });
-
-        // Set initial indent levels based on hierarchy
         const initialIndentLevels = new Map<string, number>();
-        sortedMeters.forEach(meter => {
-          initialIndentLevels.set(meter.id, getIndentLevel(meter.id));
-        });
-        setMeterIndentLevels(initialIndentLevels);
 
+        // First, add all bulk meters (if any)
+        const bulkMeters = metersWithData
+          .filter(m => m.meter_type === 'bulk_meter')
+          .sort((a, b) => a.meter_number.localeCompare(b.meter_number));
+        
+        bulkMeters.forEach(bulk => {
+          sortedMeters.push(bulk);
+          initialIndentLevels.set(bulk.id, 0);
+        });
+
+        // Then add check meters with their tenant meters
+        const checkMeters = metersWithData
+          .filter(m => m.meter_type === 'check_meter')
+          .sort((a, b) => a.meter_number.localeCompare(b.meter_number));
+
+        checkMeters.forEach(check => {
+          sortedMeters.push(check);
+          initialIndentLevels.set(check.id, 0);
+
+          // Add tenant meters that feed into this check meter
+          const tenantIds = checkToTenants.get(check.id) || [];
+          const tenants = tenantIds
+            .map(id => meterMap.get(id))
+            .filter((m): m is typeof metersWithData[0] => m !== undefined)
+            .sort((a, b) => a.meter_number.localeCompare(b.meter_number));
+
+          tenants.forEach(tenant => {
+            sortedMeters.push(tenant);
+            initialIndentLevels.set(tenant.id, 1);
+          });
+        });
+
+        // Add any tenant meters not connected to a check meter
+        const unconnectedTenants = metersWithData
+          .filter(m => m.meter_type === 'tenant_meter' && !tenantToCheck.has(m.id))
+          .sort((a, b) => a.meter_number.localeCompare(b.meter_number));
+
+        unconnectedTenants.forEach(tenant => {
+          sortedMeters.push(tenant);
+          initialIndentLevels.set(tenant.id, 0);
+        });
+
+        // Add any other meters
+        const otherMeters = metersWithData
+          .filter(m => m.meter_type === 'other_meter')
+          .sort((a, b) => a.meter_number.localeCompare(b.meter_number));
+
+        otherMeters.forEach(other => {
+          sortedMeters.push(other);
+          initialIndentLevels.set(other.id, 0);
+        });
+
+        setMeterIndentLevels(initialIndentLevels);
         setAvailableMeters(sortedMeters);
 
         // Auto-select first meter with data, or bulk meter if available
