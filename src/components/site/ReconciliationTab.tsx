@@ -52,7 +52,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
   const [draggedMeterId, setDraggedMeterId] = useState<string | null>(null);
   const [dragOverMeterId, setDragOverMeterId] = useState<string | null>(null);
 
-  // Fetch available meters with CSV data and organize by hierarchy
+  // Fetch available meters with CSV data
   useEffect(() => {
     const fetchAvailableMeters = async () => {
       try {
@@ -60,41 +60,13 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
         const { data: meters, error: metersError } = await supabase
           .from("meters")
           .select("id, meter_number, meter_type")
-          .eq("site_id", siteId);
+          .eq("site_id", siteId)
+          .order("meter_number");
 
         if (metersError || !meters) {
           console.error("Error fetching meters:", metersError);
           return;
         }
-
-        const meterIds = meters.map(m => m.id);
-
-        // Get meter connections for this site's meters only
-        const { data: connections, error: connectionsError } = await supabase
-          .from("meter_connections")
-          .select("parent_meter_id, child_meter_id")
-          .in("parent_meter_id", meterIds)
-          .in("child_meter_id", meterIds);
-
-        if (connectionsError) {
-          console.error("Error fetching connections:", connectionsError);
-        }
-
-        // Build maps: parent_meter -> child_meter (tenant -> check)
-        // In this system, tenant meters feed INTO check meters
-        // So child_meter is the check meter, parent_meter is the tenant
-        const checkToTenants = new Map<string, string[]>(); // check meter -> tenant meters feeding into it
-        const tenantToCheck = new Map<string, string>(); // tenant meter -> its check meter
-        
-        (connections || []).forEach(conn => {
-          // conn.child_meter_id is the check meter
-          // conn.parent_meter_id is the tenant meter feeding into it
-          if (!checkToTenants.has(conn.child_meter_id)) {
-            checkToTenants.set(conn.child_meter_id, []);
-          }
-          checkToTenants.get(conn.child_meter_id)!.push(conn.parent_meter_id);
-          tenantToCheck.set(conn.parent_meter_id, conn.child_meter_id);
-        });
 
         // Check which meters have CSV files uploaded
         const metersWithData = await Promise.all(
@@ -112,79 +84,11 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
           })
         );
 
-        // Create a map for quick lookup
-        const meterMap = new Map(metersWithData.map(m => [m.id, m]));
-
-        // Define type hierarchy order for sorting
-        const typeOrder: { [key: string]: number } = {
-          'bulk_meter': 0,
-          'check_meter': 1,
-          'tenant_meter': 2,
-          'other_meter': 3
-        };
-
-        // Build the hierarchical list
-        const sortedMeters: typeof metersWithData = [];
-        const initialIndentLevels = new Map<string, number>();
-
-        // First, add all bulk meters (if any)
-        const bulkMeters = metersWithData
-          .filter(m => m.meter_type === 'bulk_meter')
-          .sort((a, b) => a.meter_number.localeCompare(b.meter_number));
-        
-        bulkMeters.forEach(bulk => {
-          sortedMeters.push(bulk);
-          initialIndentLevels.set(bulk.id, 0);
-        });
-
-        // Then add check meters with their tenant meters
-        const checkMeters = metersWithData
-          .filter(m => m.meter_type === 'check_meter')
-          .sort((a, b) => a.meter_number.localeCompare(b.meter_number));
-
-        checkMeters.forEach(check => {
-          sortedMeters.push(check);
-          initialIndentLevels.set(check.id, 0);
-
-          // Add tenant meters that feed into this check meter
-          const tenantIds = checkToTenants.get(check.id) || [];
-          const tenants = tenantIds
-            .map(id => meterMap.get(id))
-            .filter((m): m is typeof metersWithData[0] => m !== undefined)
-            .sort((a, b) => a.meter_number.localeCompare(b.meter_number));
-
-          tenants.forEach(tenant => {
-            sortedMeters.push(tenant);
-            initialIndentLevels.set(tenant.id, 1);
-          });
-        });
-
-        // Add any tenant meters not connected to a check meter
-        const unconnectedTenants = metersWithData
-          .filter(m => m.meter_type === 'tenant_meter' && !tenantToCheck.has(m.id))
-          .sort((a, b) => a.meter_number.localeCompare(b.meter_number));
-
-        unconnectedTenants.forEach(tenant => {
-          sortedMeters.push(tenant);
-          initialIndentLevels.set(tenant.id, 0);
-        });
-
-        // Add any other meters
-        const otherMeters = metersWithData
-          .filter(m => m.meter_type === 'other_meter')
-          .sort((a, b) => a.meter_number.localeCompare(b.meter_number));
-
-        otherMeters.forEach(other => {
-          sortedMeters.push(other);
-          initialIndentLevels.set(other.id, 0);
-        });
-
-        setMeterIndentLevels(initialIndentLevels);
-        setAvailableMeters(sortedMeters);
+        setAvailableMeters(metersWithData);
 
         // Auto-select first meter with data, or bulk meter if available
-        const bulkMeter = sortedMeters.find(m => m.meter_type === "bulk_meter" && m.hasData);
-        const firstMeterWithData = sortedMeters.find(m => m.hasData);
+        const bulkMeter = metersWithData.find(m => m.meter_type === "bulk_meter" && m.hasData);
+        const firstMeterWithData = metersWithData.find(m => m.hasData);
         
         if (bulkMeter) {
           setSelectedMeterId(bulkMeter.id);
