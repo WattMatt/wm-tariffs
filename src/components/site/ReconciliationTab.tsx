@@ -7,7 +7,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { CalendarIcon, Download, Eye, FileDown } from "lucide-react";
+import { CalendarIcon, Download, Eye, FileDown, ChevronRight, ChevronLeft } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -48,6 +48,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
     latest: Date | null;
     readingsCount: number;
   }>({ earliest: null, latest: null, readingsCount: 0 });
+  const [meterIndentLevels, setMeterIndentLevels] = useState<Map<string, number>>(new Map());
 
   // Fetch available meters with CSV data
   useEffect(() => {
@@ -205,6 +206,22 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
     } finally {
       setIsRecalculating(false);
     }
+  };
+
+  const handleIndentMeter = (meterId: string) => {
+    const currentLevel = meterIndentLevels.get(meterId) || 0;
+    const newLevel = Math.min(currentLevel + 1, 3); // Max 3 levels
+    const newLevels = new Map(meterIndentLevels);
+    newLevels.set(meterId, newLevel);
+    setMeterIndentLevels(newLevels);
+  };
+
+  const handleOutdentMeter = (meterId: string) => {
+    const currentLevel = meterIndentLevels.get(meterId) || 0;
+    const newLevel = Math.max(currentLevel - 1, 0); // Min 0 levels
+    const newLevels = new Map(meterIndentLevels);
+    newLevels.set(meterId, newLevel);
+    setMeterIndentLevels(newLevels);
   };
 
   // Helper to combine date and time and format as naive timestamp string
@@ -1051,17 +1068,45 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                 {availableMeters.length === 0 ? (
                   <div className="text-sm text-muted-foreground italic">No meters found for this site</div>
                 ) : (
-                  availableMeters.map((meter) => (
-                    <div 
-                      key={meter.id} 
-                      className="flex items-center justify-between p-3 rounded-md border bg-card hover:bg-accent/5 transition-colors"
-                    >
-                      <div className="font-medium">{meter.meter_number}</div>
-                      <Badge variant={meter.hasData ? "default" : "secondary"}>
-                        {meter.hasData ? "Has Data" : "No Data"}
-                      </Badge>
-                    </div>
-                  ))
+                  availableMeters.map((meter) => {
+                    const indentLevel = meterIndentLevels.get(meter.id) || 0;
+                    const marginLeft = indentLevel * 24; // 24px per indent level
+                    
+                    return (
+                      <div 
+                        key={meter.id} 
+                        className="flex items-center gap-2"
+                        style={{ marginLeft: `${marginLeft}px` }}
+                      >
+                        <div className="flex gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0"
+                            onClick={() => handleOutdentMeter(meter.id)}
+                            disabled={indentLevel === 0}
+                          >
+                            <ChevronLeft className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0"
+                            onClick={() => handleIndentMeter(meter.id)}
+                            disabled={indentLevel >= 3}
+                          >
+                            <ChevronRight className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <div className="flex items-center justify-between flex-1 p-3 rounded-md border bg-card hover:bg-accent/5 transition-colors">
+                          <div className="font-medium">{meter.meter_number}</div>
+                          <Badge variant={meter.hasData ? "default" : "secondary"}>
+                            {meter.hasData ? "Has Data" : "No Data"}
+                          </Badge>
+                        </div>
+                      </div>
+                    );
+                  })
                 )}
               </div>
             </div>
