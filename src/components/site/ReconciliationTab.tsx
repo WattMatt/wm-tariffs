@@ -52,7 +52,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
   const [draggedMeterId, setDraggedMeterId] = useState<string | null>(null);
   const [dragOverMeterId, setDragOverMeterId] = useState<string | null>(null);
 
-  // Fetch available meters with CSV data
+  // Fetch available meters with CSV data and build hierarchy
   useEffect(() => {
     const fetchAvailableMeters = async () => {
       try {
@@ -67,6 +67,27 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
           console.error("Error fetching meters:", metersError);
           return;
         }
+
+        // Fetch meter connections
+        const { data: connections, error: connectionsError } = await supabase
+          .from("meter_connections")
+          .select("parent_meter_id, child_meter_id");
+
+        if (connectionsError) {
+          console.error("Error fetching meter connections:", connectionsError);
+        }
+
+        // Build connection maps
+        const parentToChildren = new Map<string, string[]>();
+        const childToParent = new Map<string, string>();
+        
+        connections?.forEach(conn => {
+          if (!parentToChildren.has(conn.parent_meter_id)) {
+            parentToChildren.set(conn.parent_meter_id, []);
+          }
+          parentToChildren.get(conn.parent_meter_id)!.push(conn.child_meter_id);
+          childToParent.set(conn.child_meter_id, conn.parent_meter_id);
+        });
 
         // Check which meters have CSV files uploaded
         const metersWithData = await Promise.all(
@@ -84,11 +105,52 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
           })
         );
 
-        setAvailableMeters(metersWithData);
+        // Build hierarchical meter list
+        const meterMap = new Map(metersWithData.map(m => [m.id, m]));
+        const processedMeters = new Set<string>();
+        const hierarchicalMeters: typeof metersWithData = [];
+        const indentLevels = new Map<string, number>();
+
+        // Recursive function to add meter and its children
+        const addMeterWithChildren = (meterId: string, level: number) => {
+          if (processedMeters.has(meterId)) return;
+          
+          const meter = meterMap.get(meterId);
+          if (!meter) return;
+          
+          processedMeters.add(meterId);
+          hierarchicalMeters.push(meter);
+          indentLevels.set(meterId, level);
+          
+          // Add children
+          const children = parentToChildren.get(meterId) || [];
+          children.forEach(childId => {
+            addMeterWithChildren(childId, level + 1);
+          });
+        };
+
+        // Find root meters (no parent) and sort by type priority
+        const typeOrder = { 'bulk_meter': 0, 'check_meter': 1, 'tenant_meter': 2, 'other': 3 };
+        const rootMeters = metersWithData
+          .filter(m => !childToParent.has(m.id))
+          .sort((a, b) => {
+            const typeCompare = (typeOrder[a.meter_type as keyof typeof typeOrder] || 999) - 
+                               (typeOrder[b.meter_type as keyof typeof typeOrder] || 999);
+            if (typeCompare !== 0) return typeCompare;
+            return a.meter_number.localeCompare(b.meter_number);
+          });
+
+        // Build hierarchy starting from root meters
+        rootMeters.forEach(meter => {
+          addMeterWithChildren(meter.id, 0);
+        });
+
+        setAvailableMeters(hierarchicalMeters);
+        setMeterIndentLevels(indentLevels);
 
         // Auto-select first meter with data, or bulk meter if available
-        const bulkMeter = metersWithData.find(m => m.meter_type === "bulk_meter" && m.hasData);
-        const firstMeterWithData = metersWithData.find(m => m.hasData);
+        const bulkMeter = hierarchicalMeters.find(m => m.meter_type === "bulk_meter" && m.hasData);
+        const firstMeterWithData = hierarchicalMeters.find(m => m.hasData);
         
         if (bulkMeter) {
           setSelectedMeterId(bulkMeter.id);
