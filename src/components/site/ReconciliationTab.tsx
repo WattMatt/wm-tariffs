@@ -67,10 +67,14 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
           return;
         }
 
-        // Get meter connections
+        const meterIds = meters.map(m => m.id);
+
+        // Get meter connections for this site's meters only
         const { data: connections, error: connectionsError } = await supabase
           .from("meter_connections")
-          .select("parent_meter_id, child_meter_id");
+          .select("parent_meter_id, child_meter_id")
+          .in("parent_meter_id", meterIds)
+          .in("child_meter_id", meterIds);
 
         if (connectionsError) {
           console.error("Error fetching connections:", connectionsError);
@@ -123,34 +127,61 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
           return 1 + getIndentLevel(parentId, visited);
         };
 
-        // Set initial indent levels
+        // Recursive function to build hierarchical list
+        const buildHierarchy = (meterId: string, result: typeof metersWithData): void => {
+          const meter = metersWithData.find(m => m.id === meterId);
+          if (!meter) return;
+          
+          result.push(meter);
+          
+          // Get children and sort them by type order, then by meter number
+          const children = parentChildMap.get(meterId) || [];
+          const sortedChildren = children
+            .map(childId => metersWithData.find(m => m.id === childId))
+            .filter((m): m is typeof metersWithData[0] => m !== undefined)
+            .sort((a, b) => {
+              const typeOrderA = typeOrder[a.meter_type] ?? 999;
+              const typeOrderB = typeOrder[b.meter_type] ?? 999;
+              
+              if (typeOrderA !== typeOrderB) {
+                return typeOrderA - typeOrderB;
+              }
+              
+              return a.meter_number.localeCompare(b.meter_number);
+            });
+          
+          // Recursively add children
+          sortedChildren.forEach(child => {
+            buildHierarchy(child.id, result);
+          });
+        };
+
+        // Find root meters (those without parents) and sort by type
+        const rootMeters = metersWithData
+          .filter(m => !childParentMap.has(m.id))
+          .sort((a, b) => {
+            const typeOrderA = typeOrder[a.meter_type] ?? 999;
+            const typeOrderB = typeOrder[b.meter_type] ?? 999;
+            
+            if (typeOrderA !== typeOrderB) {
+              return typeOrderA - typeOrderB;
+            }
+            
+            return a.meter_number.localeCompare(b.meter_number);
+          });
+
+        // Build the hierarchical list starting from roots
+        const sortedMeters: typeof metersWithData = [];
+        rootMeters.forEach(root => {
+          buildHierarchy(root.id, sortedMeters);
+        });
+
+        // Set initial indent levels based on hierarchy
         const initialIndentLevels = new Map<string, number>();
-        metersWithData.forEach(meter => {
+        sortedMeters.forEach(meter => {
           initialIndentLevels.set(meter.id, getIndentLevel(meter.id));
         });
         setMeterIndentLevels(initialIndentLevels);
-
-        // Sort meters by hierarchy: first by indent level, then by type, then by meter number
-        const sortedMeters = [...metersWithData].sort((a, b) => {
-          const levelA = getIndentLevel(a.id);
-          const levelB = getIndentLevel(b.id);
-          
-          // If different levels, sort by level (lower first)
-          if (levelA !== levelB) {
-            return levelA - levelB;
-          }
-          
-          // Same level, sort by type order
-          const typeOrderA = typeOrder[a.meter_type] ?? 999;
-          const typeOrderB = typeOrder[b.meter_type] ?? 999;
-          
-          if (typeOrderA !== typeOrderB) {
-            return typeOrderA - typeOrderB;
-          }
-          
-          // Same type, sort by meter number
-          return a.meter_number.localeCompare(b.meter_number);
-        });
 
         setAvailableMeters(sortedMeters);
 
