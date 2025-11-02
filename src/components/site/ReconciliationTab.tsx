@@ -111,39 +111,70 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
         const hierarchicalMeters: typeof metersWithData = [];
         const indentLevels = new Map<string, number>();
 
-        // Recursive function to add meter and its children
-        const addMeterWithChildren = (meterId: string, level: number) => {
-          if (processedMeters.has(meterId)) return;
-          
-          const meter = meterMap.get(meterId);
-          if (!meter) return;
-          
-          processedMeters.add(meterId);
-          hierarchicalMeters.push(meter);
-          indentLevels.set(meterId, level);
-          
-          // Add children
-          const children = parentToChildren.get(meterId) || [];
-          children.forEach(childId => {
-            addMeterWithChildren(childId, level + 1);
-          });
-        };
+        // Check if we have any connections in the database
+        const hasConnections = connections && connections.length > 0;
 
-        // Find root meters (no parent) and sort by type priority
-        const typeOrder = { 'bulk_meter': 0, 'check_meter': 1, 'tenant_meter': 2, 'other': 3 };
-        const rootMeters = metersWithData
-          .filter(m => !childToParent.has(m.id))
-          .sort((a, b) => {
-            const typeCompare = (typeOrder[a.meter_type as keyof typeof typeOrder] || 999) - 
-                               (typeOrder[b.meter_type as keyof typeof typeOrder] || 999);
-            if (typeCompare !== 0) return typeCompare;
+        if (hasConnections) {
+          // Use database connections to build hierarchy
+          // Recursive function to add meter and its children
+          const addMeterWithChildren = (meterId: string, level: number) => {
+            if (processedMeters.has(meterId)) return;
+            
+            const meter = meterMap.get(meterId);
+            if (!meter) return;
+            
+            processedMeters.add(meterId);
+            hierarchicalMeters.push(meter);
+            indentLevels.set(meterId, level);
+            
+            // Add children
+            const children = parentToChildren.get(meterId) || [];
+            children.forEach(childId => {
+              addMeterWithChildren(childId, level + 1);
+            });
+          };
+
+          // Find root meters (no parent) and sort by type priority
+          const typeOrder = { 'bulk_meter': 0, 'check_meter': 1, 'tenant_meter': 2, 'other': 3 };
+          const rootMeters = metersWithData
+            .filter(m => !childToParent.has(m.id))
+            .sort((a, b) => {
+              const typeCompare = (typeOrder[a.meter_type as keyof typeof typeOrder] || 999) - 
+                                 (typeOrder[b.meter_type as keyof typeof typeOrder] || 999);
+              if (typeCompare !== 0) return typeCompare;
+              return a.meter_number.localeCompare(b.meter_number);
+            });
+
+          // Build hierarchy starting from root meters
+          rootMeters.forEach(meter => {
+            addMeterWithChildren(meter.id, 0);
+          });
+        } else {
+          // Fallback: Use meter types to create visual hierarchy
+          // Bulk (0) → Check (1) → Tenant (2) → Other (3)
+          const getIndentByType = (meterType: string): number => {
+            switch (meterType) {
+              case 'bulk_meter': return 0;
+              case 'check_meter': return 1;
+              case 'tenant_meter': return 2;
+              case 'other': return 3;
+              default: return 3;
+            }
+          };
+
+          // Sort meters by type hierarchy
+          const sortedMeters = [...metersWithData].sort((a, b) => {
+            const levelA = getIndentByType(a.meter_type);
+            const levelB = getIndentByType(b.meter_type);
+            if (levelA !== levelB) return levelA - levelB;
             return a.meter_number.localeCompare(b.meter_number);
           });
 
-        // Build hierarchy starting from root meters
-        rootMeters.forEach(meter => {
-          addMeterWithChildren(meter.id, 0);
-        });
+          sortedMeters.forEach(meter => {
+            hierarchicalMeters.push(meter);
+            indentLevels.set(meter.id, getIndentByType(meter.meter_type));
+          });
+        }
 
         setAvailableMeters(hierarchicalMeters);
         setMeterIndentLevels(indentLevels);
