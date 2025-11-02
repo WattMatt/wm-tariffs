@@ -109,29 +109,45 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
 
     const fetchMeterDateRange = async () => {
       try {
-        const { data, error } = await supabase
+        // Get earliest timestamp
+        const { data: earliestData, error: earliestError } = await supabase
           .from("meter_readings")
           .select("reading_timestamp")
           .eq("meter_id", selectedMeterId)
-          .order("reading_timestamp", { ascending: true });
+          .order("reading_timestamp", { ascending: true })
+          .limit(1);
 
-        if (error) {
-          console.error("Error fetching meter date range:", error);
+        // Get latest timestamp
+        const { data: latestData, error: latestError } = await supabase
+          .from("meter_readings")
+          .select("reading_timestamp")
+          .eq("meter_id", selectedMeterId)
+          .order("reading_timestamp", { ascending: false })
+          .limit(1);
+
+        // Get total count
+        const { count, error: countError } = await supabase
+          .from("meter_readings")
+          .select("*", { count: "exact", head: true })
+          .eq("meter_id", selectedMeterId);
+
+        if (earliestError || latestError || countError) {
+          console.error("Error fetching meter date range:", earliestError || latestError || countError);
           return;
         }
 
-        if (!data || data.length === 0) {
+        if (!earliestData || earliestData.length === 0 || !latestData || latestData.length === 0) {
           setMeterDateRange({ earliest: null, latest: null, readingsCount: 0 });
           return;
         }
 
-        const earliest = new Date(data[0].reading_timestamp);
-        const latest = new Date(data[data.length - 1].reading_timestamp);
+        const earliest = new Date(earliestData[0].reading_timestamp);
+        const latest = new Date(latestData[0].reading_timestamp);
 
         setMeterDateRange({
           earliest,
           latest,
-          readingsCount: data.length
+          readingsCount: count || 0
         });
 
         // Auto-adjust date pickers to meter's date range
