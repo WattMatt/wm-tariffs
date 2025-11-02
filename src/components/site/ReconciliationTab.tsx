@@ -49,6 +49,8 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
     readingsCount: number;
   }>({ earliest: null, latest: null, readingsCount: 0 });
   const [meterIndentLevels, setMeterIndentLevels] = useState<Map<string, number>>(new Map());
+  const [draggedMeterId, setDraggedMeterId] = useState<string | null>(null);
+  const [dragOverMeterId, setDragOverMeterId] = useState<string | null>(null);
 
   // Fetch available meters with CSV data
   useEffect(() => {
@@ -222,6 +224,56 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
     const newLevels = new Map(meterIndentLevels);
     newLevels.set(meterId, newLevel);
     setMeterIndentLevels(newLevels);
+  };
+
+  const handleDragStart = (e: React.DragEvent, meterId: string) => {
+    setDraggedMeterId(meterId);
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+
+  const handleDragEnter = (meterId: string) => {
+    setDragOverMeterId(meterId);
+  };
+
+  const handleDragLeave = () => {
+    setDragOverMeterId(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, targetMeterId: string) => {
+    e.preventDefault();
+    
+    if (!draggedMeterId || draggedMeterId === targetMeterId) {
+      setDraggedMeterId(null);
+      setDragOverMeterId(null);
+      return;
+    }
+
+    const draggedIndex = availableMeters.findIndex(m => m.id === draggedMeterId);
+    const targetIndex = availableMeters.findIndex(m => m.id === targetMeterId);
+
+    if (draggedIndex === -1 || targetIndex === -1) {
+      setDraggedMeterId(null);
+      setDragOverMeterId(null);
+      return;
+    }
+
+    const newMeters = [...availableMeters];
+    const [removed] = newMeters.splice(draggedIndex, 1);
+    newMeters.splice(targetIndex, 0, removed);
+
+    setAvailableMeters(newMeters);
+    setDraggedMeterId(null);
+    setDragOverMeterId(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedMeterId(null);
+    setDragOverMeterId(null);
   };
 
   // Helper to combine date and time and format as naive timestamp string
@@ -1071,6 +1123,8 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                   availableMeters.map((meter) => {
                     const indentLevel = meterIndentLevels.get(meter.id) || 0;
                     const marginLeft = indentLevel * 24; // 24px per indent level
+                    const isDragging = draggedMeterId === meter.id;
+                    const isDragOver = dragOverMeterId === meter.id;
                     
                     return (
                       <div 
@@ -1098,7 +1152,20 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                             <ChevronRight className="h-4 w-4" />
                           </Button>
                         </div>
-                        <div className="flex items-center justify-between flex-1 p-3 rounded-md border bg-card hover:bg-accent/5 transition-colors">
+                        <div 
+                          className={cn(
+                            "flex items-center justify-between flex-1 p-3 rounded-md border bg-card hover:bg-accent/5 transition-colors cursor-move",
+                            isDragging && "opacity-50",
+                            isDragOver && "border-primary border-2"
+                          )}
+                          draggable
+                          onDragStart={(e) => handleDragStart(e, meter.id)}
+                          onDragOver={handleDragOver}
+                          onDragEnter={() => handleDragEnter(meter.id)}
+                          onDragLeave={handleDragLeave}
+                          onDrop={(e) => handleDrop(e, meter.id)}
+                          onDragEnd={handleDragEnd}
+                        >
                           <div className="font-medium">{meter.meter_number}</div>
                           <Badge variant={meter.hasData ? "default" : "secondary"}>
                             {meter.hasData ? "Has Data" : "No Data"}
