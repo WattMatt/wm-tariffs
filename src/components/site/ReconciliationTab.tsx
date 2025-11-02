@@ -52,7 +52,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
   const [draggedMeterId, setDraggedMeterId] = useState<string | null>(null);
   const [dragOverMeterId, setDragOverMeterId] = useState<string | null>(null);
 
-  // Fetch available meters with CSV data
+  // Fetch available meters with CSV data and organize by hierarchy
   useEffect(() => {
     const fetchAvailableMeters = async () => {
       try {
@@ -60,13 +60,33 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
         const { data: meters, error: metersError } = await supabase
           .from("meters")
           .select("id, meter_number, meter_type")
-          .eq("site_id", siteId)
-          .order("meter_number");
+          .eq("site_id", siteId);
 
         if (metersError || !meters) {
           console.error("Error fetching meters:", metersError);
           return;
         }
+
+        // Get meter connections
+        const { data: connections, error: connectionsError } = await supabase
+          .from("meter_connections")
+          .select("parent_meter_id, child_meter_id");
+
+        if (connectionsError) {
+          console.error("Error fetching connections:", connectionsError);
+        }
+
+        // Build a map of parent -> children
+        const parentChildMap = new Map<string, string[]>();
+        const childParentMap = new Map<string, string>();
+        
+        (connections || []).forEach(conn => {
+          if (!parentChildMap.has(conn.parent_meter_id)) {
+            parentChildMap.set(conn.parent_meter_id, []);
+          }
+          parentChildMap.get(conn.parent_meter_id)!.push(conn.child_meter_id);
+          childParentMap.set(conn.child_meter_id, conn.parent_meter_id);
+        });
 
         // Check which meters have CSV files uploaded
         const metersWithData = await Promise.all(
@@ -84,11 +104,59 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
           })
         );
 
-        setAvailableMeters(metersWithData);
+        // Define type hierarchy order
+        const typeOrder: { [key: string]: number } = {
+          'bulk_meter': 0,
+          'check_meter': 1,
+          'tenant_meter': 2,
+          'other_meter': 3
+        };
+
+        // Calculate indent level for each meter based on hierarchy
+        const getIndentLevel = (meterId: string, visited = new Set<string>()): number => {
+          if (visited.has(meterId)) return 0; // Prevent infinite loops
+          visited.add(meterId);
+          
+          const parentId = childParentMap.get(meterId);
+          if (!parentId) return 0; // No parent, top level
+          
+          return 1 + getIndentLevel(parentId, visited);
+        };
+
+        // Set initial indent levels
+        const initialIndentLevels = new Map<string, number>();
+        metersWithData.forEach(meter => {
+          initialIndentLevels.set(meter.id, getIndentLevel(meter.id));
+        });
+        setMeterIndentLevels(initialIndentLevels);
+
+        // Sort meters by hierarchy: first by indent level, then by type, then by meter number
+        const sortedMeters = [...metersWithData].sort((a, b) => {
+          const levelA = getIndentLevel(a.id);
+          const levelB = getIndentLevel(b.id);
+          
+          // If different levels, sort by level (lower first)
+          if (levelA !== levelB) {
+            return levelA - levelB;
+          }
+          
+          // Same level, sort by type order
+          const typeOrderA = typeOrder[a.meter_type] ?? 999;
+          const typeOrderB = typeOrder[b.meter_type] ?? 999;
+          
+          if (typeOrderA !== typeOrderB) {
+            return typeOrderA - typeOrderB;
+          }
+          
+          // Same type, sort by meter number
+          return a.meter_number.localeCompare(b.meter_number);
+        });
+
+        setAvailableMeters(sortedMeters);
 
         // Auto-select first meter with data, or bulk meter if available
-        const bulkMeter = metersWithData.find(m => m.meter_type === "bulk_meter" && m.hasData);
-        const firstMeterWithData = metersWithData.find(m => m.hasData);
+        const bulkMeter = sortedMeters.find(m => m.meter_type === "bulk_meter" && m.hasData);
+        const firstMeterWithData = sortedMeters.find(m => m.hasData);
         
         if (bulkMeter) {
           setSelectedMeterId(bulkMeter.id);
