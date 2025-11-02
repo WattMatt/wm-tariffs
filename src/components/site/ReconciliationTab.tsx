@@ -36,18 +36,20 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
   const [isDateFromOpen, setIsDateFromOpen] = useState(false);
   const [isDateToOpen, setIsDateToOpen] = useState(false);
-  const [selectedMeterIds, setSelectedMeterIds] = useState<Set<string>>(new Set());
+  const [selectedMeterId, setSelectedMeterId] = useState<string | null>(null);
   const [availableMeters, setAvailableMeters] = useState<Array<{
     id: string;
     meter_number: string;
     meter_type: string;
     hasData: boolean;
+  }>>([]);
+  const [meterDateRange, setMeterDateRange] = useState<{
     earliest: Date | null;
     latest: Date | null;
     readingsCount: number;
-  }>>([]);
+  }>({ earliest: null, latest: null, readingsCount: 0 });
 
-  // Fetch available meters with their data ranges
+  // Fetch available meters with CSV data
   useEffect(() => {
     const fetchAvailableMeters = async () => {
       try {
@@ -63,7 +65,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
           return;
         }
 
-        // Check which meters have CSV files and get their date ranges
+        // Check which meters have CSV files uploaded
         const metersWithData = await Promise.all(
           meters.map(async (meter) => {
             const { data: csvFiles } = await supabase
@@ -72,48 +74,23 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
               .eq("meter_id", meter.id)
               .limit(1);
 
-            const hasData = csvFiles && csvFiles.length > 0;
-            
-            let earliest: Date | null = null;
-            let latest: Date | null = null;
-            let readingsCount = 0;
-
-            if (hasData) {
-              const { data: readings } = await supabase
-                .from("meter_readings")
-                .select("reading_timestamp")
-                .eq("meter_id", meter.id)
-                .order("reading_timestamp", { ascending: true });
-
-              if (readings && readings.length > 0) {
-                earliest = new Date(readings[0].reading_timestamp);
-                latest = new Date(readings[readings.length - 1].reading_timestamp);
-                readingsCount = readings.length;
-              }
-            }
-
             return {
               ...meter,
-              hasData,
-              earliest,
-              latest,
-              readingsCount,
+              hasData: csvFiles && csvFiles.length > 0,
             };
           })
         );
 
         setAvailableMeters(metersWithData);
 
-        // Auto-select bulk meter if available
+        // Auto-select first meter with data, or bulk meter if available
         const bulkMeter = metersWithData.find(m => m.meter_type === "bulk_meter" && m.hasData);
+        const firstMeterWithData = metersWithData.find(m => m.hasData);
+        
         if (bulkMeter) {
-          setSelectedMeterIds(new Set([bulkMeter.id]));
-          if (bulkMeter.earliest && bulkMeter.latest) {
-            setDateFrom(bulkMeter.earliest);
-            setDateTo(bulkMeter.latest);
-            setTimeFrom(format(bulkMeter.earliest, "HH:mm"));
-            setTimeTo(format(bulkMeter.latest, "HH:mm"));
-          }
+          setSelectedMeterId(bulkMeter.id);
+        } else if (firstMeterWithData) {
+          setSelectedMeterId(firstMeterWithData.id);
         }
       } catch (error) {
         console.error("Error fetching available meters:", error);
@@ -123,6 +100,52 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
     fetchAvailableMeters();
   }, [siteId]);
 
+  // Fetch meter-specific date range when meter is selected
+  useEffect(() => {
+    if (!selectedMeterId) {
+      setMeterDateRange({ earliest: null, latest: null, readingsCount: 0 });
+      return;
+    }
+
+    const fetchMeterDateRange = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("meter_readings")
+          .select("reading_timestamp")
+          .eq("meter_id", selectedMeterId)
+          .order("reading_timestamp", { ascending: true });
+
+        if (error) {
+          console.error("Error fetching meter date range:", error);
+          return;
+        }
+
+        if (!data || data.length === 0) {
+          setMeterDateRange({ earliest: null, latest: null, readingsCount: 0 });
+          return;
+        }
+
+        const earliest = new Date(data[0].reading_timestamp);
+        const latest = new Date(data[data.length - 1].reading_timestamp);
+
+        setMeterDateRange({
+          earliest,
+          latest,
+          readingsCount: data.length
+        });
+
+        // Auto-adjust date pickers to meter's date range
+        setDateFrom(earliest);
+        setDateTo(latest);
+        setTimeFrom(format(earliest, "HH:mm"));
+        setTimeTo(format(latest, "HH:mm"));
+      } catch (error) {
+        console.error("Error fetching meter date range:", error);
+      }
+    };
+
+    fetchMeterDateRange();
+  }, [selectedMeterId]);
 
   const handleRecalculateTotals = () => {
     if (!previewData || selectedColumns.size === 0) {
@@ -186,90 +209,124 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
       return;
     }
 
-    if (selectedMeterIds.size === 0) {
-      toast.error("Please select at least one meter to preview");
+    if (!selectedMeterId) {
+      toast.error("Please select a meter to preview");
       return;
     }
 
     setIsLoadingPreview(true);
 
     try {
+      // First check if there's any data in the selected range
       const fullDateTimeFrom = getFullDateTime(dateFrom, timeFrom);
       const fullDateTimeTo = getFullDateTime(dateTo, timeTo);
 
-      const selectedMeterIdsArray = Array.from(selectedMeterIds);
-      const selectedMetersData = availableMeters.filter(m => selectedMeterIds.has(m.id));
+      const { count, error: countError } = await supabase
+        .from("meter_readings")
+        .select("*", { count: "exact", head: true })
+        .eq("meter_id", selectedMeterId)
+        .gte("reading_timestamp", fullDateTimeFrom)
+        .lte("reading_timestamp", fullDateTimeTo);
 
-      // Fetch readings for all selected meters
-      let allReadings: any[] = [];
-      let columnMapping: any = null;
+      if (countError) throw countError;
 
-      for (const meterId of selectedMeterIdsArray) {
-        // Fetch column mapping from first meter's CSV file
-        if (!columnMapping) {
-          const { data: csvFile } = await supabase
-            .from("meter_csv_files")
-            .select("column_mapping")
-            .eq("meter_id", meterId)
-            .not("column_mapping", "is", null)
-            .order("parsed_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          
-          if (csvFile) {
-            columnMapping = csvFile.column_mapping as any;
-          }
-        }
-
-        // Fetch ALL readings using pagination
-        let from = 0;
-        const pageSize = 1000;
-        let hasMore = true;
-
-        while (hasMore) {
-          const { data: pageData, error: readingsError } = await supabase
-            .from("meter_readings")
-            .select("*")
-            .eq("meter_id", meterId)
-            .gte("reading_timestamp", fullDateTimeFrom)
-            .lte("reading_timestamp", fullDateTimeTo)
-            .order("reading_timestamp", { ascending: true })
-            .range(from, from + pageSize - 1);
-
-          if (readingsError) {
-            toast.error(`Failed to fetch readings: ${readingsError.message}`);
-            setIsLoadingPreview(false);
-            return;
-          }
-
-          if (pageData && pageData.length > 0) {
-            allReadings = [...allReadings, ...pageData];
-            from += pageSize;
-            hasMore = pageData.length === pageSize;
-          } else {
-            hasMore = false;
-          }
-        }
-      }
-
-      if (allReadings.length === 0) {
-        toast.error("No readings found for selected meters in date range");
+      if (count === 0) {
+        toast.error(
+          `No data found for the selected date range. This meter has data from ${
+            meterDateRange.earliest ? format(meterDateRange.earliest, "MMM dd, yyyy") : "N/A"
+          } to ${
+            meterDateRange.latest ? format(meterDateRange.latest, "MMM dd, yyyy") : "N/A"
+          }`
+        );
         setIsLoadingPreview(false);
         return;
       }
 
-      console.log(`Preview: Fetched ${allReadings.length} readings from ${selectedMeterIdsArray.length} meter(s)`);
+      // Fetch the selected meter
+      const { data: meterData, error: meterError } = await supabase
+        .from("meters")
+        .select("id, meter_number, meter_type")
+        .eq("id", selectedMeterId)
+        .single();
 
-      // Extract available columns
+      if (meterError || !meterData) {
+        toast.error("Failed to fetch selected meter");
+        setIsLoadingPreview(false);
+        return;
+      }
+
+      const selectedMeter = meterData;
+
+      // Fetch column mapping from CSV file
+      const { data: csvFile, error: csvError } = await supabase
+        .from("meter_csv_files")
+        .select("column_mapping")
+        .eq("meter_id", selectedMeter.id)
+        .not("column_mapping", "is", null)
+        .order("parsed_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (csvError) {
+        console.error("Error fetching column mapping:", csvError);
+      }
+
+      const columnMapping = csvFile?.column_mapping as any;
+
+      // Fetch ALL readings using pagination (Supabase has 1000-row server limit)
+      let allReadings: any[] = [];
+      let from = 0;
+      const pageSize = 1000;
+      let hasMore = true;
+
+      while (hasMore) {
+        const { data: pageData, error: readingsError } = await supabase
+          .from("meter_readings")
+          .select("*")
+          .eq("meter_id", selectedMeter.id)
+          .gte("reading_timestamp", fullDateTimeFrom)
+          .lte("reading_timestamp", fullDateTimeTo)
+          .order("reading_timestamp", { ascending: true })
+          .range(from, from + pageSize - 1);
+
+        if (readingsError) {
+          toast.error(`Failed to fetch readings: ${readingsError.message}`);
+          setIsLoadingPreview(false);
+          return;
+        }
+
+        if (pageData && pageData.length > 0) {
+          allReadings = [...allReadings, ...pageData];
+          from += pageSize;
+          hasMore = pageData.length === pageSize; // Continue if we got a full page
+        } else {
+          hasMore = false;
+        }
+      }
+
+      const readings = allReadings;
+
+      if (!readings || readings.length === 0) {
+        toast.error("No readings found in selected date range");
+        setIsLoadingPreview(false);
+        return;
+      }
+
+      // Debug: Log actual number of readings fetched
+      console.log(`Preview: Fetched ${readings.length} readings for meter ${selectedMeter.meter_number}`);
+
+      // Extract available columns from column_mapping configuration
       const availableColumns = new Set<string>();
       if (columnMapping && columnMapping.renamedHeaders) {
+        // Use the renamed headers from the parsing configuration
         Object.values(columnMapping.renamedHeaders).forEach((headerName: any) => {
           if (headerName && typeof headerName === 'string') {
             availableColumns.add(headerName);
           }
         });
-      } else if (allReadings.length > 0) {
-        const metadata = allReadings[0].metadata as any;
+      } else if (readings.length > 0) {
+        // Fallback: extract from first reading's metadata if no column mapping
+        const metadata = readings[0].metadata as any;
         if (metadata && metadata.imported_fields) {
           Object.keys(metadata.imported_fields).forEach(key => {
             availableColumns.add(key);
@@ -277,24 +334,28 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
         }
       }
 
+      // Debug logging
       console.log('Column Mapping:', columnMapping);
       console.log('Available Columns:', Array.from(availableColumns));
-      console.log('Sample Reading Metadata:', allReadings[0]?.metadata);
+      console.log('Sample Reading Metadata:', readings[0]?.metadata);
 
+      // Auto-select all columns initially
       setSelectedColumns(new Set(availableColumns));
 
-      // Calculate totals across all selected meters
-      const totalKwh = allReadings.reduce((sum, r) => sum + Number(r.kwh_value || 0), 0);
+      // Calculate totals and store raw values for operations
+      const totalKwh = readings.reduce((sum, r) => sum + Number(r.kwh_value || 0), 0);
       const columnTotals: Record<string, number> = {};
       const columnValues: Record<string, number[]> = {};
       
-      allReadings.forEach(reading => {
+      readings.forEach(reading => {
         const metadata = reading.metadata as any;
         const importedFields = metadata?.imported_fields || {};
         Object.entries(importedFields).forEach(([key, value]) => {
           const numValue = Number(value);
           if (!isNaN(numValue) && value !== null && value !== '') {
+            // Store for sum operation
             columnTotals[key] = (columnTotals[key] || 0) + numValue;
+            // Store raw values for other operations
             if (!columnValues[key]) {
               columnValues[key] = [];
             }
@@ -303,15 +364,13 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
         });
       });
 
-      const meterNumbers = selectedMetersData.map(m => m.meter_number).join(", ");
-
       setPreviewData({
-        meterNumber: meterNumbers,
-        meterType: selectedMeterIdsArray.length > 1 ? "combined" : selectedMetersData[0]?.meter_type,
-        totalReadings: allReadings.length,
-        firstReading: allReadings[0],
-        lastReading: allReadings[allReadings.length - 1],
-        sampleReadings: allReadings.slice(0, 5),
+        meterNumber: selectedMeter.meter_number,
+        meterType: selectedMeter.meter_type,
+        totalReadings: readings.length,
+        firstReading: readings[0],
+        lastReading: readings[readings.length - 1],
+        sampleReadings: readings.slice(0, 5),
         availableColumns: Array.from(availableColumns),
         totalKwh,
         columnTotals,
@@ -666,71 +725,80 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
           <CardDescription>Select date range for reconciliation</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <Label>Select Meters to Stack</Label>
-              <div className="text-xs text-muted-foreground">
-                {selectedMeterIds.size} meter{selectedMeterIds.size !== 1 ? 's' : ''} selected
+          <div className="space-y-2">
+            <Label>Meter to Preview</Label>
+            <Select
+              value={selectedMeterId || ""}
+              onValueChange={setSelectedMeterId}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select a meter" />
+              </SelectTrigger>
+              <SelectContent>
+                {(() => {
+                  // Group meters by type
+                  const groupedMeters = availableMeters.reduce((acc, meter) => {
+                    if (!acc[meter.meter_type]) {
+                      acc[meter.meter_type] = [];
+                    }
+                    acc[meter.meter_type].push(meter);
+                    return acc;
+                  }, {} as Record<string, typeof availableMeters>);
+
+                  // Sort meter types for consistent display
+                  const meterTypeOrder = ['bulk_meter', 'check_meter', 'distribution', 'tenant_meter', 'solar_meter'];
+                  const sortedTypes = Object.keys(groupedMeters).sort((a, b) => {
+                    const indexA = meterTypeOrder.indexOf(a);
+                    const indexB = meterTypeOrder.indexOf(b);
+                    if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+                    if (indexA !== -1) return -1;
+                    if (indexB !== -1) return 1;
+                    return a.localeCompare(b);
+                  });
+
+                  return sortedTypes.map((meterType) => (
+                    <SelectGroup key={meterType}>
+                      <SelectLabel>
+                        {meterType.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}
+                      </SelectLabel>
+                      {groupedMeters[meterType].map((meter) => (
+                        <SelectItem
+                          key={meter.id}
+                          value={meter.id}
+                          disabled={!meter.hasData}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span>{meter.meter_number}</span>
+                            {!meter.hasData && (
+                              <Badge variant="outline" className="text-xs">
+                                No data
+                              </Badge>
+                            )}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  ));
+                })()}
+              </SelectContent>
+            </Select>
+            {selectedMeterId && meterDateRange.earliest && meterDateRange.latest && (
+              <div className="mt-2 p-3 bg-muted/50 rounded-md space-y-1">
+                <p className="text-sm font-medium">Selected Meter Data Range:</p>
+                <p className="text-sm text-muted-foreground">
+                  {format(meterDateRange.earliest, "MMM dd, yyyy HH:mm")} to{" "}
+                  {format(meterDateRange.latest, "MMM dd, yyyy HH:mm")}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Total readings: {meterDateRange.readingsCount.toLocaleString()}
+                </p>
               </div>
-            </div>
-            
-            <div className="border rounded-lg divide-y max-h-96 overflow-y-auto">
-              {availableMeters.map((meter) => (
-                <div
-                  key={meter.id}
-                  className={cn(
-                    "p-3 hover:bg-muted/50 transition-colors",
-                    !meter.hasData && "opacity-50"
-                  )}
-                >
-                  <div className="flex items-start gap-3">
-                    <Checkbox
-                      id={`meter-${meter.id}`}
-                      checked={selectedMeterIds.has(meter.id)}
-                      disabled={!meter.hasData}
-                      onCheckedChange={(checked) => {
-                        const newSelected = new Set(selectedMeterIds);
-                        if (checked) {
-                          newSelected.add(meter.id);
-                        } else {
-                          newSelected.delete(meter.id);
-                        }
-                        setSelectedMeterIds(newSelected);
-                      }}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <Label
-                        htmlFor={`meter-${meter.id}`}
-                        className="font-mono font-semibold cursor-pointer"
-                      >
-                        {meter.meter_number}
-                      </Label>
-                      <div className="flex items-center gap-2 mt-1">
-                        <Badge variant="outline" className="text-xs">
-                          {meter.meter_type.replace(/_/g, " ")}
-                        </Badge>
-                        {!meter.hasData && (
-                          <Badge variant="outline" className="text-xs text-muted-foreground">
-                            No data
-                          </Badge>
-                        )}
-                      </div>
-                      {meter.hasData && meter.earliest && meter.latest && (
-                        <div className="mt-2 text-xs text-muted-foreground space-y-0.5">
-                          <div>
-                            {format(meter.earliest, "MMM dd, yyyy HH:mm")} to{" "}
-                            {format(meter.latest, "MMM dd, yyyy HH:mm")}
-                          </div>
-                          <div>
-                            {meter.readingsCount.toLocaleString()} readings
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+            )}
+            {selectedMeterId && !meterDateRange.earliest && (
+              <p className="text-sm text-muted-foreground mt-2">
+                No data available for this meter
+              </p>
+            )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -821,9 +889,9 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
             </div>
           </div>
 
-          <Button onClick={handlePreview} disabled={isLoadingPreview || !dateFrom || !dateTo || selectedMeterIds.size === 0} className="w-full">
+          <Button onClick={handlePreview} disabled={isLoadingPreview || !dateFrom || !dateTo || !selectedMeterId} className="w-full">
             <Eye className="mr-2 h-4 w-4" />
-            {isLoadingPreview ? "Loading Preview..." : `Preview ${selectedMeterIds.size} Meter${selectedMeterIds.size !== 1 ? 's' : ''}`}
+            {isLoadingPreview ? "Loading Preview..." : "Preview Meter Data"}
           </Button>
         </CardContent>
       </Card>
