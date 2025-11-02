@@ -36,8 +36,6 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
   const [isDateFromOpen, setIsDateFromOpen] = useState(false);
   const [isDateToOpen, setIsDateToOpen] = useState(false);
-  const [earliestDate, setEarliestDate] = useState<string | null>(null);
-  const [latestDate, setLatestDate] = useState<string | null>(null);
   const [selectedMeterId, setSelectedMeterId] = useState<string | null>(null);
   const [availableMeters, setAvailableMeters] = useState<Array<{
     id: string;
@@ -148,51 +146,6 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
 
     fetchMeterDateRange();
   }, [selectedMeterId]);
-
-  // Fetch earliest and latest dates from database
-  useEffect(() => {
-    const fetchDateRange = async () => {
-      try {
-        // Get all meters for this site
-        const { data: meters } = await supabase
-          .from("meters")
-          .select("id")
-          .eq("site_id", siteId);
-
-        if (!meters || meters.length === 0) return;
-
-        const meterIds = meters.map((m) => m.id);
-
-        // Get earliest and latest reading timestamps
-        const { data: readings } = await supabase
-          .from("meter_readings")
-          .select("reading_timestamp")
-          .in("meter_id", meterIds)
-          .order("reading_timestamp", { ascending: true })
-          .limit(1);
-
-        const { data: latestReadings } = await supabase
-          .from("meter_readings")
-          .select("reading_timestamp")
-          .in("meter_id", meterIds)
-          .order("reading_timestamp", { ascending: false })
-          .limit(1);
-
-        if (readings && readings.length > 0) {
-          // Store the raw timestamp string instead of Date object
-          setEarliestDate(readings[0].reading_timestamp);
-        }
-        if (latestReadings && latestReadings.length > 0) {
-          // Store the raw timestamp string instead of Date object
-          setLatestDate(latestReadings[0].reading_timestamp);
-        }
-      } catch (error) {
-        console.error("Error fetching date range:", error);
-      }
-    };
-
-    fetchDateRange();
-  }, [siteId]);
 
   const handleRecalculateTotals = () => {
     if (!previewData || selectedColumns.size === 0) {
@@ -768,30 +721,8 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
 
       <Card className="border-border/50">
         <CardHeader>
-          <div className="flex items-start justify-between">
-            <div>
-              <CardTitle>Analysis Parameters</CardTitle>
-              <CardDescription>Select date range for reconciliation</CardDescription>
-            </div>
-            <div className="text-right text-sm text-muted-foreground space-y-0.5">
-              {earliestDate && (
-                <div>
-                  Earliest: {earliestDate.split('T')[0].replace(/(\d{4})-(\d{2})-(\d{2})/, (_, y, m, d) => {
-                    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                    return `${months[parseInt(m)-1]} ${parseInt(d)}, ${y}`;
-                  })} at {earliestDate.split('T')[1]?.substring(0, 5) || '00:00'}
-                </div>
-              )}
-              {latestDate && (
-                <div>
-                  Latest: {latestDate.split('T')[0].replace(/(\d{4})-(\d{2})-(\d{2})/, (_, y, m, d) => {
-                    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                    return `${months[parseInt(m)-1]} ${parseInt(d)}, ${y}`;
-                  })} at {latestDate.split('T')[1]?.substring(0, 5) || '00:00'}
-                </div>
-              )}
-            </div>
-          </div>
+          <CardTitle>Analysis Parameters</CardTitle>
+          <CardDescription>Select date range for reconciliation</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
