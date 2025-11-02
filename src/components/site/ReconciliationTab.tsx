@@ -1046,57 +1046,28 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
             </div>
 
             <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
-              <Label className="text-sm font-semibold mb-3 block">Total Consumption in Selected Period</Label>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                <div className="space-y-1">
-                  <div className="text-xs text-muted-foreground">
-                    {recalculatedTotal !== null ? "Recalculated Total" : "Total kWh"}
-                  </div>
-                  <div className="text-2xl font-bold">
-                    {recalculatedTotal !== null ? recalculatedTotal.toFixed(2) : previewData.totalKwh.toFixed(2)}
-                  </div>
-                </div>
-                {Array.from(selectedColumns).map((column) => {
-                  const operation = columnOperations.get(column) || "sum";
-                  const factorStr = columnFactors.get(column) || "1";
-                  let factor = 1;
-                  
-                  try {
-                    factor = Function('"use strict"; return (' + factorStr + ')')();
-                    if (isNaN(factor) || !isFinite(factor)) {
-                      factor = 1;
-                    }
-                  } catch (e) {
-                    factor = 1;
-                  }
-                  
-                  // Calculate the correct total based on operation
-                  let total = 0;
-                  const values = previewData.columnValues?.[column] || [];
-                  
-                  if (operation === "sum") {
-                    total = previewData.columnTotals[column] || 0;
-                  } else if (operation === "max") {
-                    total = values.length > 0 ? Math.max(...values) : 0;
-                  } else if (operation === "min") {
-                    total = values.length > 0 ? Math.min(...values) : 0;
-                  } else if (operation === "average") {
-                    total = values.length > 0 ? values.reduce((sum, val) => sum + val, 0) / values.length : 0;
-                  } else if (operation === "count") {
-                    total = values.length;
-                  }
-                  
-                  const adjustedTotal = total * factor;
-                  
-                  return (
-                    <div key={column} className="space-y-1">
-                      <div className="text-xs text-muted-foreground">
-                        {column} {factorStr !== "1" && `(×${factorStr})`}
+              <Label className="text-sm font-semibold mb-3 block">Meters Associated with This Site</Label>
+              <div className="space-y-2">
+                {availableMeters.length === 0 ? (
+                  <div className="text-sm text-muted-foreground italic">No meters found for this site</div>
+                ) : (
+                  availableMeters.map((meter) => (
+                    <div 
+                      key={meter.id} 
+                      className="flex items-center justify-between p-3 rounded-md border bg-card hover:bg-accent/5 transition-colors"
+                    >
+                      <div className="flex flex-col gap-1">
+                        <div className="font-medium">{meter.meter_number}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {meter.meter_type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                        </div>
                       </div>
-                      <div className="text-lg font-semibold">{adjustedTotal.toFixed(2)}</div>
+                      <Badge variant={meter.hasData ? "default" : "secondary"}>
+                        {meter.hasData ? "Has Data" : "No Data"}
+                      </Badge>
                     </div>
-                  );
-                })}
+                  ))
+                )}
               </div>
             </div>
 
