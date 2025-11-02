@@ -1100,58 +1100,6 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
               </div>
             </div>
 
-            <div className="space-y-3">
-              <Label className="text-sm font-semibold">Sample Data (First 5 Readings)</Label>
-              <div className="border rounded-lg overflow-auto max-h-96">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      {Array.from(selectedColumns).map(col => (
-                        <TableHead key={col} className="sticky top-0 bg-background">{col}</TableHead>
-                      ))}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {previewData.sampleReadings.map((reading: any, idx: number) => {
-                      const importedFields = reading.metadata?.imported_fields || {};
-                      
-                      return (
-                        <TableRow key={idx}>
-                          {Array.from(selectedColumns).map(col => {
-                            let value = '-';
-                            
-                            // Map special columns to their dedicated fields
-                            if (col === 'Time') {
-                              // Time is stored in reading_timestamp
-                              value = reading.reading_timestamp?.split('T')[0] + ' ' + 
-                                      (reading.reading_timestamp?.split('T')[1]?.substring(0, 8) || '00:00:00');
-                            } else if (col === 'P1 (kWh)') {
-                              // P1 (kWh) is the kwh_value column
-                              value = reading.kwh_value?.toString() || '-';
-                            } else if (col === 'Q1 (kvarh)') {
-                              // Q1 (kvarh) is the kva_value column (kvaColumn: "2" maps to Q1)
-                              value = reading.kva_value?.toString() || '-';
-                            } else {
-                              // All other columns come from imported_fields
-                              value = importedFields[col]?.toString() || '-';
-                            }
-                            
-                            return (
-                              <TableCell key={col} className="font-mono text-xs">
-                                {value}
-                              </TableCell>
-                            );
-                          })}
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-              <div className="text-xs text-muted-foreground italic">
-                Verify these values match your CSV file before proceeding with reconciliation
-              </div>
-            </div>
 
             <Button onClick={handleReconcile} disabled={isLoading || selectedColumns.size === 0} className="w-full">
               {isLoading ? "Analyzing..." : "Run Reconciliation with Selected Columns"}
