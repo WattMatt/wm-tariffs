@@ -1199,8 +1199,8 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                             variant="ghost"
                             size="sm"
                             className="h-8 w-8 p-0"
-                            onClick={() => handleOutdentMeter(meter.id)}
-                            disabled={indentLevel === 0}
+                            onClick={() => handleIndentMeter(meter.id)}
+                            disabled={indentLevel >= 3}
                           >
                             <ChevronLeft className="h-4 w-4" />
                           </Button>
@@ -1208,8 +1208,8 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                             variant="ghost"
                             size="sm"
                             className="h-8 w-8 p-0"
-                            onClick={() => handleIndentMeter(meter.id)}
-                            disabled={indentLevel >= 3}
+                            onClick={() => handleOutdentMeter(meter.id)}
+                            disabled={indentLevel === 0}
                           >
                             <ChevronRight className="h-4 w-4" />
                           </Button>
