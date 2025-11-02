@@ -45,6 +45,11 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
     meter_type: string;
     hasData: boolean;
   }>>([]);
+  const [meterDateRange, setMeterDateRange] = useState<{
+    earliest: Date | null;
+    latest: Date | null;
+    readingsCount: number;
+  }>({ earliest: null, latest: null, readingsCount: 0 });
 
   // Fetch available meters with CSV data
   useEffect(() => {
@@ -96,6 +101,53 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
 
     fetchAvailableMeters();
   }, [siteId]);
+
+  // Fetch meter-specific date range when meter is selected
+  useEffect(() => {
+    if (!selectedMeterId) {
+      setMeterDateRange({ earliest: null, latest: null, readingsCount: 0 });
+      return;
+    }
+
+    const fetchMeterDateRange = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("meter_readings")
+          .select("reading_timestamp")
+          .eq("meter_id", selectedMeterId)
+          .order("reading_timestamp", { ascending: true });
+
+        if (error) {
+          console.error("Error fetching meter date range:", error);
+          return;
+        }
+
+        if (!data || data.length === 0) {
+          setMeterDateRange({ earliest: null, latest: null, readingsCount: 0 });
+          return;
+        }
+
+        const earliest = new Date(data[0].reading_timestamp);
+        const latest = new Date(data[data.length - 1].reading_timestamp);
+
+        setMeterDateRange({
+          earliest,
+          latest,
+          readingsCount: data.length
+        });
+
+        // Auto-adjust date pickers to meter's date range
+        setDateFrom(earliest);
+        setDateTo(latest);
+        setTimeFrom(format(earliest, "HH:mm"));
+        setTimeTo(format(latest, "HH:mm"));
+      } catch (error) {
+        console.error("Error fetching meter date range:", error);
+      }
+    };
+
+    fetchMeterDateRange();
+  }, [selectedMeterId]);
 
   // Fetch earliest and latest dates from database
   useEffect(() => {
@@ -212,6 +264,31 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
     setIsLoadingPreview(true);
 
     try {
+      // First check if there's any data in the selected range
+      const fullDateTimeFrom = getFullDateTime(dateFrom, timeFrom);
+      const fullDateTimeTo = getFullDateTime(dateTo, timeTo);
+
+      const { count, error: countError } = await supabase
+        .from("meter_readings")
+        .select("*", { count: "exact", head: true })
+        .eq("meter_id", selectedMeterId)
+        .gte("reading_timestamp", fullDateTimeFrom)
+        .lte("reading_timestamp", fullDateTimeTo);
+
+      if (countError) throw countError;
+
+      if (count === 0) {
+        toast.error(
+          `No data found for the selected date range. This meter has data from ${
+            meterDateRange.earliest ? format(meterDateRange.earliest, "MMM dd, yyyy") : "N/A"
+          } to ${
+            meterDateRange.latest ? format(meterDateRange.latest, "MMM dd, yyyy") : "N/A"
+          }`
+        );
+        setIsLoadingPreview(false);
+        return;
+      }
+
       // Fetch the selected meter
       const { data: meterData, error: meterError } = await supabase
         .from("meters")
@@ -242,10 +319,6 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
       }
 
       const columnMapping = csvFile?.column_mapping as any;
-
-      // Combine date and time for precise filtering
-      const fullDateTimeFrom = getFullDateTime(dateFrom, timeFrom);
-      const fullDateTimeTo = getFullDateTime(dateTo, timeTo);
 
       // Fetch ALL readings using pagination (Supabase has 1000-row server limit)
       let allReadings: any[] = [];
@@ -778,9 +851,21 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                 })()}
               </SelectContent>
             </Select>
-            {selectedMeterId && (
-              <p className="text-sm text-muted-foreground">
-                Selected: {availableMeters.find(m => m.id === selectedMeterId)?.meter_number}
+            {selectedMeterId && meterDateRange.earliest && meterDateRange.latest && (
+              <div className="mt-2 p-3 bg-muted/50 rounded-md space-y-1">
+                <p className="text-sm font-medium">Selected Meter Data Range:</p>
+                <p className="text-sm text-muted-foreground">
+                  {format(meterDateRange.earliest, "MMM dd, yyyy HH:mm")} to{" "}
+                  {format(meterDateRange.latest, "MMM dd, yyyy HH:mm")}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Total readings: {meterDateRange.readingsCount.toLocaleString()}
+                </p>
+              </div>
+            )}
+            {selectedMeterId && !meterDateRange.earliest && (
+              <p className="text-sm text-muted-foreground mt-2">
+                No data available for this meter
               </p>
             )}
           </div>
