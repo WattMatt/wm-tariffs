@@ -1056,12 +1056,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                       key={meter.id} 
                       className="flex items-center justify-between p-3 rounded-md border bg-card hover:bg-accent/5 transition-colors"
                     >
-                      <div className="flex flex-col gap-1">
-                        <div className="font-medium">{meter.meter_number}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {meter.meter_type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                        </div>
-                      </div>
+                      <div className="font-medium">{meter.meter_number}</div>
                       <Badge variant={meter.hasData ? "default" : "secondary"}>
                         {meter.hasData ? "Has Data" : "No Data"}
                       </Badge>
