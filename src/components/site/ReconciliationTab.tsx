@@ -874,8 +874,8 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
       const checkMeters = meterData.filter((m) => m.meter_type === "check_meter");
       const tenantMeters = meterData.filter((m) => m.meter_type === "tenant_meter");
 
-    const bulkTotal = gridSupplyMeters.length > 0 ? Number(gridSupplyMeters[0].totalKwh) : 0;
-    const otherTotal = solarEnergyMeters.length > 0 ? Math.max(0, Number(solarEnergyMeters[0].totalKwh)) : 0;
+    const bulkTotal = gridSupplyMeters.length > 0 ? gridSupplyMeters[0].totalKwh : 0;
+    const otherTotal = solarEnergyMeters.length > 0 ? Math.max(0, solarEnergyMeters[0].totalKwh) : 0;
       const tenantTotal = tenantMeters.reduce((sum, m) => sum + m.totalKwh, 0);
       
       // Total supply = Grid Supply + Solar Energy
