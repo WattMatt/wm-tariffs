@@ -788,6 +788,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
             columnTotals: {},
             columnMaxValues: {},
             readingsCount: 0,
+            hasData: false,
             hasError: true,
             errorMessage: "Query timeout"
           };
@@ -823,6 +824,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
           columnTotals: {},
           columnMaxValues: {},
           readingsCount: 0,
+          hasData: false,
           hasError: true,
           errorMessage: readingsError.message
         };
@@ -937,6 +939,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
         columnTotals,
         columnMaxValues,
         readingsCount: uniqueReadings.length,
+        hasData: uniqueReadings.length > 0,
         hasError: false
       };
     } catch (error: any) {
@@ -950,6 +953,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
         columnTotals: {},
         columnMaxValues: {},
         readingsCount: 0,
+        hasData: false,
         hasError: true,
         errorMessage: error.message
       };
