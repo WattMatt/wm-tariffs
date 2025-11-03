@@ -49,6 +49,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
     readingsCount: number;
   }>({ earliest: null, latest: null, readingsCount: 0 });
   const [meterIndentLevels, setMeterIndentLevels] = useState<Map<string, number>>(new Map());
+  const [meterParentInfo, setMeterParentInfo] = useState<Map<string, string>>(new Map()); // meter_id -> parent meter_number
   const [draggedMeterId, setDraggedMeterId] = useState<string | null>(null);
   const [dragOverMeterId, setDragOverMeterId] = useState<string | null>(null);
 
@@ -81,6 +82,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
         // DB structure: tenant (parent) → check (child)
         // For display: we want to group tenant meters under their check meter
         const checkMeterToTenants = new Map<string, string[]>();
+        const meterParentMap = new Map<string, string>(); // meter_id -> parent meter_number
         
         connections?.forEach(conn => {
           // conn.child_meter_id is the check meter
@@ -89,6 +91,12 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
             checkMeterToTenants.set(conn.child_meter_id, []);
           }
           checkMeterToTenants.get(conn.child_meter_id)!.push(conn.parent_meter_id);
+          
+          // For display: tenant connects TO check meter
+          const checkMeter = metersWithData.find(m => m.id === conn.child_meter_id);
+          if (checkMeter) {
+            meterParentMap.set(conn.parent_meter_id, checkMeter.meter_number);
+          }
         });
 
         // Check which meters have CSV files uploaded
@@ -214,6 +222,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
 
         setAvailableMeters(hierarchicalMeters);
         setMeterIndentLevels(indentLevels);
+        setMeterParentInfo(meterParentMap);
 
         // Auto-select first meter with data, or bulk meter if available
         const bulkMeter = hierarchicalMeters.find(m => m.meter_type === "bulk_meter" && m.hasData);
@@ -983,6 +992,11 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                         >
                           <div className="flex items-center gap-2">
                             <span>{meter.meter_number}</span>
+                            {meterParentInfo.has(meter.id) && (
+                              <span className="text-xs text-muted-foreground">
+                                → {meterParentInfo.get(meter.id)}
+                              </span>
+                            )}
                             {!meter.hasData && (
                               <Badge variant="outline" className="text-xs">
                                 No data
