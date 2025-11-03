@@ -748,23 +748,52 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
     const clientTimeout = 10000; // 10 seconds client-side timeout
     
     try {
-      // Wrap query in client-side timeout
-      const queryPromise = supabase
-        .from("meter_readings")
-        .select("kwh_value, reading_timestamp, metadata")
-        .eq("meter_id", meter.id) // Prioritize indexed column first
-        .gte("reading_timestamp", fullDateTimeFrom)
-        .lte("reading_timestamp", fullDateTimeTo)
-        .order("reading_timestamp", { ascending: true })
-        .limit(100000);
+      // Fetch all readings using pagination to avoid 1000-row limit
+      let allReadings: any[] = [];
+      let start = 0;
+      const pageSize = 1000;
+      let hasMore = true;
+      let fetchError: any = null;
+
+      // Wrap entire pagination loop in client-side timeout
+      const fetchAllPages = async () => {
+        while (hasMore) {
+          const { data: pageReadings, error: pageError } = await supabase
+            .from("meter_readings")
+            .select("kwh_value, reading_timestamp, metadata")
+            .eq("meter_id", meter.id)
+            .gte("reading_timestamp", fullDateTimeFrom)
+            .lte("reading_timestamp", fullDateTimeTo)
+            .order("reading_timestamp", { ascending: true })
+            .range(start, start + pageSize - 1);
+
+          if (pageError) {
+            fetchError = pageError;
+            break;
+          }
+
+          if (pageReadings && pageReadings.length > 0) {
+            allReadings = allReadings.concat(pageReadings);
+            start += pageSize;
+            hasMore = pageReadings.length === pageSize;
+            
+            if (pageReadings.length === pageSize) {
+              console.log(`Fetching page ${Math.floor(start / pageSize)} for meter ${meter.meter_number}...`);
+            }
+          } else {
+            hasMore = false;
+          }
+        }
+        return { allReadings, fetchError };
+      };
 
       const timeoutPromise = new Promise<never>((_, reject) => 
         setTimeout(() => reject(new Error('Client timeout')), clientTimeout)
       );
 
-      let result: Awaited<typeof queryPromise>;
+      let result: { allReadings: any[], fetchError: any };
       try {
-        result = await Promise.race([queryPromise, timeoutPromise]) as Awaited<typeof queryPromise>;
+        result = await Promise.race([fetchAllPages(), timeoutPromise]) as { allReadings: any[], fetchError: any };
       } catch (timeoutError: any) {
         // Handle client timeout
         if (retryCount < maxRetries) {
@@ -795,7 +824,8 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
         }
       }
 
-      const { data: readings, error: readingsError } = result;
+      const readings = result.allReadings;
+      const readingsError = result.fetchError;
 
       if (readingsError) {
         // Check if it's a database timeout error (code 57014)
