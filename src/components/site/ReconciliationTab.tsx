@@ -1576,8 +1576,16 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                     ...(reconciliationData.distribution || [])
                   ];
 
+                  // Create a map for quick lookup of meter data
+                  const meterDataMap = new Map(allMeters.map((m: any) => [m.id, m]));
+
+                  // Sort meters according to availableMeters order (which preserves hierarchy)
+                  const sortedMeters = availableMeters
+                    .map(m => meterDataMap.get(m.id))
+                    .filter((meter): meter is any => meter !== undefined);
+
                   // Filter to show only visible meters (respects hierarchy visibility)
-                  const visibleMeters = allMeters.filter((meter: any) => isMeterVisible(meter.id));
+                  const visibleMeters = sortedMeters.filter((meter: any) => isMeterVisible(meter.id));
 
                   return visibleMeters.map((meter: any) => {
                     // Calculate hierarchical total if this meter has children
@@ -1598,10 +1606,23 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                     const hasChildren = childIds.length > 0;
                     const isExpanded = expandedMeters.has(meter.id);
                     
+                    // Determine meter type for color coding
+                    const meterAssignment = meterAssignments.get(meter.id);
+                    let bgColor = "bg-muted/50"; // Default for distribution meters
+                    let borderColor = "border-border/50";
+                    
+                    if (meterAssignment === "grid_supply") {
+                      bgColor = "bg-primary/10";
+                      borderColor = "border-primary/30";
+                    } else if (meterAssignment === "solar_energy") {
+                      bgColor = "bg-yellow-500/10";
+                      borderColor = "border-yellow-500/30";
+                    }
+                    
                     return (
                       <div
                         key={meter.id}
-                        className="space-y-2 p-3 rounded-lg bg-muted/50"
+                        className={cn("space-y-2 p-3 rounded-lg border", bgColor, borderColor)}
                         style={{ marginLeft: `${marginLeft}px` }}
                       >
                         <div className="flex items-center justify-between">
