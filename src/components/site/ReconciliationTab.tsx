@@ -1069,7 +1069,6 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                       selected={dateFrom} 
                       onSelect={(date) => {
                         setDateFrom(date);
-                        setIsDateFromOpen(false);
                       }}
                       className={cn("p-3 pointer-events-auto")}
                       disabled={false}
@@ -1081,7 +1080,10 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                       <Input
                         type="time"
                         value={timeFrom}
-                        onChange={(e) => setTimeFrom(e.target.value)}
+                        onChange={(e) => {
+                          setTimeFrom(e.target.value);
+                          setIsDateFromOpen(false);
+                        }}
                         className="w-full"
                       />
                     </div>
@@ -1112,7 +1114,6 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                       selected={dateTo} 
                       onSelect={(date) => {
                         setDateTo(date);
-                        setIsDateToOpen(false);
                       }}
                       className={cn("p-3 pointer-events-auto")}
                       disabled={false}
@@ -1124,7 +1125,10 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                       <Input
                         type="time"
                         value={timeTo}
-                        onChange={(e) => setTimeTo(e.target.value)}
+                        onChange={(e) => {
+                          setTimeTo(e.target.value);
+                          setIsDateToOpen(false);
+                        }}
                         className="w-full"
                       />
                     </div>
