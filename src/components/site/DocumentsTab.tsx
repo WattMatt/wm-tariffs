@@ -85,8 +85,8 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
   const [isMoveDialogOpen, setIsMoveDialogOpen] = useState(false);
   const [moveDestinationFolder, setMoveDestinationFolder] = useState<string>('');
   const [isMoving, setIsMoving] = useState(false);
-  const [isFolderMode, setIsFolderMode] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
   
   // Fabric.js canvas state
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -470,14 +470,18 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
+    setSelectedFiles(Array.from(files));
+  };
+
+  const handleFolderSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
     const filesArray = Array.from(files);
     setSelectedFiles(filesArray);
     
-    // If folder mode, auto-upload
-    if (isFolderMode) {
-      handleFolderUpload(filesArray);
-    }
+    // Auto-upload folders
+    handleFolderUpload(filesArray);
   };
 
   const convertPdfToImage = async (pdfFile: File): Promise<Blob> => {
@@ -1459,32 +1463,46 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="file-upload">Select Files</Label>
-              <Input
-                ref={fileInputRef}
-                id="file-upload"
-                type="file"
-                accept=".pdf,.jpg,.jpeg,.png"
-                onChange={handleFileSelect}
-                disabled={isUploading}
-                multiple
-                {...(isFolderMode ? ({ webkitdirectory: "", directory: "" } as any) : {})}
-              />
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="folder-mode"
-                  checked={isFolderMode}
-                  onCheckedChange={(checked) => {
-                    setIsFolderMode(checked as boolean);
-                    setSelectedFiles([]);
-                    if (fileInputRef.current) {
-                      fileInputRef.current.value = '';
-                    }
-                  }}
+              <Label htmlFor="file-upload">Select Files or Folder</Label>
+              <div className="flex gap-2">
+                <Input
+                  ref={fileInputRef}
+                  id="file-upload"
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  onChange={handleFileSelect}
+                  disabled={isUploading}
+                  multiple
+                  className="hidden"
                 />
-                <Label htmlFor="folder-mode" className="text-sm font-normal cursor-pointer">
-                  Select entire folder
-                </Label>
+                <Input
+                  ref={folderInputRef}
+                  type="file"
+                  className="hidden"
+                  onChange={handleFolderSelect}
+                  {...({ webkitdirectory: "", directory: "" } as any)}
+                  multiple
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploading}
+                  className="flex-1"
+                >
+                  <FileText className="w-4 h-4 mr-2" />
+                  Choose Files
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => folderInputRef.current?.click()}
+                  disabled={isUploading}
+                  className="flex-1"
+                >
+                  <Folder className="w-4 h-4 mr-2" />
+                  Choose Folder
+                </Button>
               </div>
               {selectedFiles.length > 0 && (
                 <p className="text-sm text-muted-foreground">
