@@ -186,10 +186,6 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
     }
 
     try {
-      const folderPath = currentFolderPath
-        ? `${currentFolderPath}/${newFolderName.trim()}`
-        : newFolderName.trim();
-
       const { data: user } = await supabase.auth.getUser();
 
       const { error } = await supabase
@@ -202,7 +198,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
           document_type: 'other' as any,
           uploaded_by: user.user?.id || null,
           extraction_status: 'completed',
-          folder_path: folderPath,
+          folder_path: currentFolderPath, // Parent folder path
           is_folder: true,
         });
 
