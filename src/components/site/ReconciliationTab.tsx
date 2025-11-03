@@ -1014,12 +1014,40 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
       setFailedMeters(errors);
 
       // Filter meters based on user assignments
-      const gridSupplyMeters = meterData.filter((m) => meterAssignments.get(m.id) === "grid_supply");
-      const solarEnergyMeters = meterData.filter((m) => meterAssignments.get(m.id) === "solar_energy");
+      // Fallback: if no assignments exist, use meter types
+      let gridSupplyMeters = meterData.filter((m) => meterAssignments.get(m.id) === "grid_supply");
+      let solarEnergyMeters = meterData.filter((m) => meterAssignments.get(m.id) === "solar_energy");
       
-      // Keep existing meter type filters for backward compatibility
+      // If no manual assignments, fall back to meter types
+      if (gridSupplyMeters.length === 0 && solarEnergyMeters.length === 0) {
+        // Grid Supply: bulk meters (MB-*)
+        gridSupplyMeters = meterData.filter((m) => m.meter_type === "bulk_meter");
+        // Solar: no automatic assignment - user must manually assign
+        solarEnergyMeters = [];
+        
+        console.log("No meter assignments found. Using automatic categorization:");
+        console.log(`  Grid Supply: ${gridSupplyMeters.length} bulk meters`);
+        console.log(`  Solar: 0 (requires manual assignment)`);
+      }
+      
+      // Keep existing meter type filters
       const checkMeters = meterData.filter((m) => m.meter_type === "check_meter");
       const tenantMeters = meterData.filter((m) => m.meter_type === "tenant_meter");
+      
+      // Collect all meters that should be displayed but aren't in the above categories
+      const assignedMeterIds = new Set([
+        ...gridSupplyMeters.map(m => m.id),
+        ...solarEnergyMeters.map(m => m.id),
+        ...tenantMeters.map(m => m.id),
+        ...checkMeters.map(m => m.id)
+      ]);
+      const unassignedMeters = meterData.filter(m => !assignedMeterIds.has(m.id));
+      
+      console.log("Reconciliation meter breakdown:");
+      console.log(`  Grid Supply: ${gridSupplyMeters.map(m => m.meter_number).join(', ')}`);
+      console.log(`  Solar Energy: ${solarEnergyMeters.map(m => m.meter_number).join(', ') || 'none'}`);
+      console.log(`  Distribution: ${tenantMeters.map(m => m.meter_number).join(', ')}`);
+      console.log(`  Unassigned: ${unassignedMeters.map(m => m.meter_number).join(', ') || 'none'}`);
 
       // Grid Supply: sum all positive values from all grid supply meters (consumption FROM grid)
       const bulkTotal = gridSupplyMeters.reduce((sum, m) => sum + (m.totalKwhPositive || 0), 0);
@@ -1039,12 +1067,13 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
         // Meter arrays
         bulkMeters: gridSupplyMeters,
         checkMeters,
-        otherMeters: solarEnergyMeters,
+        otherMeters: [...solarEnergyMeters, ...unassignedMeters],  // Include unassigned meters here
         tenantMeters,
         councilBulk: gridSupplyMeters,  // UI expects this name
         solarMeters: solarEnergyMeters,  // UI expects this name  
         distribution: tenantMeters,  // UI expects this name
         distributionMeters: tenantMeters,  // Alternative name
+        unassignedMeters,  // New: for displaying meters that aren't categorized
         
         // Totals
         bulkTotal,
