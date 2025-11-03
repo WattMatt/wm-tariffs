@@ -1251,11 +1251,17 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
               {/* Column Headers */}
               <div className="flex items-center gap-2 mb-2 pb-2 border-b">
                 <div className="w-6 text-xs font-semibold text-left">Summate</div>
-                <div className="w-[72px]"></div> {/* Space for indent buttons */}
-                <div className="flex-1 text-xs font-semibold">Meter Number</div>
-                <div className="w-24 text-xs font-semibold text-center">Grid Supply</div>
-                <div className="w-24 text-xs font-semibold text-center">Solar Supply</div>
-                <div className="w-24 text-xs font-semibold text-center">Data Status</div>
+                <div className="flex-1 flex items-center gap-2">
+                  <div className="w-[72px]"></div> {/* Space for indent buttons */}
+                  <div className="flex-1 flex items-center justify-between p-3">
+                    <div className="text-xs font-semibold">Meter Number</div>
+                    <div className="flex items-center gap-6">
+                      <div className="w-24 text-xs font-semibold text-center">Grid Supply</div>
+                      <div className="w-24 text-xs font-semibold text-center">Solar Supply</div>
+                      <div className="w-24 text-xs font-semibold text-center">Data Status</div>
+                    </div>
+                  </div>
+                </div>
               </div>
               
               <div className="space-y-2">
