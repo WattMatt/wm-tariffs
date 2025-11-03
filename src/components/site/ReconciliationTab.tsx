@@ -2088,8 +2088,8 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
         open={isSaveDialogOpen}
         onOpenChange={setIsSaveDialogOpen}
         onSave={saveReconciliation}
-        dateFrom={dateFrom!}
-        dateTo={dateTo!}
+        dateFrom={dateFrom}
+        dateTo={dateTo}
         reconciliationData={reconciliationData}
       />
     </div>

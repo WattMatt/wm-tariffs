@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,8 +10,8 @@ interface SaveReconciliationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSave: (runName: string, notes: string) => Promise<string | void>;
-  dateFrom: Date;
-  dateTo: Date;
+  dateFrom?: Date;
+  dateTo?: Date;
   reconciliationData: any;
 }
 
@@ -23,10 +23,19 @@ export default function SaveReconciliationDialog({
   dateTo,
   reconciliationData,
 }: SaveReconciliationDialogProps) {
-  const defaultName = `Reconciliation - ${format(dateFrom, "dd MMM yyyy")} to ${format(dateTo, "dd MMM yyyy")}`;
+  const defaultName = dateFrom && dateTo 
+    ? `Reconciliation - ${format(dateFrom, "dd MMM yyyy")} to ${format(dateTo, "dd MMM yyyy")}`
+    : "Reconciliation";
   const [runName, setRunName] = useState(defaultName);
   const [notes, setNotes] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+
+  // Update default name when dates change or dialog opens
+  useEffect(() => {
+    if (open && dateFrom && dateTo) {
+      setRunName(`Reconciliation - ${format(dateFrom, "dd MMM yyyy")} to ${format(dateTo, "dd MMM yyyy")}`);
+    }
+  }, [open, dateFrom, dateTo]);
 
   const handleSave = async () => {
     if (!runName.trim()) {
