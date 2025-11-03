@@ -1078,7 +1078,12 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                         value={timeFrom}
                         onChange={(e) => {
                           setTimeFrom(e.target.value);
-                          setIsDateFromOpen(false);
+                        }}
+                        onBlur={() => {
+                          // Only close if both minute digits are present (format HH:MM)
+                          if (timeFrom && timeFrom.includes(':') && timeFrom.split(':')[1]?.length === 2) {
+                            setIsDateFromOpen(false);
+                          }
                         }}
                         className="w-full"
                       />
@@ -1123,7 +1128,12 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                         value={timeTo}
                         onChange={(e) => {
                           setTimeTo(e.target.value);
-                          setIsDateToOpen(false);
+                        }}
+                        onBlur={() => {
+                          // Only close if both minute digits are present (format HH:MM)
+                          if (timeTo && timeTo.includes(':') && timeTo.split(':')[1]?.length === 2) {
+                            setIsDateToOpen(false);
+                          }
                         }}
                         className="w-full"
                       />
