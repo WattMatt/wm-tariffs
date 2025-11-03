@@ -52,6 +52,8 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
   const [meterParentInfo, setMeterParentInfo] = useState<Map<string, string>>(new Map()); // meter_id -> parent meter_number
   const [draggedMeterId, setDraggedMeterId] = useState<string | null>(null);
   const [dragOverMeterId, setDragOverMeterId] = useState<string | null>(null);
+  const [selectedMetersForSummation, setSelectedMetersForSummation] = useState<Set<string>>(new Set());
+  const [meterConnectionsMap, setMeterConnectionsMap] = useState<Map<string, string[]>>(new Map()); // parent_id -> child_ids
 
   // Fetch available meters with CSV data and build hierarchy
   useEffect(() => {
@@ -114,14 +116,27 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
         const hierarchicalMeters: typeof metersWithData = [];
         const indentLevels = new Map<string, number>();
         
-        // Build parent info map: tenant meter_id -> check meter_number
+        // Build parent info map: child meter_id -> parent meter_number
+        // Also build connections map: parent_id -> child_ids for hierarchical calculations
         const meterParentMap = new Map<string, string>();
+        const connectionsMap = new Map<string, string[]>();
+        
         connections?.forEach(conn => {
-          const checkMeter = metersWithData.find(m => m.id === conn.child_meter_id);
-          if (checkMeter) {
-            meterParentMap.set(conn.parent_meter_id, checkMeter.meter_number);
+          // conn.parent_meter_id is the child (downstream)
+          // conn.child_meter_id is the parent (upstream)
+          const parentMeter = metersWithData.find(m => m.id === conn.child_meter_id);
+          if (parentMeter) {
+            meterParentMap.set(conn.parent_meter_id, parentMeter.meter_number);
           }
+          
+          // Build connections map for calculations: parent -> children
+          if (!connectionsMap.has(conn.child_meter_id)) {
+            connectionsMap.set(conn.child_meter_id, []);
+          }
+          connectionsMap.get(conn.child_meter_id)!.push(conn.parent_meter_id);
         });
+        
+        setMeterConnectionsMap(connectionsMap);
 
         // Check if we have any connections in the database
         const hasConnections = connections && connections.length > 0;
@@ -1270,6 +1285,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                     const marginLeft = indentLevel * 24; // 24px per indent level
                     const isDragging = draggedMeterId === meter.id;
                     const isDragOver = dragOverMeterId === meter.id;
+                    const parentInfo = meterParentInfo.get(meter.id);
                     
                     return (
                       <div 
@@ -1277,6 +1293,18 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                         className="flex items-center gap-2"
                         style={{ marginLeft: `${marginLeft}px` }}
                       >
+                        <Checkbox
+                          checked={selectedMetersForSummation.has(meter.id)}
+                          onCheckedChange={(checked) => {
+                            const newSelected = new Set(selectedMetersForSummation);
+                            if (checked) {
+                              newSelected.add(meter.id);
+                            } else {
+                              newSelected.delete(meter.id);
+                            }
+                            setSelectedMetersForSummation(newSelected);
+                          }}
+                        />
                         <div className="flex gap-1">
                           <Button
                             variant="ghost"
@@ -1311,7 +1339,14 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                           onDrop={(e) => handleDrop(e, meter.id)}
                           onDragEnd={handleDragEnd}
                         >
-                          <div className="font-medium">{meter.meter_number}</div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{meter.meter_number}</span>
+                            {parentInfo && (
+                              <span className="text-xs text-muted-foreground">
+                                (connects to {parentInfo})
+                              </span>
+                            )}
+                          </div>
                           <Badge variant={meter.hasData ? "default" : "secondary"}>
                             {meter.hasData ? "Has Data" : "No Data"}
                           </Badge>
@@ -1321,6 +1356,83 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                   })
                 )}
               </div>
+              
+              {selectedMetersForSummation.size > 0 && reconciliationData && (
+                <div className="mt-4 p-4 rounded-lg bg-accent/10 border border-border">
+                  <Label className="text-sm font-semibold mb-2 block">Selected Meters Summation</Label>
+                  <div className="space-y-2">
+                    {Array.from(selectedMetersForSummation).map(meterId => {
+                      const meter = availableMeters.find(m => m.id === meterId);
+                      if (!meter) return null;
+                      
+                      // Find meter data from reconciliation
+                      const allMeters = [
+                        ...reconciliationData.bulkMeters,
+                        ...reconciliationData.checkMeters,
+                        ...reconciliationData.tenantMeters,
+                        ...reconciliationData.otherMeters
+                      ];
+                      const meterData = allMeters.find(m => m.id === meterId);
+                      
+                      // Calculate hierarchical total if this meter has children
+                      const childIds = meterConnectionsMap.get(meterId) || [];
+                      let hierarchicalTotal = meterData?.totalKwh || 0;
+                      
+                      if (childIds.length > 0) {
+                        // Sum children
+                        hierarchicalTotal = childIds.reduce((sum, childId) => {
+                          const childData = allMeters.find(m => m.id === childId);
+                          return sum + (childData?.totalKwh || 0);
+                        }, 0);
+                      }
+                      
+                      return (
+                        <div key={meterId} className="flex items-center justify-between text-sm">
+                          <span className="font-medium">
+                            {meter.meter_number}
+                            {childIds.length > 0 && (
+                              <span className="text-xs text-muted-foreground ml-2">
+                                (sum of {childIds.length} child meter{childIds.length > 1 ? 's' : ''})
+                              </span>
+                            )}
+                          </span>
+                          <span className="font-mono">
+                            {hierarchicalTotal.toFixed(2)} kWh
+                          </span>
+                        </div>
+                      );
+                    })}
+                    <div className="pt-2 mt-2 border-t border-border">
+                      <div className="flex items-center justify-between text-sm font-semibold">
+                        <span>Total of Selected Meters</span>
+                        <span className="font-mono">
+                          {Array.from(selectedMetersForSummation).reduce((sum, meterId) => {
+                            const allMeters = [
+                              ...reconciliationData.bulkMeters,
+                              ...reconciliationData.checkMeters,
+                              ...reconciliationData.tenantMeters,
+                              ...reconciliationData.otherMeters
+                            ];
+                            const childIds = meterConnectionsMap.get(meterId) || [];
+                            
+                            if (childIds.length > 0) {
+                              // Use hierarchical total (sum of children)
+                              return sum + childIds.reduce((childSum, childId) => {
+                                const childData = allMeters.find(m => m.id === childId);
+                                return childSum + (childData?.totalKwh || 0);
+                              }, 0);
+                            } else {
+                              // Use direct meter reading
+                              const meterData = allMeters.find(m => m.id === meterId);
+                              return sum + (meterData?.totalKwh || 0);
+                            }
+                          }, 0).toFixed(2)} kWh
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
 
