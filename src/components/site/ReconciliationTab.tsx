@@ -924,6 +924,17 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
         discrepancy,
       });
 
+      // Update availableMeters to reflect which meters have data in this date range
+      setAvailableMeters(prevMeters => 
+        prevMeters.map(meter => {
+          const meterReadings = meterData.find(m => m.id === meter.id);
+          return {
+            ...meter,
+            hasData: meterReadings ? meterReadings.readingsCount > 0 : false
+          };
+        })
+      );
+
       toast.success("Reconciliation complete");
     } catch (error) {
       console.error("Reconciliation error:", error);
