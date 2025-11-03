@@ -496,6 +496,7 @@ export default function SchematicEditor({
   const [extractionProgress, setExtractionProgress] = useState<{ current: number; total: number } | null>(null);
   const [isAddMeterDialogOpen, setIsAddMeterDialogOpen] = useState(false);
   const [pendingMeterPosition, setPendingMeterPosition] = useState<{ x: number; y: number } | null>(null);
+  const [isInitialDataLoaded, setIsInitialDataLoaded] = useState(false);
   const [isCsvDialogOpen, setIsCsvDialogOpen] = useState(false);
   const [extractedMeters, setExtractedMeters] = useState<any[]>(propExtractedMeters);
   const [meterCardObjects, setMeterCardObjects] = useState<Map<number, any>>(new Map()); // Maps meter index to Fabric object
@@ -585,10 +586,17 @@ export default function SchematicEditor({
 
   // Load initial data on mount
   useEffect(() => {
-    fetchMeters();
-    fetchMeterPositions();
-    fetchMeterConnections();
-    fetchSchematicLines();
+    const loadInitialData = async () => {
+      setIsInitialDataLoaded(false);
+      await Promise.all([
+        fetchMeters(),
+        fetchMeterPositions(),
+        fetchMeterConnections(),
+        fetchSchematicLines()
+      ]);
+      setIsInitialDataLoaded(true);
+    };
+    loadInitialData();
   }, [schematicId, siteId]);
 
   // Real-time subscription for schematic_lines changes
@@ -2748,7 +2756,7 @@ export default function SchematicEditor({
   }, [activeTool, fabricCanvas]);
 
   useEffect(() => {
-    if (!fabricCanvas) return;
+    if (!fabricCanvas || !isInitialDataLoaded) return;
     
     // Clear all objects except the background schematic image, connection lines, and connection nodes
     const objects = fabricCanvas.getObjects();
@@ -3403,7 +3411,7 @@ export default function SchematicEditor({
     });
 
     fabricCanvas.renderAll();
-  }, [fabricCanvas, meterPositions, meters, activeTool, extractedMeters, legendVisibility, selectedExtractedMeterIds, showConfirmed, showUnconfirmed]);
+  }, [fabricCanvas, isInitialDataLoaded, meterPositions, meters, activeTool, extractedMeters, legendVisibility, selectedExtractedMeterIds, showConfirmed, showUnconfirmed]);
 
   const fetchMeters = async () => {
     const { data } = await supabase
@@ -3481,7 +3489,7 @@ export default function SchematicEditor({
 
   // Render connection lines on canvas when connections or positions change
   useEffect(() => {
-    if (!fabricCanvas) return;
+    if (!fabricCanvas || !isInitialDataLoaded) return;
 
     // Remove existing connection lines and nodes
     fabricCanvas.getObjects().forEach((obj: any) => {
@@ -3645,7 +3653,7 @@ export default function SchematicEditor({
     });
 
     fabricCanvas.renderAll();
-  }, [fabricCanvas, schematicLines, selectedConnectionKeys, showConnections]);
+  }, [fabricCanvas, isInitialDataLoaded, schematicLines, selectedConnectionKeys, showConnections]);
 
   // Toggle background visibility
   useEffect(() => {
