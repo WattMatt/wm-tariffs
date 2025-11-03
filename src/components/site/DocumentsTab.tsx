@@ -1584,7 +1584,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                         </TableCell>
                         <TableCell
                           className="font-medium"
-                          onClick={() => navigateToFolder(folder.folder_path)}
+                          onClick={() => navigateToFolder(currentFolderPath ? `${currentFolderPath}/${folder.file_name}` : folder.file_name)}
                         >
                           <div className="flex items-center gap-2">
                             <Folder className="w-4 h-4 text-primary" />
