@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { FileDown, Download, ChevronRight } from "lucide-react";
+import { FileDown, Download, ChevronRight, Save } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface MeterData {
@@ -39,6 +39,8 @@ interface ReconciliationResultsViewProps {
   showDownloadButtons?: boolean;
   onDownloadMeter?: (meter: MeterData) => void;
   onDownloadAll?: () => void;
+  onSave?: () => void;
+  showSaveButton?: boolean;
 }
 
 export default function ReconciliationResultsView({
@@ -57,6 +59,8 @@ export default function ReconciliationResultsView({
   showDownloadButtons = true,
   onDownloadMeter,
   onDownloadAll,
+  onSave,
+  showSaveButton = false,
 }: ReconciliationResultsViewProps) {
   const [expandedMeters, setExpandedMeters] = useState<Set<string>>(new Set());
 
@@ -198,11 +202,21 @@ export default function ReconciliationResultsView({
             <CardTitle>Detailed Breakdown</CardTitle>
             <CardDescription>Meter-by-meter consumption analysis</CardDescription>
           </div>
-          {showDownloadButtons && onDownloadAll && (
-            <Button variant="outline" className="gap-2" onClick={onDownloadAll}>
-              <Download className="w-4 h-4" />
-              Download All Meters
-            </Button>
+          {(showSaveButton || showDownloadButtons) && (
+            <div className="flex gap-2">
+              {showSaveButton && onSave && (
+                <Button variant="outline" className="gap-2" onClick={onSave}>
+                  <Save className="w-4 h-4" />
+                  Save Results
+                </Button>
+              )}
+              {showDownloadButtons && onDownloadAll && (
+                <Button variant="outline" className="gap-2" onClick={onDownloadAll}>
+                  <Download className="w-4 h-4" />
+                  Download All Meters
+                </Button>
+              )}
+            </div>
           )}
         </CardHeader>
         <CardContent className="space-y-6">

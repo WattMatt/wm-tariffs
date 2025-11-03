@@ -1764,48 +1764,36 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
       )}
 
       {reconciliationData && (
-        <>
-          <ReconciliationResultsView
-            bulkTotal={reconciliationData.councilTotal}
-            solarTotal={reconciliationData.solarTotal}
-            tenantTotal={reconciliationData.tenantTotal}
-            totalSupply={reconciliationData.totalSupply}
-            recoveryRate={reconciliationData.recoveryRate}
-            discrepancy={reconciliationData.discrepancy}
-            distributionTotal={reconciliationData.distributionTotal}
-            meters={[
-              ...(reconciliationData.councilBulk || []),
-              ...(reconciliationData.solarMeters || []),
-              ...(reconciliationData.checkMeters || []),
-              ...(reconciliationData.distribution || []),
-              ...(reconciliationData.otherMeters || [])
-            ].map(m => ({
-              ...m,
-              hasData: m.hasData !== undefined ? m.hasData : true,
-              hasError: m.hasError || failedMeters.has(m.id),
-              errorMessage: m.errorMessage || failedMeters.get(m.id)
-            }))}
-            meterConnections={meterConnectionsMap}
-            meterIndentLevels={meterIndentLevels}
-            meterParentInfo={meterParentInfo}
-            meterAssignments={meterAssignments}
-            showDownloadButtons={true}
-            onDownloadMeter={downloadMeterCSV}
-            onDownloadAll={downloadAllMetersCSV}
-          />
-
-          {/* Action Buttons */}
-          <div className="flex gap-2">
-            <Button onClick={() => setIsSaveDialogOpen(true)} variant="default" className="gap-2">
-              <Save className="h-4 w-4" />
-              Save Results
-            </Button>
-            <Button onClick={downloadAllMetersCSV} variant="outline" className="gap-2">
-              <Download className="h-4 w-4" />
-              Download All CSVs
-            </Button>
-          </div>
-        </>
+        <ReconciliationResultsView
+          bulkTotal={reconciliationData.councilTotal}
+          solarTotal={reconciliationData.solarTotal}
+          tenantTotal={reconciliationData.tenantTotal}
+          totalSupply={reconciliationData.totalSupply}
+          recoveryRate={reconciliationData.recoveryRate}
+          discrepancy={reconciliationData.discrepancy}
+          distributionTotal={reconciliationData.distributionTotal}
+          meters={[
+            ...(reconciliationData.councilBulk || []),
+            ...(reconciliationData.solarMeters || []),
+            ...(reconciliationData.checkMeters || []),
+            ...(reconciliationData.distribution || []),
+            ...(reconciliationData.otherMeters || [])
+          ].map(m => ({
+            ...m,
+            hasData: m.hasData !== undefined ? m.hasData : true,
+            hasError: m.hasError || failedMeters.has(m.id),
+            errorMessage: m.errorMessage || failedMeters.get(m.id)
+          }))}
+          meterConnections={meterConnectionsMap}
+          meterIndentLevels={meterIndentLevels}
+          meterParentInfo={meterParentInfo}
+          meterAssignments={meterAssignments}
+          showDownloadButtons={true}
+          onDownloadMeter={downloadMeterCSV}
+          onDownloadAll={downloadAllMetersCSV}
+          showSaveButton={true}
+          onSave={() => setIsSaveDialogOpen(true)}
+        />
       )}
 
       <SaveReconciliationDialog
