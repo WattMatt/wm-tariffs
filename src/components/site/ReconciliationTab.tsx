@@ -105,18 +105,18 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
           childrenMap.get(conn.child_meter_id)!.push(conn.parent_meter_id);
         });
 
-        // Check which meters have CSV files uploaded
+        // Check which meters have actual readings data
         const metersWithData = await Promise.all(
           meters.map(async (meter) => {
-            const { data: csvFiles } = await supabase
-              .from("meter_csv_files")
+            const { data: readings } = await supabase
+              .from("meter_readings")
               .select("id")
               .eq("meter_id", meter.id)
               .limit(1);
 
             return {
               ...meter,
-              hasData: csvFiles && csvFiles.length > 0,
+              hasData: readings && readings.length > 0,
             };
           })
         );
