@@ -64,6 +64,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
   const [reconciliationProgress, setReconciliationProgress] = useState<{current: number, total: number}>({current: 0, total: 0});
   const [meterAssignments, setMeterAssignments] = useState<Map<string, string>>(new Map()); // meter_id -> "grid_supply" | "solar_energy" | "none"
   const [expandedMeters, setExpandedMeters] = useState<Set<string>>(new Set()); // Set of meter IDs that are expanded
+  const [userSetDates, setUserSetDates] = useState(false); // Track if user manually set dates
 
   // Fetch available meters with CSV data and build hierarchy
   useEffect(() => {
@@ -378,8 +379,8 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
           readingsCount: count || 0
         });
 
-        // Only auto-set dates if they haven't been set yet (initial load)
-        if (!dateFrom && !dateTo) {
+        // Only auto-set dates if user hasn't manually set them
+        if (!userSetDates) {
           setDateFrom(earliest);
           setDateTo(latest);
           setTimeFrom(format(earliest, "HH:mm"));
@@ -1070,6 +1071,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                       selected={dateFrom} 
                       onSelect={(date) => {
                         setDateFrom(date);
+                        setUserSetDates(true);
                       }}
                       className={cn("p-3 pointer-events-auto")}
                       disabled={false}
@@ -1083,6 +1085,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                         value={timeFrom}
                         onChange={(e) => {
                           setTimeFrom(e.target.value);
+                          setUserSetDates(true);
                         }}
                         onBlur={() => {
                           // Close after user finishes editing and leaves the field
@@ -1121,6 +1124,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                       selected={dateTo} 
                       onSelect={(date) => {
                         setDateTo(date);
+                        setUserSetDates(true);
                       }}
                       className={cn("p-3 pointer-events-auto")}
                       disabled={false}
@@ -1134,6 +1138,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                         value={timeTo}
                         onChange={(e) => {
                           setTimeTo(e.target.value);
+                          setUserSetDates(true);
                         }}
                         onBlur={() => {
                           // Close after user finishes editing and leaves the field
