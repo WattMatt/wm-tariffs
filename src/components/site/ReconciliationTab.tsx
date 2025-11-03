@@ -7,7 +7,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { CalendarIcon, Download, Eye, FileDown, ChevronRight, ChevronLeft } from "lucide-react";
+import { CalendarIcon, Download, Eye, FileDown, ChevronRight, ChevronLeft, ArrowRight } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -1247,6 +1247,17 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
 
             <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
               <Label className="text-sm font-semibold mb-3 block">Meters Associated with This Site</Label>
+              
+              {/* Column Headers */}
+              <div className="flex items-center gap-2 mb-2 pb-2 border-b">
+                <div className="w-6 text-xs font-semibold text-left">Summate</div>
+                <div className="w-[72px]"></div> {/* Space for indent buttons */}
+                <div className="flex-1 text-xs font-semibold">Meter Number</div>
+                <div className="w-20 text-xs font-semibold text-center">Grid Supply</div>
+                <div className="w-20 text-xs font-semibold text-center">Solar Supply</div>
+                <div className="w-20 text-xs font-semibold text-center">Data Status</div>
+              </div>
+              
               <div className="space-y-2">
                 {availableMeters.length === 0 ? (
                   <div className="text-sm text-muted-foreground italic">No meters found for this site</div>
@@ -1264,18 +1275,20 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                         className="flex items-center gap-2"
                         style={{ marginLeft: `${marginLeft}px` }}
                       >
-                        <Checkbox
-                          checked={selectedMetersForSummation.has(meter.id)}
-                          onCheckedChange={(checked) => {
-                            const newSelected = new Set(selectedMetersForSummation);
-                            if (checked) {
-                              newSelected.add(meter.id);
-                            } else {
-                              newSelected.delete(meter.id);
-                            }
-                            setSelectedMetersForSummation(newSelected);
-                          }}
-                        />
+                        <div className="w-6 flex items-center justify-start">
+                          <Checkbox
+                            checked={selectedMetersForSummation.has(meter.id)}
+                            onCheckedChange={(checked) => {
+                              const newSelected = new Set(selectedMetersForSummation);
+                              if (checked) {
+                                newSelected.add(meter.id);
+                              } else {
+                                newSelected.delete(meter.id);
+                              }
+                              setSelectedMetersForSummation(newSelected);
+                            }}
+                          />
+                        </div>
                         <div className="flex gap-1">
                           <Button
                             variant="ghost"
@@ -1310,18 +1323,19 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                           onDrop={(e) => handleDrop(e, meter.id)}
                           onDragEnd={handleDragEnd}
                         >
-                          <div className="flex flex-col gap-1 flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium">{meter.meter_number}</span>
-                              {parentInfo && (
-                                <span className="text-xs text-muted-foreground">
-                                  → {parentInfo}
-                                </span>
-                              )}
-                            </div>
+                          <div className="flex items-center gap-2 flex-1">
+                            {indentLevel > 0 && (
+                              <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                            )}
+                            <span className="font-medium">{meter.meter_number}</span>
+                            {parentInfo && (
+                              <span className="text-xs text-muted-foreground">
+                                → {parentInfo}
+                              </span>
+                            )}
                           </div>
-                          <div className="flex items-center gap-3">
-                            <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-6">
+                            <div className="w-20 flex justify-center">
                               <Checkbox
                                 id={`grid-${meter.id}`}
                                 checked={meterAssignments.get(meter.id) === "grid_supply"}
@@ -1339,14 +1353,8 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                                   setMeterAssignments(newAssignments);
                                 }}
                               />
-                              <Label 
-                                htmlFor={`grid-${meter.id}`} 
-                                className="text-xs cursor-pointer whitespace-nowrap"
-                              >
-                                Grid Supply
-                              </Label>
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="w-20 flex justify-center">
                               <Checkbox
                                 id={`solar-${meter.id}`}
                                 checked={meterAssignments.get(meter.id) === "solar_energy"}
@@ -1365,16 +1373,12 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                                   setMeterAssignments(newAssignments);
                                 }}
                               />
-                              <Label 
-                                htmlFor={`solar-${meter.id}`} 
-                                className="text-xs cursor-pointer whitespace-nowrap"
-                              >
-                                Solar Supply
-                              </Label>
                             </div>
-                            <Badge variant={meter.hasData ? "default" : "secondary"}>
-                              {meter.hasData ? "Has Data" : "No Data"}
-                            </Badge>
+                            <div className="w-20 flex justify-center">
+                              <Badge variant={meter.hasData ? "default" : "secondary"} className="text-xs">
+                                {meter.hasData ? "Has Data" : "No Data"}
+                              </Badge>
+                            </div>
                           </div>
                         </div>
                       </div>
