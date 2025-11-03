@@ -92,11 +92,6 @@ export default function ReconciliationResultsView({
     return parentIds.every((parentId) => expandedMeters.has(parentId));
   };
 
-  // Deduplicate meters by ID while preserving the original order
-  const uniqueMeters = meters.filter((meter, index, self) => 
-    index === self.findIndex(m => m.id === meter.id)
-  );
-
   return (
     <div className="space-y-6">
       {/* Summary Cards */}
@@ -226,7 +221,7 @@ export default function ReconciliationResultsView({
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="space-y-2">
-            {uniqueMeters.filter(m => isMeterVisible(m.id)).map(meter => {
+            {meters.filter(m => isMeterVisible(m.id)).map(meter => {
               // Calculate hierarchical total if this meter has children
               const childIds = meterConnections.get(meter.id) || [];
               let hierarchicalTotal = 0;
@@ -238,7 +233,7 @@ export default function ReconciliationResultsView({
                   
                   // If this meter has no children, it's a leaf - return its value
                   if (children.length === 0) {
-                    const meterData = uniqueMeters.find((m: any) => m.id === meterId);
+                    const meterData = meters.find((m: any) => m.id === meterId);
                     const isSolar = meterAssignments.get(meterId) === "solar_energy";
                     const value = meterData?.totalKwh || 0;
                     // Solar meters subtract from the total instead of adding
