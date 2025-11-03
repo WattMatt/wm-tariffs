@@ -1053,6 +1053,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                       "w-full justify-start text-left font-normal",
                       !dateFrom && "text-muted-foreground"
                     )}
+                    disabled={!totalDateRange.earliest || !totalDateRange.latest}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {dateFrom ? `${format(dateFrom, "PP")} at ${timeFrom}` : "Pick date & time"}
@@ -1103,6 +1104,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                       "w-full justify-start text-left font-normal",
                       !dateTo && "text-muted-foreground"
                     )}
+                    disabled={!totalDateRange.earliest || !totalDateRange.latest}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {dateTo ? `${format(dateTo, "PP")} at ${timeTo}` : "Pick date & time"}
@@ -1144,7 +1146,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
             </div>
           </div>
 
-          <Button onClick={handlePreview} disabled={isLoadingPreview || !dateFrom || !dateTo || !selectedMeterId} className="w-full">
+          <Button onClick={handlePreview} disabled={isLoadingPreview || !dateFrom || !dateTo || !selectedMeterId || !totalDateRange.earliest || !totalDateRange.latest} className="w-full">
             <Eye className="mr-2 h-4 w-4" />
             {isLoadingPreview ? "Loading Preview..." : "Preview Meter Data"}
           </Button>
