@@ -378,11 +378,13 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
           readingsCount: count || 0
         });
 
-        // Auto-adjust date pickers to meter's date range
-        setDateFrom(earliest);
-        setDateTo(latest);
-        setTimeFrom(format(earliest, "HH:mm"));
-        setTimeTo(format(latest, "HH:mm"));
+        // Only auto-set dates if they haven't been set yet (initial load)
+        if (!dateFrom && !dateTo) {
+          setDateFrom(earliest);
+          setDateTo(latest);
+          setTimeFrom(format(earliest, "HH:mm"));
+          setTimeTo(format(latest, "HH:mm"));
+        }
       } catch (error) {
         console.error("Error fetching meter date range:", error);
       }
