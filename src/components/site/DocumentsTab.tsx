@@ -82,6 +82,9 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
   const [newFolderName, setNewFolderName] = useState('');
   const [renamingFolder, setRenamingFolder] = useState<string | null>(null);
   const [renameFolderName, setRenameFolderName] = useState('');
+  const [isMoveDialogOpen, setIsMoveDialogOpen] = useState(false);
+  const [moveDestinationFolder, setMoveDestinationFolder] = useState<string>('');
+  const [isMoving, setIsMoving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
   
@@ -306,6 +309,53 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
   // Navigate to folder
   const navigateToFolder = (folderPath: string) => {
     setCurrentFolderPath(folderPath);
+  };
+
+  // Get available folders for move dialog
+  const getAvailableFolders = (): string[] => {
+    const folders = new Set<string>();
+    folders.add(''); // Root folder
+    
+    documents.forEach(doc => {
+      if (doc.is_folder) {
+        folders.add(doc.folder_path);
+      }
+    });
+    
+    return Array.from(folders).sort();
+  };
+
+  // Handle move selected documents to folder
+  const handleMoveToFolder = async () => {
+    if (selectedDocuments.size === 0) {
+      toast.error("No documents selected");
+      return;
+    }
+
+    setIsMoving(true);
+    try {
+      const selectedDocs = documents.filter(d => selectedDocuments.has(d.id));
+      
+      for (const doc of selectedDocs) {
+        const { error } = await supabase
+          .from("site_documents")
+          .update({ folder_path: moveDestinationFolder })
+          .eq("id", doc.id);
+
+        if (error) throw error;
+      }
+
+      toast.success(`Moved ${selectedDocuments.size} document(s) to ${moveDestinationFolder || 'root'}`);
+      setSelectedDocuments(new Set());
+      setIsMoveDialogOpen(false);
+      setMoveDestinationFolder('');
+      fetchDocuments();
+    } catch (error) {
+      console.error("Error moving documents:", error);
+      toast.error("Failed to move documents");
+    } finally {
+      setIsMoving(false);
+    }
   };
 
   // Handle folder upload
@@ -1520,6 +1570,15 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                 <Button
                   variant="outline"
                   size="sm"
+                  onClick={() => setIsMoveDialogOpen(true)}
+                  disabled={isBulkExtracting}
+                >
+                  <FolderOpen className="w-4 h-4 mr-2" />
+                  Move to Folder
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={handleBulkDownload}
                   disabled={isBulkExtracting}
                 >
@@ -2229,6 +2288,60 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
               }}
             >
               Rename
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Move to Folder Dialog */}
+      <Dialog open={isMoveDialogOpen} onOpenChange={setIsMoveDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Move to Folder</DialogTitle>
+            <DialogDescription>
+              Select a destination folder for {selectedDocuments.size} document(s)
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Destination Folder</Label>
+              <Select value={moveDestinationFolder} onValueChange={setMoveDestinationFolder}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a folder..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Root (No folder)</SelectItem>
+                  {getAvailableFolders()
+                    .filter(f => f !== '')
+                    .map((folder) => (
+                      <SelectItem key={folder} value={folder}>
+                        {folder}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsMoveDialogOpen(false);
+                setMoveDestinationFolder('');
+              }}
+              disabled={isMoving}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleMoveToFolder} disabled={isMoving}>
+              {isMoving ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Moving...
+                </>
+              ) : (
+                'Move'
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
