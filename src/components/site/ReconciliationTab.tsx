@@ -1320,9 +1320,62 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                               )}
                             </div>
                           </div>
-                          <Badge variant={meter.hasData ? "default" : "secondary"}>
-                            {meter.hasData ? "Has Data" : "No Data"}
-                          </Badge>
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2">
+                              <Checkbox
+                                id={`grid-${meter.id}`}
+                                checked={meterAssignments.get(meter.id) === "grid_supply"}
+                                disabled={
+                                  Array.from(meterAssignments.values()).some(v => v === "grid_supply") && 
+                                  meterAssignments.get(meter.id) !== "grid_supply"
+                                }
+                                onCheckedChange={(checked) => {
+                                  const newAssignments = new Map(meterAssignments);
+                                  if (checked) {
+                                    newAssignments.set(meter.id, "grid_supply");
+                                  } else {
+                                    newAssignments.delete(meter.id);
+                                  }
+                                  setMeterAssignments(newAssignments);
+                                }}
+                              />
+                              <Label 
+                                htmlFor={`grid-${meter.id}`} 
+                                className="text-xs cursor-pointer whitespace-nowrap"
+                              >
+                                Grid Supply
+                              </Label>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Checkbox
+                                id={`solar-${meter.id}`}
+                                checked={meterAssignments.get(meter.id) === "solar_energy"}
+                                disabled={
+                                  (Array.from(meterAssignments.values()).some(v => v === "solar_energy") && 
+                                   meterAssignments.get(meter.id) !== "solar_energy") ||
+                                  meterAssignments.get(meter.id) === "grid_supply"
+                                }
+                                onCheckedChange={(checked) => {
+                                  const newAssignments = new Map(meterAssignments);
+                                  if (checked) {
+                                    newAssignments.set(meter.id, "solar_energy");
+                                  } else {
+                                    newAssignments.delete(meter.id);
+                                  }
+                                  setMeterAssignments(newAssignments);
+                                }}
+                              />
+                              <Label 
+                                htmlFor={`solar-${meter.id}`} 
+                                className="text-xs cursor-pointer whitespace-nowrap"
+                              >
+                                Solar Supply
+                              </Label>
+                            </div>
+                            <Badge variant={meter.hasData ? "default" : "secondary"}>
+                              {meter.hasData ? "Has Data" : "No Data"}
+                            </Badge>
+                          </div>
                         </div>
                       </div>
                     );
