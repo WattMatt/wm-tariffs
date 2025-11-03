@@ -92,55 +92,10 @@ export default function ReconciliationResultsView({
     return parentIds.every((parentId) => expandedMeters.has(parentId));
   };
 
-  // Deduplicate meters by ID and sort them properly
-  const uniqueMeters = meters.reduce((acc, meter) => {
-    if (!acc.find(m => m.id === meter.id)) {
-      acc.push(meter);
-    }
-    return acc;
-  }, [] as MeterData[]);
-
-  // Build a proper hierarchical order
-  const buildHierarchicalOrder = (): MeterData[] => {
-    const ordered: MeterData[] = [];
-    const processed = new Set<string>();
-
-    const addMeterAndChildren = (meterId: string, level: number = 0) => {
-      if (processed.has(meterId)) return;
-      
-      const meter = uniqueMeters.find(m => m.id === meterId);
-      if (!meter) return;
-
-      ordered.push(meter);
-      processed.add(meterId);
-
-      // Add children in order
-      const children = meterConnections.get(meterId) || [];
-      children.forEach(childId => {
-        addMeterAndChildren(childId, level + 1);
-      });
-    };
-
-    // First, find all top-level meters (meters with no parents)
-    const topLevelMeters = uniqueMeters.filter(meter => {
-      // Check if this meter is a child of any other meter
-      for (const [_, childIds] of meterConnections.entries()) {
-        if (childIds.includes(meter.id)) {
-          return false;
-        }
-      }
-      return true;
-    });
-
-    // Add top-level meters and their hierarchies
-    topLevelMeters.forEach(meter => {
-      addMeterAndChildren(meter.id, 0);
-    });
-
-    return ordered;
-  };
-
-  const orderedMeters = buildHierarchicalOrder();
+  // Deduplicate meters by ID while preserving the original order
+  const uniqueMeters = meters.filter((meter, index, self) => 
+    index === self.findIndex(m => m.id === meter.id)
+  );
 
   return (
     <div className="space-y-6">
@@ -271,7 +226,7 @@ export default function ReconciliationResultsView({
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="space-y-2">
-            {orderedMeters.filter(m => isMeterVisible(m.id)).map(meter => {
+            {uniqueMeters.filter(m => isMeterVisible(m.id)).map(meter => {
               // Calculate hierarchical total if this meter has children
               const childIds = meterConnections.get(meter.id) || [];
               let hierarchicalTotal = 0;
@@ -283,7 +238,7 @@ export default function ReconciliationResultsView({
                   
                   // If this meter has no children, it's a leaf - return its value
                   if (children.length === 0) {
-                    const meterData = meters.find((m: any) => m.id === meterId);
+                    const meterData = uniqueMeters.find((m: any) => m.id === meterId);
                     const isSolar = meterAssignments.get(meterId) === "solar_energy";
                     const value = meterData?.totalKwh || 0;
                     // Solar meters subtract from the total instead of adding
