@@ -7,7 +7,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { CalendarIcon, Download, Eye, FileDown, ChevronRight, ChevronLeft, ArrowRight } from "lucide-react";
+import { CalendarIcon, Download, Eye, FileDown, ChevronRight, ChevronLeft, ArrowRight, Check, X } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -1253,9 +1253,9 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                 <div className="w-6 text-xs font-semibold text-left">Summate</div>
                 <div className="w-[72px]"></div> {/* Space for indent buttons */}
                 <div className="flex-1 text-xs font-semibold">Meter Number</div>
-                <div className="w-20 text-xs font-semibold text-center">Grid Supply</div>
-                <div className="w-20 text-xs font-semibold text-center">Solar Supply</div>
-                <div className="w-20 text-xs font-semibold text-center">Data Status</div>
+                <div className="w-24 text-xs font-semibold text-center">Grid Supply</div>
+                <div className="w-24 text-xs font-semibold text-center">Solar Supply</div>
+                <div className="w-24 text-xs font-semibold text-center">Data Status</div>
               </div>
               
               <div className="space-y-2">
@@ -1335,7 +1335,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                               )}
                             </div>
                             <div className="flex items-center gap-6">
-                              <div className="w-20 flex justify-center">
+                              <div className="w-24 flex justify-center">
                                 <Checkbox
                                   id={`grid-${meter.id}`}
                                   checked={meterAssignments.get(meter.id) === "grid_supply"}
@@ -1354,7 +1354,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                                   }}
                                 />
                               </div>
-                              <div className="w-20 flex justify-center">
+                              <div className="w-24 flex justify-center">
                                 <Checkbox
                                   id={`solar-${meter.id}`}
                                   checked={meterAssignments.get(meter.id) === "solar_energy"}
@@ -1374,10 +1374,12 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                                   }}
                                 />
                               </div>
-                              <div className="w-20 flex justify-center">
-                                <Badge variant={meter.hasData ? "default" : "secondary"} className="text-xs">
-                                  {meter.hasData ? "Has Data" : "No Data"}
-                                </Badge>
+                              <div className="w-24 flex justify-center">
+                                {meter.hasData ? (
+                                  <Check className="h-5 w-5 text-primary" />
+                                ) : (
+                                  <X className="h-5 w-5 text-muted-foreground" />
+                                )}
                               </div>
                             </div>
                           </div>
