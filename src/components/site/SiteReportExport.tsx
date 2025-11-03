@@ -59,6 +59,65 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
   const [isLoadingColumns, setIsLoadingColumns] = useState(false);
   const [previewData, setPreviewData] = useState<PreviewData | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  
+  // New states for required selections
+  const [selectedSchematicId, setSelectedSchematicId] = useState<string>("");
+  const [selectedFolderPath, setSelectedFolderPath] = useState<string>("");
+  const [selectedReconciliationId, setSelectedReconciliationId] = useState<string>("");
+  const [availableSchematics, setAvailableSchematics] = useState<any[]>([]);
+  const [availableFolders, setAvailableFolders] = useState<any[]>([]);
+  const [availableReconciliations, setAvailableReconciliations] = useState<any[]>([]);
+  const [isLoadingOptions, setIsLoadingOptions] = useState(true);
+
+  // Fetch available options on mount
+  useEffect(() => {
+    const fetchOptions = async () => {
+      setIsLoadingOptions(true);
+      try {
+        // Fetch schematics
+        const { data: schematics, error: schematicsError } = await supabase
+          .from("schematics")
+          .select("id, name, description, page_number, total_pages")
+          .eq("site_id", siteId)
+          .order("name", { ascending: true });
+
+        if (schematicsError) throw schematicsError;
+        setAvailableSchematics(schematics || []);
+
+        // Fetch document folders (only folders, not individual files)
+        const { data: folders, error: foldersError } = await supabase
+          .from("site_documents")
+          .select("folder_path")
+          .eq("site_id", siteId)
+          .eq("is_folder", true)
+          .order("folder_path", { ascending: true });
+
+        if (foldersError) throw foldersError;
+        
+        // Get unique folder paths
+        const uniqueFolders = Array.from(new Set(folders?.map(f => f.folder_path) || []));
+        setAvailableFolders(uniqueFolders.map(path => ({ path, name: path || "Root" })));
+
+        // Fetch reconciliation runs
+        const { data: reconciliations, error: reconciliationsError } = await supabase
+          .from("reconciliation_runs")
+          .select("id, run_name, run_date, date_from, date_to")
+          .eq("site_id", siteId)
+          .order("run_date", { ascending: false });
+
+        if (reconciliationsError) throw reconciliationsError;
+        setAvailableReconciliations(reconciliations || []);
+
+      } catch (error) {
+        console.error("Error fetching options:", error);
+        toast.error("Failed to load report options");
+      } finally {
+        setIsLoadingOptions(false);
+      }
+    };
+
+    fetchOptions();
+  }, [siteId]);
 
   // Fetch available meters on mount
   useEffect(() => {
@@ -1429,6 +1488,83 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Required Selections */}
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="schematic-select">Select Schematic *</Label>
+            <Select 
+              value={selectedSchematicId} 
+              onValueChange={setSelectedSchematicId}
+              disabled={isLoadingOptions}
+            >
+              <SelectTrigger id="schematic-select">
+                <SelectValue placeholder="Choose a schematic for the report" />
+              </SelectTrigger>
+              <SelectContent>
+                {availableSchematics.length === 0 ? (
+                  <SelectItem value="none" disabled>No schematics available</SelectItem>
+                ) : (
+                  availableSchematics.map((schematic) => (
+                    <SelectItem key={schematic.id} value={schematic.id}>
+                      {schematic.name} {schematic.total_pages > 1 ? `(Page ${schematic.page_number}/${schematic.total_pages})` : ''}
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="folder-select">Select Document Folder *</Label>
+            <Select 
+              value={selectedFolderPath} 
+              onValueChange={setSelectedFolderPath}
+              disabled={isLoadingOptions}
+            >
+              <SelectTrigger id="folder-select">
+                <SelectValue placeholder="Choose a folder containing relevant documents" />
+              </SelectTrigger>
+              <SelectContent>
+                {availableFolders.length === 0 ? (
+                  <SelectItem value="none" disabled>No folders available</SelectItem>
+                ) : (
+                  availableFolders.map((folder) => (
+                    <SelectItem key={folder.path} value={folder.path}>
+                      {folder.name}
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="reconciliation-select">Select Reconciliation History *</Label>
+            <Select 
+              value={selectedReconciliationId} 
+              onValueChange={setSelectedReconciliationId}
+              disabled={isLoadingOptions}
+            >
+              <SelectTrigger id="reconciliation-select">
+                <SelectValue placeholder="Choose a saved reconciliation run" />
+              </SelectTrigger>
+              <SelectContent>
+                {availableReconciliations.length === 0 ? (
+                  <SelectItem value="none" disabled>No reconciliation history available</SelectItem>
+                ) : (
+                  availableReconciliations.map((run) => (
+                    <SelectItem key={run.id} value={run.id}>
+                      {run.run_name} - {format(new Date(run.run_date), "dd MMM yyyy")}
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <Separator />
+
         <div className="p-4 border rounded-lg bg-muted/30 space-y-2">
           <p className="text-sm font-medium">Report will include:</p>
           <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
@@ -1444,7 +1580,14 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
 
         <Button
           onClick={generatePreview}
-          disabled={isGeneratingPreview || isLoadingMeters}
+          disabled={
+            isGeneratingPreview || 
+            isLoadingMeters || 
+            isLoadingOptions ||
+            !selectedSchematicId || 
+            !selectedFolderPath || 
+            !selectedReconciliationId
+          }
           className="w-full"
           size="lg"
           variant="outline"
