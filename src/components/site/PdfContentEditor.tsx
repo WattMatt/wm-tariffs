@@ -76,9 +76,9 @@ export default function PdfContentEditor({ sections: initialSections, onSave, on
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold">Edit PDF Content</h2>
+          <h2 className="text-2xl font-bold">Edit Report Content</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            Edit text, reorder sections, and add page breaks
+            Edit markdown text, reorder sections, and add page breaks
           </p>
         </div>
         <div className="flex gap-2">
@@ -155,21 +155,21 @@ export default function PdfContentEditor({ sections: initialSections, onSave, on
 
               {section.type !== "page-break" && (
                 <CardContent>
-                  {section.editable ? (
+                   {section.editable ? (
                     <div className="space-y-2">
                       <Textarea
                         value={section.content}
                         onChange={(e) => handleContentChange(section.id, e.target.value)}
                         className="min-h-[200px] font-mono text-sm"
-                        placeholder="Enter content..."
+                        placeholder="Enter markdown content..."
                       />
                       <p className="text-xs text-muted-foreground">
-                        {section.content.length} characters
+                        {section.content.length} characters • Markdown supported
                       </p>
                     </div>
                   ) : (
                     <div className="bg-muted/50 p-4 rounded-md">
-                      <p className="text-sm whitespace-pre-wrap">{section.content}</p>
+                      <p className="text-sm whitespace-pre-wrap font-mono">{section.content}</p>
                     </div>
                   )}
                 </CardContent>

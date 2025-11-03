@@ -291,11 +291,22 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
     return `${year}-${month}-${day} ${hrs}:${mins}:00`;
   };
 
-  const generatePreview = async () => {
+  const handleSaveEditedContent = (editedSections: PdfSection[]) => {
+    setEditableSections(editedSections);
+    setIsEditingContent(false);
+    toast.success("Content updated! You can now generate the PDF.");
+  };
+
+  const generateMarkdownPreview = async () => {
+    if (!selectedSchematicId || !selectedFolderPath || !selectedReconciliationId) {
+      toast.error("Please select a schematic, folder, and reconciliation run");
+      return;
+    }
+
     setIsGeneratingPreview(true);
 
     try {
-      toast.info("Preparing audit report with selected data...");
+      toast.info("Generating markdown preview...");
 
       // 1. Fetch selected reconciliation data
       const { data: selectedReconciliation, error: reconError } = await supabase
@@ -691,15 +702,29 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
         csvColumnAggregations
       } as any);
       
-      // Convert report data to editable sections
+      // Convert report data to editable markdown sections
       const sections: PdfSection[] = [];
+      
+      // Header section
+      sections.push({
+        id: 'header',
+        title: 'Report Header',
+        content: `# Energy Audit Report
+
+**Client:** ${(previewData as any).reportData?.clientName || siteName}
+**Site:** ${siteName}
+**Audit Period:** ${format(new Date(selectedReconciliation.date_from), "dd MMM yyyy")} - ${format(new Date(selectedReconciliation.date_to), "dd MMM yyyy")}
+**Report Date:** ${format(new Date(), "dd MMM yyyy")}`,
+        type: 'text',
+        editable: true
+      });
       
       if (reportData?.sections) {
         if (reportData.sections.executiveSummary) {
           sections.push({
             id: 'executive-summary',
             title: 'Executive Summary',
-            content: reportData.sections.executiveSummary,
+            content: `## Executive Summary\n\n${reportData.sections.executiveSummary}`,
             type: 'text',
             editable: true
           });
@@ -709,7 +734,7 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
           sections.push({
             id: 'hierarchy-overview',
             title: 'Metering Hierarchy Overview',
-            content: reportData.sections.hierarchyOverview,
+            content: `## Metering Hierarchy Overview\n\n${reportData.sections.hierarchyOverview}`,
             type: 'text',
             editable: true
           });
@@ -719,17 +744,42 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
           sections.push({
             id: 'schematic-image',
             title: 'Site Schematic',
-            content: 'Schematic diagram will be included here',
+            content: `## Site Schematic\n\n*Schematic diagram will be included in the final PDF*`,
             type: 'image',
             editable: false
           });
         }
         
+        // Add reconciliation data section
+        sections.push({
+          id: 'reconciliation-data',
+          title: 'Consumption Reconciliation',
+          content: `## Consumption Reconciliation
+
+**Reading Period:** ${reconciliationData.readingsPeriod}
+
+### Summary
+- **Total Supply:** ${reconciliationData.totalSupply} kWh
+- **Council Bulk Total:** ${reconciliationData.councilTotal} kWh
+- **Solar Generation:** ${reconciliationData.solarTotal} kWh
+- **Distribution Total:** ${reconciliationData.distributionTotal} kWh
+- **Variance:** ${reconciliationData.variance} kWh (${reconciliationData.variancePercentage}%)
+- **Recovery Rate:** ${reconciliationData.recoveryRate}%
+
+### Meter Counts
+- **Council Bulk Meters:** ${reconciliationData.councilBulkCount}
+- **Distribution Meters:** ${reconciliationData.distributionCount}
+- **Solar Meters:** ${reconciliationData.solarCount}
+- **Check Meters:** ${reconciliationData.checkMeterCount}`,
+          type: 'text',
+          editable: true
+        });
+        
         if (reportData.sections.observations) {
           sections.push({
             id: 'observations',
             title: 'Observations and Anomalies',
-            content: reportData.sections.observations,
+            content: `## Observations and Anomalies\n\n${reportData.sections.observations}`,
             type: 'text',
             editable: true
           });
@@ -739,7 +789,7 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
           sections.push({
             id: 'recommendations',
             title: 'Recommendations',
-            content: reportData.sections.recommendations,
+            content: `## Recommendations\n\n${reportData.sections.recommendations}`,
             type: 'text',
             editable: true
           });
@@ -749,7 +799,7 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
           sections.push({
             id: 'billing-validation',
             title: 'Billing Validation',
-            content: reportData.sections.billingValidation,
+            content: `## Billing Validation\n\n${reportData.sections.billingValidation}`,
             type: 'text',
             editable: true
           });
@@ -757,9 +807,10 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
       }
       
       setEditableSections(sections);
+      setIsEditingContent(true); // Go directly to editor
       setCurrentPage(1); // Reset to first page
 
-      toast.success("Preview generated successfully!");
+      toast.success("Markdown preview generated - ready to edit!");
 
     } catch (error) {
       console.error("Error generating preview:", error);
@@ -1686,7 +1737,7 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
         </div>
 
         <Button
-          onClick={generatePreview}
+          onClick={generateMarkdownPreview}
           disabled={
             isGeneratingPreview || 
             isLoadingMeters || 
@@ -1706,367 +1757,20 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
             </>
           ) : (
             <>
-              <Eye className="w-4 h-4 mr-2" />
-              Generate PDF Preview
+              <Edit className="w-4 h-4 mr-2" />
+              Generate Markdown Preview
             </>
           )}
         </Button>
 
-        {previewData && !isEditingContent && (
-          <>
-            <Separator className="my-6" />
-            
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold">Report Preview</h3>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="default"
-                    size="sm"
-                    onClick={() => setIsEditingContent(true)}
-                  >
-                    <Edit className="w-4 h-4 mr-2" />
-                    Edit Content
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                    disabled={currentPage === 1}
-                  >
-                    Previous
-                  </Button>
-                  <span className="text-sm text-muted-foreground px-3">
-                    Page {currentPage} of {(() => {
-                      let totalPages = 1; // Cover page
-                      totalPages += 1; // TOC (Single Page)
-                      totalPages += 1; // Executive Summary
-                      totalPages += 1; // Metering Hierarchy
-                      if ((previewData as any).schematicImageBase64) totalPages += 1; // Schematic
-                      totalPages += 1; // Key Metrics
-                      totalPages += 1; // Observations
-                      totalPages += 1; // Recommendations
-                      if (previewData.reportData.sections.billingValidation) totalPages += 1;
-                      return totalPages;
-                    })()}
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      const maxPages = (() => {
-                        let totalPages = 1;
-                        totalPages += 1; // TOC
-                        totalPages += 1;
-                        totalPages += 1;
-                        if ((previewData as any).schematicImageBase64) totalPages += 1;
-                        totalPages += 1;
-                        totalPages += 1;
-                        totalPages += 1;
-                        if (previewData.reportData.sections.billingValidation) totalPages += 1;
-                        return totalPages;
-                      })();
-                      setCurrentPage(Math.min(maxPages, currentPage + 1));
-                    }}
-                    disabled={currentPage >= (() => {
-                      let totalPages = 1;
-                      totalPages += 1; // TOC
-                      totalPages += 1;
-                      totalPages += 1;
-                      if ((previewData as any).schematicImageBase64) totalPages += 1;
-                      totalPages += 1;
-                      totalPages += 1;
-                      totalPages += 1;
-                      if (previewData.reportData.sections.billingValidation) totalPages += 1;
-                      return totalPages;
-                    })()}
-                  >
-                    Next
-                  </Button>
-                </div>
-              </div>
-
-              {/* Page Container with A4-like aspect ratio */}
-              <div className="border rounded-lg shadow-lg bg-white overflow-hidden relative" style={{ aspectRatio: '210/297' }}>
-                {/* Blue sidebar matching PDF */}
-                <div className="absolute left-0 top-0 bottom-0 w-3 bg-[#176DB1]"></div>
-                
-                <div className="h-full w-full p-8 pl-10 overflow-auto">
-                  {/* Page 1: Cover */}
-                  {currentPage === 1 && (
-                    <div className="h-full flex flex-col items-center justify-center text-center space-y-6">
-                      <div className="w-full p-8">
-                        <h1 className="text-4xl font-bold mb-2 text-[#176DB1]">{previewData.siteName.toUpperCase()}</h1>
-                        <h2 className="text-2xl font-bold text-[#176DB1]">METERING AUDIT REPORT</h2>
-                      </div>
-                      <div className="space-y-4 p-8 w-full">
-                        <p className="text-lg font-semibold">Financial Analysis</p>
-                        <div className="space-y-2 mt-8">
-                          <p className="text-sm font-medium text-muted-foreground">Audit Period</p>
-                          <p className="text-lg font-semibold">
-                            All Available Readings
-                          </p>
-                        </div>
-                      </div>
-                      <p className="text-xs text-muted-foreground absolute bottom-4">
-                        Document Number: AUD-{format(new Date(), "yyyyMMdd-HHmmss")} | Print date: {format(new Date(), "dd/MM/yyyy HH:mm")}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Page 2: Table of Contents Title */}
-                  {currentPage === 2 && (
-                    <div className="h-full flex flex-col items-center justify-center">
-                      <h1 className="text-4xl font-bold text-[#176DB1]">Table of Contents</h1>
-                    </div>
-                  )}
-
-                  {/* Page 3: Table of Contents Content */}
-                  {currentPage === 3 && (
-                    <div className="space-y-3 py-8">
-                      <div className="space-y-2 text-sm">
-                        <p className="font-bold text-[#176DB1]">1. EXECUTIVE SUMMARY</p>
-                        <p className="font-bold text-[#176DB1]">2. METERING HIERARCHY OVERVIEW</p>
-                        <p className="font-bold text-[#176DB1]">3. DATA SOURCES AND AUDIT PERIOD</p>
-                        <p className="font-bold text-[#176DB1]">4. KEY METRICS</p>
-                        <p className="pl-6">4.1 Basic Reconciliation Metrics</p>
-                        <p className="pl-6">4.2 CSV Column Aggregations</p>
-                        <p className="font-bold text-[#176DB1]">5. METERING RECONCILIATION</p>
-                        <p className="pl-6">5.1 Supply Summary</p>
-                        <p className="pl-6">5.2 Distribution Summary</p>
-                        <p className="font-bold text-[#176DB1]">6. METER BREAKDOWN</p>
-                        <p className="font-bold text-[#176DB1]">7. OBSERVATIONS AND ANOMALIES</p>
-                        <p className="font-bold text-[#176DB1]">8. RECOMMENDATIONS</p>
-                        {previewData.reportData.sections.billingValidation && (
-                          <p className="font-bold text-[#176DB1]">9. BILLING VALIDATION</p>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Page 2: Table of Contents */}
-                  {currentPage === 2 && (
-                    <div className="space-y-4">
-                      <h3 className="text-lg font-bold text-[#176DB1]">1.1 Table of Contents</h3>
-                      <div className="space-y-1 text-sm">
-                        <div className="font-bold text-[#176DB1]">1. EXECUTIVE SUMMARY</div>
-                        <div className="font-bold text-[#176DB1]">2. METERING HIERARCHY OVERVIEW</div>
-                        <div className="font-bold text-[#176DB1]">3. DATA SOURCES AND AUDIT PERIOD</div>
-                        <div className="font-bold text-[#176DB1]">4. KEY METRICS</div>
-                        <div className="pl-4">4.1 Basic Reconciliation Metrics</div>
-                        <div className="pl-4">4.2 CSV Column Aggregations</div>
-                        <div className="font-bold text-[#176DB1]">5. METERING RECONCILIATION</div>
-                        <div className="pl-4">5.1 Supply Summary</div>
-                        <div className="pl-4">5.2 Distribution Summary</div>
-                        <div className="font-bold text-[#176DB1]">6. METER BREAKDOWN</div>
-                        <div className="font-bold text-[#176DB1]">7. OBSERVATIONS AND ANOMALIES</div>
-                        <div className="font-bold text-[#176DB1]">8. RECOMMENDATIONS</div>
-                        {previewData.reportData.sections.billingValidation && (
-                          <div className="font-bold text-[#176DB1]">9. BILLING VALIDATION</div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Page 3: Executive Summary */}
-                  {currentPage === 3 && (
-                    <div className="space-y-4">
-                      <div className="bg-[#176DB1] text-white p-4 rounded">
-                        <h3 className="text-2xl font-bold">1. EXECUTIVE SUMMARY</h3>
-                      </div>
-                      <div className="prose prose-sm max-w-none text-sm whitespace-pre-wrap">
-                        {previewData.reportData.sections.executiveSummary}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Page 4: Metering Hierarchy */}
-                  {currentPage === 4 && (
-                    <div className="space-y-4">
-                      <div className="bg-[#176DB1] text-white p-4 rounded">
-                        <h3 className="text-2xl font-bold">2. METERING HIERARCHY OVERVIEW</h3>
-                      </div>
-                      <div className="prose prose-sm max-w-none text-sm whitespace-pre-wrap">
-                        {previewData.reportData.sections.hierarchyOverview}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Page 5: Schematic (if available) */}
-                  {(previewData as any).schematicImageBase64 && currentPage === 5 && (
-                    <div className="space-y-4">
-                      <div className="bg-[#176DB1] text-white p-4 rounded">
-                        <h3 className="text-2xl font-bold">SITE SCHEMATIC DIAGRAM</h3>
-                      </div>
-                      <div className="flex flex-col items-center justify-center space-y-2">
-                        <img 
-                          src={(previewData as any).schematicImageBase64} 
-                          alt="Site Metering Schematic" 
-                          className="max-w-full h-auto rounded-lg border"
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          Figure 1: Site Metering Schematic Diagram
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Page 6 (or 5 if no schematic): Key Metrics */}
-                  {currentPage === ((previewData as any).schematicImageBase64 ? 6 : 5) && (
-                    <div className="space-y-4">
-                      <div className="bg-[#176DB1] text-white p-4 rounded">
-                        <h3 className="text-2xl font-bold">3. KEY METRICS</h3>
-                      </div>
-                      <div className="space-y-4">
-                        <div>
-                          <h4 className="text-sm font-semibold mb-3">Basic Reconciliation Metrics</h4>
-                          <div className="grid grid-cols-2 gap-3">
-                            <div className="border rounded-lg p-3 space-y-1 bg-muted/30">
-                              <p className="text-xs text-muted-foreground">Total Supply</p>
-                              <p className="text-xl font-bold">{parseFloat(previewData.reconciliationData.totalSupply).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kWh</p>
-                            </div>
-                            <div className="border rounded-lg p-3 space-y-1 bg-muted/30">
-                              <p className="text-xs text-muted-foreground">Distribution Total</p>
-                              <p className="text-xl font-bold">{parseFloat(previewData.reconciliationData.distributionTotal).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kWh</p>
-                            </div>
-                            <div className="border rounded-lg p-3 space-y-1 bg-muted/30">
-                              <p className="text-xs text-muted-foreground">Recovery Rate</p>
-                              <p className="text-xl font-bold">{parseFloat(previewData.reconciliationData.recoveryRate).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</p>
-                            </div>
-                            <div className="border rounded-lg p-3 space-y-1 bg-muted/30">
-                              <p className="text-xs text-muted-foreground">Variance</p>
-                              <p className="text-xl font-bold">
-                                {parseFloat(previewData.reconciliationData.variance).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kWh ({previewData.reconciliationData.variancePercentage}%)
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-
-                        {(previewData as any).csvColumnAggregations && Object.keys((previewData as any).csvColumnAggregations).length > 0 && (
-                          <div>
-                            <h4 className="text-sm font-semibold mb-3">CSV Column Aggregations</h4>
-                            <div className="border rounded-lg overflow-hidden">
-                              <table className="w-full text-xs">
-                                <thead className="bg-primary text-primary-foreground">
-                                  <tr>
-                                    <th className="text-left p-2">Column</th>
-                                    <th className="text-right p-2">Value</th>
-                                    <th className="text-center p-2">Unit</th>
-                                    <th className="text-center p-2">Agg</th>
-                                    <th className="text-center p-2">Mult</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {Object.entries((previewData as any).csvColumnAggregations).map(([columnName, data]: [string, any]) => (
-                                    <tr key={columnName} className="border-t">
-                                      <td className="p-2 font-medium">{columnName}</td>
-                                      <td className="p-2 text-right">{data.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                      <td className="p-2 text-center">{data.aggregation === 'sum' ? 'kWh' : 'kVA'}</td>
-                                      <td className="p-2 text-center uppercase">{data.aggregation}</td>
-                                      <td className="p-2 text-center">{data.multiplier !== 1 ? `×${data.multiplier}` : '-'}</td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Page 7 (or 6): Observations */}
-                  {currentPage === ((previewData as any).schematicImageBase64 ? 7 : 6) && (
-                    <div className="space-y-4">
-                      <div className="bg-[#176DB1] text-white p-4 rounded">
-                        <h3 className="text-2xl font-bold">4. OBSERVATIONS AND ANOMALIES</h3>
-                      </div>
-                      <div className="prose prose-sm max-w-none text-xs whitespace-pre-wrap">
-                        {previewData.reportData.sections.observations.replace(/^observations\s+and\s+anomalies[:\s]*/i, '').trim()}
-                      </div>
-                      {previewData.anomalies.length > 0 && (
-                        <div className="space-y-2 mt-4">
-                          <h4 className="font-semibold text-sm">Detected Anomalies</h4>
-                          {previewData.anomalies.slice(0, 5).map((anomaly: any, idx: number) => (
-                            <div key={idx} className="border-l-4 border-destructive pl-3 py-1">
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className="text-xs font-semibold px-2 py-0.5 bg-destructive/10 text-destructive rounded">
-                                  {anomaly.severity}
-                                </span>
-                                {anomaly.meter && (
-                                  <span className="text-xs text-muted-foreground">
-                                    Meter: {anomaly.meter}
-                                  </span>
-                                )}
-                              </div>
-                              <p className="text-xs">{anomaly.description}</p>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Page 8 (or 7): Recommendations */}
-                  {currentPage === ((previewData as any).schematicImageBase64 ? 8 : 7) && (
-                    <div className="space-y-4">
-                      <div className="bg-[#176DB1] text-white p-4 rounded">
-                        <h3 className="text-2xl font-bold">5. RECOMMENDATIONS</h3>
-                      </div>
-                      <div className="prose prose-sm max-w-none text-xs whitespace-pre-wrap">
-                        {previewData.reportData.sections.recommendations}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Page 9 (or 8): Billing Validation (if exists) */}
-                  {previewData.reportData.sections.billingValidation && 
-                   currentPage === ((previewData as any).schematicImageBase64 ? 9 : 8) && (
-                    <div className="space-y-4">
-                      <div className="bg-[#176DB1] text-white p-4 rounded">
-                        <h3 className="text-2xl font-bold">6. BILLING VALIDATION</h3>
-                      </div>
-                      <div className="prose prose-sm max-w-none text-xs whitespace-pre-wrap">
-                        {previewData.reportData.sections.billingValidation}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <Separator className="my-6" />
-
-            <Button
-              onClick={generateReport}
-              disabled={isGenerating}
-              className="w-full"
-              size="lg"
-            >
-              {isGenerating ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Generating PDF...
-                </>
-              ) : (
-                <>
-                  <Download className="w-4 h-4 mr-2" />
-                  Generate Audit Report
-                </>
-              )}
-            </Button>
-          </>
-        )}
-
         {isEditingContent && editableSections.length > 0 && (
           <PdfContentEditor
             sections={editableSections}
-            onSave={(editedSections) => {
-              setEditableSections(editedSections);
+            onSave={handleSaveEditedContent}
+            onCancel={() => {
               setIsEditingContent(false);
-              toast.success("Content updated! You can now generate the PDF.");
+              setEditableSections([]);
             }}
-            onCancel={() => setIsEditingContent(false)}
           />
         )}
       </CardContent>
