@@ -1358,6 +1358,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                                     }
                                     setMeterAssignments(newAssignments);
                                   }}
+                                  className="h-6 w-6 rounded-full"
                                 />
                               </div>
                               <div className="w-24 flex justify-center">
@@ -1378,6 +1379,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                                     }
                                     setMeterAssignments(newAssignments);
                                   }}
+                                  className="h-6 w-6 rounded-full"
                                 />
                               </div>
                               <div className="w-24 flex justify-center">
@@ -1386,8 +1388,8 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                                     <Check className="h-4 w-4 text-primary-foreground" />
                                   </div>
                                 ) : (
-                                  <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center">
-                                    <X className="h-4 w-4 text-muted-foreground" />
+                                  <div className="h-6 w-6 rounded-full bg-black flex items-center justify-center">
+                                    <X className="h-4 w-4 text-white" />
                                   </div>
                                 )}
                               </div>
