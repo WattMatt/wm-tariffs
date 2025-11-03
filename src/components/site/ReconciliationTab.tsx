@@ -1264,7 +1264,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                 ) : (
                   availableMeters.map((meter) => {
                     const indentLevel = meterIndentLevels.get(meter.id) || 0;
-                    const marginLeft = indentLevel * 24; // 24px per indent level
+                    const contentMarginLeft = indentLevel * 24; // 24px per indent level - only for content, not checkbox
                     const isDragging = draggedMeterId === meter.id;
                     const isDragOver = dragOverMeterId === meter.id;
                     const parentInfo = meterParentInfo.get(meter.id);
@@ -1273,7 +1273,6 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                       <div 
                         key={meter.id} 
                         className="flex items-center gap-2"
-                        style={{ marginLeft: `${marginLeft}px` }}
                       >
                         <div className="w-6 flex items-center justify-start">
                           <Checkbox
@@ -1289,95 +1288,97 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                             }}
                           />
                         </div>
-                        <div className="flex gap-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0"
-                            onClick={() => handleOutdentMeter(meter.id)}
-                            disabled={indentLevel === 0}
-                          >
-                            <ChevronLeft className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0"
-                            onClick={() => handleIndentMeter(meter.id)}
-                            disabled={indentLevel >= 3}
-                          >
-                            <ChevronRight className="h-4 w-4" />
-                          </Button>
-                        </div>
-                        <div 
-                          className={cn(
-                            "flex items-center justify-between flex-1 p-3 rounded-md border bg-card hover:bg-accent/5 transition-colors cursor-move",
-                            isDragging && "opacity-50",
-                            isDragOver && "border-primary border-2"
-                          )}
-                          draggable
-                          onDragStart={(e) => handleDragStart(e, meter.id)}
-                          onDragOver={handleDragOver}
-                          onDragEnter={() => handleDragEnter(meter.id)}
-                          onDragLeave={handleDragLeave}
-                          onDrop={(e) => handleDrop(e, meter.id)}
-                          onDragEnd={handleDragEnd}
-                        >
-                          <div className="flex items-center gap-2 flex-1">
-                            {indentLevel > 0 && (
-                              <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                            )}
-                            <span className="font-medium">{meter.meter_number}</span>
-                            {parentInfo && (
-                              <span className="text-xs text-muted-foreground">
-                                → {parentInfo}
-                              </span>
-                            )}
+                        <div className="flex-1 flex items-center gap-2" style={{ marginLeft: `${contentMarginLeft}px` }}>
+                          <div className="flex gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0"
+                              onClick={() => handleOutdentMeter(meter.id)}
+                              disabled={indentLevel === 0}
+                            >
+                              <ChevronLeft className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0"
+                              onClick={() => handleIndentMeter(meter.id)}
+                              disabled={indentLevel >= 3}
+                            >
+                              <ChevronRight className="h-4 w-4" />
+                            </Button>
                           </div>
-                          <div className="flex items-center gap-6">
-                            <div className="w-20 flex justify-center">
-                              <Checkbox
-                                id={`grid-${meter.id}`}
-                                checked={meterAssignments.get(meter.id) === "grid_supply"}
-                                disabled={
-                                  Array.from(meterAssignments.values()).some(v => v === "grid_supply") && 
-                                  meterAssignments.get(meter.id) !== "grid_supply"
-                                }
-                                onCheckedChange={(checked) => {
-                                  const newAssignments = new Map(meterAssignments);
-                                  if (checked) {
-                                    newAssignments.set(meter.id, "grid_supply");
-                                  } else {
-                                    newAssignments.delete(meter.id);
-                                  }
-                                  setMeterAssignments(newAssignments);
-                                }}
-                              />
+                          <div 
+                            className={cn(
+                              "flex items-center justify-between flex-1 p-3 rounded-md border bg-card hover:bg-accent/5 transition-colors cursor-move",
+                              isDragging && "opacity-50",
+                              isDragOver && "border-primary border-2"
+                            )}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, meter.id)}
+                            onDragOver={handleDragOver}
+                            onDragEnter={() => handleDragEnter(meter.id)}
+                            onDragLeave={handleDragLeave}
+                            onDrop={(e) => handleDrop(e, meter.id)}
+                            onDragEnd={handleDragEnd}
+                          >
+                            <div className="flex items-center gap-2 flex-1">
+                              {indentLevel > 0 && (
+                                <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                              )}
+                              <span className="font-medium">{meter.meter_number}</span>
+                              {parentInfo && (
+                                <span className="text-xs text-muted-foreground">
+                                  → {parentInfo}
+                                </span>
+                              )}
                             </div>
-                            <div className="w-20 flex justify-center">
-                              <Checkbox
-                                id={`solar-${meter.id}`}
-                                checked={meterAssignments.get(meter.id) === "solar_energy"}
-                                disabled={
-                                  (Array.from(meterAssignments.values()).some(v => v === "solar_energy") && 
-                                   meterAssignments.get(meter.id) !== "solar_energy") ||
-                                  meterAssignments.get(meter.id) === "grid_supply"
-                                }
-                                onCheckedChange={(checked) => {
-                                  const newAssignments = new Map(meterAssignments);
-                                  if (checked) {
-                                    newAssignments.set(meter.id, "solar_energy");
-                                  } else {
-                                    newAssignments.delete(meter.id);
+                            <div className="flex items-center gap-6">
+                              <div className="w-20 flex justify-center">
+                                <Checkbox
+                                  id={`grid-${meter.id}`}
+                                  checked={meterAssignments.get(meter.id) === "grid_supply"}
+                                  disabled={
+                                    Array.from(meterAssignments.values()).some(v => v === "grid_supply") && 
+                                    meterAssignments.get(meter.id) !== "grid_supply"
                                   }
-                                  setMeterAssignments(newAssignments);
-                                }}
-                              />
-                            </div>
-                            <div className="w-20 flex justify-center">
-                              <Badge variant={meter.hasData ? "default" : "secondary"} className="text-xs">
-                                {meter.hasData ? "Has Data" : "No Data"}
-                              </Badge>
+                                  onCheckedChange={(checked) => {
+                                    const newAssignments = new Map(meterAssignments);
+                                    if (checked) {
+                                      newAssignments.set(meter.id, "grid_supply");
+                                    } else {
+                                      newAssignments.delete(meter.id);
+                                    }
+                                    setMeterAssignments(newAssignments);
+                                  }}
+                                />
+                              </div>
+                              <div className="w-20 flex justify-center">
+                                <Checkbox
+                                  id={`solar-${meter.id}`}
+                                  checked={meterAssignments.get(meter.id) === "solar_energy"}
+                                  disabled={
+                                    (Array.from(meterAssignments.values()).some(v => v === "solar_energy") && 
+                                     meterAssignments.get(meter.id) !== "solar_energy") ||
+                                    meterAssignments.get(meter.id) === "grid_supply"
+                                  }
+                                  onCheckedChange={(checked) => {
+                                    const newAssignments = new Map(meterAssignments);
+                                    if (checked) {
+                                      newAssignments.set(meter.id, "solar_energy");
+                                    } else {
+                                      newAssignments.delete(meter.id);
+                                    }
+                                    setMeterAssignments(newAssignments);
+                                  }}
+                                />
+                              </div>
+                              <div className="w-20 flex justify-center">
+                                <Badge variant={meter.hasData ? "default" : "secondary"} className="text-xs">
+                                  {meter.hasData ? "Has Data" : "No Data"}
+                                </Badge>
+                              </div>
                             </div>
                           </div>
                         </div>
