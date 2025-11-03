@@ -655,7 +655,8 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedDocuments(new Set(documents.map(doc => doc.id)));
+      const currentFolderDocs = documents.filter(d => !d.is_folder && d.folder_path === currentFolderPath);
+      setSelectedDocuments(new Set(currentFolderDocs.map(doc => doc.id)));
     } else {
       setSelectedDocuments(new Set());
     }
@@ -1330,6 +1331,92 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
             </CardDescription>
           </CardHeader>
         <CardContent className="space-y-4">
+          {/* Folder Navigation */}
+          <div className="flex items-center gap-2 p-3 border rounded-lg bg-muted/30">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setCurrentFolderPath('')}
+              className="gap-2"
+            >
+              <Home className="w-4 h-4" />
+              Root
+            </Button>
+            {currentFolderPath && (
+              <>
+                {currentFolderPath.split('/').map((folder, index, arr) => {
+                  const path = arr.slice(0, index + 1).join('/');
+                  return (
+                    <div key={path} className="flex items-center gap-2">
+                      <span>/</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setCurrentFolderPath(path)}
+                      >
+                        {folder}
+                      </Button>
+                    </div>
+                  );
+                })}
+              </>
+            )}
+            <div className="ml-auto flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsCreatingFolder(true)}
+                className="gap-2"
+              >
+                <FolderPlus className="w-4 h-4" />
+                New Folder
+              </Button>
+              <Input
+                ref={folderInputRef}
+                type="file"
+                className="hidden"
+                onChange={handleFolderSelect}
+                {...({ webkitdirectory: "", directory: "" } as any)}
+                multiple
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => folderInputRef.current?.click()}
+                className="gap-2"
+              >
+                <Upload className="w-4 h-4" />
+                Upload Folder
+              </Button>
+            </div>
+          </div>
+
+          {/* New Folder Dialog */}
+          {isCreatingFolder && (
+            <div className="flex items-center gap-2 p-3 border rounded-lg bg-primary/5">
+              <Input
+                placeholder="Folder name"
+                value={newFolderName}
+                onChange={(e) => setNewFolderName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleCreateFolder()}
+                autoFocus
+              />
+              <Button onClick={handleCreateFolder} size="sm">
+                Create
+              </Button>
+              <Button
+                onClick={() => {
+                  setIsCreatingFolder(false);
+                  setNewFolderName('');
+                }}
+                variant="ghost"
+                size="sm"
+              >
+                Cancel
+              </Button>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 border rounded-lg bg-muted/30">
             <div className="space-y-2">
               <Label htmlFor="document-type">Document Type</Label>
@@ -1348,6 +1435,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
             <div className="space-y-2">
               <Label htmlFor="file-upload">Select Files</Label>
               <Input
+                ref={fileInputRef}
                 id="file-upload"
                 type="file"
                 accept=".pdf,.jpg,.jpeg,.png"
@@ -1468,7 +1556,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                   <TableRow>
                     <TableHead className="w-12">
                       <Checkbox
-                        checked={selectedDocuments.size === documents.length && documents.length > 0}
+                        checked={selectedDocuments.size === documents.filter(d => !d.is_folder && d.folder_path === currentFolderPath).length && documents.filter(d => !d.is_folder && d.folder_path === currentFolderPath).length > 0}
                         onCheckedChange={handleSelectAll}
                       />
                     </TableHead>
@@ -1483,7 +1571,77 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {documents.map((doc) => (
+                  {/* Show folders first */}
+                  {documents
+                    .filter(d => d.is_folder && d.folder_path === (currentFolderPath || ''))
+                    .map((folder) => (
+                      <TableRow
+                        key={folder.id}
+                        className="cursor-pointer hover:bg-muted/50"
+                      >
+                        <TableCell>
+                          {/* No checkbox for folders */}
+                        </TableCell>
+                        <TableCell
+                          className="font-medium"
+                          onClick={() => navigateToFolder(folder.folder_path)}
+                        >
+                          <div className="flex items-center gap-2">
+                            <Folder className="w-4 h-4 text-primary" />
+                            {folder.file_name}
+                          </div>
+                        </TableCell>
+                        <TableCell colSpan={6}>
+                          <span className="text-muted-foreground text-sm">Folder</span>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <TooltipProvider>
+                            <div className="flex justify-end gap-2">
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setRenamingFolder(folder.id);
+                                      setRenameFolderName(folder.file_name);
+                                    }}
+                                  >
+                                    <Edit2 className="w-4 h-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Rename folder</p>
+                                </TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDeleteFolder(folder.id, folder.folder_path);
+                                    }}
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Delete folder</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </div>
+                          </TooltipProvider>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  
+                  {/* Show documents */}
+                  {documents
+                    .filter(d => !d.is_folder && d.folder_path === currentFolderPath)
+                    .map((doc) => (
                     <TableRow key={doc.id}>
                       <TableCell>
                         <Checkbox
@@ -2030,6 +2188,49 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Rename Folder Dialog */}
+      <Dialog open={renamingFolder !== null} onOpenChange={(open) => !open && setRenamingFolder(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rename Folder</DialogTitle>
+            <DialogDescription>Enter a new name for the folder</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <Input
+              value={renameFolderName}
+              onChange={(e) => setRenameFolderName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && renamingFolder) {
+                  const folder = documents.find(d => d.id === renamingFolder);
+                  if (folder) {
+                    handleRenameFolder(renamingFolder, folder.folder_path);
+                  }
+                }
+              }}
+              placeholder="New folder name"
+              autoFocus
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRenamingFolder(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (renamingFolder) {
+                  const folder = documents.find(d => d.id === renamingFolder);
+                  if (folder) {
+                    handleRenameFolder(renamingFolder, folder.folder_path);
+                  }
+                }
+              }}
+            >
+              Rename
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>
