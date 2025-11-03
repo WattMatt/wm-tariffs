@@ -937,87 +937,6 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
           <CardDescription>Select date range for reconciliation</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label>Meter to Preview</Label>
-            <Select
-              value={selectedMeterId || ""}
-              onValueChange={setSelectedMeterId}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select a meter" />
-              </SelectTrigger>
-              <SelectContent>
-                {(() => {
-                  // Group meters by type
-                  const groupedMeters = availableMeters.reduce((acc, meter) => {
-                    if (!acc[meter.meter_type]) {
-                      acc[meter.meter_type] = [];
-                    }
-                    acc[meter.meter_type].push(meter);
-                    return acc;
-                  }, {} as Record<string, typeof availableMeters>);
-
-                  // Sort meter types for consistent display
-                  const meterTypeOrder = ['bulk_meter', 'check_meter', 'distribution', 'tenant_meter', 'solar_meter'];
-                  const sortedTypes = Object.keys(groupedMeters).sort((a, b) => {
-                    const indexA = meterTypeOrder.indexOf(a);
-                    const indexB = meterTypeOrder.indexOf(b);
-                    if (indexA !== -1 && indexB !== -1) return indexA - indexB;
-                    if (indexA !== -1) return -1;
-                    if (indexB !== -1) return 1;
-                    return a.localeCompare(b);
-                  });
-
-                  return sortedTypes.map((meterType) => (
-                    <SelectGroup key={meterType}>
-                      <SelectLabel>
-                        {meterType.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}
-                      </SelectLabel>
-                      {groupedMeters[meterType].map((meter) => (
-                        <SelectItem
-                          key={meter.id}
-                          value={meter.id}
-                          disabled={!meter.hasData}
-                        >
-                          <div className="flex items-center gap-2">
-                            <span>{meter.meter_number}</span>
-                            {meterParentInfo.has(meter.id) && (
-                              <span className="text-xs text-muted-foreground">
-                                → {meterParentInfo.get(meter.id)}
-                              </span>
-                            )}
-                            {!meter.hasData && (
-                              <Badge variant="outline" className="text-xs">
-                                No data
-                              </Badge>
-                            )}
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
-                  ));
-                })()}
-              </SelectContent>
-            </Select>
-            {selectedMeterId && meterDateRange.earliest && meterDateRange.latest && (
-              <div className="mt-2 p-3 bg-muted/50 rounded-md space-y-1">
-                <p className="text-sm font-medium">Selected Meter Data Range:</p>
-                <p className="text-sm text-muted-foreground">
-                  {format(meterDateRange.earliest, "MMM dd, yyyy HH:mm")} to{" "}
-                  {format(meterDateRange.latest, "MMM dd, yyyy HH:mm")}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Total readings: {meterDateRange.readingsCount.toLocaleString()}
-                </p>
-              </div>
-            )}
-            {selectedMeterId && !meterDateRange.earliest && (
-              <p className="text-sm text-muted-foreground mt-2">
-                No data available for this meter
-              </p>
-            )}
-          </div>
-
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>From Date & Time</Label>
@@ -1312,32 +1231,13 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                           onDrop={(e) => handleDrop(e, meter.id)}
                           onDragEnd={handleDragEnd}
                         >
-                          <div className="flex items-center gap-3 flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium">{meter.meter_number}</span>
-                              {parentInfo && (
-                                <span className="text-xs text-muted-foreground">
-                                  → {parentInfo}
-                                </span>
-                              )}
-                            </div>
-                            <Select
-                              value={meterAssignments.get(meter.id) || "none"}
-                              onValueChange={(value) => {
-                                const newAssignments = new Map(meterAssignments);
-                                newAssignments.set(meter.id, value);
-                                setMeterAssignments(newAssignments);
-                              }}
-                            >
-                              <SelectTrigger className="w-[140px] h-8 text-xs bg-background">
-                                <SelectValue placeholder="Assign to..." />
-                              </SelectTrigger>
-                              <SelectContent className="bg-popover z-50">
-                                <SelectItem value="none">None</SelectItem>
-                                <SelectItem value="grid_supply">Grid Supply</SelectItem>
-                                <SelectItem value="solar_energy">Solar Energy</SelectItem>
-                              </SelectContent>
-                            </Select>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{meter.meter_number}</span>
+                            {parentInfo && (
+                              <span className="text-xs text-muted-foreground">
+                                → {parentInfo}
+                              </span>
+                            )}
                           </div>
                           <Badge variant={meter.hasData ? "default" : "secondary"}>
                             {meter.hasData ? "Has Data" : "No Data"}
