@@ -812,15 +812,24 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
       const discrepancy = totalSupply - tenantTotal;
 
       setReconciliationData({
+        // Meter arrays
         bulkMeters,
         checkMeters,
         otherMeters,
         tenantMeters,
+        councilBulk: bulkMeters,  // UI expects this name
+        solarMeters: otherMeters,  // UI expects this name  
+        distribution: tenantMeters,  // UI expects this name
+        distributionMeters: tenantMeters,  // Alternative name
+        
+        // Totals
         bulkTotal,
-        councilTotal: bulkTotal, // Grid supply (alias for bulkTotal)
+        councilTotal: bulkTotal,  // Grid supply
         otherTotal,
-        totalSupply,
+        solarTotal: otherTotal,  // UI expects this name
         tenantTotal,
+        distributionTotal: tenantTotal,  // UI expects this name
+        totalSupply,
         recoveryRate,
         discrepancy,
       });
