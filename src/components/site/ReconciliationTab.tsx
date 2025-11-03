@@ -51,6 +51,10 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
     latest: Date | null;
     readingsCount: number;
   }>>(new Map());
+  const [totalDateRange, setTotalDateRange] = useState<{
+    earliest: Date | null;
+    latest: Date | null;
+  }>({ earliest: null, latest: null });
   const [meterIndentLevels, setMeterIndentLevels] = useState<Map<string, number>>(new Map());
   const [meterParentInfo, setMeterParentInfo] = useState<Map<string, string>>(new Map()); // meter_id -> parent meter_number
   const [draggedMeterId, setDraggedMeterId] = useState<string | null>(null);
@@ -278,6 +282,25 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
         );
         
         setAllMeterDateRanges(dateRangesMap);
+
+        // Calculate overall date range
+        let overallEarliest: Date | null = null;
+        let overallLatest: Date | null = null;
+        
+        dateRangesMap.forEach((range) => {
+          if (range.earliest) {
+            if (!overallEarliest || range.earliest < overallEarliest) {
+              overallEarliest = range.earliest;
+            }
+          }
+          if (range.latest) {
+            if (!overallLatest || range.latest > overallLatest) {
+              overallLatest = range.latest;
+            }
+          }
+        });
+        
+        setTotalDateRange({ earliest: overallEarliest, latest: overallLatest });
 
         // Auto-select first meter with data, or bulk meter if available
         const bulkMeter = hierarchicalMeters.find(m => m.meter_type === "bulk_meter" && m.hasData);
@@ -969,8 +992,20 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
 
       <Card className="border-border/50">
         <CardHeader>
-          <CardTitle>Analysis Parameters</CardTitle>
-          <CardDescription>Select date range for reconciliation</CardDescription>
+          <div className="flex items-start justify-between">
+            <div>
+              <CardTitle>Analysis Parameters</CardTitle>
+              <CardDescription>Select date range for reconciliation</CardDescription>
+            </div>
+            {totalDateRange.earliest && totalDateRange.latest && (
+              <div className="text-right">
+                <div className="text-sm font-medium text-muted-foreground">Total Dataset Range</div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  {format(totalDateRange.earliest, "MMM dd, yyyy")} - {format(totalDateRange.latest, "MMM dd, yyyy")}
+                </div>
+              </div>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
