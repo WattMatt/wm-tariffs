@@ -1586,8 +1586,8 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                   // Create a map for quick lookup of meter data
                   const meterDataMap = new Map(allMeters.map((m: any) => [m.id, m]));
 
-                  // Show ALL meters in the same order as Associated Meters table
-                  return availableMeters.map(m => {
+                  // Show meters respecting hierarchy visibility
+                  return availableMeters.filter(m => isMeterVisible(m.id)).map(m => {
                     const meterData = meterDataMap.get(m.id);
                     // If meter has no data, create a fallback object
                     const meter = !meterData ? {
