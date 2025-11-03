@@ -1128,44 +1128,6 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <div className="p-3 rounded-lg bg-muted/50 space-y-3">
-                    <div className="space-y-1">
-                      <div className="text-xs text-muted-foreground">From Date & Time</div>
-                      <div className="text-sm font-mono">
-                        {dateFrom ? format(dateFrom, "yyyy-MM-dd") : '-'} {timeFrom}
-                      </div>
-                    </div>
-                    <div className="space-y-1">
-                      <div className="text-xs text-muted-foreground">First Actual Reading Found</div>
-                      <div className="text-sm font-mono">
-                        {previewData.firstReading.reading_timestamp.split('T')[0]} {previewData.firstReading.reading_timestamp.split('T')[1]?.substring(0, 8) || '00:00:00'}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <div className="p-3 rounded-lg bg-muted/50 space-y-3">
-                    <div className="space-y-1">
-                      <div className="text-xs text-muted-foreground">To Date & Time</div>
-                      <div className="text-sm font-mono">
-                        {dateTo ? format(dateTo, "yyyy-MM-dd") : '-'} {timeTo}
-                      </div>
-                    </div>
-                    <div className="space-y-1">
-                      <div className="text-xs text-muted-foreground">Last Actual Reading Found</div>
-                      <div className="text-sm font-mono">
-                        {previewData.lastReading.reading_timestamp.split('T')[0]} {previewData.lastReading.reading_timestamp.split('T')[1]?.substring(0, 8) || '00:00:00'}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
             <div className="space-y-2">
               <Label className="text-sm font-semibold">Available Columns - Select to Include in Calculations</Label>
               <div className="space-y-1">
