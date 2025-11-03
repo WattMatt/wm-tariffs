@@ -887,12 +887,12 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
       const checkMeters = meterData.filter((m) => m.meter_type === "check_meter");
       const tenantMeters = meterData.filter((m) => m.meter_type === "tenant_meter");
 
-      // Grid Supply: only positive values (consumption FROM grid)
-      const bulkTotal = gridSupplyMeters.length > 0 ? (gridSupplyMeters[0].totalKwhPositive || 0) : 0;
+      // Grid Supply: sum all positive values from all grid supply meters (consumption FROM grid)
+      const bulkTotal = gridSupplyMeters.reduce((sum, m) => sum + (m.totalKwhPositive || 0), 0);
       
-      // Solar Energy: solar generation + grid negative value (export, already negative)
-      const solarMeterTotal = solarEnergyMeters.length > 0 ? Math.max(0, solarEnergyMeters[0].totalKwh) : 0;
-      const gridNegative = gridSupplyMeters.length > 0 ? (gridSupplyMeters[0].totalKwhNegative || 0) : 0;
+      // Solar Energy: sum all solar meters + sum of all grid negative values (export)
+      const solarMeterTotal = solarEnergyMeters.reduce((sum, m) => sum + Math.max(0, m.totalKwh), 0);
+      const gridNegative = gridSupplyMeters.reduce((sum, m) => sum + (m.totalKwhNegative || 0), 0);
       const otherTotal = solarMeterTotal + gridNegative; // Adding negative value
       const tenantTotal = tenantMeters.reduce((sum, m) => sum + m.totalKwh, 0);
       
@@ -1409,10 +1409,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                                 <Checkbox
                                   id={`grid-${meter.id}`}
                                   checked={meterAssignments.get(meter.id) === "grid_supply"}
-                                  disabled={
-                                    Array.from(meterAssignments.values()).some(v => v === "grid_supply") && 
-                                    meterAssignments.get(meter.id) !== "grid_supply"
-                                  }
+                                  disabled={meterAssignments.get(meter.id) === "solar_energy"}
                                   onCheckedChange={(checked) => {
                                     const newAssignments = new Map(meterAssignments);
                                     if (checked) {
@@ -1428,11 +1425,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                                 <Checkbox
                                   id={`solar-${meter.id}`}
                                   checked={meterAssignments.get(meter.id) === "solar_energy"}
-                                  disabled={
-                                    (Array.from(meterAssignments.values()).some(v => v === "solar_energy") && 
-                                     meterAssignments.get(meter.id) !== "solar_energy") ||
-                                    meterAssignments.get(meter.id) === "grid_supply"
-                                  }
+                                  disabled={meterAssignments.get(meter.id) === "grid_supply"}
                                   onCheckedChange={(checked) => {
                                     const newAssignments = new Map(meterAssignments);
                                     if (checked) {
