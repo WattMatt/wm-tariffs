@@ -94,9 +94,13 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
 
         if (foldersError) throw foldersError;
         
-        // Get unique folder paths
+        // Get unique folder paths and handle empty paths
         const uniqueFolders = Array.from(new Set(folders?.map(f => f.folder_path) || []));
-        setAvailableFolders(uniqueFolders.map(path => ({ path, name: path || "Root" })));
+        setAvailableFolders(uniqueFolders.map(path => ({ 
+          path: path || "/", // Use "/" instead of empty string for root
+          displayPath: path, // Keep original for filtering
+          name: path || "Root" 
+        })));
 
         // Fetch reconciliation runs
         const { data: reconciliations, error: reconciliationsError } = await supabase
@@ -1502,7 +1506,7 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
               </SelectTrigger>
               <SelectContent>
                 {availableSchematics.length === 0 ? (
-                  <SelectItem value="none" disabled>No schematics available</SelectItem>
+                  <SelectItem value="no-schematics" disabled>No schematics available</SelectItem>
                 ) : (
                   availableSchematics.map((schematic) => (
                     <SelectItem key={schematic.id} value={schematic.id}>
@@ -1526,9 +1530,9 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
               </SelectTrigger>
               <SelectContent>
                 {availableFolders.length === 0 ? (
-                  <SelectItem value="none" disabled>No folders available</SelectItem>
+                  <SelectItem value="no-folders" disabled>No folders available</SelectItem>
                 ) : (
-                  availableFolders.map((folder) => (
+                  availableFolders.map((folder: any) => (
                     <SelectItem key={folder.path} value={folder.path}>
                       {folder.name}
                     </SelectItem>
@@ -1550,7 +1554,7 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
               </SelectTrigger>
               <SelectContent>
                 {availableReconciliations.length === 0 ? (
-                  <SelectItem value="none" disabled>No reconciliation history available</SelectItem>
+                  <SelectItem value="no-reconciliations" disabled>No reconciliation history available</SelectItem>
                 ) : (
                   availableReconciliations.map((run) => (
                     <SelectItem key={run.id} value={run.id}>
