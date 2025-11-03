@@ -46,6 +46,11 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
     latest: Date | null;
     readingsCount: number;
   }>({ earliest: null, latest: null, readingsCount: 0 });
+  const [allMeterDateRanges, setAllMeterDateRanges] = useState<Map<string, {
+    earliest: Date | null;
+    latest: Date | null;
+    readingsCount: number;
+  }>>(new Map());
   const [meterIndentLevels, setMeterIndentLevels] = useState<Map<string, number>>(new Map());
   const [meterParentInfo, setMeterParentInfo] = useState<Map<string, string>>(new Map()); // meter_id -> parent meter_number
   const [draggedMeterId, setDraggedMeterId] = useState<string | null>(null);
@@ -236,6 +241,43 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
         setAvailableMeters(hierarchicalMeters);
         setMeterIndentLevels(indentLevels);
         setMeterParentInfo(meterParentMap);
+
+        // Fetch date ranges for all meters with data
+        const dateRangesMap = new Map();
+        await Promise.all(
+          hierarchicalMeters
+            .filter(m => m.hasData)
+            .map(async (meter) => {
+              const { data: earliestData } = await supabase
+                .from("meter_readings")
+                .select("reading_timestamp")
+                .eq("meter_id", meter.id)
+                .order("reading_timestamp", { ascending: true })
+                .limit(1);
+
+              const { data: latestData } = await supabase
+                .from("meter_readings")
+                .select("reading_timestamp")
+                .eq("meter_id", meter.id)
+                .order("reading_timestamp", { ascending: false })
+                .limit(1);
+
+              const { count } = await supabase
+                .from("meter_readings")
+                .select("*", { count: "exact", head: true })
+                .eq("meter_id", meter.id);
+
+              if (earliestData && earliestData.length > 0 && latestData && latestData.length > 0) {
+                dateRangesMap.set(meter.id, {
+                  earliest: new Date(earliestData[0].reading_timestamp),
+                  latest: new Date(latestData[0].reading_timestamp),
+                  readingsCount: count || 0
+                });
+              }
+            })
+        );
+        
+        setAllMeterDateRanges(dateRangesMap);
 
         // Auto-select first meter with data, or bulk meter if available
         const bulkMeter = hierarchicalMeters.find(m => m.meter_type === "bulk_meter" && m.hasData);
@@ -1225,12 +1267,19 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                           onDrop={(e) => handleDrop(e, meter.id)}
                           onDragEnd={handleDragEnd}
                         >
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium">{meter.meter_number}</span>
-                            {parentInfo && (
-                              <span className="text-xs text-muted-foreground">
-                                → {parentInfo}
-                              </span>
+                          <div className="flex flex-col gap-1 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">{meter.meter_number}</span>
+                              {parentInfo && (
+                                <span className="text-xs text-muted-foreground">
+                                  → {parentInfo}
+                                </span>
+                              )}
+                            </div>
+                            {meter.hasData && allMeterDateRanges.has(meter.id) && (
+                              <div className="text-xs text-muted-foreground">
+                                {format(allMeterDateRanges.get(meter.id)!.earliest!, "MMM dd, yyyy")} - {format(allMeterDateRanges.get(meter.id)!.latest!, "MMM dd, yyyy")}
+                              </div>
                             )}
                           </div>
                           <Badge variant={meter.hasData ? "default" : "secondary"}>
