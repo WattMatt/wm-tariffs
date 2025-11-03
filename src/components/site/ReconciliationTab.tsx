@@ -923,12 +923,6 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
     <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-bold mb-2">Energy Reconciliation</h2>
-        <p className="text-muted-foreground">
-          Balance total supply (grid + solar) against downstream distribution
-        </p>
-        <p className="text-xs text-muted-foreground mt-1">
-          Bulk Check Meter + Solar Generation = Total Supply ≈ Sum of all Distribution Meters
-        </p>
       </div>
 
       <Card className="border-border/50">
