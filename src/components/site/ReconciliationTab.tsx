@@ -82,7 +82,6 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
         // DB structure: tenant (parent) → check (child)
         // For display: we want to group tenant meters under their check meter
         const checkMeterToTenants = new Map<string, string[]>();
-        const meterParentMap = new Map<string, string>(); // meter_id -> parent meter_number
         
         connections?.forEach(conn => {
           // conn.child_meter_id is the check meter
@@ -91,12 +90,6 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
             checkMeterToTenants.set(conn.child_meter_id, []);
           }
           checkMeterToTenants.get(conn.child_meter_id)!.push(conn.parent_meter_id);
-          
-          // For display: tenant connects TO check meter
-          const checkMeter = metersWithData.find(m => m.id === conn.child_meter_id);
-          if (checkMeter) {
-            meterParentMap.set(conn.parent_meter_id, checkMeter.meter_number);
-          }
         });
 
         // Check which meters have CSV files uploaded
@@ -120,6 +113,15 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
         const processedMeters = new Set<string>();
         const hierarchicalMeters: typeof metersWithData = [];
         const indentLevels = new Map<string, number>();
+        
+        // Build parent info map: tenant meter_id -> check meter_number
+        const meterParentMap = new Map<string, string>();
+        connections?.forEach(conn => {
+          const checkMeter = metersWithData.find(m => m.id === conn.child_meter_id);
+          if (checkMeter) {
+            meterParentMap.set(conn.parent_meter_id, checkMeter.meter_number);
+          }
+        });
 
         // Check if we have any connections in the database
         const hasConnections = connections && connections.length > 0;
