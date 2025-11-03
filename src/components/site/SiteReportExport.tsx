@@ -38,8 +38,6 @@ interface ColumnConfig {
 
 interface PreviewData {
   siteName: string;
-  periodStart: Date;
-  periodEnd: Date;
   meterData: any[];
   meterHierarchy: any[];
   meterBreakdown: any[];
@@ -53,12 +51,6 @@ interface PreviewData {
 export default function SiteReportExport({ siteId, siteName }: SiteReportExportProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
-  const [periodStart, setPeriodStart] = useState<Date>();
-  const [periodEnd, setPeriodEnd] = useState<Date>();
-  const [isStartOpen, setIsStartOpen] = useState(false);
-  const [isEndOpen, setIsEndOpen] = useState(false);
-  const [startTime, setStartTime] = useState("00:00");
-  const [endTime, setEndTime] = useState("23:59");
   const [availableMeters, setAvailableMeters] = useState<MeterOption[]>([]);
   const [selectedMeterIds, setSelectedMeterIds] = useState<Set<string>>(new Set());
   const [isLoadingMeters, setIsLoadingMeters] = useState(true);
@@ -221,10 +213,6 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
   };
 
   const generatePreview = async () => {
-    if (!periodStart || !periodEnd) {
-      toast.error("Please select both start and end dates");
-      return;
-    }
 
     setIsGeneratingPreview(true);
 
@@ -256,9 +244,7 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
 
       if (metersError) throw metersError;
 
-      // 2. Set up date range with selected times
-      const fullDateTimeFrom = getFullDateTime(format(periodStart, "yyyy-MM-dd"), startTime);
-      const fullDateTimeTo = getFullDateTime(format(periodEnd, "yyyy-MM-dd"), endTime);
+      // 2. Fetch all readings without date filtering
 
       // 3. Fetch readings for each meter with pagination and deduplication
       const meterData = await Promise.all(
@@ -273,8 +259,6 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
               .from("meter_readings")
               .select("kwh_value, reading_timestamp, metadata")
               .eq("meter_id", meter.id)
-              .gte("reading_timestamp", fullDateTimeFrom)
-              .lte("reading_timestamp", fullDateTimeTo)
               .order("reading_timestamp", { ascending: true })
               .range(from, from + pageSize - 1);
 
@@ -363,7 +347,7 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
         solarCount: otherMeters.length,
         distributionCount: tenantMeters.length,
         checkMeterCount: checkMeters.length,
-        readingsPeriod: `${format(periodStart, "dd MMM yyyy")} - ${format(periodEnd, "dd MMM yyyy")}`,
+        readingsPeriod: "All available readings",
         documentsAnalyzed: 0 // Will be updated after fetching documents
       };
 
@@ -604,8 +588,6 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
         {
           body: {
             siteName,
-            auditPeriodStart: format(periodStart, "dd MMMM yyyy"),
-            auditPeriodEnd: format(periodEnd, "dd MMMM yyyy"),
             meterHierarchy,
             meterBreakdown,
             reconciliationData,
@@ -621,8 +603,6 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
       // Store preview data with schematic and CSV aggregations
       setPreviewData({
         siteName,
-        periodStart,
-        periodEnd,
         meterData,
         meterHierarchy,
         meterBreakdown,
@@ -659,8 +639,6 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
       // Extract data from preview
       const {
         siteName: previewSiteName,
-        periodStart: previewPeriodStart,
-        periodEnd: previewPeriodEnd,
         meterData,
         meterHierarchy,
         meterBreakdown,
@@ -943,7 +921,7 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
       pdf.text("Audit Period", pageWidth / 2, 155, { align: "center" });
       pdf.setFont("helvetica", "bold");
       pdf.text(
-        `${format(previewPeriodStart, "dd MMMM yyyy")} ${startTime} - ${format(previewPeriodEnd, "dd MMMM yyyy")} ${endTime}`,
+        "All Available Readings",
         pageWidth / 2,
         165,
         { align: "center" }
@@ -1066,7 +1044,7 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
       // Section 3: Data Sources and Audit Period
       addSectionHeading("3. DATA SOURCES AND AUDIT PERIOD", 16);
       addSubsectionHeading("Audit Period");
-      addText(`${format(previewPeriodStart, "dd MMMM yyyy")} ${startTime} to ${format(previewPeriodEnd, "dd MMMM yyyy")} ${endTime}`);
+      addText("All Available Readings");
       addSpacer(5);
       
       addSubsectionHeading("Council Bulk Supply Meters");
@@ -1451,73 +1429,6 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label>Audit Period Start</Label>
-            <Popover open={isStartOpen} onOpenChange={setIsStartOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn(
-                    "w-full justify-start text-left font-normal",
-                    !periodStart && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {periodStart ? `${format(periodStart, "dd MMM yyyy")} ${startTime}` : "Select start date"}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={periodStart}
-                  onSelect={(date) => {
-                    setPeriodStart(date);
-                    setIsStartOpen(false);
-                  }}
-                  showTime={true}
-                  onTimeChange={setStartTime}
-                  defaultTime={startTime}
-                  initialFocus
-                  className="pointer-events-auto"
-                />
-              </PopoverContent>
-            </Popover>
-          </div>
-          <div className="space-y-2">
-            <Label>Audit Period End</Label>
-            <Popover open={isEndOpen} onOpenChange={setIsEndOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn(
-                    "w-full justify-start text-left font-normal",
-                    !periodEnd && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {periodEnd ? `${format(periodEnd, "dd MMM yyyy")} ${endTime}` : "Select end date"}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={periodEnd}
-                  onSelect={(date) => {
-                    setPeriodEnd(date);
-                    setIsEndOpen(false);
-                  }}
-                  showTime={true}
-                  onTimeChange={setEndTime}
-                  defaultTime={endTime}
-                  initialFocus
-                  className="pointer-events-auto"
-                />
-              </PopoverContent>
-            </Popover>
-          </div>
-        </div>
-
         <div className="p-4 border rounded-lg bg-muted/30 space-y-2">
           <p className="text-sm font-medium">Report will include:</p>
           <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
@@ -1533,7 +1444,7 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
 
         <Button
           onClick={generatePreview}
-          disabled={isGeneratingPreview || !periodStart || !periodEnd || isLoadingMeters}
+          disabled={isGeneratingPreview || isLoadingMeters}
           className="w-full"
           size="lg"
           variant="outline"
@@ -1635,7 +1546,7 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
                         <div className="space-y-2 mt-8">
                           <p className="text-sm font-medium text-muted-foreground">Audit Period</p>
                           <p className="text-lg font-semibold">
-                            {format(previewData.periodStart, "dd MMMM yyyy")} {startTime} - {format(previewData.periodEnd, "dd MMMM yyyy")} {endTime}
+                            All Available Readings
                           </p>
                         </div>
                       </div>
