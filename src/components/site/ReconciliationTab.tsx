@@ -53,6 +53,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
   const [selectedMetersForSummation, setSelectedMetersForSummation] = useState<Set<string>>(new Set());
   const [meterConnectionsMap, setMeterConnectionsMap] = useState<Map<string, string[]>>(new Map()); // parent_id -> child_ids
   const [reconciliationProgress, setReconciliationProgress] = useState<{current: number, total: number}>({current: 0, total: 0});
+  const [meterAssignments, setMeterAssignments] = useState<Map<string, string>>(new Map()); // meter_id -> "grid_supply" | "solar_energy" | "none"
 
   // Fetch available meters with CSV data and build hierarchy
   useEffect(() => {
@@ -760,28 +761,31 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
         })
       );
 
-      const bulkMeters = meterData.filter((m) => m.meter_type === "bulk_meter");
+      // Filter meters based on user assignments
+      const gridSupplyMeters = meterData.filter((m) => meterAssignments.get(m.id) === "grid_supply");
+      const solarEnergyMeters = meterData.filter((m) => meterAssignments.get(m.id) === "solar_energy");
+      
+      // Keep existing meter type filters for backward compatibility
       const checkMeters = meterData.filter((m) => m.meter_type === "check_meter");
-      const otherMeters = meterData.filter((m) => m.meter_type === "other");
       const tenantMeters = meterData.filter((m) => m.meter_type === "tenant_meter");
 
-      const bulkTotal = bulkMeters.reduce((sum, m) => sum + m.totalKwh, 0);
-      const otherTotal = otherMeters.reduce((sum, m) => sum + m.totalKwh, 0);
+      const bulkTotal = gridSupplyMeters.reduce((sum, m) => sum + m.totalKwh, 0);
+      const otherTotal = solarEnergyMeters.reduce((sum, m) => sum + m.totalKwh, 0);
       const tenantTotal = tenantMeters.reduce((sum, m) => sum + m.totalKwh, 0);
       
-      // Total supply = Bulk (from grid) + Other (e.g., solar generation)
+      // Total supply = Grid Supply + Solar Energy
       const totalSupply = bulkTotal + otherTotal;
       const recoveryRate = totalSupply > 0 ? (tenantTotal / totalSupply) * 100 : 0;
       const discrepancy = totalSupply - tenantTotal;
 
       setReconciliationData({
         // Meter arrays
-        bulkMeters,
+        bulkMeters: gridSupplyMeters,
         checkMeters,
-        otherMeters,
+        otherMeters: solarEnergyMeters,
         tenantMeters,
-        councilBulk: bulkMeters,  // UI expects this name
-        solarMeters: otherMeters,  // UI expects this name  
+        councilBulk: gridSupplyMeters,  // UI expects this name
+        solarMeters: solarEnergyMeters,  // UI expects this name  
         distribution: tenantMeters,  // UI expects this name
         distributionMeters: tenantMeters,  // Alternative name
         
@@ -1308,13 +1312,32 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                           onDrop={(e) => handleDrop(e, meter.id)}
                           onDragEnd={handleDragEnd}
                         >
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium">{meter.meter_number}</span>
-                            {parentInfo && (
-                              <span className="text-xs text-muted-foreground">
-                                → {parentInfo}
-                              </span>
-                            )}
+                          <div className="flex items-center gap-3 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">{meter.meter_number}</span>
+                              {parentInfo && (
+                                <span className="text-xs text-muted-foreground">
+                                  → {parentInfo}
+                                </span>
+                              )}
+                            </div>
+                            <Select
+                              value={meterAssignments.get(meter.id) || "none"}
+                              onValueChange={(value) => {
+                                const newAssignments = new Map(meterAssignments);
+                                newAssignments.set(meter.id, value);
+                                setMeterAssignments(newAssignments);
+                              }}
+                            >
+                              <SelectTrigger className="w-[140px] h-8 text-xs bg-background">
+                                <SelectValue placeholder="Assign to..." />
+                              </SelectTrigger>
+                              <SelectContent className="bg-popover z-50">
+                                <SelectItem value="none">None</SelectItem>
+                                <SelectItem value="grid_supply">Grid Supply</SelectItem>
+                                <SelectItem value="solar_energy">Solar Energy</SelectItem>
+                              </SelectContent>
+                            </Select>
                           </div>
                           <Badge variant={meter.hasData ? "default" : "secondary"}>
                             {meter.hasData ? "Has Data" : "No Data"}
