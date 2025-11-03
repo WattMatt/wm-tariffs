@@ -83,21 +83,31 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
           return;
         }
 
-        // Fetch meter connections
+        // Fetch meter connections - ONLY for meters in this site
         const { data: connections, error: connectionsError } = await supabase
           .from("meter_connections")
-          .select("parent_meter_id, child_meter_id");
+          .select(`
+            parent_meter_id,
+            child_meter_id,
+            parent:meters!meter_connections_parent_meter_id_fkey(site_id),
+            child:meters!meter_connections_child_meter_id_fkey(site_id)
+          `);
 
         if (connectionsError) {
           console.error("Error fetching meter connections:", connectionsError);
         }
+
+        // Filter to only connections where BOTH meters are in the current site
+        const siteConnections = connections?.filter(conn => 
+          conn.parent?.site_id === siteId && conn.child?.site_id === siteId
+        ) || [];
 
         // Build parent-child map for hierarchy
         // DB structure: parent_meter_id is downstream (child), child_meter_id is upstream (parent)
         // For display: we want childrenMap where key = parent, value = children
         const childrenMap = new Map<string, string[]>();
         
-        connections?.forEach(conn => {
+        siteConnections.forEach(conn => {
           // conn.child_meter_id is the parent (upstream)
           // conn.parent_meter_id is the child (downstream)
           if (!childrenMap.has(conn.child_meter_id)) {
@@ -133,7 +143,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
         const meterParentMap = new Map<string, string>();
         const connectionsMap = new Map<string, string[]>();
         
-        connections?.forEach(conn => {
+        siteConnections.forEach(conn => {
           // conn.parent_meter_id is the child (downstream)
           // conn.child_meter_id is the parent (upstream)
           const parentMeter = metersWithData.find(m => m.id === conn.child_meter_id);
@@ -151,7 +161,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
         setMeterConnectionsMap(connectionsMap);
 
         // Check if we have any connections in the database
-        const hasConnections = connections && connections.length > 0;
+        const hasConnections = siteConnections && siteConnections.length > 0;
 
         if (hasConnections) {
           // Recursive function to add meter and its children
@@ -692,17 +702,24 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
   ) => {
     const results: any[] = [];
     const errors = new Map<string, string>();
+    const retryingMeters = new Set<string>();
     
     for (let i = 0; i < meters.length; i += batchSize) {
       const batch = meters.slice(i, i + batchSize);
       const batchNumber = Math.floor(i / batchSize) + 1;
       const totalBatches = Math.ceil(meters.length / batchSize);
       
-      console.log(`Processing batch ${batchNumber} of ${totalBatches} (meters ${i + 1}-${Math.min(i + batchSize, meters.length)} of ${meters.length})`);
+      const retryingList = Array.from(retryingMeters).join(', ');
+      const statusMessage = retryingList 
+        ? `Processing batch ${batchNumber} of ${totalBatches} (retrying: ${retryingList})`
+        : `Processing batch ${batchNumber} of ${totalBatches}`;
+      console.log(statusMessage);
       
       const batchResults = await Promise.all(
         batch.map(async (meter) => {
-          return await processSingleMeter(meter, fullDateTimeFrom, fullDateTimeTo, errors);
+          const result = await processSingleMeter(meter, fullDateTimeFrom, fullDateTimeTo, errors, 0, retryingMeters);
+          retryingMeters.delete(meter.meter_number);
+          return result;
         })
       );
       
@@ -724,25 +741,76 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
     fullDateTimeFrom: string,
     fullDateTimeTo: string,
     errors: Map<string, string>,
-    retryCount = 0
+    retryCount = 0,
+    retryingMeters?: Set<string>
   ): Promise<any> => {
+    const maxRetries = 3;
+    const clientTimeout = 10000; // 10 seconds client-side timeout
+    
     try {
-      // Single optimized query with high limit (no pagination needed)
-      const { data: readings, error: readingsError } = await supabase
+      // Wrap query in client-side timeout
+      const queryPromise = supabase
         .from("meter_readings")
         .select("kwh_value, reading_timestamp, metadata")
-        .eq("meter_id", meter.id)
+        .eq("meter_id", meter.id) // Prioritize indexed column first
         .gte("reading_timestamp", fullDateTimeFrom)
         .lte("reading_timestamp", fullDateTimeTo)
         .order("reading_timestamp", { ascending: true })
         .limit(100000);
 
+      const timeoutPromise = new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error('Client timeout')), clientTimeout)
+      );
+
+      let result: Awaited<typeof queryPromise>;
+      try {
+        result = await Promise.race([queryPromise, timeoutPromise]) as Awaited<typeof queryPromise>;
+      } catch (timeoutError: any) {
+        // Handle client timeout
+        if (retryCount < maxRetries) {
+          const delay = 2000 * Math.pow(2, retryCount);
+          console.warn(`Client timeout for meter ${meter.meter_number}, retry ${retryCount + 1}/${maxRetries} in ${delay/1000}s...`);
+          
+          if (retryingMeters) {
+            retryingMeters.add(meter.meter_number);
+          }
+          
+          await new Promise(resolve => setTimeout(resolve, delay));
+          return await processSingleMeter(meter, fullDateTimeFrom, fullDateTimeTo, errors, retryCount + 1, retryingMeters);
+        } else {
+          console.error(`All retries exhausted for ${meter.meter_number}:`, timeoutError);
+          errors.set(meter.id, "Query timeout after multiple retries");
+          return {
+            ...meter,
+            totalKwh: 0,
+            totalKwhPositive: 0,
+            totalKwhNegative: 0,
+            columnTotals: {},
+            columnMaxValues: {},
+            readingsCount: 0,
+            hasError: true,
+            errorMessage: "Query timeout"
+          };
+        }
+      }
+
+      const { data: readings, error: readingsError } = result;
+
       if (readingsError) {
-        // Check if it's a timeout error (code 57014)
-        if (readingsError.code === "57014" && retryCount === 0) {
-          console.warn(`Timeout for meter ${meter.meter_number}, retrying in 2s...`);
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          return await processSingleMeter(meter, fullDateTimeFrom, fullDateTimeTo, errors, retryCount + 1);
+        // Check if it's a database timeout error (code 57014)
+        const isTimeout = readingsError.code === "57014";
+        
+        if (isTimeout && retryCount < maxRetries) {
+          // Exponential backoff: 2s, 4s, 8s
+          const delay = 2000 * Math.pow(2, retryCount);
+          console.warn(`DB timeout for meter ${meter.meter_number}, retry ${retryCount + 1}/${maxRetries} in ${delay/1000}s...`);
+          
+          if (retryingMeters) {
+            retryingMeters.add(meter.meter_number);
+          }
+          
+          await new Promise(resolve => setTimeout(resolve, delay));
+          return await processSingleMeter(meter, fullDateTimeFrom, fullDateTimeTo, errors, retryCount + 1, retryingMeters);
         }
         
         console.error(`Error fetching readings for meter ${meter.meter_number}:`, readingsError);
@@ -930,10 +998,10 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
       const fullDateTimeFrom = getFullDateTime(dateFrom, timeFrom);
       const fullDateTimeTo = getFullDateTime(dateTo, timeTo);
 
-      // Process meters in batches of 5 to avoid connection pool exhaustion
+      // Process meters in batches of 2 to reduce database load and avoid timeouts
       const { results: meterData, errors } = await processMeterBatches(
         meters,
-        5,
+        2,
         fullDateTimeFrom,
         fullDateTimeTo
       );
