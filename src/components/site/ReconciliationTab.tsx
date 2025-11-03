@@ -1683,9 +1683,8 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
               </div>
             </CardContent>
           </Card>
-         </>
-        )}
-      </div>
+        </>
+      )}
     </div>
   );
 }
