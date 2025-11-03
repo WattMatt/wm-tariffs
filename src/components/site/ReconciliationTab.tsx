@@ -1077,12 +1077,11 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                         type="time"
                         value={timeFrom}
                         onChange={(e) => {
-                          setTimeFrom(e.target.value);
-                        }}
-                        onBlur={() => {
-                          // Only close if both minute digits are present (format HH:MM)
-                          if (timeFrom && timeFrom.includes(':') && timeFrom.split(':')[1]?.length === 2) {
-                            setIsDateFromOpen(false);
+                          const newTime = e.target.value;
+                          setTimeFrom(newTime);
+                          // Auto-close if time is fully entered (format HH:MM - 5 characters)
+                          if (newTime && newTime.length === 5 && newTime.includes(':')) {
+                            setTimeout(() => setIsDateFromOpen(false), 100);
                           }
                         }}
                         className="w-full"
@@ -1127,12 +1126,11 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                         type="time"
                         value={timeTo}
                         onChange={(e) => {
-                          setTimeTo(e.target.value);
-                        }}
-                        onBlur={() => {
-                          // Only close if both minute digits are present (format HH:MM)
-                          if (timeTo && timeTo.includes(':') && timeTo.split(':')[1]?.length === 2) {
-                            setIsDateToOpen(false);
+                          const newTime = e.target.value;
+                          setTimeTo(newTime);
+                          // Auto-close if time is fully entered (format HH:MM - 5 characters)
+                          if (newTime && newTime.length === 5 && newTime.includes(':')) {
+                            setTimeout(() => setIsDateToOpen(false), 100);
                           }
                         }}
                         className="w-full"
