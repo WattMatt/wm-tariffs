@@ -7,10 +7,11 @@ import { toast } from "sonner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { FileDown, Eye, Trash2, Download } from "lucide-react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
+import ReconciliationResultsView from "./ReconciliationResultsView";
 
 interface ReconciliationHistoryTabProps {
   siteId: string;
@@ -270,7 +271,7 @@ export default function ReconciliationHistoryTab({ siteId }: ReconciliationHisto
 
       {/* Detail Dialog */}
       <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{selectedRun?.run_name}</DialogTitle>
             <DialogDescription>
@@ -279,44 +280,36 @@ export default function ReconciliationHistoryTab({ siteId }: ReconciliationHisto
           </DialogHeader>
 
           {selectedRun && (
-            <div className="space-y-6">
-              {/* Summary Cards */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Grid Supply</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-2xl font-bold">{selectedRun.bulk_total.toFixed(2)} kWh</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Solar Energy</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-2xl font-bold">{selectedRun.solar_total.toFixed(2)} kWh</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Recovery Rate</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-2xl font-bold">{selectedRun.recovery_rate.toFixed(2)}%</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Discrepancy</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-2xl font-bold">{selectedRun.discrepancy.toFixed(2)} kWh</p>
-                  </CardContent>
-                </Card>
-              </div>
+            <>
+              <ReconciliationResultsView
+                bulkTotal={selectedRun.bulk_total}
+                solarTotal={selectedRun.solar_total}
+                tenantTotal={selectedRun.tenant_total}
+                totalSupply={selectedRun.total_supply}
+                recoveryRate={selectedRun.recovery_rate}
+                discrepancy={selectedRun.discrepancy}
+                distributionTotal={selectedRun.total_supply - selectedRun.bulk_total - selectedRun.solar_total}
+                meters={selectedRun.reconciliation_meter_results.map(m => ({
+                  id: m.id,
+                  meter_number: m.meter_number,
+                  meter_name: m.meter_name || undefined,
+                  meter_type: m.meter_type,
+                  location: m.location || undefined,
+                  assignment: m.assignment,
+                  totalKwh: m.total_kwh,
+                  totalKwhPositive: m.total_kwh_positive,
+                  totalKwhNegative: m.total_kwh_negative,
+                  readingsCount: m.readings_count,
+                  columnTotals: m.column_totals || undefined,
+                  columnMaxValues: m.column_max_values || undefined,
+                  hasData: m.readings_count > 0,
+                  hasError: m.has_error,
+                  errorMessage: m.error_message || undefined,
+                }))}
+                showDownloadButtons={false}
+              />
 
-              {/* Notes */}
+              {/* Notes Section */}
               {selectedRun.notes && (
                 <Card>
                   <CardHeader>
@@ -327,41 +320,19 @@ export default function ReconciliationHistoryTab({ siteId }: ReconciliationHisto
                   </CardContent>
                 </Card>
               )}
-
-              {/* Meter Details */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm">Meter Breakdown</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Meter</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead>Assignment</TableHead>
-                        <TableHead className="text-right">Total kWh</TableHead>
-                        <TableHead className="text-right">Readings</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {selectedRun.reconciliation_meter_results.map((meter) => (
-                        <TableRow key={meter.id}>
-                          <TableCell className="font-mono text-sm">{meter.meter_number}</TableCell>
-                          <TableCell className="text-sm">{meter.meter_type}</TableCell>
-                          <TableCell>
-                            <Badge variant="outline">{meter.assignment}</Badge>
-                          </TableCell>
-                          <TableCell className="text-right font-mono">{meter.total_kwh.toFixed(2)}</TableCell>
-                          <TableCell className="text-right">{meter.readings_count}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-            </div>
+            </>
           )}
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => selectedRun && exportToCSV(selectedRun)}>
+              <FileDown className="h-4 w-4 mr-2" />
+              Export CSV
+            </Button>
+            <Button variant="outline" onClick={() => selectedRun && exportToExcel(selectedRun)}>
+              <Download className="h-4 w-4 mr-2" />
+              Export Excel
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

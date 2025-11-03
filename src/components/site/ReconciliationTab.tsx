@@ -16,6 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import Papa from "papaparse";
 import SaveReconciliationDialog from "./SaveReconciliationDialog";
+import ReconciliationResultsView from "./ReconciliationResultsView";
 
 interface ReconciliationTabProps {
   siteId: string;
@@ -1764,105 +1765,34 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
 
       {reconciliationData && (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-            <Card className="border-border/50">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Grid Supply
-                </CardTitle>
-                <div className="text-xs text-muted-foreground mt-1">Grid</div>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {reconciliationData.councilTotal.toFixed(2)} kWh
-                </div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  {reconciliationData.totalSupply > 0 
-                    ? ((reconciliationData.councilTotal / reconciliationData.totalSupply) * 100).toFixed(2) 
-                    : '0.00'}%
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-border/50">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Solar Energy
-                </CardTitle>
-                <div className="text-xs text-muted-foreground mt-1">Solar</div>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-green-600">
-                  {reconciliationData.solarTotal.toFixed(2)} kWh
-                </div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  {reconciliationData.totalSupply > 0 
-                    ? ((reconciliationData.solarTotal / reconciliationData.totalSupply) * 100).toFixed(2) 
-                    : '0.00'}%
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-border/50 bg-primary/5">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Total Supply
-                </CardTitle>
-                <div className="text-xs text-muted-foreground mt-1">Grid + Solar</div>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-primary">
-                  {reconciliationData.totalSupply.toFixed(2)} kWh
-                </div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  100.00%
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-border/50">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Metered Consumption
-                </CardTitle>
-                <div className="text-xs text-muted-foreground mt-1">Distribution</div>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {reconciliationData.distributionTotal.toFixed(2)} kWh
-                </div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  {reconciliationData.totalSupply > 0 
-                    ? ((reconciliationData.distributionTotal / reconciliationData.totalSupply) * 100).toFixed(2) 
-                    : '0.00'}%
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-border/50">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Unmetered Loss
-                </CardTitle>
-                <div className="text-xs text-muted-foreground mt-1">Discrepancy</div>
-              </CardHeader>
-              <CardContent>
-                <div
-                  className={cn(
-                    "text-2xl font-bold",
-                    reconciliationData.discrepancy > 0 ? "text-warning" : "text-accent"
-                  )}
-                >
-                  {reconciliationData.discrepancy.toFixed(2)} kWh
-                </div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  {reconciliationData.totalSupply > 0 
-                    ? ((Math.abs(reconciliationData.discrepancy) / reconciliationData.totalSupply) * 100).toFixed(2) 
-                    : '0.00'}%
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+          <ReconciliationResultsView
+            bulkTotal={reconciliationData.councilTotal}
+            solarTotal={reconciliationData.solarTotal}
+            tenantTotal={reconciliationData.tenantTotal}
+            totalSupply={reconciliationData.totalSupply}
+            recoveryRate={reconciliationData.recoveryRate}
+            discrepancy={reconciliationData.discrepancy}
+            distributionTotal={reconciliationData.distributionTotal}
+            meters={[
+              ...(reconciliationData.councilBulk || []),
+              ...(reconciliationData.solarMeters || []),
+              ...(reconciliationData.checkMeters || []),
+              ...(reconciliationData.distribution || []),
+              ...(reconciliationData.otherMeters || [])
+            ].map(m => ({
+              ...m,
+              hasData: m.hasData !== undefined ? m.hasData : true,
+              hasError: m.hasError || failedMeters.has(m.id),
+              errorMessage: m.errorMessage || failedMeters.get(m.id)
+            }))}
+            meterConnections={meterConnectionsMap}
+            meterIndentLevels={meterIndentLevels}
+            meterParentInfo={meterParentInfo}
+            meterAssignments={meterAssignments}
+            showDownloadButtons={true}
+            onDownloadMeter={downloadMeterCSV}
+            onDownloadAll={downloadAllMetersCSV}
+          />
 
           {/* Action Buttons */}
           <div className="flex gap-2">
@@ -1875,212 +1805,6 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
               Download All CSVs
             </Button>
           </div>
-
-          <Card className="border-border/50">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle>Detailed Breakdown</CardTitle>
-                <CardDescription>Meter-by-meter consumption analysis</CardDescription>
-              </div>
-              <Button variant="outline" className="gap-2" onClick={downloadAllMetersCSV}>
-                <Download className="w-4 h-4" />
-                Download All Meters
-              </Button>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-2">
-                {(() => {
-                  // Combine all meters into one list
-                  const allMeters = [
-                    ...(reconciliationData.councilBulk || []),
-                    ...(reconciliationData.solarMeters || []),
-                    ...(reconciliationData.checkMeters || []),
-                    ...(reconciliationData.distribution || []),
-                    ...(reconciliationData.otherMeters || [])
-                  ];
-
-                  // Create a map for quick lookup of meter data
-                  const meterDataMap = new Map(allMeters.map((m: any) => [m.id, m]));
-
-                  // Show meters respecting hierarchy visibility
-                  return availableMeters.filter(m => isMeterVisible(m.id)).map(m => {
-                    const meterData = meterDataMap.get(m.id);
-                    // If meter has no data, create a fallback object
-                    const meter = !meterData ? {
-                      id: m.id,
-                      meter_number: m.meter_number,
-                      totalKwh: 0,
-                      readingsCount: 0,
-                      columnTotals: {},
-                      columnMaxValues: {},
-                      hasData: false,
-                      hasError: failedMeters.has(m.id),
-                      errorMessage: failedMeters.get(m.id)
-                    } : { 
-                      ...meterData, 
-                      hasData: true,
-                      hasError: meterData.hasError || false,
-                      errorMessage: meterData.errorMessage
-                    };
-                    
-                    // Calculate hierarchical total if this meter has children
-                    const childIds = meterConnectionsMap.get(meter.id) || [];
-                    let hierarchicalTotal = 0;
-                    
-                    // Calculate summation by only counting leaf meters (no double-counting parents)
-                    if (childIds.length > 0) {
-                      const getLeafMeterSum = (meterId: string): number => {
-                        const children = meterConnectionsMap.get(meterId) || [];
-                        
-                        // If this meter has no children, it's a leaf - return its value
-                        if (children.length === 0) {
-                          const meterData = allMeters.find((m: any) => m.id === meterId);
-                          const isSolar = meterAssignments.get(meterId) === "solar_energy";
-                          const value = meterData?.totalKwh || 0;
-                          // Solar meters subtract from the total instead of adding
-                          return isSolar ? -value : value;
-                        }
-                        
-                        // If this meter has children, recursively sum only its leaf descendants
-                        return children.reduce((sum, childId) => {
-                          return sum + getLeafMeterSum(childId);
-                        }, 0);
-                      };
-                      
-                      hierarchicalTotal = childIds.reduce((sum, childId) => {
-                        return sum + getLeafMeterSum(childId);
-                      }, 0);
-                    }
-                    
-                    const indentLevel = meterIndentLevels.get(meter.id) || 0;
-                    const marginLeft = indentLevel * 24;
-                    const parentInfo = meterParentInfo.get(meter.id);
-                    
-                    const hasChildren = childIds.length > 0;
-                    const isExpanded = expandedMeters.has(meter.id);
-                    
-                    // Determine meter type for color coding
-                    const meterAssignment = meterAssignments.get(meter.id);
-                    let bgColor = "bg-muted/50"; // Default for distribution meters
-                    let borderColor = "border-border/50";
-                    
-                    if (meterAssignment === "grid_supply") {
-                      bgColor = "bg-primary/10";
-                      borderColor = "border-primary/30";
-                    } else if (meterAssignment === "solar_energy") {
-                      bgColor = "bg-yellow-500/10";
-                      borderColor = "border-yellow-500/30";
-                    }
-                    
-                    // If meter has no data, use muted styling
-                    // If meter has error, use destructive styling
-                    if (meter.hasError) {
-                      bgColor = "bg-destructive/10";
-                      borderColor = "border-destructive/30";
-                    } else if (!meter.hasData) {
-                      bgColor = "bg-muted/20";
-                      borderColor = "border-muted/30";
-                    }
-                    
-                    return (
-                      <div
-                        key={meter.id}
-                        className={cn("space-y-2 p-3 rounded-lg border", bgColor, borderColor)}
-                        style={{ marginLeft: `${marginLeft}px` }}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex flex-col gap-1 flex-1">
-                            <div className="flex items-center gap-2">
-                              {hasChildren && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-5 w-5 p-0"
-                                  onClick={() => toggleMeterExpanded(meter.id)}
-                                >
-                                  {isExpanded ? (
-                                    <ChevronRight className="h-4 w-4 rotate-90" />
-                                  ) : (
-                                    <ChevronRight className="h-4 w-4" />
-                                  )}
-                                </Button>
-                              )}
-                              <span className="font-mono text-sm font-semibold">{meter.meter_number}</span>
-                              {!meter.hasData && !meter.hasError && (
-                                <Badge variant="outline" className="text-xs">No data in range</Badge>
-                              )}
-                              {meter.hasError && (
-                                <Badge variant="destructive" className="text-xs">Error: {meter.errorMessage || 'Failed to load'}</Badge>
-                              )}
-                              {parentInfo && (
-                                <span className="text-xs text-muted-foreground">
-                                  → {parentInfo}
-                                </span>
-                              )}
-                            </div>
-                            {childIds.length > 0 && (
-                              <span className="text-xs text-muted-foreground">
-                                (sum of {childIds.length} child meter{childIds.length > 1 ? 's' : ''})
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-4">
-                            {childIds.length > 0 && (
-                              <div className="flex flex-col items-end">
-                                <span className="font-semibold text-primary">{hierarchicalTotal.toFixed(2)} kWh</span>
-                                <span className="text-xs text-muted-foreground">Summation</span>
-                              </div>
-                            )}
-                            <div className="flex flex-col items-end">
-                              <div className="flex items-center gap-2">
-                                <span className={cn("font-semibold", !meter.hasData && "text-muted-foreground")}>
-                                  {meter.totalKwh.toFixed(2)} kWh
-                                </span>
-                                {childIds.length > 0 && hierarchicalTotal > 0 && meter.hasData && (
-                                  <Badge variant={Math.abs((meter.totalKwh / hierarchicalTotal) * 100 - 100) > 10 ? "destructive" : "secondary"} className="text-xs">
-                                    {((meter.totalKwh / hierarchicalTotal) * 100).toFixed(1)}%
-                                  </Badge>
-                                )}
-                              </div>
-                              <span className="text-xs text-muted-foreground">Actual</span>
-                            </div>
-                            {meter.hasData && (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => downloadMeterCSV(meter)}
-                                className="h-7 w-7 p-0"
-                                title={`Download ${meter.readingsCount} readings`}
-                              >
-                                <FileDown className="h-4 w-4" />
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                        {meter.hasData && ((meter.columnTotals && Object.keys(meter.columnTotals).length > 0) || 
-                          (meter.columnMaxValues && Object.keys(meter.columnMaxValues).length > 0)) && (
-                          <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border/50">
-                            {Object.entries(meter.columnTotals || {}).map(([col, val]: [string, any]) => (
-                              <div key={col} className="flex justify-between text-xs">
-                                <span className="text-muted-foreground">{col}:</span>
-                                <span className="font-mono">{Number(val).toFixed(2)}</span>
-                              </div>
-                            ))}
-                            {Object.entries(meter.columnMaxValues || {}).map(([col, val]: [string, any]) => (
-                              <div key={col} className="flex justify-between text-xs">
-                                <span className="text-muted-foreground">{col} (Max):</span>
-                                <span className="font-mono font-semibold">{Number(val).toFixed(2)}</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  });
-                })()}
-              </div>
-            </CardContent>
-          </Card>
         </>
       )}
 
