@@ -84,18 +84,31 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
         if (schematicsError) throw schematicsError;
         setAvailableSchematics(schematics || []);
 
-        // Fetch document folders (only folders, not individual files)
-        const { data: folders, error: foldersError } = await supabase
+        // Fetch available folders from document paths
+        const { data: documents, error: foldersError } = await supabase
           .from("site_documents")
           .select("folder_path")
-          .eq("site_id", siteId)
-          .eq("is_folder", true)
-          .order("folder_path", { ascending: true });
+          .eq("site_id", siteId);
 
         if (foldersError) throw foldersError;
         
-        // Get unique folder paths and handle empty paths
-        const uniqueFolders = Array.from(new Set(folders?.map(f => f.folder_path) || []));
+        // Get unique folder paths (including nested folders)
+        const folderSet = new Set<string>();
+        folderSet.add(''); // Add root
+        
+        documents?.forEach(doc => {
+          if (doc.folder_path) {
+            // Add this folder and all parent folders
+            const parts = doc.folder_path.split('/').filter(Boolean);
+            let currentPath = '';
+            parts.forEach(part => {
+              currentPath = currentPath ? `${currentPath}/${part}` : part;
+              folderSet.add(currentPath);
+            });
+          }
+        });
+        
+        const uniqueFolders = Array.from(folderSet).sort();
         setAvailableFolders(uniqueFolders.map(path => ({ 
           path: path || "/", // Use "/" instead of empty string for root
           displayPath: path, // Keep original for filtering
