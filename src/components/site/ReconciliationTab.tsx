@@ -998,10 +998,12 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
               <CardDescription>Select date range for reconciliation</CardDescription>
             </div>
             {totalDateRange.earliest && totalDateRange.latest && (
-              <div className="text-right">
-                <div className="text-sm font-medium text-muted-foreground">Total Dataset Range</div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  {format(totalDateRange.earliest, "MMM dd, yyyy")} - {format(totalDateRange.latest, "MMM dd, yyyy")}
+              <div className="text-right space-y-1">
+                <div className="text-xs text-muted-foreground">
+                  <span className="font-medium">First Date & Time:</span> {format(totalDateRange.earliest, "MMM dd, yyyy HH:mm")}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  <span className="font-medium">Last Date & Time:</span> {format(totalDateRange.latest, "MMM dd, yyyy HH:mm")}
                 </div>
               </div>
             )}
