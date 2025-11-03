@@ -874,41 +874,11 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
       const checkMeters = meterData.filter((m) => m.meter_type === "check_meter");
       const tenantMeters = meterData.filter((m) => m.meter_type === "tenant_meter");
 
-      // Helper function to calculate hierarchical total for a meter
-      const calculateHierarchicalTotal = (meterId: string): number => {
-        const children = meterConnectionsMap.get(meterId) || [];
-        
-        // If no children, return the meter's own value
-        if (children.length === 0) {
-          const meter = meterData.find((m: any) => m.id === meterId);
-          const isSolar = meterAssignments.get(meterId) === "solar_energy";
-          const value = meter?.totalKwh || 0;
-          // Solar meters subtract from the total instead of adding
-          return isSolar ? -value : value;
-        }
-        
-        // If has children, recursively sum only leaf descendants
-        return children.reduce((sum, childId) => {
-          return sum + calculateHierarchicalTotal(childId);
-        }, 0);
-      };
-
-      // For grid supply meters, use hierarchical total if they have children
-      const bulkTotal = gridSupplyMeters.reduce((sum, m) => {
-        const childIds = meterConnectionsMap.get(m.id) || [];
-        if (childIds.length > 0) {
-          // Use hierarchical summation for meters with children
-          return sum + calculateHierarchicalTotal(m.id);
-        }
-        // Use actual reading for leaf meters
-        return sum + m.totalKwh;
-      }, 0);
-      
-      // Solar energy meters use direct positive values only
+      const bulkTotal = gridSupplyMeters.reduce((sum, m) => sum + m.totalKwh, 0);
       const otherTotal = solarEnergyMeters.reduce((sum, m) => sum + m.totalKwh, 0);
       const tenantTotal = tenantMeters.reduce((sum, m) => sum + m.totalKwh, 0);
       
-      // Total supply = Grid Supply (with hierarchical calc) + Solar Energy (direct values)
+      // Total supply = Grid Supply + Solar Energy
       const totalSupply = bulkTotal + otherTotal;
       const recoveryRate = totalSupply > 0 ? (tenantTotal / totalSupply) * 100 : 0;
       const discrepancy = totalSupply - tenantTotal;
