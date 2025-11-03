@@ -747,7 +747,10 @@ export type Database = {
           file_name: string
           file_path: string
           file_size: number | null
+          folder_path: string
           id: string
+          is_folder: boolean
+          parent_folder_id: string | null
           site_id: string
           updated_at: string
           upload_date: string
@@ -761,7 +764,10 @@ export type Database = {
           file_name: string
           file_path: string
           file_size?: number | null
+          folder_path?: string
           id?: string
+          is_folder?: boolean
+          parent_folder_id?: string | null
           site_id: string
           updated_at?: string
           upload_date?: string
@@ -775,13 +781,23 @@ export type Database = {
           file_name?: string
           file_path?: string
           file_size?: number | null
+          folder_path?: string
           id?: string
+          is_folder?: boolean
+          parent_folder_id?: string | null
           site_id?: string
           updated_at?: string
           upload_date?: string
           uploaded_by?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "site_documents_parent_folder_id_fkey"
+            columns: ["parent_folder_id"]
+            isOneToOne: false
+            referencedRelation: "site_documents"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "site_documents_site_id_fkey"
             columns: ["site_id"]

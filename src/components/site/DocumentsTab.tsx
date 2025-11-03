@@ -10,9 +10,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { FileText, Upload, Loader2, Download, Trash2, Eye, GripVertical, Plus, X, Sparkles, RefreshCw, Square, XCircle } from "lucide-react";
+import { FileText, Upload, Loader2, Download, Trash2, Eye, GripVertical, Plus, X, Sparkles, RefreshCw, Square, XCircle, Folder, FolderPlus, ChevronRight, ChevronDown, Home, Edit2, FolderOpen } from "lucide-react";
 import { format } from "date-fns";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { pdfjs } from 'react-pdf';
 import { Canvas as FabricCanvas, Image as FabricImage, Rect as FabricRect, Circle } from "fabric";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
@@ -33,6 +33,9 @@ interface SiteDocument {
   upload_date: string;
   extraction_status: string;
   converted_image_path?: string | null;
+  folder_path: string;
+  is_folder: boolean;
+  parent_folder_id?: string | null;
   document_extractions: Array<{
     period_start: string;
     period_end: string;
@@ -40,6 +43,15 @@ interface SiteDocument {
     currency: string;
     extracted_data: any;
   }>;
+}
+
+interface FolderItem {
+  id: string;
+  name: string;
+  path: string;
+  children: FolderItem[];
+  documents: SiteDocument[];
+  isExpanded?: boolean;
 }
 
 export default function DocumentsTab({ siteId }: DocumentsTabProps) {
@@ -61,6 +73,17 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [bulkEditQueue, setBulkEditQueue] = useState<string[]>([]);
   const [currentBulkEditIndex, setCurrentBulkEditIndex] = useState(0);
+  
+  // Folder management state
+  const [currentFolderPath, setCurrentFolderPath] = useState<string>('');
+  const [folderTree, setFolderTree] = useState<FolderItem[]>([]);
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
+  const [isCreatingFolder, setIsCreatingFolder] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
+  const [renamingFolder, setRenamingFolder] = useState<string | null>(null);
+  const [renameFolderName, setRenameFolderName] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
   
   // Fabric.js canvas state
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -97,11 +120,313 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
 
       if (error) throw error;
       setDocuments(data || []);
+      buildFolderTree(data || []);
     } catch (error) {
       console.error("Error fetching documents:", error);
       toast.error("Failed to load documents");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Build folder tree from documents
+  const buildFolderTree = (docs: SiteDocument[]) => {
+    const tree: FolderItem[] = [];
+    const folders = docs.filter(d => d.is_folder);
+    const files = docs.filter(d => !d.is_folder);
+    
+    // Create folder structure
+    folders.forEach(folder => {
+      const pathParts = folder.folder_path.split('/').filter(Boolean);
+      let currentLevel = tree;
+      let currentPath = '';
+      
+      pathParts.forEach((part, index) => {
+        currentPath += (currentPath ? '/' : '') + part;
+        let existing = currentLevel.find(f => f.name === part);
+        
+        if (!existing) {
+          existing = {
+            id: folder.id,
+            name: part,
+            path: currentPath,
+            children: [],
+            documents: [],
+            isExpanded: expandedFolders.has(currentPath)
+          };
+          currentLevel.push(existing);
+        }
+        
+        currentLevel = existing.children;
+      });
+    });
+    
+    // Assign documents to folders
+    const assignDocsToFolder = (folderItems: FolderItem[]) => {
+      folderItems.forEach(folder => {
+        folder.documents = files.filter(d => d.folder_path === folder.path);
+        if (folder.children.length > 0) {
+          assignDocsToFolder(folder.children);
+        }
+      });
+    };
+    
+    assignDocsToFolder(tree);
+    setFolderTree(tree);
+  };
+
+  // Create new folder
+  const handleCreateFolder = async () => {
+    if (!newFolderName.trim()) {
+      toast.error("Please enter a folder name");
+      return;
+    }
+
+    try {
+      const folderPath = currentFolderPath
+        ? `${currentFolderPath}/${newFolderName.trim()}`
+        : newFolderName.trim();
+
+      const { data: user } = await supabase.auth.getUser();
+
+      const { error } = await supabase
+        .from("site_documents")
+        .insert({
+          site_id: siteId,
+          file_name: newFolderName.trim(),
+          file_path: '', // Folders don't have a storage path
+          file_size: 0,
+          document_type: 'other' as any,
+          uploaded_by: user.user?.id || null,
+          extraction_status: 'completed',
+          folder_path: folderPath,
+          is_folder: true,
+        });
+
+      if (error) throw error;
+
+      toast.success("Folder created successfully");
+      setNewFolderName('');
+      setIsCreatingFolder(false);
+      fetchDocuments();
+    } catch (error) {
+      console.error("Error creating folder:", error);
+      toast.error("Failed to create folder");
+    }
+  };
+
+  // Rename folder
+  const handleRenameFolder = async (folderId: string, oldPath: string) => {
+    if (!renameFolderName.trim()) {
+      toast.error("Please enter a new folder name");
+      return;
+    }
+
+    try {
+      const pathParts = oldPath.split('/');
+      pathParts[pathParts.length - 1] = renameFolderName.trim();
+      const newPath = pathParts.join('/');
+
+      // Update folder
+      const { error: folderError } = await supabase
+        .from("site_documents")
+        .update({
+          file_name: renameFolderName.trim(),
+          folder_path: newPath,
+        })
+        .eq("id", folderId);
+
+      if (folderError) throw folderError;
+
+      // Update all documents in this folder and subfolders
+      const docsToUpdate = documents.filter(d => 
+        d.folder_path === oldPath || d.folder_path.startsWith(`${oldPath}/`)
+      );
+
+      for (const doc of docsToUpdate) {
+        const updatedPath = doc.folder_path.replace(oldPath, newPath);
+        await supabase
+          .from("site_documents")
+          .update({ folder_path: updatedPath })
+          .eq("id", doc.id);
+      }
+
+      toast.success("Folder renamed successfully");
+      setRenamingFolder(null);
+      setRenameFolderName('');
+      fetchDocuments();
+    } catch (error) {
+      console.error("Error renaming folder:", error);
+      toast.error("Failed to rename folder");
+    }
+  };
+
+  // Delete folder
+  const handleDeleteFolder = async (folderId: string, folderPath: string) => {
+    if (!confirm("Are you sure you want to delete this folder and all its contents?")) return;
+
+    try {
+      // Get all documents in this folder and subfolders
+      const docsToDelete = documents.filter(d => 
+        d.folder_path === folderPath || d.folder_path.startsWith(`${folderPath}/`)
+      );
+
+      // Delete from storage and database
+      for (const doc of docsToDelete) {
+        if (!doc.is_folder && doc.file_path) {
+          await supabase.storage.from("site-documents").remove([doc.file_path]);
+        }
+        await supabase.from("site_documents").delete().eq("id", doc.id);
+      }
+
+      // Delete the folder itself
+      await supabase.from("site_documents").delete().eq("id", folderId);
+
+      toast.success("Folder deleted successfully");
+      fetchDocuments();
+    } catch (error) {
+      console.error("Error deleting folder:", error);
+      toast.error("Failed to delete folder");
+    }
+  };
+
+  // Toggle folder expansion
+  const toggleFolder = (folderPath: string) => {
+    setExpandedFolders(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(folderPath)) {
+        newSet.delete(folderPath);
+      } else {
+        newSet.add(folderPath);
+      }
+      return newSet;
+    });
+  };
+
+  // Navigate to folder
+  const navigateToFolder = (folderPath: string) => {
+    setCurrentFolderPath(folderPath);
+  };
+
+  // Handle folder upload
+  const handleFolderSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const filesArray = Array.from(files);
+    setSelectedFiles(filesArray);
+    
+    // Auto-upload folders
+    handleFolderUpload(filesArray);
+  };
+
+  // Upload files from folder with structure
+  const handleFolderUpload = async (files: File[]) => {
+    setIsUploading(true);
+    setUploadProgress({ current: 0, total: files.length, action: 'Uploading' });
+
+    try {
+      const { data: user } = await supabase.auth.getUser();
+      let successCount = 0;
+      let failCount = 0;
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i] as any; // File with webkitRelativePath
+        setUploadProgress({ current: i + 1, total: files.length, action: 'Uploading' });
+
+        try {
+          // Extract folder path from webkitRelativePath
+          const relativePath = file.webkitRelativePath || file.name;
+          const pathParts = relativePath.split('/');
+          const fileName = pathParts[pathParts.length - 1];
+          const folderPath = currentFolderPath
+            ? `${currentFolderPath}/${pathParts.slice(0, -1).join('/')}`
+            : pathParts.slice(0, -1).join('/');
+
+          const fileExt = fileName.split('.').pop()?.toLowerCase();
+          const isPdf = fileExt === 'pdf';
+
+          // Upload file to storage
+          const storagePath = `${siteId}/${Date.now()}-${fileName}`;
+          const { data: uploadData, error: uploadError } = await supabase.storage
+            .from("site-documents")
+            .upload(storagePath, file);
+
+          if (uploadError) throw uploadError;
+
+          let convertedImagePath: string | null = null;
+
+          if (isPdf) {
+            const imageBlob = await convertPdfToImage(file);
+            const imagePath = `${siteId}/${Date.now()}-converted.png`;
+            
+            const { error: imageUploadError } = await supabase.storage
+              .from("site-documents")
+              .upload(imagePath, imageBlob);
+
+            if (!imageUploadError) {
+              convertedImagePath = imagePath;
+            }
+          }
+
+          // Create document record
+          const { data: document, error: docError } = await supabase
+            .from("site_documents")
+            .insert({
+              site_id: siteId,
+              file_name: fileName,
+              file_path: uploadData.path,
+              file_size: file.size,
+              document_type: documentType as any,
+              uploaded_by: user.user?.id || null,
+              extraction_status: 'pending',
+              converted_image_path: convertedImagePath,
+              folder_path: folderPath,
+              is_folder: false,
+            })
+            .select()
+            .single();
+
+          if (docError) throw docError;
+
+          // Trigger AI extraction
+          const pathToProcess = convertedImagePath || uploadData.path;
+          const { data: urlData } = await supabase.storage
+            .from("site-documents")
+            .createSignedUrl(pathToProcess, 3600);
+
+          if (urlData?.signedUrl) {
+            await supabase.functions.invoke("extract-document-data", {
+              body: {
+                documentId: document.id,
+                fileUrl: urlData.signedUrl,
+                documentType: documentType
+              }
+            });
+          }
+
+          successCount++;
+        } catch (error) {
+          console.error(`Error uploading ${file.name}:`, error);
+          failCount++;
+        }
+      }
+
+      if (successCount > 0) {
+        toast.success(`${successCount} file(s) uploaded successfully`);
+      }
+      if (failCount > 0) {
+        toast.error(`${failCount} file(s) failed to upload`);
+      }
+
+      setSelectedFiles([]);
+      fetchDocuments();
+    } catch (error) {
+      console.error("Upload error:", error);
+      toast.error("Failed to upload folder");
+    } finally {
+      setIsUploading(false);
+      setUploadProgress({ current: 0, total: 0, action: '' });
     }
   };
 
@@ -217,7 +542,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
             }
           }
 
-          // Create document record
+          // Create document record with current folder path
           const { data: document, error: docError } = await supabase
             .from("site_documents")
             .insert({
@@ -229,6 +554,8 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
               uploaded_by: user.user?.id || null,
               extraction_status: 'pending',
               converted_image_path: convertedImagePath,
+              folder_path: currentFolderPath,
+              is_folder: false,
             })
             .select()
             .single();
