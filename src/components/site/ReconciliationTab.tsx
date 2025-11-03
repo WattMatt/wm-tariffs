@@ -1772,18 +1772,65 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
           recoveryRate={reconciliationData.recoveryRate}
           discrepancy={reconciliationData.discrepancy}
           distributionTotal={reconciliationData.distributionTotal}
-          meters={[
-            ...(reconciliationData.councilBulk || []),
-            ...(reconciliationData.solarMeters || []),
-            ...(reconciliationData.checkMeters || []),
-            ...(reconciliationData.distribution || []),
-            ...(reconciliationData.otherMeters || [])
-          ].map(m => ({
-            ...m,
-            hasData: m.hasData !== undefined ? m.hasData : true,
-            hasError: m.hasError || failedMeters.has(m.id),
-            errorMessage: m.errorMessage || failedMeters.get(m.id)
-          }))}
+          meters={(() => {
+            // Collect all meters
+            const allMeters = [
+              ...(reconciliationData.councilBulk || []),
+              ...(reconciliationData.solarMeters || []),
+              ...(reconciliationData.checkMeters || []),
+              ...(reconciliationData.distribution || []),
+              ...(reconciliationData.otherMeters || [])
+            ].map(m => ({
+              ...m,
+              hasData: m.hasData !== undefined ? m.hasData : true,
+              hasError: m.hasError || failedMeters.has(m.id),
+              errorMessage: m.errorMessage || failedMeters.get(m.id)
+            }));
+
+            // Order meters according to hierarchy
+            const orderedMeters: any[] = [];
+            const processed = new Set<string>();
+
+            const addMeterAndChildren = (meterId: string) => {
+              if (processed.has(meterId)) return;
+              
+              const meter = allMeters.find(m => m.id === meterId);
+              if (!meter) return;
+
+              orderedMeters.push(meter);
+              processed.add(meterId);
+
+              // Add children in the order they appear in meterConnectionsMap
+              const children = meterConnectionsMap.get(meterId) || [];
+              children.forEach(childId => {
+                addMeterAndChildren(childId);
+              });
+            };
+
+            // Find top-level meters (meters with no parents)
+            const topLevelMeters = allMeters.filter(meter => {
+              for (const [_, childIds] of meterConnectionsMap.entries()) {
+                if (childIds.includes(meter.id)) {
+                  return false;
+                }
+              }
+              return true;
+            });
+
+            // Add top-level meters and their hierarchies
+            topLevelMeters.forEach(meter => {
+              addMeterAndChildren(meter.id);
+            });
+
+            // Add any remaining meters that weren't in the hierarchy
+            allMeters.forEach(meter => {
+              if (!processed.has(meter.id)) {
+                orderedMeters.push(meter);
+              }
+            });
+
+            return orderedMeters;
+          })()}
           meterConnections={meterConnectionsMap}
           meterIndentLevels={meterIndentLevels}
           meterParentInfo={meterParentInfo}
