@@ -63,6 +63,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
   const [meterConnectionsMap, setMeterConnectionsMap] = useState<Map<string, string[]>>(new Map()); // parent_id -> child_ids
   const [reconciliationProgress, setReconciliationProgress] = useState<{current: number, total: number}>({current: 0, total: 0});
   const [meterAssignments, setMeterAssignments] = useState<Map<string, string>>(new Map()); // meter_id -> "grid_supply" | "solar_energy" | "none"
+  const [expandedMeters, setExpandedMeters] = useState<Set<string>>(new Set()); // Set of meter IDs that are expanded
 
   // Fetch available meters with CSV data and build hierarchy
   useEffect(() => {
@@ -382,6 +383,29 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
     fetchMeterDateRange();
   }, [selectedMeterId]);
 
+  // Toggle expand/collapse for meters
+  const toggleMeterExpanded = (meterId: string) => {
+    const newExpanded = new Set(expandedMeters);
+    if (newExpanded.has(meterId)) {
+      newExpanded.delete(meterId);
+    } else {
+      newExpanded.add(meterId);
+    }
+    setExpandedMeters(newExpanded);
+  };
+
+  // Check if a meter is visible based on hierarchy
+  const isMeterVisible = (meterId: string) => {
+    // Find parent of this meter
+    const parentId = Array.from(meterConnectionsMap.entries())
+      .find(([_, children]) => children.includes(meterId))?.[0];
+    
+    // If no parent, always visible
+    if (!parentId) return true;
+    
+    // If has parent, visible only if parent is expanded
+    return expandedMeters.has(parentId);
+  };
 
   const handleIndentMeter = (meterId: string) => {
     const currentLevel = meterIndentLevels.get(meterId) || 0;
@@ -1536,10 +1560,10 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                   <h3 className="font-semibold text-lg border-b pb-2">Supply Sources</h3>
                   
                   {reconciliationData.councilBulk.length > 0 && (
-                    <div>
+                     <div>
                       <h4 className="font-semibold mb-3 text-sm text-muted-foreground">Council Bulk (Grid)</h4>
                       <div className="space-y-2">
-                        {reconciliationData.councilBulk.map((meter: any) => {
+                        {reconciliationData.councilBulk.filter((meter: any) => isMeterVisible(meter.id)).map((meter: any) => {
                           // Calculate hierarchical total if this meter has children
                           const childIds = meterConnectionsMap.get(meter.id) || [];
                           let hierarchicalTotal = 0;
@@ -1561,6 +1585,9 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                           const marginLeft = indentLevel * 24;
                           const parentInfo = meterParentInfo.get(meter.id);
                           
+                          const hasChildren = childIds.length > 0;
+                          const isExpanded = expandedMeters.has(meter.id);
+                          
                           return (
                           <div
                             key={meter.id}
@@ -1570,6 +1597,20 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                             <div className="flex items-center justify-between">
                               <div className="flex flex-col gap-1">
                                 <div className="flex items-center gap-2">
+                                  {hasChildren && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-5 w-5 p-0"
+                                      onClick={() => toggleMeterExpanded(meter.id)}
+                                    >
+                                      {isExpanded ? (
+                                        <ChevronRight className="h-4 w-4 rotate-90" />
+                                      ) : (
+                                        <ChevronRight className="h-4 w-4" />
+                                      )}
+                                    </Button>
+                                  )}
                                   <span className="font-mono text-sm font-semibold">{meter.meter_number}</span>
                                   {parentInfo && (
                                     <span className="text-xs text-muted-foreground">
@@ -1621,10 +1662,10 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                   )}
 
                   {reconciliationData.solarMeters?.length > 0 && (
-                    <div>
+                     <div>
                       <h4 className="font-semibold mb-3 text-sm text-muted-foreground">Solar Generation</h4>
                       <div className="space-y-2">
-                        {reconciliationData.solarMeters.map((meter: any) => {
+                        {reconciliationData.solarMeters.filter((meter: any) => isMeterVisible(meter.id)).map((meter: any) => {
                           // Calculate hierarchical total if this meter has children
                           const childIds = meterConnectionsMap.get(meter.id) || [];
                           let hierarchicalTotal = 0;
@@ -1646,6 +1687,9 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                           const marginLeft = indentLevel * 24;
                           const parentInfo = meterParentInfo.get(meter.id);
                           
+                          const hasChildren = childIds.length > 0;
+                          const isExpanded = expandedMeters.has(meter.id);
+                          
                           return (
                           <div
                             key={meter.id}
@@ -1655,6 +1699,20 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                             <div className="flex items-center justify-between">
                               <div className="flex flex-col gap-1">
                                 <div className="flex items-center gap-2">
+                                  {hasChildren && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-5 w-5 p-0"
+                                      onClick={() => toggleMeterExpanded(meter.id)}
+                                    >
+                                      {isExpanded ? (
+                                        <ChevronRight className="h-4 w-4 rotate-90" />
+                                      ) : (
+                                        <ChevronRight className="h-4 w-4" />
+                                      )}
+                                    </Button>
+                                  )}
                                   <span className="font-mono text-sm font-semibold">{meter.meter_number}</span>
                                   {parentInfo && (
                                     <span className="text-xs text-muted-foreground">
@@ -1706,10 +1764,10 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                   )}
 
                   {reconciliationData.checkMeters?.length > 0 && (
-                    <div>
+                     <div>
                       <h4 className="font-semibold mb-3 text-sm text-muted-foreground">Check Meters</h4>
                       <div className="space-y-2">
-                        {reconciliationData.checkMeters.map((meter: any) => {
+                        {reconciliationData.checkMeters.filter((meter: any) => isMeterVisible(meter.id)).map((meter: any) => {
                           // Calculate hierarchical total if this meter has children
                           const childIds = meterConnectionsMap.get(meter.id) || [];
                           let hierarchicalTotal = 0;
@@ -1731,6 +1789,9 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                           const marginLeft = indentLevel * 24;
                           const parentInfo = meterParentInfo.get(meter.id);
                           
+                          const hasChildren = childIds.length > 0;
+                          const isExpanded = expandedMeters.has(meter.id);
+                          
                           return (
                           <div
                             key={meter.id}
@@ -1740,6 +1801,20 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                             <div className="flex items-center justify-between">
                               <div className="flex flex-col gap-1">
                                 <div className="flex items-center gap-2">
+                                  {hasChildren && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-5 w-5 p-0"
+                                      onClick={() => toggleMeterExpanded(meter.id)}
+                                    >
+                                      {isExpanded ? (
+                                        <ChevronRight className="h-4 w-4 rotate-90" />
+                                      ) : (
+                                        <ChevronRight className="h-4 w-4" />
+                                      )}
+                                    </Button>
+                                  )}
                                   <span className="font-mono text-sm font-semibold">{meter.meter_number}</span>
                                   {parentInfo && (
                                     <span className="text-xs text-muted-foreground">
@@ -1803,8 +1878,8 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                           (Total: {reconciliationData.distributionTotal.toFixed(2)} kWh)
                         </span>
                       </h4>
-                      <div className="space-y-2">
-                        {reconciliationData.distribution.map((meter: any) => {
+                       <div className="space-y-2">
+                        {reconciliationData.distribution.filter((meter: any) => isMeterVisible(meter.id)).map((meter: any) => {
                           const percentage = reconciliationData.distributionTotal > 0 
                             ? (meter.totalKwh / reconciliationData.distributionTotal) * 100 
                             : 0;
@@ -1829,6 +1904,8 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                           const indentLevel = meterIndentLevels.get(meter.id) || 0;
                           const marginLeft = indentLevel * 24;
                           const parentInfo = meterParentInfo.get(meter.id);
+                          const hasChildren = childIds.length > 0;
+                          const isExpanded = expandedMeters.has(meter.id);
                           
                           return (
                             <div
@@ -1839,6 +1916,20 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                               <div className="flex items-center justify-between">
                                 <div className="flex flex-col gap-1">
                                   <div className="flex items-center gap-2">
+                                    {hasChildren && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-5 w-5 p-0"
+                                        onClick={() => toggleMeterExpanded(meter.id)}
+                                      >
+                                        {isExpanded ? (
+                                          <ChevronRight className="h-4 w-4 rotate-90" />
+                                        ) : (
+                                          <ChevronRight className="h-4 w-4" />
+                                        )}
+                                      </Button>
+                                    )}
                                     <span className="font-mono text-sm font-semibold">{meter.meter_number}</span>
                                     {parentInfo && (
                                       <span className="text-xs text-muted-foreground">
