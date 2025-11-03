@@ -1777,7 +1777,8 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                     ...(reconciliationData.councilBulk || []),
                     ...(reconciliationData.solarMeters || []),
                     ...(reconciliationData.checkMeters || []),
-                    ...(reconciliationData.distribution || [])
+                    ...(reconciliationData.distribution || []),
+                    ...(reconciliationData.otherMeters || [])
                   ];
 
                   // Create a map for quick lookup of meter data
