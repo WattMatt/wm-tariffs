@@ -1129,39 +1129,33 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="space-y-2">
-              <div className="flex items-center justify-between mb-2">
-                <Label className="text-sm font-semibold">Available Columns - Select to Include in Calculations</Label>
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    id="select-all-columns"
-                    checked={selectedColumns.size === previewData.availableColumns.length}
-                    onCheckedChange={(checked) => {
-                      if (checked) {
-                        const newSelected = new Set<string>(previewData.availableColumns as string[]);
-                        setSelectedColumns(newSelected);
-                        const newOps = new Map(columnOperations);
-                        const newFactors = new Map(columnFactors);
-                        previewData.availableColumns.forEach((col: string) => {
-                          if (!newOps.has(col)) newOps.set(col, "sum");
-                          if (!newFactors.has(col)) newFactors.set(col, "1");
-                        });
-                        setColumnOperations(newOps);
-                        setColumnFactors(newFactors);
-                      } else {
-                        setSelectedColumns(new Set());
-                      }
-                    }}
-                  />
-                  <Label htmlFor="select-all-columns" className="text-xs cursor-pointer text-muted-foreground">
-                    Select All
-                  </Label>
-                </div>
-              </div>
+              <Label className="text-sm font-semibold">Available Columns - Select to Include in Calculations</Label>
               <div className="border rounded-lg overflow-hidden">
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-muted/50">
-                      <TableHead className="w-12"></TableHead>
+                      <TableHead className="w-12">
+                        <Checkbox
+                          id="select-all-columns"
+                          checked={selectedColumns.size === previewData.availableColumns.length}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              const newSelected = new Set<string>(previewData.availableColumns as string[]);
+                              setSelectedColumns(newSelected);
+                              const newOps = new Map(columnOperations);
+                              const newFactors = new Map(columnFactors);
+                              previewData.availableColumns.forEach((col: string) => {
+                                if (!newOps.has(col)) newOps.set(col, "sum");
+                                if (!newFactors.has(col)) newFactors.set(col, "1");
+                              });
+                              setColumnOperations(newOps);
+                              setColumnFactors(newFactors);
+                            } else {
+                              setSelectedColumns(new Set());
+                            }
+                          }}
+                        />
+                      </TableHead>
                       <TableHead className="font-semibold">Column Name</TableHead>
                       <TableHead className="w-32 font-semibold">Operation</TableHead>
                       <TableHead className="w-24 font-semibold">Factor</TableHead>
