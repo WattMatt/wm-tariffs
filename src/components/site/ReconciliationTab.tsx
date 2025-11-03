@@ -1275,11 +1275,6 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                                 </span>
                               )}
                             </div>
-                            {meter.hasData && allMeterDateRanges.has(meter.id) && (
-                              <div className="text-xs text-muted-foreground">
-                                {format(allMeterDateRanges.get(meter.id)!.earliest!, "MMM dd, yyyy")} - {format(allMeterDateRanges.get(meter.id)!.latest!, "MMM dd, yyyy")}
-                              </div>
-                            )}
                           </div>
                           <Badge variant={meter.hasData ? "default" : "secondary"}>
                             {meter.hasData ? "Has Data" : "No Data"}
