@@ -354,6 +354,10 @@ export default function SiteDetail() {
                 <FolderOpen className="w-4 h-4" />
                 Documents
               </TabsTrigger>
+              <TabsTrigger value="load-profiles" className="gap-2">
+                <TrendingUp className="w-4 h-4" />
+                Load Profiles
+              </TabsTrigger>
               <TabsTrigger value="reconciliation" className="gap-2">
                 <BarChart3 className="w-4 h-4" />
                 Reconciliation
@@ -365,10 +369,6 @@ export default function SiteDetail() {
               <TabsTrigger value="compare" className="gap-2">
                 <Activity className="w-4 h-4" />
                 Compare
-              </TabsTrigger>
-              <TabsTrigger value="load-profiles" className="gap-2">
-                <TrendingUp className="w-4 h-4" />
-                Load Profiles
               </TabsTrigger>
               <TabsTrigger value="tariffs" className="gap-2">
                 <DollarSign className="w-4 h-4" />
@@ -396,6 +396,10 @@ export default function SiteDetail() {
               <DocumentsTab siteId={id!} />
             </TabsContent>
 
+            <TabsContent value="load-profiles">
+              <LoadProfilesTab siteId={id!} />
+            </TabsContent>
+
             <TabsContent value="reconciliation">
               <ReconciliationTab siteId={id!} />
             </TabsContent>
@@ -406,10 +410,6 @@ export default function SiteDetail() {
 
             <TabsContent value="compare">
               <ReconciliationCompareTab siteId={id!} />
-            </TabsContent>
-
-            <TabsContent value="load-profiles">
-              <LoadProfilesTab siteId={id!} />
             </TabsContent>
 
             <TabsContent value="tariffs">
