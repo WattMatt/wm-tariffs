@@ -1376,9 +1376,13 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                               </div>
                               <div className="w-24 flex justify-center">
                                 {meter.hasData ? (
-                                  <Check className="h-5 w-5 text-primary" />
+                                  <div className="h-6 w-6 rounded-full bg-primary flex items-center justify-center">
+                                    <Check className="h-4 w-4 text-primary-foreground" />
+                                  </div>
                                 ) : (
-                                  <X className="h-5 w-5 text-muted-foreground" />
+                                  <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center">
+                                    <X className="h-4 w-4 text-muted-foreground" />
+                                  </div>
                                 )}
                               </div>
                             </div>
