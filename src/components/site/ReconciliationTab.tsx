@@ -1094,10 +1094,11 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                         type="time"
                         value={timeFrom}
                         onChange={(e) => {
-                          const newTime = e.target.value;
-                          setTimeFrom(newTime);
-                          // Auto-close if time is fully entered (format HH:MM - 5 characters)
-                          if (newTime && newTime.length === 5 && newTime.includes(':')) {
+                          setTimeFrom(e.target.value);
+                        }}
+                        onBlur={() => {
+                          // Close after user finishes editing and leaves the field
+                          if (timeFrom && timeFrom.length === 5) {
                             setTimeout(() => setIsDateFromOpen(false), 100);
                           }
                         }}
@@ -1143,10 +1144,11 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                         type="time"
                         value={timeTo}
                         onChange={(e) => {
-                          const newTime = e.target.value;
-                          setTimeTo(newTime);
-                          // Auto-close if time is fully entered (format HH:MM - 5 characters)
-                          if (newTime && newTime.length === 5 && newTime.includes(':')) {
+                          setTimeTo(e.target.value);
+                        }}
+                        onBlur={() => {
+                          // Close after user finishes editing and leaves the field
+                          if (timeTo && timeTo.length === 5) {
                             setTimeout(() => setIsDateToOpen(false), 100);
                           }
                         }}
