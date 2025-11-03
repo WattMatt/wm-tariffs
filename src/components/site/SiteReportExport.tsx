@@ -289,13 +289,55 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
   };
 
   const generatePreview = async () => {
-
     setIsGeneratingPreview(true);
 
     try {
-      toast.info("Running reconciliation for selected period...");
+      toast.info("Preparing audit report with selected data...");
 
-      // 1. Fetch all meters for this site
+      // 1. Fetch selected reconciliation data
+      const { data: selectedReconciliation, error: reconError } = await supabase
+        .from("reconciliation_runs")
+        .select(`
+          *,
+          reconciliation_meter_results(*)
+        `)
+        .eq("id", selectedReconciliationId)
+        .single();
+
+      if (reconError) throw reconError;
+      if (!selectedReconciliation) throw new Error("Selected reconciliation not found");
+
+      // 2. Fetch selected schematic
+      const { data: selectedSchematic, error: schematicError } = await supabase
+        .from("schematics")
+        .select("*")
+        .eq("id", selectedSchematicId)
+        .single();
+
+      if (schematicError) throw schematicError;
+      if (!selectedSchematic) throw new Error("Selected schematic not found");
+
+      // 3. Fetch documents from selected folder
+      const folderPath = selectedFolderPath === "/" ? "" : selectedFolderPath;
+      const { data: documents, error: docsError } = await supabase
+        .from("site_documents")
+        .select(`
+          *,
+          document_extractions(*)
+        `)
+        .eq("site_id", siteId)
+        .eq("folder_path", folderPath)
+        .eq("extraction_status", "completed");
+
+      if (docsError) throw docsError;
+
+      const documentExtractions = documents?.map(doc => ({
+        fileName: doc.file_name,
+        documentType: doc.document_type,
+        extraction: doc.document_extractions?.[0]
+      })).filter(d => d.extraction) || [];
+
+      // 4. Fetch all meters for this site
       const { data: meters, error: metersError } = await supabase
         .from("meters")
         .select(`
@@ -389,84 +431,79 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
         }) || []
       );
 
-      // 4. Categorize meters by type
-      const bulkMeters = meterData.filter((m) => m.meter_type === "bulk_meter");
-      const checkMeters = meterData.filter((m) => m.meter_type === "check_meter");
-      const otherMeters = meterData.filter((m) => m.meter_type === "other");
-      const tenantMeters = meterData.filter((m) => m.meter_type === "tenant_meter");
-
-      const bulkTotal = bulkMeters.reduce((sum, m) => sum + m.totalKwh, 0);
-      const otherTotal = otherMeters.reduce((sum, m) => sum + m.totalKwh, 0);
-      const tenantTotal = tenantMeters.reduce((sum, m) => sum + m.totalKwh, 0);
-      
-      // Calculate total supply from CSV columns with SUM operation (not yet available at this point)
-      // This will be calculated after column configs are processed
-      const totalSupply = bulkTotal + otherTotal;
-      const recoveryRate = totalSupply > 0 ? (tenantTotal / totalSupply) * 100 : 0;
-      const discrepancy = totalSupply - tenantTotal;
-      const variancePercentage = totalSupply > 0 
-        ? ((discrepancy / totalSupply) * 100).toFixed(2)
-        : "0";
-
-      // 5. Prepare reconciliation data with enhanced categorization
+      // 5. Use data from selected reconciliation
       const reconciliationData = {
-        councilBulkMeters: bulkMeters.map(m => `${m.meter_number} (${m.name})`).join(", ") || "N/A",
-        councilTotal: bulkTotal.toFixed(2),
-        solarTotal: otherTotal.toFixed(2),
-        totalSupply: totalSupply.toFixed(2),
-        distributionTotal: tenantTotal.toFixed(2),
-        variance: discrepancy.toFixed(2),
-        variancePercentage,
-        recoveryRate: recoveryRate.toFixed(2),
-        meterCount: meterData.length,
-        councilBulkCount: bulkMeters.length,
-        solarCount: otherMeters.length,
-        distributionCount: tenantMeters.length,
-        checkMeterCount: checkMeters.length,
-        readingsPeriod: "All available readings",
-        documentsAnalyzed: 0 // Will be updated after fetching documents
+        councilBulkMeters: selectedReconciliation.reconciliation_meter_results
+          ?.filter((r: any) => r.meter_type === "bulk_meter")
+          .map((r: any) => `${r.meter_number} (${r.meter_name})`)
+          .join(", ") || "N/A",
+        councilTotal: selectedReconciliation.bulk_total.toFixed(2),
+        solarTotal: selectedReconciliation.solar_total.toFixed(2),
+        totalSupply: selectedReconciliation.total_supply.toFixed(2),
+        distributionTotal: selectedReconciliation.tenant_total.toFixed(2),
+        variance: selectedReconciliation.discrepancy.toFixed(2),
+        variancePercentage: selectedReconciliation.total_supply > 0 
+          ? ((selectedReconciliation.discrepancy / selectedReconciliation.total_supply) * 100).toFixed(2)
+          : "0",
+        recoveryRate: selectedReconciliation.recovery_rate.toFixed(2),
+        meterCount: selectedReconciliation.reconciliation_meter_results?.length || 0,
+        councilBulkCount: selectedReconciliation.reconciliation_meter_results?.filter((r: any) => r.meter_type === "bulk_meter").length || 0,
+        solarCount: selectedReconciliation.reconciliation_meter_results?.filter((r: any) => r.meter_type === "other").length || 0,
+        distributionCount: selectedReconciliation.reconciliation_meter_results?.filter((r: any) => r.meter_type === "tenant_meter").length || 0,
+        checkMeterCount: selectedReconciliation.reconciliation_meter_results?.filter((r: any) => r.meter_type === "check_meter").length || 0,
+        readingsPeriod: `${format(new Date(selectedReconciliation.date_from), "dd MMM yyyy")} - ${format(new Date(selectedReconciliation.date_to), "dd MMM yyyy")}`,
+        documentsAnalyzed: documentExtractions.length
       };
 
-      // 6. Detect anomalies with severity categorization
+      const variancePercentage = reconciliationData.variancePercentage;
+
+      // 6. Detect anomalies based on reconciliation results
       const anomalies: any[] = [];
 
-      // Critical: No readings on bulk meters
-      bulkMeters.forEach(m => {
-        if (m.readingsCount === 0) {
+      selectedReconciliation.reconciliation_meter_results?.forEach((result: any) => {
+        // Critical: No readings on bulk meters
+        if (result.meter_type === "bulk_meter" && result.readings_count === 0) {
           anomalies.push({
             type: "no_readings_bulk",
-            meter: m.meter_number,
-            name: m.name,
-            description: `Council bulk meter ${m.meter_number} has no readings for the audit period`,
+            meter: result.meter_number,
+            name: result.meter_name,
+            description: `Council bulk meter ${result.meter_number} has no readings for the audit period`,
             severity: "CRITICAL"
           });
         }
-      });
 
-      // Critical: Negative consumption
-      meterData.forEach(m => {
-        if (m.totalKwh < 0) {
+        // Critical: Negative consumption
+        if (result.total_kwh < 0) {
           anomalies.push({
             type: "negative_consumption",
-            meter: m.meter_number,
-            name: m.name,
-            consumption: m.totalKwh.toFixed(2),
-            description: `Meter ${m.meter_number} (${m.name}) shows negative consumption of ${m.totalKwh.toFixed(2)} kWh - possible meter rollback or tampering`,
+            meter: result.meter_number,
+            name: result.meter_name,
+            consumption: result.total_kwh.toFixed(2),
+            description: `Meter ${result.meter_number} (${result.meter_name}) shows negative consumption of ${result.total_kwh.toFixed(2)} kWh - possible meter rollback or tampering`,
             severity: "CRITICAL"
           });
         }
-      });
 
-      // High: Insufficient readings (< 10)
-      meterData.forEach(m => {
-        if (m.readingsCount > 0 && m.readingsCount < 10) {
+        // High: Insufficient readings (< 10)
+        if (result.readings_count > 0 && result.readings_count < 10) {
           anomalies.push({
             type: "insufficient_readings",
-            meter: m.meter_number,
-            name: m.name,
-            readingsCount: m.readingsCount,
-            description: `Meter ${m.meter_number} (${m.name}) has only ${m.readingsCount} reading(s) - insufficient for accurate reconciliation`,
+            meter: result.meter_number,
+            name: result.meter_name,
+            readingsCount: result.readings_count,
+            description: `Meter ${result.meter_number} (${result.meter_name}) has only ${result.readings_count} reading(s) - insufficient for accurate reconciliation`,
             severity: "HIGH"
+          });
+        }
+
+        // Low: No readings on tenant meters (non-critical)
+        if (result.meter_type === "tenant_meter" && result.readings_count === 0) {
+          anomalies.push({
+            type: "no_readings_distribution",
+            meter: result.meter_number,
+            name: result.meter_name,
+            description: `Distribution meter ${result.meter_number} (${result.meter_name}) has no readings - may be inactive or require investigation`,
+            severity: "LOW"
           });
         }
       });
@@ -475,20 +512,20 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
       if (Math.abs(parseFloat(variancePercentage)) > 10) {
         anomalies.push({
           type: "high_variance",
-          variance: discrepancy.toFixed(2),
+          variance: reconciliationData.variance,
           variancePercentage,
-          description: `Variance of ${variancePercentage}% (${discrepancy.toFixed(2)} kWh) between supply and distribution exceeds acceptable threshold of 5-7%`,
+          description: `Variance of ${variancePercentage}% (${reconciliationData.variance} kWh) between supply and distribution exceeds acceptable threshold of 5-7%`,
           severity: "HIGH"
         });
       }
 
       // High: Low recovery rate (< 90%)
-      if (recoveryRate < 90) {
+      if (parseFloat(reconciliationData.recoveryRate) < 90) {
         anomalies.push({
           type: "low_recovery",
-          recoveryRate: recoveryRate.toFixed(2),
-          lostRevenue: (totalSupply - tenantTotal) * 2.5, // Estimate at R2.50/kWh
-          description: `Recovery rate of ${recoveryRate.toFixed(2)}% is below acceptable threshold of 90-95% - estimated revenue loss: R${((totalSupply - tenantTotal) * 2.5).toFixed(2)}`,
+          recoveryRate: reconciliationData.recoveryRate,
+          lostRevenue: parseFloat(reconciliationData.variance) * 2.5, // Estimate at R2.50/kWh
+          description: `Recovery rate of ${reconciliationData.recoveryRate}% is below acceptable threshold of 90-95% - estimated revenue loss: R${(parseFloat(reconciliationData.variance) * 2.5).toFixed(2)}`,
           severity: "HIGH"
         });
       }
@@ -497,66 +534,21 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
       if (Math.abs(parseFloat(variancePercentage)) > 5 && Math.abs(parseFloat(variancePercentage)) <= 10) {
         anomalies.push({
           type: "moderate_variance",
-          variance: discrepancy.toFixed(2),
+          variance: reconciliationData.variance,
           variancePercentage,
-          description: `Variance of ${variancePercentage}% (${discrepancy.toFixed(2)} kWh) between supply and distribution is above optimal range of 2-5%`,
+          description: `Variance of ${variancePercentage}% (${reconciliationData.variance} kWh) between supply and distribution is above optimal range of 2-5%`,
           severity: "MEDIUM"
         });
       }
 
-      // Low: No readings on tenant meters (non-critical)
-      tenantMeters.forEach(m => {
-        if (m.readingsCount === 0) {
-          anomalies.push({
-            type: "no_readings_distribution",
-            meter: m.meter_number,
-            name: m.name,
-            description: `Distribution meter ${m.meter_number} (${m.name}) has no readings - may be inactive or require investigation`,
-            severity: "LOW"
-          });
-        }
-      });
-
-      // 8. Fetch document extractions
-      const { data: documents, error: docsError } = await supabase
-        .from("site_documents")
-        .select(`
-          *,
-          document_extractions(*)
-        `)
-        .eq("site_id", siteId)
-        .eq("extraction_status", "completed");
-
-      if (docsError) throw docsError;
-
-      const documentExtractions = documents?.map(doc => ({
-        fileName: doc.file_name,
-        documentType: doc.document_type,
-        extraction: doc.document_extractions?.[0]
-      })).filter(d => d.extraction) || [];
-
-      // Update reconciliation data with documents count
-      reconciliationData.documentsAnalyzed = documentExtractions.length;
-
-      // 7. Fetch schematic for the site
-      const { data: schematics, error: schematicsError } = await supabase
-        .from("schematics")
-        .select("id, name, file_path, converted_image_path")
-        .eq("site_id", siteId)
-        .limit(1);
-
-      if (schematicsError) {
-        console.error("Error fetching schematic:", schematicsError);
-      }
-
-      const schematicData = schematics && schematics.length > 0 ? schematics[0] : null;
+      // 7. Load schematic image
       let schematicImageBase64 = null;
 
-      if (schematicData?.converted_image_path) {
+      if (selectedSchematic?.converted_image_path) {
         try {
           const { data: imageData } = await supabase.storage
             .from("schematics")
-            .download(schematicData.converted_image_path);
+            .download(selectedSchematic.converted_image_path);
           
           if (imageData) {
             const arrayBuffer = await imageData.arrayBuffer();
@@ -664,12 +656,17 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
         {
           body: {
             siteName,
+            auditPeriodStart: format(new Date(selectedReconciliation.date_from), "dd MMM yyyy"),
+            auditPeriodEnd: format(new Date(selectedReconciliation.date_to), "dd MMM yyyy"),
             meterHierarchy,
             meterBreakdown,
             reconciliationData,
             documentExtractions,
             anomalies,
-            selectedCsvColumns
+            selectedCsvColumns,
+            selectedSchematicName: selectedSchematic.name,
+            selectedFolderPath,
+            selectedReconciliationName: selectedReconciliation.run_name
           }
         }
       );
