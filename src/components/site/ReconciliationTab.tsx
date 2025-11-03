@@ -1586,29 +1586,20 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                   // Create a map for quick lookup of meter data
                   const meterDataMap = new Map(allMeters.map((m: any) => [m.id, m]));
 
-                  // Sort meters according to availableMeters order (which preserves hierarchy)
-                  // Include ALL meters, even those without data
-                  const sortedMeters = availableMeters.map(m => {
+                  // Show ALL meters in the same order as Associated Meters table
+                  return availableMeters.map(m => {
                     const meterData = meterDataMap.get(m.id);
                     // If meter has no data, create a fallback object
-                    if (!meterData) {
-                      return {
-                        id: m.id,
-                        meter_number: m.meter_number,
-                        totalKwh: 0,
-                        readingsCount: 0,
-                        columnTotals: {},
-                        columnMaxValues: {},
-                        hasData: false
-                      };
-                    }
-                    return { ...meterData, hasData: true };
-                  });
-
-                  // Filter to show only visible meters (respects hierarchy visibility)
-                  const visibleMeters = sortedMeters.filter((meter: any) => isMeterVisible(meter.id));
-
-                  return visibleMeters.map((meter: any) => {
+                    const meter = !meterData ? {
+                      id: m.id,
+                      meter_number: m.meter_number,
+                      totalKwh: 0,
+                      readingsCount: 0,
+                      columnTotals: {},
+                      columnMaxValues: {},
+                      hasData: false
+                    } : { ...meterData, hasData: true };
+                    
                     // Calculate hierarchical total if this meter has children
                     const childIds = meterConnectionsMap.get(meter.id) || [];
                     let hierarchicalTotal = 0;
