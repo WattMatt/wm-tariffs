@@ -1506,14 +1506,26 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                             }, 0);
                           }
                           
+                          const indentLevel = meterIndentLevels.get(meter.id) || 0;
+                          const marginLeft = indentLevel * 24;
+                          const parentInfo = meterParentInfo.get(meter.id);
+                          
                           return (
                           <div
                             key={meter.id}
                             className="space-y-2 p-3 rounded-lg bg-muted/50"
+                            style={{ marginLeft: `${marginLeft}px` }}
                           >
                             <div className="flex items-center justify-between">
                               <div className="flex flex-col gap-1">
-                                <span className="font-mono text-sm font-semibold">{meter.meter_number}</span>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-mono text-sm font-semibold">{meter.meter_number}</span>
+                                  {parentInfo && (
+                                    <span className="text-xs text-muted-foreground">
+                                      → {parentInfo}
+                                    </span>
+                                  )}
+                                </div>
                                 {childIds.length > 0 && (
                                   <span className="text-xs text-muted-foreground">
                                     (sum of {childIds.length} child meter{childIds.length > 1 ? 's' : ''}): {hierarchicalTotal.toFixed(2)} kWh
@@ -1579,14 +1591,26 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                             }, 0);
                           }
                           
+                          const indentLevel = meterIndentLevels.get(meter.id) || 0;
+                          const marginLeft = indentLevel * 24;
+                          const parentInfo = meterParentInfo.get(meter.id);
+                          
                           return (
                           <div
                             key={meter.id}
                             className="space-y-2 p-3 rounded-lg bg-green-50 border border-green-200"
+                            style={{ marginLeft: `${marginLeft}px` }}
                           >
                             <div className="flex items-center justify-between">
                               <div className="flex flex-col gap-1">
-                                <span className="font-mono text-sm font-semibold">{meter.meter_number}</span>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-mono text-sm font-semibold">{meter.meter_number}</span>
+                                  {parentInfo && (
+                                    <span className="text-xs text-muted-foreground">
+                                      → {parentInfo}
+                                    </span>
+                                  )}
+                                </div>
                                 {childIds.length > 0 && (
                                   <span className="text-xs text-green-600">
                                     (sum of {childIds.length} child meter{childIds.length > 1 ? 's' : ''}): {hierarchicalTotal.toFixed(2)} kWh
@@ -1652,14 +1676,26 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                             }, 0);
                           }
                           
+                          const indentLevel = meterIndentLevels.get(meter.id) || 0;
+                          const marginLeft = indentLevel * 24;
+                          const parentInfo = meterParentInfo.get(meter.id);
+                          
                           return (
                           <div
                             key={meter.id}
                             className="space-y-2 p-3 rounded-lg bg-blue-50 border border-blue-200"
+                            style={{ marginLeft: `${marginLeft}px` }}
                           >
                             <div className="flex items-center justify-between">
                               <div className="flex flex-col gap-1">
-                                <span className="font-mono text-sm font-semibold">{meter.meter_number}</span>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-mono text-sm font-semibold">{meter.meter_number}</span>
+                                  {parentInfo && (
+                                    <span className="text-xs text-muted-foreground">
+                                      → {parentInfo}
+                                    </span>
+                                  )}
+                                </div>
                                 {childIds.length > 0 && (
                                   <span className="text-xs text-blue-600">
                                     (sum of {childIds.length} child meter{childIds.length > 1 ? 's' : ''}): {hierarchicalTotal.toFixed(2)} kWh
@@ -1722,13 +1758,25 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                             ? (meter.totalKwh / reconciliationData.distributionTotal) * 100 
                             : 0;
                           
+                          const indentLevel = meterIndentLevels.get(meter.id) || 0;
+                          const marginLeft = indentLevel * 24;
+                          const parentInfo = meterParentInfo.get(meter.id);
+                          
                           return (
                             <div
                               key={meter.id}
                               className="space-y-2 p-3 rounded-lg bg-muted/50"
+                              style={{ marginLeft: `${marginLeft}px` }}
                             >
                               <div className="flex items-center justify-between">
-                                <span className="font-mono text-sm font-semibold">{meter.meter_number}</span>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-mono text-sm font-semibold">{meter.meter_number}</span>
+                                  {parentInfo && (
+                                    <span className="text-xs text-muted-foreground">
+                                      → {parentInfo}
+                                    </span>
+                                  )}
+                                </div>
                                 <div className="flex items-center gap-2">
                                   <span className="font-semibold">{meter.totalKwh.toFixed(2)} kWh</span>
                                   <span className="text-xs text-muted-foreground bg-background px-2 py-1 rounded border border-border">
