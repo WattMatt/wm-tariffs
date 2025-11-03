@@ -1347,7 +1347,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                             <span className="font-medium">{meter.meter_number}</span>
                             {parentInfo && (
                               <span className="text-xs text-muted-foreground">
-                                (connects to {parentInfo})
+                                → {parentInfo}
                               </span>
                             )}
                           </div>
