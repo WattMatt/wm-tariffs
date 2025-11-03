@@ -1604,10 +1604,25 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                     const childIds = meterConnectionsMap.get(meter.id) || [];
                     let hierarchicalTotal = 0;
                     
+                    // Calculate summation by only counting leaf meters (no double-counting parents)
                     if (childIds.length > 0) {
+                      const getLeafMeterSum = (meterId: string): number => {
+                        const children = meterConnectionsMap.get(meterId) || [];
+                        
+                        // If this meter has no children, it's a leaf - return its value
+                        if (children.length === 0) {
+                          const meterData = allMeters.find((m: any) => m.id === meterId);
+                          return meterData?.totalKwh || 0;
+                        }
+                        
+                        // If this meter has children, recursively sum only its leaf descendants
+                        return children.reduce((sum, childId) => {
+                          return sum + getLeafMeterSum(childId);
+                        }, 0);
+                      };
+                      
                       hierarchicalTotal = childIds.reduce((sum, childId) => {
-                        const childData = allMeters.find((m: any) => m.id === childId);
-                        return sum + (childData?.totalKwh || 0);
+                        return sum + getLeafMeterSum(childId);
                       }, 0);
                     }
                     
