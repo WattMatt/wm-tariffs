@@ -778,42 +778,8 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
           const columnMaxValues: Record<string, number> = {};
           
           if (uniqueReadings.length > 0) {
-            // Determine which column factor to apply to kwh_value
-            // Look at first reading's metadata to find the energy column
-            let kwhFactor = 1;
-            if (uniqueReadings[0].metadata) {
-              const importedFields = (uniqueReadings[0].metadata as any)?.imported_fields || {};
-              const fieldNames = Object.keys(importedFields);
-              
-              // Find the column that likely represents energy (kWh)
-              const energyColumn = fieldNames.find(name => 
-                selectedColumns.has(name) && (
-                  name.toLowerCase().includes('kwh') ||
-                  name.toLowerCase().includes('energy') ||
-                  name.toLowerCase().includes('consumption') ||
-                  name.toLowerCase().includes('e (kwh)')
-                )
-              );
-              
-              if (energyColumn && columnFactors.has(energyColumn)) {
-                kwhFactor = Number(columnFactors.get(energyColumn) || 1);
-              }
-            }
-            
-            // Sum all interval consumption values with factor applied
-            uniqueReadings.forEach(r => {
-              const baseValue = Number(r.kwh_value);
-              const adjustedValue = baseValue * kwhFactor;
-              
-              totalKwh += adjustedValue;
-              
-              // Separate positive and negative for Grid Supply meters
-              if (adjustedValue > 0) {
-                totalKwhPositive += adjustedValue;
-              } else if (adjustedValue < 0) {
-                totalKwhNegative += adjustedValue; // Keep negative
-              }
-            });
+            // Sum all interval consumption values
+            totalKwh = uniqueReadings.reduce((sum, r) => sum + Number(r.kwh_value), 0);
             
             // Process all numeric columns from metadata
             const columnValues: Record<string, number[]> = {};
@@ -865,6 +831,15 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                 columnMaxValues[key] = result;
               } else {
                 columnTotals[key] = result;
+              }
+            });
+            
+            // Calculate positive and negative totals from column totals (factors already applied)
+            Object.values(columnTotals).forEach((colTotal) => {
+              if (colTotal > 0) {
+                totalKwhPositive += colTotal;
+              } else if (colTotal < 0) {
+                totalKwhNegative += colTotal; // Keep negative
               }
             });
             
