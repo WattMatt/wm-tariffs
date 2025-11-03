@@ -1587,9 +1587,23 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                   const meterDataMap = new Map(allMeters.map((m: any) => [m.id, m]));
 
                   // Sort meters according to availableMeters order (which preserves hierarchy)
-                  const sortedMeters = availableMeters
-                    .map(m => meterDataMap.get(m.id))
-                    .filter((meter): meter is any => meter !== undefined);
+                  // Include ALL meters, even those without data
+                  const sortedMeters = availableMeters.map(m => {
+                    const meterData = meterDataMap.get(m.id);
+                    // If meter has no data, create a fallback object
+                    if (!meterData) {
+                      return {
+                        id: m.id,
+                        meter_number: m.meter_number,
+                        totalKwh: 0,
+                        readingsCount: 0,
+                        columnTotals: {},
+                        columnMaxValues: {},
+                        hasData: false
+                      };
+                    }
+                    return { ...meterData, hasData: true };
+                  });
 
                   // Filter to show only visible meters (respects hierarchy visibility)
                   const visibleMeters = sortedMeters.filter((meter: any) => isMeterVisible(meter.id));
@@ -1626,6 +1640,12 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                       borderColor = "border-yellow-500/30";
                     }
                     
+                    // If meter has no data, use muted styling
+                    if (!meter.hasData) {
+                      bgColor = "bg-muted/20";
+                      borderColor = "border-muted/30";
+                    }
+                    
                     return (
                       <div
                         key={meter.id}
@@ -1650,6 +1670,9 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                                 </Button>
                               )}
                               <span className="font-mono text-sm font-semibold">{meter.meter_number}</span>
+                              {!meter.hasData && (
+                                <Badge variant="outline" className="text-xs">No data in range</Badge>
+                              )}
                               {parentInfo && (
                                 <span className="text-xs text-muted-foreground">
                                   → {parentInfo}
@@ -1671,8 +1694,10 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                             )}
                             <div className="flex flex-col items-end">
                               <div className="flex items-center gap-2">
-                                <span className="font-semibold">{meter.totalKwh.toFixed(2)} kWh</span>
-                                {childIds.length > 0 && hierarchicalTotal > 0 && (
+                                <span className={cn("font-semibold", !meter.hasData && "text-muted-foreground")}>
+                                  {meter.totalKwh.toFixed(2)} kWh
+                                </span>
+                                {childIds.length > 0 && hierarchicalTotal > 0 && meter.hasData && (
                                   <Badge variant={Math.abs((meter.totalKwh / hierarchicalTotal) * 100 - 100) > 10 ? "destructive" : "secondary"} className="text-xs">
                                     {((meter.totalKwh / hierarchicalTotal) * 100).toFixed(1)}%
                                   </Badge>
@@ -1680,18 +1705,20 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                               </div>
                               <span className="text-xs text-muted-foreground">Actual</span>
                             </div>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => downloadMeterCSV(meter)}
-                              className="h-7 w-7 p-0"
-                              title={`Download ${meter.readingsCount} readings`}
-                            >
-                              <FileDown className="h-4 w-4" />
-                            </Button>
+                            {meter.hasData && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => downloadMeterCSV(meter)}
+                                className="h-7 w-7 p-0"
+                                title={`Download ${meter.readingsCount} readings`}
+                              >
+                                <FileDown className="h-4 w-4" />
+                              </Button>
+                            )}
                           </div>
                         </div>
-                        {((meter.columnTotals && Object.keys(meter.columnTotals).length > 0) || 
+                        {meter.hasData && ((meter.columnTotals && Object.keys(meter.columnTotals).length > 0) || 
                           (meter.columnMaxValues && Object.keys(meter.columnMaxValues).length > 0)) && (
                           <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border/50">
                             {Object.entries(meter.columnTotals || {}).map(([col, val]: [string, any]) => (
