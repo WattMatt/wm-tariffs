@@ -468,6 +468,146 @@ export type Database = {
         }
         Relationships: []
       }
+      reconciliation_meter_results: {
+        Row: {
+          assignment: string | null
+          column_max_values: Json | null
+          column_totals: Json | null
+          created_at: string | null
+          error_message: string | null
+          has_error: boolean | null
+          id: string
+          location: string | null
+          meter_id: string
+          meter_name: string | null
+          meter_number: string
+          meter_type: string
+          readings_count: number
+          reconciliation_run_id: string
+          total_kwh: number
+          total_kwh_negative: number
+          total_kwh_positive: number
+        }
+        Insert: {
+          assignment?: string | null
+          column_max_values?: Json | null
+          column_totals?: Json | null
+          created_at?: string | null
+          error_message?: string | null
+          has_error?: boolean | null
+          id?: string
+          location?: string | null
+          meter_id: string
+          meter_name?: string | null
+          meter_number: string
+          meter_type: string
+          readings_count?: number
+          reconciliation_run_id: string
+          total_kwh?: number
+          total_kwh_negative?: number
+          total_kwh_positive?: number
+        }
+        Update: {
+          assignment?: string | null
+          column_max_values?: Json | null
+          column_totals?: Json | null
+          created_at?: string | null
+          error_message?: string | null
+          has_error?: boolean | null
+          id?: string
+          location?: string | null
+          meter_id?: string
+          meter_name?: string | null
+          meter_number?: string
+          meter_type?: string
+          readings_count?: number
+          reconciliation_run_id?: string
+          total_kwh?: number
+          total_kwh_negative?: number
+          total_kwh_positive?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reconciliation_meter_results_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reconciliation_meter_results_reconciliation_run_id_fkey"
+            columns: ["reconciliation_run_id"]
+            isOneToOne: false
+            referencedRelation: "reconciliation_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reconciliation_runs: {
+        Row: {
+          bulk_total: number
+          created_at: string | null
+          created_by: string | null
+          date_from: string
+          date_to: string
+          discrepancy: number
+          id: string
+          notes: string | null
+          recovery_rate: number
+          run_date: string
+          run_name: string
+          site_id: string
+          solar_total: number
+          tenant_total: number
+          total_supply: number
+          updated_at: string | null
+        }
+        Insert: {
+          bulk_total?: number
+          created_at?: string | null
+          created_by?: string | null
+          date_from: string
+          date_to: string
+          discrepancy?: number
+          id?: string
+          notes?: string | null
+          recovery_rate?: number
+          run_date?: string
+          run_name: string
+          site_id: string
+          solar_total?: number
+          tenant_total?: number
+          total_supply?: number
+          updated_at?: string | null
+        }
+        Update: {
+          bulk_total?: number
+          created_at?: string | null
+          created_by?: string | null
+          date_from?: string
+          date_to?: string
+          discrepancy?: number
+          id?: string
+          notes?: string | null
+          recovery_rate?: number
+          run_date?: string
+          run_name?: string
+          site_id?: string
+          solar_total?: number
+          tenant_total?: number
+          total_supply?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reconciliation_runs_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       schematic_lines: {
         Row: {
           color: string | null

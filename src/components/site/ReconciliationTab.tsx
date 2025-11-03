@@ -7,7 +7,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { CalendarIcon, Download, Eye, FileDown, ChevronRight, ChevronLeft, ArrowRight, Check, X } from "lucide-react";
+import { CalendarIcon, Download, Eye, FileDown, ChevronRight, ChevronLeft, ArrowRight, Check, X, Save } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -15,6 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import Papa from "papaparse";
+import SaveReconciliationDialog from "./SaveReconciliationDialog";
 
 interface ReconciliationTabProps {
   siteId: string;
@@ -35,6 +36,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
   const [isDateFromOpen, setIsDateFromOpen] = useState(false);
   const [isDateToOpen, setIsDateToOpen] = useState(false);
   const [selectedMeterId, setSelectedMeterId] = useState<string | null>(null);
+  const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
   const [availableMeters, setAvailableMeters] = useState<Array<{
     id: string;
     meter_number: string;
@@ -1146,6 +1148,80 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
     }
   };
 
+  const saveReconciliation = async (runName: string, notes: string) => {
+    if (!reconciliationData || !dateFrom || !dateTo) {
+      toast.error("No reconciliation data to save");
+      return;
+    }
+    
+    try {
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      // 1. Insert reconciliation run
+      const { data: run, error: runError } = await supabase
+        .from('reconciliation_runs')
+        .insert({
+          site_id: siteId,
+          run_name: runName,
+          date_from: getFullDateTime(dateFrom, timeFrom),
+          date_to: getFullDateTime(dateTo, timeTo),
+          bulk_total: reconciliationData.bulkTotal,
+          solar_total: reconciliationData.solarTotal,
+          tenant_total: reconciliationData.tenantTotal || 0,
+          total_supply: reconciliationData.totalSupply,
+          recovery_rate: reconciliationData.recoveryRate,
+          discrepancy: reconciliationData.discrepancy,
+          created_by: user?.id,
+          notes: notes || null
+        })
+        .select()
+        .single();
+      
+      if (runError) throw runError;
+      
+      // 2. Insert all meter results
+      const allMeters = [
+        ...(reconciliationData.bulkMeters || []).map((m: any) => ({ ...m, assignment: 'grid_supply' })),
+        ...(reconciliationData.solarMeters || []).map((m: any) => ({ ...m, assignment: 'solar' })),
+        ...(reconciliationData.tenantMeters || []).map((m: any) => ({ ...m, assignment: 'tenant' })),
+        ...(reconciliationData.checkMeters || []).map((m: any) => ({ ...m, assignment: 'check' })),
+        ...(reconciliationData.unassignedMeters || []).map((m: any) => ({ ...m, assignment: 'unassigned' }))
+      ];
+      
+      const meterResults = allMeters.map((meter: any) => ({
+        reconciliation_run_id: run.id,
+        meter_id: meter.id,
+        meter_number: meter.meter_number,
+        meter_type: meter.meter_type,
+        meter_name: meter.name || null,
+        location: meter.location || null,
+        assignment: meter.assignment,
+        total_kwh: meter.totalKwh || 0,
+        total_kwh_positive: meter.totalKwhPositive || 0,
+        total_kwh_negative: meter.totalKwhNegative || 0,
+        readings_count: meter.readingsCount || 0,
+        column_totals: meter.columnTotals || null,
+        column_max_values: meter.columnMaxValues || null,
+        has_error: meter.hasError || false,
+        error_message: meter.errorMessage || null
+      }));
+      
+      const { error: resultsError } = await supabase
+        .from('reconciliation_meter_results')
+        .insert(meterResults);
+      
+      if (resultsError) throw resultsError;
+      
+      toast.success(`Reconciliation "${runName}" saved successfully`);
+      return run.id;
+    } catch (error) {
+      console.error('Save reconciliation error:', error);
+      toast.error('Failed to save reconciliation');
+      throw error;
+    }
+  };
+
   const downloadMeterCSV = async (meter: any) => {
     try {
       if (!dateFrom || !dateTo) {
@@ -1788,6 +1864,18 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
             </Card>
           </div>
 
+          {/* Action Buttons */}
+          <div className="flex gap-2">
+            <Button onClick={() => setIsSaveDialogOpen(true)} variant="default" className="gap-2">
+              <Save className="h-4 w-4" />
+              Save Results
+            </Button>
+            <Button onClick={downloadAllMetersCSV} variant="outline" className="gap-2">
+              <Download className="h-4 w-4" />
+              Download All CSVs
+            </Button>
+          </div>
+
           <Card className="border-border/50">
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
@@ -1995,6 +2083,15 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
           </Card>
         </>
       )}
+
+      <SaveReconciliationDialog
+        open={isSaveDialogOpen}
+        onOpenChange={setIsSaveDialogOpen}
+        onSave={saveReconciliation}
+        dateFrom={dateFrom!}
+        dateTo={dateTo!}
+        reconciliationData={reconciliationData}
+      />
     </div>
   );
 }
