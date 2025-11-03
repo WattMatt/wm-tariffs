@@ -1129,75 +1129,125 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="space-y-2">
-              <Label className="text-sm font-semibold">Available Columns - Select to Include in Calculations</Label>
-              <div className="space-y-1">
-                {previewData.availableColumns.map((column: string) => (
-                  <div key={column} className="flex items-center gap-2 p-2 rounded border hover:bg-muted/50">
-                    <Checkbox
-                      id={`column-${column}`}
-                      checked={selectedColumns.has(column)}
-                      onCheckedChange={(checked) => {
-                        const newSelected = new Set(selectedColumns);
-                        if (checked) {
-                          newSelected.add(column);
-                          if (!columnOperations.has(column)) {
-                            const newOps = new Map(columnOperations);
-                            newOps.set(column, "sum");
-                            setColumnOperations(newOps);
-                          }
-                          if (!columnFactors.has(column)) {
-                            const newFactors = new Map(columnFactors);
-                            newFactors.set(column, "1");
-                            setColumnFactors(newFactors);
-                          }
-                        } else {
-                          newSelected.delete(column);
-                        }
+              <div className="flex items-center justify-between mb-2">
+                <Label className="text-sm font-semibold">Available Columns - Select to Include in Calculations</Label>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="select-all-columns"
+                    checked={selectedColumns.size === previewData.availableColumns.length}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        const newSelected = new Set<string>(previewData.availableColumns as string[]);
                         setSelectedColumns(newSelected);
-                      }}
-                    />
-                    <Label
-                      htmlFor={`column-${column}`}
-                      className="text-xs cursor-pointer flex-1"
-                    >
-                      {column}
-                    </Label>
-                    {selectedColumns.has(column) && (
-                      <>
-                        <Select
-                          value={columnOperations.get(column) || "sum"}
-                          onValueChange={(value) => {
-                            const newOps = new Map(columnOperations);
-                            newOps.set(column, value);
-                            setColumnOperations(newOps);
-                          }}
-                        >
-                          <SelectTrigger className="w-24 h-7 text-xs">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="sum">Sum</SelectItem>
-                            <SelectItem value="min">Min</SelectItem>
-                            <SelectItem value="max">Max</SelectItem>
-                            <SelectItem value="average">Avg</SelectItem>
-                            <SelectItem value="count">Cnt</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Input
-                          type="text"
-                          placeholder="Factor"
-                          value={columnFactors.get(column) || 1}
-                          onChange={(e) => {
-                            const newFactors = new Map(columnFactors);
-                            newFactors.set(column, e.target.value || "1");
-                            setColumnFactors(newFactors);
-                          }}
-                          className="w-20 h-7 text-xs"
-                        />
-                      </>
-                    )}
-                  </div>
-                ))}
+                        const newOps = new Map(columnOperations);
+                        const newFactors = new Map(columnFactors);
+                        previewData.availableColumns.forEach((col: string) => {
+                          if (!newOps.has(col)) newOps.set(col, "sum");
+                          if (!newFactors.has(col)) newFactors.set(col, "1");
+                        });
+                        setColumnOperations(newOps);
+                        setColumnFactors(newFactors);
+                      } else {
+                        setSelectedColumns(new Set());
+                      }
+                    }}
+                  />
+                  <Label htmlFor="select-all-columns" className="text-xs cursor-pointer text-muted-foreground">
+                    Select All
+                  </Label>
+                </div>
+              </div>
+              <div className="border rounded-lg overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/50">
+                      <TableHead className="w-12"></TableHead>
+                      <TableHead className="font-semibold">Column Name</TableHead>
+                      <TableHead className="w-32 font-semibold">Operation</TableHead>
+                      <TableHead className="w-24 font-semibold">Factor</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {previewData.availableColumns.map((column: string) => (
+                      <TableRow key={column} className="hover:bg-muted/30">
+                        <TableCell className="py-2">
+                          <Checkbox
+                            id={`column-${column}`}
+                            checked={selectedColumns.has(column)}
+                            onCheckedChange={(checked) => {
+                              const newSelected = new Set(selectedColumns);
+                              if (checked) {
+                                newSelected.add(column);
+                                if (!columnOperations.has(column)) {
+                                  const newOps = new Map(columnOperations);
+                                  newOps.set(column, "sum");
+                                  setColumnOperations(newOps);
+                                }
+                                if (!columnFactors.has(column)) {
+                                  const newFactors = new Map(columnFactors);
+                                  newFactors.set(column, "1");
+                                  setColumnFactors(newFactors);
+                                }
+                              } else {
+                                newSelected.delete(column);
+                              }
+                              setSelectedColumns(newSelected);
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell className="py-2">
+                          <Label
+                            htmlFor={`column-${column}`}
+                            className="text-sm cursor-pointer font-medium"
+                          >
+                            {column}
+                          </Label>
+                        </TableCell>
+                        <TableCell className="py-2">
+                          {selectedColumns.has(column) ? (
+                            <Select
+                              value={columnOperations.get(column) || "sum"}
+                              onValueChange={(value) => {
+                                const newOps = new Map(columnOperations);
+                                newOps.set(column, value);
+                                setColumnOperations(newOps);
+                              }}
+                            >
+                              <SelectTrigger className="h-8 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="sum">Sum</SelectItem>
+                                <SelectItem value="min">Min</SelectItem>
+                                <SelectItem value="max">Max</SelectItem>
+                                <SelectItem value="average">Average</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="py-2">
+                          {selectedColumns.has(column) ? (
+                            <Input
+                              type="number"
+                              step="0.01"
+                              value={columnFactors.get(column) || 1}
+                              onChange={(e) => {
+                                const newFactors = new Map(columnFactors);
+                                newFactors.set(column, e.target.value || "1");
+                                setColumnFactors(newFactors);
+                              }}
+                              className="h-8 text-xs"
+                            />
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
             </div>
 
