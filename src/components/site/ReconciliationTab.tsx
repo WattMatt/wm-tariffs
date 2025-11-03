@@ -54,6 +54,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
   const [dragOverMeterId, setDragOverMeterId] = useState<string | null>(null);
   const [selectedMetersForSummation, setSelectedMetersForSummation] = useState<Set<string>>(new Set());
   const [meterConnectionsMap, setMeterConnectionsMap] = useState<Map<string, string[]>>(new Map()); // parent_id -> child_ids
+  const [reconciliationProgress, setReconciliationProgress] = useState<{current: number, total: number}>({current: 0, total: 0});
 
   // Fetch available meters with CSV data and build hierarchy
   useEffect(() => {
@@ -639,6 +640,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
     }
 
     setIsLoading(true);
+    setReconciliationProgress({current: 0, total: 0});
 
     try {
       // Fetch all meters for the site
@@ -658,13 +660,16 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
         return;
       }
 
+      // Set total meters for progress tracking
+      setReconciliationProgress({current: 0, total: meters.length});
+
       // Combine date and time for precise filtering
       const fullDateTimeFrom = getFullDateTime(dateFrom, timeFrom);
       const fullDateTimeTo = getFullDateTime(dateTo, timeTo);
 
       // Fetch readings for each meter within date range (deduplicated by timestamp)
       const meterData = await Promise.all(
-        meters.map(async (meter) => {
+        meters.map(async (meter, index) => {
           // Get ALL readings using pagination (Supabase has 1000-row server limit)
           let allReadings: any[] = [];
           let from = 0;
@@ -786,6 +791,9 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
           } else {
             console.log(`Meter ${meter.meter_number}: No readings in date range`);
           }
+
+          // Update progress
+          setReconciliationProgress({current: index + 1, total: meters.length});
 
           return {
             ...meter,
@@ -1454,7 +1462,13 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
 
 
             <Button onClick={handleReconcile} disabled={isLoading || selectedColumns.size === 0} className="w-full">
-              {isLoading ? "Analyzing..." : "Run Reconciliation with Selected Columns"}
+              {isLoading ? (
+                <div className="flex items-center gap-2">
+                  <span>Analyzing... {reconciliationProgress.current}/{reconciliationProgress.total} meters</span>
+                </div>
+              ) : (
+                "Run Reconciliation with Selected Columns"
+              )}
             </Button>
           </CardContent>
         </Card>
