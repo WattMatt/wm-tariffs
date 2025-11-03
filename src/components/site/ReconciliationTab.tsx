@@ -1562,136 +1562,133 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
               </Button>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Supply Sources */}
-                <div className="space-y-6">
-                  <h3 className="font-semibold text-lg border-b pb-2">Supply Sources</h3>
-                  
-                  {reconciliationData.councilBulk.length > 0 && (
-                     <div>
-                      <h4 className="font-semibold mb-3 text-sm text-muted-foreground">Council Bulk (Grid)</h4>
-                      <div className="space-y-2">
-                        {reconciliationData.councilBulk.filter((meter: any) => isMeterVisible(meter.id)).map((meter: any) => {
-                          // Calculate hierarchical total if this meter has children
-                          const childIds = meterConnectionsMap.get(meter.id) || [];
-                          let hierarchicalTotal = 0;
-                          
-                          if (childIds.length > 0) {
-                            const allMeters = [
-                              ...reconciliationData.bulkMeters,
-                              ...reconciliationData.checkMeters,
-                              ...reconciliationData.tenantMeters,
-                              ...reconciliationData.otherMeters
-                            ];
-                            hierarchicalTotal = childIds.reduce((sum, childId) => {
-                              const childData = allMeters.find((m: any) => m.id === childId);
-                              return sum + (childData?.totalKwh || 0);
-                            }, 0);
-                          }
-                          
-                          const indentLevel = meterIndentLevels.get(meter.id) || 0;
-                          const marginLeft = indentLevel * 24;
-                          const parentInfo = meterParentInfo.get(meter.id);
-                          
-                          const hasChildren = childIds.length > 0;
-                          const isExpanded = expandedMeters.has(meter.id);
-                          
-                          return (
-                          <div
-                            key={meter.id}
-                            className="space-y-2 p-3 rounded-lg bg-muted/50"
-                            style={{ marginLeft: `${marginLeft}px` }}
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex flex-col gap-1 flex-1">
-                                <div className="flex items-center gap-2">
-                                  {hasChildren && (
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-5 w-5 p-0"
-                                      onClick={() => toggleMeterExpanded(meter.id)}
-                                    >
-                                      {isExpanded ? (
-                                        <ChevronRight className="h-4 w-4 rotate-90" />
-                                      ) : (
-                                        <ChevronRight className="h-4 w-4" />
-                                      )}
-                                    </Button>
-                                  )}
-                                  <span className="font-mono text-sm font-semibold">{meter.meter_number}</span>
-                                  {parentInfo && (
-                                    <span className="text-xs text-muted-foreground">
-                                      → {parentInfo}
-                                    </span>
-                                  )}
-                                </div>
-                                {childIds.length > 0 && (
-                                  <span className="text-xs text-muted-foreground">
-                                    (sum of {childIds.length} child meter{childIds.length > 1 ? 's' : ''})
-                                  </span>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-4">
-                                {childIds.length > 0 && (
-                                  <div className="flex flex-col items-end">
-                                    <span className="font-semibold text-primary">{hierarchicalTotal.toFixed(2)} kWh</span>
-                                    <span className="text-xs text-muted-foreground">Summation</span>
-                                  </div>
-                                )}
-                                <div className="flex flex-col items-end">
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-semibold">{meter.totalKwh.toFixed(2)} kWh</span>
-                                    {childIds.length > 0 && hierarchicalTotal > 0 && (
-                                      <Badge variant={Math.abs((meter.totalKwh / hierarchicalTotal) * 100 - 100) > 10 ? "destructive" : "secondary"} className="text-xs">
-                                        {((meter.totalKwh / hierarchicalTotal) * 100).toFixed(1)}%
-                                      </Badge>
-                                    )}
-                                  </div>
-                                  <span className="text-xs text-muted-foreground">Actual</span>
-                                </div>
+              <div className="space-y-2">
+                {(() => {
+                  // Combine all meters into one list
+                  const allMeters = [
+                    ...(reconciliationData.councilBulk || []),
+                    ...(reconciliationData.solarMeters || []),
+                    ...(reconciliationData.checkMeters || []),
+                    ...(reconciliationData.distribution || [])
+                  ];
+
+                  // Filter to show only visible meters (respects hierarchy visibility)
+                  const visibleMeters = allMeters.filter((meter: any) => isMeterVisible(meter.id));
+
+                  return visibleMeters.map((meter: any) => {
+                    // Calculate hierarchical total if this meter has children
+                    const childIds = meterConnectionsMap.get(meter.id) || [];
+                    let hierarchicalTotal = 0;
+                    
+                    if (childIds.length > 0) {
+                      hierarchicalTotal = childIds.reduce((sum, childId) => {
+                        const childData = allMeters.find((m: any) => m.id === childId);
+                        return sum + (childData?.totalKwh || 0);
+                      }, 0);
+                    }
+                    
+                    const indentLevel = meterIndentLevels.get(meter.id) || 0;
+                    const marginLeft = indentLevel * 24;
+                    const parentInfo = meterParentInfo.get(meter.id);
+                    
+                    const hasChildren = childIds.length > 0;
+                    const isExpanded = expandedMeters.has(meter.id);
+                    
+                    return (
+                      <div
+                        key={meter.id}
+                        className="space-y-2 p-3 rounded-lg bg-muted/50"
+                        style={{ marginLeft: `${marginLeft}px` }}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex flex-col gap-1 flex-1">
+                            <div className="flex items-center gap-2">
+                              {hasChildren && (
                                 <Button
-                                  size="sm"
                                   variant="ghost"
-                                  onClick={() => downloadMeterCSV(meter)}
-                                  className="h-7 w-7 p-0"
-                                  title={`Download ${meter.readingsCount} readings`}
+                                  size="sm"
+                                  className="h-5 w-5 p-0"
+                                  onClick={() => toggleMeterExpanded(meter.id)}
                                 >
-                                  <FileDown className="h-4 w-4" />
+                                  {isExpanded ? (
+                                    <ChevronRight className="h-4 w-4 rotate-90" />
+                                  ) : (
+                                    <ChevronRight className="h-4 w-4" />
+                                  )}
                                 </Button>
-                              </div>
+                              )}
+                              <span className="font-mono text-sm font-semibold">{meter.meter_number}</span>
+                              {parentInfo && (
+                                <span className="text-xs text-muted-foreground">
+                                  → {parentInfo}
+                                </span>
+                              )}
                             </div>
-                            {((meter.columnTotals && Object.keys(meter.columnTotals).length > 0) || 
-                              (meter.columnMaxValues && Object.keys(meter.columnMaxValues).length > 0)) && (
-                              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border/50">
-                                {Object.entries(meter.columnTotals || {}).map(([col, val]: [string, any]) => (
-                                  <div key={col} className="flex justify-between text-xs">
-                                    <span className="text-muted-foreground">{col}:</span>
-                                    <span className="font-mono">{Number(val).toFixed(2)}</span>
-                                  </div>
-                                ))}
-                                {Object.entries(meter.columnMaxValues || {}).map(([col, val]: [string, any]) => (
-                                  <div key={col} className="flex justify-between text-xs">
-                                    <span className="text-muted-foreground">{col} (Max):</span>
-                                    <span className="font-mono font-semibold">{Number(val).toFixed(2)}</span>
-                                  </div>
-                                ))}
-                              </div>
+                            {childIds.length > 0 && (
+                              <span className="text-xs text-muted-foreground">
+                                (sum of {childIds.length} child meter{childIds.length > 1 ? 's' : ''})
+                              </span>
                             )}
                           </div>
-                          );
-                        })}
+                          <div className="flex items-center gap-4">
+                            {childIds.length > 0 && (
+                              <div className="flex flex-col items-end">
+                                <span className="font-semibold text-primary">{hierarchicalTotal.toFixed(2)} kWh</span>
+                                <span className="text-xs text-muted-foreground">Summation</span>
+                              </div>
+                            )}
+                            <div className="flex flex-col items-end">
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold">{meter.totalKwh.toFixed(2)} kWh</span>
+                                {childIds.length > 0 && hierarchicalTotal > 0 && (
+                                  <Badge variant={Math.abs((meter.totalKwh / hierarchicalTotal) * 100 - 100) > 10 ? "destructive" : "secondary"} className="text-xs">
+                                    {((meter.totalKwh / hierarchicalTotal) * 100).toFixed(1)}%
+                                  </Badge>
+                                )}
+                              </div>
+                              <span className="text-xs text-muted-foreground">Actual</span>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => downloadMeterCSV(meter)}
+                              className="h-7 w-7 p-0"
+                              title={`Download ${meter.readingsCount} readings`}
+                            >
+                              <FileDown className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                        {((meter.columnTotals && Object.keys(meter.columnTotals).length > 0) || 
+                          (meter.columnMaxValues && Object.keys(meter.columnMaxValues).length > 0)) && (
+                          <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border/50">
+                            {Object.entries(meter.columnTotals || {}).map(([col, val]: [string, any]) => (
+                              <div key={col} className="flex justify-between text-xs">
+                                <span className="text-muted-foreground">{col}:</span>
+                                <span className="font-mono">{Number(val).toFixed(2)}</span>
+                              </div>
+                            ))}
+                            {Object.entries(meter.columnMaxValues || {}).map(([col, val]: [string, any]) => (
+                              <div key={col} className="flex justify-between text-xs">
+                                <span className="text-muted-foreground">{col} (Max):</span>
+                                <span className="font-mono font-semibold">{Number(val).toFixed(2)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  )}
-
-                  {reconciliationData.solarMeters?.length > 0 && (
-                     <div>
-                      <h4 className="font-semibold mb-3 text-sm text-muted-foreground">Solar Generation</h4>
-                      <div className="space-y-2">
-                        {reconciliationData.solarMeters.filter((meter: any) => isMeterVisible(meter.id)).map((meter: any) => {
-                          // Calculate hierarchical total if this meter has children
-                          const childIds = meterConnectionsMap.get(meter.id) || [];
+                    );
+                  });
+                })()}
+              </div>
+            </CardContent>
+          </Card>
+         </>
+        )}
+      </div>
+    </div>
+  );
+}
                           let hierarchicalTotal = 0;
                           
                           if (childIds.length > 0) {
