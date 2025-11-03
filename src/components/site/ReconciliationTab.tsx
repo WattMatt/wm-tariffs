@@ -1595,7 +1595,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                             style={{ marginLeft: `${marginLeft}px` }}
                           >
                             <div className="flex items-center justify-between">
-                              <div className="flex flex-col gap-1">
+                              <div className="flex flex-col gap-1 flex-1">
                                 <div className="flex items-center gap-2">
                                   {hasChildren && (
                                     <Button
@@ -1620,12 +1620,28 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                                 </div>
                                 {childIds.length > 0 && (
                                   <span className="text-xs text-muted-foreground">
-                                    (sum of {childIds.length} child meter{childIds.length > 1 ? 's' : ''}): {hierarchicalTotal.toFixed(2)} kWh
+                                    (sum of {childIds.length} child meter{childIds.length > 1 ? 's' : ''})
                                   </span>
                                 )}
                               </div>
-                              <div className="flex items-center gap-2">
-                                <span className="font-semibold">{meter.totalKwh.toFixed(2)} kWh</span>
+                              <div className="flex items-center gap-4">
+                                {childIds.length > 0 && (
+                                  <div className="flex flex-col items-end">
+                                    <span className="font-semibold text-primary">{hierarchicalTotal.toFixed(2)} kWh</span>
+                                    <span className="text-xs text-muted-foreground">Summation</span>
+                                  </div>
+                                )}
+                                <div className="flex flex-col items-end">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-semibold">{meter.totalKwh.toFixed(2)} kWh</span>
+                                    {childIds.length > 0 && hierarchicalTotal > 0 && (
+                                      <Badge variant={Math.abs((meter.totalKwh / hierarchicalTotal) * 100 - 100) > 10 ? "destructive" : "secondary"} className="text-xs">
+                                        {((meter.totalKwh / hierarchicalTotal) * 100).toFixed(1)}%
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <span className="text-xs text-muted-foreground">Actual</span>
+                                </div>
                                 <Button
                                   size="sm"
                                   variant="ghost"
@@ -1697,7 +1713,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                             style={{ marginLeft: `${marginLeft}px` }}
                           >
                             <div className="flex items-center justify-between">
-                              <div className="flex flex-col gap-1">
+                              <div className="flex flex-col gap-1 flex-1">
                                 <div className="flex items-center gap-2">
                                   {hasChildren && (
                                     <Button
@@ -1722,12 +1738,28 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                                 </div>
                                 {childIds.length > 0 && (
                                   <span className="text-xs text-green-600">
-                                    (sum of {childIds.length} child meter{childIds.length > 1 ? 's' : ''}): {hierarchicalTotal.toFixed(2)} kWh
+                                    (sum of {childIds.length} child meter{childIds.length > 1 ? 's' : ''})
                                   </span>
                                 )}
                               </div>
-                              <div className="flex items-center gap-2">
-                                <span className="font-semibold text-green-700">{meter.totalKwh.toFixed(2)} kWh</span>
+                              <div className="flex items-center gap-4">
+                                {childIds.length > 0 && (
+                                  <div className="flex flex-col items-end">
+                                    <span className="font-semibold text-green-700">{hierarchicalTotal.toFixed(2)} kWh</span>
+                                    <span className="text-xs text-green-600">Summation</span>
+                                  </div>
+                                )}
+                                <div className="flex flex-col items-end">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-semibold text-green-700">{meter.totalKwh.toFixed(2)} kWh</span>
+                                    {childIds.length > 0 && hierarchicalTotal > 0 && (
+                                      <Badge variant={Math.abs((meter.totalKwh / hierarchicalTotal) * 100 - 100) > 10 ? "destructive" : "secondary"} className="text-xs">
+                                        {((meter.totalKwh / hierarchicalTotal) * 100).toFixed(1)}%
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <span className="text-xs text-green-600">Actual</span>
+                                </div>
                                 <Button
                                   size="sm"
                                   variant="ghost"
@@ -1799,7 +1831,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                             style={{ marginLeft: `${marginLeft}px` }}
                           >
                             <div className="flex items-center justify-between">
-                              <div className="flex flex-col gap-1">
+                              <div className="flex flex-col gap-1 flex-1">
                                 <div className="flex items-center gap-2">
                                   {hasChildren && (
                                     <Button
@@ -1824,12 +1856,28 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                                 </div>
                                 {childIds.length > 0 && (
                                   <span className="text-xs text-blue-600">
-                                    (sum of {childIds.length} child meter{childIds.length > 1 ? 's' : ''}): {hierarchicalTotal.toFixed(2)} kWh
+                                    (sum of {childIds.length} child meter{childIds.length > 1 ? 's' : ''})
                                   </span>
                                 )}
                               </div>
-                              <div className="flex items-center gap-2">
-                                <span className="font-semibold text-blue-700">{meter.totalKwh.toFixed(2)} kWh</span>
+                              <div className="flex items-center gap-4">
+                                {childIds.length > 0 && (
+                                  <div className="flex flex-col items-end">
+                                    <span className="font-semibold text-blue-700">{hierarchicalTotal.toFixed(2)} kWh</span>
+                                    <span className="text-xs text-blue-600">Summation</span>
+                                  </div>
+                                )}
+                                <div className="flex flex-col items-end">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-semibold text-blue-700">{meter.totalKwh.toFixed(2)} kWh</span>
+                                    {childIds.length > 0 && hierarchicalTotal > 0 && (
+                                      <Badge variant={Math.abs((meter.totalKwh / hierarchicalTotal) * 100 - 100) > 10 ? "destructive" : "secondary"} className="text-xs">
+                                        {((meter.totalKwh / hierarchicalTotal) * 100).toFixed(1)}%
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <span className="text-xs text-blue-600">Actual</span>
+                                </div>
                                 <Button
                                   size="sm"
                                   variant="ghost"
@@ -1914,7 +1962,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                               style={{ marginLeft: `${marginLeft}px` }}
                             >
                               <div className="flex items-center justify-between">
-                                <div className="flex flex-col gap-1">
+                                <div className="flex flex-col gap-1 flex-1">
                                   <div className="flex items-center gap-2">
                                     {hasChildren && (
                                       <Button
@@ -1939,15 +1987,28 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                                   </div>
                                   {childIds.length > 0 && (
                                     <span className="text-xs text-muted-foreground">
-                                      (sum of {childIds.length} child meter{childIds.length > 1 ? 's' : ''}): {hierarchicalTotal.toFixed(2)} kWh
+                                      (sum of {childIds.length} child meter{childIds.length > 1 ? 's' : ''})
                                     </span>
                                   )}
                                 </div>
-                                <div className="flex items-center gap-2">
-                                  <span className="font-semibold">{meter.totalKwh.toFixed(2)} kWh</span>
-                                  <span className="text-xs text-muted-foreground bg-background px-2 py-1 rounded border border-border">
-                                    {percentage.toFixed(2)}%
-                                  </span>
+                                <div className="flex items-center gap-4">
+                                  {childIds.length > 0 && (
+                                    <div className="flex flex-col items-end">
+                                      <span className="font-semibold text-primary">{hierarchicalTotal.toFixed(2)} kWh</span>
+                                      <span className="text-xs text-muted-foreground">Summation</span>
+                                    </div>
+                                  )}
+                                  <div className="flex flex-col items-end">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-semibold">{meter.totalKwh.toFixed(2)} kWh</span>
+                                      {childIds.length > 0 && hierarchicalTotal > 0 && (
+                                        <Badge variant={Math.abs((meter.totalKwh / hierarchicalTotal) * 100 - 100) > 10 ? "destructive" : "secondary"} className="text-xs">
+                                          {((meter.totalKwh / hierarchicalTotal) * 100).toFixed(1)}%
+                                        </Badge>
+                                      )}
+                                    </div>
+                                    <span className="text-xs text-muted-foreground">Actual ({percentage.toFixed(1)}% of total)</span>
+                                  </div>
                                   <Button
                                     size="sm"
                                     variant="ghost"
