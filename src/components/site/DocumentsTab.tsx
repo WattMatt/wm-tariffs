@@ -85,8 +85,8 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
   const [isMoveDialogOpen, setIsMoveDialogOpen] = useState(false);
   const [moveDestinationFolder, setMoveDestinationFolder] = useState<string>('');
   const [isMoving, setIsMoving] = useState(false);
+  const [isFolderMode, setIsFolderMode] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const folderInputRef = useRef<HTMLInputElement>(null);
   
   // Fabric.js canvas state
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -356,18 +356,6 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
     }
   };
 
-  // Handle folder upload
-  const handleFolderSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-
-    const filesArray = Array.from(files);
-    setSelectedFiles(filesArray);
-    
-    // Auto-upload folders
-    handleFolderUpload(filesArray);
-  };
-
   // Upload files from folder with structure
   const handleFolderUpload = async (files: File[]) => {
     setIsUploading(true);
@@ -480,8 +468,15 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
 
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      setSelectedFiles(Array.from(e.target.files));
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const filesArray = Array.from(files);
+    setSelectedFiles(filesArray);
+    
+    // If folder mode, auto-upload
+    if (isFolderMode) {
+      handleFolderUpload(filesArray);
     }
   };
 
@@ -1419,23 +1414,6 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                 <FolderPlus className="w-4 h-4" />
                 New Folder
               </Button>
-              <Input
-                ref={folderInputRef}
-                type="file"
-                className="hidden"
-                onChange={handleFolderSelect}
-                {...({ webkitdirectory: "", directory: "" } as any)}
-                multiple
-              />
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => folderInputRef.current?.click()}
-                className="gap-2"
-              >
-                <Upload className="w-4 h-4" />
-                Upload Folder
-              </Button>
             </div>
           </div>
 
@@ -1490,7 +1468,24 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                 onChange={handleFileSelect}
                 disabled={isUploading}
                 multiple
+                {...(isFolderMode ? ({ webkitdirectory: "", directory: "" } as any) : {})}
               />
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="folder-mode"
+                  checked={isFolderMode}
+                  onCheckedChange={(checked) => {
+                    setIsFolderMode(checked as boolean);
+                    setSelectedFiles([]);
+                    if (fileInputRef.current) {
+                      fileInputRef.current.value = '';
+                    }
+                  }}
+                />
+                <Label htmlFor="folder-mode" className="text-sm font-normal cursor-pointer">
+                  Select entire folder
+                </Label>
+              </div>
               {selectedFiles.length > 0 && (
                 <p className="text-sm text-muted-foreground">
                   {selectedFiles.length} file(s) selected
