@@ -3,6 +3,9 @@ project_id = "azzstsqwrgfapqisovtd"
 [api]
 max_rows = 100000
 
+[db]
+statement_timeout = "60s"
+
 [functions.extract-schematic-meters]
 verify_jwt = false
 

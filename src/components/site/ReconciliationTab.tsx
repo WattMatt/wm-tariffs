@@ -65,6 +65,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
   const [meterAssignments, setMeterAssignments] = useState<Map<string, string>>(new Map()); // meter_id -> "grid_supply" | "solar_energy" | "none"
   const [expandedMeters, setExpandedMeters] = useState<Set<string>>(new Set()); // Set of meter IDs that are expanded
   const [userSetDates, setUserSetDates] = useState(false); // Track if user manually set dates
+  const [failedMeters, setFailedMeters] = useState<Map<string, string>>(new Map()); // meter_id -> error message
 
   // Fetch available meters with CSV data and build hierarchy
   useEffect(() => {
@@ -682,6 +683,211 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
     }
   };
 
+  // Helper function to process meters in batches
+  const processMeterBatches = async (
+    meters: any[], 
+    batchSize: number,
+    fullDateTimeFrom: string,
+    fullDateTimeTo: string
+  ) => {
+    const results: any[] = [];
+    const errors = new Map<string, string>();
+    
+    for (let i = 0; i < meters.length; i += batchSize) {
+      const batch = meters.slice(i, i + batchSize);
+      const batchNumber = Math.floor(i / batchSize) + 1;
+      const totalBatches = Math.ceil(meters.length / batchSize);
+      
+      console.log(`Processing batch ${batchNumber} of ${totalBatches} (meters ${i + 1}-${Math.min(i + batchSize, meters.length)} of ${meters.length})`);
+      
+      const batchResults = await Promise.all(
+        batch.map(async (meter) => {
+          return await processSingleMeter(meter, fullDateTimeFrom, fullDateTimeTo, errors);
+        })
+      );
+      
+      results.push(...batchResults);
+      
+      // Update progress after each batch
+      setReconciliationProgress({
+        current: Math.min(i + batchSize, meters.length),
+        total: meters.length
+      });
+    }
+    
+    return { results, errors };
+  };
+
+  // Helper function to process a single meter with retry logic
+  const processSingleMeter = async (
+    meter: any,
+    fullDateTimeFrom: string,
+    fullDateTimeTo: string,
+    errors: Map<string, string>,
+    retryCount = 0
+  ): Promise<any> => {
+    try {
+      // Single optimized query with high limit (no pagination needed)
+      const { data: readings, error: readingsError } = await supabase
+        .from("meter_readings")
+        .select("kwh_value, reading_timestamp, metadata")
+        .eq("meter_id", meter.id)
+        .gte("reading_timestamp", fullDateTimeFrom)
+        .lte("reading_timestamp", fullDateTimeTo)
+        .order("reading_timestamp", { ascending: true })
+        .limit(100000);
+
+      if (readingsError) {
+        // Check if it's a timeout error (code 57014)
+        if (readingsError.code === "57014" && retryCount === 0) {
+          console.warn(`Timeout for meter ${meter.meter_number}, retrying in 2s...`);
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          return await processSingleMeter(meter, fullDateTimeFrom, fullDateTimeTo, errors, retryCount + 1);
+        }
+        
+        console.error(`Error fetching readings for meter ${meter.meter_number}:`, readingsError);
+        errors.set(meter.id, readingsError.message || "Unknown error");
+        return {
+          ...meter,
+          totalKwh: 0,
+          totalKwhPositive: 0,
+          totalKwhNegative: 0,
+          columnTotals: {},
+          columnMaxValues: {},
+          readingsCount: 0,
+          hasError: true,
+          errorMessage: readingsError.message
+        };
+      }
+
+      // Deduplicate by timestamp (take first occurrence of each unique timestamp)
+      const uniqueReadings = readings ? 
+        Array.from(
+          new Map(
+            readings.map(r => [r.reading_timestamp, r])
+          ).values()
+        ) : [];
+
+      // Sum all interval readings (each represents consumption for that period)
+      let totalKwh = 0;
+      let totalKwhPositive = 0;
+      let totalKwhNegative = 0;
+      const columnTotals: Record<string, number> = {};
+      const columnMaxValues: Record<string, number> = {};
+      
+      if (uniqueReadings.length > 0) {
+        // Sum all interval consumption values
+        totalKwh = uniqueReadings.reduce((sum, r) => sum + Number(r.kwh_value), 0);
+        
+        // Process all numeric columns from metadata
+        const columnValues: Record<string, number[]> = {};
+        uniqueReadings.forEach(reading => {
+          const importedFields = (reading.metadata as any)?.imported_fields || {};
+          Object.entries(importedFields).forEach(([key, value]) => {
+            // Skip timestamp columns
+            if (key.toLowerCase().includes('time') || key.toLowerCase().includes('date')) return;
+            
+            // Only process selected columns
+            if (!selectedColumns.has(key)) return;
+            
+            const numValue = Number(value);
+            if (!isNaN(numValue) && value !== null && value !== '') {
+              if (!columnValues[key]) {
+                columnValues[key] = [];
+              }
+              columnValues[key].push(numValue);
+            }
+          });
+        });
+        
+        // Apply operations and scaling to each column
+        Object.entries(columnValues).forEach(([key, values]) => {
+          const operation = columnOperations.get(key) || 'sum';
+          const factor = Number(columnFactors.get(key) || 1);
+          
+          let result = 0;
+          switch (operation) {
+            case 'sum':
+              result = values.reduce((sum, val) => sum + val, 0);
+              break;
+            case 'average':
+              result = values.reduce((sum, val) => sum + val, 0) / values.length;
+              break;
+            case 'max':
+              result = Math.max(...values);
+              break;
+            case 'min':
+              result = Math.min(...values);
+              break;
+          }
+          
+          // Apply scaling factor
+          result = result * factor;
+          
+          // For kVA columns, track as max values
+          if (key.toLowerCase().includes('kva') || key.toLowerCase().includes('s (kva)')) {
+            columnMaxValues[key] = result;
+          } else {
+            columnTotals[key] = result;
+          }
+        });
+        
+        // Calculate positive and negative totals from column totals (factors already applied)
+        Object.values(columnTotals).forEach((colTotal) => {
+          if (colTotal > 0) {
+            totalKwhPositive += colTotal;
+          } else if (colTotal < 0) {
+            totalKwhNegative += colTotal; // Keep negative
+          }
+        });
+        
+        // Debug logging
+        console.log(`Reconciliation: Meter ${meter.meter_number} (${meter.meter_type}):`, {
+          originalReadings: readings?.length || 0,
+          uniqueReadings: uniqueReadings.length,
+          duplicatesRemoved: (readings?.length || 0) - uniqueReadings.length,
+          totalKwh: totalKwh.toFixed(2),
+          columnTotals,
+          columnMaxValues,
+          firstTimestamp: uniqueReadings[0].reading_timestamp,
+          lastTimestamp: uniqueReadings[uniqueReadings.length - 1].reading_timestamp
+        });
+        
+        // Alert if we hit the query limit
+        if (readings && readings.length >= 100000) {
+          console.warn(`WARNING: Meter ${meter.meter_number} may have more than 100k readings - increase limit!`);
+        }
+      } else {
+        console.log(`Meter ${meter.meter_number}: No readings in date range`);
+      }
+
+      return {
+        ...meter,
+        totalKwh,
+        totalKwhPositive,
+        totalKwhNegative,
+        columnTotals,
+        columnMaxValues,
+        readingsCount: uniqueReadings.length,
+        hasError: false
+      };
+    } catch (error: any) {
+      console.error(`Unexpected error processing meter ${meter.meter_number}:`, error);
+      errors.set(meter.id, error.message || "Unexpected error");
+      return {
+        ...meter,
+        totalKwh: 0,
+        totalKwhPositive: 0,
+        totalKwhNegative: 0,
+        columnTotals: {},
+        columnMaxValues: {},
+        readingsCount: 0,
+        hasError: true,
+        errorMessage: error.message
+      };
+    }
+  };
+
   const handleReconcile = async () => {
     if (!dateFrom || !dateTo) {
       toast.error("Please select a date range");
@@ -700,6 +906,7 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
 
     setIsLoading(true);
     setReconciliationProgress({current: 0, total: 0});
+    setFailedMeters(new Map());
 
     try {
       // Fetch all meters for the site
@@ -719,165 +926,20 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
         return;
       }
 
-      
-      // Create a completion counter that increments sequentially
-      let completedCount = 0;
-
       // Combine date and time for precise filtering
       const fullDateTimeFrom = getFullDateTime(dateFrom, timeFrom);
       const fullDateTimeTo = getFullDateTime(dateTo, timeTo);
 
-      // Fetch readings for each meter within date range (deduplicated by timestamp)
-      const meterData = await Promise.all(
-        meters.map(async (meter, index) => {
-          // Get ALL readings using pagination (Supabase has 1000-row server limit)
-          let allReadings: any[] = [];
-          let from = 0;
-          const pageSize = 1000;
-          let hasMore = true;
-
-          while (hasMore) {
-            const { data: pageData, error: readingsError } = await supabase
-              .from("meter_readings")
-              .select("kwh_value, reading_timestamp, metadata")
-              .eq("meter_id", meter.id)
-              .gte("reading_timestamp", fullDateTimeFrom)
-              .lte("reading_timestamp", fullDateTimeTo)
-              .order("reading_timestamp", { ascending: true })
-              .range(from, from + pageSize - 1);
-
-            if (readingsError) {
-              console.error(`Error fetching readings for meter ${meter.meter_number}:`, readingsError);
-              break;
-            }
-
-            if (pageData && pageData.length > 0) {
-              allReadings = [...allReadings, ...pageData];
-              from += pageSize;
-              hasMore = pageData.length === pageSize;
-            } else {
-              hasMore = false;
-            }
-          }
-
-          const readings = allReadings;
-
-          // Deduplicate by timestamp (take first occurrence of each unique timestamp)
-          const uniqueReadings = readings ? 
-            Array.from(
-              new Map(
-                readings.map(r => [r.reading_timestamp, r])
-              ).values()
-            ) : [];
-
-          // Sum all interval readings (each represents consumption for that period)
-          let totalKwh = 0;
-          let totalKwhPositive = 0;
-          let totalKwhNegative = 0;
-          const columnTotals: Record<string, number> = {};
-          const columnMaxValues: Record<string, number> = {};
-          
-          if (uniqueReadings.length > 0) {
-            // Sum all interval consumption values
-            totalKwh = uniqueReadings.reduce((sum, r) => sum + Number(r.kwh_value), 0);
-            
-            // Process all numeric columns from metadata
-            const columnValues: Record<string, number[]> = {};
-            uniqueReadings.forEach(reading => {
-              const importedFields = (reading.metadata as any)?.imported_fields || {};
-              Object.entries(importedFields).forEach(([key, value]) => {
-                // Skip timestamp columns
-                if (key.toLowerCase().includes('time') || key.toLowerCase().includes('date')) return;
-                
-                // Only process selected columns
-                if (!selectedColumns.has(key)) return;
-                
-                const numValue = Number(value);
-                if (!isNaN(numValue) && value !== null && value !== '') {
-                  if (!columnValues[key]) {
-                    columnValues[key] = [];
-                  }
-                  columnValues[key].push(numValue);
-                }
-              });
-            });
-            
-            // Apply operations and scaling to each column
-            Object.entries(columnValues).forEach(([key, values]) => {
-              const operation = columnOperations.get(key) || 'sum';
-              const factor = Number(columnFactors.get(key) || 1);
-              
-              let result = 0;
-              switch (operation) {
-                case 'sum':
-                  result = values.reduce((sum, val) => sum + val, 0);
-                  break;
-                case 'average':
-                  result = values.reduce((sum, val) => sum + val, 0) / values.length;
-                  break;
-                case 'max':
-                  result = Math.max(...values);
-                  break;
-                case 'min':
-                  result = Math.min(...values);
-                  break;
-              }
-              
-              // Apply scaling factor
-              result = result * factor;
-              
-              // For kVA columns, track as max values
-              if (key.toLowerCase().includes('kva') || key.toLowerCase().includes('s (kva)')) {
-                columnMaxValues[key] = result;
-              } else {
-                columnTotals[key] = result;
-              }
-            });
-            
-            // Calculate positive and negative totals from column totals (factors already applied)
-            Object.values(columnTotals).forEach((colTotal) => {
-              if (colTotal > 0) {
-                totalKwhPositive += colTotal;
-              } else if (colTotal < 0) {
-                totalKwhNegative += colTotal; // Keep negative
-              }
-            });
-            
-            // Debug logging
-            console.log(`Reconciliation: Meter ${meter.meter_number} (${meter.meter_type}):`, {
-              originalReadings: readings?.length || 0,
-              uniqueReadings: uniqueReadings.length,
-              duplicatesRemoved: (readings?.length || 0) - uniqueReadings.length,
-              totalKwh: totalKwh.toFixed(2),
-              columnTotals,
-              columnMaxValues,
-              firstTimestamp: uniqueReadings[0].reading_timestamp,
-              lastTimestamp: uniqueReadings[uniqueReadings.length - 1].reading_timestamp
-            });
-            
-            // Alert if we hit the query limit
-            if (readings && readings.length >= 100000) {
-              console.warn(`WARNING: Meter ${meter.meter_number} may have more than 100k readings - increase limit!`);
-            }
-          } else {
-            console.log(`Meter ${meter.meter_number}: No readings in date range`);
-          }
-
-          // Update progress sequentially
-          completedCount++;
-          setReconciliationProgress({current: completedCount, total: meters.length});
-
-          return {
-            ...meter,
-            totalKwh,
-            totalKwhPositive,
-            totalKwhNegative,
-            columnTotals,
-            columnMaxValues,
-            readingsCount: uniqueReadings.length,
-          };
-        })
+      // Process meters in batches of 5 to avoid connection pool exhaustion
+      const { results: meterData, errors } = await processMeterBatches(
+        meters,
+        5,
+        fullDateTimeFrom,
+        fullDateTimeTo
       );
+
+      // Store failed meters
+      setFailedMeters(errors);
 
       // Filter meters based on user assignments
       const gridSupplyMeters = meterData.filter((m) => meterAssignments.get(m.id) === "grid_supply");
@@ -935,7 +997,16 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
         })
       );
 
-      toast.success("Reconciliation complete");
+      // Show completion message with failure count if applicable
+      if (errors.size > 0) {
+        toast.warning(`Reconciliation complete with ${errors.size} meter failure${errors.size > 1 ? 's' : ''}. Check console for details.`);
+        console.warn("Failed meters:", Array.from(errors.entries()).map(([id, msg]) => {
+          const meter = meters.find(m => m.id === id);
+          return { meter_number: meter?.meter_number, error: msg };
+        }));
+      } else {
+        toast.success("Reconciliation complete");
+      }
     } catch (error) {
       console.error("Reconciliation error:", error);
       toast.error("Failed to complete reconciliation. Please try again.");
@@ -1622,8 +1693,15 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                       readingsCount: 0,
                       columnTotals: {},
                       columnMaxValues: {},
-                      hasData: false
-                    } : { ...meterData, hasData: true };
+                      hasData: false,
+                      hasError: failedMeters.has(m.id),
+                      errorMessage: failedMeters.get(m.id)
+                    } : { 
+                      ...meterData, 
+                      hasData: true,
+                      hasError: meterData.hasError || false,
+                      errorMessage: meterData.errorMessage
+                    };
                     
                     // Calculate hierarchical total if this meter has children
                     const childIds = meterConnectionsMap.get(meter.id) || [];
@@ -1675,7 +1753,11 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                     }
                     
                     // If meter has no data, use muted styling
-                    if (!meter.hasData) {
+                    // If meter has error, use destructive styling
+                    if (meter.hasError) {
+                      bgColor = "bg-destructive/10";
+                      borderColor = "border-destructive/30";
+                    } else if (!meter.hasData) {
                       bgColor = "bg-muted/20";
                       borderColor = "border-muted/30";
                     }
@@ -1704,8 +1786,11 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                                 </Button>
                               )}
                               <span className="font-mono text-sm font-semibold">{meter.meter_number}</span>
-                              {!meter.hasData && (
+                              {!meter.hasData && !meter.hasError && (
                                 <Badge variant="outline" className="text-xs">No data in range</Badge>
+                              )}
+                              {meter.hasError && (
+                                <Badge variant="destructive" className="text-xs">Error: {meter.errorMessage || 'Failed to load'}</Badge>
                               )}
                               {parentInfo && (
                                 <span className="text-xs text-muted-foreground">
