@@ -20,6 +20,7 @@ import PdfContentEditor, { PdfSection } from "./PdfContentEditor";
 interface SiteReportExportProps {
   siteId: string;
   siteName: string;
+  reconciliationRun?: any; // Optional: if provided, use this data instead of fetching
 }
 
 interface MeterOption {
@@ -49,7 +50,7 @@ interface PreviewData {
   reportData: any;
 }
 
-export default function SiteReportExport({ siteId, siteName }: SiteReportExportProps) {
+export default function SiteReportExport({ siteId, siteName, reconciliationRun }: SiteReportExportProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
   const [availableMeters, setAvailableMeters] = useState<MeterOption[]>([]);
@@ -298,9 +299,17 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
   };
 
   const generateMarkdownPreview = async () => {
-    if (!selectedSchematicId || !selectedFolderPath || !selectedReconciliationId) {
-      toast.error("Please select a schematic, folder, and reconciliation run");
-      return;
+    // If reconciliationRun is provided, use it directly
+    if (reconciliationRun) {
+      if (!selectedSchematicId || !selectedFolderPath) {
+        toast.error("Please select a schematic and folder");
+        return;
+      }
+    } else {
+      if (!selectedSchematicId || !selectedFolderPath || !selectedReconciliationId) {
+        toast.error("Please select a schematic, folder, and reconciliation run");
+        return;
+      }
     }
 
     setIsGeneratingPreview(true);
@@ -308,18 +317,23 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
     try {
       toast.info("Generating markdown preview...");
 
-      // 1. Fetch selected reconciliation data
-      const { data: selectedReconciliation, error: reconError } = await supabase
-        .from("reconciliation_runs")
-        .select(`
-          *,
-          reconciliation_meter_results(*)
-        `)
-        .eq("id", selectedReconciliationId)
-        .single();
+      // 1. Use provided reconciliation or fetch selected one
+      let selectedReconciliation = reconciliationRun;
+      
+      if (!selectedReconciliation) {
+        const { data: fetchedRecon, error: reconError } = await supabase
+          .from("reconciliation_runs")
+          .select(`
+            *,
+            reconciliation_meter_results(*)
+          `)
+          .eq("id", selectedReconciliationId)
+          .single();
 
-      if (reconError) throw reconError;
-      if (!selectedReconciliation) throw new Error("Selected reconciliation not found");
+        if (reconError) throw reconError;
+        if (!fetchedRecon) throw new Error("Selected reconciliation not found");
+        selectedReconciliation = fetchedRecon;
+      }
 
       // 2. Fetch selected schematic
       const { data: selectedSchematic, error: schematicError } = await supabase
@@ -351,99 +365,19 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
         extraction: doc.document_extractions?.[0]
       })).filter(d => d.extraction) || [];
 
-      // 4. Fetch all meters for this site
-      const { data: meters, error: metersError } = await supabase
-        .from("meters")
-        .select(`
-          *,
-          parent_connections:meter_connections!meter_connections_child_meter_id_fkey(
-            parent_meter_id,
-            parent_meter:meters!meter_connections_parent_meter_id_fkey(
-              meter_number,
-              name
-            )
-          ),
-          child_connections:meter_connections!meter_connections_parent_meter_id_fkey(
-            child_meter_id,
-            child_meter:meters!meter_connections_child_meter_id_fkey(
-              meter_number,
-              name
-            )
-          )
-        `)
-        .eq("site_id", siteId)
-        .in("id", Array.from(selectedMeterIds));
-
-      if (metersError) throw metersError;
-
-      // 2. Fetch all readings without date filtering
-
-      // 3. Fetch readings for each meter with pagination and deduplication
-      const meterData = await Promise.all(
-        meters?.map(async (meter) => {
-          let allReadings: any[] = [];
-          let from = 0;
-          const pageSize = 1000;
-          let hasMore = true;
-
-          while (hasMore) {
-            const { data: pageData, error: readingsError } = await supabase
-              .from("meter_readings")
-              .select("kwh_value, reading_timestamp, metadata")
-              .eq("meter_id", meter.id)
-              .order("reading_timestamp", { ascending: true })
-              .range(from, from + pageSize - 1);
-
-            if (readingsError) {
-              console.error(`Error fetching readings for meter ${meter.meter_number}:`, readingsError);
-              break;
-            }
-
-            if (pageData && pageData.length > 0) {
-              allReadings = [...allReadings, ...pageData];
-              from += pageSize;
-              hasMore = pageData.length === pageSize;
-            } else {
-              hasMore = false;
-            }
-          }
-
-          // Deduplicate by timestamp
-          const uniqueReadings = Array.from(
-            new Map(allReadings.map(r => [r.reading_timestamp, r])).values()
-          );
-
-          // Sum all interval readings
-          const totalKwh = uniqueReadings.reduce((sum, r) => sum + Number(r.kwh_value || 0), 0);
-          
-          const columnTotals: Record<string, number> = {};
-          const columnMaxValues: Record<string, number> = {};
-          
-          uniqueReadings.forEach(reading => {
-            const importedFields = (reading.metadata as any)?.imported_fields || {};
-            Object.entries(importedFields).forEach(([key, value]) => {
-              if (key.toLowerCase().includes('time') || key.toLowerCase().includes('date')) return;
-              
-              const numValue = Number(value);
-              if (!isNaN(numValue) && value !== null && value !== '') {
-                if (key.toLowerCase().includes('kva')) {
-                  columnMaxValues[key] = Math.max(columnMaxValues[key] || 0, numValue);
-                } else {
-                  columnTotals[key] = (columnTotals[key] || 0) + numValue;
-                }
-              }
-            });
-          });
-
-          return {
-            ...meter,
-            totalKwh,
-            columnTotals,
-            columnMaxValues,
-            readingsCount: uniqueReadings.length,
-          };
-        }) || []
-      );
+      // 4. Use meter data from reconciliation results instead of fetching
+      const meterData = selectedReconciliation.reconciliation_meter_results?.map((result: any) => ({
+        id: result.meter_id,
+        meter_number: result.meter_number,
+        name: result.meter_name,
+        meter_type: result.meter_type,
+        location: result.location,
+        totalKwh: result.total_kwh,
+        columnTotals: result.column_totals || {},
+        columnMaxValues: result.column_max_values || {},
+        readingsCount: result.readings_count,
+        assignment: result.assignment
+      })) || [];
 
       // 5. Use data from selected reconciliation
       const reconciliationData = {
@@ -576,7 +510,41 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
         }
       }
 
-      // 8. Calculate site-wide CSV column aggregations
+      // 8. Prepare meter breakdown from reconciliation data
+      const sortMetersByType = (meters: any[]) => {
+        return meters.sort((a, b) => {
+          const typeOrder = { bulk_meter: 1, other: 2, check_meter: 3, tenant_meter: 4 };
+          const aOrder = typeOrder[a.meter_type as keyof typeof typeOrder] || 5;
+          const bOrder = typeOrder[b.meter_type as keyof typeof typeOrder] || 5;
+          if (aOrder !== bOrder) return aOrder - bOrder;
+          return (a.meter_number || "").localeCompare(b.meter_number || "");
+        });
+      };
+
+      const meterBreakdown = sortMetersByType(meterData).map(m => ({
+        meterNumber: m.meter_number,
+        name: m.name,
+        type: m.meter_type,
+        location: m.location,
+        consumption: m.totalKwh.toFixed(2),
+        readingsCount: m.readingsCount,
+        assignment: m.assignment
+      }));
+
+      // 9. Prepare meter hierarchy from reconciliation data
+      const meterHierarchy = meterData.map(m => ({
+        meterNumber: m.meter_number,
+        name: m.name,
+        type: m.meter_type,
+        location: m.location,
+        consumption: m.totalKwh.toFixed(2),
+        readingsCount: m.readingsCount,
+        columnTotals: m.columnTotals || {},
+        columnMaxValues: m.columnMaxValues || {},
+        assignment: m.assignment
+      }));
+
+      // Calculate CSV column aggregations from meter data
       const csvColumnAggregations: Record<string, { value: number; aggregation: string; multiplier: number }> = {};
       
       Object.entries(columnConfigs)
@@ -600,58 +568,6 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
             };
           }
         });
-
-      // Keep original Total Supply calculation (council_bulk + solar)
-      // CSV aggregations are for display only in section 4.2
-
-      // 9. Prepare detailed meter breakdown with sorting
-      const sortMetersByType = (meters: any[]) => {
-        return meters.sort((a, b) => {
-          // Sort by type priority: council_bulk > solar > check_meter > distribution
-          const typeOrder = { council_bulk: 1, solar: 2, check_meter: 3, distribution: 4 };
-          const aOrder = typeOrder[a.meter_type as keyof typeof typeOrder] || 5;
-          const bOrder = typeOrder[b.meter_type as keyof typeof typeOrder] || 5;
-          if (aOrder !== bOrder) return aOrder - bOrder;
-          // Then by meter number
-          return (a.meter_number || "").localeCompare(b.meter_number || "");
-        });
-      };
-
-      const meterBreakdown = sortMetersByType(meterData).map(m => ({
-        meterNumber: m.meter_number,
-        name: m.name,
-        type: m.meter_type,
-        location: m.location,
-        consumption: m.totalKwh.toFixed(2),
-        readingsCount: m.readingsCount,
-        parentMeters: m.parent_connections?.map((pc: any) => 
-          pc.parent_meter?.meter_number
-        ) || [],
-        childMeters: m.child_connections?.map((cc: any) => 
-          cc.child_meter?.meter_number
-        ) || []
-      }));
-
-      // 9. Prepare meter hierarchy with CSV column data
-      const meterHierarchy = meters?.map(meter => {
-        const meterInfo = meterData.find(m => m.id === meter.id);
-        return {
-          meterNumber: meter.meter_number,
-          name: meter.name,
-          type: meter.meter_type,
-          location: meter.location,
-          consumption: meterInfo?.totalKwh.toFixed(2) || "0.00",
-          readingsCount: meterInfo?.readingsCount || 0,
-          columnTotals: meterInfo?.columnTotals || {},
-          columnMaxValues: meterInfo?.columnMaxValues || {},
-          parentMeters: meter.parent_connections?.map((pc: any) => 
-            pc.parent_meter?.meter_number
-          ) || [],
-          childMeters: meter.child_connections?.map((cc: any) => 
-            cc.child_meter?.meter_number
-          ) || []
-        };
-      }) || [];
 
       // Prepare selected CSV columns configuration
       const selectedCsvColumns = Object.entries(columnConfigs)
@@ -1696,29 +1612,40 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
             </Select>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="reconciliation-select">Select Reconciliation History *</Label>
-            <Select 
-              value={selectedReconciliationId} 
-              onValueChange={setSelectedReconciliationId}
-              disabled={isLoadingOptions}
-            >
-              <SelectTrigger id="reconciliation-select">
-                <SelectValue placeholder="Choose a saved reconciliation run" />
-              </SelectTrigger>
-              <SelectContent>
-                {availableReconciliations.length === 0 ? (
-                  <SelectItem value="no-reconciliations" disabled>No reconciliation history available</SelectItem>
-                ) : (
-                  availableReconciliations.map((run) => (
-                    <SelectItem key={run.id} value={run.id}>
-                      {run.run_name} - {format(new Date(run.run_date), "dd MMM yyyy")}
-                    </SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
-          </div>
+          {!reconciliationRun && (
+            <div className="space-y-2">
+              <Label htmlFor="reconciliation-select">Select Reconciliation History *</Label>
+              <Select 
+                value={selectedReconciliationId} 
+                onValueChange={setSelectedReconciliationId}
+                disabled={isLoadingOptions}
+              >
+                <SelectTrigger id="reconciliation-select">
+                  <SelectValue placeholder="Choose a saved reconciliation run" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableReconciliations.length === 0 ? (
+                    <SelectItem value="no-reconciliations" disabled>No reconciliation history available</SelectItem>
+                  ) : (
+                    availableReconciliations.map((run) => (
+                      <SelectItem key={run.id} value={run.id}>
+                        {run.run_name} - {format(new Date(run.run_date), "dd MMM yyyy")}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {reconciliationRun && (
+            <div className="p-4 border rounded-lg bg-muted/30">
+              <p className="text-sm font-medium mb-2">Using Reconciliation:</p>
+              <p className="text-sm text-muted-foreground">
+                {reconciliationRun.run_name} - {format(new Date(reconciliationRun.run_date), "dd MMM yyyy")}
+              </p>
+            </div>
+          )}
         </div>
 
         <Separator />
@@ -1744,7 +1671,7 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
             isLoadingOptions ||
             !selectedSchematicId || 
             !selectedFolderPath || 
-            !selectedReconciliationId
+            (!reconciliationRun && !selectedReconciliationId)
           }
           className="w-full"
           size="lg"

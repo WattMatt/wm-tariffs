@@ -6,15 +6,17 @@ import { format } from "date-fns";
 import { toast } from "sonner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { FileDown, Eye, Trash2, Download } from "lucide-react";
+import { FileDown, Eye, Trash2, Download, FileText } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
 import ReconciliationResultsView from "./ReconciliationResultsView";
+import SiteReportExport from "./SiteReportExport";
 
 interface ReconciliationHistoryTabProps {
   siteId: string;
+  siteName: string;
 }
 
 interface ReconciliationRun {
@@ -50,12 +52,14 @@ interface MeterResult {
   error_message: string | null;
 }
 
-export default function ReconciliationHistoryTab({ siteId }: ReconciliationHistoryTabProps) {
+export default function ReconciliationHistoryTab({ siteId, siteName }: ReconciliationHistoryTabProps) {
   const [runs, setRuns] = useState<ReconciliationRun[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedRun, setSelectedRun] = useState<ReconciliationRun | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [deleteRunId, setDeleteRunId] = useState<string | null>(null);
+  const [reportRun, setReportRun] = useState<ReconciliationRun | null>(null);
+  const [isReportOpen, setIsReportOpen] = useState(false);
 
   useEffect(() => {
     fetchReconciliationHistory();
@@ -86,6 +90,11 @@ export default function ReconciliationHistoryTab({ siteId }: ReconciliationHisto
   const handleViewDetails = (run: ReconciliationRun) => {
     setSelectedRun(run);
     setIsDetailOpen(true);
+  };
+
+  const handleGenerateReport = (run: ReconciliationRun) => {
+    setReportRun(run);
+    setIsReportOpen(true);
   };
 
   const handleDelete = async () => {
@@ -230,6 +239,14 @@ export default function ReconciliationHistoryTab({ siteId }: ReconciliationHisto
                         <Button
                           size="sm"
                           variant="ghost"
+                          onClick={() => handleGenerateReport(run)}
+                          title="Generate report"
+                        >
+                          <FileText className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
                           onClick={() => handleViewDetails(run)}
                           title="View details"
                         >
@@ -333,6 +350,26 @@ export default function ReconciliationHistoryTab({ siteId }: ReconciliationHisto
               Export Excel
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Report Generation Dialog */}
+      <Dialog open={isReportOpen} onOpenChange={setIsReportOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Generate Audit Report</DialogTitle>
+            <DialogDescription>
+              {reportRun && `Using reconciliation: ${reportRun.run_name}`}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {reportRun && (
+            <SiteReportExport 
+              siteId={siteId}
+              siteName={siteName}
+              reconciliationRun={reportRun}
+            />
+          )}
         </DialogContent>
       </Dialog>
 

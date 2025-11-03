@@ -405,7 +405,7 @@ export default function SiteDetail() {
             </TabsContent>
 
             <TabsContent value="history">
-              <ReconciliationHistoryTab siteId={id!} />
+              <ReconciliationHistoryTab siteId={id!} siteName={site?.name || ""} />
             </TabsContent>
 
             <TabsContent value="compare">
