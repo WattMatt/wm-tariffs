@@ -414,8 +414,11 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
     // If no parent, always visible
     if (!parentId) return true;
     
-    // If has parent, visible only if parent is expanded
-    return expandedMeters.has(parentId);
+    // If has parent, check if parent is expanded
+    if (!expandedMeters.has(parentId)) return false;
+    
+    // Recursively check if all ancestors are visible
+    return isMeterVisible(parentId);
   };
 
   const handleIndentMeter = (meterId: string) => {
