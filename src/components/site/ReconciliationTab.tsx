@@ -31,8 +31,6 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
   const [selectedColumns, setSelectedColumns] = useState<Set<string>>(new Set());
   const [columnOperations, setColumnOperations] = useState<Map<string, string>>(new Map());
   const [columnFactors, setColumnFactors] = useState<Map<string, string>>(new Map());
-  const [recalculatedTotal, setRecalculatedTotal] = useState<number | null>(null);
-  const [isRecalculating, setIsRecalculating] = useState(false);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
   const [isDateFromOpen, setIsDateFromOpen] = useState(false);
   const [isDateToOpen, setIsDateToOpen] = useState(false);
@@ -318,49 +316,6 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
     fetchMeterDateRange();
   }, [selectedMeterId]);
 
-  const handleRecalculateTotals = () => {
-    if (!previewData || selectedColumns.size === 0) {
-      toast.error("Please select columns to calculate");
-      return;
-    }
-
-    setIsRecalculating(true);
-
-    try {
-      let newTotal = 0;
-      
-      Array.from(selectedColumns).forEach((column) => {
-        const operation = columnOperations.get(column) || "sum";
-        const factorStr = columnFactors.get(column) || "1";
-        let factor = 1;
-        
-        try {
-          factor = Function('"use strict"; return (' + factorStr + ')')();
-          if (isNaN(factor) || !isFinite(factor)) {
-            factor = 1;
-          }
-        } catch (e) {
-          console.warn(`Invalid factor for ${column}: ${factorStr}, using 1`);
-          factor = 1;
-        }
-        
-        // Only sum columns with "sum" operation
-        if (operation === "sum") {
-          const total = Number(previewData.columnTotals[column] || 0);
-          const adjustedTotal = total * factor;
-          newTotal += adjustedTotal;
-        }
-      });
-
-      setRecalculatedTotal(newTotal);
-      toast.success("Total consumption recalculated");
-    } catch (error) {
-      console.error("Recalculation error:", error);
-      toast.error("Failed to recalculate totals");
-    } finally {
-      setIsRecalculating(false);
-    }
-  };
 
   const handleIndentMeter = (meterId: string) => {
     const currentLevel = meterIndentLevels.get(meterId) || 0;
@@ -1285,19 +1240,6 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                     )}
                   </div>
                 ))}
-              </div>
-              <div className="flex items-center justify-between pt-1">
-                <div className="text-xs text-muted-foreground">
-                  {selectedColumns.size} of {previewData.availableColumns.length} columns selected
-                </div>
-                <Button 
-                  onClick={handleRecalculateTotals} 
-                  disabled={isRecalculating || selectedColumns.size === 0}
-                  variant="outline"
-                  size="sm"
-                >
-                  {isRecalculating ? "Calculating..." : "Recalculate Total"}
-                </Button>
               </div>
             </div>
 
