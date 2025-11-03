@@ -713,8 +713,9 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
         return;
       }
 
-      // Set total meters for progress tracking
-      setReconciliationProgress({current: 0, total: meters.length});
+      
+      // Create a completion counter that increments sequentially
+      let completedCount = 0;
 
       // Combine date and time for precise filtering
       const fullDateTimeFrom = getFullDateTime(dateFrom, timeFrom);
@@ -845,8 +846,9 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
             console.log(`Meter ${meter.meter_number}: No readings in date range`);
           }
 
-          // Update progress
-          setReconciliationProgress({current: index + 1, total: meters.length});
+          // Update progress sequentially
+          completedCount++;
+          setReconciliationProgress({current: completedCount, total: meters.length});
 
           return {
             ...meter,
