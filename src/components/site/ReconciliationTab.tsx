@@ -1612,7 +1612,10 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                         // If this meter has no children, it's a leaf - return its value
                         if (children.length === 0) {
                           const meterData = allMeters.find((m: any) => m.id === meterId);
-                          return meterData?.totalKwh || 0;
+                          const isSolar = meterAssignments.get(meterId) === "solar_energy";
+                          const value = meterData?.totalKwh || 0;
+                          // Solar meters subtract from the total instead of adding
+                          return isSolar ? -value : value;
                         }
                         
                         // If this meter has children, recursively sum only its leaf descendants
