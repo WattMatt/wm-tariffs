@@ -310,7 +310,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
   // Get available folders for move dialog
   const getAvailableFolders = (): string[] => {
     const folders = new Set<string>();
-    folders.add(''); // Root folder
+    folders.add('__root__'); // Use special value instead of empty string
     
     documents.forEach(doc => {
       if (doc.is_folder) {
@@ -331,17 +331,19 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
     setIsMoving(true);
     try {
       const selectedDocs = documents.filter(d => selectedDocuments.has(d.id));
+      // Convert "__root__" back to empty string for database
+      const destinationPath = moveDestinationFolder === "__root__" ? "" : moveDestinationFolder;
       
       for (const doc of selectedDocs) {
         const { error } = await supabase
           .from("site_documents")
-          .update({ folder_path: moveDestinationFolder })
+          .update({ folder_path: destinationPath })
           .eq("id", doc.id);
 
         if (error) throw error;
       }
 
-      toast.success(`Moved ${selectedDocuments.size} document(s) to ${moveDestinationFolder || 'root'}`);
+      toast.success(`Moved ${selectedDocuments.size} document(s) to ${destinationPath || 'root'}`);
       setSelectedDocuments(new Set());
       setIsMoveDialogOpen(false);
       setMoveDestinationFolder('');
@@ -2306,9 +2308,9 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                   <SelectValue placeholder="Select a folder..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Root (No folder)</SelectItem>
+                  <SelectItem value="__root__">Root (No folder)</SelectItem>
                   {getAvailableFolders()
-                    .filter(f => f !== '')
+                    .filter(f => f !== '__root__')
                     .map((folder) => (
                       <SelectItem key={folder} value={folder}>
                         {folder}
