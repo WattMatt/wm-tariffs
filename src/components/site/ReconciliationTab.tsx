@@ -80,18 +80,18 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
           console.error("Error fetching meter connections:", connectionsError);
         }
 
-        // Build connection map: check meter ID → tenant meter IDs
-        // DB structure: tenant (parent) → check (child)
-        // For display: we want to group tenant meters under their check meter
-        const checkMeterToTenants = new Map<string, string[]>();
+        // Build parent-child map for hierarchy
+        // DB structure: parent_meter_id is downstream (child), child_meter_id is upstream (parent)
+        // For display: we want childrenMap where key = parent, value = children
+        const childrenMap = new Map<string, string[]>();
         
         connections?.forEach(conn => {
-          // conn.child_meter_id is the check meter
-          // conn.parent_meter_id is the tenant meter
-          if (!checkMeterToTenants.has(conn.child_meter_id)) {
-            checkMeterToTenants.set(conn.child_meter_id, []);
+          // conn.child_meter_id is the parent (upstream)
+          // conn.parent_meter_id is the child (downstream)
+          if (!childrenMap.has(conn.child_meter_id)) {
+            childrenMap.set(conn.child_meter_id, []);
           }
-          checkMeterToTenants.get(conn.child_meter_id)!.push(conn.parent_meter_id);
+          childrenMap.get(conn.child_meter_id)!.push(conn.parent_meter_id);
         });
 
         // Check which meters have CSV files uploaded
@@ -142,74 +142,70 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
         const hasConnections = connections && connections.length > 0;
 
         if (hasConnections) {
-          // Use meter_type for indent levels
-          const typeToLevel: Record<string, number> = {
-            'bulk_meter': 0,
-            'check_meter': 1,
-            'tenant_meter': 2,
-            'other': 3
+          // Recursive function to add meter and its children
+          const addMeterWithChildren = (meterId: string, level: number) => {
+            if (processedMeters.has(meterId)) return;
+            
+            const meter = meterMap.get(meterId);
+            if (!meter) return;
+            
+            hierarchicalMeters.push(meter);
+            indentLevels.set(meterId, level);
+            processedMeters.add(meterId);
+            
+            // Add all children of this meter
+            const children = childrenMap.get(meterId) || [];
+            children.sort((a, b) => {
+              const meterA = meterMap.get(a);
+              const meterB = meterMap.get(b);
+              return (meterA?.meter_number || '').localeCompare(meterB?.meter_number || '');
+            });
+            
+            children.forEach(childId => {
+              addMeterWithChildren(childId, level + 1);
+            });
           };
-
-          // Sort meters by type priority, then alphabetically
-          const sortedMeters = [...metersWithData].sort((a, b) => {
-            const levelA = typeToLevel[a.meter_type] ?? 999;
-            const levelB = typeToLevel[b.meter_type] ?? 999;
-            if (levelA !== levelB) return levelA - levelB;
-            return a.meter_number.localeCompare(b.meter_number);
+          
+          // Find all bulk meters (they have no parent in connections)
+          const allChildIds = new Set<string>();
+          childrenMap.forEach(children => {
+            children.forEach(childId => allChildIds.add(childId));
           });
-
-          // Group check meters with their tenant meters
-          const tenantMeterIds = new Set<string>();
-          checkMeterToTenants.forEach(tenants => {
-            tenants.forEach(id => tenantMeterIds.add(id));
+          
+          const bulkMeters = metersWithData
+            .filter(m => m.meter_type === 'bulk_meter' && !allChildIds.has(m.id))
+            .sort((a, b) => a.meter_number.localeCompare(b.meter_number));
+          
+          // Start hierarchy with bulk meters at level 0
+          bulkMeters.forEach(meter => {
+            addMeterWithChildren(meter.id, 0);
           });
-
-          // Display bulk meters first
-          sortedMeters.forEach(meter => {
-            if (meter.meter_type === 'bulk_meter') {
-              hierarchicalMeters.push(meter);
-              indentLevels.set(meter.id, 0);
-              processedMeters.add(meter.id);
-            }
+          
+          // Process any check meters that aren't connected to bulk meters
+          const checkMeters = metersWithData
+            .filter(m => m.meter_type === 'check_meter' && !processedMeters.has(m.id) && !allChildIds.has(m.id))
+            .sort((a, b) => a.meter_number.localeCompare(b.meter_number));
+          
+          checkMeters.forEach(meter => {
+            addMeterWithChildren(meter.id, 0);
           });
-
-          // Display check meters with their tenant meters grouped underneath
-          sortedMeters.forEach(meter => {
-            if (meter.meter_type === 'check_meter' && !processedMeters.has(meter.id)) {
-              hierarchicalMeters.push(meter);
-              indentLevels.set(meter.id, 1);
-              processedMeters.add(meter.id);
-
-              // Add tenant meters connected to this check meter
-              const tenantIds = checkMeterToTenants.get(meter.id) || [];
-              tenantIds.forEach(tenantId => {
-                const tenantMeter = metersWithData.find(m => m.id === tenantId);
-                if (tenantMeter && !processedMeters.has(tenantId)) {
-                  hierarchicalMeters.push(tenantMeter);
-                  indentLevels.set(tenantId, 2);
-                  processedMeters.add(tenantId);
-                }
-              });
-            }
+          
+          // Process any tenant meters that aren't connected
+          const tenantMeters = metersWithData
+            .filter(m => m.meter_type === 'tenant_meter' && !processedMeters.has(m.id) && !allChildIds.has(m.id))
+            .sort((a, b) => a.meter_number.localeCompare(b.meter_number));
+          
+          tenantMeters.forEach(meter => {
+            addMeterWithChildren(meter.id, 0);
           });
-
-          // Display any remaining tenant meters (not connected to check meters)
-          sortedMeters.forEach(meter => {
-            if (meter.meter_type === 'tenant_meter' && !processedMeters.has(meter.id)) {
-              hierarchicalMeters.push(meter);
-              indentLevels.set(meter.id, 2);
-              processedMeters.add(meter.id);
-            }
-          });
-
-          // Display other meters
-          sortedMeters.forEach(meter => {
-            if (meter.meter_type === 'other' && !processedMeters.has(meter.id)) {
-              hierarchicalMeters.push(meter);
-              indentLevels.set(meter.id, 3);
-              processedMeters.add(meter.id);
-            }
-          });
+          
+          // Process any remaining meters
+          metersWithData
+            .filter(m => !processedMeters.has(m.id))
+            .sort((a, b) => a.meter_number.localeCompare(b.meter_number))
+            .forEach(meter => {
+              addMeterWithChildren(meter.id, 0);
+            });
         } else {
           // Fallback: Use meter types to create visual hierarchy
           // Bulk (0) → Check (1) → Tenant (2) → Other (3)
