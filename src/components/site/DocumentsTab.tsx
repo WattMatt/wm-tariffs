@@ -80,6 +80,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
+  const [creatingSubfolderFor, setCreatingSubfolderFor] = useState<string | null>(null);
   const [renamingFolder, setRenamingFolder] = useState<string | null>(null);
   const [renameFolderName, setRenameFolderName] = useState('');
   const [isMoveDialogOpen, setIsMoveDialogOpen] = useState(false);
@@ -178,8 +179,8 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
     setFolderTree(tree);
   };
 
-  // Create new folder
-  const handleCreateFolder = async () => {
+  // Create new folder or subfolder
+  const handleCreateFolder = async (parentPath?: string) => {
     if (!newFolderName.trim()) {
       toast.error("Please enter a folder name");
       return;
@@ -187,6 +188,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
 
     try {
       const { data: user } = await supabase.auth.getUser();
+      const targetPath = parentPath || currentFolderPath;
 
       const { error } = await supabase
         .from("site_documents")
@@ -198,7 +200,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
           document_type: 'other' as any,
           uploaded_by: user.user?.id || null,
           extraction_status: 'completed',
-          folder_path: currentFolderPath, // Parent folder path
+          folder_path: targetPath, // Parent folder path
           is_folder: true,
         });
 
@@ -207,6 +209,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
       toast.success("Folder created successfully");
       setNewFolderName('');
       setIsCreatingFolder(false);
+      setCreatingSubfolderFor(null);
       fetchDocuments();
     } catch (error) {
       console.error("Error creating folder:", error);
@@ -1378,50 +1381,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
             </CardDescription>
           </CardHeader>
         <CardContent className="space-y-4">
-          {/* Folder Navigation */}
-          <div className="flex items-center gap-2 p-3 border rounded-lg bg-muted/30">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setCurrentFolderPath('')}
-              className="gap-2"
-            >
-              <Home className="w-4 h-4" />
-              Root
-            </Button>
-            {currentFolderPath && (
-              <>
-                {currentFolderPath.split('/').map((folder, index, arr) => {
-                  const path = arr.slice(0, index + 1).join('/');
-                  return (
-                    <div key={path} className="flex items-center gap-2">
-                      <span>/</span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setCurrentFolderPath(path)}
-                      >
-                        {folder}
-                      </Button>
-                    </div>
-                  );
-                })}
-              </>
-            )}
-            <div className="ml-auto flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsCreatingFolder(true)}
-                className="gap-2"
-              >
-                <FolderPlus className="w-4 h-4" />
-                New Folder
-              </Button>
-            </div>
-          </div>
-
-          {/* New Folder Dialog */}
+          {/* New Folder Dialog - Inline */}
           {isCreatingFolder && (
             <div className="flex items-center gap-2 p-3 border rounded-lg bg-primary/5">
               <Input
@@ -1431,7 +1391,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                 onKeyDown={(e) => e.key === 'Enter' && handleCreateFolder()}
                 autoFocus
               />
-              <Button onClick={handleCreateFolder} size="sm">
+              <Button onClick={() => handleCreateFolder()} size="sm">
                 Create
               </Button>
               <Button
@@ -1623,6 +1583,53 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
             <div className="border rounded-lg">
               <Table>
                 <TableHeader>
+                  <TableRow className="bg-muted/30">
+                    <TableHead colSpan={9} className="h-auto py-3">
+                      <div className="flex items-center justify-between">
+                        {/* Folder Navigation */}
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setCurrentFolderPath('')}
+                            className="gap-2"
+                          >
+                            <Home className="w-4 h-4" />
+                            Root
+                          </Button>
+                          {currentFolderPath && (
+                            <>
+                              {currentFolderPath.split('/').map((folder, index, arr) => {
+                                const path = arr.slice(0, index + 1).join('/');
+                                return (
+                                  <div key={path} className="flex items-center gap-2">
+                                    <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => setCurrentFolderPath(path)}
+                                    >
+                                      {folder}
+                                    </Button>
+                                  </div>
+                                );
+                              })}
+                            </>
+                          )}
+                        </div>
+                        {/* New Folder Button */}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setIsCreatingFolder(true)}
+                          className="gap-2"
+                        >
+                          <FolderPlus className="w-4 h-4" />
+                          New Folder
+                        </Button>
+                      </div>
+                    </TableHead>
+                  </TableRow>
                   <TableRow>
                     <TableHead className="w-12">
                       <Checkbox
@@ -1674,6 +1681,25 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                                     size="sm"
                                     onClick={(e) => {
                                       e.stopPropagation();
+                                      const folderPath = currentFolderPath ? `${currentFolderPath}/${folder.file_name}` : folder.file_name;
+                                      setCreatingSubfolderFor(folderPath);
+                                      setNewFolderName('');
+                                    }}
+                                  >
+                                    <FolderPlus className="w-4 h-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Create subfolder</p>
+                                </TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
                                       setRenamingFolder(folder.id);
                                       setRenameFolderName(folder.file_name);
                                     }}
@@ -1692,7 +1718,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                                     size="sm"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      handleDeleteFolder(folder.id, folder.folder_path);
+                                      handleDeleteFolder(folder.id, currentFolderPath ? `${currentFolderPath}/${folder.file_name}` : folder.file_name);
                                     }}
                                   >
                                     <Trash2 className="w-4 h-4" />
@@ -2299,6 +2325,44 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
               }}
             >
               Rename
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Subfolder Dialog */}
+      <Dialog open={creatingSubfolderFor !== null} onOpenChange={(open) => !open && setCreatingSubfolderFor(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create Subfolder</DialogTitle>
+            <DialogDescription>
+              Create a new folder inside {creatingSubfolderFor?.split('/').pop()}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <Input
+              value={newFolderName}
+              onChange={(e) => setNewFolderName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && creatingSubfolderFor) {
+                  handleCreateFolder(creatingSubfolderFor);
+                }
+              }}
+              placeholder="Folder name"
+              autoFocus
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setCreatingSubfolderFor(null);
+              setNewFolderName('');
+            }}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => creatingSubfolderFor && handleCreateFolder(creatingSubfolderFor)}
+            >
+              Create
             </Button>
           </DialogFooter>
         </DialogContent>
