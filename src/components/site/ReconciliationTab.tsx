@@ -772,12 +772,48 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
 
           // Sum all interval readings (each represents consumption for that period)
           let totalKwh = 0;
+          let totalKwhPositive = 0;
+          let totalKwhNegative = 0;
           const columnTotals: Record<string, number> = {};
           const columnMaxValues: Record<string, number> = {};
           
           if (uniqueReadings.length > 0) {
-            // Sum all interval consumption values
-            totalKwh = uniqueReadings.reduce((sum, r) => sum + Number(r.kwh_value), 0);
+            // Determine which column factor to apply to kwh_value
+            // Look at first reading's metadata to find the energy column
+            let kwhFactor = 1;
+            if (uniqueReadings[0].metadata) {
+              const importedFields = (uniqueReadings[0].metadata as any)?.imported_fields || {};
+              const fieldNames = Object.keys(importedFields);
+              
+              // Find the column that likely represents energy (kWh)
+              const energyColumn = fieldNames.find(name => 
+                selectedColumns.has(name) && (
+                  name.toLowerCase().includes('kwh') ||
+                  name.toLowerCase().includes('energy') ||
+                  name.toLowerCase().includes('consumption') ||
+                  name.toLowerCase().includes('e (kwh)')
+                )
+              );
+              
+              if (energyColumn && columnFactors.has(energyColumn)) {
+                kwhFactor = Number(columnFactors.get(energyColumn) || 1);
+              }
+            }
+            
+            // Sum all interval consumption values with factor applied
+            uniqueReadings.forEach(r => {
+              const baseValue = Number(r.kwh_value);
+              const adjustedValue = baseValue * kwhFactor;
+              
+              totalKwh += adjustedValue;
+              
+              // Separate positive and negative for Grid Supply meters
+              if (adjustedValue > 0) {
+                totalKwhPositive += adjustedValue;
+              } else if (adjustedValue < 0) {
+                totalKwhNegative += adjustedValue; // Keep negative
+              }
+            });
             
             // Process all numeric columns from metadata
             const columnValues: Record<string, number[]> = {};
@@ -859,6 +895,8 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
           return {
             ...meter,
             totalKwh,
+            totalKwhPositive,
+            totalKwhNegative,
             columnTotals,
             columnMaxValues,
             readingsCount: uniqueReadings.length,
@@ -874,8 +912,13 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
       const checkMeters = meterData.filter((m) => m.meter_type === "check_meter");
       const tenantMeters = meterData.filter((m) => m.meter_type === "tenant_meter");
 
-    const bulkTotal = gridSupplyMeters.length > 0 ? gridSupplyMeters[0].totalKwh : 0;
-    const otherTotal = solarEnergyMeters.length > 0 ? Math.max(0, solarEnergyMeters[0].totalKwh) : 0;
+      // Grid Supply: only positive values (consumption FROM grid)
+      const bulkTotal = gridSupplyMeters.length > 0 ? (gridSupplyMeters[0].totalKwhPositive || 0) : 0;
+      
+      // Solar Energy: solar generation + grid negative value (export, already negative)
+      const solarMeterTotal = solarEnergyMeters.length > 0 ? Math.max(0, solarEnergyMeters[0].totalKwh) : 0;
+      const gridNegative = gridSupplyMeters.length > 0 ? (gridSupplyMeters[0].totalKwhNegative || 0) : 0;
+      const otherTotal = solarMeterTotal + gridNegative; // Adding negative value
       const tenantTotal = tenantMeters.reduce((sum, m) => sum + m.totalKwh, 0);
       
       // Total supply = Grid Supply + Solar Energy
