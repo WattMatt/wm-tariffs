@@ -320,6 +320,14 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
     fetchAvailableMeters();
   }, [siteId]);
 
+  // Auto-expand all parent meters when reconciliation data loads
+  useEffect(() => {
+    if (reconciliationData) {
+      const allParentIds = Array.from(meterConnectionsMap.keys());
+      setExpandedMeters(new Set(allParentIds));
+    }
+  }, [reconciliationData, meterConnectionsMap]);
+
   // Fetch meter-specific date range when meter is selected
   useEffect(() => {
     if (!selectedMeterId) {
