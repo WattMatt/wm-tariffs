@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { FileText, Loader2, Download, CalendarIcon, Eye } from "lucide-react";
+import { FileText, Loader2, Download, CalendarIcon, Eye, Edit } from "lucide-react";
 import { format } from "date-fns";
 import jsPDF from "jspdf";
 import { Calendar } from "@/components/ui/calendar";
@@ -15,6 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import PdfContentEditor, { PdfSection } from "./PdfContentEditor";
 
 interface SiteReportExportProps {
   siteId: string;
@@ -59,6 +60,8 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
   const [isLoadingColumns, setIsLoadingColumns] = useState(false);
   const [previewData, setPreviewData] = useState<PreviewData | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [isEditingContent, setIsEditingContent] = useState(false);
+  const [editableSections, setEditableSections] = useState<PdfSection[]>([]);
   
   // New states for required selections
   const [selectedSchematicId, setSelectedSchematicId] = useState<string>("");
@@ -688,6 +691,72 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
         csvColumnAggregations
       } as any);
       
+      // Convert report data to editable sections
+      const sections: PdfSection[] = [];
+      
+      if (reportData?.sections) {
+        if (reportData.sections.executiveSummary) {
+          sections.push({
+            id: 'executive-summary',
+            title: 'Executive Summary',
+            content: reportData.sections.executiveSummary,
+            type: 'text',
+            editable: true
+          });
+        }
+        
+        if (reportData.sections.hierarchyOverview) {
+          sections.push({
+            id: 'hierarchy-overview',
+            title: 'Metering Hierarchy Overview',
+            content: reportData.sections.hierarchyOverview,
+            type: 'text',
+            editable: true
+          });
+        }
+        
+        if (schematicImageBase64) {
+          sections.push({
+            id: 'schematic-image',
+            title: 'Site Schematic',
+            content: 'Schematic diagram will be included here',
+            type: 'image',
+            editable: false
+          });
+        }
+        
+        if (reportData.sections.observations) {
+          sections.push({
+            id: 'observations',
+            title: 'Observations and Anomalies',
+            content: reportData.sections.observations,
+            type: 'text',
+            editable: true
+          });
+        }
+        
+        if (reportData.sections.recommendations) {
+          sections.push({
+            id: 'recommendations',
+            title: 'Recommendations',
+            content: reportData.sections.recommendations,
+            type: 'text',
+            editable: true
+          });
+        }
+        
+        if (reportData.sections.billingValidation) {
+          sections.push({
+            id: 'billing-validation',
+            title: 'Billing Validation',
+            content: reportData.sections.billingValidation,
+            type: 'text',
+            editable: true
+          });
+        }
+      }
+      
+      setEditableSections(sections);
       setCurrentPage(1); // Reset to first page
 
       toast.success("Preview generated successfully!");
@@ -722,6 +791,29 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
         schematicImageBase64,
         csvColumnAggregations
       } = previewData as any;
+
+      // Helper function to get section content (edited or original)
+      const getSectionContent = (sectionId: string): string => {
+        const editedSection = editableSections.find(s => s.id === sectionId);
+        if (editedSection && editedSection.content) {
+          return editedSection.content;
+        }
+        // Fallback to original content
+        const sectionMap: Record<string, string> = {
+          'executive-summary': reportData.sections.executiveSummary,
+          'hierarchy-overview': reportData.sections.hierarchyOverview,
+          'observations': reportData.sections.observations,
+          'recommendations': reportData.sections.recommendations,
+          'billing-validation': reportData.sections.billingValidation
+        };
+        return sectionMap[sectionId] || '';
+      };
+
+      // Get page breaks positions from editableSections
+      const pageBreakPositions = editableSections
+        .map((section, index) => ({ section, index }))
+        .filter(({ section }) => section.type === 'page-break')
+        .map(({ index }) => index);
 
       // Categorize meters by type for PDF generation
       const councilBulk = meterData.filter((m: any) => m.meter_type === "council_bulk");
@@ -1078,12 +1170,12 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
 
       // Section 1: Executive Summary
       addSectionHeading("1. EXECUTIVE SUMMARY", 16, false);
-      addText(reportData.sections.executiveSummary);
+      addText(getSectionContent('executive-summary'));
       addSpacer(8);
 
       // Section 2: Metering Hierarchy Overview
       addSectionHeading("2. METERING HIERARCHY OVERVIEW", 16, true);
-      addText(reportData.sections.hierarchyOverview);
+      addText(getSectionContent('hierarchy-overview'));
       addSpacer(5);
       
       // Add schematic if available
@@ -1258,17 +1350,18 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
       addSpacer(8);
 
       // Section 5: Billing Validation (if documents available)
-      if (reportData.sections.billingValidation) {
+      const billingContent = getSectionContent('billing-validation');
+      if (billingContent) {
         addSectionHeading("5. BILLING VALIDATION", 16);
-        addText(reportData.sections.billingValidation);
+        addText(billingContent);
         addSpacer(8);
       }
 
       // Section 6: Observations and Anomalies
-      const obsSection = reportData.sections.billingValidation ? "6" : "5";
+      const obsSection = billingContent ? "6" : "5";
       addSectionHeading(`${obsSection}. OBSERVATIONS AND ANOMALIES`, 16);
       // Clean any duplicate heading text from AI response
-      const cleanedObservations = reportData.sections.observations
+      const cleanedObservations = getSectionContent('observations')
         .replace(/^observations\s+and\s+anomalies[:\s]*/i, '')
         .trim();
       addText(cleanedObservations);
@@ -1342,13 +1435,13 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
       addSpacer(8);
 
       // Section 8: Recommendations
-      const recSection = reportData.sections.billingValidation ? "8" : "7";
+      const recSection = billingContent ? "8" : "7";
       addSectionHeading(`${recSection}. RECOMMENDATIONS`, 16, true);
-      addText(reportData.sections.recommendations);
+      addText(getSectionContent('recommendations'));
       addSpacer(8);
 
       // Section 9: Appendices
-      const appSection = reportData.sections.billingValidation ? "9" : "8";
+      const appSection = billingContent ? "9" : "8";
       addSectionHeading(`${appSection}. APPENDICES`, 16, true);
       
       addSubsectionHeading(`Appendix A: Complete Meter Hierarchy`);
@@ -1619,7 +1712,7 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
           )}
         </Button>
 
-        {previewData && (
+        {previewData && !isEditingContent && (
           <>
             <Separator className="my-6" />
             
@@ -1627,6 +1720,14 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold">Report Preview</h3>
                 <div className="flex items-center gap-2">
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={() => setIsEditingContent(true)}
+                  >
+                    <Edit className="w-4 h-4 mr-2" />
+                    Edit Content
+                  </Button>
                   <Button
                     variant="outline"
                     size="sm"
@@ -1955,6 +2056,18 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
               )}
             </Button>
           </>
+        )}
+
+        {isEditingContent && editableSections.length > 0 && (
+          <PdfContentEditor
+            sections={editableSections}
+            onSave={(editedSections) => {
+              setEditableSections(editedSections);
+              setIsEditingContent(false);
+              toast.success("Content updated! You can now generate the PDF.");
+            }}
+            onCancel={() => setIsEditingContent(false)}
+          />
         )}
       </CardContent>
     </Card>
