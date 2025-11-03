@@ -1758,6 +1758,23 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                             ? (meter.totalKwh / reconciliationData.distributionTotal) * 100 
                             : 0;
                           
+                          // Calculate hierarchical total if this meter has children
+                          const childIds = meterConnectionsMap.get(meter.id) || [];
+                          let hierarchicalTotal = 0;
+                          
+                          if (childIds.length > 0) {
+                            const allMeters = [
+                              ...reconciliationData.bulkMeters,
+                              ...reconciliationData.checkMeters,
+                              ...reconciliationData.tenantMeters,
+                              ...reconciliationData.otherMeters
+                            ];
+                            hierarchicalTotal = childIds.reduce((sum, childId) => {
+                              const childData = allMeters.find((m: any) => m.id === childId);
+                              return sum + (childData?.totalKwh || 0);
+                            }, 0);
+                          }
+                          
                           const indentLevel = meterIndentLevels.get(meter.id) || 0;
                           const marginLeft = indentLevel * 24;
                           const parentInfo = meterParentInfo.get(meter.id);
@@ -1769,11 +1786,18 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
                               style={{ marginLeft: `${marginLeft}px` }}
                             >
                               <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-mono text-sm font-semibold">{meter.meter_number}</span>
-                                  {parentInfo && (
+                                <div className="flex flex-col gap-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-mono text-sm font-semibold">{meter.meter_number}</span>
+                                    {parentInfo && (
+                                      <span className="text-xs text-muted-foreground">
+                                        → {parentInfo}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {childIds.length > 0 && (
                                     <span className="text-xs text-muted-foreground">
-                                      → {parentInfo}
+                                      (sum of {childIds.length} child meter{childIds.length > 1 ? 's' : ''}): {hierarchicalTotal.toFixed(2)} kWh
                                     </span>
                                   )}
                                 </div>
