@@ -1556,50 +1556,69 @@ export default function SiteReportExport({ siteId, siteName }: SiteReportExportP
             ) : (
               <ScrollArea className="h-[400px] border rounded-lg p-4">
                 <div className="space-y-4">
-                  {["council_bulk", "solar", "distribution", "check_meter"].map((meterType) => {
-                    const metersOfType = availableMeters.filter(m => m.meter_type === meterType);
-                    if (metersOfType.length === 0) return null;
+                  {(() => {
+                    // Get unique meter types dynamically
+                    const uniqueTypes = Array.from(new Set(availableMeters.map(m => m.meter_type)));
+                    
+                    // Sort types in a logical order
+                    const typeOrder = ["bulk_meter", "council_bulk", "check_meter", "solar", "distribution", "tenant_meter", "other"];
+                    const sortedTypes = uniqueTypes.sort((a, b) => {
+                      const aIndex = typeOrder.indexOf(a);
+                      const bIndex = typeOrder.indexOf(b);
+                      if (aIndex === -1 && bIndex === -1) return a.localeCompare(b);
+                      if (aIndex === -1) return 1;
+                      if (bIndex === -1) return -1;
+                      return aIndex - bIndex;
+                    });
 
-                    const typeLabel = {
-                      council_bulk: "Council Bulk Supply",
-                      solar: "Solar/Generation",
-                      distribution: "Distribution",
-                      check_meter: "Check Meters"
-                    }[meterType];
+                    return sortedTypes.map((meterType) => {
+                      const metersOfType = availableMeters.filter(m => m.meter_type === meterType);
+                      if (metersOfType.length === 0) return null;
 
-                    return (
-                      <div key={meterType} className="space-y-2">
-                        <h4 className="text-sm font-semibold text-muted-foreground">{typeLabel}</h4>
-                        <div className="space-y-2 pl-2">
-                          {metersOfType.map((meter) => (
-                            <div key={meter.id} className="flex items-center space-x-2">
-                              <Checkbox
-                                id={meter.id}
-                                checked={selectedMeterIds.has(meter.id)}
-                                onCheckedChange={(checked) => {
-                                  const newSet = new Set(selectedMeterIds);
-                                  if (checked) {
-                                    newSet.add(meter.id);
-                                  } else {
-                                    newSet.delete(meter.id);
-                                  }
-                                  setSelectedMeterIds(newSet);
-                                }}
-                              />
-                              <label
-                                htmlFor={meter.id}
-                                className="text-sm cursor-pointer flex-1"
-                              >
-                                <span className="font-medium">{meter.meter_number}</span>
-                                {meter.name && <span className="text-muted-foreground"> - {meter.name}</span>}
-                                {meter.location && <span className="text-xs text-muted-foreground ml-2">({meter.location})</span>}
-                              </label>
-                            </div>
-                          ))}
+                      const typeLabel = {
+                        bulk_meter: "Bulk Meters",
+                        council_bulk: "Council Bulk Supply",
+                        solar: "Solar/Generation",
+                        distribution: "Distribution Meters",
+                        check_meter: "Check Meters",
+                        tenant_meter: "Tenant/Distribution Meters",
+                        other: "Other Meters"
+                      }[meterType] || meterType.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+
+                      return (
+                        <div key={meterType} className="space-y-2">
+                          <h4 className="text-sm font-semibold text-muted-foreground">{typeLabel}</h4>
+                          <div className="space-y-2 pl-2">
+                            {metersOfType.map((meter) => (
+                              <div key={meter.id} className="flex items-center space-x-2">
+                                <Checkbox
+                                  id={meter.id}
+                                  checked={selectedMeterIds.has(meter.id)}
+                                  onCheckedChange={(checked) => {
+                                    const newSet = new Set(selectedMeterIds);
+                                    if (checked) {
+                                      newSet.add(meter.id);
+                                    } else {
+                                      newSet.delete(meter.id);
+                                    }
+                                    setSelectedMeterIds(newSet);
+                                  }}
+                                />
+                                <label
+                                  htmlFor={meter.id}
+                                  className="text-sm cursor-pointer flex-1"
+                                >
+                                  <span className="font-medium">{meter.meter_number}</span>
+                                  {meter.name && <span className="text-muted-foreground"> - {meter.name}</span>}
+                                  {meter.location && <span className="text-xs text-muted-foreground ml-2">({meter.location})</span>}
+                                </label>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    });
+                  })()}
                 </div>
               </ScrollArea>
             )}
