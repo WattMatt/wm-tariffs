@@ -20,6 +20,7 @@ import ReconciliationResultsView from "./ReconciliationResultsView";
 import ReconciliationHistoryTab from "./ReconciliationHistoryTab";
 import ReconciliationCompareTab from "./ReconciliationCompareTab";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 interface ReconciliationTabProps {
   siteId: string;
@@ -73,6 +74,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
   const [expandedMeters, setExpandedMeters] = useState<Set<string>>(new Set()); // Set of meter IDs that are expanded
   const [userSetDates, setUserSetDates] = useState(false); // Track if user manually set dates
   const [failedMeters, setFailedMeters] = useState<Map<string, string>>(new Map()); // meter_id -> error message
+  const [isColumnsOpen, setIsColumnsOpen] = useState(true); // Control collapse state of columns section
+  const [isMetersOpen, setIsMetersOpen] = useState(true); // Control collapse state of meters section
 
   // Fetch available meters with CSV data and build hierarchy
   useEffect(() => {
@@ -1013,6 +1016,10 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       return;
     }
 
+    // Collapse the sections when reconciliation starts
+    setIsColumnsOpen(false);
+    setIsMetersOpen(false);
+
     setIsLoading(true);
     setReconciliationProgress({current: 0, total: 0});
     setFailedMeters(new Map());
@@ -1544,10 +1551,15 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="space-y-2">
-              <Label className="text-sm font-semibold">Available Columns - Select to Include in Calculations</Label>
-              <div className="border rounded-lg overflow-hidden">
-                <Table>
+            <Collapsible open={isColumnsOpen} onOpenChange={setIsColumnsOpen}>
+              <div className="space-y-2">
+                <CollapsibleTrigger className="flex items-center justify-between w-full hover:underline">
+                  <Label className="text-sm font-semibold cursor-pointer">Available Columns - Select to Include in Calculations</Label>
+                  <ChevronRight className={cn("h-4 w-4 transition-transform", isColumnsOpen && "rotate-90")} />
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="border rounded-lg overflow-hidden">
+                    <Table>
                   <TableHeader>
                     <TableRow className="bg-muted/50">
                       <TableHead className="w-12">
@@ -1659,10 +1671,17 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                   </TableBody>
                 </Table>
               </div>
+            </CollapsibleContent>
             </div>
+            </Collapsible>
 
-            <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
-              <Label className="text-sm font-semibold mb-3 block">Meters Associated with This Site</Label>
+            <Collapsible open={isMetersOpen} onOpenChange={setIsMetersOpen}>
+              <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
+                <CollapsibleTrigger className="flex items-center justify-between w-full mb-3 hover:underline">
+                  <Label className="text-sm font-semibold cursor-pointer">Meters Associated with This Site</Label>
+                  <ChevronRight className={cn("h-4 w-4 transition-transform", isMetersOpen && "rotate-90")} />
+                </CollapsibleTrigger>
+                <CollapsibleContent>
               
               {/* Column Headers */}
               <div className="flex items-center gap-2 mb-2 pb-2 border-b">
@@ -1808,8 +1827,9 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                   })
                 )}
               </div>
-              
+              </CollapsibleContent>
             </div>
+            </Collapsible>
 
 
             <Button onClick={handleReconcile} disabled={isLoading || selectedColumns.size === 0} className="w-full">
