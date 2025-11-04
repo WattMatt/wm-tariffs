@@ -53,6 +53,8 @@ interface PreviewData {
 export default function SiteReportExport({ siteId, siteName, reconciliationRun }: SiteReportExportProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState(0);
+  const [generationStatus, setGenerationStatus] = useState("");
   const [availableMeters, setAvailableMeters] = useState<MeterOption[]>([]);
   const [selectedMeterIds, setSelectedMeterIds] = useState<Set<string>>(new Set());
   const [isLoadingMeters, setIsLoadingMeters] = useState(true);
@@ -313,11 +315,15 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
     }
 
     setIsGeneratingPreview(true);
+    setGenerationProgress(0);
+    setGenerationStatus("Initializing...");
 
     try {
-      toast.info("Generating markdown preview...");
 
       // 1. Use provided reconciliation or fetch selected one
+      setGenerationProgress(10);
+      setGenerationStatus("Loading reconciliation data...");
+      
       let selectedReconciliation = reconciliationRun;
       
       if (!selectedReconciliation) {
@@ -336,6 +342,9 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       }
 
       // 2. Fetch selected schematic
+      setGenerationProgress(20);
+      setGenerationStatus("Loading schematic data...");
+      
       const { data: selectedSchematic, error: schematicError } = await supabase
         .from("schematics")
         .select("*")
@@ -346,6 +355,9 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       if (!selectedSchematic) throw new Error("Selected schematic not found");
 
       // 3. Fetch documents from selected folder
+      setGenerationProgress(30);
+      setGenerationStatus("Loading document extractions...");
+      
       const folderPath = selectedFolderPath === "/" ? "" : selectedFolderPath;
       const { data: documents, error: docsError } = await supabase
         .from("site_documents")
@@ -366,6 +378,9 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       })).filter(d => d.extraction) || [];
 
       // 4. Use meter data from reconciliation results instead of fetching
+      setGenerationProgress(40);
+      setGenerationStatus("Processing meter data...");
+      
       const meterData = selectedReconciliation.reconciliation_meter_results?.map((result: any) => ({
         id: result.meter_id,
         meter_number: result.meter_number,
@@ -406,6 +421,9 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       const variancePercentage = reconciliationData.variancePercentage;
 
       // 6. Detect anomalies based on reconciliation results
+      setGenerationProgress(50);
+      setGenerationStatus("Detecting anomalies...");
+      
       const anomalies: any[] = [];
 
       selectedReconciliation.reconciliation_meter_results?.forEach((result: any) => {
@@ -490,6 +508,9 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       }
 
       // 7. Load schematic image
+      setGenerationProgress(60);
+      setGenerationStatus("Loading schematic image...");
+      
       let schematicImageBase64 = null;
 
       if (selectedSchematic?.converted_image_path) {
@@ -579,7 +600,8 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         }));
 
       // 10. Generate AI narrative sections
-      toast.info("Generating report sections with AI...");
+      setGenerationProgress(70);
+      setGenerationStatus("Generating AI report sections...");
 
       const { data: reportData, error: aiError } = await supabase.functions.invoke(
         "generate-audit-report",
@@ -604,6 +626,9 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       if (aiError) throw aiError;
 
       // Store preview data with schematic and CSV aggregations
+      setGenerationProgress(90);
+      setGenerationStatus("Finalizing report...");
+      
       setPreviewData({
         siteName,
         meterData,
@@ -726,11 +751,15 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       setIsEditingContent(true); // Go directly to editor
       setCurrentPage(1); // Reset to first page
 
-      toast.success("Markdown preview generated - ready to edit!");
+      setGenerationProgress(100);
+      setGenerationStatus("Complete!");
+      toast.success("✓ Markdown preview generated - ready to edit!");
 
     } catch (error) {
       console.error("Error generating preview:", error);
       toast.error("Failed to generate preview");
+      setGenerationProgress(0);
+      setGenerationStatus("");
     } finally {
       setIsGeneratingPreview(false);
     }
@@ -1662,6 +1691,25 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             <li>Detailed Appendices</li>
           </ul>
         </div>
+
+        {isGeneratingPreview && (
+          <Card className="mb-4">
+            <CardContent className="pt-6">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-medium">{generationStatus}</span>
+                  <span className="text-muted-foreground">{generationProgress}%</span>
+                </div>
+                <div className="relative h-2 bg-secondary rounded-full overflow-hidden">
+                  <div 
+                    className="absolute top-0 left-0 h-full bg-primary transition-all duration-500 ease-out"
+                    style={{ width: `${generationProgress}%` }}
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Button
           onClick={generateMarkdownPreview}
