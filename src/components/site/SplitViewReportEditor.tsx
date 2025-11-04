@@ -179,11 +179,18 @@ export function SplitViewReportEditor({
 
   // Update canvas size when PDF container size changes
   useEffect(() => {
-    if (pdfContainerRef.current && canvasRef.current) {
-      const rect = pdfContainerRef.current.getBoundingClientRect();
-      canvasRef.current.width = rect.width;
-      canvasRef.current.height = rect.height;
-    }
+    const updateCanvasSize = () => {
+      if (pdfContainerRef.current && canvasRef.current) {
+        const rect = pdfContainerRef.current.getBoundingClientRect();
+        canvasRef.current.width = rect.width;
+        canvasRef.current.height = rect.height;
+      }
+    };
+    
+    updateCanvasSize();
+    window.addEventListener('resize', updateCanvasSize);
+    
+    return () => window.removeEventListener('resize', updateCanvasSize);
   }, [zoom, pdfUrl]);
 
   // Cleanup on unmount
@@ -334,31 +341,32 @@ export function SplitViewReportEditor({
               </div>
               <ScrollArea className="flex-1 bg-muted/20">
                 {pdfUrl ? (
-                  <div 
-                    ref={pdfContainerRef}
-                    className="relative p-4 flex justify-center cursor-crosshair"
-                  >
-                    <object
-                      data={pdfUrl}
-                      type="application/pdf"
-                      className="w-full h-[750px] border shadow-lg"
-                      style={{ transform: `scale(${zoom / 100})`, transformOrigin: 'top center' }}
+                  <div className="p-4">
+                    <div 
+                      ref={pdfContainerRef}
+                      className="relative mx-auto"
+                      style={{ 
+                        width: `${zoom}%`,
+                        maxWidth: '100%'
+                      }}
                     >
-                      <p className="text-sm text-muted-foreground">
-                        Your browser doesn't support PDF preview. 
-                        <a href={pdfUrl} download className="text-primary underline ml-1">
-                          Download PDF
-                        </a>
-                      </p>
-                    </object>
-                    <canvas
-                      ref={canvasRef}
-                      onMouseDown={handleMouseDown}
-                      onMouseMove={handleMouseMove}
-                      onMouseUp={handleMouseUp}
-                      className="absolute top-4 left-4 pointer-events-auto"
-                      style={{ cursor: 'crosshair' }}
-                    />
+                      <iframe
+                        src={pdfUrl}
+                        className="w-full h-[750px] border shadow-lg bg-white"
+                        title="PDF Preview"
+                      />
+                      <canvas
+                        ref={canvasRef}
+                        onMouseDown={handleMouseDown}
+                        onMouseMove={handleMouseMove}
+                        onMouseUp={handleMouseUp}
+                        className="absolute top-0 left-0 w-full h-full"
+                        style={{ 
+                          cursor: isSelecting ? 'crosshair' : 'default',
+                          pointerEvents: 'auto'
+                        }}
+                      />
+                    </div>
                   </div>
                 ) : (
                   <div className="flex items-center justify-center h-full">
