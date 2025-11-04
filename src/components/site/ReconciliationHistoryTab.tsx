@@ -367,33 +367,80 @@ export default function ReconciliationHistoryTab({ siteId, siteName }: Reconcili
             <div className="space-y-6">
               {/* Summary Cards */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Grid Supply Card */}
                 <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Grid Supply</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">{reportRun.bulk_total.toFixed(2)}</div>
-                    <p className="text-xs text-muted-foreground mt-1">kWh</p>
+                  <CardContent className="pt-6">
+                    <div className="space-y-3">
+                      <div className="flex items-start justify-between border-b pb-3">
+                        <div className="flex-1">
+                          <div className="text-2xl font-bold">{reportRun.bulk_total.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                          <div className="text-xs text-muted-foreground mt-1">kWh</div>
+                        </div>
+                        <div className="flex gap-2 text-xs">
+                          <Badge variant="outline">S/N</Badge>
+                          <Badge variant="outline">P</Badge>
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <div className="font-semibold text-sm">Bulk Check</div>
+                        <div className="text-xs text-muted-foreground">
+                          <div>Type: {reportRun.reconciliation_meter_results.find(m => m.assignment === 'grid_supply')?.meter_type || 'Bulk Meter'}</div>
+                          <div>Serial No: {reportRun.reconciliation_meter_results.find(m => m.assignment === 'grid_supply')?.meter_number || 'N/A'}</div>
+                        </div>
+                      </div>
+                    </div>
                   </CardContent>
                 </Card>
 
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Combined Supply</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">{reportRun.total_supply.toFixed(2)}</div>
-                    <p className="text-xs text-muted-foreground mt-1">kWh</p>
+                {/* Combined Supply Card */}
+                <Card className="border-primary/50">
+                  <CardContent className="pt-6">
+                    <div className="space-y-3">
+                      <div className="flex items-start justify-between border-b pb-3">
+                        <div className="flex-1">
+                          <div className="text-2xl font-bold">{reportRun.total_supply.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                          <div className="text-xs text-muted-foreground mt-1">kWh</div>
+                        </div>
+                        <div className="flex gap-2 text-xs">
+                          <Badge variant="outline">S/N</Badge>
+                          <Badge variant="outline">P</Badge>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="font-semibold text-sm">VIRTUAL - TOTAL INJECTION</div>
+                        <div className="text-xs bg-muted p-2 rounded">
+                          <div className="font-medium">OVER/UNDER</div>
+                          <div className="text-lg font-bold mt-1">{reportRun.discrepancy.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kWh</div>
+                          <div className="text-muted-foreground mt-1">% OF TOTAL</div>
+                          <div className="font-semibold">{((Math.abs(reportRun.discrepancy) / reportRun.total_supply) * 100).toFixed(2)}%</div>
+                        </div>
+                      </div>
+                    </div>
                   </CardContent>
                 </Card>
 
+                {/* Solar Energy Card */}
                 <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Solar Energy</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">{reportRun.solar_total.toFixed(2)}</div>
-                    <p className="text-xs text-muted-foreground mt-1">kWh</p>
+                  <CardContent className="pt-6">
+                    <div className="space-y-3">
+                      <div className="flex items-start justify-between border-b pb-3">
+                        <div className="flex-1">
+                          <div className="text-2xl font-bold">{reportRun.solar_total.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                          <div className="text-xs text-muted-foreground mt-1">kWh</div>
+                        </div>
+                        <div className="flex gap-2 text-xs">
+                          <Badge variant="outline">S/N</Badge>
+                          <Badge variant="outline">P</Badge>
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <div className="font-semibold text-sm">PV Tie In</div>
+                        <div className="text-xs text-muted-foreground">
+                          <div>Type: {reportRun.reconciliation_meter_results.find(m => m.assignment === 'solar_energy')?.meter_type || 'Solar Meter'}</div>
+                          <div>Serial No: {reportRun.reconciliation_meter_results.find(m => m.assignment === 'solar_energy')?.meter_number || 'N/A'}</div>
+                        </div>
+                      </div>
+                    </div>
                   </CardContent>
                 </Card>
               </div>
