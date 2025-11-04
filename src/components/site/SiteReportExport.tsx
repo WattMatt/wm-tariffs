@@ -404,7 +404,16 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         };
         
         // Helper to add section heading
-        const addSectionHeading = (text: string, fontSize: number = 14) => {
+        const addSectionHeading = (text: string, fontSize: number = 14, forceNewPage: boolean = false) => {
+          // Force new page for major sections
+          if (forceNewPage) {
+            addFooter();
+            addPageNumber();
+            pdf.addPage();
+            addBlueSidebar();
+            yPos = topMargin;
+          }
+          
           yPos += 8;
           pdf.setFontSize(fontSize);
           pdf.setFont("helvetica", "bold");
@@ -567,12 +576,12 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         };
         
         // Section 1: Executive Summary
-        addSectionHeading("1. EXECUTIVE SUMMARY", 16);
+        addSectionHeading("1. EXECUTIVE SUMMARY", 16, true);
         addText(getSectionContent('executive-summary'));
         addSpacer(8);
         
         // Section 2: Metering Hierarchy Overview
-        addSectionHeading("2. METERING HIERARCHY OVERVIEW", 16);
+        addSectionHeading("2. METERING HIERARCHY OVERVIEW", 16, true);
         addText(getSectionContent('hierarchy-overview'));
         addSpacer(5);
         
@@ -604,7 +613,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         addSpacer(8);
         
         // Section 3: Data Sources
-        addSectionHeading("3. DATA SOURCES AND AUDIT PERIOD", 16);
+        addSectionHeading("3. DATA SOURCES AND AUDIT PERIOD", 16, true);
         addSubsectionHeading("Audit Period");
         addText("All Available Readings");
         addSpacer(5);
@@ -614,7 +623,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         addSpacer(8);
         
         // Section 4: Key Metrics
-        addSectionHeading("4. KEY METRICS", 16);
+        addSectionHeading("4. KEY METRICS", 16, true);
         addSubsectionHeading("4.1 Basic Reconciliation Metrics");
         
         const basicMetricsRows = [
@@ -647,7 +656,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         }
         
         // Section 5: Metering Reconciliation
-        addSectionHeading("5. METERING RECONCILIATION", 16);
+        addSectionHeading("5. METERING RECONCILIATION", 16, true);
         addSubsectionHeading("5.1 Supply Summary");
         
         const supplyRows = [
@@ -668,12 +677,12 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         addSpacer(8);
         
         // Section 6: Observations
-        addSectionHeading("6. OBSERVATIONS AND ANOMALIES", 16);
+        addSectionHeading("6. OBSERVATIONS AND ANOMALIES", 16, true);
         addText(getSectionContent('observations'));
         addSpacer(8);
         
         // Section 7: Recommendations
-        addSectionHeading("7. RECOMMENDATIONS", 16);
+        addSectionHeading("7. RECOMMENDATIONS", 16, true);
         addText(getSectionContent('recommendations'));
         addSpacer(8);
         
@@ -1553,7 +1562,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       yPos = topMargin;
 
       // Section 1: Executive Summary
-      addSectionHeading("1. EXECUTIVE SUMMARY", 16, false);
+      addSectionHeading("1. EXECUTIVE SUMMARY", 16, true);
       addText(getSectionContent('executive-summary'));
       addSpacer(8);
 
@@ -1591,7 +1600,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       addSpacer(8);
 
       // Section 3: Data Sources and Audit Period
-      addSectionHeading("3. DATA SOURCES AND AUDIT PERIOD", 16);
+      addSectionHeading("3. DATA SOURCES AND AUDIT PERIOD", 16, true);
       addSubsectionHeading("Audit Period");
       addText("All Available Readings");
       addSpacer(5);
@@ -1736,14 +1745,14 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       // Section 5: Billing Validation (if documents available)
       const billingContent = getSectionContent('billing-validation');
       if (billingContent) {
-        addSectionHeading("5. BILLING VALIDATION", 16);
+        addSectionHeading("5. BILLING VALIDATION", 16, true);
         addText(billingContent);
         addSpacer(8);
       }
 
       // Section 6: Observations and Anomalies
       const obsSection = billingContent ? "6" : "5";
-      addSectionHeading(`${obsSection}. OBSERVATIONS AND ANOMALIES`, 16);
+      addSectionHeading(`${obsSection}. OBSERVATIONS AND ANOMALIES`, 16, true);
       // Clean any duplicate heading text from AI response
       const cleanedObservations = getSectionContent('observations')
         .replace(/^observations\s+and\s+anomalies[:\s]*/i, '')
