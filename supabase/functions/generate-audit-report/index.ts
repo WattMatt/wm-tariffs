@@ -66,12 +66,12 @@ serve(async (req) => {
     const executiveSummaryPrompt = `You are a professional technical editor and audit writer. Generate a formal, concise, visually structured executive summary for an audit-ready report for ${siteName}.
 
 CRITICAL FORMATTING INSTRUCTIONS:
-- Use PLAIN TEXT ONLY - no markdown formatting
-- Do NOT use ## headers or section titles
-- Do NOT use ** for bold text  
-- Do NOT include any markdown syntax
-- Use simple table formatting with pipe separators (|) for the three required tables
-- Start directly with content
+- Do NOT use ## headers or section titles at the start of sections
+- Do NOT use ** for bold text
+- Use markdown table formatting with pipe separators (|) for the three required tables
+- Include proper table headers with separator rows (---|---|---)
+- Start directly with content (no title/header for the document)
+- Use blank lines between sections for readability
 
 Audit Period: ${auditPeriodStart} to ${auditPeriodEnd}
 
