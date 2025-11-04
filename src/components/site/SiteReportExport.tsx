@@ -381,6 +381,57 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           pageNumber++;
         };
         
+        // Helper to parse markdown tables
+        const parseMarkdownTable = (text: string): { headers: string[], rows: string[][] } | null => {
+          const lines = text.trim().split('\n').map(l => l.trim()).filter(l => l.startsWith('|'));
+          if (lines.length < 3) return null; // Need header, separator, and at least one row
+          
+          const parseRow = (line: string) => 
+            line.split('|')
+              .slice(1, -1) // Remove empty first and last elements from split
+              .map(cell => cell.trim());
+          
+          const headers = parseRow(lines[0]);
+          const rows = lines.slice(2).map(parseRow); // Skip separator line
+          
+          return headers.length > 0 && rows.length > 0 ? { headers, rows } : null;
+        };
+        
+        // Helper to render content with markdown support
+        const renderContent = (text: string, fontSize: number = 10) => {
+          if (!text || text.trim() === '') return;
+          
+          // Check for markdown table
+          const tableMatch = text.match(/\|[^\n]+\|\n\|[-:\s|]+\|\n(\|[^\n]+\|\n?)+/);
+          if (tableMatch) {
+            const tableText = tableMatch[0];
+            const beforeTable = text.substring(0, tableMatch.index);
+            const afterTable = text.substring((tableMatch.index || 0) + tableText.length);
+            
+            // Render text before table
+            if (beforeTable.trim()) {
+              addText(beforeTable, fontSize, false);
+              yPos += 3;
+            }
+            
+            // Parse and render table
+            const parsed = parseMarkdownTable(tableText);
+            if (parsed) {
+              addTable(parsed.headers, parsed.rows);
+              yPos += 5;
+            }
+            
+            // Render text after table (recursively in case of multiple tables)
+            if (afterTable.trim()) {
+              renderContent(afterTable, fontSize);
+            }
+            return;
+          }
+          
+          // No table found, render as text
+          addText(text, fontSize, false);
+        };
+        
         // Helper to add text with wrapping
         const addText = (text: string, fontSize: number = 10, isBold: boolean = false) => {
           const cleanedText = text.replace(/\*\*(.*?)\*\*/g, '$1').replace(/^##\s+.+$/gm, '').trim();
@@ -577,12 +628,12 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         
         // Section 1: Executive Summary
         addSectionHeading("1. EXECUTIVE SUMMARY", 16, true);
-        addText(getSectionContent('executive-summary'));
+        renderContent(getSectionContent('executive-summary'));
         addSpacer(8);
         
         // Section 2: Metering Hierarchy Overview
         addSectionHeading("2. METERING HIERARCHY OVERVIEW", 16, true);
-        addText(getSectionContent('hierarchy-overview'));
+        renderContent(getSectionContent('hierarchy-overview'));
         addSpacer(5);
         
         // Add schematic if available
@@ -678,12 +729,12 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         
         // Section 6: Observations
         addSectionHeading("6. OBSERVATIONS AND ANOMALIES", 16, true);
-        addText(getSectionContent('observations'));
+        renderContent(getSectionContent('observations'));
         addSpacer(8);
         
         // Section 7: Recommendations
         addSectionHeading("7. RECOMMENDATIONS", 16, true);
-        addText(getSectionContent('recommendations'));
+        renderContent(getSectionContent('recommendations'));
         addSpacer(8);
         
         // Add footer and page number to last page
@@ -1278,6 +1329,57 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           .trim();
       };
 
+      // Helper to parse markdown tables
+      const parseMarkdownTable = (text: string): { headers: string[], rows: string[][] } | null => {
+        const lines = text.trim().split('\n').map(l => l.trim()).filter(l => l.startsWith('|'));
+        if (lines.length < 3) return null; // Need header, separator, and at least one row
+        
+        const parseRow = (line: string) => 
+          line.split('|')
+            .slice(1, -1) // Remove empty first and last elements from split
+            .map(cell => cell.trim());
+        
+        const headers = parseRow(lines[0]);
+        const rows = lines.slice(2).map(parseRow); // Skip separator line
+        
+        return headers.length > 0 && rows.length > 0 ? { headers, rows } : null;
+      };
+      
+      // Helper to render content with markdown support
+      const renderContent = (text: string, fontSize: number = 10, indent: number = 0) => {
+        if (!text || text.trim() === '') return;
+        
+        // Check for markdown table
+        const tableMatch = text.match(/\|[^\n]+\|\n\|[-:\s|]+\|\n(\|[^\n]+\|\n?)+/);
+        if (tableMatch) {
+          const tableText = tableMatch[0];
+          const beforeTable = text.substring(0, tableMatch.index);
+          const afterTable = text.substring((tableMatch.index || 0) + tableText.length);
+          
+          // Render text before table
+          if (beforeTable.trim()) {
+            addText(beforeTable, fontSize, false, indent);
+            yPos += 3;
+          }
+          
+          // Parse and render table
+          const parsed = parseMarkdownTable(tableText);
+          if (parsed) {
+            addTable(parsed.headers, parsed.rows);
+            yPos += 5;
+          }
+          
+          // Render text after table (recursively in case of multiple tables)
+          if (afterTable.trim()) {
+            renderContent(afterTable, fontSize, indent);
+          }
+          return;
+        }
+        
+        // No table found, render as text
+        addText(text, fontSize, false, indent);
+      };
+
       // Helper function to add text with wrapping
       const addText = (text: string, fontSize: number = 10, isBold: boolean = false, indent: number = 0) => {
         const cleanedText = cleanMarkdown(text);
@@ -1563,12 +1665,12 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
 
       // Section 1: Executive Summary
       addSectionHeading("1. EXECUTIVE SUMMARY", 16, true);
-      addText(getSectionContent('executive-summary'));
+      renderContent(getSectionContent('executive-summary'));
       addSpacer(8);
 
       // Section 2: Metering Hierarchy Overview
       addSectionHeading("2. METERING HIERARCHY OVERVIEW", 16, true);
-      addText(getSectionContent('hierarchy-overview'));
+      renderContent(getSectionContent('hierarchy-overview'));
       addSpacer(5);
       
       // Add schematic if available
@@ -1746,7 +1848,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       const billingContent = getSectionContent('billing-validation');
       if (billingContent) {
         addSectionHeading("5. BILLING VALIDATION", 16, true);
-        addText(billingContent);
+        renderContent(billingContent);
         addSpacer(8);
       }
 
@@ -1757,7 +1859,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       const cleanedObservations = getSectionContent('observations')
         .replace(/^observations\s+and\s+anomalies[:\s]*/i, '')
         .trim();
-      addText(cleanedObservations);
+      renderContent(cleanedObservations);
       addSpacer(5);
       
       if (anomalies.length > 0) {
@@ -1830,7 +1932,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       // Section 8: Recommendations
       const recSection = billingContent ? "8" : "7";
       addSectionHeading(`${recSection}. RECOMMENDATIONS`, 16, true);
-      addText(getSectionContent('recommendations'));
+      renderContent(getSectionContent('recommendations'));
       addSpacer(8);
 
       // Section 9: Appendices
