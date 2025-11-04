@@ -355,7 +355,7 @@ export default function ReconciliationHistoryTab({ siteId, siteName }: Reconcili
 
       {/* Report Generation Dialog */}
       <Dialog open={isReportOpen} onOpenChange={setIsReportOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Generate Audit Report</DialogTitle>
             <DialogDescription>
@@ -364,11 +364,47 @@ export default function ReconciliationHistoryTab({ siteId, siteName }: Reconcili
           </DialogHeader>
           
           {reportRun && (
-            <SiteReportExport 
-              siteId={siteId}
-              siteName={siteName}
-              reconciliationRun={reportRun}
-            />
+            <div className="space-y-6">
+              {/* Summary Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Grid Supply</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{reportRun.bulk_total.toFixed(2)}</div>
+                    <p className="text-xs text-muted-foreground mt-1">kWh</p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Combined Supply</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{reportRun.total_supply.toFixed(2)}</div>
+                    <p className="text-xs text-muted-foreground mt-1">kWh</p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Solar Energy</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{reportRun.solar_total.toFixed(2)}</div>
+                    <p className="text-xs text-muted-foreground mt-1">kWh</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Report Export Component */}
+              <SiteReportExport 
+                siteId={siteId}
+                siteName={siteName}
+                reconciliationRun={reportRun}
+              />
+            </div>
           )}
         </DialogContent>
       </Dialog>
