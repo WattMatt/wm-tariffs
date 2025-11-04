@@ -344,16 +344,16 @@ export function SplitViewReportEditor({
                   <div className="p-4">
                     <div 
                       ref={pdfContainerRef}
-                      className="relative mx-auto"
+                      className="relative mx-auto max-w-[800px]"
                       style={{ 
-                        width: `${zoom}%`,
-                        maxWidth: '100%'
+                        transform: `scale(${zoom / 100})`,
+                        transformOrigin: 'top center'
                       }}
                     >
-                      <iframe
-                        src={pdfUrl}
-                        className="w-full h-[750px] border shadow-lg bg-white"
-                        title="PDF Preview"
+                      <embed
+                        src={`${pdfUrl}#toolbar=0&navpanes=0&scrollbar=0`}
+                        type="application/pdf"
+                        className="w-full h-[1000px] border shadow-lg bg-white"
                       />
                       <canvas
                         ref={canvasRef}
