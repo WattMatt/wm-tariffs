@@ -7,6 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
 import { Document, Page, pdfjs } from 'react-pdf';
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 // Configure PDF.js worker
 pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
@@ -41,6 +42,7 @@ export function SplitViewReportEditor({
   generatePdfPreview,
   generateFinalPdf
 }: SplitViewReportEditorProps) {
+  const [localSections, setLocalSections] = useState<PdfSection[]>(sections);
   const [pdfUrl, setPdfUrl] = useState<string>("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [zoom, setZoom] = useState(100);
@@ -60,7 +62,7 @@ export function SplitViewReportEditor({
       setIsGenerating(true);
       try {
         console.log('Generating PDF preview...');
-        const url = await generatePdfPreview(sections);
+        const url = await generatePdfPreview(localSections);
         console.log('PDF URL generated:', url);
         console.log('PDF URL type:', typeof url);
         console.log('Is blob URL?', url.startsWith('blob:'));
@@ -141,15 +143,59 @@ export function SplitViewReportEditor({
   const handleApplyChanges = async () => {
     if (!prompt.trim() || !selectionArea) return;
     
-    console.log('Applying changes:', { prompt, selectionArea });
+    setIsGenerating(true);
+    const loadingToast = toast.loading("Processing your request with AI...");
     
-    toast.info("AI Workshop Feature", {
-      description: "The AI-powered PDF editing feature is currently under development. For now, you can edit the report sections directly in the main report editor. Page breaks and section formatting will be available soon.",
-      duration: 6000,
-    });
-    
-    // Clear the selection and prompt
-    handleClearSelection();
+    try {
+      console.log('Applying changes:', { prompt, selectionArea });
+      
+      const { data, error } = await supabase.functions.invoke('process-pdf-edit', {
+        body: {
+          prompt: prompt,
+          sections: localSections,
+          selectionArea: selectionArea
+        }
+      });
+
+      if (error) {
+        console.error('Edge function error:', error);
+        
+        if (error.message?.includes('429') || error.message?.includes('rate limit')) {
+          toast.error("Rate limit exceeded. Please try again in a moment.", { id: loadingToast });
+        } else if (error.message?.includes('402') || error.message?.includes('credits')) {
+          toast.error("AI credits exhausted. Please add credits to your workspace.", { id: loadingToast });
+        } else {
+          toast.error("Failed to process changes. Please try again.", { id: loadingToast });
+        }
+        return;
+      }
+
+      if (!data?.sections) {
+        toast.error("Invalid response from AI service", { id: loadingToast });
+        return;
+      }
+
+      // Update local sections with the AI-modified sections
+      setLocalSections(data.sections);
+      
+      // Regenerate PDF with new sections
+      const newUrl = await generatePdfPreview(data.sections);
+      if (pdfUrl) {
+        URL.revokeObjectURL(pdfUrl);
+      }
+      setPdfUrl(newUrl);
+      
+      // Clear the selection and prompt
+      handleClearSelection();
+      
+      toast.success("Changes applied successfully!", { id: loadingToast });
+      
+    } catch (err) {
+      console.error('Error applying changes:', err);
+      toast.error("An unexpected error occurred", { id: loadingToast });
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const handleClearSelection = () => {
@@ -165,14 +211,15 @@ export function SplitViewReportEditor({
     if (generateFinalPdf) {
       setIsGenerating(true);
       try {
-        await generateFinalPdf(sections);
+        await generateFinalPdf(localSections);
       } catch (error) {
         console.error("Error generating final PDF:", error);
+        toast.error("Failed to generate final PDF");
       } finally {
         setIsGenerating(false);
       }
     } else {
-      onSave(sections);
+      onSave(localSections);
     }
   };
 
@@ -200,7 +247,7 @@ export function SplitViewReportEditor({
   const handleRefresh = async () => {
     setIsGenerating(true);
     try {
-      const url = await generatePdfPreview(sections);
+      const url = await generatePdfPreview(localSections);
       if (pdfUrl) {
         URL.revokeObjectURL(pdfUrl);
       }
