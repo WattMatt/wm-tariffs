@@ -15,7 +15,15 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import PdfContentEditor, { PdfSection } from "./PdfContentEditor";
+import { SplitViewReportEditor } from "./SplitViewReportEditor";
+
+export interface PdfSection {
+  id: string;
+  title: string;
+  content: string;
+  type: 'text' | 'page-break';
+  editable: boolean;
+}
 
 interface SiteReportExportProps {
   siteId: string;
@@ -298,6 +306,66 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
     setEditableSections(editedSections);
     setIsEditingContent(false);
     toast.success("Content updated! You can now generate the PDF.");
+  };
+
+  const generatePdfPreview = async (sections: PdfSection[]): Promise<string> => {
+    // This is a simplified version that creates a mini PDF for preview
+    // You can call generateReport logic here with the sections
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        // Create a temporary preview PDF
+        const tempPdf = new jsPDF();
+        let yPos = 20;
+        const pageWidth = tempPdf.internal.pageSize.getWidth();
+        const pageHeight = tempPdf.internal.pageSize.getHeight();
+        const leftMargin = 25;
+        const rightMargin = 20;
+        
+        tempPdf.setFontSize(16);
+        tempPdf.setFont("helvetica", "bold");
+        tempPdf.text("Report Preview", leftMargin, yPos);
+        yPos += 15;
+        
+        sections.forEach((section, index) => {
+          if (section.type === 'page-break') {
+            tempPdf.addPage();
+            yPos = 20;
+          } else {
+            // Add section title
+            if (yPos > pageHeight - 40) {
+              tempPdf.addPage();
+              yPos = 20;
+            }
+            
+            tempPdf.setFontSize(12);
+            tempPdf.setFont("helvetica", "bold");
+            tempPdf.text(section.title, leftMargin, yPos);
+            yPos += 8;
+            
+            // Add section content
+            tempPdf.setFontSize(10);
+            tempPdf.setFont("helvetica", "normal");
+            const maxWidth = pageWidth - leftMargin - rightMargin;
+            const lines = tempPdf.splitTextToSize(section.content.substring(0, 500), maxWidth);
+            
+            lines.forEach((line: string) => {
+              if (yPos > pageHeight - 20) {
+                tempPdf.addPage();
+                yPos = 20;
+              }
+              tempPdf.text(line, leftMargin, yPos);
+              yPos += 5;
+            });
+            
+            yPos += 10;
+          }
+        });
+        
+        const pdfBlob = tempPdf.output('blob');
+        const url = URL.createObjectURL(pdfBlob);
+        resolve(url);
+      }, 100);
+    });
   };
 
   const generateMarkdownPreview = async () => {
@@ -686,7 +754,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             id: 'schematic-image',
             title: 'Site Schematic',
             content: `## Site Schematic\n\n*Schematic diagram will be included in the final PDF*`,
-            type: 'image',
+            type: 'text',
             editable: false
           });
         }
@@ -1729,13 +1797,14 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         </Button>
 
         {isEditingContent && editableSections.length > 0 && (
-          <PdfContentEditor
+          <SplitViewReportEditor
             sections={editableSections}
             onSave={handleSaveEditedContent}
             onCancel={() => {
               setIsEditingContent(false);
               setEditableSections([]);
             }}
+            generatePdfPreview={generatePdfPreview}
           />
         )}
       </CardContent>
