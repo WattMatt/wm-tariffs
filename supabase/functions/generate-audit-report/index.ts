@@ -63,49 +63,68 @@ serve(async (req) => {
     }
 
     // Generate Executive Summary
-    const executiveSummaryPrompt = `Generate an executive summary following THIS EXACT FORMAT. Do not deviate from this structure:
+    const executiveSummaryPrompt = `You are generating a visual executive-style report following these principles:
 
-Metering audit for ${siteName} (${auditPeriodStart} to ${auditPeriodEnd}) reveals ${reconciliationData.recoveryRate}% recovery rate with ${reconciliationData.variance} kWh variance.
+FRAMEWORK:
+- Purpose: Enable rapid decision-making with relevant facts, impacts, and actions
+- Length: Concise, single-screen equivalent
+- Structure: Clear hierarchy with headline, 3-5 key points, visuals, immediate actions
+- Language: Plain, active, directive; bullets and one-line sentences only
+- Visuals: Tables with status indicators
+- Traceability: Each point links to data
+- Format: Large headings, consistent numeric formats, minimal jargon
 
-Executive Summary
+DATA FOR ${siteName}:
+Period: ${auditPeriodStart} to ${auditPeriodEnd}
+- Total Supply: ${reconciliationData.totalSupply} kWh
+- Council Bulk: ${reconciliationData.councilTotal} kWh  
+- Solar: ${reconciliationData.solarTotal} kWh
+- Consumption: ${reconciliationData.distributionTotal} kWh
+- Variance: ${reconciliationData.variance} kWh (${reconciliationData.variancePercentage}%)
+- Recovery: ${reconciliationData.recoveryRate}%
+- Financial Impact: R${(parseFloat(reconciliationData.variance) * 2.50).toFixed(2)}
 
-This audit reconciles bulk electricity supply against sub-meter consumption at ${siteName} for ${auditPeriodStart} to ${auditPeriodEnd}. Analysis of meter reading data shows total supply of ${reconciliationData.totalSupply} kWh comprising council bulk supply (${reconciliationData.councilTotal} kWh) and solar generation (${reconciliationData.solarTotal} kWh). Total sub-meter consumption recorded ${reconciliationData.distributionTotal} kWh, yielding ${reconciliationData.recoveryRate}% recovery rate. Unaccounted variance of ${reconciliationData.variance} kWh (${reconciliationData.variancePercentage}%) represents estimated financial impact of R${(parseFloat(reconciliationData.variance) * 2.50).toFixed(2)}.
+OUTPUT STRUCTURE:
 
-Key Metrics
+[One-line headline stating site, period, and critical finding]
 
-| Metric | Value | Unit |
-|--------|-------|------|
-| Total supply | ${reconciliationData.totalSupply} | kWh |
-| Council bulk supply (MB-1.1) | ${reconciliationData.councilTotal} | kWh |
-| Solar generation (SOLAR-DB-1.1) | ${reconciliationData.solarTotal} | kWh |
-| Total sub-meter consumption | ${reconciliationData.distributionTotal} | kWh |
-| Unaccounted variance | ${reconciliationData.variance} | kWh |
-| Loss percentage | ${reconciliationData.variancePercentage} | % |
-| Recovery rate | ${reconciliationData.recoveryRate} | % |
-| Audit period | ${auditPeriodStart} to ${auditPeriodEnd} | - |
+EXECUTIVE BRIEFING
 
-Meter Anomalies
+[3-5 bullet points, one line each, covering: audit scope, key finding, variance impact, recovery rate, financial exposure]
 
-| Meter ID | Issue | Reading (kWh) | Priority |
-|----------|-------|---------------|----------|
-| MB-1.1 | Negative P2 reading detected | ${reconciliationData.councilTotal} | High |
-| GM-1.1 | Negative P2 reading detected | Data required | High |
-| DB-1A | Negative P2 reading detected | Data required | High |
+PERFORMANCE SNAPSHOT
 
-Financial Impact
+| Metric | Value | Status |
+|--------|-------|--------|
+| Total supply | ${reconciliationData.totalSupply} kWh | ✓ |
+| Council bulk supply | ${reconciliationData.councilTotal} kWh | ⚠ |
+| Solar generation | ${reconciliationData.solarTotal} kWh | ✓ |
+| Sub-meter consumption | ${reconciliationData.distributionTotal} kWh | ✓ |
+| Unaccounted variance | ${reconciliationData.variance} kWh | ⚠ |
+| Recovery rate | ${reconciliationData.recoveryRate}% | [⚠ if <98%, ✓ if ≥98%] |
 
-| Item | Calculation | Amount (ZAR) |
-|------|-------------|--------------|
-| Estimated cost of variance | ${reconciliationData.variance} kWh × R2.50/kWh | R${(parseFloat(reconciliationData.variance) * 2.50).toFixed(2)} |
+CRITICAL FINDINGS
 
-Recommendations
+[3 findings maximum, one line each with impact]
 
-- Investigate negative P2 readings for meters MB-1.1, GM-1.1, DB-1A immediately.
-- Verify meter calibration and configuration for all meters with anomalies.
-- Implement monthly reconciliation reviews to detect variances early.
-- Enhance metering infrastructure with real-time monitoring and alerting systems.
+| Finding | Impact | Priority |
+|---------|--------|----------|
+| [Finding 1 - negative P2 readings] | Revenue loss risk | HIGH |
+| [Finding 2 - based on variance] | Billing accuracy | HIGH |
+| [Finding 3 - based on anomalies] | Operational | MEDIUM |
 
-Immediate investigation of negative P2 readings is required to prevent revenue loss.`;
+FINANCIAL IMPACT
+
+| Item | Calculation | Amount |
+|------|-------------|--------|
+| Variance cost estimate | ${reconciliationData.variance} kWh × R2.50 | R${(parseFloat(reconciliationData.variance) * 2.50).toFixed(2)} |
+
+IMMEDIATE ACTIONS REQUIRED
+
+1. [Action addressing highest priority finding - one line, directive]
+2. [Action addressing second priority - one line, directive]
+
+Generate the report following this exact structure with plain, active language.`;
 
     const execSummaryResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
