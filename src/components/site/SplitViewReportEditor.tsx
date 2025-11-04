@@ -68,6 +68,7 @@ export function SplitViewReportEditor({
   // KPI Statistics State
   const [kpiStats, setKpiStats] = useState({
     totalReadings: 0,
+    totalReadingsAvailable: 0,
     totalMeters: 0,
     dateRange: { earliest: '', latest: '' },
     totalConsumption: 0,
@@ -107,6 +108,7 @@ export function SplitViewReportEditor({
         if (meterIds.length === 0) {
           setKpiStats({
             totalReadings: 0,
+            totalReadingsAvailable: 0,
             totalMeters: 0,
             dateRange: { earliest: 'N/A', latest: 'N/A' },
             totalConsumption: 0,
@@ -114,6 +116,12 @@ export function SplitViewReportEditor({
           });
           return;
         }
+
+        // Count total readings available (all time)
+        const { count: totalAvailableCount } = await supabase
+          .from('meter_readings')
+          .select('*', { count: 'exact', head: true })
+          .in('meter_id', meterIds);
 
         // Build query with optional date filtering for reading count
         let countQuery = supabase
@@ -191,6 +199,7 @@ export function SplitViewReportEditor({
 
         setKpiStats({
           totalReadings: totalReadingsCount || 0,
+          totalReadingsAvailable: totalAvailableCount || 0,
           totalMeters: metersData?.length || 0,
           dateRange: { 
             earliest: earliestDate ? earliestDate.toLocaleDateString() : 'N/A', 
@@ -582,9 +591,9 @@ export function SplitViewReportEditor({
                   <Database className="w-4 h-4 text-primary" />
                 </div>
                 <div>
-                  <div className="text-xs text-muted-foreground">Total Data Points</div>
+                  <div className="text-xs text-muted-foreground">Data Points Used</div>
                   <div className="text-lg font-semibold">{kpiStats.totalReadings.toLocaleString()}</div>
-                  <div className="text-[10px] text-muted-foreground">readings analyzed</div>
+                  <div className="text-[10px] text-muted-foreground">of {kpiStats.totalReadingsAvailable.toLocaleString()} available</div>
                 </div>
               </div>
               <div className="flex items-center gap-3">
