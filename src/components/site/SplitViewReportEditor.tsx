@@ -59,6 +59,8 @@ export function SplitViewReportEditor({
         console.log('Generating PDF preview...');
         const url = await generatePdfPreview(sections);
         console.log('PDF URL generated:', url);
+        console.log('PDF URL type:', typeof url);
+        console.log('Is blob URL?', url.startsWith('blob:'));
         setPdfUrl(url);
         setInitialLoadDone(true);
       } catch (error) {
@@ -395,6 +397,10 @@ export function SplitViewReportEditor({
                       <Document
                         file={pdfUrl}
                         onLoadSuccess={onDocumentLoadSuccess}
+                        onLoadError={(error) => {
+                          console.error('PDF load error:', error);
+                          console.error('PDF URL that failed:', pdfUrl);
+                        }}
                         loading={
                           <div className="flex items-center justify-center py-20">
                             <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
