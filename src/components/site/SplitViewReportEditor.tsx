@@ -93,7 +93,7 @@ export function SplitViewReportEditor({
         // Get all meters for this site
         const { data: metersData, error: metersError } = await supabase
           .from('meters')
-          .select('id')
+          .select('id, meter_number')
           .eq('site_id', siteId);
 
         if (metersError) {
@@ -115,25 +115,18 @@ export function SplitViewReportEditor({
           return;
         }
 
-        // Build query with optional date filtering
+        // Build query with optional date filtering for reading count
         let countQuery = supabase
           .from('meter_readings')
           .select('*', { count: 'exact', head: true })
           .in('meter_id', meterIds);
 
-        let statsQuery = supabase
-          .from('meter_readings')
-          .select('reading_timestamp, kwh_value')
-          .in('meter_id', meterIds);
-
         // Apply date range filter if provided
         if (dateFrom) {
           countQuery = countQuery.gte('reading_timestamp', dateFrom);
-          statsQuery = statsQuery.gte('reading_timestamp', dateFrom);
         }
         if (dateTo) {
           countQuery = countQuery.lte('reading_timestamp', dateTo);
-          statsQuery = statsQuery.lte('reading_timestamp', dateTo);
         }
 
         // Count total readings
@@ -143,22 +136,66 @@ export function SplitViewReportEditor({
           console.error('Error counting readings:', countError);
         }
 
-        // Get date range and total consumption
-        statsQuery = statsQuery.order('reading_timestamp', { ascending: true });
-        const { data: statsData, error: statsError } = await statsQuery;
+        // Calculate consumption for each meter (last - first reading)
+        let totalConsumption = 0;
+        let earliestDate: Date | null = null;
+        let latestDate: Date | null = null;
 
-        if (statsError) {
-          console.error('Error fetching stats:', statsError);
+        for (const meter of meterIds) {
+          let readingsQuery = supabase
+            .from('meter_readings')
+            .select('kwh_value, reading_timestamp')
+            .eq('meter_id', meter);
+
+          if (dateFrom) {
+            readingsQuery = readingsQuery.gte('reading_timestamp', dateFrom);
+          }
+          if (dateTo) {
+            readingsQuery = readingsQuery.lte('reading_timestamp', dateTo);
+          }
+
+          readingsQuery = readingsQuery.order('reading_timestamp', { ascending: true });
+
+          const { data: meterReadings, error: readingsError } = await readingsQuery;
+
+          if (readingsError) {
+            console.error(`Error fetching readings for meter ${meter}:`, readingsError);
+            continue;
+          }
+
+          if (meterReadings && meterReadings.length > 0) {
+            // Track earliest and latest timestamps
+            const firstReading = new Date(meterReadings[0].reading_timestamp);
+            const lastReading = new Date(meterReadings[meterReadings.length - 1].reading_timestamp);
+            
+            if (!earliestDate || firstReading < earliestDate) {
+              earliestDate = firstReading;
+            }
+            if (!latestDate || lastReading > latestDate) {
+              latestDate = lastReading;
+            }
+
+            // Calculate consumption: last reading - first reading
+            if (meterReadings.length > 1) {
+              const firstValue = Number(meterReadings[0].kwh_value) || 0;
+              const lastValue = Number(meterReadings[meterReadings.length - 1].kwh_value) || 0;
+              const consumption = lastValue - firstValue;
+              
+              // Only add positive consumption (ignore negative values which might indicate meter rollover or errors)
+              if (consumption > 0) {
+                totalConsumption += consumption;
+              }
+            }
+          }
         }
-
-        const totalConsumption = (statsData || []).reduce((sum, r) => sum + (Number(r.kwh_value) || 0), 0);
-        const earliest = statsData && statsData.length > 0 ? new Date(statsData[0].reading_timestamp).toLocaleDateString() : 'N/A';
-        const latest = statsData && statsData.length > 0 ? new Date(statsData[statsData.length - 1].reading_timestamp).toLocaleDateString() : 'N/A';
 
         setKpiStats({
           totalReadings: totalReadingsCount || 0,
           totalMeters: metersData?.length || 0,
-          dateRange: { earliest, latest },
+          dateRange: { 
+            earliest: earliestDate ? earliestDate.toLocaleDateString() : 'N/A', 
+            latest: latestDate ? latestDate.toLocaleDateString() : 'N/A' 
+          },
           totalConsumption: Math.round(totalConsumption),
           isLoading: false
         });
