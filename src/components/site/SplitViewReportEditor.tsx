@@ -16,7 +16,7 @@ interface PdfSection {
   id: string;
   title: string;
   content: string;
-  type: 'text' | 'page-break';
+  type: 'text' | 'page-break' | 'chart';
   editable: boolean;
 }
 

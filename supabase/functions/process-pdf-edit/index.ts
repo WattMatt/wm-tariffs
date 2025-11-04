@@ -9,7 +9,7 @@ interface PdfSection {
   id: string;
   title: string;
   content: string;
-  type: 'text' | 'page-break';
+  type: 'text' | 'page-break' | 'chart';
   editable: boolean;
 }
 
@@ -46,9 +46,43 @@ ${sectionsContext}
 When the user asks for changes:
 1. If they want page breaks, insert page-break sections between appropriate sections
 2. If they want to modify text, update the content of relevant sections
-3. Return the complete modified sections array as JSON
+3. If they want to ADD charts (pie, bar), you should EMBED the chart JSON within the content of an existing or new text section
 
-IMPORTANT: Return ONLY a valid JSON array of sections, no additional text. Each section must have: id, title, content, type ('text' or 'page-break'), and editable (boolean).`;
+CHART EMBEDDING FORMAT:
+When adding charts, embed them within text content like this:
+
+For a PIE chart showing supply breakdown:
+\`\`\`json
+{
+  "type": "pie",
+  "data": {
+    "labels": ["Council Bulk Supply", "Solar Generation"],
+    "datasets": [{
+      "data": [113187.07, 82759.01]
+    }]
+  }
+}
+\`\`\`
+
+For a BAR chart:
+\`\`\`json
+{
+  "type": "bar",
+  "data": {
+    "labels": ["Meter 1", "Meter 2", "Meter 3"],
+    "datasets": [{
+      "data": [1000, 1500, 2000]
+    }]
+  }
+}
+\`\`\`
+
+IMPORTANT RULES:
+- Charts must be embedded WITHIN the "content" field of a text section, surrounded by markdown code fences
+- Do NOT create separate sections with type: "chart"
+- Use accurate data from the report (e.g., for supply pie chart, only include supply sources, NOT distribution or variance)
+- Return ONLY a valid JSON array of sections, no additional text
+- Each section must have: id, title, content, type ('text', 'page-break', or 'chart'), and editable (boolean)`;
 
     const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -111,7 +145,7 @@ IMPORTANT: Return ONLY a valid JSON array of sections, no additional text. Each 
         id: section.id || `section-${Date.now()}-${idx}`,
         title: section.title || 'Untitled Section',
         content: section.content || '',
-        type: section.type === 'page-break' ? 'page-break' : 'text',
+        type: section.type === 'page-break' ? 'page-break' : (section.type === 'chart' ? 'chart' : 'text'),
         editable: section.editable !== false,
       }));
       

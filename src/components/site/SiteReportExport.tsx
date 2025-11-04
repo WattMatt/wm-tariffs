@@ -23,7 +23,7 @@ export interface PdfSection {
   id: string;
   title: string;
   content: string;
-  type: 'text' | 'page-break';
+  type: 'text' | 'page-break' | 'chart';
   editable: boolean;
 }
 
@@ -552,6 +552,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           
           if (chartMatch) {
             const chartJson = chartMatch[1];
+            const chartType = chartMatch[2] as 'pie' | 'bar';
             const beforeChart = text.substring(0, chartMatch.index);
             const afterChart = text.substring((chartMatch.index || 0) + chartMatch[0].length);
             
@@ -563,13 +564,15 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             // Parse and render chart
             try {
               const chartData = JSON.parse(chartJson);
+              console.log(`Rendering ${chartType} chart:`, chartData);
+              
               if (chartData.type === 'pie') {
                 drawPieChart(chartData);
               } else if (chartData.type === 'bar') {
                 drawBarChart(chartData);
               }
             } catch (e) {
-              console.error('Failed to parse chart JSON:', e);
+              console.error('Failed to parse chart JSON:', e, chartJson);
               addText(`[Chart rendering error: ${e instanceof Error ? e.message : 'Unknown error'}]`, fontSize, false);
             }
             
@@ -805,14 +808,40 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           return section?.content || '';
         };
         
+        // Helper to render a section (handles both text and chart sections)
+        const renderSection = (sectionId: string) => {
+          const section = sections.find(s => s.id === sectionId);
+          if (!section) return;
+          
+          if (section.type === 'chart') {
+            // For chart sections, parse and render the chart directly
+            try {
+              const chartData = JSON.parse(section.content);
+              console.log(`Rendering chart section ${sectionId}:`, chartData);
+              
+              if (chartData.type === 'pie') {
+                drawPieChart(chartData);
+              } else if (chartData.type === 'bar') {
+                drawBarChart(chartData);
+              }
+            } catch (e) {
+              console.error(`Failed to render chart section ${sectionId}:`, e);
+              addText(`[Chart rendering error: ${e instanceof Error ? e.message : 'Unknown error'}]`, 10, false);
+            }
+          } else {
+            // For text sections, render content (which may contain embedded charts)
+            renderContent(section.content);
+          }
+        };
+        
         // Section 1: Executive Summary
         addSectionHeading("1. EXECUTIVE SUMMARY", 16, true);
-        renderContent(getSectionContent('executive-summary'));
+        renderSection('executive-summary');
         addSpacer(8);
         
         // Section 2: Metering Hierarchy Overview
         addSectionHeading("2. METERING HIERARCHY OVERVIEW", 16, true);
-        renderContent(getSectionContent('hierarchy-overview'));
+        renderSection('hierarchy-overview');
         addSpacer(5);
         
         // Add schematic if available
@@ -908,12 +937,12 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         
         // Section 6: Observations
         addSectionHeading("6. OBSERVATIONS AND ANOMALIES", 16, true);
-        renderContent(getSectionContent('observations'));
+        renderSection('observations');
         addSpacer(8);
         
         // Section 7: Recommendations
         addSectionHeading("7. RECOMMENDATIONS", 16, true);
-        renderContent(getSectionContent('recommendations'));
+        renderSection('recommendations');
         addSpacer(8);
         
         // Add footer and page number to last page
@@ -1430,6 +1459,34 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           'billing-validation': reportData.sections.billingValidation
         };
         return sectionMap[sectionId] || '';
+      };
+      
+      // Helper to render a section (handles both text and chart sections)
+      const renderSection = (sectionId: string) => {
+        const editedSection = editableSections.find(s => s.id === sectionId);
+        
+        if (editedSection && editedSection.type === 'chart') {
+          // For chart sections, parse and render the chart directly
+          try {
+            const chartData = JSON.parse(editedSection.content);
+            console.log(`Rendering chart section ${sectionId}:`, chartData);
+            
+            if (chartData.type === 'pie') {
+              drawPieChart(chartData);
+            } else if (chartData.type === 'bar') {
+              drawBarChart(chartData);
+            }
+          } catch (e) {
+            console.error(`Failed to render chart section ${sectionId}:`, e);
+            addText(`[Chart rendering error: ${e instanceof Error ? e.message : 'Unknown error'}]`, 10, false, 0);
+          }
+        } else {
+          // For text sections, render content (which may contain embedded charts)
+          const content = getSectionContent(sectionId);
+          if (content) {
+            renderContent(content);
+          }
+        }
       };
 
       // Get page breaks positions from editableSections
@@ -2025,12 +2082,12 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
 
       // Section 1: Executive Summary
       addSectionHeading("1. EXECUTIVE SUMMARY", 16, true);
-      renderContent(getSectionContent('executive-summary'));
+      renderSection('executive-summary');
       addSpacer(8);
 
       // Section 2: Metering Hierarchy Overview
       addSectionHeading("2. METERING HIERARCHY OVERVIEW", 16, true);
-      renderContent(getSectionContent('hierarchy-overview'));
+      renderSection('hierarchy-overview');
       addSpacer(5);
       
       // Add schematic if available
@@ -2208,18 +2265,14 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       const billingContent = getSectionContent('billing-validation');
       if (billingContent) {
         addSectionHeading("5. BILLING VALIDATION", 16, true);
-        renderContent(billingContent);
+        renderSection('billing-validation');
         addSpacer(8);
       }
 
       // Section 6: Observations and Anomalies
       const obsSection = billingContent ? "6" : "5";
       addSectionHeading(`${obsSection}. OBSERVATIONS AND ANOMALIES`, 16, true);
-      // Clean any duplicate heading text from AI response
-      const cleanedObservations = getSectionContent('observations')
-        .replace(/^observations\s+and\s+anomalies[:\s]*/i, '')
-        .trim();
-      renderContent(cleanedObservations);
+      renderSection('observations');
       addSpacer(5);
       
       if (anomalies.length > 0) {
@@ -2292,7 +2345,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       // Section 8: Recommendations
       const recSection = billingContent ? "8" : "7";
       addSectionHeading(`${recSection}. RECOMMENDATIONS`, 16, true);
-      renderContent(getSectionContent('recommendations'));
+      renderSection('recommendations');
       addSpacer(8);
 
       // Section 9: Appendices
