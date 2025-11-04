@@ -1692,25 +1692,6 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           </ul>
         </div>
 
-        {isGeneratingPreview && (
-          <Card className="mb-4">
-            <CardContent className="pt-6">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium">{generationStatus}</span>
-                  <span className="text-muted-foreground">{generationProgress}%</span>
-                </div>
-                <div className="relative h-2 bg-secondary rounded-full overflow-hidden">
-                  <div 
-                    className="absolute top-0 left-0 h-full bg-primary transition-all duration-500 ease-out"
-                    style={{ width: `${generationProgress}%` }}
-                  />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
         <Button
           onClick={generateMarkdownPreview}
           disabled={
@@ -1721,21 +1702,30 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             !selectedFolderPath || 
             (!reconciliationRun && !selectedReconciliationId)
           }
-          className="w-full"
+          className="w-full relative overflow-hidden"
           size="lg"
           variant="outline"
         >
-          {isGeneratingPreview ? (
-            <>
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Generating Preview...
-            </>
-          ) : (
-            <>
-              <Edit className="w-4 h-4 mr-2" />
-              Generate Markdown Preview
-            </>
+          {isGeneratingPreview && (
+            <div 
+              className="absolute inset-0 bg-primary/20 transition-all duration-500 ease-out"
+              style={{ width: `${generationProgress}%` }}
+            />
           )}
+          <div className="relative z-10 flex items-center justify-center w-full">
+            {isGeneratingPreview ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                <span className="flex-1 text-left">{generationStatus}</span>
+                <span className="ml-2 font-mono">{generationProgress}%</span>
+              </>
+            ) : (
+              <>
+                <Edit className="w-4 h-4 mr-2" />
+                Generate Markdown Preview
+              </>
+            )}
+          </div>
         </Button>
 
         {isEditingContent && editableSections.length > 0 && (
