@@ -877,6 +877,146 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         
         // Section 3: Data Sources
         addSectionHeading("3. DATA SOURCES AND AUDIT PERIOD", 16, true);
+        
+        // Add KPI Cards Section
+        addSubsectionHeading("Data Collection Overview");
+        
+        // Calculate KPIs
+        const kpiTotalReadings = meterData.reduce((sum: number, meter: any) => sum + (meter.readingsCount || 0), 0);
+        const kpiTotalMeters = meterData.length;
+        const kpiTotalConsumption = meterData.reduce((sum: number, meter: any) => sum + (parseFloat(meter.totalKwh) || 0), 0);
+        const kpiAvgReadings = kpiTotalMeters > 0 ? Math.round(kpiTotalReadings / kpiTotalMeters) : 0;
+        
+        // Check if we need a new page for KPI cards
+        if (yPos > pageHeight - bottomMargin - 80) {
+          addFooter();
+          addPageNumber();
+          pdf.addPage();
+          addBlueSidebar();
+          yPos = topMargin;
+        }
+        
+        // Draw KPI Cards (4 cards in a row)
+        const cardWidth = (pageWidth - leftMargin - rightMargin - 15) / 4; // 15 = 3 gaps of 5
+        const cardHeight = 28;
+        const cardStartY = yPos;
+        const iconSize = 8;
+        const iconPadding = 2;
+        
+        // Card 1: Total Data Points
+        let cardX = leftMargin;
+        pdf.setFillColor(59, 130, 246, 0.05); // primary with 5% opacity
+        pdf.roundedRect(cardX, cardStartY, cardWidth, cardHeight, 2, 2, 'F');
+        
+        // Icon background
+        pdf.setFillColor(219, 234, 254); // primary/10
+        pdf.roundedRect(cardX + 3, cardStartY + 3, iconSize + iconPadding * 2, iconSize + iconPadding * 2, 2, 2, 'F');
+        
+        // Icon (simplified database icon using text)
+        pdf.setFontSize(8);
+        pdf.setTextColor(59, 130, 246); // primary
+        pdf.text("▤", cardX + 5, cardStartY + 9);
+        
+        // Label
+        pdf.setFontSize(7);
+        pdf.setTextColor(100, 116, 139); // muted-foreground
+        pdf.text("Total Data Points", cardX + 3, cardStartY + 17);
+        
+        // Value
+        pdf.setFontSize(11);
+        pdf.setFont("helvetica", "bold");
+        pdf.setTextColor(0, 0, 0);
+        pdf.text(kpiTotalReadings.toLocaleString(), cardX + 3, cardStartY + 23);
+        
+        // Description
+        pdf.setFontSize(6);
+        pdf.setFont("helvetica", "normal");
+        pdf.setTextColor(100, 116, 139);
+        pdf.text("readings analyzed", cardX + 3, cardStartY + 26.5);
+        
+        // Card 2: Active Meters
+        cardX += cardWidth + 5;
+        pdf.setFillColor(142, 81, 245, 0.05); // accent
+        pdf.roundedRect(cardX, cardStartY, cardWidth, cardHeight, 2, 2, 'F');
+        
+        pdf.setFillColor(237, 233, 254); // accent/10
+        pdf.roundedRect(cardX + 3, cardStartY + 3, iconSize + iconPadding * 2, iconSize + iconPadding * 2, 2, 2, 'F');
+        
+        pdf.setFontSize(8);
+        pdf.setTextColor(142, 81, 245);
+        pdf.text("◆", cardX + 5, cardStartY + 9);
+        
+        pdf.setFontSize(7);
+        pdf.setTextColor(100, 116, 139);
+        pdf.text("Active Meters", cardX + 3, cardStartY + 17);
+        
+        pdf.setFontSize(11);
+        pdf.setFont("helvetica", "bold");
+        pdf.setTextColor(0, 0, 0);
+        pdf.text(kpiTotalMeters.toString(), cardX + 3, cardStartY + 23);
+        
+        pdf.setFontSize(6);
+        pdf.setFont("helvetica", "normal");
+        pdf.setTextColor(100, 116, 139);
+        pdf.text("monitored", cardX + 3, cardStartY + 26.5);
+        
+        // Card 3: Analysis Period
+        cardX += cardWidth + 5;
+        pdf.setFillColor(100, 116, 139, 0.05); // secondary
+        pdf.roundedRect(cardX, cardStartY, cardWidth, cardHeight, 2, 2, 'F');
+        
+        pdf.setFillColor(226, 232, 240); // secondary/10
+        pdf.roundedRect(cardX + 3, cardStartY + 3, iconSize + iconPadding * 2, iconSize + iconPadding * 2, 2, 2, 'F');
+        
+        pdf.setFontSize(8);
+        pdf.setTextColor(100, 116, 139);
+        pdf.text("■", cardX + 5, cardStartY + 9);
+        
+        pdf.setFontSize(7);
+        pdf.setTextColor(100, 116, 139);
+        pdf.text("Analysis Period", cardX + 3, cardStartY + 17);
+        
+        pdf.setFontSize(8);
+        pdf.setFont("helvetica", "bold");
+        pdf.setTextColor(0, 0, 0);
+        const dateText = `${reconciliationData.readingsPeriod || 'All Data'}`;
+        pdf.text(dateText, cardX + 3, cardStartY + 23, { maxWidth: cardWidth - 6 });
+        
+        pdf.setFontSize(6);
+        pdf.setFont("helvetica", "normal");
+        pdf.setTextColor(100, 116, 139);
+        pdf.text("date range", cardX + 3, cardStartY + 26.5);
+        
+        // Card 4: Total Consumption
+        cardX += cardWidth + 5;
+        pdf.setFillColor(59, 130, 246, 0.05); // primary
+        pdf.roundedRect(cardX, cardStartY, cardWidth, cardHeight, 2, 2, 'F');
+        
+        pdf.setFillColor(219, 234, 254); // primary/10
+        pdf.roundedRect(cardX + 3, cardStartY + 3, iconSize + iconPadding * 2, iconSize + iconPadding * 2, 2, 2, 'F');
+        
+        pdf.setFontSize(8);
+        pdf.setTextColor(59, 130, 246);
+        pdf.text("⚡", cardX + 5, cardStartY + 9);
+        
+        pdf.setFontSize(7);
+        pdf.setTextColor(100, 116, 139);
+        pdf.text("Total Consumption", cardX + 3, cardStartY + 17);
+        
+        pdf.setFontSize(11);
+        pdf.setFont("helvetica", "bold");
+        pdf.setTextColor(0, 0, 0);
+        pdf.text(`${formatNumber(kpiTotalConsumption)} kWh`, cardX + 3, cardStartY + 23, { maxWidth: cardWidth - 6 });
+        
+        pdf.setFontSize(6);
+        pdf.setFont("helvetica", "normal");
+        pdf.setTextColor(100, 116, 139);
+        pdf.text("energy used", cardX + 3, cardStartY + 26.5);
+        
+        yPos += cardHeight + 10;
+        pdf.setTextColor(0, 0, 0);
+        
+        addSpacer(5);
         addSubsectionHeading("Audit Period");
         addText("All Available Readings");
         addSpacer(5);
@@ -2201,6 +2341,142 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
 
       // Section 3: Data Sources and Audit Period
       addSectionHeading("3. DATA SOURCES AND AUDIT PERIOD", 16, true);
+      
+      // Add KPI Cards Section
+      addSubsectionHeading("Data Collection Overview");
+      
+      // Calculate KPIs
+      const kpiTotalReadings = meterData.reduce((sum: number, meter: any) => sum + (meter.readingsCount || 0), 0);
+      const kpiTotalMeters = meterData.length;
+      const kpiTotalConsumption = meterData.reduce((sum: number, meter: any) => sum + (parseFloat(meter.totalKwh) || 0), 0);
+      const kpiAvgReadings = kpiTotalMeters > 0 ? Math.round(kpiTotalReadings / kpiTotalMeters) : 0;
+      
+      // Check if we need a new page for KPI cards
+      if (yPos > pageHeight - bottomMargin - 80) {
+        addBlueSidebar();
+        addFooter();
+        addPageNumber();
+        pdf.addPage();
+        addBlueSidebar();
+        yPos = topMargin;
+      }
+      
+      // Draw KPI Cards (4 cards in a row)
+      const cardWidth = (pageWidth - leftMargin - rightMargin - 15) / 4;
+      const cardHeight = 28;
+      const cardStartY = yPos;
+      const iconSize = 8;
+      const iconPadding = 2;
+      
+      // Card 1: Total Data Points
+      let cardX = leftMargin;
+      pdf.setFillColor(59, 130, 246, 0.05);
+      pdf.roundedRect(cardX, cardStartY, cardWidth, cardHeight, 2, 2, 'F');
+      
+      pdf.setFillColor(219, 234, 254);
+      pdf.roundedRect(cardX + 3, cardStartY + 3, iconSize + iconPadding * 2, iconSize + iconPadding * 2, 2, 2, 'F');
+      
+      pdf.setFontSize(8);
+      pdf.setTextColor(59, 130, 246);
+      pdf.text("▤", cardX + 5, cardStartY + 9);
+      
+      pdf.setFontSize(7);
+      pdf.setTextColor(100, 116, 139);
+      pdf.text("Total Data Points", cardX + 3, cardStartY + 17);
+      
+      pdf.setFontSize(11);
+      pdf.setFont("helvetica", "bold");
+      pdf.setTextColor(0, 0, 0);
+      pdf.text(kpiTotalReadings.toLocaleString(), cardX + 3, cardStartY + 23);
+      
+      pdf.setFontSize(6);
+      pdf.setFont("helvetica", "normal");
+      pdf.setTextColor(100, 116, 139);
+      pdf.text("readings analyzed", cardX + 3, cardStartY + 26.5);
+      
+      // Card 2: Active Meters
+      cardX += cardWidth + 5;
+      pdf.setFillColor(142, 81, 245, 0.05);
+      pdf.roundedRect(cardX, cardStartY, cardWidth, cardHeight, 2, 2, 'F');
+      
+      pdf.setFillColor(237, 233, 254);
+      pdf.roundedRect(cardX + 3, cardStartY + 3, iconSize + iconPadding * 2, iconSize + iconPadding * 2, 2, 2, 'F');
+      
+      pdf.setFontSize(8);
+      pdf.setTextColor(142, 81, 245);
+      pdf.text("◆", cardX + 5, cardStartY + 9);
+      
+      pdf.setFontSize(7);
+      pdf.setTextColor(100, 116, 139);
+      pdf.text("Active Meters", cardX + 3, cardStartY + 17);
+      
+      pdf.setFontSize(11);
+      pdf.setFont("helvetica", "bold");
+      pdf.setTextColor(0, 0, 0);
+      pdf.text(kpiTotalMeters.toString(), cardX + 3, cardStartY + 23);
+      
+      pdf.setFontSize(6);
+      pdf.setFont("helvetica", "normal");
+      pdf.setTextColor(100, 116, 139);
+      pdf.text("monitored", cardX + 3, cardStartY + 26.5);
+      
+      // Card 3: Analysis Period
+      cardX += cardWidth + 5;
+      pdf.setFillColor(100, 116, 139, 0.05);
+      pdf.roundedRect(cardX, cardStartY, cardWidth, cardHeight, 2, 2, 'F');
+      
+      pdf.setFillColor(226, 232, 240);
+      pdf.roundedRect(cardX + 3, cardStartY + 3, iconSize + iconPadding * 2, iconSize + iconPadding * 2, 2, 2, 'F');
+      
+      pdf.setFontSize(8);
+      pdf.setTextColor(100, 116, 139);
+      pdf.text("■", cardX + 5, cardStartY + 9);
+      
+      pdf.setFontSize(7);
+      pdf.setTextColor(100, 116, 139);
+      pdf.text("Analysis Period", cardX + 3, cardStartY + 17);
+      
+      pdf.setFontSize(8);
+      pdf.setFont("helvetica", "bold");
+      pdf.setTextColor(0, 0, 0);
+      const dateText = `${reconciliationData.readingsPeriod || 'All Data'}`;
+      pdf.text(dateText, cardX + 3, cardStartY + 23, { maxWidth: cardWidth - 6 });
+      
+      pdf.setFontSize(6);
+      pdf.setFont("helvetica", "normal");
+      pdf.setTextColor(100, 116, 139);
+      pdf.text("date range", cardX + 3, cardStartY + 26.5);
+      
+      // Card 4: Total Consumption
+      cardX += cardWidth + 5;
+      pdf.setFillColor(59, 130, 246, 0.05);
+      pdf.roundedRect(cardX, cardStartY, cardWidth, cardHeight, 2, 2, 'F');
+      
+      pdf.setFillColor(219, 234, 254);
+      pdf.roundedRect(cardX + 3, cardStartY + 3, iconSize + iconPadding * 2, iconSize + iconPadding * 2, 2, 2, 'F');
+      
+      pdf.setFontSize(8);
+      pdf.setTextColor(59, 130, 246);
+      pdf.text("⚡", cardX + 5, cardStartY + 9);
+      
+      pdf.setFontSize(7);
+      pdf.setTextColor(100, 116, 139);
+      pdf.text("Total Consumption", cardX + 3, cardStartY + 17);
+      
+      pdf.setFontSize(11);
+      pdf.setFont("helvetica", "bold");
+      pdf.setTextColor(0, 0, 0);
+      pdf.text(`${formatNumber(kpiTotalConsumption)} kWh`, cardX + 3, cardStartY + 23, { maxWidth: cardWidth - 6 });
+      
+      pdf.setFontSize(6);
+      pdf.setFont("helvetica", "normal");
+      pdf.setTextColor(100, 116, 139);
+      pdf.text("energy used", cardX + 3, cardStartY + 26.5);
+      
+      yPos += cardHeight + 10;
+      pdf.setTextColor(0, 0, 0);
+      
+      addSpacer(5);
       addSubsectionHeading("Audit Period");
       addText("All Available Readings");
       addSpacer(5);
