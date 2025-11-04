@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Download, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { Download, ChevronLeft, ChevronRight, Loader2, Printer } from "lucide-react";
 import { Document, Page, pdfjs } from "react-pdf";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -107,6 +107,20 @@ export function StandardReportPreview({
     }
   };
 
+  const handlePrint = () => {
+    if (!pdfUrl) return;
+    
+    // Open PDF in new window for printing
+    const printWindow = window.open(pdfUrl, '_blank');
+    if (printWindow) {
+      printWindow.onload = () => {
+        printWindow.print();
+      };
+    } else {
+      toast.error("Please allow pop-ups to print the report");
+    }
+  };
+
   const goToPrevPage = () => {
     setPageNumber((prev) => Math.max(1, prev - 1));
   };
@@ -131,6 +145,17 @@ export function StandardReportPreview({
                   Page {pageNumber} of {numPages}
                 </span>
               )}
+              
+              {/* Print button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handlePrint}
+                disabled={!pdfUrl || isLoading || hasError}
+              >
+                <Printer className="h-4 w-4 mr-2" />
+                Print
+              </Button>
               
               {/* Download button */}
               <Button
