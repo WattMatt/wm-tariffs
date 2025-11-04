@@ -28,97 +28,83 @@ serve(async (req) => {
       throw new Error('LOVABLE_API_KEY not configured');
     }
 
-    const systemPrompt = `You are an expert electrical metering auditor specializing in South African municipal billing and sub-metering reconciliation. You write detailed, evidence-based audit reports following professional standards. Your writing is formal, technical, quantitative, and action-oriented. Always reference specific meters, consumption values in kWh, and financial impacts in ZAR when relevant.`;
+    const systemPrompt = `You are an expert electrical metering auditor specializing in South African municipal billing and sub-metering reconciliation. Generate reports following this exact format with precise tables, status indicators (✓, ⚠, ✗), and one-line statements. Always reference specific meters, consumption values in kWh, and financial impacts in ZAR.`;
 
     const sections: any = {};
 
-    // Prepare CSV columns summary for AI context with actual data
+    // Prepare CSV columns summary
     let csvColumnsSummary = '';
     if (selectedCsvColumns && selectedCsvColumns.length > 0) {
-      csvColumnsSummary = `\n\n=== CRITICAL: CSV COLUMNS DATA ANALYSIS ===\nThe following CSV columns have been selected and MUST be analyzed in detail:\n${selectedCsvColumns.map((col: any) => 
-        `- ${col.columnName} (aggregation: ${col.aggregation}, multiplier: ${col.multiplier})`
+      csvColumnsSummary = `\n\nCSV Columns Selected for Analysis:\n${selectedCsvColumns.map((col: any) => 
+        `- ${col.columnName} (${col.aggregation}, ×${col.multiplier})`
       ).join('\n')}`;
       
-      // Add actual values for each meter
-      csvColumnsSummary += '\n\nMeter-by-Meter CSV Data:\n';
+      csvColumnsSummary += '\n\nMeter CSV Data:\n';
       meterHierarchy.forEach((meter: any) => {
-        csvColumnsSummary += `\n${meter.meterNumber} (${meter.name}):\n`;
-        
-        // Add totals
-        if (meter.columnTotals && Object.keys(meter.columnTotals).length > 0) {
-          csvColumnsSummary += '  Totals:\n';
+        csvColumnsSummary += `\n${meter.meterNumber}:\n`;
+        if (meter.columnTotals) {
           Object.entries(meter.columnTotals).forEach(([key, value]) => {
-            csvColumnsSummary += `    - ${key}: ${value}\n`;
-          });
-        }
-        
-        // Add max values
-        if (meter.columnMaxValues && Object.keys(meter.columnMaxValues).length > 0) {
-          csvColumnsSummary += '  Maximum Values:\n';
-          Object.entries(meter.columnMaxValues).forEach(([key, value]) => {
-            csvColumnsSummary += `    - ${key}: ${value}\n`;
+            csvColumnsSummary += `  ${key}: ${value}\n`;
           });
         }
       });
     }
 
-    // Generate Executive Summary
-    const executiveSummaryPrompt = `Generate a visual executive-style report section following these principles:
-- Purpose: Enable rapid decision-making
-- Language: Plain, active, directive; bullets and one-line sentences only
-- Visuals: Tables with status indicators (✓ ⚠ ✗)
-- Format: Clear headings, consistent numbers, minimal jargon
+    // 1. EXECUTIVE SUMMARY
+    const executiveSummaryPrompt = `Generate Section 1: Executive Summary for ${siteName}.
 
-DATA FOR ${siteName}:
+STRUCTURE REQUIRED (match this exactly):
+
+Single-sentence headline:
+[Site Name] [Period] Audit: Critical [X.XX]% Energy Variance and ZAR [Amount] Financial Loss Identified.
+
+# Key Points
+
+- Scope: [One sentence describing audit coverage - council billing, main check meter, tenant sub-metering]
+- Finding: [One sentence on primary issue causing financial losses]
+- Metering Variance: [One sentence: X.XX% variance between main meter and sub-meters]
+- Financial Impact: [One sentence: Total calculated loss for this quarter is ZAR X,XXX]
+
+# Performance Snapshot
+
+| Metric | Status | Detail |
+|--------|--------|--------|
+| Council Bill Accuracy | [✓/⚠/✗] | [One sentence about council bill vs site meter variance with %] |
+| Metering System Health | [✓/⚠/✗] | [One sentence about main vs sub-meter variance with %] |
+| Tenant Billing Accuracy | [✓/⚠/✗] | [One sentence about tenant billing issues if any] |
+| Data Integrity | [✓/⚠/✗] | [One sentence about missing readings or data gaps] |
+
+# Top 3 Critical Findings
+
+## Finding 1: [Title]
+Impact: [Specific kWh] of energy [issue], resulting in a ZAR [amount] loss this quarter.
+Priority: HIGH
+
+## Finding 2: [Title]
+Impact: [Specific issue description with ZAR amount]
+Priority: HIGH
+
+## Finding 3: [Title]
+Impact: [Specific issue description]
+Priority: MEDIUM
+
+# Financial Impact Calculation
+[Component 1] ([X,XXX kWh @ ZAR X.XX]) + [Component 2] = ZAR [Total] Total Loss
+
+# Immediate Actions Required
+- [Action 1 - specific and directive]
+- [Action 2 - specific and directive]
+
+DATA PROVIDED:
 Period: ${auditPeriodStart} to ${auditPeriodEnd}
-- Total Supply: ${reconciliationData.totalSupply} kWh
-- Council Bulk: ${reconciliationData.councilTotal} kWh  
-- Solar: ${reconciliationData.solarTotal} kWh
-- Consumption: ${reconciliationData.distributionTotal} kWh
-- Variance: ${reconciliationData.variance} kWh (${reconciliationData.variancePercentage}%)
-- Recovery: ${reconciliationData.recoveryRate}%
-- Financial Impact: R${(parseFloat(reconciliationData.variance) * 2.50).toFixed(2)}
+Total Supply: ${reconciliationData.totalSupply} kWh
+Council Bulk: ${reconciliationData.councilTotal} kWh
+Solar: ${reconciliationData.solarTotal} kWh
+Consumption: ${reconciliationData.distributionTotal} kWh
+Variance: ${reconciliationData.variance} kWh (${reconciliationData.variancePercentage}%)
+Recovery Rate: ${reconciliationData.recoveryRate}%
 
-OUTPUT REQUIRED:
-
-One-line headline: [Site name], [period], [critical finding in 10 words or less]
-
-EXECUTIVE BRIEFING
-• [One line: audit scope]
-• [One line: key finding with number]
-• [One line: variance impact in kWh and %]
-• [One line: recovery rate with comparison to target]
-• [One line: financial exposure in ZAR]
-
-PERFORMANCE SNAPSHOT
-| Metric | Value | Status |
-|--------|-------|--------|
-| Total supply | ${reconciliationData.totalSupply} kWh | ✓ |
-| Council bulk supply | ${reconciliationData.councilTotal} kWh | ${parseFloat(reconciliationData.councilTotal) > 0 ? '✓' : '⚠'} |
-| Solar generation | ${reconciliationData.solarTotal} kWh | ✓ |
-| Sub-meter consumption | ${reconciliationData.distributionTotal} kWh | ✓ |
-| Unaccounted variance | ${reconciliationData.variance} kWh | ${Math.abs(parseFloat(reconciliationData.variancePercentage)) < 5 ? '✓' : '⚠'} |
-| Recovery rate | ${reconciliationData.recoveryRate}% | ${parseFloat(reconciliationData.recoveryRate) >= 98 ? '✓' : '⚠'} |
-
-CRITICAL FINDINGS
-[List exactly 3 findings, one line each]
-
-| Finding | Impact | Priority |
-|---------|--------|----------|
-| [Finding 1 from data] | [Impact in kWh or ZAR] | HIGH |
-| [Finding 2 from data] | [Impact in kWh or ZAR] | HIGH |
-| [Finding 3 from data] | [Impact] | MEDIUM |
-
-FINANCIAL IMPACT
-| Item | Calculation | Amount |
-|------|-------------|--------|
-| Variance cost estimate | ${reconciliationData.variance} kWh × R2.50 | R${(parseFloat(reconciliationData.variance) * 2.50).toFixed(2)} |
-
-IMMEDIATE ACTIONS REQUIRED
-1. [One-line directive action addressing finding 1]
-2. [One-line directive action addressing finding 2]
-
-Use this EXACT structure. Keep all text to one line per point.`;
+Calculate financial loss at ZAR 3.20/kWh. Use ✓ for <2% variance, ⚠ for 2-5%, ✗ for >5%.`;
 
     const execSummaryResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -142,41 +128,29 @@ Use this EXACT structure. Keep all text to one line per point.`;
     const execSummaryResult = await execSummaryResponse.json();
     sections.executiveSummary = execSummaryResult.choices[0].message.content;
 
-    // Generate Metering Hierarchy Overview
-    const hierarchyPrompt = `Generate a visual executive-style metering hierarchy section for ${siteName}.
+    // 2. METERING HIERARCHY OVERVIEW
+    const hierarchyPrompt = `Generate Section 2: Metering Hierarchy Overview for ${siteName}.
 
-PRINCIPLES:
-- Language: Plain, active, directive; one-line sentences and bullets
-- Format: Clear structure with tables where appropriate
-- Minimal jargon
+STRUCTURE REQUIRED (match this exactly):
 
-Meter Hierarchy Data:
+# Supply and Distribution
+[One sentence describing electricity flow sequence]
+
+[Supply Authority Name] → [Council Meter] → [M###: Site Check Meter] → Main DB → [Sub-meters: List] → Tenants
+
+# Sub-metering Breakdown
+
+| Category | Key Meter Numbers | Area / Purpose Covered |
+|----------|-------------------|------------------------|
+| [Tenant/Unit Name] | [Meter IDs] | [Description of area] |
+| [Tenant/Unit Name] | [Meter IDs] | [Description of area] |
+| [Other category] | [Meter IDs] | [Description of area] |
+
+DATA PROVIDED:
 ${JSON.stringify(meterHierarchy, null, 2)}
-
-Meter Breakdown:
 ${JSON.stringify(meterBreakdown, null, 2)}
 
-OUTPUT REQUIRED:
-
-One-line opening: [State total number of meters and basic hierarchy structure]
-
-SUPPLY METERS
-• [One line: Council bulk meter number and capacity/consumption]
-• [One line: Solar/generation meter if present]
-
-DISTRIBUTION STRUCTURE
-• [One line: How power flows from bulk to distribution]
-• [One line: Main distribution boards or key connection points]
-
-SUB-METERING BREAKDOWN
-| Category | Count | Key Meters |
-|----------|-------|------------|
-| Tenant/Retail meters | [#] | [List 2-3 meter numbers] |
-| Service meters | [#] | [HVAC, utilities] |
-| Check meters | [#] | [Active/inactive status] |
-| Specialized | [#] | [Signage, ATM, etc.] |
-
-Keep each point to one line. Include meter numbers for traceability.`;
+Create the flow diagram showing the actual meter numbers. Group sub-meters by tenant/purpose in the table.`;
 
     const hierarchyResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -200,72 +174,40 @@ Keep each point to one line. Include meter numbers for traceability.`;
     const hierarchyResult = await hierarchyResponse.json();
     sections.hierarchyOverview = hierarchyResult.choices[0].message.content;
 
-    // Generate Observations and Anomalies with CSV data
-    const observationsPrompt = `Generate a visual executive-style observations section.
+    // 3. METERING SYSTEM OBSERVATIONS
+    const observationsPrompt = `Generate Section 3: Metering System Observations for ${siteName}.
 
-PRINCIPLES:
-- Language: Plain, active; one-line sentences and bullets
-- Format: Tables with status indicators (✓ ⚠ ✗)
-- Minimal jargon
+STRUCTURE REQUIRED (match this exactly):
 
-Anomalies Detected:
-${JSON.stringify(anomalies, null, 2)}
+# Meter Reading Deficiencies
 
-Reconciliation Data:
-${JSON.stringify(reconciliationData, null, 2)}
+| Meter Number | Deficiency Noted | Impact |
+|--------------|------------------|--------|
+| [Meter ID] | [One sentence describing deficiency] | [One sentence on impact] |
 
-Meter Breakdown:
-${JSON.stringify(meterBreakdown, null, 2)}
+# Variance Analysis (Check Meter vs Sum of Sub-Meters)
+
+The variance between the main check meter and the sum of sub-meters is [X.XX]%. This [exceeds/is within] the acceptable threshold of 2%.
+
+# Analysis Table
+
+| Description | kWh |
+|-------------|-----|
+| Total Consumption (Check Meter [ID]) | [Value] |
+| Total Sub-metered (Sum of [IDs]) | [Value] |
+| **Variance (Unaccounted Energy)** | **[Value]** |
+
+DATA PROVIDED:
+Variance: ${reconciliationData.variance} kWh (${reconciliationData.variancePercentage}%)
+Total Supply: ${reconciliationData.totalSupply} kWh
+Distribution Total: ${reconciliationData.distributionTotal} kWh
+Recovery Rate: ${reconciliationData.recoveryRate}%
+
+Anomalies: ${JSON.stringify(anomalies, null, 2)}
+Meter Breakdown: ${JSON.stringify(meterBreakdown, null, 2)}
 ${csvColumnsSummary}
 
-OUTPUT REQUIRED:
-
-One-line opening: [State number of issues found and severity]
-
-METER READING DEFICIENCIES
-| Meter | Readings | Status | Impact |
-|-------|----------|--------|--------|
-| [Meter #] | [Count] | ⚠ | [One-line impact] |
-| [Meter #] | [Count] | ✗ | [One-line impact] |
-
-${selectedCsvColumns && selectedCsvColumns.length > 0 ? `
-CSV DATA ANALYSIS - MANDATORY
-[One line: Overview of CSV columns analyzed]
-
-| Meter | ${selectedCsvColumns.map((c: any) => c.columnName).slice(0, 3).join(' | ')} | Status |
-|-------|${selectedCsvColumns.slice(0, 3).map(() => '---').join('|')}|--------|
-| [Meter #] | [Value] | [Value] | [Value] | ⚠ |
-
-Key findings from CSV data:
-• [One line: P1/P2 comparison finding]
-• [One line: kVA demand finding]
-• [One line: Power factor or billing concern]
-` : ''}
-
-VARIANCE ANALYSIS
-• Current variance: ${reconciliationData.variance} kWh (${reconciliationData.variancePercentage}%)
-• Acceptable threshold: 5-7%
-• Status: ${Math.abs(parseFloat(reconciliationData.variancePercentage)) < 5 ? '✓ Within limits' : '⚠ Exceeds threshold'}
-• Financial impact: R${(parseFloat(reconciliationData.variance) * 2.50).toFixed(2)}
-
-RECOVERY RATE ANALYSIS
-• Current rate: ${reconciliationData.recoveryRate}%
-• Target threshold: 90-95%
-• Status: ${parseFloat(reconciliationData.recoveryRate) >= 90 ? '✓ Acceptable' : '⚠ Below target'}
-• Lost revenue potential: [Calculate based on variance]
-
-MISSING/INACCESSIBLE METERS
-[If any meters have no data]
-| Meter | Last Reading | Suspected Cause |
-|-------|--------------|-----------------|
-| [Meter #] | [Date or "None"] | [One-line cause] |
-
-BILLING DISCREPANCIES
-• [One line: Overbilling scenario with meter #]
-• [One line: Underbilling scenario with meter #]
-• [One line: Tariff misapplication with meter #]
-
-Keep all points to one line. Use tables for data. Include meter numbers for traceability.`;
+Identify meters with missing readings. Calculate actual variance percentage. Bold the variance row in the table.`;
 
     const observationsResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -289,48 +231,34 @@ Keep all points to one line. Use tables for data. Include meter numbers for trac
     const observationsResult = await observationsResponse.json();
     sections.observations = observationsResult.choices[0].message.content;
 
-    // Generate Recommendations
-    const recommendationsPrompt = `Generate visual executive-style recommendations.
+    // 5. RECOMMENDATIONS
+    const recommendationsPrompt = `Generate Section 5: Recommendations for ${siteName}.
 
-PRINCIPLES:
-- Language: Directive, action-oriented; one-line sentences
-- Format: Tables with priority indicators
-- Each action: what, why, priority
+STRUCTURE REQUIRED (match this exactly):
 
-Issues Found:
-${JSON.stringify(anomalies, null, 2)}
+# Immediate Actions (HIGH Priority)
 
-Reconciliation Data:
-${JSON.stringify(reconciliationData, null, 2)}
+| Action | Owner | Timeline |
+|--------|-------|----------|
+| [Specific action 1] | [Facility Manager/Energy Team/etc.] | [24 Hours/7 Days/etc.] |
+| [Specific action 2] | [Owner] | [Timeline] |
+| [Specific action 3] | [Owner] | [Timeline] |
 
-OUTPUT REQUIRED:
+# Process Improvements (MEDIUM Priority)
 
-One-line opening: [Number of recommendations across priority levels]
+[Action statement as heading]
 
-IMMEDIATE ACTIONS (Priority: HIGH)
-| Action | Target | Timeline | Impact |
-|--------|--------|----------|--------|
-| [Action 1: Fix meter readings] | [Specific meters] | [Days/weeks] | [Revenue/accuracy] |
-| [Action 2: Investigate variance] | [Area/meters] | [Days/weeks] | [Financial] |
+Implementation Steps:
+1. [Concrete step 1]
+2. [Concrete step 2]
+3. [Concrete step 3]
 
-INFRASTRUCTURE UPGRADES (Priority: MEDIUM)
-| Upgrade | Scope | Timeline | Benefit |
-|---------|-------|----------|---------|
-| [Smart meter installation] | [# meters] | [Months] | [One-line benefit] |
-| [CT ratio verification] | [# meters] | [Months] | [One-line benefit] |
+DATA PROVIDED:
+Variance: ${reconciliationData.variance} kWh (${reconciliationData.variancePercentage}%)
+Recovery Rate: ${reconciliationData.recoveryRate}%
+Anomalies: ${JSON.stringify(anomalies, null, 2)}
 
-PROCESS IMPROVEMENTS (Priority: MEDIUM)
-• [Action: Implement automated reading system - timeline - benefit]
-• [Action: Deploy validation protocols - timeline - benefit]
-• [Action: Create reconciliation dashboard - timeline - benefit]
-
-PREVENTATIVE MEASURES (Ongoing)
-| Measure | Frequency | Owner | Purpose |
-|---------|-----------|-------|---------|
-| [Regular audits] | [Monthly/quarterly] | [Role] | [One-line purpose] |
-| [Real-time monitoring] | [Continuous] | [Role] | [One-line purpose] |
-
-Keep each action to one line. Include timelines and responsible parties where known.`;
+Generate 3-5 immediate actions with specific owners (e.g., "Facility Manager", "Energy Team", "Billing Department") and realistic timelines. For process improvements, provide a clear action statement and 3-5 numbered implementation steps.`;
 
     const recommendationsResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -354,58 +282,45 @@ Keep each action to one line. Include timelines and responsible parties where kn
     const recommendationsResult = await recommendationsResponse.json();
     sections.recommendations = recommendationsResult.choices[0].message.content;
 
-    // Generate Billing Validation Summary
+    // 4. BILLING AND INVOICE VALIDATION
     if (documentExtractions?.length > 0) {
-      const billingPrompt = `Generate visual executive-style billing validation section.
+      const billingPrompt = `Generate Section 4: Billing and Invoice Validation for ${siteName}.
 
-PRINCIPLES:
-- Language: Factual, quantitative; one-line sentences
-- Format: Tables for discrepancies
-- Each finding: what, amount, priority
+STRUCTURE REQUIRED (match this exactly):
 
-Extracted Billing Data:
-${JSON.stringify(documentExtractions, null, 2)}
+# A. Council Bill Validation
 
-Meter Data for Cross-Reference:
-${JSON.stringify(meterBreakdown, null, 2)}
+This check confirms the [Utility Name] utility bill matches our main site meter.
 
-OUTPUT REQUIRED:
+# Consumption Verification
 
-One-line opening: [Purpose and number of bills validated]
+| Description | Council Billed (kWh) | Site Check Meter (kWh) | Difference | Status |
+|-------------|---------------------|----------------------|------------|--------|
+| [Period description] | [Value] | [Value] | [Diff] | [✓/⚠/✗] |
 
-CONSUMPTION VERIFICATION
-| Tenant/Unit | Billed (kWh) | Actual (kWh) | Variance | Status |
-|-------------|--------------|--------------|----------|--------|
-| [Unit #] | [Value] | [Value] | [Diff] | ⚠ |
-| [Unit #] | [Value] | [Value] | [Diff] | ✓ |
+# B. Tenant Invoice Validation
 
-TARIFF APPLICATION CHECK
-| Tenant | Applied Rate | Correct Rate | Status | Impact |
-|--------|--------------|--------------|--------|--------|
-| [Tenant] | [Rate] | [Rate] | ⚠ | R[Amount] |
+This check confirms our invoices to tenants are accurate.
 
-BILLING DISCREPANCIES IDENTIFIED
-| Issue | Tenant/Meter | Variance (kWh) | Variance (ZAR) | Priority |
-|-------|--------------|----------------|----------------|----------|
-| [Overbilling case] | [ID] | [Value] | R[Value] | HIGH |
-| [Underbilling case] | [ID] | [Value] | R[Value] | MEDIUM |
+# Invoice vs Meter Data Check
 
-SOLAR CREDIT VERIFICATION (if applicable)
-• Billed solar credit: [kWh] @ R[rate]
-• Actual solar generation: [kWh]
-• Status: ${reconciliationData.solarTotal && parseFloat(reconciliationData.solarTotal) > 0 ? '[✓ or ⚠]' : 'N/A'}
+| Tenant/Meter | Metered (kWh) | Invoiced (kWh) | Difference | Status |
+|--------------|--------------|----------------|------------|--------|
+| [Tenant/Meter ID] | [Value] | [Value] | [Diff] | [✓/⚠/✗] |
 
-TOTAL AMOUNT VERIFICATION
-| Tenant | Calculated Total | Billed Total | Variance | Status |
-|--------|------------------|--------------|----------|--------|
-| [Tenant] | R[Value] | R[Value] | R[Diff] | ⚠ |
+# Tenant Tariff Check
 
-IMMEDIATE BILLING CORRECTIONS REQUIRED
-1. [One-line directive: tenant, issue, amount]
-2. [One-line directive: tenant, issue, amount]
-3. [One-line directive: tenant, issue, amount]
+| Tenant/Meter | Tariff Applied | Correct Tariff | Financial Impact (ZAR) | Status |
+|--------------|---------------|----------------|----------------------|--------|
+| [Tenant/Meter ID] | [Rate] | [Rate] | [Amount] | [✓/⚠/✗] |
 
-Keep each point to one line. Include ZAR amounts for financial traceability.`;
+DATA PROVIDED:
+Document Extractions: ${JSON.stringify(documentExtractions, null, 2)}
+Meter Data: ${JSON.stringify(meterBreakdown, null, 2)}
+Council Total: ${reconciliationData.councilTotal} kWh
+Total Supply: ${reconciliationData.totalSupply} kWh
+
+Cross-reference council bill with site check meter. Compare tenant invoices with actual metered data. Identify tariff misapplications with financial impact. Use ✓ for matches, ⚠ for <5% variance, ✗ for >5% variance.`;
 
       const billingResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
         method: 'POST',
