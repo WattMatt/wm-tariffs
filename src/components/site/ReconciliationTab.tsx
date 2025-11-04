@@ -1185,7 +1185,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       
       if (runError) throw runError;
       
-      // 2. Insert all meter results
+      // 2. Prepare all meters with their assignments
       const allMeters = [
         ...(reconciliationData.bulkMeters || []).map((m: any) => ({ ...m, assignment: 'grid_supply' })),
         ...(reconciliationData.solarMeters || []).map((m: any) => ({ ...m, assignment: 'solar' })),
@@ -1194,6 +1194,46 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         ...(reconciliationData.unassignedMeters || []).map((m: any) => ({ ...m, assignment: 'unassigned' }))
       ];
       
+      // 3. Calculate hierarchical totals for meters with children
+      const meterMap = new Map(allMeters.map(m => [m.id, m]));
+      const hierarchicalTotals = new Map<string, number>();
+      
+      // Helper function to calculate summation by only counting leaf meters
+      const getLeafMeterSum = (meterId: string, visited = new Set<string>()): number => {
+        if (visited.has(meterId)) return 0; // Prevent infinite loops
+        visited.add(meterId);
+        
+        const children = meterConnectionsMap.get(meterId) || [];
+        
+        // If this meter has no children, it's a leaf - return its value
+        if (children.length === 0) {
+          const meterData = meterMap.get(meterId);
+          if (!meterData) return 0;
+          
+          const isSolar = meterAssignments.get(meterId) === "solar_energy" || meterData.assignment === 'solar';
+          const value = meterData.totalKwh || 0;
+          // Solar meters subtract from the total instead of adding
+          return isSolar ? -value : value;
+        }
+        
+        // If this meter has children, recursively sum only its leaf descendants
+        return children.reduce((sum, childId) => {
+          return sum + getLeafMeterSum(childId, visited);
+        }, 0);
+      };
+      
+      // Calculate hierarchical total for each meter that has children
+      allMeters.forEach(meter => {
+        const childIds = meterConnectionsMap.get(meter.id) || [];
+        if (childIds.length > 0) {
+          const hierarchicalTotal = childIds.reduce((sum, childId) => {
+            return sum + getLeafMeterSum(childId);
+          }, 0);
+          hierarchicalTotals.set(meter.id, hierarchicalTotal);
+        }
+      });
+      
+      // 4. Insert all meter results with hierarchical totals
       const meterResults = allMeters.map((meter: any) => ({
         reconciliation_run_id: run.id,
         meter_id: meter.id,
@@ -1205,6 +1245,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         total_kwh: meter.totalKwh || 0,
         total_kwh_positive: meter.totalKwhPositive || 0,
         total_kwh_negative: meter.totalKwhNegative || 0,
+        hierarchical_total: hierarchicalTotals.get(meter.id) || 0,
         readings_count: meter.readingsCount || 0,
         column_totals: meter.columnTotals || null,
         column_max_values: meter.columnMaxValues || null,

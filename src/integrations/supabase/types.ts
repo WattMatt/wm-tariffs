@@ -476,6 +476,7 @@ export type Database = {
           created_at: string | null
           error_message: string | null
           has_error: boolean | null
+          hierarchical_total: number | null
           id: string
           location: string | null
           meter_id: string
@@ -495,6 +496,7 @@ export type Database = {
           created_at?: string | null
           error_message?: string | null
           has_error?: boolean | null
+          hierarchical_total?: number | null
           id?: string
           location?: string | null
           meter_id: string
@@ -514,6 +516,7 @@ export type Database = {
           created_at?: string | null
           error_message?: string | null
           has_error?: boolean | null
+          hierarchical_total?: number | null
           id?: string
           location?: string | null
           meter_id?: string
