@@ -1607,75 +1607,107 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                   </span>
                 )}
               </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleBulkRescan}
-                  disabled={isBulkExtracting}
-                >
-                  {isBulkExtracting ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Re-scanning...
-                    </>
-                  ) : (
-                    <>
-                      <RefreshCw className="w-4 h-4 mr-2" />
-                      Rescan Selected
-                    </>
-                  )}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleBulkEdit}
-                  disabled={isBulkExtracting}
-                >
-                  <Eye className="w-4 h-4 mr-2" />
-                  Bulk Edit
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setIsMoveDialogOpen(true)}
-                  disabled={isBulkExtracting}
-                >
-                  <FolderOpen className="w-4 h-4 mr-2" />
-                  Move to Folder
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleBulkDownload}
-                  disabled={isBulkExtracting}
-                >
-                  <Download className="w-4 h-4 mr-2" />
-                  Download Selected
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleAutoAssignAll}
-                  disabled={isAutoAssigning || documents.filter(d => !d.is_folder).length === 0}
-                  title="Auto-assign meters"
-                >
-                  {isAutoAssigning ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Link className="w-4 h-4" />
-                  )}
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={handleBulkDelete}
-                  disabled={isBulkExtracting}
-                >
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  Delete Selected
-                </Button>
-              </div>
+              <TooltipProvider>
+                <div className="flex gap-2">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleBulkRescan}
+                        disabled={isBulkExtracting}
+                      >
+                        {isBulkExtracting ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <RefreshCw className="w-4 h-4" />
+                        )}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Rescan Selected</p>
+                    </TooltipContent>
+                  </Tooltip>
+                  
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleBulkEdit}
+                        disabled={isBulkExtracting}
+                      >
+                        <Eye className="w-4 h-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Bulk Edit</p>
+                    </TooltipContent>
+                  </Tooltip>
+                  
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setIsMoveDialogOpen(true)}
+                        disabled={isBulkExtracting}
+                      >
+                        <FolderOpen className="w-4 h-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Move to Folder</p>
+                    </TooltipContent>
+                  </Tooltip>
+                  
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleBulkDownload}
+                        disabled={isBulkExtracting}
+                      >
+                        <Download className="w-4 h-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Download Selected</p>
+                    </TooltipContent>
+                  </Tooltip>
+                  
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleAutoAssignAll}
+                        disabled={isAutoAssigning || documents.filter(d => !d.is_folder).length === 0}
+                      >
+                        {isAutoAssigning ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Link className="w-4 h-4" />
+                        )}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Auto-assign Meters</p>
+                    </TooltipContent>
+                  </Tooltip>
+                  
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={handleBulkDelete}
+                    disabled={isBulkExtracting}
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Delete Selected
+                  </Button>
+                </div>
+              </TooltipProvider>
             </div>
           )}
 
