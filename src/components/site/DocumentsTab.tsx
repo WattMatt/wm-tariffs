@@ -583,8 +583,16 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
 
       if (error) throw error;
 
+      // Update local state instead of refetching
+      setDocuments(prevDocs => 
+        prevDocs.map(doc => 
+          doc.id === documentId 
+            ? { ...doc, meter_id: meterId }
+            : doc
+        )
+      );
+
       toast.success(meterId ? "Meter assigned successfully" : "Meter unassigned");
-      fetchDocuments();
     } catch (error: any) {
       console.error("Error assigning meter:", error);
       toast.error("Failed to assign meter");
