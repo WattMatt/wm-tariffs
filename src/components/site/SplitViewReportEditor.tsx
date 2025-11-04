@@ -263,15 +263,27 @@ export function SplitViewReportEditor({
                         maxWidth: '800px'
                       }}
                     >
-                      <embed
-                        src={pdfUrl}
+                      <object
+                        data={pdfUrl}
                         type="application/pdf"
-                        className="w-full border shadow-lg rounded"
+                        className="w-full border shadow-lg rounded bg-white"
                         style={{ 
                           height: '700px',
                           minHeight: '700px'
                         }}
-                      />
+                      >
+                        <div className="flex items-center justify-center h-full p-8">
+                          <div className="text-center space-y-4">
+                            <p className="text-sm text-muted-foreground">
+                              PDF preview not supported in your browser
+                            </p>
+                            <Button onClick={handleRefresh} variant="outline" size="sm">
+                              <RefreshCw className="w-4 h-4 mr-2" />
+                              Try Again
+                            </Button>
+                          </div>
+                        </div>
+                      </object>
                     </div>
                   </div>
                 ) : (
