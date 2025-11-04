@@ -32,7 +32,6 @@ export function SplitViewReportEditor({
   const [zoom, setZoom] = useState(100);
   const [initialLoadDone, setInitialLoadDone] = useState(false);
   const debounceTimer = useRef<NodeJS.Timeout>();
-  const iframeRef = useRef<HTMLIFrameElement>(null);
 
   // Convert sections to unified markdown on mount
   useEffect(() => {
@@ -254,22 +253,24 @@ export function SplitViewReportEditor({
               </div>
               <div className="flex-1 bg-muted/20 overflow-auto">
                 {pdfUrl ? (
-                  <div className="p-4">
+                  <div className="p-4 flex justify-center">
                     <div 
                       style={{ 
                         transform: `scale(${zoom / 100})`,
                         transformOrigin: 'top center',
-                        transition: 'transform 0.2s ease'
+                        transition: 'transform 0.2s ease',
+                        width: '100%',
+                        maxWidth: '800px'
                       }}
                     >
-                      <iframe
-                        ref={iframeRef}
+                      <embed
                         src={pdfUrl}
-                        className="w-full border shadow-lg"
+                        type="application/pdf"
+                        className="w-full border shadow-lg rounded"
                         style={{ 
-                          height: '700px'
+                          height: '700px',
+                          minHeight: '700px'
                         }}
-                        title="PDF Preview"
                       />
                     </div>
                   </div>
