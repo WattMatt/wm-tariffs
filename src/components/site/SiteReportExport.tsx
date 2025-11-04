@@ -895,9 +895,27 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         addTable(["Metric", "Value"], basicMetricsRows, [100, 70]);
         addSpacer(5);
         
+        // KPI Indicators Section
+        addSubsectionHeading("4.2 Data Collection KPIs");
+        
+        // Calculate KPI stats from meter data
+        const totalReadingsCount = meterData.reduce((sum: number, meter: any) => sum + (meter.readingsCount || 0), 0);
+        const totalMetersCount = meterData.length;
+        const totalConsumption = meterData.reduce((sum: number, meter: any) => sum + (parseFloat(meter.totalKwh) || 0), 0);
+        
+        const kpiRows = [
+          ["Total Readings Collected", totalReadingsCount.toLocaleString()],
+          ["Active Meters Analyzed", totalMetersCount.toString()],
+          ["Total Consumption", `${formatNumber(totalConsumption)} kWh`],
+          ["Average Readings per Meter", totalMetersCount > 0 ? Math.round(totalReadingsCount / totalMetersCount).toString() : "0"]
+        ];
+        
+        addTable(["KPI Indicator", "Value"], kpiRows, [100, 70]);
+        addSpacer(5);
+        
         // CSV Column Aggregations
         if (csvColumnAggregations && csvColumnAggregations.length > 0) {
-          addSubsectionHeading("4.2 CSV Column Aggregations");
+          addSubsectionHeading("4.3 CSV Column Aggregations");
           const csvMetricsRows = csvColumnAggregations.map((data: any) => [
             data.column,
             formatNumber(data.value),
@@ -2157,9 +2175,27 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       addTable(["Metric", "Value"], basicMetricsRows, [100, 70]);
       addSpacer(8);
       
+      // KPI Indicators Section
+      addSubsectionHeading("4.2 Data Collection KPIs");
+      
+      // Calculate KPI stats from meter data
+      const totalReadingsCount = meterData.reduce((sum: number, meter: any) => sum + (meter.readingsCount || 0), 0);
+      const totalMetersCount = meterData.length;
+      const totalConsumption = meterData.reduce((sum: number, meter: any) => sum + (parseFloat(meter.totalKwh) || 0), 0);
+      
+      const kpiRows = [
+        ["Total Readings Collected", totalReadingsCount.toLocaleString()],
+        ["Active Meters Analyzed", totalMetersCount.toString()],
+        ["Total Consumption", `${formatNumber(totalConsumption)} kWh`],
+        ["Average Readings per Meter", totalMetersCount > 0 ? Math.round(totalReadingsCount / totalMetersCount).toString() : "0"]
+      ];
+      
+      addTable(["KPI Indicator", "Value"], kpiRows, [100, 70]);
+      addSpacer(8);
+      
       // Add CSV Column Aggregations if available
       if (csvColumnAggregations && Object.keys(csvColumnAggregations).length > 0) {
-        addSubsectionHeading("4.2 CSV Column Aggregations");
+        addSubsectionHeading("4.3 CSV Column Aggregations");
         addText("Site-wide aggregated values for selected CSV columns:");
         addSpacer(3);
         
