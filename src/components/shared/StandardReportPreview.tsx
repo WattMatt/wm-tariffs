@@ -117,7 +117,7 @@ export function StandardReportPreview({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl h-[90vh] flex flex-col">
+      <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
         <DialogHeader className="flex-shrink-0">
           <div className="flex items-center justify-between">
             <DialogTitle className="text-lg font-semibold">
@@ -193,7 +193,7 @@ export function StandardReportPreview({
               >
                 <Page
                   pageNumber={pageNumber}
-                  width={700}
+                  width={600}
                   renderTextLayer={true}
                   renderAnnotationLayer={true}
                   className="shadow-lg"

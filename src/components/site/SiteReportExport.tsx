@@ -339,10 +339,10 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
 
         // Template styling constants
         const blueBarWidth = 15;
-        const leftMargin = 25;
+        const leftMargin = 15;
         const rightMargin = 20;
-        const topMargin = 20;
-        const bottomMargin = 20;
+        const topMargin = 15;
+        const bottomMargin = 15;
         const templateBlue = [23, 109, 177]; // RGB for #176DB1
         
         let yPos = topMargin;
@@ -538,7 +538,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         };
         
         // Helper to render content with markdown support
-        const renderContent = (text: string, fontSize: number = 10) => {
+        const renderContent = (text: string, fontSize: number = 9) => {
           if (!text || text.trim() === '') return;
           
           // Check for JSON chart blocks (with or without code fences)
@@ -615,7 +615,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         };
         
         // Helper to add text with wrapping
-        const addText = (text: string, fontSize: number = 10, isBold: boolean = false) => {
+        const addText = (text: string, fontSize: number = 9, isBold: boolean = false) => {
           const cleanedText = text.replace(/\*\*(.*?)\*\*/g, '$1').replace(/^##\s+.+$/gm, '').trim();
           pdf.setFontSize(fontSize);
           pdf.setFont("helvetica", isBold ? "bold" : "normal");
@@ -637,7 +637,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         };
         
         // Helper to add section heading
-        const addSectionHeading = (text: string, fontSize: number = 14, forceNewPage: boolean = false) => {
+        const addSectionHeading = (text: string, fontSize: number = 12, forceNewPage: boolean = false) => {
           // Force new page for major sections
           if (forceNewPage) {
             addFooter();
@@ -666,7 +666,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             addBlueSidebar();
             yPos = topMargin;
           }
-          pdf.setFontSize(11);
+          pdf.setFontSize(9);
           pdf.setFont("helvetica", "bold");
           pdf.setTextColor(templateBlue[0], templateBlue[1], templateBlue[2]);
           pdf.text(text, leftMargin, yPos);
@@ -736,19 +736,19 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         // COVER PAGE
         addBlueSidebar();
         pdf.setTextColor(templateBlue[0], templateBlue[1], templateBlue[2]);
-        pdf.setFontSize(32);
+        pdf.setFontSize(24);
         pdf.setFont("helvetica", "bold");
         pdf.text(previewSiteName.toUpperCase(), pageWidth / 2, 80, { align: "center" });
         
-        pdf.setFontSize(18);
+        pdf.setFontSize(14);
         pdf.text("METERING AUDIT REPORT", pageWidth / 2, 100, { align: "center" });
         
         pdf.setTextColor(0, 0, 0);
-        pdf.setFontSize(14);
+        pdf.setFontSize(12);
         pdf.setFont("helvetica", "normal");
         pdf.text("Financial Analysis", pageWidth / 2, 115, { align: "center" });
         
-        pdf.setFontSize(11);
+        pdf.setFontSize(9);
         pdf.text("Audit Period", pageWidth / 2, 155, { align: "center" });
         pdf.setFont("helvetica", "bold");
         pdf.text("All Available Readings", pageWidth / 2, 165, { align: "center" });
@@ -768,7 +768,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         yPos = topMargin;
         
         pdf.setTextColor(templateBlue[0], templateBlue[1], templateBlue[2]);
-        pdf.setFontSize(14);
+        pdf.setFontSize(12);
         pdf.setFont("helvetica", "bold");
         pdf.text("1.1 Table of Contents", leftMargin, yPos);
         pdf.setTextColor(0, 0, 0);
@@ -785,7 +785,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           "8. APPENDICES"
         ];
         
-        pdf.setFontSize(11);
+        pdf.setFontSize(9);
         tocEntries.forEach((entry) => {
           pdf.setFont("helvetica", "bold");
           pdf.setTextColor(templateBlue[0], templateBlue[1], templateBlue[2]);
@@ -1509,10 +1509,10 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       
       // Template styling constants
       const blueBarWidth = 15; // Width of left blue bar
-      const leftMargin = 25; // Left margin (accounting for blue bar)
+      const leftMargin = 15; // Left margin (accounting for blue bar)
       const rightMargin = 20;
-      const topMargin = 20;
-      const bottomMargin = 20;
+      const topMargin = 15;
+      const bottomMargin = 15;
       
       // Template blue color (from the template)
       const templateBlue = [23, 109, 177]; // RGB for #176DB1
@@ -1724,7 +1724,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       };
       
       // Helper to render content with markdown support
-      const renderContent = (text: string, fontSize: number = 10, indent: number = 0) => {
+      const renderContent = (text: string, fontSize: number = 9, indent: number = 0) => {
         if (!text || text.trim() === '') return;
         
         // Check for JSON chart blocks (with or without code fences)
@@ -1798,7 +1798,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       };
 
       // Helper function to add text with wrapping
-      const addText = (text: string, fontSize: number = 10, isBold: boolean = false, indent: number = 0) => {
+      const addText = (text: string, fontSize: number = 9, isBold: boolean = false, indent: number = 0) => {
         const cleanedText = cleanMarkdown(text);
         pdf.setFontSize(fontSize);
         pdf.setFont("helvetica", isBold ? "bold" : "normal");
@@ -1920,7 +1920,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         yPos += 5;
       };
 
-      const addSectionHeading = (text: string, fontSize: number = 14, forceNewPage: boolean = false) => {
+      const addSectionHeading = (text: string, fontSize: number = 12, forceNewPage: boolean = false) => {
         // Force new page for major sections
         if (forceNewPage) {
           addBlueSidebar();
@@ -1980,20 +1980,20 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       
       // Title centered on page
       pdf.setTextColor(templateBlue[0], templateBlue[1], templateBlue[2]);
-      pdf.setFontSize(32);
+      pdf.setFontSize(24);
       pdf.setFont("helvetica", "bold");
       pdf.text(previewSiteName.toUpperCase(), pageWidth / 2, 80, { align: "center" });
       
-      pdf.setFontSize(18);
+      pdf.setFontSize(14);
       pdf.text("METERING AUDIT REPORT", pageWidth / 2, 100, { align: "center" });
       
       pdf.setTextColor(0, 0, 0);
-      pdf.setFontSize(14);
+      pdf.setFontSize(12);
       pdf.setFont("helvetica", "normal");
       pdf.text("Financial Analysis", pageWidth / 2, 115, { align: "center" });
       
       // Audit Period section
-      pdf.setFontSize(11);
+      pdf.setFontSize(9);
       pdf.setFont("helvetica", "normal");
       pdf.text("Audit Period", pageWidth / 2, 155, { align: "center" });
       pdf.setFont("helvetica", "bold");
@@ -2014,7 +2014,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       
       // Add heading
       pdf.setTextColor(templateBlue[0], templateBlue[1], templateBlue[2]);
-      pdf.setFontSize(14);
+      pdf.setFontSize(12);
       pdf.setFont("helvetica", "bold");
       pdf.text("1.1 Table of Contents", leftMargin, yPos);
       pdf.setTextColor(0, 0, 0);
@@ -2040,8 +2040,8 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         tocEntries.push("9. BILLING VALIDATION");
       }
       
-      pdf.setFontSize(11);
-      pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(9);
+        pdf.setFont("helvetica", "normal");
       
       tocEntries.forEach((entry, index) => {
         if (yPos > pageHeight - bottomMargin - 10) {
