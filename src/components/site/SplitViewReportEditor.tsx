@@ -166,7 +166,6 @@ export function SplitViewReportEditor({
       setIsGenerating(true);
       try {
         await generateFinalPdf(sections);
-        onSave(sections);
       } catch (error) {
         console.error("Error generating final PDF:", error);
       } finally {
@@ -261,7 +260,7 @@ export function SplitViewReportEditor({
             ) : (
               <>
                 <Save className="w-4 h-4 mr-2" />
-                {generateFinalPdf ? 'Generate & Download PDF' : 'Save Changes'}
+                {generateFinalPdf ? 'Generate & Save PDF' : 'Save Changes'}
               </>
             )}
           </Button>

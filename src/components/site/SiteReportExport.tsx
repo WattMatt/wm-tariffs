@@ -16,6 +16,8 @@ import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { SplitViewReportEditor } from "./SplitViewReportEditor";
+import SaveReportDialog from "./SaveReportDialog";
+import SavedReportsList from "./SavedReportsList";
 
 export interface PdfSection {
   id: string;
@@ -73,6 +75,9 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
   const [currentPage, setCurrentPage] = useState(1);
   const [isEditingContent, setIsEditingContent] = useState(false);
   const [editableSections, setEditableSections] = useState<PdfSection[]>([]);
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [pendingPdfBlob, setPendingPdfBlob] = useState<Blob | null>(null);
+  const [refreshReports, setRefreshReports] = useState(0);
   
   // New states for required selections
   const [selectedSchematicId, setSelectedSchematicId] = useState<string>("");
@@ -1706,17 +1711,63 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       
       addTable(["Topic", "Page"], indexRows, [140, 30]);
       
-      // Save PDF
-      const fileName = `${previewSiteName.replace(/\s+/g, "_")}_Audit_Report_${format(new Date(), "yyyyMMdd")}.pdf`;
-      pdf.save(fileName);
+      // Convert PDF to Blob and show save dialog
+      const pdfBlob = pdf.output('blob');
+      setPendingPdfBlob(pdfBlob);
+      const defaultFileName = `${previewSiteName.replace(/\s+/g, "_")}_Audit_Report_${format(new Date(), "yyyyMMdd")}`;
+      setShowSaveDialog(true);
 
-      toast.success("Audit report generated successfully!");
+      toast.success("Report generated! Please name and save it.");
 
     } catch (error) {
       console.error("Error generating report:", error);
       toast.error("Failed to generate audit report");
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const handleSaveReport = async (fileName: string) => {
+    if (!pendingPdfBlob) return;
+
+    try {
+      // Ensure .pdf extension
+      const finalFileName = fileName.endsWith('.pdf') ? fileName : `${fileName}.pdf`;
+      
+      // Upload to storage
+      const filePath = `${siteId}/reports/${Date.now()}_${finalFileName}`;
+      const { error: uploadError } = await supabase.storage
+        .from("site-documents")
+        .upload(filePath, pendingPdfBlob, {
+          contentType: 'application/pdf',
+          upsert: false
+        });
+
+      if (uploadError) throw uploadError;
+
+      // Create database record
+      const { error: dbError } = await supabase
+        .from("site_documents")
+        .insert({
+          site_id: siteId,
+          file_name: finalFileName,
+          file_path: filePath,
+          folder_path: "/reports",
+          document_type: "report",
+          extraction_status: "not_applicable",
+          file_size: pendingPdfBlob.size,
+          is_folder: false
+        });
+
+      if (dbError) throw dbError;
+
+      toast.success("Report saved successfully!");
+      setPendingPdfBlob(null);
+      setRefreshReports(prev => prev + 1);
+    } catch (error) {
+      console.error("Error saving report:", error);
+      toast.error("Failed to save report");
+      throw error;
     }
   };
 
@@ -1820,18 +1871,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
 
         <Separator />
 
-        <div className="p-4 border rounded-lg bg-muted/30 space-y-2">
-          <p className="text-sm font-medium">Report will include:</p>
-          <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
-            <li>Executive Summary</li>
-            <li>Metering Hierarchy Overview</li>
-            <li>Consumption Reconciliation</li>
-            <li>Billing Validation (from uploaded documents)</li>
-            <li>Anomaly Detection & Analysis</li>
-            <li>AI-Generated Recommendations</li>
-            <li>Detailed Appendices</li>
-          </ul>
-        </div>
+        <SavedReportsList siteId={siteId} key={refreshReports} />
 
         <Button
           onClick={generateMarkdownPreview}
@@ -1884,6 +1924,13 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             }}
           />
         )}
+
+        <SaveReportDialog
+          open={showSaveDialog}
+          onOpenChange={setShowSaveDialog}
+          onSave={handleSaveReport}
+          defaultFileName={`${siteName.replace(/\s+/g, "_")}_Audit_Report_${format(new Date(), "yyyyMMdd")}`}
+        />
       </CardContent>
     </Card>
   );
