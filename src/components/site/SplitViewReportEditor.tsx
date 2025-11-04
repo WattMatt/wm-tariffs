@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
-import { Save, X, RefreshCw, Loader2, ZoomIn, ZoomOut, Wand2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Save, X, RefreshCw, Loader2, ZoomIn, ZoomOut, Wand2, ChevronLeft, ChevronRight, Activity, Database, Calendar, Zap } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
 import { Document, Page, pdfjs } from 'react-pdf';
@@ -22,6 +22,7 @@ interface PdfSection {
 
 interface SplitViewReportEditorProps {
   sections: PdfSection[];
+  siteId: string;
   onSave: (sections: PdfSection[]) => void;
   onCancel: () => void;
   generatePdfPreview: (sections: PdfSection[]) => Promise<string>;
@@ -37,6 +38,7 @@ interface SelectionArea {
 
 export function SplitViewReportEditor({ 
   sections, 
+  siteId,
   onSave, 
   onCancel,
   generatePdfPreview,
@@ -55,6 +57,85 @@ export function SplitViewReportEditor({
   const [pageNumber, setPageNumber] = useState<number>(1);
   const pdfContainerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // KPI Statistics State
+  const [kpiStats, setKpiStats] = useState({
+    totalReadings: 0,
+    totalMeters: 0,
+    dateRange: { earliest: '', latest: '' },
+    totalConsumption: 0,
+    isLoading: true
+  });
+
+  // Fetch KPI statistics
+  useEffect(() => {
+    const fetchKPIs = async () => {
+      try {
+        // Get all meters for this site
+        const { data: metersData, error: metersError } = await supabase
+          .from('meters')
+          .select('id')
+          .eq('site_id', siteId);
+
+        if (metersError) {
+          console.error('Error fetching meters:', metersError);
+          setKpiStats(prev => ({ ...prev, isLoading: false }));
+          return;
+        }
+
+        const meterIds = (metersData || []).map(m => m.id);
+
+        if (meterIds.length === 0) {
+          setKpiStats({
+            totalReadings: 0,
+            totalMeters: 0,
+            dateRange: { earliest: 'N/A', latest: 'N/A' },
+            totalConsumption: 0,
+            isLoading: false
+          });
+          return;
+        }
+
+        // Count total readings
+        const { count: totalReadingsCount, error: countError } = await supabase
+          .from('meter_readings')
+          .select('*', { count: 'exact', head: true })
+          .in('meter_id', meterIds);
+
+        if (countError) {
+          console.error('Error counting readings:', countError);
+        }
+
+        // Get date range and total consumption
+        const { data: statsData, error: statsError } = await supabase
+          .from('meter_readings')
+          .select('reading_timestamp, kwh_value')
+          .in('meter_id', meterIds)
+          .order('reading_timestamp', { ascending: true });
+
+        if (statsError) {
+          console.error('Error fetching stats:', statsError);
+        }
+
+        const totalConsumption = (statsData || []).reduce((sum, r) => sum + (Number(r.kwh_value) || 0), 0);
+        const earliest = statsData && statsData.length > 0 ? new Date(statsData[0].reading_timestamp).toLocaleDateString() : 'N/A';
+        const latest = statsData && statsData.length > 0 ? new Date(statsData[statsData.length - 1].reading_timestamp).toLocaleDateString() : 'N/A';
+
+        setKpiStats({
+          totalReadings: totalReadingsCount || 0,
+          totalMeters: metersData?.length || 0,
+          dateRange: { earliest, latest },
+          totalConsumption: Math.round(totalConsumption),
+          isLoading: false
+        });
+      } catch (error) {
+        console.error('Error loading KPIs:', error);
+        setKpiStats(prev => ({ ...prev, isLoading: false }));
+      }
+    };
+
+    fetchKPIs();
+  }, [siteId]);
 
   // Generate initial PDF preview on mount
   useEffect(() => {
@@ -329,6 +410,57 @@ export function SplitViewReportEditor({
             Cancel
           </Button>
         </div>
+      </div>
+
+      {/* KPI Statistics Bar */}
+      <div className="border-b bg-muted/5 px-4 py-3">
+        {kpiStats.isLoading ? (
+          <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            <span>Loading statistics...</span>
+          </div>
+        ) : (
+          <div className="grid grid-cols-4 gap-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <Database className="w-4 h-4 text-primary" />
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">Total Readings</div>
+                <div className="text-lg font-semibold">{kpiStats.totalReadings.toLocaleString()}</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-accent/10">
+                <Activity className="w-4 h-4 text-accent-foreground" />
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">Active Meters</div>
+                <div className="text-lg font-semibold">{kpiStats.totalMeters}</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-secondary/10">
+                <Calendar className="w-4 h-4 text-secondary-foreground" />
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">Date Range</div>
+                <div className="text-sm font-semibold">
+                  {kpiStats.dateRange.earliest} - {kpiStats.dateRange.latest}
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <Zap className="w-4 h-4 text-primary" />
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">Total Consumption</div>
+                <div className="text-lg font-semibold">{kpiStats.totalConsumption.toLocaleString()} kWh</div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Split View */}

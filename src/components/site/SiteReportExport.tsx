@@ -2721,6 +2721,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         {isEditingContent && editableSections.length > 0 && (
           <SplitViewReportEditor
             sections={editableSections}
+            siteId={siteId}
             onSave={handleSaveEditedContent}
             onCancel={() => {
               setIsEditingContent(false);
