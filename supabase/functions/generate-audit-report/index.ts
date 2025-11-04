@@ -63,15 +63,15 @@ serve(async (req) => {
     }
 
     // Generate Executive Summary
-    const executiveSummaryPrompt = `Generate a professional executive summary for a metering audit report for ${siteName}.
+    const executiveSummaryPrompt = `You are a professional technical editor and audit writer. Generate a formal, concise, visually structured executive summary for an audit-ready report for ${siteName}.
 
 CRITICAL FORMATTING INSTRUCTIONS:
 - Use PLAIN TEXT ONLY - no markdown formatting
 - Do NOT use ## headers or section titles
-- Do NOT use ** for bold text
+- Do NOT use ** for bold text  
 - Do NOT include any markdown syntax
-- Start directly with the content
-- Use simple paragraphs separated by line breaks
+- Use simple table formatting with pipe separators (|) for the three required tables
+- Start directly with content
 
 Audit Period: ${auditPeriodStart} to ${auditPeriodEnd}
 
@@ -84,17 +84,39 @@ Reconciliation Data:
 - Recovery Rate: ${reconciliationData.recoveryRate}%
 - Anomalies Detected: ${anomalies?.length || 0}${csvColumnsSummary}
 
-Structure (3-4 paragraphs):
-1. Purpose statement: State this is a metering audit report for the site
-2. Scope and period: Mention audit period and what was analyzed
-3. Key findings: 
-   - Highlight total variance in kWh and percentage
-   - State recovery rate percentage
-   - Note number of anomalies by severity if applicable
-   - Mention financial impact estimate if variance is significant (estimate ZAR loss based on ~R2.50/kWh average tariff)
-4. Recommendations preview: Brief mention of infrastructure upgrades, billing improvements, or remedial actions needed
+REQUIRED STRUCTURE:
 
-Writing style: Professional, evidence-based, quantitative. Use specific numbers from the data provided. Plain text only.`;
+1. ELEVATOR SUMMARY (one sentence, max 20 words):
+   State the audit, site, period, and headline result (recovery rate or variance).
+
+2. EXECUTIVE SUMMARY PARAGRAPH (4-6 sentences, max 120 words, formal tone):
+   Include: purpose, scope (dates and meters), methodology in one brief phrase, headline supply, headline consumption, variance and recovery rate, one-line financial impact.
+   No technical jargon beyond metering terms (P1, P2, kvarh, kWh).
+
+3. KEY METRICS TABLE:
+   Columns: Metric | Value | Unit
+   Rows must include: Total supply, Council bulk supply (MB-1.1), Solar generation (SOLAR-DB-1.1), Total sub-meter consumption, Unaccounted variance, Loss percentage, Recovery rate, Audit period
+   Use actual meter numbers from the data when available.
+
+4. METER ANOMALIES TABLE:
+   Columns: Meter ID | Issue | Reading (kWh) | Priority
+   Include rows for meters with negative P2 readings or significant anomalies from the data provided.
+   Label all priorities as High.
+
+5. FINANCIAL IMPACT TABLE:
+   Columns: Item | Calculation | Amount (ZAR)
+   Row 1: Estimated cost of variance | ${reconciliationData.variance} kWh × R2.50/kWh | R${(parseFloat(reconciliationData.variance) * 2.50).toFixed(2)}
+
+6. RECOMMENDATIONS (4 action-oriented bullets, 10-14 words each):
+   First bullet MUST address investigating negative P2 readings for specific meters.
+   Use active voice, direct commands. No hedging language (avoid "may", "could", "might").
+
+7. CLOSING SENTENCE (one line, max 12 words):
+   Direct urgent action.
+
+TONE: Formal, audit-ready, active voice. Use consistent numeric formatting (commas and two decimal places for currency). Preserve all numeric values exactly as provided.
+
+LENGTH LIMITS: Executive Summary paragraph max 120 words; entire response max 300 words excluding data.`;
 
     const execSummaryResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
