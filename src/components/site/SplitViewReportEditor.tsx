@@ -2,10 +2,13 @@ import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
-import { Save, X, RefreshCw, Loader2, ZoomIn, ZoomOut, Wand2 } from "lucide-react";
+import { Save, X, RefreshCw, Loader2, ZoomIn, ZoomOut, Wand2, ChevronLeft, ChevronRight } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
+import { Document, Page, pdfjs } from 'react-pdf';
+
+// Configure PDF.js worker
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
 
 interface PdfSection {
   id: string;
@@ -43,6 +46,8 @@ export function SplitViewReportEditor({
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectionArea, setSelectionArea] = useState<SelectionArea | null>(null);
   const [startPoint, setStartPoint] = useState<{ x: number; y: number } | null>(null);
+  const [numPages, setNumPages] = useState<number>(0);
+  const [pageNumber, setPageNumber] = useState<number>(1);
   const pdfContainerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -162,6 +167,19 @@ export function SplitViewReportEditor({
 
   const handleZoomOut = () => {
     setZoom(prev => Math.max(prev - 10, 50));
+  };
+
+  const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
+    setNumPages(numPages);
+    setPageNumber(1);
+  };
+
+  const goToPrevPage = () => {
+    setPageNumber((prev) => Math.max(prev - 1, 1));
+  };
+
+  const goToNextPage = () => {
+    setPageNumber((prev) => Math.min(prev + 1, numPages));
   };
 
   const handleRefresh = async () => {
@@ -316,6 +334,32 @@ export function SplitViewReportEditor({
               <div className="h-10 border-b flex items-center justify-between px-4 bg-muted/30">
                 <span className="text-sm font-medium">PDF Preview</span>
                 <div className="flex items-center gap-2">
+                  {numPages > 0 && (
+                    <>
+                      <Button 
+                        onClick={goToPrevPage} 
+                        variant="ghost" 
+                        size="icon"
+                        className="h-7 w-7"
+                        disabled={pageNumber <= 1}
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </Button>
+                      <span className="text-xs font-medium min-w-[4rem] text-center">
+                        {pageNumber} / {numPages}
+                      </span>
+                      <Button 
+                        onClick={goToNextPage} 
+                        variant="ghost" 
+                        size="icon"
+                        className="h-7 w-7"
+                        disabled={pageNumber >= numPages}
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </Button>
+                      <div className="w-px h-5 bg-border mx-1" />
+                    </>
+                  )}
                   <Button 
                     onClick={handleZoomOut} 
                     variant="ghost" 
@@ -346,28 +390,48 @@ export function SplitViewReportEditor({
                   <div className="p-4">
                     <div 
                       ref={pdfContainerRef}
-                      className="relative mx-auto max-w-[800px]"
-                      style={{ 
-                        transform: `scale(${zoom / 100})`,
-                        transformOrigin: 'top center'
-                      }}
+                      className="relative mx-auto"
                     >
-                      <iframe
-                        src={pdfUrl}
-                        className="w-full h-[1000px] border shadow-lg bg-white"
-                        title="PDF Preview"
-                        onLoad={() => console.log('PDF iframe loaded')}
-                        onError={(e) => console.error('PDF iframe error:', e)}
-                      />
+                      <Document
+                        file={pdfUrl}
+                        onLoadSuccess={onDocumentLoadSuccess}
+                        loading={
+                          <div className="flex items-center justify-center py-20">
+                            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+                          </div>
+                        }
+                        error={
+                          <div className="flex items-center justify-center py-20">
+                            <div className="text-center space-y-4">
+                              <p className="text-sm text-destructive">Failed to load PDF</p>
+                              <Button onClick={handleRefresh} variant="outline" size="sm">
+                                <RefreshCw className="w-4 h-4 mr-2" />
+                                Try Again
+                              </Button>
+                            </div>
+                          </div>
+                        }
+                      >
+                        <Page
+                          pageNumber={pageNumber}
+                          scale={zoom / 100}
+                          renderTextLayer={false}
+                          renderAnnotationLayer={false}
+                          loading={
+                            <div className="flex items-center justify-center py-20">
+                              <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                            </div>
+                          }
+                        />
+                      </Document>
                       <canvas
                         ref={canvasRef}
                         onMouseDown={handleMouseDown}
                         onMouseMove={handleMouseMove}
                         onMouseUp={handleMouseUp}
-                        className="absolute top-0 left-0 w-full h-full"
+                        className="absolute top-0 left-0 w-full h-full pointer-events-auto"
                         style={{ 
-                          cursor: isSelecting ? 'crosshair' : 'default',
-                          pointerEvents: 'auto'
+                          cursor: isSelecting ? 'crosshair' : 'default'
                         }}
                       />
                     </div>
