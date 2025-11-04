@@ -10,7 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { FileText, Upload, Loader2, Download, Trash2, Eye, GripVertical, Plus, X, Sparkles, RefreshCw, Square, XCircle, Folder, FolderPlus, ChevronRight, ChevronDown, Home, Edit2, FolderOpen } from "lucide-react";
+import { FileText, Upload, Loader2, Download, Trash2, Eye, GripVertical, Plus, X, Sparkles, RefreshCw, Square, XCircle, Folder, FolderPlus, ChevronRight, ChevronDown, Home, Edit2, FolderOpen, Link } from "lucide-react";
 import { format } from "date-fns";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { pdfjs } from 'react-pdf';
@@ -36,6 +36,7 @@ interface SiteDocument {
   folder_path: string;
   is_folder: boolean;
   parent_folder_id?: string | null;
+  meter_id?: string | null;
   document_extractions: Array<{
     period_start: string;
     period_end: string;
@@ -43,6 +44,11 @@ interface SiteDocument {
     currency: string;
     extracted_data: any;
   }>;
+  meters?: {
+    id: string;
+    meter_number: string;
+    name: string | null;
+  } | null;
 }
 
 interface FolderItem {
@@ -56,6 +62,7 @@ interface FolderItem {
 
 export default function DocumentsTab({ siteId }: DocumentsTabProps) {
   const [documents, setDocuments] = useState<SiteDocument[]>([]);
+  const [siteMeters, setSiteMeters] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -73,6 +80,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [bulkEditQueue, setBulkEditQueue] = useState<string[]>([]);
   const [currentBulkEditIndex, setCurrentBulkEditIndex] = useState(0);
+  const [isAutoAssigning, setIsAutoAssigning] = useState(false);
   
   // Folder management state
   const [currentFolderPath, setCurrentFolderPath] = useState<string>('');
@@ -102,7 +110,23 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
 
   useEffect(() => {
     fetchDocuments();
+    fetchSiteMeters();
   }, [siteId]);
+  
+  const fetchSiteMeters = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("meters")
+        .select("*")
+        .eq("site_id", siteId)
+        .order("meter_number");
+      
+      if (error) throw error;
+      setSiteMeters(data || []);
+    } catch (error) {
+      console.error("Error fetching meters:", error);
+    }
+  };
 
   const fetchDocuments = async () => {
     setIsLoading(true);
@@ -117,6 +141,11 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
             total_amount,
             currency,
             extracted_data
+          ),
+          meters (
+            id,
+            meter_number,
+            name
           )
         `)
         .eq("site_id", siteId)
@@ -542,6 +571,74 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
       });
     } finally {
       setIsConvertingPdf(false);
+    }
+  };
+
+  const handleAssignMeter = async (documentId: string, meterId: string | null) => {
+    try {
+      const { error } = await supabase
+        .from("site_documents")
+        .update({ meter_id: meterId })
+        .eq("id", documentId);
+
+      if (error) throw error;
+
+      toast.success(meterId ? "Meter assigned successfully" : "Meter unassigned");
+      fetchDocuments();
+    } catch (error: any) {
+      console.error("Error assigning meter:", error);
+      toast.error("Failed to assign meter");
+    }
+  };
+
+  const handleAutoAssignAll = async () => {
+    setIsAutoAssigning(true);
+    try {
+      let assignedCount = 0;
+      let skippedCount = 0;
+
+      for (const doc of documents) {
+        if (doc.is_folder) continue;
+        
+        // Get shop number from extraction data
+        const extraction = doc.document_extractions?.[0];
+        const shopNumber = extraction?.extracted_data?.shop_number;
+        
+        if (!shopNumber) {
+          skippedCount++;
+          continue;
+        }
+
+        // Find matching meter by meter_number
+        const matchingMeter = siteMeters.find(
+          (meter) => meter.meter_number.toLowerCase() === shopNumber.toLowerCase()
+        );
+
+        if (matchingMeter) {
+          const { error } = await supabase
+            .from("site_documents")
+            .update({ meter_id: matchingMeter.id })
+            .eq("id", doc.id);
+
+          if (!error) {
+            assignedCount++;
+          } else {
+            skippedCount++;
+          }
+        } else {
+          skippedCount++;
+        }
+      }
+
+      toast.success(
+        `Auto-assignment complete: ${assignedCount} assigned, ${skippedCount} skipped`
+      );
+      fetchDocuments();
+    } catch (error: any) {
+      console.error("Error auto-assigning meters:", error);
+      toast.error("Failed to auto-assign meters");
+    } finally {
+      setIsAutoAssigning(false);
     }
   };
 
@@ -1627,6 +1724,25 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                           <FolderPlus className="w-4 h-4" />
                           New Folder
                         </Button>
+                        <Button 
+                          onClick={handleAutoAssignAll} 
+                          size="sm"
+                          disabled={isAutoAssigning || documents.filter(d => !d.is_folder).length === 0}
+                          variant="outline"
+                          className="gap-2"
+                        >
+                          {isAutoAssigning ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Auto-assigning...
+                            </>
+                          ) : (
+                            <>
+                              <Link className="h-4 w-4" />
+                              Auto-assign Meters
+                            </>
+                          )}
+                        </Button>
                       </div>
                     </TableHead>
                   </TableRow>
@@ -1639,12 +1755,13 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                     </TableHead>
                     <TableHead>File Name</TableHead>
                     <TableHead>Shop Number</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Upload Date</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Extracted Period</TableHead>
-                    <TableHead>Amount</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Upload Date</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Extracted Period</TableHead>
+                  <TableHead>Amount</TableHead>
+                  <TableHead>Assigned Meter</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1772,16 +1889,43 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                           <span className="text-muted-foreground text-sm">-</span>
                         )}
                       </TableCell>
-                      <TableCell>
-                        {doc.document_extractions?.[0] ? (
-                          <span className="font-medium">
-                            {doc.document_extractions[0].currency} {doc.document_extractions[0].total_amount.toLocaleString()}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
-                      </TableCell>
-                       <TableCell className="text-right">
+                       <TableCell>
+                         {doc.document_extractions?.[0] ? (
+                           <span className="font-medium">
+                             {doc.document_extractions[0].currency} {doc.document_extractions[0].total_amount.toLocaleString()}
+                           </span>
+                         ) : (
+                           <span className="text-muted-foreground">-</span>
+                         )}
+                       </TableCell>
+                       <TableCell>
+                         <div className="flex items-center gap-2">
+                           {doc.meters ? (
+                             <Badge variant="outline" className="text-xs">
+                               {doc.meters.meter_number}
+                             </Badge>
+                           ) : (
+                             <span className="text-muted-foreground text-xs">Unassigned</span>
+                           )}
+                           <Select
+                             value={doc.meter_id || ""}
+                             onValueChange={(value) => handleAssignMeter(doc.id, value || null)}
+                           >
+                             <SelectTrigger className="h-7 w-[120px] text-xs">
+                               <SelectValue placeholder="Assign..." />
+                             </SelectTrigger>
+                             <SelectContent>
+                               <SelectItem value="">Unassign</SelectItem>
+                               {siteMeters.map((meter) => (
+                                 <SelectItem key={meter.id} value={meter.id}>
+                                   {meter.meter_number}
+                                 </SelectItem>
+                               ))}
+                             </SelectContent>
+                           </Select>
+                         </div>
+                       </TableCell>
+                        <TableCell className="text-right">
                          <TooltipProvider>
                            <div className="flex justify-end gap-2">
                              {doc.document_extractions?.[0] && (

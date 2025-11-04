@@ -754,6 +754,7 @@ export type Database = {
           generation_parameters: Json | null
           id: string
           is_folder: boolean
+          meter_id: string | null
           parent_folder_id: string | null
           site_id: string
           updated_at: string
@@ -772,6 +773,7 @@ export type Database = {
           generation_parameters?: Json | null
           id?: string
           is_folder?: boolean
+          meter_id?: string | null
           parent_folder_id?: string | null
           site_id: string
           updated_at?: string
@@ -790,6 +792,7 @@ export type Database = {
           generation_parameters?: Json | null
           id?: string
           is_folder?: boolean
+          meter_id?: string | null
           parent_folder_id?: string | null
           site_id?: string
           updated_at?: string
@@ -797,6 +800,13 @@ export type Database = {
           uploaded_by?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "site_documents_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "site_documents_parent_folder_id_fkey"
             columns: ["parent_folder_id"]
