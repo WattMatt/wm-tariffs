@@ -283,6 +283,7 @@ export function MeterFormFields({
             </SelectTrigger>
             <SelectContent className="bg-background z-50">
               <SelectItem value="bulk_meter">Bulk Meter{!showLocationAndTariff && ' (Main Incoming)'}</SelectItem>
+              <SelectItem value="council_meter">Council Meter</SelectItem>
               <SelectItem value="check_meter">Check Meter{!showLocationAndTariff && ' (Verification)'}</SelectItem>
               <SelectItem value="tenant_meter">Tenant Meter</SelectItem>
               <SelectItem value="other">Other</SelectItem>

@@ -436,6 +436,8 @@ export default function MetersTab({ siteId }: MetersTabProps) {
     switch (type) {
       case "bulk_meter":
         return "bg-primary text-primary-foreground";
+      case "council_meter":
+        return "bg-blue-600 text-white";
       case "check_meter":
         return "bg-warning text-warning-foreground";
       case "tenant_meter":
@@ -451,6 +453,8 @@ export default function MetersTab({ siteId }: MetersTabProps) {
     switch (type) {
       case "bulk_meter":
         return "Bulk Meter";
+      case "council_meter":
+        return "Council Meter";
       case "check_meter":
         return "Check Meter";
       case "tenant_meter":
@@ -823,6 +827,7 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="bulk_meter">Bulk Meter</SelectItem>
+                      <SelectItem value="council_meter">Council Meter</SelectItem>
                       <SelectItem value="check_meter">Check Meter</SelectItem>
                       <SelectItem value="tenant_meter">Tenant Meter</SelectItem>
                       <SelectItem value="other">Other</SelectItem>

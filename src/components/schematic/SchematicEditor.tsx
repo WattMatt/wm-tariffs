@@ -5320,6 +5320,7 @@ export default function SchematicEditor({
                   </SelectTrigger>
                   <SelectContent className="bg-background z-50">
                     <SelectItem value="bulk_meter">Bulk Meter</SelectItem>
+                    <SelectItem value="council_meter">Council Meter</SelectItem>
                     <SelectItem value="check_meter">Check Meter</SelectItem>
                     <SelectItem value="tenant_meter">Tenant Meter</SelectItem>
                     <SelectItem value="other">Other</SelectItem>
@@ -5566,6 +5567,7 @@ export default function SchematicEditor({
                       </SelectTrigger>
                       <SelectContent className="bg-background z-50">
                         <SelectItem value="bulk_meter">Bulk Meter (Main Incoming)</SelectItem>
+                        <SelectItem value="council_meter">Council Meter</SelectItem>
                         <SelectItem value="check_meter">Check Meter (Verification)</SelectItem>
                         <SelectItem value="tenant_meter">Tenant Meter</SelectItem>
                         <SelectItem value="other">Other</SelectItem>
@@ -5916,6 +5918,7 @@ export default function SchematicEditor({
                   <SelectContent>
                     <SelectItem value="keep_existing">Keep existing</SelectItem>
                     <SelectItem value="bulk_meter">Bulk Meter</SelectItem>
+                    <SelectItem value="council_meter">Council Meter</SelectItem>
                     <SelectItem value="check_meter">Check Meter</SelectItem>
                     <SelectItem value="tenant_meter">Tenant Meter</SelectItem>
                   </SelectContent>
