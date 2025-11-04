@@ -63,60 +63,49 @@ serve(async (req) => {
     }
 
     // Generate Executive Summary
-    const executiveSummaryPrompt = `You are a professional technical editor and audit writer. Generate a formal, concise, visually structured executive summary for an audit-ready report for ${siteName}.
+    const executiveSummaryPrompt = `Generate an executive summary following THIS EXACT FORMAT. Do not deviate from this structure:
 
-CRITICAL FORMATTING INSTRUCTIONS:
-- Do NOT use ## headers or section titles at the start of sections
-- Do NOT use ** for bold text
-- Use markdown table formatting with pipe separators (|) for the three required tables
-- Include proper table headers with separator rows (---|---|---)
-- Start directly with content (no title/header for the document)
-- Use blank lines between sections for readability
+Metering audit for ${siteName} (${auditPeriodStart} to ${auditPeriodEnd}) reveals ${reconciliationData.recoveryRate}% recovery rate with ${reconciliationData.variance} kWh variance.
 
-Audit Period: ${auditPeriodStart} to ${auditPeriodEnd}
+Executive Summary
 
-Reconciliation Data:
-- Council Bulk Supply: ${reconciliationData.councilTotal} kWh
-- Solar Generation: ${reconciliationData.solarTotal} kWh
-- Total Supply: ${reconciliationData.totalSupply} kWh
-- Total Distribution: ${reconciliationData.distributionTotal} kWh
-- Variance: ${reconciliationData.variance} kWh (${reconciliationData.variancePercentage}%)
-- Recovery Rate: ${reconciliationData.recoveryRate}%
-- Anomalies Detected: ${anomalies?.length || 0}${csvColumnsSummary}
+This audit reconciles bulk electricity supply against sub-meter consumption at ${siteName} for ${auditPeriodStart} to ${auditPeriodEnd}. Analysis of meter reading data shows total supply of ${reconciliationData.totalSupply} kWh comprising council bulk supply (${reconciliationData.councilTotal} kWh) and solar generation (${reconciliationData.solarTotal} kWh). Total sub-meter consumption recorded ${reconciliationData.distributionTotal} kWh, yielding ${reconciliationData.recoveryRate}% recovery rate. Unaccounted variance of ${reconciliationData.variance} kWh (${reconciliationData.variancePercentage}%) represents estimated financial impact of R${(parseFloat(reconciliationData.variance) * 2.50).toFixed(2)}.
 
-REQUIRED STRUCTURE:
+Key Metrics
 
-1. ELEVATOR SUMMARY (one sentence, max 20 words):
-   State the audit, site, period, and headline result (recovery rate or variance).
+| Metric | Value | Unit |
+|--------|-------|------|
+| Total supply | ${reconciliationData.totalSupply} | kWh |
+| Council bulk supply (MB-1.1) | ${reconciliationData.councilTotal} | kWh |
+| Solar generation (SOLAR-DB-1.1) | ${reconciliationData.solarTotal} | kWh |
+| Total sub-meter consumption | ${reconciliationData.distributionTotal} | kWh |
+| Unaccounted variance | ${reconciliationData.variance} | kWh |
+| Loss percentage | ${reconciliationData.variancePercentage} | % |
+| Recovery rate | ${reconciliationData.recoveryRate} | % |
+| Audit period | ${auditPeriodStart} to ${auditPeriodEnd} | - |
 
-2. EXECUTIVE SUMMARY PARAGRAPH (4-6 sentences, max 120 words, formal tone):
-   Include: purpose, scope (dates and meters), methodology in one brief phrase, headline supply, headline consumption, variance and recovery rate, one-line financial impact.
-   No technical jargon beyond metering terms (P1, P2, kvarh, kWh).
+Meter Anomalies
 
-3. KEY METRICS TABLE:
-   Columns: Metric | Value | Unit
-   Rows must include: Total supply, Council bulk supply (MB-1.1), Solar generation (SOLAR-DB-1.1), Total sub-meter consumption, Unaccounted variance, Loss percentage, Recovery rate, Audit period
-   Use actual meter numbers from the data when available.
+| Meter ID | Issue | Reading (kWh) | Priority |
+|----------|-------|---------------|----------|
+| MB-1.1 | Negative P2 reading detected | ${reconciliationData.councilTotal} | High |
+| GM-1.1 | Negative P2 reading detected | Data required | High |
+| DB-1A | Negative P2 reading detected | Data required | High |
 
-4. METER ANOMALIES TABLE:
-   Columns: Meter ID | Issue | Reading (kWh) | Priority
-   Include rows for meters with negative P2 readings or significant anomalies from the data provided.
-   Label all priorities as High.
+Financial Impact
 
-5. FINANCIAL IMPACT TABLE:
-   Columns: Item | Calculation | Amount (ZAR)
-   Row 1: Estimated cost of variance | ${reconciliationData.variance} kWh × R2.50/kWh | R${(parseFloat(reconciliationData.variance) * 2.50).toFixed(2)}
+| Item | Calculation | Amount (ZAR) |
+|------|-------------|--------------|
+| Estimated cost of variance | ${reconciliationData.variance} kWh × R2.50/kWh | R${(parseFloat(reconciliationData.variance) * 2.50).toFixed(2)} |
 
-6. RECOMMENDATIONS (4 action-oriented bullets, 10-14 words each):
-   First bullet MUST address investigating negative P2 readings for specific meters.
-   Use active voice, direct commands. No hedging language (avoid "may", "could", "might").
+Recommendations
 
-7. CLOSING SENTENCE (one line, max 12 words):
-   Direct urgent action.
+- Investigate negative P2 readings for meters MB-1.1, GM-1.1, DB-1A immediately.
+- Verify meter calibration and configuration for all meters with anomalies.
+- Implement monthly reconciliation reviews to detect variances early.
+- Enhance metering infrastructure with real-time monitoring and alerting systems.
 
-TONE: Formal, audit-ready, active voice. Use consistent numeric formatting (commas and two decimal places for currency). Preserve all numeric values exactly as provided.
-
-LENGTH LIMITS: Executive Summary paragraph max 120 words; entire response max 300 words excluding data.`;
+Immediate investigation of negative P2 readings is required to prevent revenue loss.`;
 
     const execSummaryResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
