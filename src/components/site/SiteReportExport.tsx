@@ -309,59 +309,132 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
   };
 
   const generatePdfPreview = async (sections: PdfSection[]): Promise<string> => {
-    // This is a simplified version that creates a mini PDF for preview
-    // You can call generateReport logic here with the sections
     return new Promise((resolve) => {
       setTimeout(() => {
-        // Create a temporary preview PDF
-        const tempPdf = new jsPDF();
-        let yPos = 20;
-        const pageWidth = tempPdf.internal.pageSize.getWidth();
-        const pageHeight = tempPdf.internal.pageSize.getHeight();
+        const pdf = new jsPDF();
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        const pageHeight = pdf.internal.pageSize.getHeight();
+        
+        // Template styling constants (matching main report)
+        const blueBarWidth = 15;
         const leftMargin = 25;
         const rightMargin = 20;
+        const topMargin = 20;
+        const bottomMargin = 20;
+        const templateBlue = [23, 109, 177]; // RGB for #176DB1
         
-        tempPdf.setFontSize(16);
-        tempPdf.setFont("helvetica", "bold");
-        tempPdf.text("Report Preview", leftMargin, yPos);
-        yPos += 15;
+        let yPos = topMargin;
+        let pageNumber = 1;
+        
+        // Helper to add blue sidebar
+        const addBlueSidebar = () => {
+          pdf.setFillColor(templateBlue[0], templateBlue[1], templateBlue[2]);
+          pdf.rect(0, 0, blueBarWidth, pageHeight, "F");
+        };
+        
+        // Helper to add footer
+        const addFooter = () => {
+          pdf.setFontSize(8);
+          pdf.setFont("helvetica", "normal");
+          pdf.setTextColor(100, 100, 100);
+          const docNumber = `Document Number: AUD-${format(new Date(), "yyyyMMdd-HHmmss")}`;
+          const printDate = `Print date: ${format(new Date(), "dd/MM/yyyy HH:mm")}`;
+          pdf.text(docNumber, leftMargin, pageHeight - 10);
+          pdf.text(printDate, pageWidth - rightMargin, pageHeight - 10, { align: "right" });
+          pdf.setTextColor(0, 0, 0);
+        };
+        
+        // Helper to add page number
+        const addPageNumber = () => {
+          pdf.setFontSize(9);
+          pdf.setFont("helvetica", "normal");
+          pdf.setTextColor(100, 100, 100);
+          pdf.text(`Page ${pageNumber}`, pageWidth / 2, pageHeight - 5, { align: "center" });
+          pdf.setTextColor(0, 0, 0);
+          pageNumber++;
+        };
+        
+        // Helper to add text with wrapping
+        const addText = (text: string, fontSize: number = 10, isBold: boolean = false) => {
+          pdf.setFontSize(fontSize);
+          pdf.setFont("helvetica", isBold ? "bold" : "normal");
+          const maxWidth = pageWidth - leftMargin - rightMargin;
+          const lines = pdf.splitTextToSize(text, maxWidth);
+          
+          lines.forEach((line: string) => {
+            if (yPos > pageHeight - bottomMargin - 15) {
+              addFooter();
+              addPageNumber();
+              pdf.addPage();
+              addBlueSidebar();
+              yPos = topMargin;
+            }
+            pdf.text(line, leftMargin, yPos);
+            yPos += fontSize * 0.5;
+          });
+          yPos += 3;
+        };
+        
+        // Helper to add section heading in template blue
+        const addSectionHeading = (text: string, fontSize: number = 14) => {
+          yPos += 8;
+          pdf.setFontSize(fontSize);
+          pdf.setFont("helvetica", "bold");
+          pdf.setTextColor(templateBlue[0], templateBlue[1], templateBlue[2]);
+          pdf.text(text, leftMargin, yPos);
+          pdf.setTextColor(0, 0, 0);
+          yPos += 10;
+        };
+        
+        // Initialize first page with blue sidebar
+        addBlueSidebar();
         
         sections.forEach((section, index) => {
           if (section.type === 'page-break') {
-            tempPdf.addPage();
-            yPos = 20;
+            addFooter();
+            addPageNumber();
+            pdf.addPage();
+            addBlueSidebar();
+            yPos = topMargin;
           } else {
-            // Add section title
-            if (yPos > pageHeight - 40) {
-              tempPdf.addPage();
-              yPos = 20;
+            // Check if we need a new page
+            if (yPos > pageHeight - bottomMargin - 40) {
+              addFooter();
+              addPageNumber();
+              pdf.addPage();
+              addBlueSidebar();
+              yPos = topMargin;
             }
             
-            tempPdf.setFontSize(12);
-            tempPdf.setFont("helvetica", "bold");
-            tempPdf.text(section.title, leftMargin, yPos);
-            yPos += 8;
-            
-            // Add section content
-            tempPdf.setFontSize(10);
-            tempPdf.setFont("helvetica", "normal");
-            const maxWidth = pageWidth - leftMargin - rightMargin;
-            const lines = tempPdf.splitTextToSize(section.content.substring(0, 500), maxWidth);
-            
-            lines.forEach((line: string) => {
-              if (yPos > pageHeight - 20) {
-                tempPdf.addPage();
-                yPos = 20;
+            // Parse markdown content
+            const lines = section.content.split('\n');
+            lines.forEach(line => {
+              if (line.startsWith('# ')) {
+                addSectionHeading(line.replace('# ', ''), 16);
+              } else if (line.startsWith('## ')) {
+                addSectionHeading(line.replace('## ', ''), 14);
+              } else if (line.startsWith('### ')) {
+                addSectionHeading(line.replace('### ', ''), 12);
+              } else if (line.startsWith('**') && line.endsWith('**')) {
+                addText(line.replace(/\*\*/g, ''), 10, true);
+              } else if (line.startsWith('- ')) {
+                addText('• ' + line.substring(2), 10, false);
+              } else if (line.trim()) {
+                addText(line, 10, false);
+              } else {
+                yPos += 3;
               }
-              tempPdf.text(line, leftMargin, yPos);
-              yPos += 5;
             });
             
-            yPos += 10;
+            yPos += 5;
           }
         });
         
-        const pdfBlob = tempPdf.output('blob');
+        // Add footer and page number to last page
+        addFooter();
+        addPageNumber();
+        
+        const pdfBlob = pdf.output('blob');
         const url = URL.createObjectURL(pdfBlob);
         resolve(url);
       }, 100);
