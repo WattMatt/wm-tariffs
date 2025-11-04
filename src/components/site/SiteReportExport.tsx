@@ -397,9 +397,181 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           return headers.length > 0 && rows.length > 0 ? { headers, rows } : null;
         };
         
+        // Helper to draw pie charts
+        const drawPieChart = (chartData: any) => {
+          const data = chartData.data?.datasets?.[0]?.data || [];
+          const labels = chartData.data?.labels || [];
+          const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+          
+          if (data.length === 0) return;
+
+          // Check if we need a new page
+          if (yPos > pageHeight - bottomMargin - 100) {
+            addFooter();
+            addPageNumber();
+            pdf.addPage();
+            addBlueSidebar();
+            yPos = topMargin;
+          }
+
+          const centerX = pageWidth / 2;
+          const centerY = yPos + 40;
+          const radius = 30;
+          
+          const total = data.reduce((sum: number, val: number) => sum + val, 0);
+          let currentAngle = -Math.PI / 2; // Start at top
+
+          // Draw pie slices
+          data.forEach((value: number, index: number) => {
+            const sliceAngle = (value / total) * 2 * Math.PI;
+            const endAngle = currentAngle + sliceAngle;
+            
+            // Parse color
+            const color = colors[index % colors.length];
+            const r = parseInt(color.slice(1, 3), 16);
+            const g = parseInt(color.slice(3, 5), 16);
+            const b = parseInt(color.slice(5, 7), 16);
+            
+            pdf.setFillColor(r, g, b);
+            
+            // Draw wedge using triangles approximation
+            const segments = Math.max(3, Math.ceil(sliceAngle / (Math.PI / 18))); // More segments for smoother arc
+            const segmentAngle = sliceAngle / segments;
+            
+            for (let i = 0; i < segments; i++) {
+              const angle1 = currentAngle + (i * segmentAngle);
+              const angle2 = currentAngle + ((i + 1) * segmentAngle);
+              
+              const x1 = centerX + radius * Math.cos(angle1);
+              const y1 = centerY + radius * Math.sin(angle1);
+              const x2 = centerX + radius * Math.cos(angle2);
+              const y2 = centerY + radius * Math.sin(angle2);
+              
+              pdf.triangle(centerX, centerY, x1, y1, x2, y2, 'F');
+            }
+            
+            currentAngle = endAngle;
+          });
+
+          // Draw legend
+          yPos = centerY + radius + 10;
+          labels.forEach((label: string, index: number) => {
+            const color = colors[index % colors.length];
+            const r = parseInt(color.slice(1, 3), 16);
+            const g = parseInt(color.slice(3, 5), 16);
+            const b = parseInt(color.slice(5, 7), 16);
+            
+            pdf.setFillColor(r, g, b);
+            pdf.rect(leftMargin, yPos - 3, 5, 5, 'F');
+            pdf.setFontSize(9);
+            pdf.setTextColor(60, 60, 60);
+            const percentage = ((data[index] / total) * 100).toFixed(1);
+            pdf.text(`${label}: ${data[index].toLocaleString()} (${percentage}%)`, leftMargin + 8, yPos);
+            yPos += 6;
+          });
+          
+          pdf.setTextColor(0, 0, 0);
+          yPos += 5;
+        };
+
+        // Helper to draw bar charts
+        const drawBarChart = (chartData: any) => {
+          const data = chartData.data?.datasets?.[0]?.data || [];
+          const labels = chartData.data?.labels || [];
+          const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+          
+          if (data.length === 0) return;
+
+          // Check if we need a new page
+          if (yPos > pageHeight - bottomMargin - 100) {
+            addFooter();
+            addPageNumber();
+            pdf.addPage();
+            addBlueSidebar();
+            yPos = topMargin;
+          }
+
+          const chartWidth = pageWidth - leftMargin - rightMargin - 20;
+          const chartHeight = 60;
+          const chartX = leftMargin + 10;
+          const chartY = yPos;
+
+          const maxValue = Math.max(...data);
+          const barWidth = chartWidth / data.length * 0.6;
+          const spacing = chartWidth / data.length;
+
+          // Draw bars
+          data.forEach((value: number, index: number) => {
+            const barHeight = (value / maxValue) * chartHeight;
+            const barX = chartX + index * spacing + (spacing - barWidth) / 2;
+            const barY = chartY + chartHeight - barHeight;
+            
+            const color = colors[index % colors.length];
+            const r = parseInt(color.slice(1, 3), 16);
+            const g = parseInt(color.slice(3, 5), 16);
+            const b = parseInt(color.slice(5, 7), 16);
+            
+            pdf.setFillColor(r, g, b);
+            pdf.rect(barX, barY, barWidth, barHeight, 'F');
+            
+            // Draw value on top
+            pdf.setFontSize(8);
+            pdf.setTextColor(60, 60, 60);
+            pdf.text(value.toLocaleString(), barX + barWidth / 2, barY - 2, { align: 'center' });
+            
+            // Draw label below
+            pdf.setFontSize(7);
+            const labelText = labels[index] || `Item ${index + 1}`;
+            const labelLines = pdf.splitTextToSize(labelText, barWidth + 10);
+            pdf.text(labelLines, barX + barWidth / 2, chartY + chartHeight + 5, { 
+              align: 'center'
+            });
+          });
+
+          // Draw axes
+          pdf.setDrawColor(200, 200, 200);
+          pdf.line(chartX, chartY + chartHeight, chartX + chartWidth, chartY + chartHeight); // X-axis
+          pdf.line(chartX, chartY, chartX, chartY + chartHeight); // Y-axis
+          
+          pdf.setTextColor(0, 0, 0);
+          yPos += chartHeight + 25;
+        };
+        
         // Helper to render content with markdown support
         const renderContent = (text: string, fontSize: number = 10) => {
           if (!text || text.trim() === '') return;
+          
+          // Check for JSON chart blocks (```json {...} ```)
+          const chartMatch = text.match(/```json\s*(\{[\s\S]*?"type":\s*"(pie|bar)"[\s\S]*?\})\s*```/);
+          if (chartMatch) {
+            const chartJson = chartMatch[1];
+            const beforeChart = text.substring(0, chartMatch.index);
+            const afterChart = text.substring((chartMatch.index || 0) + chartMatch[0].length);
+            
+            // Render text before chart
+            if (beforeChart.trim()) {
+              renderContent(beforeChart, fontSize);
+            }
+            
+            // Parse and render chart
+            try {
+              const chartData = JSON.parse(chartJson);
+              if (chartData.type === 'pie') {
+                drawPieChart(chartData);
+              } else if (chartData.type === 'bar') {
+                drawBarChart(chartData);
+              }
+            } catch (e) {
+              console.error('Failed to parse chart JSON:', e);
+              addText(`[Chart rendering error: ${e instanceof Error ? e.message : 'Unknown error'}]`, fontSize, false);
+            }
+            
+            // Render text after chart (recursively)
+            if (afterChart.trim()) {
+              renderContent(afterChart, fontSize);
+            }
+            return;
+          }
           
           // Check for markdown table
           const tableMatch = text.match(/\|[^\n]+\|\n\|[-:\s|]+\|\n(\|[^\n]+\|\n?)+/);
@@ -428,7 +600,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             return;
           }
           
-          // No table found, render as text
+          // No table or chart found, render as text
           addText(text, fontSize, false);
         };
         
@@ -1345,9 +1517,183 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         return headers.length > 0 && rows.length > 0 ? { headers, rows } : null;
       };
       
+      // Helper to draw pie charts
+      const drawPieChart = (chartData: any) => {
+        const data = chartData.data?.datasets?.[0]?.data || [];
+        const labels = chartData.data?.labels || [];
+        const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+        
+        if (data.length === 0) return;
+
+        // Check if we need a new page
+        if (yPos > pageHeight - bottomMargin - 100) {
+          addBlueSidebar();
+          addFooter();
+          addPageNumber();
+          pdf.addPage();
+          addBlueSidebar();
+          yPos = topMargin;
+        }
+
+        const centerX = pageWidth / 2;
+        const centerY = yPos + 40;
+        const radius = 30;
+        
+        const total = data.reduce((sum: number, val: number) => sum + val, 0);
+        let currentAngle = -Math.PI / 2; // Start at top
+
+        // Draw pie slices
+        data.forEach((value: number, index: number) => {
+          const sliceAngle = (value / total) * 2 * Math.PI;
+          const endAngle = currentAngle + sliceAngle;
+          
+          // Parse color
+          const color = colors[index % colors.length];
+          const r = parseInt(color.slice(1, 3), 16);
+          const g = parseInt(color.slice(3, 5), 16);
+          const b = parseInt(color.slice(5, 7), 16);
+          
+          pdf.setFillColor(r, g, b);
+          
+          // Draw wedge using triangles approximation
+          const segments = Math.max(3, Math.ceil(sliceAngle / (Math.PI / 18)));
+          const segmentAngle = sliceAngle / segments;
+          
+          for (let i = 0; i < segments; i++) {
+            const angle1 = currentAngle + (i * segmentAngle);
+            const angle2 = currentAngle + ((i + 1) * segmentAngle);
+            
+            const x1 = centerX + radius * Math.cos(angle1);
+            const y1 = centerY + radius * Math.sin(angle1);
+            const x2 = centerX + radius * Math.cos(angle2);
+            const y2 = centerY + radius * Math.sin(angle2);
+            
+            pdf.triangle(centerX, centerY, x1, y1, x2, y2, 'F');
+          }
+          
+          currentAngle = endAngle;
+        });
+
+        // Draw legend
+        yPos = centerY + radius + 10;
+        labels.forEach((label: string, index: number) => {
+          const color = colors[index % colors.length];
+          const r = parseInt(color.slice(1, 3), 16);
+          const g = parseInt(color.slice(3, 5), 16);
+          const b = parseInt(color.slice(5, 7), 16);
+          
+          pdf.setFillColor(r, g, b);
+          pdf.rect(leftMargin, yPos - 3, 5, 5, 'F');
+          pdf.setFontSize(9);
+          pdf.setTextColor(60, 60, 60);
+          const percentage = ((data[index] / total) * 100).toFixed(1);
+          pdf.text(`${label}: ${data[index].toLocaleString()} (${percentage}%)`, leftMargin + 8, yPos);
+          yPos += 6;
+        });
+        
+        pdf.setTextColor(0, 0, 0);
+        yPos += 5;
+      };
+
+      // Helper to draw bar charts
+      const drawBarChart = (chartData: any) => {
+        const data = chartData.data?.datasets?.[0]?.data || [];
+        const labels = chartData.data?.labels || [];
+        const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+        
+        if (data.length === 0) return;
+
+        // Check if we need a new page
+        if (yPos > pageHeight - bottomMargin - 100) {
+          addBlueSidebar();
+          addFooter();
+          addPageNumber();
+          pdf.addPage();
+          addBlueSidebar();
+          yPos = topMargin;
+        }
+
+        const chartWidth = pageWidth - leftMargin - rightMargin - 20;
+        const chartHeight = 60;
+        const chartX = leftMargin + 10;
+        const chartY = yPos;
+
+        const maxValue = Math.max(...data);
+        const barWidth = chartWidth / data.length * 0.6;
+        const spacing = chartWidth / data.length;
+
+        // Draw bars
+        data.forEach((value: number, index: number) => {
+          const barHeight = (value / maxValue) * chartHeight;
+          const barX = chartX + index * spacing + (spacing - barWidth) / 2;
+          const barY = chartY + chartHeight - barHeight;
+          
+          const color = colors[index % colors.length];
+          const r = parseInt(color.slice(1, 3), 16);
+          const g = parseInt(color.slice(3, 5), 16);
+          const b = parseInt(color.slice(5, 7), 16);
+          
+          pdf.setFillColor(r, g, b);
+          pdf.rect(barX, barY, barWidth, barHeight, 'F');
+          
+          // Draw value on top
+          pdf.setFontSize(8);
+          pdf.setTextColor(60, 60, 60);
+          pdf.text(value.toLocaleString(), barX + barWidth / 2, barY - 2, { align: 'center' });
+          
+          // Draw label below
+          pdf.setFontSize(7);
+          const labelText = labels[index] || `Item ${index + 1}`;
+          const labelLines = pdf.splitTextToSize(labelText, barWidth + 10);
+          pdf.text(labelLines, barX + barWidth / 2, chartY + chartHeight + 5, { 
+            align: 'center'
+          });
+        });
+
+        // Draw axes
+        pdf.setDrawColor(200, 200, 200);
+        pdf.line(chartX, chartY + chartHeight, chartX + chartWidth, chartY + chartHeight);
+        pdf.line(chartX, chartY, chartX, chartY + chartHeight);
+        
+        pdf.setTextColor(0, 0, 0);
+        yPos += chartHeight + 25;
+      };
+      
       // Helper to render content with markdown support
       const renderContent = (text: string, fontSize: number = 10, indent: number = 0) => {
         if (!text || text.trim() === '') return;
+        
+        // Check for JSON chart blocks (```json {...} ```)
+        const chartMatch = text.match(/```json\s*(\{[\s\S]*?"type":\s*"(pie|bar)"[\s\S]*?\})\s*```/);
+        if (chartMatch) {
+          const chartJson = chartMatch[1];
+          const beforeChart = text.substring(0, chartMatch.index);
+          const afterChart = text.substring((chartMatch.index || 0) + chartMatch[0].length);
+          
+          // Render text before chart
+          if (beforeChart.trim()) {
+            renderContent(beforeChart, fontSize, indent);
+          }
+          
+          // Parse and render chart
+          try {
+            const chartData = JSON.parse(chartJson);
+            if (chartData.type === 'pie') {
+              drawPieChart(chartData);
+            } else if (chartData.type === 'bar') {
+              drawBarChart(chartData);
+            }
+          } catch (e) {
+            console.error('Failed to parse chart JSON:', e);
+            addText(`[Chart rendering error: ${e instanceof Error ? e.message : 'Unknown error'}]`, fontSize, false, indent);
+          }
+          
+          // Render text after chart (recursively)
+          if (afterChart.trim()) {
+            renderContent(afterChart, fontSize, indent);
+          }
+          return;
+        }
         
         // Check for markdown table
         const tableMatch = text.match(/\|[^\n]+\|\n\|[-:\s|]+\|\n(\|[^\n]+\|\n?)+/);
@@ -1376,7 +1722,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           return;
         }
         
-        // No table found, render as text
+        // No table or chart found, render as text
         addText(text, fontSize, false, indent);
       };
 
