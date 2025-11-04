@@ -6,6 +6,7 @@ import { Save, X, RefreshCw, Loader2, ZoomIn, ZoomOut, Wand2, ChevronLeft, Chevr
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
 import { Document, Page, pdfjs } from 'react-pdf';
+import { toast } from "sonner";
 
 // Configure PDF.js worker
 pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
@@ -140,17 +141,15 @@ export function SplitViewReportEditor({
   const handleApplyChanges = async () => {
     if (!prompt.trim() || !selectionArea) return;
     
-    setIsGenerating(true);
-    try {
-      // TODO: Send prompt and selection area to AI for processing
-      console.log('Applying changes:', { prompt, selectionArea });
-      // For now, just regenerate the preview
-      // In the future, this will call an AI service to modify the selected area
-    } catch (error) {
-      console.error("Error applying changes:", error);
-    } finally {
-      setIsGenerating(false);
-    }
+    console.log('Applying changes:', { prompt, selectionArea });
+    
+    toast.info("AI Workshop Feature", {
+      description: "The AI-powered PDF editing feature is currently under development. For now, you can edit the report sections directly in the main report editor. Page breaks and section formatting will be available soon.",
+      duration: 6000,
+    });
+    
+    // Clear the selection and prompt
+    handleClearSelection();
   };
 
   const handleClearSelection = () => {
