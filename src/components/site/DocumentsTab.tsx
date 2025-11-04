@@ -2022,91 +2022,48 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                       </div>
                       
                       {editedData.extracted_data?.line_items && Array.isArray(editedData.extracted_data.line_items) && editedData.extracted_data.line_items.length > 0 ? (
-                        <Accordion type="single" collapsible className="w-full">
-                          {editedData.extracted_data.line_items.map((item: any, index: number) => (
-                            <AccordionItem key={index} value={`item-${index}`}>
-                              <AccordionTrigger className="hover:no-underline">
-                                <div className="flex items-center justify-between w-full pr-4">
-                                  <span className="font-medium">{item.description || `Line Item ${index + 1}`}</span>
-                                  <span className="text-sm text-muted-foreground">
-                                    {editedData.currency} {(item.amount || 0).toFixed(2)}
-                                  </span>
-                                </div>
-                              </AccordionTrigger>
-                              <AccordionContent>
-                                <div className="space-y-3 pt-2">
-                                  <div className="flex justify-end">
-                                    {isEditing && (
-                                      <Button
-                                        size="sm"
-                                        variant="destructive"
-                                        onClick={() => {
-                                          setEditedData({
-                                            ...editedData,
-                                            extracted_data: {
-                                              ...editedData.extracted_data,
-                                              line_items: editedData.extracted_data.line_items.filter((_: any, i: number) => i !== index)
-                                            }
-                                          });
-                                        }}
-                                      >
-                                        <Trash2 className="w-4 h-4 mr-1" />
-                                        Delete
-                                      </Button>
-                                    )}
+                        <>
+                          <Accordion type="single" collapsible className="w-full">
+                            {editedData.extracted_data.line_items.map((item: any, index: number) => (
+                              <AccordionItem key={index} value={`item-${index}`}>
+                                <AccordionTrigger className="hover:no-underline">
+                                  <div className="flex items-center justify-between w-full pr-4">
+                                    <span className="font-medium">{item.description || `Line Item ${index + 1}`}</span>
+                                    <span className="text-sm text-muted-foreground">
+                                      {editedData.currency} {(item.amount || 0).toFixed(2)}
+                                    </span>
                                   </div>
-                                  
-                                  <div>
-                                    <Label className="text-sm">Description</Label>
-                                    <Input
-                                      value={item.description || ''}
-                                      onChange={(e) => {
-                                        const newItems = [...editedData.extracted_data.line_items];
-                                        newItems[index] = { ...newItems[index], description: e.target.value };
-                                        setEditedData({
-                                          ...editedData,
-                                          extracted_data: { ...editedData.extracted_data, line_items: newItems }
-                                        });
-                                      }}
-                                      disabled={!isEditing}
-                                    />
-                                  </div>
-                                  
-                                  <div>
-                                    <Label className="text-sm">Meter Number</Label>
-                                    <Input
-                                      value={item.meter_number || ''}
-                                      onChange={(e) => {
-                                        const newItems = [...editedData.extracted_data.line_items];
-                                        newItems[index] = { ...newItems[index], meter_number: e.target.value };
-                                        setEditedData({
-                                          ...editedData,
-                                          extracted_data: { ...editedData.extracted_data, line_items: newItems }
-                                        });
-                                      }}
-                                      disabled={!isEditing}
-                                    />
-                                  </div>
-                                  
-                                  <div className="grid grid-cols-2 gap-3">
+                                </AccordionTrigger>
+                                <AccordionContent>
+                                  <div className="space-y-3 pt-2">
+                                    <div className="flex justify-end">
+                                      {isEditing && (
+                                        <Button
+                                          size="sm"
+                                          variant="destructive"
+                                          onClick={() => {
+                                            setEditedData({
+                                              ...editedData,
+                                              extracted_data: {
+                                                ...editedData.extracted_data,
+                                                line_items: editedData.extracted_data.line_items.filter((_: any, i: number) => i !== index)
+                                              }
+                                            });
+                                          }}
+                                        >
+                                          <Trash2 className="w-4 h-4 mr-1" />
+                                          Delete
+                                        </Button>
+                                      )}
+                                    </div>
+                                    
                                     <div>
-                                      <Label className="text-sm">Previous Reading</Label>
+                                      <Label className="text-sm">Description</Label>
                                       <Input
-                                        type="number"
-                                        step="0.01"
-                                        value={item.previous_reading || ''}
+                                        value={item.description || ''}
                                         onChange={(e) => {
-                                          const value = parseFloat(e.target.value) || 0;
                                           const newItems = [...editedData.extracted_data.line_items];
-                                          const current = newItems[index].current_reading || 0;
-                                          const consumption = current - value;
-                                          const rate = newItems[index].rate || 0;
-                                          newItems[index] = { 
-                                            ...newItems[index], 
-                                            previous_reading: value,
-                                            consumption: consumption,
-                                            amount: consumption * rate
-                                          };
+                                          newItems[index] = { ...newItems[index], description: e.target.value };
                                           setEditedData({
                                             ...editedData,
                                             extracted_data: { ...editedData.extracted_data, line_items: newItems }
@@ -2115,24 +2072,14 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                                         disabled={!isEditing}
                                       />
                                     </div>
+                                    
                                     <div>
-                                      <Label className="text-sm">Current Reading</Label>
+                                      <Label className="text-sm">Meter Number</Label>
                                       <Input
-                                        type="number"
-                                        step="0.01"
-                                        value={item.current_reading || ''}
+                                        value={item.meter_number || ''}
                                         onChange={(e) => {
-                                          const value = parseFloat(e.target.value) || 0;
                                           const newItems = [...editedData.extracted_data.line_items];
-                                          const previous = newItems[index].previous_reading || 0;
-                                          const consumption = value - previous;
-                                          const rate = newItems[index].rate || 0;
-                                          newItems[index] = { 
-                                            ...newItems[index], 
-                                            current_reading: value,
-                                            consumption: consumption,
-                                            amount: consumption * rate
-                                          };
+                                          newItems[index] = { ...newItems[index], meter_number: e.target.value };
                                           setEditedData({
                                             ...editedData,
                                             extracted_data: { ...editedData.extracted_data, line_items: newItems }
@@ -2140,59 +2087,163 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                                         }}
                                         disabled={!isEditing}
                                       />
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-2 gap-3">
+                                      <div>
+                                        <Label className="text-sm">Previous Reading</Label>
+                                        <Input
+                                          type="number"
+                                          step="0.01"
+                                          value={item.previous_reading || ''}
+                                          onChange={(e) => {
+                                            const value = parseFloat(e.target.value) || 0;
+                                            const newItems = [...editedData.extracted_data.line_items];
+                                            const current = newItems[index].current_reading || 0;
+                                            const consumption = current - value;
+                                            const rate = newItems[index].rate || 0;
+                                            newItems[index] = { 
+                                              ...newItems[index], 
+                                              previous_reading: value,
+                                              consumption: consumption,
+                                              amount: consumption * rate
+                                            };
+                                            setEditedData({
+                                              ...editedData,
+                                              extracted_data: { ...editedData.extracted_data, line_items: newItems }
+                                            });
+                                          }}
+                                          disabled={!isEditing}
+                                        />
+                                      </div>
+                                      <div>
+                                        <Label className="text-sm">Current Reading</Label>
+                                        <Input
+                                          type="number"
+                                          step="0.01"
+                                          value={item.current_reading || ''}
+                                          onChange={(e) => {
+                                            const value = parseFloat(e.target.value) || 0;
+                                            const newItems = [...editedData.extracted_data.line_items];
+                                            const previous = newItems[index].previous_reading || 0;
+                                            const consumption = value - previous;
+                                            const rate = newItems[index].rate || 0;
+                                            newItems[index] = { 
+                                              ...newItems[index], 
+                                              current_reading: value,
+                                              consumption: consumption,
+                                              amount: consumption * rate
+                                            };
+                                            setEditedData({
+                                              ...editedData,
+                                              extracted_data: { ...editedData.extracted_data, line_items: newItems }
+                                            });
+                                          }}
+                                          disabled={!isEditing}
+                                        />
+                                      </div>
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-3 gap-3">
+                                      <div>
+                                        <Label className="text-sm">Consumption</Label>
+                                        <Input
+                                          type="number"
+                                          step="0.01"
+                                          value={(item.consumption || 0).toFixed(2)}
+                                          disabled
+                                          className="bg-muted"
+                                        />
+                                      </div>
+                                      <div>
+                                        <Label className="text-sm">Rate</Label>
+                                        <Input
+                                          type="number"
+                                          step="0.01"
+                                          value={item.rate || ''}
+                                          onChange={(e) => {
+                                            const value = parseFloat(e.target.value) || 0;
+                                            const newItems = [...editedData.extracted_data.line_items];
+                                            const consumption = newItems[index].consumption || 0;
+                                            newItems[index] = { 
+                                              ...newItems[index], 
+                                              rate: value,
+                                              amount: consumption * value
+                                            };
+                                            setEditedData({
+                                              ...editedData,
+                                              extracted_data: { ...editedData.extracted_data, line_items: newItems }
+                                            });
+                                          }}
+                                          disabled={!isEditing}
+                                        />
+                                      </div>
+                                      <div>
+                                        <Label className="text-sm">Amount</Label>
+                                        <Input
+                                          type="number"
+                                          step="0.01"
+                                          value={(item.amount || 0).toFixed(2)}
+                                          disabled
+                                          className="bg-muted"
+                                        />
+                                      </div>
+                                    </div>
+                                  </div>
+                                </AccordionContent>
+                              </AccordionItem>
+                            ))}
+                          </Accordion>
+                          
+                          {/* Consumption Summary */}
+                          <div className="mt-4 grid grid-cols-2 gap-4">
+                            {(() => {
+                              const councilItems = editedData.extracted_data.line_items.filter(
+                                (item: any) => !item.description?.toLowerCase().includes('generator')
+                              );
+                              const generatorItems = editedData.extracted_data.line_items.filter(
+                                (item: any) => item.description?.toLowerCase().includes('generator')
+                              );
+                              
+                              const councilKwh = councilItems.reduce((sum: number, item: any) => sum + (item.consumption || 0), 0);
+                              const councilAmount = councilItems.reduce((sum: number, item: any) => sum + (item.amount || 0), 0);
+                              const generatorKwh = generatorItems.reduce((sum: number, item: any) => sum + (item.consumption || 0), 0);
+                              const generatorAmount = generatorItems.reduce((sum: number, item: any) => sum + (item.amount || 0), 0);
+                              
+                              return (
+                                <>
+                                  <div className="p-4 border rounded-lg bg-primary/5">
+                                    <div className="text-sm font-medium text-muted-foreground mb-2">Council Supply</div>
+                                    <div className="space-y-1">
+                                      <div className="flex justify-between items-center">
+                                        <span className="text-sm">Consumption:</span>
+                                        <span className="font-semibold">{councilKwh.toFixed(2)} kWh</span>
+                                      </div>
+                                      <div className="flex justify-between items-center">
+                                        <span className="text-sm">Amount:</span>
+                                        <span className="font-semibold">{editedData.currency} {councilAmount.toFixed(2)}</span>
+                                      </div>
                                     </div>
                                   </div>
                                   
-                                  <div className="grid grid-cols-3 gap-3">
-                                    <div>
-                                      <Label className="text-sm">Consumption</Label>
-                                      <Input
-                                        type="number"
-                                        step="0.01"
-                                        value={(item.consumption || 0).toFixed(2)}
-                                        disabled
-                                        className="bg-muted"
-                                      />
-                                    </div>
-                                    <div>
-                                      <Label className="text-sm">Rate</Label>
-                                      <Input
-                                        type="number"
-                                        step="0.01"
-                                        value={item.rate || ''}
-                                        onChange={(e) => {
-                                          const value = parseFloat(e.target.value) || 0;
-                                          const newItems = [...editedData.extracted_data.line_items];
-                                          const consumption = newItems[index].consumption || 0;
-                                          newItems[index] = { 
-                                            ...newItems[index], 
-                                            rate: value,
-                                            amount: consumption * value
-                                          };
-                                          setEditedData({
-                                            ...editedData,
-                                            extracted_data: { ...editedData.extracted_data, line_items: newItems }
-                                          });
-                                        }}
-                                        disabled={!isEditing}
-                                      />
-                                    </div>
-                                    <div>
-                                      <Label className="text-sm">Amount</Label>
-                                      <Input
-                                        type="number"
-                                        step="0.01"
-                                        value={(item.amount || 0).toFixed(2)}
-                                        disabled
-                                        className="bg-muted"
-                                      />
+                                  <div className="p-4 border rounded-lg bg-accent/5">
+                                    <div className="text-sm font-medium text-muted-foreground mb-2">Generator Supply</div>
+                                    <div className="space-y-1">
+                                      <div className="flex justify-between items-center">
+                                        <span className="text-sm">Consumption:</span>
+                                        <span className="font-semibold">{generatorKwh.toFixed(2)} kWh</span>
+                                      </div>
+                                      <div className="flex justify-between items-center">
+                                        <span className="text-sm">Amount:</span>
+                                        <span className="font-semibold">{editedData.currency} {generatorAmount.toFixed(2)}</span>
+                                      </div>
                                     </div>
                                   </div>
-                                </div>
-                              </AccordionContent>
-                            </AccordionItem>
-                          ))}
-                        </Accordion>
+                                </>
+                              );
+                            })()}
+                          </div>
+                        </>
                       ) : (
                         <p className="text-sm text-muted-foreground">No line items extracted</p>
                       )}
