@@ -51,7 +51,9 @@ export function SplitViewReportEditor({
     const initPreview = async () => {
       setIsGenerating(true);
       try {
+        console.log('Generating PDF preview...');
         const url = await generatePdfPreview(sections);
+        console.log('PDF URL generated:', url);
         setPdfUrl(url);
         setInitialLoadDone(true);
       } catch (error) {
@@ -350,10 +352,12 @@ export function SplitViewReportEditor({
                         transformOrigin: 'top center'
                       }}
                     >
-                      <embed
-                        src={`${pdfUrl}#toolbar=0&navpanes=0&scrollbar=0`}
-                        type="application/pdf"
+                      <iframe
+                        src={pdfUrl}
                         className="w-full h-[1000px] border shadow-lg bg-white"
+                        title="PDF Preview"
+                        onLoad={() => console.log('PDF iframe loaded')}
+                        onError={(e) => console.error('PDF iframe error:', e)}
                       />
                       <canvas
                         ref={canvasRef}
