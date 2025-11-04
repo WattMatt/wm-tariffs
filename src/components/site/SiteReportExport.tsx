@@ -541,8 +541,15 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         const renderContent = (text: string, fontSize: number = 10) => {
           if (!text || text.trim() === '') return;
           
-          // Check for JSON chart blocks (```json {...} ```)
-          const chartMatch = text.match(/```json\s*(\{[\s\S]*?"type":\s*"(pie|bar)"[\s\S]*?\})\s*```/);
+          // Check for JSON chart blocks (with or without code fences)
+          // First try code-fenced JSON: ```json {...} ```
+          let chartMatch = text.match(/```json\s*(\{[\s\S]*?"type":\s*"(pie|bar)"[\s\S]*?\})\s*```/);
+          
+          // If no code fence, try standalone JSON object
+          if (!chartMatch) {
+            chartMatch = text.match(/(\{[\s\S]*?"type":\s*"(pie|bar)"[\s\S]*?\})/);
+          }
+          
           if (chartMatch) {
             const chartJson = chartMatch[1];
             const beforeChart = text.substring(0, chartMatch.index);
@@ -1663,8 +1670,15 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       const renderContent = (text: string, fontSize: number = 10, indent: number = 0) => {
         if (!text || text.trim() === '') return;
         
-        // Check for JSON chart blocks (```json {...} ```)
-        const chartMatch = text.match(/```json\s*(\{[\s\S]*?"type":\s*"(pie|bar)"[\s\S]*?\})\s*```/);
+        // Check for JSON chart blocks (with or without code fences)
+        // First try code-fenced JSON: ```json {...} ```
+        let chartMatch = text.match(/```json\s*(\{[\s\S]*?"type":\s*"(pie|bar)"[\s\S]*?\})\s*```/);
+        
+        // If no code fence, try standalone JSON object
+        if (!chartMatch) {
+          chartMatch = text.match(/(\{[\s\S]*?"type":\s*"(pie|bar)"[\s\S]*?\})/);
+        }
+        
         if (chartMatch) {
           const chartJson = chartMatch[1];
           const beforeChart = text.substring(0, chartMatch.index);
