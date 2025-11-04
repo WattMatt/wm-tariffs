@@ -1907,22 +1907,22 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                            ) : (
                              <span className="text-muted-foreground text-xs">Unassigned</span>
                            )}
-                           <Select
-                             value={doc.meter_id || ""}
-                             onValueChange={(value) => handleAssignMeter(doc.id, value || null)}
-                           >
-                             <SelectTrigger className="h-7 w-[120px] text-xs">
-                               <SelectValue placeholder="Assign..." />
-                             </SelectTrigger>
-                             <SelectContent>
-                               <SelectItem value="">Unassign</SelectItem>
-                               {siteMeters.map((meter) => (
-                                 <SelectItem key={meter.id} value={meter.id}>
-                                   {meter.meter_number}
-                                 </SelectItem>
-                               ))}
-                             </SelectContent>
-                           </Select>
+                            <Select
+                              value={doc.meter_id || "unassign"}
+                              onValueChange={(value) => handleAssignMeter(doc.id, value === "unassign" ? null : value)}
+                            >
+                              <SelectTrigger className="h-7 w-[120px] text-xs">
+                                <SelectValue placeholder="Assign..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="unassign">Unassign</SelectItem>
+                                {siteMeters.map((meter) => (
+                                  <SelectItem key={meter.id} value={meter.id}>
+                                    {meter.meter_number}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                          </div>
                        </TableCell>
                         <TableCell className="text-right">
