@@ -1878,6 +1878,10 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
               setEditableSections([]);
             }}
             generatePdfPreview={generatePdfPreview}
+            generateFinalPdf={async (sections) => {
+              setEditableSections(sections);
+              await generateReport();
+            }}
           />
         )}
       </CardContent>

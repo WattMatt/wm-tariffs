@@ -23,6 +23,7 @@ interface SplitViewReportEditorProps {
   onSave: (sections: PdfSection[]) => void;
   onCancel: () => void;
   generatePdfPreview: (sections: PdfSection[]) => Promise<string>;
+  generateFinalPdf?: (sections: PdfSection[]) => Promise<void>;
 }
 
 interface SelectionArea {
@@ -36,7 +37,8 @@ export function SplitViewReportEditor({
   sections, 
   onSave, 
   onCancel,
-  generatePdfPreview 
+  generatePdfPreview,
+  generateFinalPdf
 }: SplitViewReportEditorProps) {
   const [pdfUrl, setPdfUrl] = useState<string>("");
   const [isGenerating, setIsGenerating] = useState(false);
@@ -159,8 +161,20 @@ export function SplitViewReportEditor({
     }
   };
 
-  const handleSave = () => {
-    onSave(sections);
+  const handleSave = async () => {
+    if (generateFinalPdf) {
+      setIsGenerating(true);
+      try {
+        await generateFinalPdf(sections);
+        onSave(sections);
+      } catch (error) {
+        console.error("Error generating final PDF:", error);
+      } finally {
+        setIsGenerating(false);
+      }
+    } else {
+      onSave(sections);
+    }
   };
 
   const handleZoomIn = () => {
@@ -238,11 +252,20 @@ export function SplitViewReportEditor({
           )}
         </div>
         <div className="flex items-center gap-2">
-          <Button onClick={handleSave} size="sm">
-            <Save className="w-4 h-4 mr-2" />
-            Save Report
+          <Button onClick={handleSave} size="sm" disabled={isGenerating}>
+            {isGenerating ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Generating PDF...
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4 mr-2" />
+                {generateFinalPdf ? 'Generate & Download PDF' : 'Save Changes'}
+              </>
+            )}
           </Button>
-          <Button onClick={onCancel} variant="outline" size="sm">
+          <Button onClick={onCancel} variant="outline" size="sm" disabled={isGenerating}>
             <X className="w-4 h-4 mr-2" />
             Cancel
           </Button>
