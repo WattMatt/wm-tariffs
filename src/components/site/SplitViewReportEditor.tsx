@@ -30,6 +30,7 @@ export function SplitViewReportEditor({
   const [pdfUrl, setPdfUrl] = useState<string>("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [zoom, setZoom] = useState(100);
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
   const debounceTimer = useRef<NodeJS.Timeout>();
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
@@ -44,14 +45,15 @@ export function SplitViewReportEditor({
       })
       .join('\n');
     setMarkdown(markdownText);
+    setInitialLoadDone(true);
   }, []);
 
-  // Generate initial PDF preview
+  // Generate initial PDF preview after markdown is set
   useEffect(() => {
-    if (markdown) {
+    if (markdown && initialLoadDone && !pdfUrl) {
       generatePreview();
     }
-  }, []);
+  }, [markdown, initialLoadDone]);
 
   const parseMarkdownToSections = (md: string): PdfSection[] => {
     const lines = md.split('\n');
@@ -170,9 +172,9 @@ export function SplitViewReportEditor({
   }, [pdfUrl]);
 
   return (
-    <div className="fixed inset-0 z-50 bg-background">
+    <div className="border rounded-lg overflow-hidden bg-background">
       {/* Header */}
-      <div className="h-14 border-b flex items-center justify-between px-4">
+      <div className="h-14 border-b flex items-center justify-between px-4 bg-muted/10">
         <div className="flex items-center gap-2">
           <h2 className="text-lg font-semibold">Edit Report Content</h2>
           {isGenerating && (
@@ -199,7 +201,7 @@ export function SplitViewReportEditor({
       </div>
 
       {/* Split View */}
-      <div className="h-[calc(100vh-3.5rem)]">
+      <div className="h-[800px]">
         <ResizablePanelGroup direction="horizontal">
           {/* Left Panel - Markdown Editor */}
           <ResizablePanel defaultSize={50} minSize={30}>
@@ -214,7 +216,7 @@ export function SplitViewReportEditor({
                 <Textarea
                   value={markdown}
                   onChange={(e) => handleMarkdownChange(e.target.value)}
-                  className="min-h-full w-full border-0 rounded-none font-mono text-sm resize-none focus-visible:ring-0"
+                  className="min-h-[750px] w-full border-0 rounded-none font-mono text-sm resize-none focus-visible:ring-0"
                   placeholder="Edit your report content in markdown format..."
                 />
               </ScrollArea>
@@ -265,8 +267,7 @@ export function SplitViewReportEditor({
                         src={pdfUrl}
                         className="w-full border shadow-lg"
                         style={{ 
-                          height: 'calc(100vh - 8rem)',
-                          minHeight: '800px'
+                          height: '700px'
                         }}
                         title="PDF Preview"
                       />
