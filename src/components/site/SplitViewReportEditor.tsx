@@ -2,8 +2,14 @@ import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
-import { Save, X, RefreshCw, Loader2, ZoomIn, ZoomOut } from "lucide-react";
+import { Save, X, RefreshCw, Loader2, ZoomIn, ZoomOut, ChevronLeft, ChevronRight } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Document, Page, pdfjs } from 'react-pdf';
+import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
+import 'react-pdf/dist/esm/Page/TextLayer.css';
+
+// Configure PDF.js worker
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
 
 interface PdfSection {
   id: string;
@@ -31,6 +37,8 @@ export function SplitViewReportEditor({
   const [isGenerating, setIsGenerating] = useState(false);
   const [zoom, setZoom] = useState(100);
   const [initialLoadDone, setInitialLoadDone] = useState(false);
+  const [numPages, setNumPages] = useState<number>(0);
+  const [pageNumber, setPageNumber] = useState<number>(1);
   const debounceTimer = useRef<NodeJS.Timeout>();
 
   // Convert sections to unified markdown on mount
@@ -158,6 +166,19 @@ export function SplitViewReportEditor({
     generatePreview();
   };
 
+  const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
+    setNumPages(numPages);
+    setPageNumber(1);
+  };
+
+  const goToPrevPage = () => {
+    setPageNumber((prev) => Math.max(prev - 1, 1));
+  };
+
+  const goToNextPage = () => {
+    setPageNumber((prev) => Math.min(prev + 1, numPages));
+  };
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -230,6 +251,32 @@ export function SplitViewReportEditor({
               <div className="h-10 border-b flex items-center justify-between px-4 bg-muted/30">
                 <span className="text-sm font-medium">PDF Preview</span>
                 <div className="flex items-center gap-2">
+                  {numPages > 0 && (
+                    <>
+                      <Button 
+                        onClick={goToPrevPage} 
+                        variant="ghost" 
+                        size="icon"
+                        className="h-7 w-7"
+                        disabled={pageNumber <= 1}
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </Button>
+                      <span className="text-xs font-medium min-w-[4rem] text-center">
+                        {pageNumber} / {numPages}
+                      </span>
+                      <Button 
+                        onClick={goToNextPage} 
+                        variant="ghost" 
+                        size="icon"
+                        className="h-7 w-7"
+                        disabled={pageNumber >= numPages}
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </Button>
+                      <div className="w-px h-5 bg-border mx-1" />
+                    </>
+                  )}
                   <Button 
                     onClick={handleZoomOut} 
                     variant="ghost" 
@@ -251,40 +298,41 @@ export function SplitViewReportEditor({
                   </Button>
                 </div>
               </div>
-              <div className="flex-1 bg-muted/20 overflow-auto">
+              <ScrollArea className="flex-1 bg-muted/20">
                 {pdfUrl ? (
                   <div className="p-4 flex justify-center">
-                    <div 
-                      style={{ 
-                        transform: `scale(${zoom / 100})`,
-                        transformOrigin: 'top center',
-                        transition: 'transform 0.2s ease',
-                        width: '100%',
-                        maxWidth: '800px'
-                      }}
-                    >
-                      <object
-                        data={pdfUrl}
-                        type="application/pdf"
-                        className="w-full border shadow-lg rounded bg-white"
-                        style={{ 
-                          height: '700px',
-                          minHeight: '700px'
-                        }}
-                      >
-                        <div className="flex items-center justify-center h-full p-8">
+                    <Document
+                      file={pdfUrl}
+                      onLoadSuccess={onDocumentLoadSuccess}
+                      loading={
+                        <div className="flex items-center justify-center py-20">
+                          <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+                        </div>
+                      }
+                      error={
+                        <div className="flex items-center justify-center py-20">
                           <div className="text-center space-y-4">
-                            <p className="text-sm text-muted-foreground">
-                              PDF preview not supported in your browser
-                            </p>
+                            <p className="text-sm text-destructive">Failed to load PDF</p>
                             <Button onClick={handleRefresh} variant="outline" size="sm">
                               <RefreshCw className="w-4 h-4 mr-2" />
                               Try Again
                             </Button>
                           </div>
                         </div>
-                      </object>
-                    </div>
+                      }
+                    >
+                      <Page
+                        pageNumber={pageNumber}
+                        scale={zoom / 100}
+                        renderTextLayer={true}
+                        renderAnnotationLayer={true}
+                        loading={
+                          <div className="flex items-center justify-center py-20">
+                            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                          </div>
+                        }
+                      />
+                    </Document>
                   </div>
                 ) : (
                   <div className="flex items-center justify-center h-full">
@@ -294,7 +342,7 @@ export function SplitViewReportEditor({
                     </div>
                   </div>
                 )}
-              </div>
+              </ScrollArea>
             </div>
           </ResizablePanel>
         </ResizablePanelGroup>
