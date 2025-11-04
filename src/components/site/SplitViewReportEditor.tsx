@@ -2,12 +2,15 @@ import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
-import { Save, X, RefreshCw, Loader2, ZoomIn, ZoomOut, Wand2, ChevronLeft, ChevronRight, Activity, Database, Calendar, Zap } from "lucide-react";
+import { Save, X, RefreshCw, Loader2, ZoomIn, ZoomOut, Wand2, ChevronLeft, ChevronRight, Activity, Database, Calendar, Zap, ChevronDown, ChevronUp, TrendingUp, BarChart3 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
 import { Document, Page, pdfjs } from 'react-pdf';
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, XAxis, YAxis, ResponsiveContainer } from "recharts";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 // Configure PDF.js worker
 pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
@@ -65,6 +68,18 @@ export function SplitViewReportEditor({
     dateRange: { earliest: '', latest: '' },
     totalConsumption: 0,
     isLoading: true
+  });
+
+  // Charts State
+  const [showCharts, setShowCharts] = useState(false);
+  const [chartData, setChartData] = useState<{
+    consumption: Array<{ date: string; kwh: number }>;
+    activity: Array<{ date: string; readings: number }>;
+    isLoading: boolean;
+  }>({
+    consumption: [],
+    activity: [],
+    isLoading: false
   });
 
   // Fetch KPI statistics
@@ -136,6 +151,79 @@ export function SplitViewReportEditor({
 
     fetchKPIs();
   }, [siteId]);
+
+  // Fetch chart data when charts are expanded
+  useEffect(() => {
+    if (!showCharts || chartData.consumption.length > 0) return;
+
+    const fetchChartData = async () => {
+      setChartData(prev => ({ ...prev, isLoading: true }));
+      
+      try {
+        // Get all meters for this site
+        const { data: metersData, error: metersError } = await supabase
+          .from('meters')
+          .select('id')
+          .eq('site_id', siteId);
+
+        if (metersError) throw metersError;
+
+        const meterIds = (metersData || []).map(m => m.id);
+        if (meterIds.length === 0) {
+          setChartData({ consumption: [], activity: [], isLoading: false });
+          return;
+        }
+
+        // Fetch all readings for these meters
+        const { data: readingsData, error: readingsError } = await supabase
+          .from('meter_readings')
+          .select('reading_timestamp, kwh_value')
+          .in('meter_id', meterIds)
+          .order('reading_timestamp', { ascending: true });
+
+        if (readingsError) throw readingsError;
+
+        // Group by date for consumption trends
+        const consumptionByDate = new Map<string, number>();
+        const activityByDate = new Map<string, number>();
+
+        (readingsData || []).forEach(reading => {
+          const date = new Date(reading.reading_timestamp).toLocaleDateString('en-US', { 
+            month: 'short', 
+            day: 'numeric' 
+          });
+          
+          // Sum consumption
+          const currentConsumption = consumptionByDate.get(date) || 0;
+          consumptionByDate.set(date, currentConsumption + Number(reading.kwh_value));
+          
+          // Count readings
+          const currentCount = activityByDate.get(date) || 0;
+          activityByDate.set(date, currentCount + 1);
+        });
+
+        // Convert to array format for charts (limit to last 30 days)
+        const consumptionArray = Array.from(consumptionByDate.entries())
+          .slice(-30)
+          .map(([date, kwh]) => ({ date, kwh: Math.round(kwh) }));
+
+        const activityArray = Array.from(activityByDate.entries())
+          .slice(-30)
+          .map(([date, readings]) => ({ date, readings }));
+
+        setChartData({
+          consumption: consumptionArray,
+          activity: activityArray,
+          isLoading: false
+        });
+      } catch (error) {
+        console.error('Error loading chart data:', error);
+        setChartData(prev => ({ ...prev, isLoading: false }));
+      }
+    };
+
+    fetchChartData();
+  }, [showCharts, siteId]);
 
   // Generate initial PDF preview on mount
   useEffect(() => {
@@ -413,54 +501,165 @@ export function SplitViewReportEditor({
       </div>
 
       {/* KPI Statistics Bar */}
-      <div className="border-b bg-muted/5 px-4 py-3">
-        {kpiStats.isLoading ? (
-          <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="w-4 h-4 animate-spin" />
-            <span>Loading statistics...</span>
-          </div>
-        ) : (
-          <div className="grid grid-cols-4 gap-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <Database className="w-4 h-4 text-primary" />
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground">Total Readings</div>
-                <div className="text-lg font-semibold">{kpiStats.totalReadings.toLocaleString()}</div>
-              </div>
+      <div className="border-b bg-muted/5">
+        <div className="px-4 py-3">
+          {kpiStats.isLoading ? (
+            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span>Loading statistics...</span>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-accent/10">
-                <Activity className="w-4 h-4 text-accent-foreground" />
+          ) : (
+            <div className="grid grid-cols-4 gap-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-primary/10">
+                  <Database className="w-4 h-4 text-primary" />
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground">Total Readings</div>
+                  <div className="text-lg font-semibold">{kpiStats.totalReadings.toLocaleString()}</div>
+                </div>
               </div>
-              <div>
-                <div className="text-xs text-muted-foreground">Active Meters</div>
-                <div className="text-lg font-semibold">{kpiStats.totalMeters}</div>
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-accent/10">
+                  <Activity className="w-4 h-4 text-accent-foreground" />
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground">Active Meters</div>
+                  <div className="text-lg font-semibold">{kpiStats.totalMeters}</div>
+                </div>
               </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-secondary/10">
-                <Calendar className="w-4 h-4 text-secondary-foreground" />
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-secondary/10">
+                  <Calendar className="w-4 h-4 text-secondary-foreground" />
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground">Date Range</div>
+                  <div className="text-sm font-semibold">
+                    {kpiStats.dateRange.earliest} - {kpiStats.dateRange.latest}
+                  </div>
+                </div>
               </div>
-              <div>
-                <div className="text-xs text-muted-foreground">Date Range</div>
-                <div className="text-sm font-semibold">
-                  {kpiStats.dateRange.earliest} - {kpiStats.dateRange.latest}
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-primary/10">
+                  <Zap className="w-4 h-4 text-primary" />
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground">Total Consumption</div>
+                  <div className="text-lg font-semibold">{kpiStats.totalConsumption.toLocaleString()} kWh</div>
                 </div>
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <Zap className="w-4 h-4 text-primary" />
+          )}
+        </div>
+
+        {/* Collapsible Charts Section */}
+        <Collapsible open={showCharts} onOpenChange={setShowCharts}>
+          <CollapsibleTrigger asChild>
+            <Button
+              variant="ghost"
+              className="w-full h-8 justify-center gap-2 hover:bg-muted/50 rounded-none border-t"
+            >
+              <BarChart3 className="w-4 h-4" />
+              <span className="text-xs font-medium">
+                {showCharts ? 'Hide Charts' : 'Show Consumption & Activity Charts'}
+              </span>
+              {showCharts ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="px-4 pb-4 pt-2">
+            {chartData.isLoading ? (
+              <div className="flex items-center justify-center py-8 gap-2 text-sm text-muted-foreground">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Loading charts...</span>
               </div>
-              <div>
-                <div className="text-xs text-muted-foreground">Total Consumption</div>
-                <div className="text-lg font-semibold">{kpiStats.totalConsumption.toLocaleString()} kWh</div>
+            ) : chartData.consumption.length === 0 ? (
+              <div className="text-center py-8 text-sm text-muted-foreground">
+                No data available for charts
               </div>
-            </div>
-          </div>
-        )}
+            ) : (
+              <div className="grid grid-cols-2 gap-4">
+                {/* Consumption Trends Chart */}
+                <Card className="p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <TrendingUp className="w-4 h-4 text-primary" />
+                    <h3 className="text-sm font-semibold">Consumption Trends (Last 30 Days)</h3>
+                  </div>
+                  <ChartContainer
+                    config={{
+                      kwh: {
+                        label: "Consumption (kWh)",
+                        color: "hsl(var(--primary))",
+                      },
+                    }}
+                    className="h-[200px]"
+                  >
+                    <AreaChart data={chartData.consumption}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                      <XAxis
+                        dataKey="date"
+                        tick={{ fontSize: 10 }}
+                        tickLine={false}
+                        axisLine={false}
+                      />
+                      <YAxis
+                        tick={{ fontSize: 10 }}
+                        tickLine={false}
+                        axisLine={false}
+                        tickFormatter={(value) => `${value}`}
+                      />
+                      <ChartTooltip content={<ChartTooltipContent />} />
+                      <Area
+                        type="monotone"
+                        dataKey="kwh"
+                        stroke="hsl(var(--primary))"
+                        fill="hsl(var(--primary))"
+                        fillOpacity={0.2}
+                      />
+                    </AreaChart>
+                  </ChartContainer>
+                </Card>
+
+                {/* Meter Activity Chart */}
+                <Card className="p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Activity className="w-4 h-4 text-accent-foreground" />
+                    <h3 className="text-sm font-semibold">Meter Activity (Last 30 Days)</h3>
+                  </div>
+                  <ChartContainer
+                    config={{
+                      readings: {
+                        label: "Reading Count",
+                        color: "hsl(var(--accent))",
+                      },
+                    }}
+                    className="h-[200px]"
+                  >
+                    <BarChart data={chartData.activity}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                      <XAxis
+                        dataKey="date"
+                        tick={{ fontSize: 10 }}
+                        tickLine={false}
+                        axisLine={false}
+                      />
+                      <YAxis
+                        tick={{ fontSize: 10 }}
+                        tickLine={false}
+                        axisLine={false}
+                      />
+                      <ChartTooltip content={<ChartTooltipContent />} />
+                      <Bar
+                        dataKey="readings"
+                        fill="hsl(var(--accent))"
+                        radius={[4, 4, 0, 0]}
+                      />
+                    </BarChart>
+                  </ChartContainer>
+                </Card>
+              </div>
+            )}
+          </CollapsibleContent>
+        </Collapsible>
       </div>
 
       {/* Split View */}
