@@ -1552,8 +1552,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           </CardHeader>
           <CardContent className="space-y-6">
             <Collapsible open={isColumnsOpen} onOpenChange={setIsColumnsOpen}>
-              <div className="space-y-2">
-                <CollapsibleTrigger className="flex items-center justify-between w-full hover:underline">
+              <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
+                <CollapsibleTrigger className="flex items-center justify-between w-full mb-3 hover:underline">
                   <Label className="text-sm font-semibold cursor-pointer">Available Columns - Select to Include in Calculations</Label>
                   <ChevronRight className={cn("h-4 w-4 transition-transform", isColumnsOpen && "rotate-90")} />
                 </CollapsibleTrigger>
@@ -1671,8 +1671,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                   </TableBody>
                 </Table>
               </div>
-            </CollapsibleContent>
-            </div>
+                </CollapsibleContent>
+              </div>
             </Collapsible>
 
             <Collapsible open={isMetersOpen} onOpenChange={setIsMetersOpen}>
