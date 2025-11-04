@@ -75,9 +75,10 @@ export function SplitViewReportEditor({
   }, []);
 
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!pdfContainerRef.current) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
     
-    const rect = pdfContainerRef.current.getBoundingClientRect();
+    const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
     
@@ -89,8 +90,8 @@ export function SplitViewReportEditor({
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!isSelecting || !startPoint || !canvasRef.current) return;
     
-    const rect = pdfContainerRef.current?.getBoundingClientRect();
-    if (!rect) return;
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
     
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
@@ -99,7 +100,6 @@ export function SplitViewReportEditor({
     const height = y - startPoint.y;
     
     // Draw selection rectangle
-    const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     
@@ -114,9 +114,10 @@ export function SplitViewReportEditor({
   const handleMouseUp = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!isSelecting || !startPoint) return;
     
-    const rect = pdfContainerRef.current?.getBoundingClientRect();
-    if (!rect) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
     
+    const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
     
@@ -212,21 +213,34 @@ export function SplitViewReportEditor({
     }
   };
 
-  // Update canvas size when PDF container size changes
+  // Update canvas size to match PDF page dimensions
   useEffect(() => {
     const updateCanvasSize = () => {
-      if (pdfContainerRef.current && canvasRef.current) {
-        const rect = pdfContainerRef.current.getBoundingClientRect();
-        canvasRef.current.width = rect.width;
-        canvasRef.current.height = rect.height;
+      if (!pdfContainerRef.current || !canvasRef.current) return;
+      
+      // Find the actual PDF page element
+      const pageElement = pdfContainerRef.current.querySelector('.react-pdf__Page__canvas');
+      if (pageElement) {
+        const rect = pageElement.getBoundingClientRect();
+        const canvas = canvasRef.current;
+        canvas.width = rect.width;
+        canvas.height = rect.height;
+        
+        // Position canvas to match the PDF page
+        canvas.style.width = `${rect.width}px`;
+        canvas.style.height = `${rect.height}px`;
       }
     };
     
-    updateCanvasSize();
+    // Use a slight delay to ensure PDF is rendered
+    const timer = setTimeout(updateCanvasSize, 100);
     window.addEventListener('resize', updateCanvasSize);
     
-    return () => window.removeEventListener('resize', updateCanvasSize);
-  }, [zoom, pdfUrl]);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', updateCanvasSize);
+    };
+  }, [zoom, pdfUrl, pageNumber]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -457,9 +471,11 @@ export function SplitViewReportEditor({
                         onMouseDown={handleMouseDown}
                         onMouseMove={handleMouseMove}
                         onMouseUp={handleMouseUp}
-                        className="absolute top-0 left-0 w-full h-full pointer-events-auto"
+                        className="absolute pointer-events-auto"
                         style={{ 
-                          cursor: isSelecting ? 'crosshair' : 'default'
+                          cursor: isSelecting ? 'crosshair' : 'default',
+                          top: 0,
+                          left: 0
                         }}
                       />
                     </div>
