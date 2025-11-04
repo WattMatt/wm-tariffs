@@ -58,26 +58,21 @@ STRUCTURE REQUIRED (match this exactly):
 Single-sentence headline:
 [Site Name] [Period] Audit: Critical [X.XX]% Energy Variance and ZAR [Amount] Financial Loss Identified.
 
+---
+
 # Energy Flow Summary
 
-Present the energy flow in a card-style format showing the three key metrics:
+| **GRID SUPPLY (Bulk Check)** | **COMBINED SUPPLY (VIRTUAL - TOTAL INJECTION)** | **SOLAR ENERGY (PV Tie In)** |
+|:------------------------------|:------------------------------------------------|:----------------------------|
+| **Total: ${reconciliationData.councilTotal.toFixed(2)} kWh** | **Total: ${reconciliationData.totalSupply.toFixed(2)} kWh** | **Total: ${reconciliationData.solarTotal.toFixed(2)} kWh** |
+| Source: Municipal/Council Supply | Components: Grid + Solar | Source: On-site Generation |
+| Status: [✓/⚠/✗] | **OVER/UNDER: ${reconciliationData.variance.toFixed(2)} kWh** | Status: [✓/⚠/✗] |
+| | **% OF TOTAL: ${reconciliationData.variancePercentage}%** | |
+| | Status: [✓/⚠/✗] | |
 
-## Grid Supply (Bulk Check)
-- **Total: ${reconciliationData.councilTotal.toFixed(2)} kWh**
-- Source: Municipal/Council Supply
-- Status: [✓/⚠/✗] based on variance
+**Note:** Use ✓ for values within acceptable range (<2% variance), ⚠ for caution range (2-5% variance), ✗ for critical issues (>5% variance).
 
-## Combined Supply (VIRTUAL - TOTAL INJECTION)
-- **Total: ${reconciliationData.totalSupply.toFixed(2)} kWh**
-- Components: Grid + Solar
-- **OVER/UNDER: ${reconciliationData.variance.toFixed(2)} kWh**
-- **% OF TOTAL: ${reconciliationData.variancePercentage}%**
-- Status: [✓/⚠/✗] based on variance threshold
-
-## Solar Energy (PV Tie In)
-- **Total: ${reconciliationData.solarTotal.toFixed(2)} kWh**
-- Source: On-site Generation
-- Status: [✓/⚠/✗] based on expected vs actual
+---
 
 # Key Points
 
