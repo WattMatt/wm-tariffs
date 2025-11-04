@@ -1654,6 +1654,19 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                   Download Selected
                 </Button>
                 <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAutoAssignAll}
+                  disabled={isAutoAssigning || documents.filter(d => !d.is_folder).length === 0}
+                  title="Auto-assign meters"
+                >
+                  {isAutoAssigning ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Link className="w-4 h-4" />
+                  )}
+                </Button>
+                <Button
                   variant="destructive"
                   size="sm"
                   onClick={handleBulkDelete}
@@ -1724,29 +1737,10 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                           <FolderPlus className="w-4 h-4" />
                           New Folder
                         </Button>
-                        <Button 
-                          onClick={handleAutoAssignAll} 
-                          size="sm"
-                          disabled={isAutoAssigning || documents.filter(d => !d.is_folder).length === 0}
-                          variant="outline"
-                          className="gap-2"
-                        >
-                          {isAutoAssigning ? (
-                            <>
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                              Auto-assigning...
-                            </>
-                          ) : (
-                            <>
-                              <Link className="h-4 w-4" />
-                              Auto-assign Meters
-                            </>
-                          )}
-                        </Button>
                       </div>
                     </TableHead>
                   </TableRow>
-                  <TableRow>
+                  <TableRow className="bg-muted/50">
                     <TableHead className="w-12">
                       <Checkbox
                         checked={selectedDocuments.size === documents.filter(d => !d.is_folder && d.folder_path === currentFolderPath).length && documents.filter(d => !d.is_folder && d.folder_path === currentFolderPath).length > 0}
@@ -1897,34 +1891,25 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                          ) : (
                            <span className="text-muted-foreground">-</span>
                          )}
-                       </TableCell>
-                       <TableCell>
-                         <div className="flex items-center gap-2">
-                           {doc.meters ? (
-                             <Badge variant="outline" className="text-xs">
-                               {doc.meters.meter_number}
-                             </Badge>
-                           ) : (
-                             <span className="text-muted-foreground text-xs">Unassigned</span>
-                           )}
-                            <Select
-                              value={doc.meter_id || "unassign"}
-                              onValueChange={(value) => handleAssignMeter(doc.id, value === "unassign" ? null : value)}
-                            >
-                              <SelectTrigger className="h-7 w-[120px] text-xs">
-                                <SelectValue placeholder="Assign..." />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="unassign">Unassign</SelectItem>
-                                {siteMeters.map((meter) => (
-                                  <SelectItem key={meter.id} value={meter.id}>
-                                    {meter.meter_number}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                         </div>
-                       </TableCell>
+                        </TableCell>
+                        <TableCell>
+                          <Select
+                            value={doc.meter_id || "unassign"}
+                            onValueChange={(value) => handleAssignMeter(doc.id, value === "unassign" ? null : value)}
+                          >
+                            <SelectTrigger className="h-7 w-[140px] text-xs">
+                              <SelectValue placeholder="Assign..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="unassign">Unassigned</SelectItem>
+                              {siteMeters.map((meter) => (
+                                <SelectItem key={meter.id} value={meter.id}>
+                                  {meter.meter_number}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
                         <TableCell className="text-right">
                          <TooltipProvider>
                            <div className="flex justify-end gap-2">
