@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { FileText, Download, Trash2, Loader2 } from "lucide-react";
+import { FileText, Download, Trash2, Loader2, Eye } from "lucide-react";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,6 +14,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { StandardReportPreview } from "@/components/shared/StandardReportPreview";
 
 interface SavedReport {
   id: string;
@@ -33,6 +34,7 @@ export default function SavedReportsList({ siteId, onRefresh }: SavedReportsList
   const [isLoading, setIsLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [reportToDelete, setReportToDelete] = useState<SavedReport | null>(null);
+  const [previewReport, setPreviewReport] = useState<SavedReport | null>(null);
 
   const fetchReports = async () => {
     setIsLoading(true);
@@ -162,8 +164,18 @@ export default function SavedReportsList({ siteId, onRefresh }: SavedReportsList
               <Button
                 variant="ghost"
                 size="sm"
+                onClick={() => setPreviewReport(report)}
+                disabled={deletingId === report.id}
+                title="Preview report"
+              >
+                <Eye className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => handleDownload(report)}
                 disabled={deletingId === report.id}
+                title="Download report"
               >
                 <Download className="w-4 h-4" />
               </Button>
@@ -172,6 +184,7 @@ export default function SavedReportsList({ siteId, onRefresh }: SavedReportsList
                 size="sm"
                 onClick={() => setReportToDelete(report)}
                 disabled={deletingId === report.id}
+                title="Delete report"
               >
                 {deletingId === report.id ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -198,6 +211,19 @@ export default function SavedReportsList({ siteId, onRefresh }: SavedReportsList
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* PDF Preview Dialog */}
+      {previewReport && (
+        <StandardReportPreview
+          report={{
+            file_path: previewReport.file_path,
+            report_name: previewReport.file_name,
+          }}
+          open={!!previewReport}
+          onOpenChange={(open) => !open && setPreviewReport(null)}
+          storageBucket="site-documents"
+        />
+      )}
     </>
   );
 }
