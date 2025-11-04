@@ -912,10 +912,10 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         pdf.setFillColor(219, 234, 254); // primary/10
         pdf.roundedRect(cardX + 3, cardStartY + 3, iconSize + iconPadding * 2, iconSize + iconPadding * 2, 2, 2, 'F');
         
-        // Icon (simplified database icon using text)
+        // Icon (simplified analytics icon using text)
         pdf.setFontSize(8);
         pdf.setTextColor(59, 130, 246); // primary
-        pdf.text("▤", cardX + 5, cardStartY + 9);
+        pdf.text("📊", cardX + 5, cardStartY + 9);
         
         // Label
         pdf.setFontSize(7);
@@ -944,7 +944,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         
         pdf.setFontSize(8);
         pdf.setTextColor(142, 81, 245);
-        pdf.text("◆", cardX + 5, cardStartY + 9);
+        pdf.text("◉", cardX + 5, cardStartY + 9);
         
         pdf.setFontSize(7);
         pdf.setTextColor(100, 116, 139);
@@ -970,7 +970,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         
         pdf.setFontSize(8);
         pdf.setTextColor(100, 116, 139);
-        pdf.text("■", cardX + 5, cardStartY + 9);
+        pdf.text("📅", cardX + 5, cardStartY + 9);
         
         pdf.setFontSize(7);
         pdf.setTextColor(100, 116, 139);
@@ -2378,7 +2378,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       
       pdf.setFontSize(8);
       pdf.setTextColor(59, 130, 246);
-      pdf.text("▤", cardX + 5, cardStartY + 9);
+      pdf.text("📊", cardX + 5, cardStartY + 9);
       
       pdf.setFontSize(7);
       pdf.setTextColor(100, 116, 139);
@@ -2404,7 +2404,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       
       pdf.setFontSize(8);
       pdf.setTextColor(142, 81, 245);
-      pdf.text("◆", cardX + 5, cardStartY + 9);
+      pdf.text("◉", cardX + 5, cardStartY + 9);
       
       pdf.setFontSize(7);
       pdf.setTextColor(100, 116, 139);
@@ -2430,7 +2430,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       
       pdf.setFontSize(8);
       pdf.setTextColor(100, 116, 139);
-      pdf.text("■", cardX + 5, cardStartY + 9);
+      pdf.text("📅", cardX + 5, cardStartY + 9);
       
       pdf.setFontSize(7);
       pdf.setTextColor(100, 116, 139);

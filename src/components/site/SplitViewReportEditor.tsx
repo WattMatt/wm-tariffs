@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
-import { Save, X, RefreshCw, Loader2, ZoomIn, ZoomOut, Wand2, ChevronLeft, ChevronRight, Activity, Database, Calendar, Zap, ChevronDown, ChevronUp, TrendingUp, BarChart3 } from "lucide-react";
+import { Save, X, RefreshCw, Loader2, ZoomIn, ZoomOut, Wand2, ChevronLeft, ChevronRight, Activity, FileBarChart, Calendar, Bolt, ChevronDown, ChevronUp, TrendingUp, BarChart3, Gauge, CalendarDays } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
 import { Document, Page, pdfjs } from 'react-pdf';
@@ -588,7 +588,7 @@ export function SplitViewReportEditor({
             <div className="grid grid-cols-4 gap-4">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-primary/10">
-                  <Database className="w-4 h-4 text-primary" />
+                  <FileBarChart className="w-4 h-4 text-primary" />
                 </div>
                 <div>
                   <div className="text-xs text-muted-foreground">Data Points Used</div>
@@ -598,7 +598,7 @@ export function SplitViewReportEditor({
               </div>
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-accent/10">
-                  <Activity className="w-4 h-4 text-accent-foreground" />
+                  <Gauge className="w-4 h-4 text-accent-foreground" />
                 </div>
                 <div>
                   <div className="text-xs text-muted-foreground">Active Meters</div>
@@ -608,7 +608,7 @@ export function SplitViewReportEditor({
               </div>
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-secondary/10">
-                  <Calendar className="w-4 h-4 text-secondary-foreground" />
+                  <CalendarDays className="w-4 h-4 text-secondary-foreground" />
                 </div>
                 <div>
                   <div className="text-xs text-muted-foreground">Analysis Period</div>
@@ -620,7 +620,7 @@ export function SplitViewReportEditor({
               </div>
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-primary/10">
-                  <Zap className="w-4 h-4 text-primary" />
+                  <Bolt className="w-4 h-4 text-primary" />
                 </div>
                 <div>
                   <div className="text-xs text-muted-foreground">Total Consumption</div>
