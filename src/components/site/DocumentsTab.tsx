@@ -2198,12 +2198,22 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                           {/* Consumption Summary */}
                           <div className="mt-4 grid grid-cols-2 gap-4">
                             {(() => {
-                              const councilItems = editedData.extracted_data.line_items.filter(
-                                (item: any) => !item.description?.toLowerCase().includes('generator')
-                              );
-                              const generatorItems = editedData.extracted_data.line_items.filter(
-                                (item: any) => item.description?.toLowerCase().includes('generator')
-                              );
+                              // Sort line items by their order in the array to maintain document order
+                              const sortedItems = [...editedData.extracted_data.line_items];
+                              
+                              // Identify generator items by keywords in description or meter designation
+                              const isGeneratorItem = (item: any) => {
+                                const desc = item.description?.toLowerCase() || '';
+                                const meter = item.meter_number?.toLowerCase() || '';
+                                return desc.includes('generator') || 
+                                       desc.includes('standby') || 
+                                       desc.includes('gen ') ||
+                                       meter.includes('_t2') || // T2 meters are typically generator
+                                       meter.includes('gen');
+                              };
+                              
+                              const councilItems = sortedItems.filter((item: any) => !isGeneratorItem(item));
+                              const generatorItems = sortedItems.filter((item: any) => isGeneratorItem(item));
                               
                               const councilKwh = councilItems.reduce((sum: number, item: any) => sum + (item.consumption || 0), 0);
                               const councilAmount = councilItems.reduce((sum: number, item: any) => sum + (item.amount || 0), 0);
@@ -2223,11 +2233,14 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                                         <span className="text-sm">Amount:</span>
                                         <span className="font-semibold">{editedData.currency} {councilAmount.toFixed(2)}</span>
                                       </div>
+                                      <div className="text-xs text-muted-foreground mt-2">
+                                        {councilItems.length} line item(s)
+                                      </div>
                                     </div>
                                   </div>
                                   
                                   <div className="p-4 border rounded-lg bg-accent/5">
-                                    <div className="text-sm font-medium text-muted-foreground mb-2">Generator Supply</div>
+                                    <div className="text-sm font-medium text-muted-foreground mb-2">Generator/Standby Supply</div>
                                     <div className="space-y-1">
                                       <div className="flex justify-between items-center">
                                         <span className="text-sm">Consumption:</span>
@@ -2236,6 +2249,9 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                                       <div className="flex justify-between items-center">
                                         <span className="text-sm">Amount:</span>
                                         <span className="font-semibold">{editedData.currency} {generatorAmount.toFixed(2)}</span>
+                                      </div>
+                                      <div className="text-xs text-muted-foreground mt-2">
+                                        {generatorItems.length} line item(s)
                                       </div>
                                     </div>
                                   </div>
