@@ -87,6 +87,8 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
   const [availableFolders, setAvailableFolders] = useState<any[]>([]);
   const [availableReconciliations, setAvailableReconciliations] = useState<any[]>([]);
   const [isLoadingOptions, setIsLoadingOptions] = useState(true);
+  const [reconciliationDateFrom, setReconciliationDateFrom] = useState<string>("");
+  const [reconciliationDateTo, setReconciliationDateTo] = useState<string>("");
 
   // Fetch available options on mount
   useEffect(() => {
@@ -1014,6 +1016,10 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         if (!fetchedRecon) throw new Error("Selected reconciliation not found");
         selectedReconciliation = fetchedRecon;
       }
+
+      // Store reconciliation date range for KPI filtering
+      setReconciliationDateFrom(selectedReconciliation.date_from);
+      setReconciliationDateTo(selectedReconciliation.date_to);
 
       // 2. Fetch selected schematic
       setGenerationProgress(20);
@@ -2758,6 +2764,8 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           <SplitViewReportEditor
             sections={editableSections}
             siteId={siteId}
+            dateFrom={reconciliationDateFrom}
+            dateTo={reconciliationDateTo}
             onSave={handleSaveEditedContent}
             onCancel={() => {
               setIsEditingContent(false);

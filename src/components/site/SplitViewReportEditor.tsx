@@ -26,6 +26,8 @@ interface PdfSection {
 interface SplitViewReportEditorProps {
   sections: PdfSection[];
   siteId: string;
+  dateFrom?: string;
+  dateTo?: string;
   onSave: (sections: PdfSection[]) => void;
   onCancel: () => void;
   generatePdfPreview: (sections: PdfSection[]) => Promise<string>;
@@ -42,6 +44,8 @@ interface SelectionArea {
 export function SplitViewReportEditor({ 
   sections, 
   siteId,
+  dateFrom,
+  dateTo,
   onSave, 
   onCancel,
   generatePdfPreview,
@@ -111,22 +115,37 @@ export function SplitViewReportEditor({
           return;
         }
 
-        // Count total readings
-        const { count: totalReadingsCount, error: countError } = await supabase
+        // Build query with optional date filtering
+        let countQuery = supabase
           .from('meter_readings')
           .select('*', { count: 'exact', head: true })
           .in('meter_id', meterIds);
+
+        let statsQuery = supabase
+          .from('meter_readings')
+          .select('reading_timestamp, kwh_value')
+          .in('meter_id', meterIds);
+
+        // Apply date range filter if provided
+        if (dateFrom) {
+          countQuery = countQuery.gte('reading_timestamp', dateFrom);
+          statsQuery = statsQuery.gte('reading_timestamp', dateFrom);
+        }
+        if (dateTo) {
+          countQuery = countQuery.lte('reading_timestamp', dateTo);
+          statsQuery = statsQuery.lte('reading_timestamp', dateTo);
+        }
+
+        // Count total readings
+        const { count: totalReadingsCount, error: countError } = await countQuery;
 
         if (countError) {
           console.error('Error counting readings:', countError);
         }
 
         // Get date range and total consumption
-        const { data: statsData, error: statsError } = await supabase
-          .from('meter_readings')
-          .select('reading_timestamp, kwh_value')
-          .in('meter_id', meterIds)
-          .order('reading_timestamp', { ascending: true });
+        statsQuery = statsQuery.order('reading_timestamp', { ascending: true });
+        const { data: statsData, error: statsError } = await statsQuery;
 
         if (statsError) {
           console.error('Error fetching stats:', statsError);
@@ -150,7 +169,7 @@ export function SplitViewReportEditor({
     };
 
     fetchKPIs();
-  }, [siteId]);
+  }, [siteId, dateFrom, dateTo]);
 
   // Fetch chart data when charts are expanded
   useEffect(() => {
@@ -174,12 +193,23 @@ export function SplitViewReportEditor({
           return;
         }
 
-        // Fetch all readings for these meters
-        const { data: readingsData, error: readingsError } = await supabase
+        // Build query with optional date filtering
+        let readingsQuery = supabase
           .from('meter_readings')
           .select('reading_timestamp, kwh_value')
-          .in('meter_id', meterIds)
-          .order('reading_timestamp', { ascending: true });
+          .in('meter_id', meterIds);
+
+        // Apply date range filter if provided
+        if (dateFrom) {
+          readingsQuery = readingsQuery.gte('reading_timestamp', dateFrom);
+        }
+        if (dateTo) {
+          readingsQuery = readingsQuery.lte('reading_timestamp', dateTo);
+        }
+
+        // Fetch all readings for these meters
+        readingsQuery = readingsQuery.order('reading_timestamp', { ascending: true });
+        const { data: readingsData, error: readingsError } = await readingsQuery;
 
         if (readingsError) throw readingsError;
 
@@ -223,7 +253,7 @@ export function SplitViewReportEditor({
     };
 
     fetchChartData();
-  }, [showCharts, siteId]);
+  }, [showCharts, siteId, dateFrom, dateTo]);
 
   // Generate initial PDF preview on mount
   useEffect(() => {
