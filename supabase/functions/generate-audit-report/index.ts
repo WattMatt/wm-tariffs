@@ -66,11 +66,21 @@ Single-sentence headline:
 |:------------------------------|:------------------------------------------------|:----------------------------|
 | **Total: ${reconciliationData.councilTotal.toFixed(2)} kWh** | **Total: ${reconciliationData.totalSupply.toFixed(2)} kWh** | **Total: ${reconciliationData.solarTotal.toFixed(2)} kWh** |
 | Source: Municipal/Council Supply | Components: Grid + Solar | Source: On-site Generation |
-| Status: [✓/⚠/✗] | **OVER/UNDER: ${reconciliationData.variance.toFixed(2)} kWh** | Status: [✓/⚠/✗] |
-| | **% OF TOTAL: ${reconciliationData.variancePercentage}%** | |
+| **Meter Details:** | **OVER/UNDER: ${reconciliationData.variance.toFixed(2)} kWh** | **Meter Details:** |
+| Type: [Extract meter_type from grid_supply assignment] | **% OF TOTAL: ${reconciliationData.variancePercentage}%** | Type: [Extract meter_type from solar_energy assignment] |
+| Number: [Extract meter_number from grid_supply assignment] | Combined from: | Number: [Extract meter_number from solar_energy assignment] |
+| Serial: [Extract serial_number if available] | - Grid: [Grid meter_number] | Serial: [Extract serial_number if available] |
+| Status: [✓/⚠/✗] | - Solar: [Solar meter_number] | Status: [✓/⚠/✗] |
 | | Status: [✓/⚠/✗] | |
 
-**Note:** Use ✓ for values within acceptable range (<2% variance), ⚠ for caution range (2-5% variance), ✗ for critical issues (>5% variance).
+**Meter Assignment Data:**
+${JSON.stringify(meterHierarchy.filter((m: any) => m.assignment === 'grid_supply' || m.assignment === 'solar_energy'), null, 2)}
+
+**Instructions:**
+- Extract the actual meter_number, meter_type, and serial_number from the meters with assignment='grid_supply' for Grid Supply card
+- Extract the actual meter_number, meter_type, and serial_number from the meters with assignment='solar_energy' for Solar Energy card
+- If serial_number is not available, use meter_number
+- Use ✓ for values within acceptable range (<2% variance), ⚠ for caution range (2-5% variance), ✗ for critical issues (>5% variance)
 
 ---
 
