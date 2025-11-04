@@ -2511,6 +2511,16 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
 
       if (uploadError) throw uploadError;
 
+      // Prepare generation parameters for regeneration
+      const generationParameters = {
+        selectedMeterIds: Array.from(selectedMeterIds),
+        selectedSchematicId,
+        selectedFolderPath,
+        selectedReconciliationId,
+        columnConfigs,
+        timestamp: Date.now()
+      };
+
       // Create database record
       const { error: dbError } = await supabase
         .from("site_documents")
@@ -2519,10 +2529,11 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           file_name: finalFileName,
           file_path: filePath,
           folder_path: "/reports",
-          document_type: "report",
+          document_type: "report" as const,
           extraction_status: "not_applicable",
           file_size: pendingPdfBlob.size,
-          is_folder: false
+          is_folder: false,
+          generation_parameters: generationParameters as any
         });
 
       if (dbError) throw dbError;
@@ -2534,6 +2545,34 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       console.error("Error saving report:", error);
       toast.error("Failed to save report");
       throw error;
+    }
+  };
+
+  const handleRegenerateReport = async (report: any) => {
+    if (!report.generation_parameters) {
+      toast.error("This report doesn't have saved parameters for regeneration");
+      return;
+    }
+
+    try {
+      const params = report.generation_parameters;
+      
+      // Restore parameters
+      setSelectedMeterIds(new Set(params.selectedMeterIds || []));
+      setSelectedSchematicId(params.selectedSchematicId || "");
+      setSelectedFolderPath(params.selectedFolderPath || "");
+      setSelectedReconciliationId(params.selectedReconciliationId || "");
+      setColumnConfigs(params.columnConfigs || {});
+
+      toast.info("Parameters loaded. Regenerating report...");
+      
+      // Wait for state to update, then generate preview
+      setTimeout(async () => {
+        await generateMarkdownPreview();
+      }, 100);
+    } catch (error) {
+      console.error("Error regenerating report:", error);
+      toast.error("Failed to regenerate report");
     }
   };
 
@@ -2637,7 +2676,11 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
 
         <Separator />
 
-        <SavedReportsList siteId={siteId} key={refreshReports} />
+        <SavedReportsList 
+          siteId={siteId} 
+          key={refreshReports} 
+          onRegenerate={handleRegenerateReport}
+        />
 
         <Button
           onClick={generateMarkdownPreview}

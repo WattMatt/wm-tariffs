@@ -751,6 +751,7 @@ export type Database = {
           file_path: string
           file_size: number | null
           folder_path: string
+          generation_parameters: Json | null
           id: string
           is_folder: boolean
           parent_folder_id: string | null
@@ -768,6 +769,7 @@ export type Database = {
           file_path: string
           file_size?: number | null
           folder_path?: string
+          generation_parameters?: Json | null
           id?: string
           is_folder?: boolean
           parent_folder_id?: string | null
@@ -785,6 +787,7 @@ export type Database = {
           file_path?: string
           file_size?: number | null
           folder_path?: string
+          generation_parameters?: Json | null
           id?: string
           is_folder?: boolean
           parent_folder_id?: string | null

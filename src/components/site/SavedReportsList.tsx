@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { FileText, Download, Trash2, Loader2, Eye } from "lucide-react";
+import { FileText, Download, Trash2, Loader2, Eye, RefreshCw } from "lucide-react";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,14 +22,16 @@ interface SavedReport {
   file_path: string;
   created_at: string;
   file_size: number | null;
+  generation_parameters?: any;
 }
 
 interface SavedReportsListProps {
   siteId: string;
   onRefresh?: () => void;
+  onRegenerate?: (report: SavedReport) => void;
 }
 
-export default function SavedReportsList({ siteId, onRefresh }: SavedReportsListProps) {
+export default function SavedReportsList({ siteId, onRefresh, onRegenerate }: SavedReportsListProps) {
   const [reports, setReports] = useState<SavedReport[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -41,7 +43,7 @@ export default function SavedReportsList({ siteId, onRefresh }: SavedReportsList
     try {
       const { data, error } = await supabase
         .from("site_documents")
-        .select("id, file_name, file_path, created_at, file_size")
+        .select("id, file_name, file_path, created_at, file_size, generation_parameters")
         .eq("site_id", siteId)
         .eq("document_type", "report")
         .order("created_at", { ascending: false });
@@ -161,6 +163,17 @@ export default function SavedReportsList({ siteId, onRefresh }: SavedReportsList
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {onRegenerate && report.generation_parameters && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onRegenerate(report)}
+                  disabled={deletingId === report.id}
+                  title="Regenerate report with same parameters"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="sm"
