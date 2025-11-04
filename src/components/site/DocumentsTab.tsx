@@ -1694,7 +1694,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/30">
-                    <TableHead colSpan={9} className="h-auto py-3">
+                    <TableHead colSpan={10} className="h-auto py-3">
                       <div className="flex items-center justify-between">
                         {/* Folder Navigation */}
                         <div className="flex items-center gap-2">
