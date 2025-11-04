@@ -58,53 +58,74 @@ STRUCTURE REQUIRED (match this exactly):
 Single-sentence headline:
 [Site Name] [Period] Audit: Critical [X.XX]% Energy Variance and ZAR [Amount] Financial Loss Identified.
 
+# Energy Flow Summary
+
+Present the energy flow in a card-style format showing the three key metrics:
+
+## Grid Supply (Bulk Check)
+- **Total: ${reconciliationData.councilTotal.toFixed(2)} kWh**
+- Source: Municipal/Council Supply
+- Status: [✓/⚠/✗] based on variance
+
+## Combined Supply (VIRTUAL - TOTAL INJECTION)
+- **Total: ${reconciliationData.totalSupply.toFixed(2)} kWh**
+- Components: Grid + Solar
+- **OVER/UNDER: ${reconciliationData.variance.toFixed(2)} kWh**
+- **% OF TOTAL: ${reconciliationData.variancePercentage}%**
+- Status: [✓/⚠/✗] based on variance threshold
+
+## Solar Energy (PV Tie In)
+- **Total: ${reconciliationData.solarTotal.toFixed(2)} kWh**
+- Source: On-site Generation
+- Status: [✓/⚠/✗] based on expected vs actual
+
 # Key Points
 
-- Scope: [One sentence describing audit coverage - council billing, main check meter, tenant sub-metering]
+- Scope: Audit covers ${auditPeriodStart} to ${auditPeriodEnd}, including council billing verification, main check meter validation, and tenant sub-metering reconciliation
 - Finding: [One sentence on primary issue causing financial losses]
-- Metering Variance: [One sentence: X.XX% variance between main meter and sub-meters]
-- Financial Impact: [One sentence: Total calculated loss for this quarter is ZAR X,XXX]
+- Metering Variance: ${Math.abs(reconciliationData.variancePercentage)}% variance detected between total supply (${reconciliationData.totalSupply.toFixed(2)} kWh) and distribution (${reconciliationData.distributionTotal.toFixed(2)} kWh)
+- Financial Impact: Variance of ${Math.abs(reconciliationData.variance).toFixed(2)} kWh represents ZAR [calculate amount] in unaccounted energy
 
 # Performance Snapshot
 
 | Metric | Status | Detail |
 |--------|--------|--------|
-| Council Bill Accuracy | [✓/⚠/✗] | [One sentence about council bill vs site meter variance with %] |
-| Metering System Health | [✓/⚠/✗] | [One sentence about main vs sub-meter variance with %] |
-| Tenant Billing Accuracy | [✓/⚠/✗] | [One sentence about tenant billing issues if any] |
-| Data Integrity | [✓/⚠/✗] | [One sentence about missing readings or data gaps] |
+| Council Bill Accuracy | [✓/⚠/✗] | Grid supply vs council billing variance: [calculate %] |
+| Metering System Health | [✓/⚠/✗] | Combined supply (${reconciliationData.totalSupply.toFixed(2)} kWh) vs sub-metered consumption shows ${reconciliationData.variancePercentage}% discrepancy |
+| Tenant Billing Accuracy | [✓/⚠/✗] | Recovery rate of ${reconciliationData.recoveryRate.toFixed(2)}% against total supply |
+| Data Integrity | [✓/⚠/✗] | [Assess based on data gaps or missing readings] |
 
 # Top 3 Critical Findings
 
-## Finding 1: [Title]
-Impact: [Specific kWh] of energy [issue], resulting in a ZAR [amount] loss this quarter.
+## Finding 1: Energy Variance in Distribution
+Impact: ${Math.abs(reconciliationData.variance).toFixed(2)} kWh unaccounted between supply and distribution, representing ZAR [calculate @ 3.20/kWh] potential revenue loss.
 Priority: HIGH
 
-## Finding 2: [Title]
+## Finding 2: [Title based on recovery rate or specific meter issues]
 Impact: [Specific issue description with ZAR amount]
 Priority: HIGH
 
-## Finding 3: [Title]
+## Finding 3: [Title based on data quality or operational issues]
 Impact: [Specific issue description]
 Priority: MEDIUM
 
 # Financial Impact Calculation
-[Component 1] ([X,XXX kWh @ ZAR X.XX]) + [Component 2] = ZAR [Total] Total Loss
+Energy Variance (${Math.abs(reconciliationData.variance).toFixed(2)} kWh @ ZAR 3.20) = ZAR [Total] Total Loss
 
 # Immediate Actions Required
-- [Action 1 - specific and directive]
-- [Action 2 - specific and directive]
+- Investigate and address ${Math.abs(reconciliationData.variance).toFixed(2)} kWh discrepancy between combined supply and tenant consumption
+- [Action 2 - specific to recovery rate or meter issues]
 
 DATA PROVIDED:
 Period: ${auditPeriodStart} to ${auditPeriodEnd}
-Total Supply: ${reconciliationData.totalSupply} kWh
-Council Bulk: ${reconciliationData.councilTotal} kWh
-Solar: ${reconciliationData.solarTotal} kWh
-Consumption: ${reconciliationData.distributionTotal} kWh
-Variance: ${reconciliationData.variance} kWh (${reconciliationData.variancePercentage}%)
+Total Supply (Combined): ${reconciliationData.totalSupply} kWh
+Grid Supply (Bulk): ${reconciliationData.councilTotal} kWh
+Solar Generation: ${reconciliationData.solarTotal} kWh
+Distribution (Consumption): ${reconciliationData.distributionTotal} kWh
+Variance (OVER/UNDER): ${reconciliationData.variance} kWh (${reconciliationData.variancePercentage}%)
 Recovery Rate: ${reconciliationData.recoveryRate}%
 
-Calculate financial loss at ZAR 3.20/kWh. Use ✓ for <2% variance, ⚠ for 2-5%, ✗ for >5%.`;
+Use ✓ for <2% variance, ⚠ for 2-5%, ✗ for >5%. Calculate all financial impacts at ZAR 3.20/kWh.`;
 
     const execSummaryResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
