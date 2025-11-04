@@ -323,7 +323,9 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           return;
         }
 
-        const pdf = new jsPDF();
+        const pdf = new jsPDF({
+          compress: true // Enable PDF compression
+        });
         const pageWidth = pdf.internal.pageSize.getWidth();
         const pageHeight = pdf.internal.pageSize.getHeight();
         
@@ -859,7 +861,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           try {
             const imgWidth = pageWidth - leftMargin - rightMargin;
             const imgHeight = 120;
-            pdf.addImage(schematicImageBase64, 'PNG', leftMargin, yPos, imgWidth, imgHeight);
+            pdf.addImage(schematicImageBase64, 'JPEG', leftMargin, yPos, imgWidth, imgHeight);
             yPos += imgHeight + 5;
             
             pdf.setFontSize(9);
@@ -1187,7 +1189,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         });
       }
 
-      // 7. Load schematic image
+      // 7. Load and compress schematic image
       setGenerationProgress(60);
       setGenerationStatus("Loading schematic image...");
       
@@ -1198,13 +1200,45 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           const { data: imageData } = await supabase.storage
             .from("schematics")
             .download(selectedSchematic.converted_image_path);
-          
+
           if (imageData) {
-            const arrayBuffer = await imageData.arrayBuffer();
-            const base64 = btoa(
-              new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
-            );
-            schematicImageBase64 = `data:image/png;base64,${base64}`;
+            // Create an image element to compress
+            const img = new Image();
+            const blob = imageData;
+            const url = URL.createObjectURL(blob);
+            
+            await new Promise((resolve, reject) => {
+              img.onload = () => {
+                // Create canvas for compression
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                
+                // Set max dimensions (reduce resolution significantly for PDF)
+                const maxWidth = 1200;
+                const maxHeight = 800;
+                let width = img.width;
+                let height = img.height;
+                
+                // Calculate new dimensions maintaining aspect ratio
+                if (width > maxWidth || height > maxHeight) {
+                  const ratio = Math.min(maxWidth / width, maxHeight / height);
+                  width = width * ratio;
+                  height = height * ratio;
+                }
+                
+                canvas.width = width;
+                canvas.height = height;
+                
+                // Draw and compress image as JPEG with quality 0.6
+                ctx?.drawImage(img, 0, 0, width, height);
+                schematicImageBase64 = canvas.toDataURL('image/jpeg', 0.6);
+                
+                URL.revokeObjectURL(url);
+                resolve(null);
+              };
+              img.onerror = reject;
+              img.src = url;
+            });
           }
         } catch (err) {
           console.error("Error loading schematic image:", err);
@@ -1546,9 +1580,11 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       const distribution = meterData.filter((m: any) => m.meter_type === "distribution");
       const checkMeters = meterData.filter((m: any) => m.meter_type === "check_meter");
 
-      // 11. Generate PDF with template styling
+      // 11. Generate PDF with template styling and compression
       toast.info("Generating PDF...");
-      const pdf = new jsPDF();
+      const pdf = new jsPDF({
+        compress: true // Enable PDF compression
+      });
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
       
@@ -2149,7 +2185,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         try {
           const imgWidth = pageWidth - leftMargin - rightMargin;
           const imgHeight = 120;
-          pdf.addImage(schematicImageBase64, 'PNG', leftMargin, yPos, imgWidth, imgHeight);
+          pdf.addImage(schematicImageBase64, 'JPEG', leftMargin, yPos, imgWidth, imgHeight);
           yPos += imgHeight + 5;
           
           pdf.setFontSize(9);
