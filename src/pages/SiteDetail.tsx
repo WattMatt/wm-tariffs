@@ -16,8 +16,6 @@ import TariffAssignmentTab from "@/components/site/TariffAssignmentTab";
 import CostCalculationTab from "@/components/site/CostCalculationTab";
 import SiteReportExport from "@/components/site/SiteReportExport";
 import DocumentsTab from "@/components/site/DocumentsTab";
-import ReconciliationHistoryTab from "@/components/site/ReconciliationHistoryTab";
-import ReconciliationCompareTab from "@/components/site/ReconciliationCompareTab";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -341,7 +339,7 @@ export default function SiteDetail() {
 
         {selectedSection === 'metering' && (
           <Tabs defaultValue="schematics" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-10 lg:w-auto">
+            <TabsList className="grid w-full grid-cols-8 lg:w-auto">
               <TabsTrigger value="schematics" className="gap-2">
                 <FileText className="w-4 h-4" />
                 Schematics
@@ -361,14 +359,6 @@ export default function SiteDetail() {
               <TabsTrigger value="reconciliation" className="gap-2">
                 <BarChart3 className="w-4 h-4" />
                 Reconciliation
-              </TabsTrigger>
-              <TabsTrigger value="history" className="gap-2">
-                <Calendar className="w-4 h-4" />
-                History
-              </TabsTrigger>
-              <TabsTrigger value="compare" className="gap-2">
-                <Activity className="w-4 h-4" />
-                Compare
               </TabsTrigger>
               <TabsTrigger value="tariffs" className="gap-2">
                 <DollarSign className="w-4 h-4" />
@@ -401,15 +391,7 @@ export default function SiteDetail() {
             </TabsContent>
 
             <TabsContent value="reconciliation">
-              <ReconciliationTab siteId={id!} />
-            </TabsContent>
-
-            <TabsContent value="history">
-              <ReconciliationHistoryTab siteId={id!} siteName={site?.name || ""} />
-            </TabsContent>
-
-            <TabsContent value="compare">
-              <ReconciliationCompareTab siteId={id!} />
+              <ReconciliationTab siteId={id!} siteName={site?.name || ""} />
             </TabsContent>
 
             <TabsContent value="tariffs">

@@ -7,7 +7,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { CalendarIcon, Download, Eye, FileDown, ChevronRight, ChevronLeft, ArrowRight, Check, X, Save } from "lucide-react";
+import { CalendarIcon, Download, Eye, FileDown, ChevronRight, ChevronLeft, ArrowRight, Check, X, Save, BarChart3, Activity, Calendar as CalendarHistoryIcon } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -17,12 +17,16 @@ import { Badge } from "@/components/ui/badge";
 import Papa from "papaparse";
 import SaveReconciliationDialog from "./SaveReconciliationDialog";
 import ReconciliationResultsView from "./ReconciliationResultsView";
+import ReconciliationHistoryTab from "./ReconciliationHistoryTab";
+import ReconciliationCompareTab from "./ReconciliationCompareTab";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface ReconciliationTabProps {
   siteId: string;
+  siteName: string;
 }
 
-export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
+export default function ReconciliationTab({ siteId, siteName }: ReconciliationTabProps) {
   const [dateFrom, setDateFrom] = useState<Date>();
   const [dateTo, setDateTo] = useState<Date>();
   const [timeFrom, setTimeFrom] = useState<string>("00:00");
@@ -1333,7 +1337,24 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
   };
 
   return (
-    <div className="space-y-6">
+    <Tabs defaultValue="analysis" className="space-y-6">
+      <TabsList className="grid w-full grid-cols-3 lg:w-auto">
+        <TabsTrigger value="analysis" className="gap-2">
+          <BarChart3 className="w-4 h-4" />
+          Analysis
+        </TabsTrigger>
+        <TabsTrigger value="history" className="gap-2">
+          <CalendarHistoryIcon className="w-4 h-4" />
+          History
+        </TabsTrigger>
+        <TabsTrigger value="compare" className="gap-2">
+          <Activity className="w-4 h-4" />
+          Compare
+        </TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="analysis">
+        <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-bold mb-2">Energy Reconciliation</h2>
       </div>
@@ -1809,14 +1830,24 @@ export default function ReconciliationTab({ siteId }: ReconciliationTabProps) {
         />
       )}
 
-      <SaveReconciliationDialog
-        open={isSaveDialogOpen}
-        onOpenChange={setIsSaveDialogOpen}
-        onSave={saveReconciliation}
-        dateFrom={dateFrom}
-        dateTo={dateTo}
-        reconciliationData={reconciliationData}
-      />
-    </div>
+        <SaveReconciliationDialog
+          open={isSaveDialogOpen}
+          onOpenChange={setIsSaveDialogOpen}
+          onSave={saveReconciliation}
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          reconciliationData={reconciliationData}
+        />
+        </div>
+      </TabsContent>
+
+      <TabsContent value="history">
+        <ReconciliationHistoryTab siteId={siteId} siteName={siteName} />
+      </TabsContent>
+
+      <TabsContent value="compare">
+        <ReconciliationCompareTab siteId={siteId} />
+      </TabsContent>
+    </Tabs>
   );
 }
