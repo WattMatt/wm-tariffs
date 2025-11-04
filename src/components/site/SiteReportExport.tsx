@@ -627,7 +627,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         title: 'Report Header',
         content: `# Energy Audit Report
 
-**Client:** ${(previewData as any).reportData?.clientName || siteName}
+**Client:** ${reportData?.clientName || siteName}
 **Site:** ${siteName}
 **Audit Period:** ${format(new Date(selectedReconciliation.date_from), "dd MMM yyyy")} - ${format(new Date(selectedReconciliation.date_to), "dd MMM yyyy")}
 **Report Date:** ${format(new Date(), "dd MMM yyyy")}`,
