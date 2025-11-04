@@ -316,11 +316,28 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
   const generatePdfPreview = async (sections: PdfSection[]): Promise<string> => {
     return new Promise((resolve) => {
       setTimeout(() => {
+        if (!previewData) {
+          resolve('');
+          return;
+        }
+
         const pdf = new jsPDF();
         const pageWidth = pdf.internal.pageSize.getWidth();
         const pageHeight = pdf.internal.pageSize.getHeight();
         
-        // Template styling constants (matching main report)
+        // Extract data from preview
+        const {
+          siteName: previewSiteName,
+          meterData,
+          meterHierarchy,
+          reconciliationData,
+          documentExtractions,
+          anomalies,
+          schematicImageBase64,
+          csvColumnAggregations
+        } = previewData as any;
+
+        // Template styling constants
         const blueBarWidth = 15;
         const leftMargin = 25;
         const rightMargin = 20;
@@ -330,6 +347,11 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         
         let yPos = topMargin;
         let pageNumber = 1;
+
+        // Number formatting helper
+        const formatNumber = (value: number, decimals: number = 2): string => {
+          return value.toFixed(decimals).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        };
         
         // Helper to add blue sidebar
         const addBlueSidebar = () => {
@@ -361,10 +383,11 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         
         // Helper to add text with wrapping
         const addText = (text: string, fontSize: number = 10, isBold: boolean = false) => {
+          const cleanedText = text.replace(/\*\*(.*?)\*\*/g, '$1').replace(/^##\s+.+$/gm, '').trim();
           pdf.setFontSize(fontSize);
           pdf.setFont("helvetica", isBold ? "bold" : "normal");
           const maxWidth = pageWidth - leftMargin - rightMargin;
-          const lines = pdf.splitTextToSize(text, maxWidth);
+          const lines = pdf.splitTextToSize(cleanedText, maxWidth);
           
           lines.forEach((line: string) => {
             if (yPos > pageHeight - bottomMargin - 15) {
@@ -380,7 +403,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           yPos += 3;
         };
         
-        // Helper to add section heading in template blue
+        // Helper to add section heading
         const addSectionHeading = (text: string, fontSize: number = 14) => {
           yPos += 8;
           pdf.setFontSize(fontSize);
@@ -388,52 +411,271 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           pdf.setTextColor(templateBlue[0], templateBlue[1], templateBlue[2]);
           pdf.text(text, leftMargin, yPos);
           pdf.setTextColor(0, 0, 0);
-          yPos += 10;
+          yPos += fontSize + 5;
         };
-        
-        // Initialize first page with blue sidebar
-        addBlueSidebar();
-        
-        sections.forEach((section, index) => {
-          if (section.type === 'page-break') {
+
+        // Helper to add subsection heading
+        const addSubsectionHeading = (text: string) => {
+          yPos += 5;
+          if (yPos > pageHeight - bottomMargin - 20) {
             addFooter();
             addPageNumber();
             pdf.addPage();
             addBlueSidebar();
             yPos = topMargin;
-          } else {
-            // Check if we need a new page
-            if (yPos > pageHeight - bottomMargin - 40) {
+          }
+          pdf.setFontSize(11);
+          pdf.setFont("helvetica", "bold");
+          pdf.setTextColor(templateBlue[0], templateBlue[1], templateBlue[2]);
+          pdf.text(text, leftMargin, yPos);
+          pdf.setTextColor(0, 0, 0);
+          yPos += 8;
+        };
+
+        // Helper to add table
+        const addTable = (headers: string[], rows: string[][], columnWidths?: number[]) => {
+          const tableWidth = pageWidth - leftMargin - rightMargin;
+          const defaultColWidth = tableWidth / headers.length;
+          const colWidths = columnWidths || headers.map(() => defaultColWidth);
+          
+          if (yPos > pageHeight - bottomMargin - 40) {
+            addFooter();
+            addPageNumber();
+            pdf.addPage();
+            addBlueSidebar();
+            yPos = topMargin;
+          }
+          
+          // Draw header
+          pdf.setFillColor(templateBlue[0], templateBlue[1], templateBlue[2]);
+          pdf.rect(leftMargin, yPos - 5, tableWidth, 10, "F");
+          
+          pdf.setFontSize(9);
+          pdf.setFont("helvetica", "bold");
+          pdf.setTextColor(255, 255, 255);
+          let xPos = leftMargin + 2;
+          headers.forEach((header, i) => {
+            pdf.text(header, xPos, yPos);
+            xPos += colWidths[i];
+          });
+          pdf.setTextColor(0, 0, 0);
+          yPos += 7;
+          
+          // Draw rows
+          pdf.setFont("helvetica", "normal");
+          rows.forEach((row) => {
+            if (yPos > pageHeight - bottomMargin - 15) {
               addFooter();
               addPageNumber();
               pdf.addPage();
               addBlueSidebar();
-              yPos = topMargin;
+              yPos = topMargin + 15;
             }
             
-            // Parse markdown content
-            const lines = section.content.split('\n');
-            lines.forEach(line => {
-              if (line.startsWith('# ')) {
-                addSectionHeading(line.replace('# ', ''), 16);
-              } else if (line.startsWith('## ')) {
-                addSectionHeading(line.replace('## ', ''), 14);
-              } else if (line.startsWith('### ')) {
-                addSectionHeading(line.replace('### ', ''), 12);
-              } else if (line.startsWith('**') && line.endsWith('**')) {
-                addText(line.replace(/\*\*/g, ''), 10, true);
-              } else if (line.startsWith('- ')) {
-                addText('• ' + line.substring(2), 10, false);
-              } else if (line.trim()) {
-                addText(line, 10, false);
-              } else {
-                yPos += 3;
-              }
+            xPos = leftMargin + 2;
+            row.forEach((cell, i) => {
+              const cellLines = pdf.splitTextToSize(cell, colWidths[i] - 4);
+              pdf.text(cellLines[0] || "", xPos, yPos);
+              xPos += colWidths[i];
             });
             
-            yPos += 5;
-          }
+            pdf.setDrawColor(220, 220, 220);
+            pdf.rect(leftMargin, yPos - 5, tableWidth, 8);
+            yPos += 8;
+          });
+          
+          yPos += 5;
+        };
+
+        const addSpacer = (height: number = 5) => {
+          yPos += height;
+        };
+        
+        // COVER PAGE
+        addBlueSidebar();
+        pdf.setTextColor(templateBlue[0], templateBlue[1], templateBlue[2]);
+        pdf.setFontSize(32);
+        pdf.setFont("helvetica", "bold");
+        pdf.text(previewSiteName.toUpperCase(), pageWidth / 2, 80, { align: "center" });
+        
+        pdf.setFontSize(18);
+        pdf.text("METERING AUDIT REPORT", pageWidth / 2, 100, { align: "center" });
+        
+        pdf.setTextColor(0, 0, 0);
+        pdf.setFontSize(14);
+        pdf.setFont("helvetica", "normal");
+        pdf.text("Financial Analysis", pageWidth / 2, 115, { align: "center" });
+        
+        pdf.setFontSize(11);
+        pdf.text("Audit Period", pageWidth / 2, 155, { align: "center" });
+        pdf.setFont("helvetica", "bold");
+        pdf.text("All Available Readings", pageWidth / 2, 165, { align: "center" });
+        
+        pdf.setFontSize(10);
+        pdf.setFont("helvetica", "italic");
+        pdf.setTextColor(150, 0, 0);
+        pdf.text("PREVIEW - This is an editable preview", pageWidth / 2, 200, { align: "center" });
+        pdf.setTextColor(0, 0, 0);
+
+        addFooter();
+        
+        // TABLE OF CONTENTS
+        addPageNumber();
+        pdf.addPage();
+        addBlueSidebar();
+        yPos = topMargin;
+        
+        pdf.setTextColor(templateBlue[0], templateBlue[1], templateBlue[2]);
+        pdf.setFontSize(14);
+        pdf.setFont("helvetica", "bold");
+        pdf.text("1.1 Table of Contents", leftMargin, yPos);
+        pdf.setTextColor(0, 0, 0);
+        yPos += 12;
+        
+        const tocEntries = [
+          "1. EXECUTIVE SUMMARY",
+          "2. METERING HIERARCHY OVERVIEW",
+          "3. DATA SOURCES AND AUDIT PERIOD",
+          "4. KEY METRICS",
+          "5. METERING RECONCILIATION",
+          "6. OBSERVATIONS AND ANOMALIES",
+          "7. RECOMMENDATIONS",
+          "8. APPENDICES"
+        ];
+        
+        pdf.setFontSize(11);
+        tocEntries.forEach((entry) => {
+          pdf.setFont("helvetica", "bold");
+          pdf.setTextColor(templateBlue[0], templateBlue[1], templateBlue[2]);
+          pdf.text(entry, leftMargin, yPos);
+          pdf.setTextColor(0, 0, 0);
+          yPos += 8;
         });
+        
+        addFooter();
+        
+        // Start main content
+        addPageNumber();
+        pdf.addPage();
+        addBlueSidebar();
+        yPos = topMargin;
+        
+        // Get section content helper
+        const getSectionContent = (sectionId: string): string => {
+          const section = sections.find(s => s.id === sectionId);
+          return section?.content || '';
+        };
+        
+        // Section 1: Executive Summary
+        addSectionHeading("1. EXECUTIVE SUMMARY", 16);
+        addText(getSectionContent('executive-summary'));
+        addSpacer(8);
+        
+        // Section 2: Metering Hierarchy Overview
+        addSectionHeading("2. METERING HIERARCHY OVERVIEW", 16);
+        addText(getSectionContent('hierarchy-overview'));
+        addSpacer(5);
+        
+        // Add schematic if available
+        if (schematicImageBase64) {
+          if (yPos > pageHeight - 150) {
+            addFooter();
+            addPageNumber();
+            pdf.addPage();
+            addBlueSidebar();
+            yPos = topMargin;
+          }
+          
+          try {
+            const imgWidth = pageWidth - leftMargin - rightMargin;
+            const imgHeight = 120;
+            pdf.addImage(schematicImageBase64, 'PNG', leftMargin, yPos, imgWidth, imgHeight);
+            yPos += imgHeight + 5;
+            
+            pdf.setFontSize(9);
+            pdf.setFont("helvetica", "italic");
+            pdf.text("Figure 1: Site Metering Schematic Diagram", pageWidth / 2, yPos, { align: "center" });
+            pdf.setFont("helvetica", "normal");
+            yPos += 10;
+          } catch (err) {
+            console.error("Error adding schematic to preview:", err);
+          }
+        }
+        addSpacer(8);
+        
+        // Section 3: Data Sources
+        addSectionHeading("3. DATA SOURCES AND AUDIT PERIOD", 16);
+        addSubsectionHeading("Audit Period");
+        addText("All Available Readings");
+        addSpacer(5);
+        
+        addSubsectionHeading("Metering Infrastructure");
+        addText(`Total Meters Analyzed: ${reconciliationData.meterCount}`);
+        addSpacer(8);
+        
+        // Section 4: Key Metrics
+        addSectionHeading("4. KEY METRICS", 16);
+        addSubsectionHeading("4.1 Basic Reconciliation Metrics");
+        
+        const basicMetricsRows = [
+          ["Total Supply", `${formatNumber(parseFloat(reconciliationData.totalSupply))} kWh`],
+          ["Distribution Total", `${formatNumber(parseFloat(reconciliationData.distributionTotal))} kWh`],
+          ["Recovery Rate", `${formatNumber(parseFloat(reconciliationData.recoveryRate))}%`],
+          ["Discrepancy", `${formatNumber(parseFloat(reconciliationData.variance))} kWh`]
+        ];
+        
+        addTable(["Metric", "Value"], basicMetricsRows, [100, 70]);
+        addSpacer(5);
+        
+        // CSV Column Aggregations
+        if (csvColumnAggregations && csvColumnAggregations.length > 0) {
+          addSubsectionHeading("4.2 CSV Column Aggregations");
+          const csvMetricsRows = csvColumnAggregations.map((data: any) => [
+            data.column,
+            formatNumber(data.value),
+            data.unit || 'kWh',
+            data.aggregation.toUpperCase(),
+            data.multiplier !== 1 ? `×${data.multiplier}` : '-'
+          ]);
+          
+          addTable(
+            ["Column", "Value", "Unit", "Aggregation", "Multiplier"],
+            csvMetricsRows,
+            [50, 35, 25, 30, 30]
+          );
+          addSpacer(8);
+        }
+        
+        // Section 5: Metering Reconciliation
+        addSectionHeading("5. METERING RECONCILIATION", 16);
+        addSubsectionHeading("5.1 Supply Summary");
+        
+        const supplyRows = [
+          ["Council Bulk Supply", `${formatNumber(parseFloat(reconciliationData.councilTotal))} kWh`],
+          ["Total Supply", `${formatNumber(parseFloat(reconciliationData.totalSupply))} kWh`]
+        ];
+        
+        addTable(["Supply Source", "Energy (kWh)"], supplyRows, [120, 50]);
+        addSpacer(5);
+        
+        addSubsectionHeading("5.2 Distribution Summary");
+        const distributionRows = [
+          ["Total Distribution", `${formatNumber(parseFloat(reconciliationData.distributionTotal))} kWh`],
+          ["Recovery Rate", `${formatNumber(parseFloat(reconciliationData.recoveryRate))}%`]
+        ];
+        
+        addTable(["Metric", "Value"], distributionRows, [120, 50]);
+        addSpacer(8);
+        
+        // Section 6: Observations
+        addSectionHeading("6. OBSERVATIONS AND ANOMALIES", 16);
+        addText(getSectionContent('observations'));
+        addSpacer(8);
+        
+        // Section 7: Recommendations
+        addSectionHeading("7. RECOMMENDATIONS", 16);
+        addText(getSectionContent('recommendations'));
+        addSpacer(8);
         
         // Add footer and page number to last page
         addFooter();
