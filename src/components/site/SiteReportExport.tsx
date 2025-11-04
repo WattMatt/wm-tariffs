@@ -1396,6 +1396,27 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           editable: true
         });
         
+        // Add KPI section
+        const totalReadingsCount = meterData.reduce((sum: number, meter: any) => sum + (meter.readingsCount || 0), 0);
+        const totalMetersCount = meterData.length;
+        const totalConsumption = meterData.reduce((sum: number, meter: any) => sum + (parseFloat(meter.totalKwh) || 0), 0);
+        const avgReadingsPerMeter = totalMetersCount > 0 ? Math.round(totalReadingsCount / totalMetersCount) : 0;
+        
+        sections.push({
+          id: 'kpi-indicators',
+          title: 'Data Collection KPIs',
+          content: `## Data Collection KPIs
+
+| KPI Indicator | Value |
+|--------------|-------|
+| Total Readings Collected | ${totalReadingsCount.toLocaleString()} |
+| Active Meters Analyzed | ${totalMetersCount} |
+| Total Consumption | ${totalConsumption.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')} kWh |
+| Average Readings per Meter | ${avgReadingsPerMeter} |`,
+          type: 'text',
+          editable: true
+        });
+        
         if (reportData.sections.observations) {
           sections.push({
             id: 'observations',
