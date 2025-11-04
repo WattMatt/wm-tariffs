@@ -582,8 +582,9 @@ export function SplitViewReportEditor({
                   <Database className="w-4 h-4 text-primary" />
                 </div>
                 <div>
-                  <div className="text-xs text-muted-foreground">Total Readings</div>
+                  <div className="text-xs text-muted-foreground">Total Data Points</div>
                   <div className="text-lg font-semibold">{kpiStats.totalReadings.toLocaleString()}</div>
+                  <div className="text-[10px] text-muted-foreground">readings analyzed</div>
                 </div>
               </div>
               <div className="flex items-center gap-3">
@@ -593,6 +594,7 @@ export function SplitViewReportEditor({
                 <div>
                   <div className="text-xs text-muted-foreground">Active Meters</div>
                   <div className="text-lg font-semibold">{kpiStats.totalMeters}</div>
+                  <div className="text-[10px] text-muted-foreground">monitored</div>
                 </div>
               </div>
               <div className="flex items-center gap-3">
@@ -600,10 +602,11 @@ export function SplitViewReportEditor({
                   <Calendar className="w-4 h-4 text-secondary-foreground" />
                 </div>
                 <div>
-                  <div className="text-xs text-muted-foreground">Date Range</div>
+                  <div className="text-xs text-muted-foreground">Analysis Period</div>
                   <div className="text-sm font-semibold">
                     {kpiStats.dateRange.earliest} - {kpiStats.dateRange.latest}
                   </div>
+                  <div className="text-[10px] text-muted-foreground">date range</div>
                 </div>
               </div>
               <div className="flex items-center gap-3">
@@ -613,6 +616,7 @@ export function SplitViewReportEditor({
                 <div>
                   <div className="text-xs text-muted-foreground">Total Consumption</div>
                   <div className="text-lg font-semibold">{kpiStats.totalConsumption.toLocaleString()} kWh</div>
+                  <div className="text-[10px] text-muted-foreground">energy used</div>
                 </div>
               </div>
             </div>

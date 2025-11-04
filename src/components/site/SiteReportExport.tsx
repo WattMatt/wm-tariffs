@@ -908,7 +908,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         const totalConsumption = meterData.reduce((sum: number, meter: any) => sum + (parseFloat(meter.totalKwh) || 0), 0);
         
         const kpiRows = [
-          ["Total Readings Collected", totalReadingsCount.toLocaleString()],
+          ["Total Data Points Reviewed", totalReadingsCount.toLocaleString()],
           ["Active Meters Analyzed", totalMetersCount.toString()],
           ["Total Consumption", `${formatNumber(totalConsumption)} kWh`],
           ["Average Readings per Meter", totalMetersCount > 0 ? Math.round(totalReadingsCount / totalMetersCount).toString() : "0"]
@@ -1443,7 +1443,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
 
 | KPI Indicator | Value |
 |--------------|-------|
-| Total Readings Collected | ${totalReadingsCount.toLocaleString()} |
+| Total Data Points Reviewed | ${totalReadingsCount.toLocaleString()} |
 | Active Meters Analyzed | ${totalMetersCount} |
 | Total Consumption | ${totalConsumption.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')} kWh |
 | Average Readings per Meter | ${avgReadingsPerMeter} |`,
@@ -2247,7 +2247,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       const totalConsumption = meterData.reduce((sum: number, meter: any) => sum + (parseFloat(meter.totalKwh) || 0), 0);
       
       const kpiRows = [
-        ["Total Readings Collected", totalReadingsCount.toLocaleString()],
+        ["Total Data Points Reviewed", totalReadingsCount.toLocaleString()],
         ["Active Meters Analyzed", totalMetersCount.toString()],
         ["Total Consumption", `${formatNumber(totalConsumption)} kWh`],
         ["Average Readings per Meter", totalMetersCount > 0 ? Math.round(totalReadingsCount / totalMetersCount).toString() : "0"]
