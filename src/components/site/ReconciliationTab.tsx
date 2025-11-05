@@ -1490,12 +1490,16 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                   const selected = documentDateRanges.find(d => d.id === value);
                   if (selected) {
                     const startDate = new Date(selected.period_start);
+                    startDate.setHours(0, 0, 0, 0);
+                    
                     const endDate = new Date(selected.period_end);
+                    endDate.setDate(endDate.getDate() - 1);
+                    endDate.setHours(23, 59, 0, 0);
                     
                     setDateFrom(startDate);
                     setDateTo(endDate);
-                    setTimeFrom(format(startDate, "HH:mm"));
-                    setTimeTo(format(endDate, "HH:mm"));
+                    setTimeFrom("00:00");
+                    setTimeTo("23:59");
                     toast.success(`Date range set from ${format(startDate, "PP")} to ${format(endDate, "PP")}`);
                   }
                 }}
