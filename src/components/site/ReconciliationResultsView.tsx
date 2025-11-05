@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { FileDown, Download, ChevronRight, Save } from "lucide-react";
+import { FileDown, Download, ChevronRight, Save, Loader2, Zap, Calculator, DollarSign } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -67,6 +67,14 @@ interface ReconciliationResultsViewProps {
   onSave?: () => void;
   showSaveButton?: boolean;
   revenueData?: RevenueData | null;
+  onReconcileEnergy?: () => void;
+  onReconcileRevenue?: () => void;
+  isLoadingEnergy?: boolean;
+  isLoadingRevenue?: boolean;
+  energyProgress?: { current: number; total: number };
+  revenueProgress?: { current: number; total: number };
+  hasPreviewData?: boolean;
+  canReconcile?: boolean;
 }
 
 export default function ReconciliationResultsView({
@@ -88,6 +96,14 @@ export default function ReconciliationResultsView({
   onSave,
   showSaveButton = false,
   revenueData = null,
+  onReconcileEnergy,
+  onReconcileRevenue,
+  isLoadingEnergy = false,
+  isLoadingRevenue = false,
+  energyProgress = { current: 0, total: 0 },
+  revenueProgress = { current: 0, total: 0 },
+  hasPreviewData = false,
+  canReconcile = false,
 }: ReconciliationResultsViewProps) {
   const [expandedMeters, setExpandedMeters] = useState<Set<string>>(new Set());
 
@@ -335,10 +351,59 @@ export default function ReconciliationResultsView({
     <div className="space-y-6">
       <Tabs defaultValue="energy" className="w-full">
         <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="energy">Energy</TabsTrigger>
-          <TabsTrigger value="revenue" disabled={!revenueData}>
-            Revenue
-            {!revenueData && <span className="ml-2 text-xs opacity-60">(Not enabled)</span>}
+          <TabsTrigger 
+            value="energy" 
+            onClick={() => {
+              if (!meters || meters.length === 0) {
+                onReconcileEnergy?.();
+              }
+            }}
+            disabled={!canReconcile || isLoadingEnergy || isLoadingRevenue}
+            className="gap-2"
+          >
+            {isLoadingEnergy ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Analyzing... {energyProgress.current}/{energyProgress.total}</span>
+              </>
+            ) : meters && meters.length > 0 ? (
+              <>
+                <Zap className="h-4 w-4" />
+                <span>Energy</span>
+              </>
+            ) : (
+              <>
+                <Calculator className="h-4 w-4" />
+                <span>Calculate Energy</span>
+              </>
+            )}
+          </TabsTrigger>
+          <TabsTrigger 
+            value="revenue" 
+            onClick={() => {
+              if (!revenueData) {
+                onReconcileRevenue?.();
+              }
+            }}
+            disabled={!canReconcile || isLoadingEnergy || isLoadingRevenue || (!revenueData && meters.length === 0)}
+            className="gap-2"
+          >
+            {isLoadingRevenue ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Calculating... {revenueProgress.current}/{revenueProgress.total}</span>
+              </>
+            ) : revenueData ? (
+              <>
+                <DollarSign className="h-4 w-4" />
+                <span>Revenue</span>
+              </>
+            ) : (
+              <>
+                <Calculator className="h-4 w-4" />
+                <span>Calculate Revenue</span>
+              </>
+            )}
           </TabsTrigger>
         </TabsList>
 

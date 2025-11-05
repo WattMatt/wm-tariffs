@@ -2066,95 +2066,64 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
             </div>
             </Collapsible>
 
-            {/* Reconciliation Action Buttons */}
-            <div className="flex gap-2 w-full">
-              <Button 
-                onClick={() => {
-                  handleReconcile(false);
-                }}
-                disabled={isLoading || isCalculatingRevenue || selectedColumns.size === 0} 
-                className="flex-1"
-                variant="outline"
-              >
-                {isLoading ? (
-                  <div className="flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>Analyzing... {reconciliationProgress.current}/{reconciliationProgress.total}</span>
-                  </div>
-                ) : (
-                  <span>Energy Reconciliation</span>
-                )}
-              </Button>
-              
-              <Button 
-                onClick={() => {
-                  handleReconcile(true);
-                }}
-                disabled={isLoading || isCalculatingRevenue || selectedColumns.size === 0} 
-                className="flex-1"
-                variant="outline"
-              >
-                {isCalculatingRevenue || isLoading ? (
-                  <div className="flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>Calculating... {reconciliationProgress.current}/{reconciliationProgress.total}</span>
-                  </div>
-                ) : (
-                  <span>Revenue Reconciliation</span>
-                )}
-              </Button>
-            </div>
+            {/* Reconciliation Action Buttons - Removed, moved to tabs */}
 
           </CardContent>
         </Card>
       )}
 
-      {reconciliationData && (
-        <ReconciliationResultsView
-          bulkTotal={reconciliationData.councilTotal}
-          solarTotal={reconciliationData.solarTotal}
-          tenantTotal={reconciliationData.tenantTotal}
-          totalSupply={reconciliationData.totalSupply}
-          recoveryRate={reconciliationData.recoveryRate}
-          discrepancy={reconciliationData.discrepancy}
-          distributionTotal={reconciliationData.distributionTotal}
-          meters={(() => {
-            // Collect all processed meters
-            const allMeters = [
-              ...(reconciliationData.councilBulk || []),
-              ...(reconciliationData.solarMeters || []),
-              ...(reconciliationData.checkMeters || []),
-              ...(reconciliationData.distribution || []),
-              ...(reconciliationData.otherMeters || [])
-            ].map(m => ({
-              ...m,
-              hasData: m.hasData !== undefined ? m.hasData : true,
-              hasError: m.hasError || failedMeters.has(m.id),
-              errorMessage: m.errorMessage || failedMeters.get(m.id)
-            }));
+      <ReconciliationResultsView
+        bulkTotal={reconciliationData?.councilTotal ?? 0}
+        solarTotal={reconciliationData?.solarTotal ?? 0}
+        tenantTotal={reconciliationData?.tenantTotal ?? 0}
+        totalSupply={reconciliationData?.totalSupply ?? 0}
+        recoveryRate={reconciliationData?.recoveryRate ?? 0}
+        discrepancy={reconciliationData?.discrepancy ?? 0}
+        distributionTotal={reconciliationData?.distributionTotal ?? 0}
+        meters={reconciliationData ? (() => {
+          // Collect all processed meters
+          const allMeters = [
+            ...(reconciliationData.councilBulk || []),
+            ...(reconciliationData.solarMeters || []),
+            ...(reconciliationData.checkMeters || []),
+            ...(reconciliationData.distribution || []),
+            ...(reconciliationData.otherMeters || [])
+          ].map(m => ({
+            ...m,
+            hasData: m.hasData !== undefined ? m.hasData : true,
+            hasError: m.hasError || failedMeters.has(m.id),
+            errorMessage: m.errorMessage || failedMeters.get(m.id)
+          }));
 
-            // Create a map for quick lookup
-            const meterMap = new Map(allMeters.map(m => [m.id, m]));
+          // Create a map for quick lookup
+          const meterMap = new Map(allMeters.map(m => [m.id, m]));
 
-            // Order meters according to availableMeters (which has the hierarchy)
-            const orderedMeters = availableMeters
-              .map(availMeter => meterMap.get(availMeter.id))
-              .filter(m => m !== undefined);
+          // Order meters according to availableMeters (which has the hierarchy)
+          const orderedMeters = availableMeters
+            .map(availMeter => meterMap.get(availMeter.id))
+            .filter(m => m !== undefined);
 
-            return orderedMeters;
-          })()}
-          meterConnections={meterConnectionsMap}
-          meterIndentLevels={meterIndentLevels}
-          meterParentInfo={meterParentInfo}
-          meterAssignments={meterAssignments}
-          showDownloadButtons={true}
-          onDownloadMeter={downloadMeterCSV}
-          onDownloadAll={downloadAllMetersCSV}
-          showSaveButton={true}
-          onSave={() => setIsSaveDialogOpen(true)}
-          revenueData={reconciliationData.revenueData}
-        />
-      )}
+          return orderedMeters;
+        })() : []}
+        meterConnections={meterConnectionsMap}
+        meterIndentLevels={meterIndentLevels}
+        meterParentInfo={meterParentInfo}
+        meterAssignments={meterAssignments}
+        showDownloadButtons={true}
+        onDownloadMeter={downloadMeterCSV}
+        onDownloadAll={downloadAllMetersCSV}
+        showSaveButton={true}
+        onSave={() => setIsSaveDialogOpen(true)}
+        revenueData={reconciliationData?.revenueData}
+        onReconcileEnergy={() => handleReconcile(false)}
+        onReconcileRevenue={() => handleReconcile(true)}
+        isLoadingEnergy={isLoading && !isCalculatingRevenue}
+        isLoadingRevenue={isCalculatingRevenue}
+        energyProgress={reconciliationProgress}
+        revenueProgress={reconciliationProgress}
+        hasPreviewData={previewData !== null}
+        canReconcile={selectedColumns.size > 0}
+      />
 
         <SaveReconciliationDialog
           open={isSaveDialogOpen}
