@@ -1470,15 +1470,6 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         <h2 className="text-2xl font-bold mb-2">Energy Reconciliation</h2>
       </div>
 
-      {isLoadingDateRanges && (
-        <Card className="border-primary/20 bg-primary/5">
-          <CardContent className="flex items-center gap-3 py-4">
-            <Loader2 className="h-5 w-5 animate-spin text-primary" />
-            <p className="text-sm text-muted-foreground">Loading meter date ranges...</p>
-          </CardContent>
-        </Card>
-      )}
-
       <Card className="border-border/50">
         <CardHeader>
           <div className="flex items-start justify-between">
@@ -1486,7 +1477,12 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
               <CardTitle>Analysis Parameters</CardTitle>
               <CardDescription>Select date range for reconciliation or use document periods</CardDescription>
             </div>
-            {totalDateRange.earliest && totalDateRange.latest && (
+            {isLoadingDateRanges ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                <span>Loading date ranges...</span>
+              </div>
+            ) : totalDateRange.earliest && totalDateRange.latest ? (
               <div className="text-right space-y-1">
                 <div className="text-xs text-muted-foreground">
                   <span className="font-medium">First Date & Time:</span> {format(totalDateRange.earliest, "MMM dd, yyyy HH:mm")}
@@ -1495,7 +1491,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                   <span className="font-medium">Last Date & Time:</span> {format(totalDateRange.latest, "MMM dd, yyyy HH:mm")}
                 </div>
               </div>
-            )}
+            ) : null}
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
