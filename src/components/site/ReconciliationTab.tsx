@@ -1796,7 +1796,30 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                           }}
                         />
                       </TableHead>
-                      <TableHead className="font-semibold">Column Name</TableHead>
+                      <TableHead className="font-semibold">
+                        <span 
+                          className="cursor-pointer hover:underline"
+                          onClick={() => {
+                            const allSelected = selectedColumns.size === previewData.availableColumns.length;
+                            if (!allSelected) {
+                              const newSelected = new Set<string>(previewData.availableColumns as string[]);
+                              setSelectedColumns(newSelected);
+                              const newOps = new Map(columnOperations);
+                              const newFactors = new Map(columnFactors);
+                              previewData.availableColumns.forEach((col: string) => {
+                                if (!newOps.has(col)) newOps.set(col, "sum");
+                                if (!newFactors.has(col)) newFactors.set(col, "1");
+                              });
+                              setColumnOperations(newOps);
+                              setColumnFactors(newFactors);
+                            } else {
+                              setSelectedColumns(new Set());
+                            }
+                          }}
+                        >
+                          Column Name
+                        </span>
+                      </TableHead>
                       <TableHead className="w-32 font-semibold">Operation</TableHead>
                       <TableHead className="w-24 font-semibold">Factor</TableHead>
                     </TableRow>
