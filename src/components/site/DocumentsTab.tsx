@@ -346,7 +346,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
     folders.add('__root__'); // Use special value instead of empty string
     
     documents.forEach(doc => {
-      if (doc.is_folder) {
+      if (doc.is_folder && doc.folder_path && doc.folder_path.trim() !== '') {
         folders.add(doc.folder_path);
       }
     });
