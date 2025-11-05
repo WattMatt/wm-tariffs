@@ -335,9 +335,9 @@ export default function ReconciliationResultsView({
     <div className="space-y-6">
       <Tabs defaultValue="energy" className="w-full">
         <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="energy">Energy Reconciliation</TabsTrigger>
+          <TabsTrigger value="energy">Energy</TabsTrigger>
           <TabsTrigger value="revenue" disabled={!revenueData}>
-            Revenue Reconciliation
+            Revenue
             {!revenueData && <span className="ml-2 text-xs opacity-60">(Not enabled)</span>}
           </TabsTrigger>
         </TabsList>
