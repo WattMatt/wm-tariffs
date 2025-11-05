@@ -224,27 +224,54 @@ export default function ReconciliationResultsView({
           <div className="flex items-center gap-4">
             {meter.hasData !== false && !meter.hasError && (
               <>
-                <div className="text-right">
-                  <div className="text-sm font-medium">
-                    {meter.totalKwh.toFixed(2)} kWh
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {isRevenueView && meterRevenue && !meterRevenue.hasError ? (
-                      <span className="text-primary font-medium">R {meterRevenue.totalCost.toFixed(2)}</span>
-                    ) : isRevenueView && meterRevenue?.hasError ? (
-                      <span className="text-destructive">Calculation error</span>
-                    ) : isRevenueView ? (
-                      <span>No tariff assigned</span>
+                {isRevenueView ? (
+                  // Revenue View - Show only costs
+                  <div className="text-right">
+                    {meterRevenue && !meterRevenue.hasError ? (
+                      <>
+                        <div className="text-sm font-medium text-primary">
+                          R {meterRevenue.totalCost.toFixed(2)}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          Total Cost
+                        </div>
+                      </>
+                    ) : meterRevenue?.hasError ? (
+                      <>
+                        <div className="text-sm font-medium text-destructive">
+                          Calculation Error
+                        </div>
+                        <div className="text-xs text-destructive">
+                          {meterRevenue.errorMessage}
+                        </div>
+                      </>
                     ) : (
-                      <span>{meter.readingsCount} readings</span>
+                      <>
+                        <div className="text-sm font-medium text-muted-foreground">
+                          No tariff assigned
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          Cannot calculate cost
+                        </div>
+                      </>
                     )}
                   </div>
-                  {!isRevenueView && childIds.length > 0 && (
-                    <div className="text-xs text-muted-foreground mt-1">
-                      Σ children: {hierarchicalTotal.toFixed(2)} kWh
+                ) : (
+                  // Energy View - Show kWh
+                  <div className="text-right">
+                    <div className="text-sm font-medium">
+                      {meter.totalKwh.toFixed(2)} kWh
                     </div>
-                  )}
-                </div>
+                    <div className="text-xs text-muted-foreground">
+                      {meter.readingsCount} readings
+                    </div>
+                    {childIds.length > 0 && (
+                      <div className="text-xs text-muted-foreground mt-1">
+                        Σ children: {hierarchicalTotal.toFixed(2)} kWh
+                      </div>
+                    )}
+                  </div>
+                )}
                 {!isRevenueView && showDownloadButtons && onDownloadMeter && (
                   <Button
                     variant="ghost"
