@@ -76,6 +76,61 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
   const [failedMeters, setFailedMeters] = useState<Map<string, string>>(new Map()); // meter_id -> error message
   const [isColumnsOpen, setIsColumnsOpen] = useState(true); // Control collapse state of columns section
   const [isMetersOpen, setIsMetersOpen] = useState(true); // Control collapse state of meters section
+  const [documentDateRanges, setDocumentDateRanges] = useState<Array<{
+    id: string;
+    document_type: string;
+    file_name: string;
+    period_start: string;
+    period_end: string;
+  }>>([]);
+
+  // Fetch document date ranges
+  useEffect(() => {
+    const fetchDocumentDateRanges = async () => {
+      const { data, error } = await supabase
+        .from('site_documents')
+        .select(`
+          id,
+          document_type,
+          file_name,
+          document_extractions (
+            period_start,
+            period_end
+          )
+        `)
+        .eq('site_id', siteId)
+        .not('document_extractions.period_start', 'is', null)
+        .not('document_extractions.period_end', 'is', null);
+
+      if (error) {
+        console.error("Error fetching document date ranges:", error);
+        return;
+      }
+
+      if (data) {
+        const ranges = data
+          .filter(doc => doc.document_extractions && doc.document_extractions.length > 0)
+          .map(doc => ({
+            id: doc.id,
+            document_type: doc.document_type,
+            file_name: doc.file_name,
+            period_start: doc.document_extractions[0].period_start,
+            period_end: doc.document_extractions[0].period_end,
+          }))
+          .sort((a, b) => {
+            // Sort by document type first, then by period_start descending
+            if (a.document_type !== b.document_type) {
+              return a.document_type.localeCompare(b.document_type);
+            }
+            return new Date(b.period_start).getTime() - new Date(a.period_start).getTime();
+          });
+
+        setDocumentDateRanges(ranges);
+      }
+    };
+
+    fetchDocumentDateRanges();
+  }, [siteId]);
 
   // Fetch available meters with CSV data and build hierarchy
   useEffect(() => {
@@ -1412,7 +1467,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           <div className="flex items-start justify-between">
             <div>
               <CardTitle>Analysis Parameters</CardTitle>
-              <CardDescription>Select date range for reconciliation</CardDescription>
+              <CardDescription>Select date range for reconciliation or use document periods</CardDescription>
             </div>
             {totalDateRange.earliest && totalDateRange.latest && (
               <div className="text-right space-y-1">
@@ -1427,6 +1482,56 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
+          {documentDateRanges.length > 0 && (
+            <div className="space-y-2">
+              <Label>Document Period</Label>
+              <Select
+                onValueChange={(value) => {
+                  const selected = documentDateRanges.find(d => d.id === value);
+                  if (selected) {
+                    const startDate = new Date(selected.period_start);
+                    const endDate = new Date(selected.period_end);
+                    
+                    setDateFrom(startDate);
+                    setDateTo(endDate);
+                    setTimeFrom(format(startDate, "HH:mm"));
+                    setTimeTo(format(endDate, "HH:mm"));
+                    toast.success(`Date range set from ${format(startDate, "PP")} to ${format(endDate, "PP")}`);
+                  }
+                }}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select a document period..." />
+                </SelectTrigger>
+                <SelectContent className="bg-popover z-50">
+                  {Object.entries(
+                    documentDateRanges.reduce((acc, doc) => {
+                      const typeLabel = doc.document_type === 'municipal_account' 
+                        ? 'Municipal Accounts' 
+                        : doc.document_type === 'tenant_bill'
+                        ? 'Tenant Bills'
+                        : doc.document_type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                      
+                      if (!acc[typeLabel]) {
+                        acc[typeLabel] = [];
+                      }
+                      acc[typeLabel].push(doc);
+                      return acc;
+                    }, {} as Record<string, typeof documentDateRanges>)
+                  ).map(([type, docs]) => (
+                    <SelectGroup key={type}>
+                      <SelectLabel>{type}</SelectLabel>
+                      {docs.map((doc) => (
+                        <SelectItem key={doc.id} value={doc.id}>
+                          {doc.file_name} ({format(new Date(doc.period_start), "PP")} - {format(new Date(doc.period_end), "PP")})
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>From Date & Time</Label>
