@@ -1092,10 +1092,10 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     setFailedMeters(new Map());
 
     try {
-      // Fetch all meters for the site
+      // Fetch all meters for the site with tariff assignments
       const { data: meters, error: metersError } = await supabase
         .from("meters")
-        .select("id, meter_number, meter_type")
+        .select("id, meter_number, meter_type, tariff_structure_id, name, location")
         .eq("site_id", siteId);
 
       if (metersError) {
@@ -1189,17 +1189,11 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         
         // Process all meters that have tariff assignments
         for (const meter of meterData) {
-          // Fetch meter's tariff assignment
-          const { data: meterInfo } = await supabase
-            .from("meters")
-            .select("tariff_structure_id")
-            .eq("id", meter.id)
-            .single();
-          
-          if (meterInfo?.tariff_structure_id && meter.totalKwh > 0) {
+          // Use tariff_structure_id from meter data (already fetched)
+          if (meter.tariff_structure_id && meter.totalKwh > 0) {
             const costResult = await calculateMeterCost(
               meter.id,
-              meterInfo.tariff_structure_id,
+              meter.tariff_structure_id,
               new Date(fullDateTimeFrom),
               new Date(fullDateTimeTo),
               meter.totalKwh
