@@ -16,6 +16,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { pdfjs } from 'react-pdf';
 import { Canvas as FabricCanvas, Image as FabricImage, Rect as FabricRect, Circle } from "fabric";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { DatePicker } from "@/components/ui/date-picker";
 
 // Set up PDF.js worker
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
@@ -2071,30 +2072,24 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Period Start</Label>
-                    <Input
-                      type="text"
-                      disabled={!isEditing}
-                      value={editedData.period_start ? format(new Date(editedData.period_start), 'dd MMM yyyy') : ''}
-                      onChange={(e) => {
-                        const date = new Date(e.target.value);
-                        if (!isNaN(date.getTime())) {
-                          setEditedData({ ...editedData, period_start: date.toISOString().split('T')[0] });
-                        }
+                    <DatePicker
+                      date={editedData.period_start ? new Date(editedData.period_start) : undefined}
+                      onDateChange={(date) => {
+                        setEditedData({ ...editedData, period_start: date ? date.toISOString().split('T')[0] : null });
                       }}
+                      placeholder="Pick a date"
+                      disabled={!isEditing}
                     />
                   </div>
                   <div className="space-y-2">
                     <Label>Period End</Label>
-                    <Input
-                      type="text"
-                      disabled={!isEditing}
-                      value={editedData.period_end ? format(new Date(editedData.period_end), 'dd MMM yyyy') : ''}
-                      onChange={(e) => {
-                        const date = new Date(e.target.value);
-                        if (!isNaN(date.getTime())) {
-                          setEditedData({ ...editedData, period_end: date.toISOString().split('T')[0] });
-                        }
+                    <DatePicker
+                      date={editedData.period_end ? new Date(editedData.period_end) : undefined}
+                      onDateChange={(date) => {
+                        setEditedData({ ...editedData, period_end: date ? date.toISOString().split('T')[0] : null });
                       }}
+                      placeholder="Pick a date"
+                      disabled={!isEditing}
                     />
                   </div>
                 </div>
