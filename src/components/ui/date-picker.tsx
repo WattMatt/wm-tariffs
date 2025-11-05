@@ -56,6 +56,7 @@ export function DatePicker({
           showTime={showTime}
           onTimeChange={onTimeChange}
           defaultTime={defaultTime}
+          className="pointer-events-auto"
         />
       </PopoverContent>
     </Popover>
