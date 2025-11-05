@@ -250,12 +250,23 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
       const updates = Object.entries(selectedTariffs).map(([meterId, tariffId]) => {
         return supabase
           .from("meters")
-          .update({ tariff_structure_id: tariffId })
+          .update({ 
+            tariff_structure_id: tariffId,
+            tariff: tariffId // Keep tariff column in sync for backward compatibility
+          })
           .eq("id", meterId);
       });
 
-      await Promise.all(updates);
-      toast.success("Tariff assignments saved successfully");
+      const results = await Promise.allSettled(updates);
+      const successful = results.filter(r => r.status === 'fulfilled').length;
+      const failed = results.filter(r => r.status === 'rejected').length;
+
+      if (failed > 0) {
+        toast.error(`Saved ${successful} assignments, ${failed} failed`);
+      } else {
+        toast.success(`Successfully saved ${successful} tariff assignments`);
+      }
+      
       fetchMeters();
     } catch (error) {
       console.error("Error saving tariff assignments:", error);
