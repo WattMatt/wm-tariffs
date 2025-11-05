@@ -345,6 +345,33 @@ export default function SingleMeterCsvParseDialog({
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="p-4 border rounded-md bg-muted/20 space-y-4">
+                      {/* Select All/Deselect All Header */}
+                      <div className="p-3 border rounded-md bg-background/50">
+                        <div className="flex items-center gap-3">
+                          <Checkbox
+                            checked={Object.values(visibleColumns).every(v => v !== false)}
+                            onCheckedChange={(checked) => {
+                              const newState: { [key: string]: boolean } = {};
+                              previewData.headers.forEach((_, idx) => {
+                                newState[idx.toString()] = checked === true;
+                              });
+                              setVisibleColumns(newState);
+                            }}
+                            className="shrink-0"
+                          />
+                          <Label className="text-sm font-semibold cursor-pointer" onClick={() => {
+                            const allChecked = Object.values(visibleColumns).every(v => v !== false);
+                            const newState: { [key: string]: boolean } = {};
+                            previewData.headers.forEach((_, idx) => {
+                              newState[idx.toString()] = !allChecked;
+                            });
+                            setVisibleColumns(newState);
+                          }}>
+                            Column Name
+                          </Label>
+                        </div>
+                      </div>
+
                       {/* Individual Column Cards */}
                       {previewData.headers.map((header, idx) => {
                         const displayName = columnMapping.renamedHeaders?.[idx] || header || `Column ${idx + 1}`;
