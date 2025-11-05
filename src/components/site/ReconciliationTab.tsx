@@ -2066,44 +2066,6 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
             </div>
             </Collapsible>
 
-            {/* Reconciliation Action Buttons */}
-            <div className="flex gap-2 w-full">
-              <Button 
-                onClick={() => {
-                  handleReconcile(false);
-                }}
-                disabled={isLoading || isCalculatingRevenue || selectedColumns.size === 0} 
-                className="flex-1"
-                variant="outline"
-              >
-                {isLoading ? (
-                  <div className="flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>Analyzing... {reconciliationProgress.current}/{reconciliationProgress.total}</span>
-                  </div>
-                ) : (
-                  <span>Energy Reconciliation</span>
-                )}
-              </Button>
-              
-              <Button 
-                onClick={() => {
-                  handleReconcile(true);
-                }}
-                disabled={isLoading || isCalculatingRevenue || selectedColumns.size === 0} 
-                className="flex-1"
-                variant="outline"
-              >
-                {isCalculatingRevenue || isLoading ? (
-                  <div className="flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>Calculating... {reconciliationProgress.current}/{reconciliationProgress.total}</span>
-                  </div>
-                ) : (
-                  <span>Revenue Reconciliation</span>
-                )}
-              </Button>
-            </div>
           </CardContent>
         </Card>
       )}
