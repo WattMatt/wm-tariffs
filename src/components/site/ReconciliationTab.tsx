@@ -1488,65 +1488,62 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label>Document Period</Label>
-            {isLoadingDocuments ? (
-              <div className="flex items-center gap-2 py-2 px-3 border rounded-md bg-muted/30">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
-                <span className="text-sm text-muted-foreground">Loading document periods...</span>
-              </div>
-            ) : documentDateRanges.length > 0 ? (
-              <Select
-                disabled={isLoadingDocuments}
-                onValueChange={(value) => {
-                  const selected = documentDateRanges.find(d => d.id === value);
-                  if (selected) {
-                    const startDate = new Date(selected.period_start);
-                    startDate.setHours(0, 0, 0, 0);
+            <Select
+              disabled={isLoadingDocuments || documentDateRanges.length === 0}
+              onValueChange={(value) => {
+                const selected = documentDateRanges.find(d => d.id === value);
+                if (selected) {
+                  const startDate = new Date(selected.period_start);
+                  startDate.setHours(0, 0, 0, 0);
+                  
+                  const endDate = new Date(selected.period_end);
+                  endDate.setDate(endDate.getDate() - 1);
+                  endDate.setHours(23, 59, 0, 0);
+                  
+                  setDateFrom(startDate);
+                  setDateTo(endDate);
+                  setTimeFrom("00:00");
+                  setTimeTo("23:59");
+                  toast.success(`Date range set from ${format(startDate, "PP")} to ${format(endDate, "PP")}`);
+                }
+              }}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder={
+                  isLoadingDocuments 
+                    ? "Loading document periods..." 
+                    : documentDateRanges.length === 0 
+                    ? "No document periods available" 
+                    : "Select a document period..."
+                } />
+              </SelectTrigger>
+              <SelectContent className="bg-popover z-50">
+                {Object.entries(
+                  documentDateRanges.reduce((acc, doc) => {
+                    const typeLabel = doc.document_type === 'municipal_account' 
+                      ? 'Municipal Accounts' 
+                      : doc.document_type === 'tenant_bill'
+                      ? 'Tenant Bills'
+                      : doc.document_type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
                     
-                    const endDate = new Date(selected.period_end);
-                    endDate.setDate(endDate.getDate() - 1);
-                    endDate.setHours(23, 59, 0, 0);
-                    
-                    setDateFrom(startDate);
-                    setDateTo(endDate);
-                    setTimeFrom("00:00");
-                    setTimeTo("23:59");
-                    toast.success(`Date range set from ${format(startDate, "PP")} to ${format(endDate, "PP")}`);
-                  }
-                }}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select a document period..." />
-                </SelectTrigger>
-                <SelectContent className="bg-popover z-50">
-                  {Object.entries(
-                    documentDateRanges.reduce((acc, doc) => {
-                      const typeLabel = doc.document_type === 'municipal_account' 
-                        ? 'Municipal Accounts' 
-                        : doc.document_type === 'tenant_bill'
-                        ? 'Tenant Bills'
-                        : doc.document_type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                      
-                      if (!acc[typeLabel]) {
-                        acc[typeLabel] = [];
-                      }
-                      acc[typeLabel].push(doc);
-                      return acc;
-                    }, {} as Record<string, typeof documentDateRanges>)
-                  ).map(([type, docs]) => (
-                    <SelectGroup key={type}>
-                      <SelectLabel>{type}</SelectLabel>
-                      {docs.map((doc) => (
-                        <SelectItem key={doc.id} value={doc.id}>
-                          {doc.file_name} ({format(new Date(doc.period_start), "PP")} - {format(new Date(doc.period_end), "PP")})
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
-              <div className="text-sm text-muted-foreground py-2">No document periods available</div>
-            )}
+                    if (!acc[typeLabel]) {
+                      acc[typeLabel] = [];
+                    }
+                    acc[typeLabel].push(doc);
+                    return acc;
+                  }, {} as Record<string, typeof documentDateRanges>)
+                ).map(([type, docs]) => (
+                  <SelectGroup key={type}>
+                    <SelectLabel>{type}</SelectLabel>
+                    {docs.map((doc) => (
+                      <SelectItem key={doc.id} value={doc.id}>
+                        {doc.file_name} ({format(new Date(doc.period_start), "PP")} - {format(new Date(doc.period_end), "PP")})
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
