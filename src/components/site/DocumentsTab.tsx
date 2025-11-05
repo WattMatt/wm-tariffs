@@ -1794,7 +1794,9 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                   <TableHead>Status</TableHead>
                   <TableHead>Extracted Period</TableHead>
                   <TableHead>Amount</TableHead>
-                  <TableHead>Assigned Meter</TableHead>
+                  <TableHead>
+                    Assigned Meter ({documents.filter(d => !d.is_folder && d.meter_id).map(d => d.meter_id).filter((id, idx, arr) => arr.indexOf(id) === idx).length}/{siteMeters.length})
+                  </TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
