@@ -149,7 +149,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         // Get all meters for this site
         const { data: meters, error: metersError } = await supabase
           .from("meters")
-          .select("id, meter_number, meter_type")
+          .select("id, meter_number, meter_type, tariff_structure_id")
           .eq("site_id", siteId)
           .order("meter_number");
 
