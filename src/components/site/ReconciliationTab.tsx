@@ -1489,7 +1489,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           <div className="space-y-2">
             <Label>Document Period</Label>
             <Select
-              disabled={isLoadingDocuments || documentDateRanges.length === 0}
+              disabled={isLoadingDocuments || documentDateRanges.length === 0 || !totalDateRange.earliest || !totalDateRange.latest}
               onValueChange={(value) => {
                 const selected = documentDateRanges.find(d => d.id === value);
                 if (selected) {
@@ -1508,7 +1508,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                 }
               }}
             >
-              <SelectTrigger className="w-full" disabled={isLoadingDocuments || documentDateRanges.length === 0}>
+              <SelectTrigger className="w-full" disabled={isLoadingDocuments || documentDateRanges.length === 0 || !totalDateRange.earliest || !totalDateRange.latest}>
                 <SelectValue placeholder={
                   isLoadingDocuments 
                     ? "Loading document periods..." 
