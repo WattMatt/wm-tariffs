@@ -46,6 +46,7 @@ interface Meter {
   meter_number: string;
   name: string;
   tariff: string | null;
+  tariff_structure_id: string | null;
   meter_type: string;
   mccb_size: number | null;
 }
@@ -134,7 +135,7 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
   const fetchMeters = async () => {
     const { data, error } = await supabase
       .from("meters")
-      .select("id, meter_number, name, tariff, meter_type, mccb_size")
+      .select("id, meter_number, name, tariff, tariff_structure_id, meter_type, mccb_size")
       .eq("site_id", siteId)
       .order("meter_number");
 
@@ -148,8 +149,8 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
     // Initialize selected tariffs from existing data
     const tariffMap: { [meterId: string]: string } = {};
     data?.forEach((meter) => {
-      if (meter.tariff) {
-        tariffMap[meter.id] = meter.tariff;
+      if (meter.tariff_structure_id) {
+        tariffMap[meter.id] = meter.tariff_structure_id;
       }
     });
     setSelectedTariffs(tariffMap);
@@ -249,7 +250,7 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
       const updates = Object.entries(selectedTariffs).map(([meterId, tariffId]) => {
         return supabase
           .from("meters")
-          .update({ tariff: tariffId })
+          .update({ tariff_structure_id: tariffId })
           .eq("id", meterId);
       });
 
@@ -275,7 +276,7 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
     if (!meter) return false;
     
     const currentSelection = selectedTariffs[meterId];
-    const savedTariff = meter.tariff;
+    const savedTariff = meter.tariff_structure_id;
     
     // If both are empty/null, no changes
     if (!currentSelection && !savedTariff) return false;
