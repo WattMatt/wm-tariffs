@@ -1486,15 +1486,16 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          {isLoadingDocuments ? (
-            <div className="flex items-center justify-center py-4">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
-              <span className="ml-2 text-sm text-muted-foreground">Loading document periods...</span>
-            </div>
-          ) : documentDateRanges.length > 0 ? (
-            <div className="space-y-2">
-              <Label>Document Period</Label>
+          <div className="space-y-2">
+            <Label>Document Period</Label>
+            {isLoadingDocuments ? (
+              <div className="flex items-center gap-2 py-2 px-3 border rounded-md bg-muted/30">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                <span className="text-sm text-muted-foreground">Loading document periods...</span>
+              </div>
+            ) : documentDateRanges.length > 0 ? (
               <Select
+                disabled={isLoadingDocuments}
                 onValueChange={(value) => {
                   const selected = documentDateRanges.find(d => d.id === value);
                   if (selected) {
@@ -1543,8 +1544,10 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-          ) : null}
+            ) : (
+              <div className="text-sm text-muted-foreground py-2">No document periods available</div>
+            )}
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>From Date & Time</Label>
