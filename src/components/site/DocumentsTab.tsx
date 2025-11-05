@@ -345,9 +345,16 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
     const folders = new Set<string>();
     folders.add('__root__'); // Use special value instead of empty string
     
+    // Get all unique folder paths from documents
     documents.forEach(doc => {
-      if (doc.is_folder && doc.folder_path && doc.folder_path.trim() !== '') {
-        folders.add(doc.folder_path);
+      if (doc.is_folder) {
+        // For folders, construct their full path
+        const folderFullPath = doc.folder_path 
+          ? `${doc.folder_path}/${doc.file_name}` 
+          : doc.file_name;
+        if (folderFullPath) {
+          folders.add(folderFullPath);
+        }
       }
     });
     
