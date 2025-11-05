@@ -21,6 +21,8 @@ import ReconciliationHistoryTab from "./ReconciliationHistoryTab";
 import ReconciliationCompareTab from "./ReconciliationCompareTab";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Switch } from "@/components/ui/switch";
+import { calculateMeterCost } from "@/lib/costCalculation";
 
 interface ReconciliationTabProps {
   siteId: string;
@@ -85,6 +87,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
   }>>([]);
   const [isLoadingDocuments, setIsLoadingDocuments] = useState(false);
   const [isLoadingDateRanges, setIsLoadingDateRanges] = useState(false);
+  const [revenueReconciliationEnabled, setRevenueReconciliationEnabled] = useState(false);
+  const [isCalculatingRevenue, setIsCalculatingRevenue] = useState(false);
 
   // Fetch document date ranges
   useEffect(() => {
@@ -1170,6 +1174,70 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       const recoveryRate = totalSupply > 0 ? (tenantTotal / totalSupply) * 100 : 0;
       const discrepancy = totalSupply - tenantTotal;
 
+      // Revenue Reconciliation (if enabled)
+      let revenueData = null;
+      if (revenueReconciliationEnabled) {
+        setIsCalculatingRevenue(true);
+        toast.info("Calculating revenue for meters with tariffs...");
+        
+        const meterRevenues = new Map();
+        let gridSupplyCost = 0;
+        let solarCost = 0;
+        let tenantCost = 0;
+        let totalKwhWithTariffs = 0;
+        let totalCostCalculated = 0;
+        
+        // Process all meters that have tariff assignments
+        for (const meter of meterData) {
+          // Fetch meter's tariff assignment
+          const { data: meterInfo } = await supabase
+            .from("meters")
+            .select("tariff_structure_id")
+            .eq("id", meter.id)
+            .single();
+          
+          if (meterInfo?.tariff_structure_id && meter.totalKwh > 0) {
+            const costResult = await calculateMeterCost(
+              meter.id,
+              meterInfo.tariff_structure_id,
+              new Date(fullDateTimeFrom),
+              new Date(fullDateTimeTo),
+              meter.totalKwh
+            );
+            
+            meterRevenues.set(meter.id, costResult);
+            
+            // Categorize costs based on meter assignment
+            const assignment = meterAssignments.get(meter.id);
+            if (assignment === "grid_supply") {
+              gridSupplyCost += costResult.totalCost;
+            } else if (assignment === "solar_energy") {
+              solarCost += costResult.totalCost;
+            } else {
+              tenantCost += costResult.totalCost;
+            }
+            
+            totalKwhWithTariffs += meter.totalKwh;
+            totalCostCalculated += costResult.totalCost;
+          }
+        }
+        
+        const avgCostPerKwh = totalKwhWithTariffs > 0 ? totalCostCalculated / totalKwhWithTariffs : 0;
+        const totalRevenue = gridSupplyCost + solarCost + tenantCost;
+        
+        revenueData = {
+          meterRevenues,
+          gridSupplyCost,
+          solarCost,
+          tenantCost,
+          totalRevenue,
+          avgCostPerKwh
+        };
+        
+        setIsCalculatingRevenue(false);
+        toast.success("Revenue calculation complete");
+      }
+
       setReconciliationData({
         // Meter arrays
         bulkMeters: gridSupplyMeters,
@@ -1192,6 +1260,9 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         totalSupply,
         recoveryRate,
         discrepancy,
+        
+        // Revenue data
+        revenueData,
       });
 
       // Update availableMeters to reflect which meters have data in this date range
@@ -1248,7 +1319,13 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           recovery_rate: reconciliationData.recoveryRate,
           discrepancy: reconciliationData.discrepancy,
           created_by: user?.id,
-          notes: notes || null
+          notes: notes || null,
+          revenue_enabled: reconciliationData.revenueData !== null,
+          grid_supply_cost: reconciliationData.revenueData?.gridSupplyCost || 0,
+          solar_cost: reconciliationData.revenueData?.solarCost || 0,
+          tenant_cost: reconciliationData.revenueData?.tenantCost || 0,
+          total_revenue: reconciliationData.revenueData?.totalRevenue || 0,
+          avg_cost_per_kwh: reconciliationData.revenueData?.avgCostPerKwh || 0
         })
         .select()
         .single();
@@ -1303,25 +1380,35 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         }
       });
       
-      // 4. Insert all meter results with hierarchical totals
-      const meterResults = allMeters.map((meter: any) => ({
-        reconciliation_run_id: run.id,
-        meter_id: meter.id,
-        meter_number: meter.meter_number,
-        meter_type: meter.meter_type,
-        meter_name: meter.name || null,
-        location: meter.location || null,
-        assignment: meter.assignment,
-        total_kwh: meter.totalKwh || 0,
-        total_kwh_positive: meter.totalKwhPositive || 0,
-        total_kwh_negative: meter.totalKwhNegative || 0,
-        hierarchical_total: hierarchicalTotals.get(meter.id) || 0,
-        readings_count: meter.readingsCount || 0,
-        column_totals: meter.columnTotals || null,
-        column_max_values: meter.columnMaxValues || null,
-        has_error: meter.hasError || false,
-        error_message: meter.errorMessage || null
-      }));
+      // 4. Insert all meter results with hierarchical totals and revenue data
+      const meterResults = allMeters.map((meter: any) => {
+        const revenueInfo = reconciliationData.revenueData?.meterRevenues.get(meter.id);
+        return {
+          reconciliation_run_id: run.id,
+          meter_id: meter.id,
+          meter_number: meter.meter_number,
+          meter_type: meter.meter_type,
+          meter_name: meter.name || null,
+          location: meter.location || null,
+          assignment: meter.assignment,
+          total_kwh: meter.totalKwh || 0,
+          total_kwh_positive: meter.totalKwhPositive || 0,
+          total_kwh_negative: meter.totalKwhNegative || 0,
+          hierarchical_total: hierarchicalTotals.get(meter.id) || 0,
+          readings_count: meter.readingsCount || 0,
+          column_totals: meter.columnTotals || null,
+          column_max_values: meter.columnMaxValues || null,
+          has_error: meter.hasError || false,
+          error_message: meter.errorMessage || null,
+          // Revenue fields
+          tariff_name: revenueInfo?.tariffName || null,
+          energy_cost: revenueInfo?.energyCost || 0,
+          fixed_charges: revenueInfo?.fixedCharges || 0,
+          total_cost: revenueInfo?.totalCost || 0,
+          avg_cost_per_kwh: revenueInfo?.avgCostPerKwh || 0,
+          cost_calculation_error: revenueInfo?.hasError ? revenueInfo.errorMessage : null
+        };
+      });
       
       const { error: resultsError } = await supabase
         .from('reconciliation_meter_results')
@@ -1960,14 +2047,35 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
             </div>
             </Collapsible>
 
+            {/* Revenue Reconciliation Toggle */}
+            <div className="flex items-center justify-between p-4 rounded-lg border border-border/50 bg-muted/20">
+              <div className="space-y-0.5">
+                <Label htmlFor="revenue-toggle" className="text-base font-medium">
+                  Include Revenue Reconciliation
+                </Label>
+                <p className="text-sm text-muted-foreground">
+                  Calculate electricity costs based on assigned tariffs
+                </p>
+              </div>
+              <Switch
+                id="revenue-toggle"
+                checked={revenueReconciliationEnabled}
+                onCheckedChange={setRevenueReconciliationEnabled}
+              />
+            </div>
 
-            <Button onClick={handleReconcile} disabled={isLoading || selectedColumns.size === 0} className="w-full">
+            <Button onClick={handleReconcile} disabled={isLoading || isCalculatingRevenue || selectedColumns.size === 0} className="w-full">
               {isLoading ? (
                 <div className="flex items-center gap-2">
                   <span>Analyzing... {reconciliationProgress.current}/{reconciliationProgress.total} meters</span>
                 </div>
+              ) : isCalculatingRevenue ? (
+                <div className="flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Calculating revenue...</span>
+                </div>
               ) : (
-                "Run Reconciliation with Selected Columns"
+                <span>Run {revenueReconciliationEnabled ? "Energy & Revenue" : "Energy"} Reconciliation</span>
               )}
             </Button>
           </CardContent>
@@ -2017,6 +2125,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           onDownloadAll={downloadAllMetersCSV}
           showSaveButton={true}
           onSave={() => setIsSaveDialogOpen(true)}
+          revenueData={reconciliationData.revenueData}
         />
       )}
 

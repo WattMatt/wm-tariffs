@@ -88,8 +88,8 @@ export default function SaveReconciliationDialog({
           </div>
 
           {reconciliationData && (
-            <div className="rounded-lg border p-4 space-y-2 bg-muted/50">
-              <p className="text-sm font-medium">Summary</p>
+            <div className="rounded-lg border p-4 space-y-3 bg-muted/50">
+              <p className="text-sm font-medium">Energy Summary</p>
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <div>
                   <span className="text-muted-foreground">Grid Supply:</span>
@@ -108,6 +108,32 @@ export default function SaveReconciliationDialog({
                   <span className="ml-2 font-mono">{reconciliationData.discrepancy.toFixed(2)} kWh</span>
                 </div>
               </div>
+              
+              {reconciliationData.revenueData && (
+                <>
+                  <div className="border-t pt-2 mt-2">
+                    <p className="text-sm font-medium">Revenue Summary</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <span className="text-muted-foreground">Grid Supply Cost:</span>
+                      <span className="ml-2 font-mono text-warning">R {reconciliationData.revenueData.gridSupplyCost.toFixed(2)}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Solar Cost:</span>
+                      <span className="ml-2 font-mono">R {reconciliationData.revenueData.solarCost.toFixed(2)}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Total Revenue:</span>
+                      <span className="ml-2 font-mono text-primary">R {reconciliationData.revenueData.totalRevenue.toFixed(2)}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Avg Cost/kWh:</span>
+                      <span className="ml-2 font-mono">R {reconciliationData.revenueData.avgCostPerKwh.toFixed(4)}</span>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>

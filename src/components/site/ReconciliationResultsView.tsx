@@ -21,6 +21,30 @@ interface MeterData {
   hasData?: boolean;
   hasError?: boolean;
   errorMessage?: string;
+  // Revenue fields
+  tariffName?: string;
+  energyCost?: number;
+  fixedCharges?: number;
+  totalCost?: number;
+  avgCostPerKwh?: number;
+  costCalculationError?: string;
+}
+
+interface RevenueData {
+  meterRevenues: Map<string, {
+    energyCost: number;
+    fixedCharges: number;
+    totalCost: number;
+    avgCostPerKwh: number;
+    tariffName: string;
+    hasError: boolean;
+    errorMessage?: string;
+  }>;
+  gridSupplyCost: number;
+  solarCost: number;
+  tenantCost: number;
+  totalRevenue: number;
+  avgCostPerKwh: number;
 }
 
 interface ReconciliationResultsViewProps {
@@ -41,6 +65,7 @@ interface ReconciliationResultsViewProps {
   onDownloadAll?: () => void;
   onSave?: () => void;
   showSaveButton?: boolean;
+  revenueData?: RevenueData | null;
 }
 
 export default function ReconciliationResultsView({
@@ -61,6 +86,7 @@ export default function ReconciliationResultsView({
   onDownloadAll,
   onSave,
   showSaveButton = false,
+  revenueData = null,
 }: ReconciliationResultsViewProps) {
   const [expandedMeters, setExpandedMeters] = useState<Set<string>>(new Set());
 
@@ -94,7 +120,13 @@ export default function ReconciliationResultsView({
 
   return (
     <div className="space-y-6">
-      {/* Summary Cards */}
+      {/* Energy Reconciliation Title */}
+      <div>
+        <h3 className="text-xl font-semibold">Energy Reconciliation Results</h3>
+        <p className="text-sm text-muted-foreground">Energy consumption analysis</p>
+      </div>
+
+      {/* Energy Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <Card className="border-border/50">
           <CardHeader className="pb-2">
@@ -194,6 +226,109 @@ export default function ReconciliationResultsView({
           </CardContent>
         </Card>
       </div>
+
+      {/* Revenue Reconciliation Results */}
+      {revenueData && (
+        <>
+          <div className="mt-8">
+            <h3 className="text-xl font-semibold">Revenue Reconciliation Results</h3>
+            <p className="text-sm text-muted-foreground">Cost analysis based on assigned tariffs</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            <Card className="border-border/50">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Grid Supply Cost
+                </CardTitle>
+                <div className="text-xs text-muted-foreground mt-1">Grid</div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-warning">
+                  R {revenueData.gridSupplyCost.toFixed(2)}
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  {revenueData.totalRevenue > 0 
+                    ? ((revenueData.gridSupplyCost / revenueData.totalRevenue) * 100).toFixed(2) 
+                    : '0.00'}%
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-border/50">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Solar Cost
+                </CardTitle>
+                <div className="text-xs text-muted-foreground mt-1">Solar</div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-600">
+                  R {revenueData.solarCost.toFixed(2)}
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  {revenueData.totalRevenue > 0 
+                    ? ((revenueData.solarCost / revenueData.totalRevenue) * 100).toFixed(2) 
+                    : '0.00'}%
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-border/50 bg-warning/10">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Total Supply Cost
+                </CardTitle>
+                <div className="text-xs text-muted-foreground mt-1">Grid + Solar</div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-warning">
+                  R {(revenueData.gridSupplyCost + revenueData.solarCost).toFixed(2)}
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  Supply Cost
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-border/50">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Metered Revenue
+                </CardTitle>
+                <div className="text-xs text-muted-foreground mt-1">Distribution</div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  R {revenueData.tenantCost.toFixed(2)}
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  {revenueData.totalRevenue > 0 
+                    ? ((revenueData.tenantCost / revenueData.totalRevenue) * 100).toFixed(2) 
+                    : '0.00'}%
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-border/50 bg-primary/10">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Avg Cost/kWh
+                </CardTitle>
+                <div className="text-xs text-muted-foreground mt-1">Weighted Average</div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-primary">
+                  R {revenueData.avgCostPerKwh.toFixed(4)}
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  per kWh
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </>
+      )}
 
       {/* Detailed Breakdown */}
       <Card className="border-border/50">
@@ -371,6 +506,51 @@ export default function ReconciliationResultsView({
                           <span className="font-mono font-semibold">{Number(val).toFixed(2)}</span>
                         </div>
                       ))}
+                    </div>
+                  )}
+                  {/* Revenue Data */}
+                  {revenueData && revenueData.meterRevenues.has(meter.id) && (
+                    <div className="pt-2 border-t border-primary/20 bg-primary/5 -m-3 mt-2 p-3 rounded-b-lg">
+                      {(() => {
+                        const costInfo = revenueData.meterRevenues.get(meter.id);
+                        if (!costInfo) return null;
+                        
+                        if (costInfo.hasError) {
+                          return (
+                            <div className="flex items-center gap-2 text-xs text-destructive">
+                              <Badge variant="destructive" className="text-xs">Cost Calculation Error</Badge>
+                              <span>{costInfo.errorMessage || 'Failed to calculate'}</span>
+                            </div>
+                          );
+                        }
+                        
+                        return (
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-medium text-primary">Revenue Breakdown</span>
+                              <Badge variant="outline" className="text-xs">{costInfo.tariffName}</Badge>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Energy Cost:</span>
+                                <span className="font-mono font-semibold text-warning">R {costInfo.energyCost.toFixed(2)}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Fixed Charges:</span>
+                                <span className="font-mono">R {costInfo.fixedCharges.toFixed(2)}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Total Cost:</span>
+                                <span className="font-mono font-semibold text-primary">R {costInfo.totalCost.toFixed(2)}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Avg/kWh:</span>
+                                <span className="font-mono">R {costInfo.avgCostPerKwh.toFixed(4)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
                 </div>

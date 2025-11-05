@@ -471,10 +471,14 @@ export type Database = {
       reconciliation_meter_results: {
         Row: {
           assignment: string | null
+          avg_cost_per_kwh: number | null
           column_max_values: Json | null
           column_totals: Json | null
+          cost_calculation_error: string | null
           created_at: string | null
+          energy_cost: number | null
           error_message: string | null
+          fixed_charges: number | null
           has_error: boolean | null
           hierarchical_total: number | null
           id: string
@@ -485,16 +489,23 @@ export type Database = {
           meter_type: string
           readings_count: number
           reconciliation_run_id: string
+          tariff_name: string | null
+          tariff_structure_id: string | null
+          total_cost: number | null
           total_kwh: number
           total_kwh_negative: number
           total_kwh_positive: number
         }
         Insert: {
           assignment?: string | null
+          avg_cost_per_kwh?: number | null
           column_max_values?: Json | null
           column_totals?: Json | null
+          cost_calculation_error?: string | null
           created_at?: string | null
+          energy_cost?: number | null
           error_message?: string | null
+          fixed_charges?: number | null
           has_error?: boolean | null
           hierarchical_total?: number | null
           id?: string
@@ -505,16 +516,23 @@ export type Database = {
           meter_type: string
           readings_count?: number
           reconciliation_run_id: string
+          tariff_name?: string | null
+          tariff_structure_id?: string | null
+          total_cost?: number | null
           total_kwh?: number
           total_kwh_negative?: number
           total_kwh_positive?: number
         }
         Update: {
           assignment?: string | null
+          avg_cost_per_kwh?: number | null
           column_max_values?: Json | null
           column_totals?: Json | null
+          cost_calculation_error?: string | null
           created_at?: string | null
+          energy_cost?: number | null
           error_message?: string | null
+          fixed_charges?: number | null
           has_error?: boolean | null
           hierarchical_total?: number | null
           id?: string
@@ -525,6 +543,9 @@ export type Database = {
           meter_type?: string
           readings_count?: number
           reconciliation_run_id?: string
+          tariff_name?: string | null
+          tariff_structure_id?: string | null
+          total_cost?: number | null
           total_kwh?: number
           total_kwh_negative?: number
           total_kwh_positive?: number
@@ -544,60 +565,85 @@ export type Database = {
             referencedRelation: "reconciliation_runs"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "reconciliation_meter_results_tariff_structure_id_fkey"
+            columns: ["tariff_structure_id"]
+            isOneToOne: false
+            referencedRelation: "tariff_structures"
+            referencedColumns: ["id"]
+          },
         ]
       }
       reconciliation_runs: {
         Row: {
+          avg_cost_per_kwh: number | null
           bulk_total: number
           created_at: string | null
           created_by: string | null
           date_from: string
           date_to: string
           discrepancy: number
+          grid_supply_cost: number | null
           id: string
           notes: string | null
           recovery_rate: number
+          revenue_enabled: boolean | null
           run_date: string
           run_name: string
           site_id: string
+          solar_cost: number | null
           solar_total: number
+          tenant_cost: number | null
           tenant_total: number
+          total_revenue: number | null
           total_supply: number
           updated_at: string | null
         }
         Insert: {
+          avg_cost_per_kwh?: number | null
           bulk_total?: number
           created_at?: string | null
           created_by?: string | null
           date_from: string
           date_to: string
           discrepancy?: number
+          grid_supply_cost?: number | null
           id?: string
           notes?: string | null
           recovery_rate?: number
+          revenue_enabled?: boolean | null
           run_date?: string
           run_name: string
           site_id: string
+          solar_cost?: number | null
           solar_total?: number
+          tenant_cost?: number | null
           tenant_total?: number
+          total_revenue?: number | null
           total_supply?: number
           updated_at?: string | null
         }
         Update: {
+          avg_cost_per_kwh?: number | null
           bulk_total?: number
           created_at?: string | null
           created_by?: string | null
           date_from?: string
           date_to?: string
           discrepancy?: number
+          grid_supply_cost?: number | null
           id?: string
           notes?: string | null
           recovery_rate?: number
+          revenue_enabled?: boolean | null
           run_date?: string
           run_name?: string
           site_id?: string
+          solar_cost?: number | null
           solar_total?: number
+          tenant_cost?: number | null
           tenant_total?: number
+          total_revenue?: number | null
           total_supply?: number
           updated_at?: string | null
         }
