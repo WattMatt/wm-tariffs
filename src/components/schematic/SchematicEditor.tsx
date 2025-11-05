@@ -4090,7 +4090,7 @@ export default function SchematicEditor({
             
             // Validate meter_type - use bulk_meter as default
             let meterType = extractedMeterData?.meter_type || "bulk_meter";
-            const validMeterTypes = ["bulk_meter", "check_meter", "tenant_meter", "other"];
+            const validMeterTypes = ["bulk_meter", "council_meter", "check_meter", "tenant_meter", "other"];
             if (!validMeterTypes.includes(meterType)) {
               console.warn(`Invalid meter_type "${meterType}", defaulting to "bulk_meter"`);
               meterType = "bulk_meter";
