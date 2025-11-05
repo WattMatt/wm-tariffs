@@ -2072,16 +2072,16 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         </Card>
       )}
 
-      {reconciliationData ? (
+      {previewData !== null && (
         <ReconciliationResultsView
-          bulkTotal={reconciliationData.councilTotal}
-          solarTotal={reconciliationData.solarTotal}
-          tenantTotal={reconciliationData.tenantTotal}
-          totalSupply={reconciliationData.totalSupply}
-          recoveryRate={reconciliationData.recoveryRate}
-          discrepancy={reconciliationData.discrepancy}
-          distributionTotal={reconciliationData.distributionTotal}
-          meters={(() => {
+          bulkTotal={reconciliationData?.councilTotal || 0}
+          solarTotal={reconciliationData?.solarTotal || 0}
+          tenantTotal={reconciliationData?.tenantTotal || 0}
+          totalSupply={reconciliationData?.totalSupply || 0}
+          recoveryRate={reconciliationData?.recoveryRate || 0}
+          discrepancy={reconciliationData?.discrepancy || 0}
+          distributionTotal={reconciliationData?.distributionTotal || 0}
+          meters={reconciliationData ? (() => {
             // Collect all processed meters
             const allMeters = [
               ...(reconciliationData.councilBulk || []),
@@ -2105,43 +2105,17 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
               .filter(m => m !== undefined);
 
             return orderedMeters;
-          })()}
+          })() : []}
           meterConnections={meterConnectionsMap}
           meterIndentLevels={meterIndentLevels}
           meterParentInfo={meterParentInfo}
           meterAssignments={meterAssignments}
-          showDownloadButtons={true}
+          showDownloadButtons={reconciliationData !== null}
           onDownloadMeter={downloadMeterCSV}
           onDownloadAll={downloadAllMetersCSV}
-          showSaveButton={true}
+          showSaveButton={reconciliationData !== null}
           onSave={() => setIsSaveDialogOpen(true)}
-          revenueData={reconciliationData.revenueData}
-          onReconcileEnergy={() => handleReconcile(false)}
-          onReconcileRevenue={() => handleReconcile(true)}
-          isLoadingEnergy={isLoading && !isCalculatingRevenue}
-          isLoadingRevenue={isCalculatingRevenue}
-          energyProgress={reconciliationProgress}
-          revenueProgress={reconciliationProgress}
-          hasPreviewData={previewData !== null}
-          canReconcile={selectedColumns.size > 0}
-        />
-      ) : (
-        <ReconciliationResultsView
-          bulkTotal={0}
-          solarTotal={0}
-          tenantTotal={0}
-          totalSupply={0}
-          recoveryRate={0}
-          discrepancy={0}
-          distributionTotal={0}
-          meters={[]}
-          meterConnections={meterConnectionsMap}
-          meterIndentLevels={meterIndentLevels}
-          meterParentInfo={meterParentInfo}
-          meterAssignments={meterAssignments}
-          showDownloadButtons={false}
-          showSaveButton={false}
-          revenueData={null}
+          revenueData={reconciliationData?.revenueData || null}
           onReconcileEnergy={() => handleReconcile(false)}
           onReconcileRevenue={() => handleReconcile(true)}
           isLoadingEnergy={isLoading && !isCalculatingRevenue}
