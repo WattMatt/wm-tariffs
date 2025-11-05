@@ -2041,37 +2041,62 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
             </div>
             </Collapsible>
 
-            {/* Revenue Reconciliation Toggle */}
-            <div className="flex items-center justify-between p-4 rounded-lg border border-border/50 bg-muted/20">
-              <div className="space-y-0.5">
-                <Label htmlFor="revenue-toggle" className="text-base font-medium">
-                  Include Revenue Reconciliation
-                </Label>
-                <p className="text-sm text-muted-foreground">
-                  Calculate electricity costs based on assigned tariffs
-                </p>
-              </div>
-              <Switch
-                id="revenue-toggle"
-                checked={revenueReconciliationEnabled}
-                onCheckedChange={setRevenueReconciliationEnabled}
-              />
-            </div>
-
-            <Button onClick={handleReconcile} disabled={isLoading || isCalculatingRevenue || selectedColumns.size === 0} className="w-full">
-              {isLoading ? (
-                <div className="flex items-center gap-2">
-                  <span>Analyzing... {reconciliationProgress.current}/{reconciliationProgress.total} meters</span>
-                </div>
-              ) : isCalculatingRevenue ? (
-                <div className="flex items-center gap-2">
+            {/* Reconciliation Action Buttons */}
+            <div className="flex gap-2 w-full">
+              <Button 
+                onClick={() => {
+                  setRevenueReconciliationEnabled(false);
+                  handleReconcile();
+                }} 
+                disabled={isLoading || isCalculatingRevenue || selectedColumns.size === 0} 
+                className="flex-[3]"
+                variant="default"
+              >
+                {isLoading && !revenueReconciliationEnabled ? (
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Analyzing... {reconciliationProgress.current}/{reconciliationProgress.total}</span>
+                  </div>
+                ) : (
+                  <span>Energy Reconciliation</span>
+                )}
+              </Button>
+              
+              <Button 
+                onClick={() => {
+                  setRevenueReconciliationEnabled(true);
+                  handleReconcile();
+                }} 
+                disabled={isLoading || isCalculatingRevenue || selectedColumns.size === 0} 
+                className="flex-[1]"
+                variant="outline"
+              >
+                {(isLoading || isCalculatingRevenue) && revenueReconciliationEnabled ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  <span>Calculating revenue...</span>
-                </div>
-              ) : (
-                <span>Run {revenueReconciliationEnabled ? "Energy & Revenue" : "Energy"} Reconciliation</span>
-              )}
-            </Button>
+                ) : (
+                  <span>Both</span>
+                )}
+              </Button>
+              
+              <Button 
+                onClick={() => {
+                  setRevenueReconciliationEnabled(true);
+                  handleReconcile();
+                }} 
+                disabled={isLoading || isCalculatingRevenue || selectedColumns.size === 0} 
+                className="flex-[3]"
+                variant="default"
+              >
+                {isCalculatingRevenue || (isLoading && revenueReconciliationEnabled) ? (
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Calculating... {reconciliationProgress.current}/{reconciliationProgress.total}</span>
+                  </div>
+                ) : (
+                  <span>Revenue Reconciliation</span>
+                )}
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}
