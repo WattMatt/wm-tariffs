@@ -7,7 +7,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { CalendarIcon, Download, Eye, FileDown, ChevronRight, ChevronLeft, ArrowRight, Check, X, Save, BarChart3, Activity, Calendar as CalendarHistoryIcon } from "lucide-react";
+import { CalendarIcon, Download, Eye, FileDown, ChevronRight, ChevronLeft, ArrowRight, Check, X, Save, BarChart3, Activity, Calendar as CalendarHistoryIcon, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -84,6 +84,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     period_end: string;
   }>>([]);
   const [isLoadingDocuments, setIsLoadingDocuments] = useState(false);
+  const [isLoadingDateRanges, setIsLoadingDateRanges] = useState(false);
 
   // Fetch document date ranges
   useEffect(() => {
@@ -140,6 +141,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
   useEffect(() => {
     const fetchAvailableMeters = async () => {
       try {
+        setIsLoadingDateRanges(true);
         // Get all meters for this site
         const { data: meters, error: metersError } = await supabase
           .from("meters")
@@ -395,6 +397,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         }
       } catch (error) {
         console.error("Error fetching available meters:", error);
+      } finally {
+        setIsLoadingDateRanges(false);
       }
     };
 
@@ -1466,6 +1470,15 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         <h2 className="text-2xl font-bold mb-2">Energy Reconciliation</h2>
       </div>
 
+      {isLoadingDateRanges && (
+        <Card className="border-primary/20 bg-primary/5">
+          <CardContent className="flex items-center gap-3 py-4">
+            <Loader2 className="h-5 w-5 animate-spin text-primary" />
+            <p className="text-sm text-muted-foreground">Loading meter date ranges...</p>
+          </CardContent>
+        </Card>
+      )}
+
       <Card className="border-border/50">
         <CardHeader>
           <div className="flex items-start justify-between">
@@ -1489,7 +1502,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           <div className="space-y-2">
             <Label>Document Period</Label>
             <Select
-              disabled={isLoadingDocuments || documentDateRanges.length === 0 || !totalDateRange.earliest || !totalDateRange.latest}
+              disabled={isLoadingDateRanges || isLoadingDocuments || documentDateRanges.length === 0 || !totalDateRange.earliest || !totalDateRange.latest}
               onValueChange={(value) => {
                 const selected = documentDateRanges.find(d => d.id === value);
                 if (selected) {
@@ -1508,9 +1521,11 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                 }
               }}
             >
-              <SelectTrigger className="w-full" disabled={isLoadingDocuments || documentDateRanges.length === 0 || !totalDateRange.earliest || !totalDateRange.latest}>
+              <SelectTrigger className="w-full" disabled={isLoadingDateRanges || isLoadingDocuments || documentDateRanges.length === 0 || !totalDateRange.earliest || !totalDateRange.latest}>
                 <SelectValue placeholder={
-                  isLoadingDocuments 
+                  isLoadingDateRanges
+                    ? "Loading date ranges..."
+                    : isLoadingDocuments 
                     ? "Loading document periods..." 
                     : documentDateRanges.length === 0 
                     ? "No document periods available" 
@@ -1556,7 +1571,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                       "w-full justify-start text-left font-normal",
                       !dateFrom && "text-muted-foreground"
                     )}
-                    disabled={!totalDateRange.earliest || !totalDateRange.latest}
+                    disabled={isLoadingDateRanges || !totalDateRange.earliest || !totalDateRange.latest}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {dateFrom ? `${format(dateFrom, "PP")} at ${timeFrom}` : "Pick date & time"}
@@ -1609,7 +1624,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                       "w-full justify-start text-left font-normal",
                       !dateTo && "text-muted-foreground"
                     )}
-                    disabled={!totalDateRange.earliest || !totalDateRange.latest}
+                    disabled={isLoadingDateRanges || !totalDateRange.earliest || !totalDateRange.latest}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {dateTo ? `${format(dateTo, "PP")} at ${timeTo}` : "Pick date & time"}
@@ -1653,7 +1668,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
             </div>
           </div>
 
-          <Button onClick={handlePreview} disabled={isLoadingPreview || !dateFrom || !dateTo || !selectedMeterId || !totalDateRange.earliest || !totalDateRange.latest} className="w-full">
+          <Button onClick={handlePreview} disabled={isLoadingDateRanges || isLoadingPreview || !dateFrom || !dateTo || !selectedMeterId || !totalDateRange.earliest || !totalDateRange.latest} className="w-full">
             <Eye className="mr-2 h-4 w-4" />
             {isLoadingPreview ? "Loading Preview..." : "Preview Meter Data"}
           </Button>
