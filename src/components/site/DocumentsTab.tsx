@@ -1942,11 +1942,24 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="unassign">Unassigned</SelectItem>
-                              {siteMeters.map((meter) => (
-                                <SelectItem key={meter.id} value={meter.id}>
-                                  {meter.meter_number}
-                                </SelectItem>
-                              ))}
+                              {siteMeters
+                                .filter(meter => {
+                                  // Allow the meter if it's currently assigned to this document
+                                  if (meter.id === doc.meter_id) return true;
+                                  
+                                  // Filter out meters already assigned to other documents in the SAME folder
+                                  const isAssignedInFolder = documents.some(
+                                    d => d.id !== doc.id && 
+                                    d.folder_path === doc.folder_path && 
+                                    d.meter_id === meter.id
+                                  );
+                                  return !isAssignedInFolder;
+                                })
+                                .map((meter) => (
+                                  <SelectItem key={meter.id} value={meter.id}>
+                                    {meter.meter_number}
+                                  </SelectItem>
+                                ))}
                             </SelectContent>
                           </Select>
                         </TableCell>
