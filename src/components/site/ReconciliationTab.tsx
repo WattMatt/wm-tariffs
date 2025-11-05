@@ -1508,7 +1508,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                 }
               }}
             >
-              <SelectTrigger className="w-full">
+              <SelectTrigger className="w-full" disabled={isLoadingDocuments || documentDateRanges.length === 0}>
                 <SelectValue placeholder={
                   isLoadingDocuments 
                     ? "Loading document periods..." 
