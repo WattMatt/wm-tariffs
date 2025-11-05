@@ -356,13 +356,13 @@ export default function SiteDetail() {
                 <TrendingUp className="w-4 h-4" />
                 Load Profiles
               </TabsTrigger>
-              <TabsTrigger value="reconciliation" className="gap-2">
-                <BarChart3 className="w-4 h-4" />
-                Reconciliation
-              </TabsTrigger>
               <TabsTrigger value="tariffs" className="gap-2">
                 <DollarSign className="w-4 h-4" />
                 Tariffs
+              </TabsTrigger>
+              <TabsTrigger value="reconciliation" className="gap-2">
+                <BarChart3 className="w-4 h-4" />
+                Reconciliation
               </TabsTrigger>
               <TabsTrigger value="costs" className="gap-2">
                 <Coins className="w-4 h-4" />
@@ -390,12 +390,12 @@ export default function SiteDetail() {
               <LoadProfilesTab siteId={id!} />
             </TabsContent>
 
-            <TabsContent value="reconciliation">
-              <ReconciliationTab siteId={id!} siteName={site?.name || ""} />
-            </TabsContent>
-
             <TabsContent value="tariffs">
               <TariffAssignmentTab siteId={id!} />
+            </TabsContent>
+
+            <TabsContent value="reconciliation">
+              <ReconciliationTab siteId={id!} siteName={site?.name || ""} />
             </TabsContent>
 
             <TabsContent value="costs">
