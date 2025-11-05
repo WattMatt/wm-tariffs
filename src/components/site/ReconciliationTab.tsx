@@ -1067,7 +1067,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     }
   };
 
-  const handleReconcile = async () => {
+  const handleReconcile = async (enableRevenue?: boolean) => {
     if (!dateFrom || !dateTo) {
       toast.error("Please select a date range");
       return;
@@ -1175,8 +1175,10 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       const discrepancy = totalSupply - tenantTotal;
 
       // Revenue Reconciliation (if enabled)
+      // Use the parameter if provided, otherwise use state
+      const shouldCalculateRevenue = enableRevenue !== undefined ? enableRevenue : revenueReconciliationEnabled;
       let revenueData = null;
-      if (revenueReconciliationEnabled) {
+      if (shouldCalculateRevenue) {
         setIsCalculatingRevenue(true);
         toast.info("Calculating revenue for meters with tariffs...");
         
@@ -2045,9 +2047,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
             <div className="flex gap-2 w-full">
               <Button 
                 onClick={() => {
-                  setRevenueReconciliationEnabled(false);
-                  handleReconcile();
-                }} 
+                  handleReconcile(false);
+                }}
                 disabled={isLoading || isCalculatingRevenue || selectedColumns.size === 0} 
                 className="flex-[3]"
                 variant="outline"
@@ -2064,9 +2065,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
               
               <Button 
                 onClick={() => {
-                  setRevenueReconciliationEnabled(true);
-                  handleReconcile();
-                }} 
+                  handleReconcile(true);
+                }}
                 disabled={isLoading || isCalculatingRevenue || selectedColumns.size === 0} 
                 className="flex-[1]"
                 variant="outline"
@@ -2080,9 +2080,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
               
               <Button 
                 onClick={() => {
-                  setRevenueReconciliationEnabled(true);
-                  handleReconcile();
-                }} 
+                  handleReconcile(true);
+                }}
                 disabled={isLoading || isCalculatingRevenue || selectedColumns.size === 0} 
                 className="flex-[3]"
                 variant="outline"
