@@ -2056,8 +2056,38 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                 <div className="border rounded-lg bg-muted/30 flex flex-col overflow-hidden">
                   {/* Top Controls */}
                   <div className="p-2 border-b bg-background/80 flex items-center justify-end gap-2 flex-shrink-0">
-                    <div className="text-sm text-muted-foreground">
-                      Zoom: {Math.round(zoom * 100)}%
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const newZoom = Math.max(0.1, zoom - 0.1);
+                          setZoom(newZoom);
+                          if (fabricCanvas) {
+                            fabricCanvas.setZoom(newZoom);
+                            fabricCanvas.renderAll();
+                          }
+                        }}
+                      >
+                        <span className="text-lg">-</span>
+                      </Button>
+                      <div className="text-sm text-muted-foreground min-w-[60px] text-center">
+                        {Math.round(zoom * 100)}%
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const newZoom = Math.min(3, zoom + 0.1);
+                          setZoom(newZoom);
+                          if (fabricCanvas) {
+                            fabricCanvas.setZoom(newZoom);
+                            fabricCanvas.renderAll();
+                          }
+                        }}
+                      >
+                        <span className="text-lg">+</span>
+                      </Button>
                     </div>
                   </div>
                   
