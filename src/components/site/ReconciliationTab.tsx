@@ -83,10 +83,12 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     period_start: string;
     period_end: string;
   }>>([]);
+  const [isLoadingDocuments, setIsLoadingDocuments] = useState(false);
 
   // Fetch document date ranges
   useEffect(() => {
     const fetchDocumentDateRanges = async () => {
+      setIsLoadingDocuments(true);
       const { data, error } = await supabase
         .from('site_documents')
         .select(`
@@ -104,6 +106,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
 
       if (error) {
         console.error("Error fetching document date ranges:", error);
+        setIsLoadingDocuments(false);
         return;
       }
 
@@ -127,6 +130,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
 
         setDocumentDateRanges(ranges);
       }
+      setIsLoadingDocuments(false);
     };
 
     fetchDocumentDateRanges();
@@ -1482,7 +1486,12 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          {documentDateRanges.length > 0 && (
+          {isLoadingDocuments ? (
+            <div className="flex items-center justify-center py-4">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+              <span className="ml-2 text-sm text-muted-foreground">Loading document periods...</span>
+            </div>
+          ) : documentDateRanges.length > 0 ? (
             <div className="space-y-2">
               <Label>Document Period</Label>
               <Select
@@ -1535,7 +1544,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                 </SelectContent>
               </Select>
             </div>
-          )}
+          ) : null}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>From Date & Time</Label>
