@@ -2072,7 +2072,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         </Card>
       )}
 
-      {previewData !== null && (
+      {(reconciliationData || isLoading || isCalculatingRevenue) && (
         <ReconciliationResultsView
           bulkTotal={reconciliationData?.councilTotal || 0}
           solarTotal={reconciliationData?.solarTotal || 0}
