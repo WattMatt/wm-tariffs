@@ -2050,7 +2050,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                   handleReconcile(false);
                 }}
                 disabled={isLoading || isCalculatingRevenue || selectedColumns.size === 0} 
-                className="flex-[3]"
+                className="flex-1"
                 variant="outline"
               >
                 {isLoading ? (
@@ -2068,22 +2068,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                   handleReconcile(true);
                 }}
                 disabled={isLoading || isCalculatingRevenue || selectedColumns.size === 0} 
-                className="flex-[1]"
-                variant="outline"
-              >
-                {isLoading || isCalculatingRevenue ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <span>Both</span>
-                )}
-              </Button>
-              
-              <Button 
-                onClick={() => {
-                  handleReconcile(true);
-                }}
-                disabled={isLoading || isCalculatingRevenue || selectedColumns.size === 0} 
-                className="flex-[3]"
+                className="flex-1"
                 variant="outline"
               >
                 {isCalculatingRevenue || isLoading ? (
