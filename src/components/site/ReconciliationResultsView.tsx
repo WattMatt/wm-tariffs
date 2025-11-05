@@ -450,6 +450,22 @@ export default function ReconciliationResultsView({
                 <CardTitle>Detailed Breakdown - Energy</CardTitle>
                 <CardDescription>Meter-by-meter consumption analysis</CardDescription>
               </div>
+              {(showSaveButton || showDownloadButtons) && (
+                <div className="flex gap-2">
+                  {showSaveButton && onSave && (
+                    <Button variant="outline" className="gap-2" onClick={onSave}>
+                      <Save className="w-4 h-4" />
+                      Save Results
+                    </Button>
+                  )}
+                  {showDownloadButtons && onDownloadAll && (
+                    <Button variant="outline" className="gap-2" onClick={onDownloadAll}>
+                      <Download className="w-4 h-4" />
+                      Download All Meters
+                    </Button>
+                  )}
+                </div>
+              )}
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-2">
@@ -457,23 +473,6 @@ export default function ReconciliationResultsView({
               </div>
             </CardContent>
           </Card>
-
-          {(showSaveButton || showDownloadButtons) && (
-            <div className="flex justify-end gap-2">
-              {showSaveButton && onSave && (
-                <Button variant="outline" className="gap-2" onClick={onSave}>
-                  <Save className="w-4 h-4" />
-                  Save Results
-                </Button>
-              )}
-              {showDownloadButtons && onDownloadAll && (
-                <Button variant="outline" className="gap-2" onClick={onDownloadAll}>
-                  <Download className="w-4 h-4" />
-                  Download All Meters
-                </Button>
-              )}
-            </div>
-          )}
         </TabsContent>
 
         {/* Revenue Reconciliation Tab */}
@@ -574,9 +573,27 @@ export default function ReconciliationResultsView({
               </div>
 
               <Card className="border-border/50">
-                <CardHeader>
-                  <CardTitle>Detailed Breakdown - Revenue</CardTitle>
-                  <CardDescription>Meter-by-meter cost analysis</CardDescription>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle>Detailed Breakdown - Revenue</CardTitle>
+                    <CardDescription>Meter-by-meter cost analysis</CardDescription>
+                  </div>
+                  {(showSaveButton || showDownloadButtons) && (
+                    <div className="flex gap-2">
+                      {showSaveButton && onSave && (
+                        <Button variant="outline" className="gap-2" onClick={onSave}>
+                          <Save className="w-4 h-4" />
+                          Save Results
+                        </Button>
+                      )}
+                      {showDownloadButtons && onDownloadAll && (
+                        <Button variant="outline" className="gap-2" onClick={onDownloadAll}>
+                          <Download className="w-4 h-4" />
+                          Download All Meters
+                        </Button>
+                      )}
+                    </div>
+                  )}
                 </CardHeader>
                 <CardContent className="space-y-6">
                   <div className="space-y-2">
@@ -584,23 +601,6 @@ export default function ReconciliationResultsView({
                   </div>
                 </CardContent>
               </Card>
-
-              {(showSaveButton || showDownloadButtons) && (
-                <div className="flex justify-end gap-2">
-                  {showSaveButton && onSave && (
-                    <Button variant="outline" className="gap-2" onClick={onSave}>
-                      <Save className="w-4 h-4" />
-                      Save Results
-                    </Button>
-                  )}
-                  {showDownloadButtons && onDownloadAll && (
-                    <Button variant="outline" className="gap-2" onClick={onDownloadAll}>
-                      <Download className="w-4 h-4" />
-                      Download All Meters
-                    </Button>
-                  )}
-                </div>
-              )}
             </>
           )}
         </TabsContent>
