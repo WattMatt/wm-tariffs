@@ -2050,7 +2050,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                 }} 
                 disabled={isLoading || isCalculatingRevenue || selectedColumns.size === 0} 
                 className="flex-[3]"
-                variant="default"
+                variant="outline"
               >
                 {isLoading && !revenueReconciliationEnabled ? (
                   <div className="flex items-center gap-2">
@@ -2085,7 +2085,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                 }} 
                 disabled={isLoading || isCalculatingRevenue || selectedColumns.size === 0} 
                 className="flex-[3]"
-                variant="default"
+                variant="outline"
               >
                 {isCalculatingRevenue || (isLoading && revenueReconciliationEnabled) ? (
                   <div className="flex items-center gap-2">
