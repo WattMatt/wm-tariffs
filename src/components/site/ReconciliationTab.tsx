@@ -2053,7 +2053,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                 className="flex-[3]"
                 variant="outline"
               >
-                {isLoading && !revenueReconciliationEnabled ? (
+                {isLoading ? (
                   <div className="flex items-center gap-2">
                     <Loader2 className="h-4 w-4 animate-spin" />
                     <span>Analyzing... {reconciliationProgress.current}/{reconciliationProgress.total}</span>
@@ -2071,7 +2071,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                 className="flex-[1]"
                 variant="outline"
               >
-                {(isLoading || isCalculatingRevenue) && revenueReconciliationEnabled ? (
+                {isLoading || isCalculatingRevenue ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <span>Both</span>
@@ -2086,7 +2086,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                 className="flex-[3]"
                 variant="outline"
               >
-                {isCalculatingRevenue || (isLoading && revenueReconciliationEnabled) ? (
+                {isCalculatingRevenue || isLoading ? (
                   <div className="flex items-center gap-2">
                     <Loader2 className="h-4 w-4 animate-spin" />
                     <span>Calculating... {reconciliationProgress.current}/{reconciliationProgress.total}</span>
