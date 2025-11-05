@@ -385,7 +385,7 @@ export default function ReconciliationResultsView({
                 onReconcileRevenue?.();
               }
             }}
-            disabled={!canReconcile || isLoadingEnergy || isLoadingRevenue || (!revenueData && meters.length === 0)}
+            disabled={!canReconcile || isLoadingEnergy || isLoadingRevenue}
             className="gap-2"
           >
             {isLoadingRevenue ? (
