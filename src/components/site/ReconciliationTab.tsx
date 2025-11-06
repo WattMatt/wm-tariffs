@@ -7,7 +7,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { CalendarIcon, Download, Eye, FileDown, ChevronRight, ChevronLeft, ArrowRight, Check, X, Save, BarChart3, Activity, Calendar as CalendarHistoryIcon, Loader2 } from "lucide-react";
+import { CalendarIcon, Download, Eye, FileDown, ChevronRight, ChevronLeft, ArrowRight, Check, X, Save, BarChart3, Activity, Calculator, Calendar as CalendarHistoryIcon, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -2072,7 +2072,20 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         </Card>
       )}
 
-      {previewData !== null && (
+      {previewData !== null && selectedColumns.size === 0 && (
+        <Card className="border-warning/50 bg-warning/5">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3 text-warning">
+              <Calculator className="h-5 w-5" />
+              <p className="text-sm font-medium">
+                Please select at least one column from "Available Columns" above to enable reconciliation calculations.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {previewData !== null && selectedColumns.size > 0 && (
         <ReconciliationResultsView
           bulkTotal={reconciliationData?.councilTotal || 0}
           solarTotal={reconciliationData?.solarTotal || 0}
