@@ -99,7 +99,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         meter_associations: Object.fromEntries(meterAssignments),
         selected_columns: Array.from(selectedColumns),
         column_operations: Object.fromEntries(columnOperations),
-        column_factors: Object.fromEntries(columnFactors)
+        column_factors: Object.fromEntries(columnFactors),
+        meter_order: availableMeters.map(m => m.id)
       };
 
       const { error } = await supabase
@@ -157,6 +158,11 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         // Restore meter assignments
         const associations = new Map(Object.entries(data.meter_associations || {}));
         setMeterAssignments(associations);
+        
+        // Store saved meter order for restoration after availableMeters is loaded
+        if (data.meter_order && data.meter_order.length > 0) {
+          (window as any).__savedMeterOrder = data.meter_order;
+        }
       }
     } catch (error) {
       console.error('Error loading reconciliation settings:', error);
@@ -408,7 +414,31 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           });
         }
 
-        setAvailableMeters(hierarchicalMeters);
+        // Check if we have saved meter order to restore
+        const savedMeterOrder = (window as any).__savedMeterOrder;
+        if (savedMeterOrder && savedMeterOrder.length > 0) {
+          // Reorder hierarchicalMeters based on saved order
+          const orderedMeters: typeof hierarchicalMeters = [];
+          const metersById = new Map(hierarchicalMeters.map(m => [m.id, m]));
+          
+          // Add meters in saved order
+          savedMeterOrder.forEach((meterId: string) => {
+            const meter = metersById.get(meterId);
+            if (meter) {
+              orderedMeters.push(meter);
+              metersById.delete(meterId);
+            }
+          });
+          
+          // Add any new meters that weren't in the saved order
+          metersById.forEach(meter => orderedMeters.push(meter));
+          
+          setAvailableMeters(orderedMeters);
+          delete (window as any).__savedMeterOrder;
+        } else {
+          setAvailableMeters(hierarchicalMeters);
+        }
+        
         setMeterIndentLevels(indentLevels);
         setMeterParentInfo(meterParentMap);
 

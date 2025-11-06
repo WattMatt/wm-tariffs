@@ -877,6 +877,7 @@ export type Database = {
           created_at: string | null
           id: string
           meter_associations: Json
+          meter_order: string[] | null
           selected_columns: string[] | null
           site_id: string
           updated_at: string | null
@@ -888,6 +889,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           meter_associations?: Json
+          meter_order?: string[] | null
           selected_columns?: string[] | null
           site_id: string
           updated_at?: string | null
@@ -899,6 +901,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           meter_associations?: Json
+          meter_order?: string[] | null
           selected_columns?: string[] | null
           site_id?: string
           updated_at?: string | null
