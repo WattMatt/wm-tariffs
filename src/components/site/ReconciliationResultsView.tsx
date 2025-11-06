@@ -359,7 +359,7 @@ export default function ReconciliationResultsView({
               }
             }}
             disabled={!canReconcile || isLoadingEnergy || isLoadingRevenue}
-            className="gap-2 h-12 bg-primary text-primary-foreground hover:bg-primary/90 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
+            className="gap-2 h-12 bg-muted text-foreground hover:bg-muted/80 data-[state=active]:bg-muted/90 data-[state=active]:text-foreground data-[state=active]:shadow-md disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
           >
             {isLoadingEnergy ? (
               <>
@@ -386,7 +386,7 @@ export default function ReconciliationResultsView({
               }
             }}
             disabled={!canReconcile || isLoadingEnergy || isLoadingRevenue}
-            className="gap-2 h-12 bg-primary text-primary-foreground hover:bg-primary/90 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
+            className="gap-2 h-12 bg-muted text-foreground hover:bg-muted/80 data-[state=active]:bg-muted/90 data-[state=active]:text-foreground data-[state=active]:shadow-md disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
           >
             {isLoadingRevenue ? (
               <>
