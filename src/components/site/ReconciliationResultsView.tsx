@@ -333,9 +333,15 @@ export default function ReconciliationResultsView({
           </div>
         )}
 
-        {!isRevenueView && meter.columnTotals && Object.keys(meter.columnTotals).length > 0 && (
+        {!isRevenueView && (meter.columnTotals || meter.columnMaxValues) && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2 pt-2 border-t border-border/50">
-            {Object.entries(meter.columnTotals).map(([key, value]) => (
+            {meter.columnTotals && Object.entries(meter.columnTotals).map(([key, value]) => (
+              <div key={key} className="text-xs">
+                <span className="text-muted-foreground">{key}: </span>
+                <span className="font-medium">{value.toFixed(2)}</span>
+              </div>
+            ))}
+            {meter.columnMaxValues && Object.entries(meter.columnMaxValues).map(([key, value]) => (
               <div key={key} className="text-xs">
                 <span className="text-muted-foreground">{key}: </span>
                 <span className="font-medium">{value.toFixed(2)}</span>
