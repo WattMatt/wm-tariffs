@@ -1192,13 +1192,13 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         // Process all meters that have tariff assignments
         for (const meter of meterData) {
           // Use tariff_structure_id from meter data (already fetched)
-          if (meter.tariff_structure_id && meter.totalKwh > 0) {
+          if (meter.tariff_structure_id && meter.totalKwhPositive > 0) {
             const costResult = await calculateMeterCost(
               meter.id,
               meter.tariff_structure_id,
               new Date(fullDateTimeFrom),
               new Date(fullDateTimeTo),
-              meter.totalKwh
+              meter.totalKwhPositive
             );
             
             meterRevenues.set(meter.id, costResult);
