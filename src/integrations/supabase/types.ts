@@ -869,6 +869,50 @@ export type Database = {
           },
         ]
       }
+      site_reconciliation_settings: {
+        Row: {
+          available_columns: string[]
+          column_factors: Json | null
+          column_operations: Json | null
+          created_at: string | null
+          id: string
+          meter_associations: Json
+          selected_columns: string[] | null
+          site_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          available_columns?: string[]
+          column_factors?: Json | null
+          column_operations?: Json | null
+          created_at?: string | null
+          id?: string
+          meter_associations?: Json
+          selected_columns?: string[] | null
+          site_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          available_columns?: string[]
+          column_factors?: Json | null
+          column_operations?: Json | null
+          created_at?: string | null
+          id?: string
+          meter_associations?: Json
+          selected_columns?: string[] | null
+          site_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_reconciliation_settings_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: true
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sites: {
         Row: {
           address: string | null

@@ -90,6 +90,61 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
   const [revenueReconciliationEnabled, setRevenueReconciliationEnabled] = useState(false);
   const [isCalculatingRevenue, setIsCalculatingRevenue] = useState(false);
 
+  // Save reconciliation settings
+  const saveReconciliationSettings = async () => {
+    try {
+      const settingsData = {
+        site_id: siteId,
+        available_columns: previewData?.availableColumns || [],
+        meter_associations: Object.fromEntries(meterAssignments),
+        selected_columns: Array.from(selectedColumns),
+        column_operations: Object.fromEntries(columnOperations),
+        column_factors: Object.fromEntries(columnFactors)
+      };
+
+      const { error } = await supabase
+        .from('site_reconciliation_settings')
+        .upsert(settingsData, { onConflict: 'site_id' });
+
+      if (error) {
+        console.error('Error saving reconciliation settings:', error);
+      } else {
+        toast.success("Settings saved for next time");
+      }
+    } catch (error) {
+      console.error('Error saving reconciliation settings:', error);
+    }
+  };
+
+  // Load saved reconciliation settings
+  const loadReconciliationSettings = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('site_reconciliation_settings')
+        .select('*')
+        .eq('site_id', siteId)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Error loading reconciliation settings:', error);
+        return;
+      }
+
+      if (data) {
+        // Restore meter assignments
+        const associations = new Map(Object.entries(data.meter_associations || {}));
+        setMeterAssignments(associations);
+      }
+    } catch (error) {
+      console.error('Error loading reconciliation settings:', error);
+    }
+  };
+
+  // Load settings on component mount
+  useEffect(() => {
+    loadReconciliationSettings();
+  }, [siteId]);
+
   // Fetch document date ranges
   useEffect(() => {
     const fetchDocumentDateRanges = async () => {
@@ -761,6 +816,43 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         columnValues
       });
 
+      // Restore saved settings if available
+      try {
+        const { data: savedSettings } = await supabase
+          .from('site_reconciliation_settings')
+          .select('*')
+          .eq('site_id', siteId)
+          .maybeSingle();
+
+        if (savedSettings) {
+          // Restore selected columns (only if they exist in current available columns)
+          if (savedSettings.selected_columns && savedSettings.selected_columns.length > 0) {
+            const validSelectedColumns = savedSettings.selected_columns.filter((col: string) => 
+              availableColumns.has(col)
+            );
+            if (validSelectedColumns.length > 0) {
+              setSelectedColumns(new Set(validSelectedColumns));
+            }
+          }
+
+          // Restore column operations
+          if (savedSettings.column_operations) {
+            const operations = new Map(Object.entries(savedSettings.column_operations || {}));
+            setColumnOperations(operations);
+          }
+
+          // Restore column factors
+          if (savedSettings.column_factors) {
+            const factors = new Map(Object.entries(savedSettings.column_factors || {}));
+            setColumnFactors(factors);
+          }
+
+          toast.success("Restored previous settings");
+        }
+      } catch (error) {
+        console.error("Error restoring settings:", error);
+      }
+
       toast.success("Preview loaded successfully");
     } catch (error) {
       console.error("Preview error:", error);
@@ -1233,6 +1325,9 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         setIsCalculatingRevenue(false);
         toast.success("Revenue calculation complete");
       }
+
+      // Save reconciliation settings for future use
+      await saveReconciliationSettings();
 
       setReconciliationData({
         // Meter arrays
