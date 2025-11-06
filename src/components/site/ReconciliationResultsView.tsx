@@ -409,6 +409,8 @@ export default function ReconciliationResultsView({
 
         {/* Energy Reconciliation Tab */}
         <TabsContent value="energy" className="space-y-6">
+          {meters && meters.length > 0 && (
+          <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
             <Card className="border-border/50">
               <CardHeader className="pb-2">
@@ -538,6 +540,8 @@ export default function ReconciliationResultsView({
               </div>
             </CardContent>
           </Card>
+          </>
+          )}
         </TabsContent>
 
         {/* Revenue Reconciliation Tab */}
