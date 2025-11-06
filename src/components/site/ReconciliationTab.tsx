@@ -7,7 +7,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { CalendarIcon, Download, Eye, FileDown, ChevronRight, ChevronLeft, ArrowRight, Check, X, Save, BarChart3, Activity, Calculator, Calendar as CalendarHistoryIcon, Loader2, RotateCcw } from "lucide-react";
+import { CalendarIcon, Download, Eye, FileDown, ChevronRight, ChevronLeft, ArrowRight, Check, X, Save, BarChart3, Activity, Calculator, Calendar as CalendarHistoryIcon, Loader2, RotateCcw, Eraser } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -2218,7 +2218,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
 
             {/* Reset Settings Button - Only visible after reconciliation has been run */}
             {reconciliationData && (
-              <div className="pt-4 border-t border-border/50">
+              <div className="pt-4 border-t border-border/50 space-y-2">
                 <Button
                   variant="outline"
                   size="sm"
@@ -2227,6 +2227,15 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                 >
                   <RotateCcw className="w-4 h-4 mr-2" />
                   Reset Saved Settings
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setReconciliationData(null)}
+                  className="w-full"
+                >
+                  <Eraser className="w-4 h-4 mr-2" />
+                  Clear Results
                 </Button>
               </div>
             )}
