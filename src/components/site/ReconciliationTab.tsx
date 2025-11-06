@@ -7,7 +7,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { CalendarIcon, Download, Eye, FileDown, ChevronRight, ChevronLeft, ArrowRight, Check, X, Save, BarChart3, Activity, Calculator, Calendar as CalendarHistoryIcon, Loader2 } from "lucide-react";
+import { CalendarIcon, Download, Eye, FileDown, ChevronRight, ChevronLeft, ArrowRight, Check, X, Save, BarChart3, Activity, Calculator, Calendar as CalendarHistoryIcon, Loader2, RotateCcw } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -113,6 +113,29 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       }
     } catch (error) {
       console.error('Error saving reconciliation settings:', error);
+    }
+  };
+
+  // Reset reconciliation settings
+  const resetReconciliationSettings = async () => {
+    try {
+      const { error } = await supabase
+        .from('site_reconciliation_settings')
+        .delete()
+        .eq('site_id', siteId);
+
+      if (error) throw error;
+
+      // Clear local state
+      setSelectedColumns(new Set());
+      setMeterAssignments(new Map());
+      setColumnOperations(new Map());
+      setColumnFactors(new Map());
+
+      toast.success("Reconciliation settings reset successfully");
+    } catch (error) {
+      console.error("Error resetting reconciliation settings:", error);
+      toast.error("Failed to reset reconciliation settings");
     }
   };
 
@@ -2162,6 +2185,21 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
             </Collapsible>
 
             {/* Reconciliation Action Buttons - Removed, moved to tabs */}
+
+            {/* Reset Settings Button - Only visible after reconciliation has been run */}
+            {reconciliationData && (
+              <div className="pt-4 border-t border-border/50">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={resetReconciliationSettings}
+                  className="w-full"
+                >
+                  <RotateCcw className="w-4 h-4 mr-2" />
+                  Reset Saved Settings
+                </Button>
+              </div>
+            )}
 
           </CardContent>
         </Card>
