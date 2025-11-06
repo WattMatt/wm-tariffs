@@ -100,7 +100,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         selected_columns: Array.from(selectedColumns),
         column_operations: Object.fromEntries(columnOperations),
         column_factors: Object.fromEntries(columnFactors),
-        meter_order: availableMeters.map(m => m.id)
+        meter_order: availableMeters.map(m => m.id),
+        meters_for_summation: Array.from(selectedMetersForSummation)
       };
 
       const { error } = await supabase
@@ -132,6 +133,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       setMeterAssignments(new Map());
       setColumnOperations(new Map());
       setColumnFactors(new Map());
+      setSelectedMetersForSummation(new Set());
 
       toast.success("Reconciliation settings reset successfully");
     } catch (error) {
@@ -162,6 +164,11 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         // Store saved meter order for restoration after availableMeters is loaded
         if (data.meter_order && data.meter_order.length > 0) {
           (window as any).__savedMeterOrder = data.meter_order;
+        }
+        
+        // Restore meters for summation
+        if (data.meters_for_summation && data.meters_for_summation.length > 0) {
+          setSelectedMetersForSummation(new Set(data.meters_for_summation));
         }
       }
     } catch (error) {
