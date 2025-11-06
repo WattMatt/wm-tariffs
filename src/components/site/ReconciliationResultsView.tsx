@@ -350,7 +350,7 @@ export default function ReconciliationResultsView({
   return (
     <div className="space-y-6">
       <Tabs defaultValue="energy" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-2 h-auto p-1 gap-2 bg-transparent">
           <TabsTrigger 
             value="energy" 
             onClick={() => {
@@ -359,7 +359,7 @@ export default function ReconciliationResultsView({
               }
             }}
             disabled={!canReconcile || isLoadingEnergy || isLoadingRevenue}
-            className="gap-2"
+            className="gap-2 h-12 bg-primary text-primary-foreground hover:bg-primary/90 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
           >
             {isLoadingEnergy ? (
               <>
@@ -386,7 +386,7 @@ export default function ReconciliationResultsView({
               }
             }}
             disabled={!canReconcile || isLoadingEnergy || isLoadingRevenue}
-            className="gap-2"
+            className="gap-2 h-12 bg-primary text-primary-foreground hover:bg-primary/90 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
           >
             {isLoadingRevenue ? (
               <>
