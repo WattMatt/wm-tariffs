@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { FileCheck2, AlertCircle, CheckCircle2, DollarSign, Eye, FileText } from "lucide-react";
+import { FileCheck2, AlertCircle, CheckCircle2, DollarSign, Eye, FileText, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import TariffDetailsDialog from "@/components/tariffs/TariffDetailsDialog";
@@ -83,6 +83,8 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
   const [viewingTariffName, setViewingTariffName] = useState<string>("");
   const [documentShopNumbers, setDocumentShopNumbers] = useState<DocumentShopNumber[]>([]);
   const [viewingShopDoc, setViewingShopDoc] = useState<DocumentShopNumber | null>(null);
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc" | null>(null);
 
   useEffect(() => {
     fetchSiteData();
@@ -296,6 +298,79 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
     return currentSelection !== savedTariff;
   };
 
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      if (sortDirection === "asc") {
+        setSortDirection("desc");
+      } else if (sortDirection === "desc") {
+        setSortColumn(null);
+        setSortDirection(null);
+      }
+    } else {
+      setSortColumn(column);
+      setSortDirection("asc");
+    }
+  };
+
+  const getSortedMeters = () => {
+    if (!sortColumn || !sortDirection) return meters;
+
+    return [...meters].sort((a, b) => {
+      let aValue: any;
+      let bValue: any;
+
+      switch (sortColumn) {
+        case "meter_number":
+          aValue = a.meter_number;
+          bValue = b.meter_number;
+          break;
+        case "name":
+          aValue = a.name || "";
+          bValue = b.name || "";
+          break;
+        case "meter_type":
+          aValue = a.meter_type;
+          bValue = b.meter_type;
+          break;
+        case "mccb_size":
+          aValue = a.mccb_size || 0;
+          bValue = b.mccb_size || 0;
+          break;
+        default:
+          return 0;
+      }
+
+      if (sortDirection === "asc") {
+        return aValue > bValue ? 1 : aValue < bValue ? -1 : 0;
+      } else {
+        return aValue < bValue ? 1 : aValue > bValue ? -1 : 0;
+      }
+    });
+  };
+
+  const SortableHeader = ({ column, children }: { column: string; children: React.ReactNode }) => {
+    const isActive = sortColumn === column;
+    const Icon = isActive
+      ? sortDirection === "asc"
+        ? ArrowUp
+        : ArrowDown
+      : ArrowUpDown;
+
+    return (
+      <TableHead>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="-ml-3 h-8 data-[state=open]:bg-accent"
+          onClick={() => handleSort(column)}
+        >
+          {children}
+          <Icon className={`ml-2 h-4 w-4 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
+        </Button>
+      </TableHead>
+    );
+  };
+
   const stats = getAssignmentStats();
 
   if (!site?.supply_authority_id) {
@@ -403,10 +478,10 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Meter Number</TableHead>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Breaker Size (A)</TableHead>
+                      <SortableHeader column="meter_number">Meter Number</SortableHeader>
+                      <SortableHeader column="name">Name</SortableHeader>
+                      <SortableHeader column="meter_type">Type</SortableHeader>
+                      <SortableHeader column="mccb_size">Breaker Size (A)</SortableHeader>
                       <TableHead>Shop Numbers</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Assigned Tariff Structure</TableHead>
@@ -414,7 +489,7 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {meters.map((meter) => {
+                    {getSortedMeters().map((meter) => {
                       const currentTariffId = selectedTariffs[meter.id];
                       const currentTariff = tariffStructures.find((t) => t.id === currentTariffId);
                       const hasAssignment = !!currentTariffId;
