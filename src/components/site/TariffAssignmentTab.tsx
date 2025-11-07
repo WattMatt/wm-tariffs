@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { FileCheck2, AlertCircle, CheckCircle2, DollarSign, Eye, FileText, ArrowUpDown, ArrowUp, ArrowDown, Eraser } from "lucide-react";
+import { FileCheck2, AlertCircle, CheckCircle2, DollarSign, Eye, FileText, ArrowUpDown, ArrowUp, ArrowDown, Eraser, ChevronDown, ChevronUp } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import TariffDetailsDialog from "@/components/tariffs/TariffDetailsDialog";
@@ -86,6 +86,8 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
   const [viewingShopDoc, setViewingShopDoc] = useState<DocumentShopNumber | null>(null);
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc" | null>(null);
+  const [selectedPreviewTariffId, setSelectedPreviewTariffId] = useState<string>("");
+  const [showTariffDetails, setShowTariffDetails] = useState(false);
 
   useEffect(() => {
     fetchSiteData();
@@ -457,6 +459,113 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
             </div>
           </div>
 
+          {!isLoading && tariffStructures.length > 0 && (
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <Label>Available Tariff Structures</Label>
+                <Select
+                  value={selectedPreviewTariffId}
+                  onValueChange={(value) => {
+                    setSelectedPreviewTariffId(value);
+                    setShowTariffDetails(true);
+                  }}
+                >
+                  <SelectTrigger className="w-full bg-background">
+                    <SelectValue placeholder={`Select from ${tariffStructures.length} available tariff structure(s)`} />
+                  </SelectTrigger>
+                  <SelectContent className="bg-background z-50">
+                    {tariffStructures.map((tariff) => (
+                      <SelectItem key={tariff.id} value={tariff.id}>
+                        <div className="flex flex-col">
+                          <span className="font-medium">{tariff.name}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {tariff.tariff_type}
+                            {tariff.voltage_level && ` • ${tariff.voltage_level}`}
+                            {tariff.uses_tou && " • TOU"}
+                          </span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {selectedPreviewTariffId && showTariffDetails && (
+                <div className="border rounded-lg p-4 space-y-3 bg-card">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="space-y-1 flex-1">
+                      {(() => {
+                        const tariff = tariffStructures.find(t => t.id === selectedPreviewTariffId);
+                        if (!tariff) return null;
+                        return (
+                          <>
+                            <h4 className="font-semibold">{tariff.name}</h4>
+                            {tariff.description && (
+                              <p className="text-sm text-muted-foreground">{tariff.description}</p>
+                            )}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Badge variant="outline">{tariff.tariff_type}</Badge>
+                              {tariff.voltage_level && (
+                                <Badge variant="outline">{tariff.voltage_level}</Badge>
+                              )}
+                              {tariff.uses_tou && <Badge variant="secondary">Time-of-Use</Badge>}
+                            </div>
+                            <div className="text-sm text-muted-foreground pt-1">
+                              <p>
+                                Effective: {new Date(tariff.effective_from).toLocaleDateString()}
+                                {tariff.effective_to && ` - ${new Date(tariff.effective_to).toLocaleDateString()}`}
+                              </p>
+                            </div>
+                          </>
+                        );
+                      })()}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              onClick={() => {
+                                const tariff = tariffStructures.find(t => t.id === selectedPreviewTariffId);
+                                if (tariff) {
+                                  setViewingTariffId(selectedPreviewTariffId);
+                                  setViewingTariffName(tariff.name);
+                                }
+                              }}
+                            >
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>View Full Details</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setShowTariffDetails(false)}
+                            >
+                              <ChevronUp className="w-4 h-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Hide Details</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="flex items-center gap-4 p-4 bg-primary/5 border border-primary/20 rounded-lg">
             <div className="flex-1 text-center">
               <p className="text-2xl font-bold text-primary">{stats.assigned}</p>
@@ -654,69 +763,6 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
           )}
         </CardContent>
       </Card>
-
-      {tariffStructures.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Available Tariff Structures</CardTitle>
-            <CardDescription>
-              {tariffStructures.length} active tariff structure(s) from {site.supply_authorities?.name}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {tariffStructures.map((tariff) => (
-                <div
-                  key={tariff.id}
-                  className="p-4 border rounded-lg hover:border-primary/50 transition-colors"
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="space-y-1 flex-1">
-                      <h4 className="font-semibold">{tariff.name}</h4>
-                      {tariff.description && (
-                        <p className="text-sm text-muted-foreground">{tariff.description}</p>
-                      )}
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <Badge variant="outline">{tariff.tariff_type}</Badge>
-                        {tariff.voltage_level && (
-                          <Badge variant="outline">{tariff.voltage_level}</Badge>
-                        )}
-                        {tariff.uses_tou && <Badge variant="secondary">Time-of-Use</Badge>}
-                      </div>
-                      <div className="text-sm text-muted-foreground pt-1">
-                        <p>
-                          Effective: {new Date(tariff.effective_from).toLocaleDateString()}
-                          {tariff.effective_to && ` - ${new Date(tariff.effective_to).toLocaleDateString()}`}
-                        </p>
-                      </div>
-                    </div>
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            onClick={() => {
-                              setViewingTariffId(tariff.id);
-                              setViewingTariffName(tariff.name);
-                            }}
-                            className="shrink-0"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>View Details</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {viewingTariffId && (
         <TariffDetailsDialog
