@@ -13,6 +13,7 @@ import Papa from "papaparse";
 import * as XLSX from "xlsx";
 import ReconciliationResultsView from "./ReconciliationResultsView";
 import SiteReportExport from "./SiteReportExport";
+import { cn } from "@/lib/utils";
 
 interface ReconciliationHistoryTabProps {
   siteId: string;
@@ -299,11 +300,9 @@ export default function ReconciliationHistoryTab({ siteId, siteName }: Reconcili
                         <Badge variant="outline" className="gap-1">
                           <Zap className="h-3 w-3" />
                         </Badge>
-                        {run.revenue_enabled && (
-                          <Badge variant="outline" className="gap-1">
-                            <DollarSign className="h-3 w-3" />
-                          </Badge>
-                        )}
+                        <Badge variant="outline" className={cn("gap-1", !run.revenue_enabled && "opacity-30")}>
+                          <DollarSign className="h-3 w-3" />
+                        </Badge>
                       </div>
                     </TableCell>
                     <TableCell className="text-right">
