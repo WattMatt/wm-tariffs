@@ -355,22 +355,6 @@ export default function ReconciliationResultsView({
 
   return (
     <div className="space-y-6">
-      {(showSaveButton || showDownloadButtons) && (meters.length > 0 || revenueData) && (
-        <div className="flex justify-end gap-2">
-          {showSaveButton && onSave && (
-            <Button variant="outline" className="gap-2" onClick={onSave}>
-              <Save className="w-4 h-4" />
-              Save Results (Energy & Revenue)
-            </Button>
-          )}
-          {showDownloadButtons && onDownloadAll && (
-            <Button variant="outline" className="gap-2" onClick={onDownloadAll}>
-              <Download className="w-4 h-4" />
-              Download All Meters
-            </Button>
-          )}
-        </div>
-      )}
       <Tabs defaultValue="energy" className="w-full">
         <TabsList className="grid w-full grid-cols-2 h-auto p-1 gap-2 bg-transparent">
           <TabsTrigger 
