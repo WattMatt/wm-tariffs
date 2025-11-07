@@ -556,6 +556,18 @@ export default function ReconciliationResultsView({
             <>
               {(() => {
                 const totalSupplyCost = revenueData.gridSupplyCost + revenueData.solarCost;
+                
+                // Calculate total revenue lost (meters with "other" assignment)
+                const totalRevenueLost = meters
+                  .filter(meter => {
+                    const assignment = meterAssignments.get(meter.id) || meter.assignment;
+                    return assignment === "other";
+                  })
+                  .reduce((sum, meter) => {
+                    const meterRevenue = revenueData.meterRevenues.get(meter.id);
+                    return sum + (meterRevenue?.totalCost || 0);
+                  }, 0);
+                
                 return (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                 <Card className="border-border/50">
@@ -632,19 +644,21 @@ export default function ReconciliationResultsView({
                   </CardContent>
                 </Card>
 
-                <Card className="border-border/50 bg-primary/10">
+                <Card className="border-border/50 bg-destructive/10">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium text-muted-foreground">
-                      Avg Cost/kWh
+                      Total Revenue Lost
                     </CardTitle>
-                    <div className="text-xs text-muted-foreground mt-1">Weighted Average</div>
+                    <div className="text-xs text-muted-foreground mt-1">Other Meters</div>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold text-primary">
-                      R {revenueData.avgCostPerKwh.toFixed(4)}
+                    <div className="text-2xl font-bold text-destructive">
+                      R {totalRevenueLost.toFixed(2)}
                     </div>
                     <div className="text-xs text-muted-foreground mt-1">
-                      per kWh
+                      {totalSupplyCost > 0 
+                        ? ((totalRevenueLost / totalSupplyCost) * 100).toFixed(2) 
+                        : '0.00'}%
                     </div>
                   </CardContent>
                 </Card>
