@@ -32,11 +32,18 @@ interface ReconciliationRun {
   recovery_rate: number;
   discrepancy: number;
   notes: string | null;
+  revenue_enabled: boolean;
+  grid_supply_cost: number;
+  solar_cost: number;
+  tenant_cost: number;
+  total_revenue: number;
+  avg_cost_per_kwh: number;
   reconciliation_meter_results: MeterResult[];
 }
 
 interface MeterResult {
   id: string;
+  meter_id: string;
   meter_number: string;
   meter_name: string | null;
   meter_type: string;
@@ -50,6 +57,12 @@ interface MeterResult {
   column_max_values: any;
   has_error: boolean;
   error_message: string | null;
+  tariff_name: string | null;
+  energy_cost: number;
+  fixed_charges: number;
+  total_cost: number;
+  avg_cost_per_kwh: number;
+  cost_calculation_error: string | null;
 }
 
 export default function ReconciliationHistoryTab({ siteId, siteName }: ReconciliationHistoryTabProps) {
@@ -118,17 +131,30 @@ export default function ReconciliationHistoryTab({ siteId, siteName }: Reconcili
   };
 
   const exportToCSV = (run: ReconciliationRun) => {
-    const csvData = run.reconciliation_meter_results.map(m => ({
-      "Meter Number": m.meter_number,
-      "Meter Name": m.meter_name || "",
-      "Type": m.meter_type,
-      "Assignment": m.assignment,
-      "Location": m.location || "",
-      "Total kWh": m.total_kwh.toFixed(2),
-      "Positive kWh": m.total_kwh_positive.toFixed(2),
-      "Negative kWh": m.total_kwh_negative.toFixed(2),
-      "Readings Count": m.readings_count,
-    }));
+    const csvData = run.reconciliation_meter_results.map(m => {
+      const baseData: any = {
+        "Meter Number": m.meter_number,
+        "Meter Name": m.meter_name || "",
+        "Type": m.meter_type,
+        "Assignment": m.assignment,
+        "Location": m.location || "",
+        "Total kWh": m.total_kwh.toFixed(2),
+        "Positive kWh": m.total_kwh_positive.toFixed(2),
+        "Negative kWh": m.total_kwh_negative.toFixed(2),
+        "Readings Count": m.readings_count,
+      };
+      
+      // Add revenue columns if available
+      if (run.revenue_enabled && m.tariff_name) {
+        baseData["Tariff"] = m.tariff_name;
+        baseData["Energy Cost (R)"] = m.energy_cost.toFixed(2);
+        baseData["Fixed Charges (R)"] = m.fixed_charges.toFixed(2);
+        baseData["Total Cost (R)"] = m.total_cost.toFixed(2);
+        baseData["Avg Cost/kWh (R)"] = m.avg_cost_per_kwh.toFixed(4);
+      }
+      
+      return baseData;
+    });
 
     const csv = Papa.unparse(csvData);
     const blob = new Blob([csv], { type: "text/csv" });
@@ -143,9 +169,9 @@ export default function ReconciliationHistoryTab({ siteId, siteName }: Reconcili
   const exportToExcel = (run: ReconciliationRun) => {
     const wb = XLSX.utils.book_new();
 
-    // Summary sheet
-    const summaryData = [
-      ["Reconciliation Summary"],
+    // Summary sheet - Energy
+    const energySummaryData = [
+      ["Energy Reconciliation Summary"],
       ["Run Name", run.run_name],
       ["Date Range", `${format(new Date(run.date_from), "PP")} to ${format(new Date(run.date_to), "PP")}`],
       ["Run Date", format(new Date(run.run_date), "PPpp")],
@@ -160,24 +186,57 @@ export default function ReconciliationHistoryTab({ siteId, siteName }: Reconcili
     ];
 
     if (run.notes) {
-      summaryData.push([], ["Notes", run.notes]);
+      energySummaryData.push([], ["Notes", run.notes]);
     }
 
-    const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
-    XLSX.utils.book_append_sheet(wb, summarySheet, "Summary");
+    const energySummarySheet = XLSX.utils.aoa_to_sheet(energySummaryData);
+    XLSX.utils.book_append_sheet(wb, energySummarySheet, "Energy Summary");
+
+    // Revenue summary sheet (if available)
+    if (run.revenue_enabled) {
+      const revenueSummaryData = [
+        ["Revenue Reconciliation Summary"],
+        ["Run Name", run.run_name],
+        ["Date Range", `${format(new Date(run.date_from), "PP")} to ${format(new Date(run.date_to), "PP")}`],
+        ["Run Date", format(new Date(run.run_date), "PPpp")],
+        [],
+        ["Metric", "Value (R)", "Percentage"],
+        ["Grid Supply Cost", run.grid_supply_cost.toFixed(2), `${((run.grid_supply_cost / (run.grid_supply_cost + run.solar_cost)) * 100).toFixed(2)}%`],
+        ["Solar Cost", run.solar_cost.toFixed(2), `${((run.solar_cost / (run.grid_supply_cost + run.solar_cost)) * 100).toFixed(2)}%`],
+        ["Total Supply Cost", (run.grid_supply_cost + run.solar_cost).toFixed(2), "100.00%"],
+        ["Metered Revenue", run.tenant_cost.toFixed(2), `${((run.tenant_cost / (run.grid_supply_cost + run.solar_cost)) * 100).toFixed(2)}%`],
+        ["Avg Cost/kWh", run.avg_cost_per_kwh.toFixed(4), ""],
+      ];
+
+      const revenueSummarySheet = XLSX.utils.aoa_to_sheet(revenueSummaryData);
+      XLSX.utils.book_append_sheet(wb, revenueSummarySheet, "Revenue Summary");
+    }
 
     // Meter details sheet
-    const meterData = run.reconciliation_meter_results.map(m => ({
-      "Meter Number": m.meter_number,
-      "Meter Name": m.meter_name || "",
-      "Type": m.meter_type,
-      "Assignment": m.assignment,
-      "Location": m.location || "",
-      "Total kWh": m.total_kwh.toFixed(2),
-      "Positive kWh": m.total_kwh_positive.toFixed(2),
-      "Negative kWh": m.total_kwh_negative.toFixed(2),
-      "Readings Count": m.readings_count,
-    }));
+    const meterData = run.reconciliation_meter_results.map(m => {
+      const baseData: any = {
+        "Meter Number": m.meter_number,
+        "Meter Name": m.meter_name || "",
+        "Type": m.meter_type,
+        "Assignment": m.assignment,
+        "Location": m.location || "",
+        "Total kWh": m.total_kwh.toFixed(2),
+        "Positive kWh": m.total_kwh_positive.toFixed(2),
+        "Negative kWh": m.total_kwh_negative.toFixed(2),
+        "Readings Count": m.readings_count,
+      };
+      
+      // Add revenue columns if available
+      if (run.revenue_enabled && m.tariff_name) {
+        baseData["Tariff"] = m.tariff_name;
+        baseData["Energy Cost (R)"] = m.energy_cost.toFixed(2);
+        baseData["Fixed Charges (R)"] = m.fixed_charges.toFixed(2);
+        baseData["Total Cost (R)"] = m.total_cost.toFixed(2);
+        baseData["Avg Cost/kWh (R)"] = m.avg_cost_per_kwh.toFixed(4);
+      }
+      
+      return baseData;
+    });
 
     const meterSheet = XLSX.utils.json_to_sheet(meterData);
     XLSX.utils.book_append_sheet(wb, meterSheet, "Meter Details");
@@ -217,6 +276,7 @@ export default function ReconciliationHistoryTab({ siteId, siteName }: Reconcili
                   <TableHead>Run Date</TableHead>
                   <TableHead className="text-right">Grid Supply</TableHead>
                   <TableHead className="text-right">Recovery Rate</TableHead>
+                  <TableHead className="text-right">Data</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -233,6 +293,14 @@ export default function ReconciliationHistoryTab({ siteId, siteName }: Reconcili
                       <Badge variant={run.recovery_rate >= 95 ? "default" : run.recovery_rate >= 85 ? "secondary" : "destructive"}>
                         {run.recovery_rate.toFixed(2)}%
                       </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <Badge variant="outline" className="text-xs">Energy</Badge>
+                        {run.revenue_enabled && (
+                          <Badge variant="outline" className="text-xs">Revenue</Badge>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
@@ -307,7 +375,7 @@ export default function ReconciliationHistoryTab({ siteId, siteName }: Reconcili
                 discrepancy={selectedRun.discrepancy}
                 distributionTotal={selectedRun.total_supply - selectedRun.bulk_total - selectedRun.solar_total}
                 meters={selectedRun.reconciliation_meter_results.map(m => ({
-                  id: m.id,
+                  id: m.meter_id,
                   meter_number: m.meter_number,
                   meter_name: m.meter_name || undefined,
                   meter_type: m.meter_type,
@@ -322,7 +390,40 @@ export default function ReconciliationHistoryTab({ siteId, siteName }: Reconcili
                   hasData: m.readings_count > 0,
                   hasError: m.has_error,
                   errorMessage: m.error_message || undefined,
+                  tariffName: m.tariff_name || undefined,
+                  energyCost: m.energy_cost,
+                  fixedCharges: m.fixed_charges,
+                  totalCost: m.total_cost,
+                  avgCostPerKwh: m.avg_cost_per_kwh,
+                  costCalculationError: m.cost_calculation_error || undefined,
                 }))}
+                meterAssignments={new Map(
+                  selectedRun.reconciliation_meter_results.map(m => [
+                    m.meter_id,
+                    m.assignment
+                  ])
+                )}
+                revenueData={selectedRun.revenue_enabled ? {
+                  meterRevenues: new Map(
+                    selectedRun.reconciliation_meter_results.map(m => [
+                      m.meter_id,
+                      {
+                        energyCost: m.energy_cost,
+                        fixedCharges: m.fixed_charges,
+                        totalCost: m.total_cost,
+                        avgCostPerKwh: m.avg_cost_per_kwh,
+                        tariffName: m.tariff_name || 'Unknown',
+                        hasError: !!m.cost_calculation_error,
+                        errorMessage: m.cost_calculation_error || undefined,
+                      }
+                    ])
+                  ),
+                  gridSupplyCost: selectedRun.grid_supply_cost,
+                  solarCost: selectedRun.solar_cost,
+                  tenantCost: selectedRun.tenant_cost,
+                  totalRevenue: selectedRun.total_revenue,
+                  avgCostPerKwh: selectedRun.avg_cost_per_kwh,
+                } : null}
                 showDownloadButtons={false}
               />
 
