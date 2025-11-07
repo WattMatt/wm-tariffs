@@ -1355,13 +1355,13 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
             
             meterRevenues.set(meter.id, costResult);
             
-            // Categorize costs based on meter assignment
+            // Categorize costs based on meter assignment and type
             const assignment = meterAssignments.get(meter.id);
             if (assignment === "grid_supply") {
               gridSupplyCost += costResult.totalCost;
             } else if (assignment === "solar_energy") {
               solarCost += costResult.totalCost;
-            } else {
+            } else if (meter.meter_type === "tenant_meter") {
               tenantCost += costResult.totalCost;
             }
             
