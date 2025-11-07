@@ -429,6 +429,8 @@ export default function ReconciliationHistoryTab({ siteId, siteName }: Reconcili
                   avgCostPerKwh: selectedRun.avg_cost_per_kwh,
                 } : null}
                 showDownloadButtons={false}
+                hasPreviewData={true}
+                canReconcile={true}
               />
 
               {/* Notes Section */}
