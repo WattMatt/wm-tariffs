@@ -578,7 +578,7 @@ export default function ReconciliationResultsView({
                     <div className="text-xs text-muted-foreground mt-1">Grid</div>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold text-warning">
+                    <div className="text-2xl font-bold">
                       R {revenueData.gridSupplyCost.toFixed(2)}
                     </div>
                     <div className="text-xs text-muted-foreground mt-1">
@@ -608,7 +608,7 @@ export default function ReconciliationResultsView({
                   </CardContent>
                 </Card>
 
-                <Card className="border-border/50 bg-warning/10">
+                <Card className="border-border/50 bg-primary/5">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium text-muted-foreground">
                       Total Supply Cost
@@ -616,7 +616,7 @@ export default function ReconciliationResultsView({
                     <div className="text-xs text-muted-foreground mt-1">Grid + Solar</div>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold text-warning">
+                    <div className="text-2xl font-bold text-primary">
                       R {totalSupplyCost.toFixed(2)}
                     </div>
                     <div className="text-xs text-muted-foreground mt-1">
@@ -644,7 +644,7 @@ export default function ReconciliationResultsView({
                   </CardContent>
                 </Card>
 
-                <Card className="border-border/50 bg-destructive/10">
+                <Card className="border-border/50">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium text-muted-foreground">
                       Total Revenue Lost
@@ -652,7 +652,7 @@ export default function ReconciliationResultsView({
                     <div className="text-xs text-muted-foreground mt-1">Other Meters</div>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold text-destructive">
+                    <div className="text-2xl font-bold text-warning">
                       R {totalRevenueLost.toFixed(2)}
                     </div>
                     <div className="text-xs text-muted-foreground mt-1">
