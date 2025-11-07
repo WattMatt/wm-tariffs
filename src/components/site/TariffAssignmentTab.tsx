@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { FileCheck2, AlertCircle, CheckCircle2, DollarSign, Eye, FileText, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { FileCheck2, AlertCircle, CheckCircle2, DollarSign, Eye, FileText, ArrowUpDown, ArrowUp, ArrowDown, X } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import TariffDetailsDialog from "@/components/tariffs/TariffDetailsDialog";
@@ -244,6 +244,35 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
       ...prev,
       [meterId]: tariffId,
     }));
+  };
+
+  const handleClearTariff = async (meterId: string) => {
+    try {
+      const { error } = await supabase
+        .from("meters")
+        .update({ 
+          tariff_structure_id: null,
+          tariff: null
+        })
+        .eq("id", meterId);
+
+      if (error) throw error;
+
+      // Update local state
+      setSelectedTariffs((prev) => {
+        const updated = { ...prev };
+        delete updated[meterId];
+        return updated;
+      });
+
+      // Refresh meters to get updated data
+      await fetchMeters();
+
+      toast.success("Tariff assignment cleared");
+    } catch (error) {
+      console.error("Error clearing tariff:", error);
+      toast.error("Failed to clear tariff assignment");
+    }
   };
 
   const handleSaveAssignments = async () => {
@@ -586,21 +615,33 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
                             </Select>
                           </TableCell>
                           <TableCell>
-                            {currentTariffId && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => {
-                                  const tariffStructure = tariffStructures.find(t => t.id === currentTariffId);
-                                  if (tariffStructure) {
-                                    setViewingTariffId(currentTariffId);
-                                    setViewingTariffName(tariffStructure.name);
-                                  }
-                                }}
-                              >
-                                <Eye className="w-4 h-4" />
-                              </Button>
-                            )}
+                            <div className="flex items-center gap-1">
+                              {currentTariffId && (
+                                <>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => {
+                                      const tariffStructure = tariffStructures.find(t => t.id === currentTariffId);
+                                      if (tariffStructure) {
+                                        setViewingTariffId(currentTariffId);
+                                        setViewingTariffName(tariffStructure.name);
+                                      }
+                                    }}
+                                  >
+                                    <Eye className="w-4 h-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleClearTariff(meter.id)}
+                                    className="text-destructive hover:text-destructive"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </Button>
+                                </>
+                              )}
+                            </div>
                           </TableCell>
                         </TableRow>
                       );
