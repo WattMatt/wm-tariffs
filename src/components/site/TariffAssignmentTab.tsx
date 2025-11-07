@@ -462,79 +462,56 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
             <div className="border rounded-lg p-4 space-y-3 bg-card">
               <div className="space-y-2">
                 <Label>Available Tariff Structures</Label>
-                <Select
-                  value={selectedPreviewTariffId}
-                  onValueChange={(value) => setSelectedPreviewTariffId(value)}
-                >
-                  <SelectTrigger className="w-full bg-background">
-                    <SelectValue placeholder={`Select from ${tariffStructures.length} available tariff structure(s)`} />
-                  </SelectTrigger>
-                  <SelectContent className="bg-background z-50">
-                    {tariffStructures.map((tariff) => (
-                      <SelectItem key={tariff.id} value={tariff.id}>
-                        <div className="flex flex-col">
-                          <span className="font-medium">{tariff.name}</span>
-                          <span className="text-xs text-muted-foreground">
-                            {tariff.tariff_type}
-                            {tariff.voltage_level && ` • ${tariff.voltage_level}`}
-                            {tariff.uses_tou && " • TOU"}
-                          </span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {selectedPreviewTariffId && (() => {
-                const tariff = tariffStructures.find(t => t.id === selectedPreviewTariffId);
-                if (!tariff) return null;
-                return (
-                  <div className="pt-3 border-t">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="space-y-1 flex-1">
-                        <h4 className="font-semibold">{tariff.name}</h4>
-                        {tariff.description && (
-                          <p className="text-sm text-muted-foreground">{tariff.description}</p>
-                        )}
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <Badge variant="outline">{tariff.tariff_type}</Badge>
-                          {tariff.voltage_level && (
-                            <Badge variant="outline">{tariff.voltage_level}</Badge>
-                          )}
-                          {tariff.uses_tou && <Badge variant="secondary">Time-of-Use</Badge>}
-                        </div>
-                        <div className="text-sm text-muted-foreground pt-1">
-                          <p>
-                            Effective: {new Date(tariff.effective_from).toLocaleDateString()}
-                            {tariff.effective_to && ` - ${new Date(tariff.effective_to).toLocaleDateString()}`}
-                          </p>
-                        </div>
-                      </div>
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              onClick={() => {
+                <div className="flex gap-2">
+                  <Select
+                    value={selectedPreviewTariffId}
+                    onValueChange={(value) => setSelectedPreviewTariffId(value)}
+                  >
+                    <SelectTrigger className="w-full bg-background">
+                      <SelectValue placeholder={`Select from ${tariffStructures.length} available tariff structure(s)`} />
+                    </SelectTrigger>
+                    <SelectContent className="bg-background z-50">
+                      {tariffStructures.map((tariff) => (
+                        <SelectItem key={tariff.id} value={tariff.id}>
+                          <div className="flex flex-col">
+                            <span className="font-medium">{tariff.name}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {tariff.tariff_type}
+                              {tariff.voltage_level && ` • ${tariff.voltage_level}`}
+                              {tariff.uses_tou && " • TOU"}
+                            </span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {selectedPreviewTariffId && (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => {
+                              const tariff = tariffStructures.find(t => t.id === selectedPreviewTariffId);
+                              if (tariff) {
                                 setViewingTariffId(selectedPreviewTariffId);
                                 setViewingTariffName(tariff.name);
-                              }}
-                              className="shrink-0"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>View Full Details</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    </div>
-                  </div>
-                );
-              })()}
+                              }
+                            }}
+                            className="shrink-0"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>View Full Details</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )}
+                </div>
+              </div>
             </div>
           )}
 
