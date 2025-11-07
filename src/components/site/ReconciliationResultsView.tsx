@@ -554,6 +554,9 @@ export default function ReconciliationResultsView({
         <TabsContent value="revenue" className="space-y-6">
           {revenueData && (
             <>
+              {(() => {
+                const totalSupplyCost = revenueData.gridSupplyCost + revenueData.solarCost;
+                return (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                 <Card className="border-border/50">
                   <CardHeader className="pb-2">
@@ -567,8 +570,8 @@ export default function ReconciliationResultsView({
                       R {revenueData.gridSupplyCost.toFixed(2)}
                     </div>
                     <div className="text-xs text-muted-foreground mt-1">
-                      {revenueData.totalRevenue > 0 
-                        ? ((revenueData.gridSupplyCost / revenueData.totalRevenue) * 100).toFixed(2) 
+                      {totalSupplyCost > 0 
+                        ? ((revenueData.gridSupplyCost / totalSupplyCost) * 100).toFixed(2) 
                         : '0.00'}%
                     </div>
                   </CardContent>
@@ -586,8 +589,8 @@ export default function ReconciliationResultsView({
                       R {revenueData.solarCost.toFixed(2)}
                     </div>
                     <div className="text-xs text-muted-foreground mt-1">
-                      {revenueData.totalRevenue > 0 
-                        ? ((revenueData.solarCost / revenueData.totalRevenue) * 100).toFixed(2) 
+                      {totalSupplyCost > 0 
+                        ? ((revenueData.solarCost / totalSupplyCost) * 100).toFixed(2) 
                         : '0.00'}%
                     </div>
                   </CardContent>
@@ -602,10 +605,10 @@ export default function ReconciliationResultsView({
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-bold text-warning">
-                      R {(revenueData.gridSupplyCost + revenueData.solarCost).toFixed(2)}
+                      R {totalSupplyCost.toFixed(2)}
                     </div>
                     <div className="text-xs text-muted-foreground mt-1">
-                      Supply Cost
+                      100.00%
                     </div>
                   </CardContent>
                 </Card>
@@ -622,8 +625,8 @@ export default function ReconciliationResultsView({
                       R {revenueData.tenantCost.toFixed(2)}
                     </div>
                     <div className="text-xs text-muted-foreground mt-1">
-                      {revenueData.totalRevenue > 0 
-                        ? ((revenueData.tenantCost / revenueData.totalRevenue) * 100).toFixed(2) 
+                      {totalSupplyCost > 0 
+                        ? ((revenueData.tenantCost / totalSupplyCost) * 100).toFixed(2) 
                         : '0.00'}%
                     </div>
                   </CardContent>
@@ -646,6 +649,8 @@ export default function ReconciliationResultsView({
                   </CardContent>
                 </Card>
               </div>
+                );
+              })()}
 
               <Card className="border-border/50">
                 <CardHeader className="flex flex-row items-center justify-between">
