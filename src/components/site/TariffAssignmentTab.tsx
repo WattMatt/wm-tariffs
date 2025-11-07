@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { FileCheck2, AlertCircle, CheckCircle2, DollarSign, Eye, FileText, ArrowUpDown, ArrowUp, ArrowDown, Trash2 } from "lucide-react";
+import { FileCheck2, AlertCircle, CheckCircle2, DollarSign, Eye, FileText, ArrowUpDown, ArrowUp, ArrowDown, Eraser } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import TariffDetailsDialog from "@/components/tariffs/TariffDetailsDialog";
@@ -636,7 +636,7 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
                                     size="icon"
                                     onClick={() => handleClearTariff(meter.id)}
                                   >
-                                    <Trash2 className="w-4 h-4" />
+                                    <Eraser className="w-4 h-4" />
                                   </Button>
                                 </>
                               )}
