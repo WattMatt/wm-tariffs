@@ -65,11 +65,7 @@ export async function calculateMeterCost(
     );
     
     const needsIndividualReadings = 
-      (tariff.uses_tou && tariff.tariff_time_periods?.length > 0) ||
-      (!tariff.uses_tou && 
-       (!tariff.tariff_blocks || tariff.tariff_blocks.length === 0) &&
-       hasSeasonalCharges &&
-       !hasBothSeasonsCharge);
+      (tariff.uses_tou && tariff.tariff_time_periods?.length > 0);
 
     if (needsIndividualReadings) {
       // For TOU tariffs and seasonal tariffs, we need individual readings with timestamps
@@ -171,7 +167,7 @@ export async function calculateMeterCost(
           // Apply single rate to all consumption
           energyCost = (calculatedTotalKwh * Number(bothSeasonsCharge.charge_amount)) / 100;
         } else {
-          // Seasonal flat-rate calculation from tariff_charges
+          // Seasonal flat-rate: apply rate to TOTAL consumption
           const seasonalCharges = {
             low_season: tariff.tariff_charges.find(
               (c: any) => c.charge_type === "energy_low_season"
@@ -182,26 +178,19 @@ export async function calculateMeterCost(
           };
 
           if (seasonalCharges.low_season || seasonalCharges.high_season) {
-            // Calculate energy cost based on seasonal rates
-            for (const reading of readings) {
-              const timestamp = new Date(reading.reading_timestamp);
-              const month = timestamp.getMonth() + 1;
-              
-              // Determine season (June-Aug = high demand winter, Sep-May = low demand)
-              const isHighSeason = month >= 6 && month <= 8;
-              const charge = isHighSeason 
-                ? seasonalCharges.high_season 
-                : seasonalCharges.low_season;
-
-              if (charge) {
-                energyCost += (Number(reading.kwh_value) * Number(charge.charge_amount)) / 100;
-              } else {
-                // Fallback: use available seasonal rate for all consumption
-                const availableCharge = seasonalCharges.high_season || seasonalCharges.low_season;
-                if (availableCharge) {
-                  energyCost += (Number(reading.kwh_value) * Number(availableCharge.charge_amount)) / 100;
-                }
-              }
+            // Determine predominant season based on date range
+            const startMonth = dateFrom.getMonth() + 1;
+            const endMonth = dateTo.getMonth() + 1;
+            
+            // If entire range is in high season (Jun-Aug), use high rate
+            const entirelyHighSeason = startMonth >= 6 && startMonth <= 8 && endMonth >= 6 && endMonth <= 8;
+            
+            const applicableCharge = entirelyHighSeason && seasonalCharges.high_season
+              ? seasonalCharges.high_season
+              : (seasonalCharges.low_season || seasonalCharges.high_season);
+            
+            if (applicableCharge) {
+              energyCost = (calculatedTotalKwh * Number(applicableCharge.charge_amount)) / 100;
             }
           } else {
             // No valid pricing structure found
