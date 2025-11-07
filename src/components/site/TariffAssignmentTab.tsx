@@ -635,7 +635,6 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
                                     variant="ghost"
                                     size="icon"
                                     onClick={() => handleClearTariff(meter.id)}
-                                    className="text-destructive hover:text-destructive"
                                   >
                                     <Trash2 className="w-4 h-4" />
                                   </Button>
