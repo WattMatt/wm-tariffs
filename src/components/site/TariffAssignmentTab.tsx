@@ -49,6 +49,7 @@ interface Meter {
   tariff_structure_id: string | null;
   meter_type: string;
   mccb_size: number | null;
+  rating: string | null;
 }
 
 interface DocumentShopNumber {
@@ -137,7 +138,7 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
   const fetchMeters = async () => {
     const { data, error } = await supabase
       .from("meters")
-      .select("id, meter_number, name, tariff, tariff_structure_id, meter_type, mccb_size")
+      .select("id, meter_number, name, tariff, tariff_structure_id, meter_type, mccb_size, rating")
       .eq("site_id", siteId)
       .order("meter_number");
 
@@ -333,8 +334,9 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
           bValue = b.meter_type;
           break;
         case "mccb_size":
-          aValue = a.mccb_size || 0;
-          bValue = b.mccb_size || 0;
+          // Sort by mccb_size if available, otherwise use rating
+          aValue = a.mccb_size || (a.rating ? parseFloat(a.rating) || 0 : 0);
+          bValue = b.mccb_size || (b.rating ? parseFloat(b.rating) || 0 : 0);
           break;
         default:
           return 0;
@@ -507,6 +509,8 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
                           <TableCell>
                             {meter.mccb_size ? (
                               <span className="font-medium">{meter.mccb_size}A</span>
+                            ) : meter.rating ? (
+                              <span className="font-medium">{meter.rating}</span>
                             ) : (
                               <span className="text-muted-foreground">—</span>
                             )}
