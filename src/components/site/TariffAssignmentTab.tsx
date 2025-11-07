@@ -279,14 +279,16 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
     setIsSaving(true);
 
     try {
-      const updates = Object.entries(selectedTariffs).map(([meterId, tariffId]) => {
+      // Update all meters - both with assignments and without
+      const updates = meters.map((meter) => {
+        const tariffId = selectedTariffs[meter.id] || null;
         return supabase
           .from("meters")
           .update({ 
             tariff_structure_id: tariffId,
             tariff: tariffId // Keep tariff column in sync for backward compatibility
           })
-          .eq("id", meterId);
+          .eq("id", meter.id);
       });
 
       const results = await Promise.allSettled(updates);
