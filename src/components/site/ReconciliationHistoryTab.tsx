@@ -6,7 +6,7 @@ import { format } from "date-fns";
 import { toast } from "sonner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { FileDown, Eye, Trash2, Download, FileText } from "lucide-react";
+import { FileDown, Eye, Trash2, Download, FileText, Zap, DollarSign } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import Papa from "papaparse";
@@ -296,9 +296,13 @@ export default function ReconciliationHistoryTab({ siteId, siteName }: Reconcili
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
-                        <Badge variant="outline" className="text-xs">Energy</Badge>
+                        <Badge variant="outline" className="gap-1">
+                          <Zap className="h-3 w-3" />
+                        </Badge>
                         {run.revenue_enabled && (
-                          <Badge variant="outline" className="text-xs">Revenue</Badge>
+                          <Badge variant="outline" className="gap-1">
+                            <DollarSign className="h-3 w-3" />
+                          </Badge>
                         )}
                       </div>
                     </TableCell>
