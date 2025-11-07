@@ -539,10 +539,10 @@ export default function ReconciliationResultsView({
               {(() => {
                 const totalSupplyCost = revenueData.gridSupplyCost + revenueData.solarCost;
                 
-                // Calculate total revenue lost (tenant meters)
+                // Calculate total revenue lost (other type meters)
                 const totalRevenueLost = meters
                   .filter(meter => {
-                    return meter.meter_type === "tenant_meter";
+                    return meter.meter_type === "other";
                   })
                   .reduce((sum, meter) => {
                     const meterRevenue = revenueData.meterRevenues.get(meter.id);
