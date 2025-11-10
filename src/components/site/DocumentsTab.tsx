@@ -255,28 +255,41 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
     }
 
     try {
-      const pathParts = oldPath.split('/');
-      pathParts[pathParts.length - 1] = renameFolderName.trim();
-      const newPath = pathParts.join('/');
+      // Get the folder record first
+      const folder = documents.find(d => d.id === folderId);
+      if (!folder) {
+        toast.error("Folder not found");
+        return;
+      }
 
-      // Update folder
+      // Build the old full path (parent path + folder name)
+      const oldFullPath = folder.folder_path 
+        ? `${folder.folder_path}/${folder.file_name}` 
+        : folder.file_name;
+      
+      // Build the new full path (parent path + new folder name)
+      const newFullPath = folder.folder_path 
+        ? `${folder.folder_path}/${renameFolderName.trim()}` 
+        : renameFolderName.trim();
+
+      // Update folder - only change file_name, keep folder_path as is (parent path)
       const { error: folderError } = await supabase
         .from("site_documents")
         .update({
           file_name: renameFolderName.trim(),
-          folder_path: newPath,
+          // folder_path stays the same - it's the parent path
         })
         .eq("id", folderId);
 
       if (folderError) throw folderError;
 
-      // Update all documents in this folder and subfolders
+      // Update all documents and subfolders that reference this folder's path
       const docsToUpdate = documents.filter(d => 
-        d.folder_path === oldPath || d.folder_path.startsWith(`${oldPath}/`)
+        d.folder_path === oldFullPath || d.folder_path.startsWith(`${oldFullPath}/`)
       );
 
       for (const doc of docsToUpdate) {
-        const updatedPath = doc.folder_path.replace(oldPath, newPath);
+        const updatedPath = doc.folder_path.replace(oldFullPath, newFullPath);
         await supabase
           .from("site_documents")
           .update({ folder_path: updatedPath })
