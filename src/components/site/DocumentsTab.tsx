@@ -1812,6 +1812,45 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                   {/* Show folders first */}
                   {documents
                     .filter(d => d.is_folder && d.folder_path === (currentFolderPath || ''))
+                    .sort((a, b) => {
+                      // Try to parse folder names as dates
+                      const parseDate = (name: string): Date | null => {
+                        try {
+                          // Try "Month YYYY" format (e.g., "March 2025")
+                          const monthYear = name.match(/^(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})$/i);
+                          if (monthYear) {
+                            const [, month, year] = monthYear;
+                            return new Date(`${month} 1, ${year}`);
+                          }
+                          
+                          // Try "Month" only format (e.g., "May") - use current year
+                          const monthOnly = name.match(/^(January|February|March|April|May|June|July|August|September|October|November|December)$/i);
+                          if (monthOnly) {
+                            const currentYear = new Date().getFullYear();
+                            return new Date(`${name} 1, ${currentYear}`);
+                          }
+                          
+                          return null;
+                        } catch {
+                          return null;
+                        }
+                      };
+                      
+                      const dateA = parseDate(a.file_name);
+                      const dateB = parseDate(b.file_name);
+                      
+                      // If both are dates, sort chronologically
+                      if (dateA && dateB) {
+                        return dateA.getTime() - dateB.getTime();
+                      }
+                      
+                      // If only one is a date, put dates first
+                      if (dateA && !dateB) return -1;
+                      if (!dateA && dateB) return 1;
+                      
+                      // Otherwise, alphabetical
+                      return a.file_name.localeCompare(b.file_name);
+                    })
                     .map((folder) => (
                       <TableRow
                         key={folder.id}
