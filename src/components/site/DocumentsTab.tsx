@@ -95,6 +95,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
   const [isMoveDialogOpen, setIsMoveDialogOpen] = useState(false);
   const [moveDestinationFolder, setMoveDestinationFolder] = useState<string>('');
   const [isMoving, setIsMoving] = useState(false);
+  const [isRepairing, setIsRepairing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
   
@@ -303,6 +304,31 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
     } catch (error) {
       console.error("Error renaming folder:", error);
       toast.error("Failed to rename folder");
+    }
+  };
+
+  // Repair folder structure
+  const handleRepairFolders = async () => {
+    setIsRepairing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('repair-folder-structure', {
+        body: { siteId },
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        toast.success(data.message);
+        if (data.repairedFolders?.length > 0) {
+          toast.info(`Repaired folders: ${data.repairedFolders.join(', ')}`);
+        }
+        fetchDocuments();
+      }
+    } catch (error) {
+      console.error('Error repairing folders:', error);
+      toast.error('Failed to repair folder structure');
+    } finally {
+      setIsRepairing(false);
     }
   };
 
@@ -1507,6 +1533,32 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
             </CardDescription>
           </CardHeader>
         <CardContent className="space-y-4">
+          {/* Folder Repair Button */}
+          <div className="flex items-center gap-2 p-3 border rounded-lg bg-muted/30">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRepairFolders}
+              disabled={isRepairing}
+              className="gap-2"
+            >
+              {isRepairing ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Repairing...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-4 h-4" />
+                  Repair Folder Structure
+                </>
+              )}
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              Click to fix any corrupted folder paths
+            </span>
+          </div>
+
           {/* New Folder Dialog - Inline */}
           {isCreatingFolder && (
             <div className="flex items-center gap-2 p-3 border rounded-lg bg-primary/5">
