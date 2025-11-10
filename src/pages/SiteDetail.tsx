@@ -16,6 +16,7 @@ import TariffAssignmentTab from "@/components/site/TariffAssignmentTab";
 import CostCalculationTab from "@/components/site/CostCalculationTab";
 import SiteReportExport from "@/components/site/SiteReportExport";
 import DocumentsTab from "@/components/site/DocumentsTab";
+import SiteOverview from "@/components/site/SiteOverview";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -338,8 +339,12 @@ export default function SiteDetail() {
         </Card>
 
         {selectedSection === 'metering' && (
-          <Tabs defaultValue="schematics" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-8 lg:w-auto">
+          <Tabs defaultValue="overview" className="space-y-6">
+            <TabsList className="grid w-full grid-cols-9 lg:w-auto">
+              <TabsTrigger value="overview" className="gap-2">
+                <Activity className="w-4 h-4" />
+                Overview
+              </TabsTrigger>
               <TabsTrigger value="schematics" className="gap-2">
                 <FileText className="w-4 h-4" />
                 Schematics
@@ -373,6 +378,10 @@ export default function SiteDetail() {
                 Audit Report
               </TabsTrigger>
             </TabsList>
+
+            <TabsContent value="overview">
+              <SiteOverview siteId={id!} siteName={site.name} />
+            </TabsContent>
 
             <TabsContent value="schematics">
               <SchematicsTab siteId={id!} />
