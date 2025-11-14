@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { FileCheck2, AlertCircle, CheckCircle2, DollarSign, Eye, FileText, ArrowUpDown, ArrowUp, ArrowDown, Eraser, Scale, Check, X, ChevronDown } from "lucide-react";
@@ -90,6 +91,7 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc" | null>(null);
   const [selectedPreviewTariffId, setSelectedPreviewTariffId] = useState<string>("");
+  const [selectedMeterIds, setSelectedMeterIds] = useState<Set<string>>(new Set());
   
   // Rate comparison state
   const [rateComparisonMeter, setRateComparisonMeter] = useState<Meter | null>(null);
@@ -293,6 +295,61 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
     } catch (error) {
       console.error("Error clearing tariff:", error);
       toast.error("Failed to clear tariff assignment");
+    }
+  };
+
+  const handleBulkClearTariffs = async () => {
+    if (selectedMeterIds.size === 0) return;
+
+    try {
+      const meterIdsArray = Array.from(selectedMeterIds);
+      const { error } = await supabase
+        .from("meters")
+        .update({ 
+          tariff_structure_id: null,
+          tariff: null
+        })
+        .in("id", meterIdsArray);
+
+      if (error) throw error;
+
+      // Update local state
+      setSelectedTariffs((prev) => {
+        const updated = { ...prev };
+        meterIdsArray.forEach(id => delete updated[id]);
+        return updated;
+      });
+
+      // Clear selection
+      setSelectedMeterIds(new Set());
+
+      // Refresh meters to get updated data
+      await fetchMeters();
+
+      toast.success(`Cleared tariff assignments for ${meterIdsArray.length} meter${meterIdsArray.length > 1 ? 's' : ''}`);
+    } catch (error) {
+      console.error("Error clearing tariffs:", error);
+      toast.error("Failed to clear tariff assignments");
+    }
+  };
+
+  const toggleMeterSelection = (meterId: string) => {
+    setSelectedMeterIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(meterId)) {
+        newSet.delete(meterId);
+      } else {
+        newSet.add(meterId);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleAllMeters = () => {
+    if (selectedMeterIds.size === meters.length) {
+      setSelectedMeterIds(new Set());
+    } else {
+      setSelectedMeterIds(new Set(meters.map(m => m.id)));
     }
   };
 
@@ -746,17 +803,48 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
                 </Button>
               </div>
 
+              {selectedMeterIds.size > 0 && (
+                <div className="flex items-center gap-3 p-3 bg-primary/10 border border-primary/30 rounded-lg">
+                  <span className="text-sm font-medium">
+                    {selectedMeterIds.size} meter{selectedMeterIds.size > 1 ? 's' : ''} selected
+                  </span>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleBulkClearTariffs}
+                        >
+                          <Eraser className="w-4 h-4 mr-2" />
+                          Clear Tariffs
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Clear tariff assignments for selected meters</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+              )}
+
               <div className="border rounded-lg overflow-hidden">
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-[50px]">
+                        <Checkbox
+                          checked={selectedMeterIds.size === meters.length && meters.length > 0}
+                          onCheckedChange={toggleAllMeters}
+                        />
+                      </TableHead>
                       <SortableHeader column="meter_number">Meter Number</SortableHeader>
                       <SortableHeader column="name">Name</SortableHeader>
                       <SortableHeader column="meter_type">Type</SortableHeader>
                       <SortableHeader column="mccb_size">Breaker Size (A)</SortableHeader>
                       <TableHead>Shop Numbers</TableHead>
                       <TableHead>Assigned Tariff Structure</TableHead>
-                      <TableHead className="w-[80px]">Actions</TableHead>
+                      <TableHead className="w-[120px]">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -768,6 +856,12 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
 
                       return (
                         <TableRow key={meter.id}>
+                          <TableCell>
+                            <Checkbox
+                              checked={selectedMeterIds.has(meter.id)}
+                              onCheckedChange={() => toggleMeterSelection(meter.id)}
+                            />
+                          </TableCell>
                           <TableCell className="font-mono font-medium">
                             {meter.meter_number}
                           </TableCell>
@@ -842,48 +936,74 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-1">
-                              {currentTariffId && (
-                                <>
-                                  <TooltipProvider>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Button
-                                          variant="ghost"
-                                          size="icon"
-                                          onClick={() => handleViewRateComparison(meter)}
-                                          disabled={matchingShops.length === 0}
-                                        >
-                                          <Scale className="w-4 h-4" />
-                                        </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent>
-                                        <p>Compare rates with documents</p>
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  </TooltipProvider>
-                                  
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => {
-                                      const tariffStructure = tariffStructures.find(t => t.id === currentTariffId);
-                                      if (tariffStructure) {
-                                        setViewingTariffId(currentTariffId);
-                                        setViewingTariffName(tariffStructure.name);
-                                      }
-                                    }}
-                                  >
-                                    <Eye className="w-4 h-4" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => handleClearTariff(meter.id)}
-                                  >
-                                    <Eraser className="w-4 h-4" />
-                                  </Button>
-                                </>
-                              )}
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => handleViewRateComparison(meter)}
+                                      disabled={!currentTariffId || matchingShops.length === 0}
+                                      className={cn(
+                                        !currentTariffId || matchingShops.length === 0 ? "opacity-50 cursor-not-allowed" : ""
+                                      )}
+                                    >
+                                      <Scale className="w-4 h-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Compare rates with documents</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                              
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => {
+                                        const tariffStructure = tariffStructures.find(t => t.id === currentTariffId);
+                                        if (tariffStructure) {
+                                          setViewingTariffId(currentTariffId);
+                                          setViewingTariffName(tariffStructure.name);
+                                        }
+                                      }}
+                                      disabled={!currentTariffId}
+                                      className={cn(
+                                        !currentTariffId ? "opacity-50 cursor-not-allowed" : ""
+                                      )}
+                                    >
+                                      <Eye className="w-4 h-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>View tariff details</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                              
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => handleClearTariff(meter.id)}
+                                      disabled={!currentTariffId}
+                                      className={cn(
+                                        !currentTariffId ? "opacity-50 cursor-not-allowed" : ""
+                                      )}
+                                    >
+                                      <Eraser className="w-4 h-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Clear tariff assignment</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
                             </div>
                           </TableCell>
                         </TableRow>
