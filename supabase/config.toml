@@ -27,5 +27,8 @@ verify_jwt = false
 [functions.process-pdf-edit]
 verify_jwt = false
 
+[functions.sync-storage-schematics]
+verify_jwt = false
+
 [functions.delete-duplicate-documents]
 verify_jwt = false
