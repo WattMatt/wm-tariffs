@@ -496,6 +496,7 @@ export default function MunicipalityExtractionDialog({
       const croppedImageUrl = croppedCanvas.toDataURL('image/png');
       
       // Upload to storage
+      // Tariff extractions are stored in a flat structure since they're temporary extraction files
       const response = await fetch(croppedImageUrl);
       const blob = await response.blob();
       const timestamp = Date.now();

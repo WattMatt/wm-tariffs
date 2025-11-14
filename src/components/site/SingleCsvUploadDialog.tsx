@@ -89,29 +89,25 @@ export default function SingleCsvUploadDialog({
       // Get site and client info for naming
       const { data: siteData } = await supabase
         .from("sites")
-        .select("name, client_id, clients(code)")
+        .select("name, clients(name)")
         .eq("id", siteId)
         .single();
 
-      const clientCode = siteData?.clients?.code || "UNKNOWN";
-      const siteName = siteData?.name?.replace(/[^a-zA-Z0-9]/g, "_") || "SITE";
+      if (!siteData) throw new Error("Site not found");
 
       // Get meter details
       const { data: meter } = await supabase
         .from("meters")
-        .select("serial_number, meter_number")
+        .select("meter_number")
         .eq("id", meterId)
         .single();
 
-      const meterSerial =
-        meter?.serial_number?.replace(/[^a-zA-Z0-9]/g, "_") ||
-        meter?.meter_number?.replace(/[^a-zA-Z0-9]/g, "_") ||
-        "METER";
+      if (!meter) throw new Error("Meter not found");
 
-      // Create readable filename
-      const shortHash = contentHash.substring(0, 8);
-      const fileName = `${clientCode}_${siteName}_${meterSerial}_${shortHash}.csv`;
-      const filePath = `${siteId}/${meterId}/${fileName}`;
+      // Generate hierarchical storage path
+      const { generateMeterStoragePath } = await import("@/lib/storagePaths");
+      const fileName = selectedFile.name;
+      const filePath = await generateMeterStoragePath(siteId, meter.meter_number, '', fileName);
 
       // Upload file to storage
       const { error: uploadError } = await supabase.storage

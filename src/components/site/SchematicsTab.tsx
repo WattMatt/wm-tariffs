@@ -117,10 +117,16 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
     const totalPages = parseInt(formData.get("total_pages") as string) || 1;
 
     try {
-      const fileName = `${Date.now()}-${selectedFile.name}`;
+      const timestamp = Date.now();
+      const fileName = `${timestamp}-${selectedFile.name}`;
+      
+      // Generate hierarchical storage path
+      const { generateStoragePath } = await import("@/lib/storagePaths");
+      const filePath = await generateStoragePath(siteId, 'Metering', 'Schematics', fileName);
+      
       const { error: uploadError } = await supabase.storage
         .from("schematics")
-        .upload(fileName, selectedFile);
+        .upload(filePath, selectedFile);
 
       if (uploadError) throw uploadError;
 
@@ -132,7 +138,7 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
           site_id: siteId,
           name,
           description: description || null,
-          file_path: fileName,
+          file_path: filePath,
           file_type: selectedFile.type,
           total_pages: totalPages,
           uploaded_by: user?.id,
@@ -148,12 +154,17 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
       if (selectedFile.type === "application/pdf" && schematicData) {
         toast.info("Converting PDF to image for faster viewing...");
         
+        // Generate path for converted image
+        const convertedImageName = `${timestamp}-${selectedFile.name.replace('.pdf', '.png')}`;
+        const convertedImagePath = await generateStoragePath(siteId, 'Metering', 'Schematics', convertedImageName);
+        
         // Trigger conversion in background (don't wait for it)
         supabase.functions
           .invoke('convert-pdf-to-image', {
             body: { 
               schematicId: schematicData.id, 
-              filePath: fileName 
+              filePath,
+              convertedImagePath
             }
           })
           .then(({ data, error }) => {
