@@ -420,7 +420,7 @@ async function cropRegionAndUpload(
           console.log('📤 Uploading cropped image to storage:', fileName);
           
           const { data, error } = await supabase.storage
-            .from('meter-snippets')
+            .from('client-files')
             .upload(fileName, blob, {
               contentType: 'image/png',
               upsert: false
@@ -434,7 +434,7 @@ async function cropRegionAndUpload(
           
           // Get public URL
           const { data: { publicUrl } } = supabase.storage
-            .from('meter-snippets')
+            .from('client-files')
             .getPublicUrl(fileName);
           
           console.log('✅ Upload successful, public URL:', publicUrl);
@@ -4198,7 +4198,7 @@ export default function SchematicEditor({
                   
                   // Copy file to new location
                   const { data: snippetData, error: downloadError } = await supabase.storage
-                    .from('meter-snippets')
+                    .from('client-files')
                     .download(tempPath);
                   
                   if (!downloadError && snippetData) {
@@ -4223,7 +4223,7 @@ export default function SchematicEditor({
                       
                       // Delete temp file
                       await supabase.storage
-                        .from('meter-snippets')
+                        .from('client-files')
                         .remove([tempPath]);
                       
                       console.log(`✅ Moved snippet from ${tempPath} to ${newSnippetPath}`);
@@ -4691,11 +4691,11 @@ export default function SchematicEditor({
                   for (const meter of metersToDelete) {
                     if (meter.scanned_snippet_url) {
                       try {
-                        // Extract path from URL: https://[project].supabase.co/storage/v1/object/public/meter-snippets/[path]
-                        const snippetPath = meter.scanned_snippet_url.split('/meter-snippets/')[1];
+                        // Extract path from URL: https://[project].supabase.co/storage/v1/object/public/client-files/[path]
+                        const snippetPath = meter.scanned_snippet_url.split('/client-files/')[1];
                         if (snippetPath) {
                           const { error: storageError } = await supabase.storage
-                            .from('meter-snippets')
+                            .from('client-files')
                             .remove([snippetPath]);
                           
                           if (storageError) {

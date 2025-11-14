@@ -137,7 +137,7 @@ Deno.serve(async (req) => {
     // Delete files from storage
     if (filesToDelete.length > 0) {
       const { error: storageError } = await supabase.storage
-        .from('site-documents')
+        .from('client-files')
         .remove(filesToDelete);
 
       if (storageError) {

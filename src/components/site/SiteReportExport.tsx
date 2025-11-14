@@ -1338,7 +1338,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       if (selectedSchematic?.converted_image_path) {
         try {
           const { data: imageData } = await supabase.storage
-            .from("schematics")
+            .from("client-files")
             .download(selectedSchematic.converted_image_path);
 
           if (imageData) {

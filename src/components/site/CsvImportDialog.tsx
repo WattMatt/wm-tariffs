@@ -250,7 +250,7 @@ export default function CsvImportDialog({ isOpen, onClose, meterId, onImportComp
       // Upload CSV file to storage
       const filePath = `${meterId}/${selectedFile!.name}`;
       const { error: uploadError } = await supabase.storage
-        .from('meter-csvs')
+        .from('client-files')
         .upload(filePath, selectedFile!, { upsert: true });
 
       if (uploadError) throw uploadError;

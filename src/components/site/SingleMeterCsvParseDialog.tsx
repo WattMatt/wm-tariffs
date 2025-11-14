@@ -129,7 +129,7 @@ export default function SingleMeterCsvParseDialog({
     try {
       // Download CSV file from storage
       const { data: fileData, error: downloadError } = await supabase.storage
-        .from('meter-csvs')
+        .from('client-files')
         .download(selectedFile.file_path);
 
       if (downloadError) throw downloadError;

@@ -112,7 +112,7 @@ export default function Schematics() {
       // Upload file to storage
       const fileName = `${Date.now()}-${selectedFile.name}`;
       const { error: uploadError } = await supabase.storage
-        .from("schematics")
+        .from("client-files")
         .upload(fileName, selectedFile);
 
       if (uploadError) throw uploadError;
@@ -164,7 +164,7 @@ export default function Schematics() {
       // Download the PDF from storage
       const { data: pdfBlob, error: downloadError } = await supabase
         .storage
-        .from('schematics')
+        .from('client-files')
         .download(schematic.file_path);
       
       if (downloadError || !pdfBlob) {
@@ -223,7 +223,7 @@ export default function Schematics() {
       // Upload converted image to storage
       const { error: uploadError } = await supabase
         .storage
-        .from('schematics')
+        .from('client-files')
         .upload(imagePath, imageBlob, {
           contentType: 'image/png',
           upsert: true,
@@ -276,7 +276,7 @@ export default function Schematics() {
       }
 
       const { error: storageError } = await supabase.storage
-        .from("schematics")
+        .from("client-files")
         .remove(filesToDelete);
 
       if (storageError) {

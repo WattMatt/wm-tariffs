@@ -30,7 +30,7 @@ serve(async (req) => {
     // Download the PDF from storage
     const { data: pdfData, error: downloadError } = await supabase
       .storage
-      .from('schematics')
+      .from('client-files')
       .download(filePath);
       
     if (downloadError || !pdfData) {
@@ -80,7 +80,7 @@ serve(async (req) => {
     // Upload the converted image to storage
     const { error: uploadError } = await supabase
       .storage
-      .from('schematics')
+      .from('client-files')
       .upload(imagePath, imageBuffer, {
         contentType: 'image/png',
         upsert: true,
@@ -109,7 +109,7 @@ serve(async (req) => {
     // Get public URL for the converted image
     const { data: urlData } = supabase
       .storage
-      .from('schematics')
+      .from('client-files')
       .getPublicUrl(imagePath);
 
     return new Response(

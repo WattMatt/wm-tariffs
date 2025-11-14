@@ -185,7 +185,7 @@ export default function SchematicViewer() {
       if (data.converted_image_path) {
         // Use the converted PNG image
         const { data: imageUrlData } = supabase.storage
-          .from("schematics")
+          .from("client-files")
           .getPublicUrl(data.converted_image_path);
         
         setImageUrl(imageUrlData.publicUrl);
@@ -193,7 +193,7 @@ export default function SchematicViewer() {
       } else {
         // Fall back to PDF URL for viewing
         const { data: pdfUrlData } = supabase.storage
-          .from("schematics")
+          .from("client-files")
           .getPublicUrl(data.file_path);
         
         setImageUrl(pdfUrlData.publicUrl);
@@ -201,7 +201,7 @@ export default function SchematicViewer() {
     } else {
       // Regular image file
       const { data: urlData } = supabase.storage
-        .from("schematics")
+        .from("client-files")
         .getPublicUrl(data.file_path);
 
       setImageUrl(urlData.publicUrl);
@@ -217,7 +217,7 @@ export default function SchematicViewer() {
       // Download the PDF from storage
       const { data: pdfBlob, error: downloadError } = await supabase
         .storage
-        .from('schematics')
+        .from('client-files')
         .download(filePath);
       
       if (downloadError || !pdfBlob) {
@@ -295,7 +295,7 @@ export default function SchematicViewer() {
       // Upload converted image to storage (with upsert to overwrite existing)
       const { error: uploadError } = await supabase
         .storage
-        .from('schematics')
+        .from('client-files')
         .upload(imagePath, imageBlob, {
           contentType: 'image/png',
           upsert: true, // Overwrite existing file
@@ -327,7 +327,7 @@ export default function SchematicViewer() {
       setTimeout(() => {
         const timestamp = Date.now();
         const { data: urlData } = supabase.storage
-          .from("schematics")
+          .from("client-files")
           .getPublicUrl(imagePath);
         
         // Add cache-busting parameter to force browser to reload
