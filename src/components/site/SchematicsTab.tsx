@@ -292,14 +292,14 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
         // Continue anyway, non-critical
       }
 
-      // Delete the files from storage
+      // Delete the files from storage (using client-files bucket)
       const filesToDelete = [schematicToDelete.file_path];
       if (schematicToDelete.converted_image_path) {
         filesToDelete.push(schematicToDelete.converted_image_path);
       }
 
       const { error: storageError } = await supabase.storage
-        .from("schematics")
+        .from("client-files")
         .remove(filesToDelete);
 
       if (storageError) {
