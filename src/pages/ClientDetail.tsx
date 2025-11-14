@@ -101,16 +101,17 @@ export default function ClientDetail() {
   };
 
   const handleLogoUpload = async (file: File) => {
-    if (!id) return null;
+    if (!id || !client) return null;
     
     setUploadingLogo(true);
     
+    const { generateClientLogoPath } = await import("@/lib/storagePaths");
     const fileExt = file.name.split('.').pop();
-    const fileName = `${id}.${fileExt}`;
-    const filePath = fileName;
+    const fileName = `logo.${fileExt}`;
+    const { bucket, path: filePath } = generateClientLogoPath(client.name, fileName);
 
     const { error: uploadError } = await supabase.storage
-      .from('client-logos')
+      .from(bucket)
       .upload(filePath, file, { upsert: true });
 
     setUploadingLogo(false);
@@ -121,7 +122,7 @@ export default function ClientDetail() {
     }
 
     const { data: { publicUrl } } = supabase.storage
-      .from('client-logos')
+      .from(bucket)
       .getPublicUrl(filePath);
 
     return publicUrl;

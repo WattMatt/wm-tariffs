@@ -2879,10 +2879,10 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       const { generateStoragePath } = await import("@/lib/storagePaths");
       const timestamp = Date.now();
       const timestampedFileName = `${timestamp}_${finalFileName}`;
-      const filePath = await generateStoragePath(siteId, 'Reconciliation', '', timestampedFileName);
+      const { bucket, path: filePath } = await generateStoragePath(siteId, 'Reconciliation', 'Reports', timestampedFileName);
       
       const { error: uploadError } = await supabase.storage
-        .from("site-documents")
+        .from(bucket)
         .upload(filePath, pendingPdfBlob, {
           contentType: 'application/pdf',
           upsert: false
@@ -2904,7 +2904,6 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       const { error: dbError } = await supabase
         .from("site_documents")
         .insert({
-          site_id: siteId,
           file_name: finalFileName,
           file_path: filePath,
           folder_path: "/Reconciliation",
@@ -2912,7 +2911,8 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           extraction_status: "not_applicable",
           file_size: pendingPdfBlob.size,
           is_folder: false,
-          generation_parameters: generationParameters as any
+          generation_parameters: generationParameters as any,
+          site_id: siteId,
         });
 
       if (dbError) throw dbError;

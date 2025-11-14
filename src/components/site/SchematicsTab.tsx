@@ -122,10 +122,10 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
       
       // Generate hierarchical storage path
       const { generateStoragePath } = await import("@/lib/storagePaths");
-      const filePath = await generateStoragePath(siteId, 'Metering', 'Schematics', fileName);
+      const { bucket, path: filePath } = await generateStoragePath(siteId, 'Metering', 'Schematics', fileName);
       
       const { error: uploadError } = await supabase.storage
-        .from("schematics")
+        .from(bucket)
         .upload(filePath, selectedFile);
 
       if (uploadError) throw uploadError;
@@ -135,13 +135,13 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
       const { data: schematicData, error: dbError } = await supabase
         .from("schematics")
         .insert({
-          site_id: siteId,
           name,
           description: description || null,
           file_path: filePath,
           file_type: selectedFile.type,
           total_pages: totalPages,
           uploaded_by: user?.id,
+          site_id: siteId,
         })
         .select()
         .single();
@@ -156,7 +156,7 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
         
         // Generate path for converted image
         const convertedImageName = `${timestamp}-${selectedFile.name.replace('.pdf', '.png')}`;
-        const convertedImagePath = await generateStoragePath(siteId, 'Metering', 'Schematics', convertedImageName);
+        const { path: convertedImagePath } = await generateStoragePath(siteId, 'Metering', 'Schematics', convertedImageName);
         
         // Trigger conversion in background (don't wait for it)
         supabase.functions

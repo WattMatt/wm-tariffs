@@ -59,15 +59,16 @@ export default function Clients() {
     }
   };
 
-  const handleLogoUpload = async (file: File, clientId?: string) => {
+  const handleLogoUpload = async (file: File, clientName: string) => {
     setUploadingLogo(true);
     
+    const { generateClientLogoPath } = await import("@/lib/storagePaths");
     const fileExt = file.name.split('.').pop();
-    const fileName = `${clientId || Date.now()}.${fileExt}`;
-    const filePath = fileName;
+    const fileName = `logo.${fileExt}`;
+    const { bucket, path: filePath } = generateClientLogoPath(clientName, fileName);
 
     const { error: uploadError } = await supabase.storage
-      .from('client-logos')
+      .from(bucket)
       .upload(filePath, file, { upsert: true });
 
     setUploadingLogo(false);
@@ -78,7 +79,7 @@ export default function Clients() {
     }
 
     const { data: { publicUrl } } = supabase.storage
-      .from('client-logos')
+      .from(bucket)
       .getPublicUrl(filePath);
 
     return publicUrl;
@@ -118,7 +119,7 @@ export default function Clients() {
 
     // Upload logo if one was selected
     if (!error && logoFile && clientId) {
-      const logoUrl = await handleLogoUpload(logoFile, clientId);
+      const logoUrl = await handleLogoUpload(logoFile, clientData.name);
       if (logoUrl) {
         await supabase
           .from("clients")
