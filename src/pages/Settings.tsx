@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Upload, Save, Loader2 } from "lucide-react";
+import { StorageMigrationTool } from "@/components/admin/StorageMigrationTool";
 
 const Settings = () => {
   const navigate = useNavigate();
@@ -252,6 +253,10 @@ const Settings = () => {
             </div>
           </CardContent>
         </Card>
+
+        <div className="mt-8">
+          <StorageMigrationTool />
+        </div>
       </div>
     </DashboardLayout>
   );
