@@ -192,32 +192,67 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
 
       toast.success("Schematic uploaded successfully");
       
-      // Auto-convert PDF to image
+      // Auto-convert PDF to image using client-side conversion
       if (selectedFile.type === "application/pdf" && schematicData) {
         toast.info("Converting PDF to image for faster viewing...");
         
-        // Generate path for converted image
-        const convertedImageName = `${timestamp}-${selectedFile.name.replace('.pdf', '.png')}`;
-        const { path: convertedImagePath } = await generateStoragePath(siteId, 'Metering', 'Schematics', convertedImageName);
-        
-        // Trigger conversion in background (don't wait for it)
-        supabase.functions
-          .invoke('convert-pdf-to-image', {
-            body: { 
-              schematicId: schematicData.id, 
-              filePath,
-              convertedImagePath
-            }
-          })
-          .then(({ data, error }) => {
-            if (error) {
-              console.error('PDF conversion failed:', error);
-              toast.error('PDF conversion failed, but file is uploaded');
-            } else {
-              toast.success('PDF converted to image successfully');
-              fetchSchematics(); // Refresh to show converted status
-            }
+        try {
+          // Import PDF.js
+          const pdfjsLib = await import('pdfjs-dist');
+          pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+          
+          // Load PDF from the uploaded file
+          const arrayBuffer = await selectedFile.arrayBuffer();
+          const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+          
+          // Get first page
+          const page = await pdf.getPage(1);
+          const viewport = page.getViewport({ scale: 2.0 }); // 2x scale for better quality
+          
+          // Create canvas
+          const canvas = document.createElement('canvas');
+          const context = canvas.getContext('2d');
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          
+          // Render PDF page to canvas
+          await page.render({
+            canvasContext: context!,
+            viewport: viewport,
+          } as any).promise;
+          
+          // Convert canvas to blob
+          const blob = await new Promise<Blob>((resolve) => {
+            canvas.toBlob((blob) => resolve(blob!), 'image/png');
           });
+          
+          // Generate path for converted image
+          const convertedImageName = `${timestamp}-${selectedFile.name.replace('.pdf', '')}_converted.png`;
+          const { path: convertedImagePath } = await generateStoragePath(siteId, 'Metering', 'Schematics', convertedImageName);
+          
+          // Upload converted image
+          const { error: uploadError } = await supabase.storage
+            .from(bucket)
+            .upload(convertedImagePath, blob, {
+              contentType: 'image/png',
+            });
+          
+          if (uploadError) throw uploadError;
+          
+          // Update schematic record with converted image path
+          const { error: updateError } = await supabase
+            .from('schematics')
+            .update({ converted_image_path: convertedImagePath })
+            .eq('id', schematicData.id);
+          
+          if (updateError) throw updateError;
+          
+          toast.success('PDF converted to image successfully');
+          fetchSchematics(); // Refresh to show converted status
+        } catch (conversionError: any) {
+          console.error('PDF conversion failed:', conversionError);
+          toast.error('PDF conversion failed, but file is uploaded');
+        }
       }
 
       setIsDialogOpen(false);
