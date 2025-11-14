@@ -8,9 +8,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { FileCheck2, AlertCircle, CheckCircle2, DollarSign, Eye, FileText, ArrowUpDown, ArrowUp, ArrowDown, Eraser, Scale, Check, X } from "lucide-react";
+import { FileCheck2, AlertCircle, CheckCircle2, DollarSign, Eye, FileText, ArrowUpDown, ArrowUp, ArrowDown, Eraser, Scale, Check, X, ChevronDown } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import TariffDetailsDialog from "@/components/tariffs/TariffDetailsDialog";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
@@ -100,7 +102,8 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
       status: 'match' | 'partial' | 'mismatch' | 'unknown';
     }>;
   } | null>(null);
-  const [tariffRates, setTariffRates] = useState<{ 
+  const [expandedDocuments, setExpandedDocuments] = useState<Set<number>>(new Set());
+  const [tariffRates, setTariffRates] = useState<{
     [tariffId: string]: { 
       basicCharge?: number; 
       energyCharge?: number; 
@@ -449,6 +452,7 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
       documentComparisons
     });
     setRateComparisonMeter(meter);
+    setExpandedDocuments(new Set()); // Start with all documents collapsed
   };
 
   const handleSaveAssignments = async () => {
@@ -907,6 +911,7 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
         onOpenChange={() => {
           setRateComparisonMeter(null);
           setRateComparisonData(null);
+          setExpandedDocuments(new Set());
         }}
       >
         <DialogContent className="max-w-2xl">
@@ -917,62 +922,88 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
             </DialogDescription>
           </DialogHeader>
           
-          {rateComparisonData && (
-            <div className="space-y-6">
-              {/* Status Badge */}
-              <div className="flex items-center justify-between p-4 border rounded-lg">
-                <span className="font-medium">Overall Status:</span>
-                <Badge 
-                  variant={
-                    rateComparisonData.overallStatus === 'match' ? 'default' : 
-                    rateComparisonData.overallStatus === 'partial' ? 'secondary' :
-                    rateComparisonData.overallStatus === 'mismatch' ? 'destructive' : 
-                    'outline'
-                  }
-                  className={
-                    rateComparisonData.overallStatus === 'match' ? "bg-green-500 hover:bg-green-600" :
-                    rateComparisonData.overallStatus === 'partial' ? "bg-amber-500 hover:bg-amber-600" : ""
-                  }
-                >
-                  {rateComparisonData.overallStatus.toUpperCase()}
-                </Badge>
-              </div>
-
-              {/* Rate Comparison - One section per document */}
+          <ScrollArea className="max-h-[60vh] pr-4">
+            {rateComparisonData && (
               <div className="space-y-6">
-                <h4 className="font-semibold">Rate Comparison by Document</h4>
-                
-                {rateComparisonData.documentComparisons.map((comparison, idx) => (
-                  <div key={idx} className="border rounded-lg p-4 space-y-4">
-                    {/* Document Header */}
-                    <div className="flex items-center justify-between pb-3 border-b">
-                      <div className="flex items-center gap-2">
-                        <FileText className="w-4 h-4 text-muted-foreground" />
-                        <span className="font-medium">{comparison.shop.shopNumber}</span>
-                        {comparison.shop.periodStart && (
-                          <span className="text-sm text-muted-foreground">
-                            ({new Date(comparison.shop.periodStart).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' })})
-                          </span>
-                        )}
-                      </div>
-                      <Badge 
-                        variant={
-                          comparison.status === 'match' ? 'default' : 
-                          comparison.status === 'partial' ? 'secondary' :
-                          comparison.status === 'mismatch' ? 'destructive' : 
-                          'outline'
-                        }
-                        className={
-                          comparison.status === 'match' ? "bg-green-500 hover:bg-green-600" :
-                          comparison.status === 'partial' ? "bg-amber-500 hover:bg-amber-600" : ""
-                        }
-                      >
-                        {comparison.status.toUpperCase()}
-                      </Badge>
-                    </div>
+                {/* Status Badge */}
+                <div className="flex items-center justify-between p-4 border rounded-lg">
+                  <span className="font-medium">Overall Status:</span>
+                  <Badge 
+                    variant={
+                      rateComparisonData.overallStatus === 'match' ? 'default' : 
+                      rateComparisonData.overallStatus === 'partial' ? 'secondary' :
+                      rateComparisonData.overallStatus === 'mismatch' ? 'destructive' : 
+                      'outline'
+                    }
+                    className={
+                      rateComparisonData.overallStatus === 'match' ? "bg-green-500 hover:bg-green-600" :
+                      rateComparisonData.overallStatus === 'partial' ? "bg-amber-500 hover:bg-amber-600" : ""
+                    }
+                  >
+                    {rateComparisonData.overallStatus.toUpperCase()}
+                  </Badge>
+                </div>
 
-                    {/* Comparison Table for this document */}
-                    <Table>
+                {/* Rate Comparison - One section per document */}
+                <div className="space-y-3">
+                  <h4 className="font-semibold">Rate Comparison by Document</h4>
+                
+                {rateComparisonData.documentComparisons.map((comparison, idx) => {
+                  const isExpanded = expandedDocuments.has(idx);
+                  
+                  return (
+                    <Collapsible
+                      key={idx}
+                      open={isExpanded}
+                      onOpenChange={(open) => {
+                        const newExpanded = new Set(expandedDocuments);
+                        if (open) {
+                          newExpanded.add(idx);
+                        } else {
+                          newExpanded.delete(idx);
+                        }
+                        setExpandedDocuments(newExpanded);
+                      }}
+                      className="border rounded-lg"
+                    >
+                      {/* Document Header - Clickable to expand/collapse */}
+                      <CollapsibleTrigger className="w-full p-4 hover:bg-muted/50 transition-colors">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <ChevronDown 
+                              className={cn(
+                                "w-4 h-4 text-muted-foreground transition-transform",
+                                isExpanded && "rotate-180"
+                              )} 
+                            />
+                            <FileText className="w-4 h-4 text-muted-foreground" />
+                            <span className="font-medium">{comparison.shop.shopNumber}</span>
+                            {comparison.shop.periodStart && (
+                              <span className="text-sm text-muted-foreground">
+                                ({new Date(comparison.shop.periodStart).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' })})
+                              </span>
+                            )}
+                          </div>
+                          <Badge 
+                            variant={
+                              comparison.status === 'match' ? 'default' : 
+                              comparison.status === 'partial' ? 'secondary' :
+                              comparison.status === 'mismatch' ? 'destructive' : 
+                              'outline'
+                            }
+                            className={
+                              comparison.status === 'match' ? "bg-green-500 hover:bg-green-600" :
+                              comparison.status === 'partial' ? "bg-amber-500 hover:bg-amber-600" : ""
+                            }
+                          >
+                            {comparison.status.toUpperCase()}
+                          </Badge>
+                        </div>
+                      </CollapsibleTrigger>
+
+                      <CollapsibleContent className="px-4 pb-4 space-y-4">
+                        {/* Comparison Table for this document */}
+                        <Table>
                       <TableHeader>
                         <TableRow>
                           <TableHead>Charge Type</TableHead>
@@ -1060,18 +1091,20 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
                       </TableBody>
                     </Table>
 
-                    {/* View Document Button */}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setViewingShopDoc(comparison.shop)}
-                      className="w-full"
-                    >
-                      <FileText className="w-3 h-3 mr-2" />
-                      View Document Details
-                    </Button>
-                  </div>
-                ))}
+                        {/* View Document Button */}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setViewingShopDoc(comparison.shop)}
+                          className="w-full"
+                        >
+                          <FileText className="w-3 h-3 mr-2" />
+                          View Document Details
+                        </Button>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  );
+                })}
               </div>
 
               {/* Help Text */}
@@ -1085,6 +1118,7 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
               </Alert>
             </div>
           )}
+          </ScrollArea>
         </DialogContent>
       </Dialog>
 
