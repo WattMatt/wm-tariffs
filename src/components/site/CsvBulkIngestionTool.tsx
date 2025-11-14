@@ -547,7 +547,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
         }
 
         const { error: uploadError } = await supabase.storage
-          .from('meter-csvs')
+          .from('client-files')
           .upload(filePath, fileItem.file!, { upsert: false });
 
         if (uploadError) {
@@ -622,7 +622,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
       for (const file of savedFiles) {
         try {
           const { data, error } = await supabase.storage
-            .from('meter-csvs')
+            .from('client-files')
             .download(file.path!);
 
           if (error || !data) continue;
@@ -653,7 +653,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
           // Delete all but the first
           for (let i = 1; i < duplicates.length; i++) {
             const { error } = await supabase.storage
-              .from('meter-csvs')
+              .from('client-files')
               .remove([duplicates[i].path]);
             
             if (!error) {
@@ -798,7 +798,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
       
       // Download file from storage
       const { data: fileData, error } = await supabase.storage
-        .from('meter-csvs')
+        .from('client-files')
         .download(fileItem.path);
       
       if (error || !fileData) {
@@ -893,7 +893,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
       
       // Step 1: List ALL files in storage for this site (recursively through meter folders)
       const { data: meterFolders, error: listError } = await supabase.storage
-        .from('meter-csvs')
+        .from('client-files')
         .list(siteId);
 
       let deletedFilesCount = 0;
@@ -903,7 +903,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
       if (meterFolders && meterFolders.length > 0) {
         for (const folder of meterFolders) {
           const { data: files } = await supabase.storage
-            .from('meter-csvs')
+            .from('client-files')
             .list(`${siteId}/${folder.name}`);
           
           if (files) {
@@ -1133,7 +1133,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
 
     try {
       const { data, error } = await supabase.storage
-        .from('meter-csvs')
+        .from('client-files')
         .download(fileItem.path);
 
       if (error) throw error;

@@ -138,7 +138,7 @@ export default function PdfImportDialog() {
     // Tariff extractions are stored in a flat structure since they're temporary extraction files
     // not tied to a specific client/site hierarchy
     const { data: uploadData, error: uploadError } = await supabase.storage
-      .from('tariff-extractions')
+      .from('client-files')
       .upload(uniqueFileName, blob, {
         contentType: 'image/png',
         upsert: false
@@ -148,7 +148,7 @@ export default function PdfImportDialog() {
     
     // Get public URL
     const { data: { publicUrl } } = supabase.storage
-      .from('tariff-extractions')
+      .from('client-files')
       .getPublicUrl(uniqueFileName);
     
     return publicUrl;

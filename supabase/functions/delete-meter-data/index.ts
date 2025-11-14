@@ -62,7 +62,7 @@ Deno.serve(async (req) => {
       // Step 2: Delete files from storage (if any exist)
       if (filePaths.length > 0) {
         const { error } = await supabase.storage
-          .from('meter-csvs')
+          .from('client-files')
           .remove(filePaths);
 
         if (error) {

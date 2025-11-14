@@ -503,7 +503,7 @@ export default function MunicipalityExtractionDialog({
       const fileName = `municipality-extract-${timestamp}.png`;
       
       const { error: uploadError } = await supabase.storage
-        .from('tariff-extractions')
+        .from('client-files')
         .upload(fileName, blob, {
           contentType: 'image/png',
           upsert: false
@@ -512,7 +512,7 @@ export default function MunicipalityExtractionDialog({
       if (uploadError) throw uploadError;
       
       const { data: { publicUrl } } = supabase.storage
-        .from('tariff-extractions')
+        .from('client-files')
         .getPublicUrl(fileName);
       
       // Call AI to extract municipality data from the cropped image

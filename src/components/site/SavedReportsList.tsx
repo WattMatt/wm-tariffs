@@ -65,7 +65,7 @@ export default function SavedReportsList({ siteId, onRefresh, onRegenerate }: Sa
   const handleDownload = async (report: SavedReport) => {
     try {
       const { data, error } = await supabase.storage
-        .from("site-documents")
+        .from("client-files")
         .download(report.file_path);
 
       if (error) throw error;
@@ -93,7 +93,7 @@ export default function SavedReportsList({ siteId, onRefresh, onRegenerate }: Sa
     try {
       // Delete from storage
       const { error: storageError } = await supabase.storage
-        .from("site-documents")
+        .from("client-files")
         .remove([reportToDelete.file_path]);
 
       if (storageError) throw storageError;

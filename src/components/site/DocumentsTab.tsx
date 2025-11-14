@@ -306,7 +306,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
       // Delete from storage and database
       for (const doc of docsToDelete) {
         if (!doc.is_folder && doc.file_path) {
-          await supabase.storage.from("site-documents").remove([doc.file_path]);
+          await supabase.storage.from("client-files").remove([doc.file_path]);
         }
         await supabase.from("site_documents").delete().eq("id", doc.id);
       }
@@ -425,7 +425,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
           // Upload file to storage
           const storagePath = `${siteId}/${Date.now()}-${fileName}`;
           const { data: uploadData, error: uploadError } = await supabase.storage
-            .from("site-documents")
+            .from("client-files")
             .upload(storagePath, file);
 
           if (uploadError) throw uploadError;
@@ -437,7 +437,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
             const imagePath = `${siteId}/${Date.now()}-converted.png`;
             
             const { error: imageUploadError } = await supabase.storage
-              .from("site-documents")
+              .from("client-files")
               .upload(imagePath, imageBlob);
 
             if (!imageUploadError) {
@@ -468,7 +468,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
           // Trigger AI extraction
           const pathToProcess = convertedImagePath || uploadData.path;
           const { data: urlData } = await supabase.storage
-            .from("site-documents")
+            .from("client-files")
             .createSignedUrl(pathToProcess, 3600);
 
           if (urlData?.signedUrl) {
@@ -684,7 +684,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
           // Upload original file to storage
           const fileName = `${siteId}/${Date.now()}-${file.name}`;
           const { data: uploadData, error: uploadError } = await supabase.storage
-            .from("site-documents")
+            .from("client-files")
             .upload(fileName, file);
 
           if (uploadError) throw uploadError;
@@ -697,7 +697,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
             const imagePath = `${siteId}/${Date.now()}-converted.png`;
             
             const { error: imageUploadError } = await supabase.storage
-              .from("site-documents")
+              .from("client-files")
               .upload(imagePath, imageBlob);
 
             if (!imageUploadError) {
@@ -730,7 +730,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
           
           const pathToProcess = convertedImagePath || uploadData.path;
           const { data: urlData } = await supabase.storage
-            .from("site-documents")
+            .from("client-files")
             .createSignedUrl(pathToProcess, 3600);
 
           if (urlData?.signedUrl) {
@@ -772,7 +772,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
   const handleDownload = async (filePath: string, fileName: string) => {
     try {
       const { data } = await supabase.storage
-        .from("site-documents")
+        .from("client-files")
         .download(filePath);
 
       if (data) {
@@ -793,7 +793,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
     if (!confirm("Are you sure you want to delete this document?")) return;
 
     try {
-      await supabase.storage.from("site-documents").remove([filePath]);
+      await supabase.storage.from("client-files").remove([filePath]);
       await supabase.from("site_documents").delete().eq("id", id);
       toast.success("Document deleted");
       fetchDocuments();
@@ -845,7 +845,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
       
       await Promise.all(
         docsToDelete.map(async (doc) => {
-          await supabase.storage.from("site-documents").remove([doc.file_path]);
+          await supabase.storage.from("client-files").remove([doc.file_path]);
           await supabase.from("site_documents").delete().eq("id", doc.id);
         })
       );
@@ -900,7 +900,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
           // Get signed URL for the document
           const pathToProcess = doc.converted_image_path || doc.file_path;
           const { data: urlData } = await supabase.storage
-            .from("site-documents")
+            .from("client-files")
             .createSignedUrl(pathToProcess, 3600);
 
           if (!urlData?.signedUrl) {
@@ -955,7 +955,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
     try {
       const pathToView = doc.converted_image_path || doc.file_path;
       const { data } = await supabase.storage
-        .from("site-documents")
+        .from("client-files")
         .createSignedUrl(pathToView, 3600);
       
       if (data?.signedUrl) {
@@ -1434,14 +1434,14 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
       // Upload cropped image
       const fileName = `${siteId}/region-${Date.now()}.png`;
       const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('site-documents')
+        .from('client-files')
         .upload(fileName, croppedBlob);
       
       if (uploadError) throw uploadError;
       
       // Get signed URL
       const { data: urlData } = await supabase.storage
-        .from('site-documents')
+        .from('client-files')
         .createSignedUrl(uploadData.path, 3600);
       
       if (!urlData?.signedUrl) throw new Error('Failed to get signed URL');
@@ -1471,7 +1471,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
       }
       
       // Clean up the uploaded cropped image
-      await supabase.storage.from('site-documents').remove([uploadData.path]);
+      await supabase.storage.from('client-files').remove([uploadData.path]);
       
     } catch (error) {
       console.error("Error rescanning region:", error);

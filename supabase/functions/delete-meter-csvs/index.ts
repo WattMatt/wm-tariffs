@@ -37,12 +37,12 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log(`Attempting to delete ${filePaths.length} files from meter-csvs bucket`);
+    console.log(`Attempting to delete ${filePaths.length} files from client-files bucket`);
     console.log('File paths:', filePaths);
 
     // Delete files from storage using service role (bypasses RLS)
     const { data, error } = await supabase.storage
-      .from('meter-csvs')
+      .from('client-files')
       .remove(filePaths);
 
     if (error) {

@@ -54,7 +54,7 @@ Deno.serve(async (req) => {
 
     // Download CSV from storage
     const { data: fileData, error: downloadError } = await supabase.storage
-      .from('meter-csvs')
+      .from('client-files')
       .download(actualFilePath);
 
     if (downloadError) {
@@ -573,7 +573,7 @@ Deno.serve(async (req) => {
       
       // Upload parsed CSV to storage
       const { error: uploadError } = await supabase.storage
-        .from('meter-csvs')
+        .from('client-files')
         .upload(tempParsedPath, new Blob([csvContent], { type: 'text/csv' }), { 
           upsert: true,
           contentType: 'text/csv'
