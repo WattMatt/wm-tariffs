@@ -512,8 +512,9 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
 
               <div className="space-y-2">
                 <Label htmlFor="file">File Upload</Label>
-                <div 
-                  className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+                <Label 
+                  htmlFor="file"
+                  className={`block border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer ${
                     isDragging 
                       ? 'border-primary bg-primary/5' 
                       : 'border-border hover:border-primary'
@@ -531,7 +532,7 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
                     onChange={handleFileChange}
                     className="hidden"
                   />
-                  <Label htmlFor="file" className="cursor-pointer text-sm text-muted-foreground">
+                  <div className="text-sm text-muted-foreground">
                     {selectedFile ? (
                       <div className="text-primary font-medium">
                         {selectedFile.name}
@@ -545,8 +546,8 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
                         <p className="text-xs mt-1">PDF, PNG, JPG, SVG (max 50MB)</p>
                       </div>
                     )}
-                  </Label>
-                </div>
+                  </div>
+                </Label>
               </div>
 
               <Button type="submit" className="w-full" disabled={isLoading || !selectedFile}>
