@@ -817,12 +817,7 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
                                 <AlertCircle className="w-3 h-3" />
                                 Pending
                               </Badge>
-                            ) : hasAssignment ? (
-                              <Badge variant="default" className="gap-1">
-                                <CheckCircle2 className="w-3 h-3" />
-                                Assigned
-                              </Badge>
-                            ) : (
+                            ) : hasAssignment ? null : (
                               <Badge variant="secondary" className="gap-1">
                                 <AlertCircle className="w-3 h-3" />
                                 Unassigned
@@ -834,7 +829,10 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
                               value={currentTariffId || ""}
                               onValueChange={(value) => handleTariffChange(meter.id, value)}
                             >
-                              <SelectTrigger className="w-full">
+                              <SelectTrigger className={cn(
+                                "w-full",
+                                hasUnsavedChanges(meter.id) && "border-blue-500 bg-blue-50 dark:bg-blue-950/30"
+                              )}>
                                 <SelectValue placeholder="Select tariff structure" />
                               </SelectTrigger>
                               <SelectContent>
