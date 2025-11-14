@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
 import { Plus, FileText, Upload, Eye, Network, Trash2 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import MeterConnectionsDialog from "@/components/schematic/MeterConnectionsDialog";
 
@@ -42,6 +43,8 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isFetching, setIsFetching] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
+  const [selectedSchematicIds, setSelectedSchematicIds] = useState<Set<string>>(new Set());
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
   useEffect(() => {
     fetchSchematics();
@@ -276,6 +279,89 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
     setDeleteDialogOpen(true);
   };
 
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedSchematicIds(new Set(schematics.map(s => s.id)));
+    } else {
+      setSelectedSchematicIds(new Set());
+    }
+  };
+
+  const handleSelectSchematic = (schematicId: string, checked: boolean) => {
+    const newSelection = new Set(selectedSchematicIds);
+    if (checked) {
+      newSelection.add(schematicId);
+    } else {
+      newSelection.delete(schematicId);
+    }
+    setSelectedSchematicIds(newSelection);
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedSchematicIds.size === 0) return;
+    
+    const confirmed = window.confirm(
+      `Are you sure you want to delete ${selectedSchematicIds.size} schematic${selectedSchematicIds.size !== 1 ? 's' : ''}? This action cannot be undone and will also delete all associated meter positions and connections.`
+    );
+    
+    if (!confirmed) return;
+    
+    setIsBulkDeleting(true);
+    try {
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (const schematicId of Array.from(selectedSchematicIds)) {
+        const schematic = schematics.find(s => s.id === schematicId);
+        if (!schematic) continue;
+
+        try {
+          // Delete associated meter positions
+          await supabase
+            .from("meter_positions")
+            .delete()
+            .eq("schematic_id", schematicId);
+
+          // Delete files from storage
+          const filesToDelete = [schematic.file_path];
+          if (schematic.converted_image_path) {
+            filesToDelete.push(schematic.converted_image_path);
+          }
+
+          await supabase.storage
+            .from("client-files")
+            .remove(filesToDelete);
+
+          // Delete the schematic record
+          const { error: dbError } = await supabase
+            .from("schematics")
+            .delete()
+            .eq("id", schematicId);
+
+          if (dbError) throw dbError;
+          successCount++;
+        } catch (error) {
+          console.error(`Error deleting schematic ${schematicId}:`, error);
+          errorCount++;
+        }
+      }
+
+      if (successCount > 0) {
+        toast.success(`Successfully deleted ${successCount} schematic${successCount !== 1 ? 's' : ''}`);
+        setSelectedSchematicIds(new Set());
+        fetchSchematics();
+      }
+      
+      if (errorCount > 0) {
+        toast.error(`Failed to delete ${errorCount} schematic${errorCount !== 1 ? 's' : ''}`);
+      }
+    } catch (error: any) {
+      toast.error("An error occurred while deleting schematics");
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  };
+
   const handleDeleteConfirm = async () => {
     if (!schematicToDelete) return;
 
@@ -352,6 +438,17 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
           <p className="text-muted-foreground">Electrical distribution diagrams for this site</p>
         </div>
         <div className="flex gap-2">
+          {selectedSchematicIds.size > 0 && (
+            <Button
+              variant="outline"
+              onClick={handleBulkDelete}
+              disabled={isBulkDeleting}
+              className="gap-2"
+            >
+              <Trash2 className="w-4 h-4" />
+              {isBulkDeleting ? "Deleting..." : `Delete ${selectedSchematicIds.size} Selected`}
+            </Button>
+          )}
           <Button variant="outline" onClick={handleSyncStorage} className="gap-2">
             <Upload className="w-4 h-4" />
             Sync Storage
@@ -486,6 +583,13 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-12">
+                    <Checkbox
+                      checked={selectedSchematicIds.size === schematics.length && schematics.length > 0}
+                      onCheckedChange={handleSelectAll}
+                      aria-label="Select all schematics"
+                    />
+                  </TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Name</TableHead>
                   <TableHead>Pages</TableHead>
@@ -496,6 +600,13 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
               <TableBody>
                 {schematics.map((schematic) => (
                   <TableRow key={schematic.id}>
+                    <TableCell>
+                      <Checkbox
+                        checked={selectedSchematicIds.has(schematic.id)}
+                        onCheckedChange={(checked) => handleSelectSchematic(schematic.id, checked as boolean)}
+                        aria-label={`Select ${schematic.name}`}
+                      />
+                    </TableCell>
                     <TableCell>
                       <span className="text-2xl">{getFileTypeIcon(schematic.file_type)}</span>
                     </TableCell>
