@@ -131,11 +131,12 @@ export default function PdfImportDialog() {
     const response = await fetch(imageDataUrl);
     const blob = await response.blob();
     
-    // Create unique file name
+    // Create unique file name with timestamp
     const timestamp = Date.now();
     const uniqueFileName = `${timestamp}-${fileName.replace(/\.pdf$/i, '.png')}`;
     
-    // Upload to storage
+    // Tariff extractions are stored in a flat structure since they're temporary extraction files
+    // not tied to a specific client/site hierarchy
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('tariff-extractions')
       .upload(uniqueFileName, blob, {

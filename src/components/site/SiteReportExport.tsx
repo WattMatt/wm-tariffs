@@ -2875,8 +2875,12 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       // Ensure .pdf extension
       const finalFileName = fileName.endsWith('.pdf') ? fileName : `${fileName}.pdf`;
       
-      // Upload to storage
-      const filePath = `${siteId}/reports/${Date.now()}_${finalFileName}`;
+      // Generate hierarchical storage path
+      const { generateStoragePath } = await import("@/lib/storagePaths");
+      const timestamp = Date.now();
+      const timestampedFileName = `${timestamp}_${finalFileName}`;
+      const filePath = await generateStoragePath(siteId, 'Reconciliation', '', timestampedFileName);
+      
       const { error: uploadError } = await supabase.storage
         .from("site-documents")
         .upload(filePath, pendingPdfBlob, {
@@ -2903,7 +2907,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           site_id: siteId,
           file_name: finalFileName,
           file_path: filePath,
-          folder_path: "/reports",
+          folder_path: "/Reconciliation",
           document_type: "report" as const,
           extraction_status: "not_applicable",
           file_size: pendingPdfBlob.size,

@@ -409,8 +409,14 @@ async function cropRegionAndUpload(
         }
         
         try {
-          // Upload to Supabase Storage
-          const fileName = `${schematicId}_${Date.now()}_${Math.round(x)}_${Math.round(y)}.png`;
+          // Get meter number for the snippet (will be determined based on the detection)
+          // For now, use a placeholder - this will be updated when meter is created/assigned
+          const timestamp = Date.now();
+          const tempFileName = `snippet_${timestamp}.png`;
+          
+          // We'll update this to use proper meter number after meter is saved
+          // For now, upload to a temp location that will be moved during save
+          const fileName = `temp/${schematicId}/${tempFileName}`;
           console.log('📤 Uploading cropped image to storage:', fileName);
           
           const { data, error } = await supabase.storage
@@ -4174,6 +4180,60 @@ export default function SchematicEditor({
             if (!newMeter) {
               errorCount++;
               continue;
+            }
+            
+            // Move snippet from temp location to proper hierarchical location
+            if (croppedImageUrl) {
+              try {
+                // Extract temp file path from URL
+                const urlParts = croppedImageUrl.split('/meter-snippets/');
+                if (urlParts.length === 2) {
+                  const tempPath = urlParts[1];
+                  
+                  // Generate proper hierarchical path for the snippet
+                  const { generateMeterStoragePath } = await import("@/lib/storagePaths");
+                  const timestamp = Date.now();
+                  const snippetFileName = `snippet_${timestamp}.png`;
+                  const newSnippetPath = await generateMeterStoragePath(siteId, newMeter.meter_number, 'Snippets', snippetFileName);
+                  
+                  // Copy file to new location
+                  const { data: snippetData, error: downloadError } = await supabase.storage
+                    .from('meter-snippets')
+                    .download(tempPath);
+                  
+                  if (!downloadError && snippetData) {
+                    const { error: uploadError } = await supabase.storage
+                      .from('meter-snippets')
+                      .upload(newSnippetPath, snippetData, {
+                        contentType: 'image/png',
+                        upsert: false
+                      });
+                    
+                    if (!uploadError) {
+                      // Get new public URL
+                      const { data: { publicUrl } } = supabase.storage
+                        .from('meter-snippets')
+                        .getPublicUrl(newSnippetPath);
+                      
+                      // Update meter with new snippet URL
+                      await supabase
+                        .from('meters')
+                        .update({ scanned_snippet_url: publicUrl })
+                        .eq('id', newMeter.id);
+                      
+                      // Delete temp file
+                      await supabase.storage
+                        .from('meter-snippets')
+                        .remove([tempPath]);
+                      
+                      console.log(`✅ Moved snippet from ${tempPath} to ${newSnippetPath}`);
+                    }
+                  }
+                }
+              } catch (snippetError) {
+                console.error('Failed to move snippet to hierarchical location:', snippetError);
+                // Continue anyway - snippet is still accessible at temp location
+              }
             }
             
             // Calculate scale based on drawn rectangle size
