@@ -8,11 +8,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { FileCheck2, AlertCircle, CheckCircle2, DollarSign, Eye, FileText, ArrowUpDown, ArrowUp, ArrowDown, Eraser } from "lucide-react";
+import { FileCheck2, AlertCircle, CheckCircle2, DollarSign, Eye, FileText, ArrowUpDown, ArrowUp, ArrowDown, Eraser, Scale, Check, X } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import TariffDetailsDialog from "@/components/tariffs/TariffDetailsDialog";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 
 interface TariffAssignmentTabProps {
   siteId: string;
@@ -87,6 +88,21 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc" | null>(null);
   const [selectedPreviewTariffId, setSelectedPreviewTariffId] = useState<string>("");
+  
+  // Rate comparison state
+  const [rateComparisonMeter, setRateComparisonMeter] = useState<Meter | null>(null);
+  const [rateComparisonData, setRateComparisonData] = useState<{
+    status: 'match' | 'partial' | 'mismatch' | 'unknown';
+    docRates: { basicCharge?: number; energyCharge?: number };
+    tariffRates: { basicCharge?: number; energyCharge?: number };
+    shopNumbers: DocumentShopNumber[];
+  } | null>(null);
+  const [tariffRates, setTariffRates] = useState<{ 
+    [tariffId: string]: { 
+      basicCharge?: number; 
+      energyCharge?: number; 
+    } 
+  }>({});
 
   useEffect(() => {
     fetchSiteData();
@@ -274,6 +290,158 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
       console.error("Error clearing tariff:", error);
       toast.error("Failed to clear tariff assignment");
     }
+  };
+
+  // Helper function to extract rates from document
+  const extractRatesFromDocument = (shop: DocumentShopNumber): { 
+    basicCharge?: number; 
+    energyCharge?: number 
+  } => {
+    if (!shop.lineItems) return {};
+    
+    const rates: { basicCharge?: number; energyCharge?: number } = {};
+    
+    shop.lineItems.forEach(item => {
+      const desc = item.description?.toLowerCase() || '';
+      
+      // Basic charge (in R/month)
+      if (desc.includes('basic')) {
+        rates.basicCharge = item.rate;
+      }
+      
+      // Energy charge (in R/kWh, convert to c/kWh)
+      if ((desc.includes('kwh') || desc.includes('kva')) && !desc.includes('basic')) {
+        rates.energyCharge = item.rate ? item.rate * 100 : undefined;
+      }
+    });
+    
+    return rates;
+  };
+
+  // Helper function to fetch tariff rates
+  const fetchTariffRates = async (tariffId: string) => {
+    if (tariffRates[tariffId]) {
+      return tariffRates[tariffId];
+    }
+    
+    const rates: { basicCharge?: number; energyCharge?: number } = {};
+    
+    // Fetch tariff charges
+    const { data: charges } = await supabase
+      .from('tariff_charges')
+      .select('charge_type, charge_amount')
+      .eq('tariff_structure_id', tariffId);
+    
+    if (charges) {
+      const basicCharge = charges.find(c => c.charge_type === 'basic_monthly');
+      if (basicCharge) {
+        rates.basicCharge = basicCharge.charge_amount;
+      }
+      
+      const energyCharge = charges.find(c => c.charge_type === 'energy_both_seasons');
+      if (energyCharge) {
+        rates.energyCharge = energyCharge.charge_amount;
+      }
+    }
+    
+    // If no flat energy charge, check blocks
+    if (!rates.energyCharge) {
+      const { data: blocks } = await supabase
+        .from('tariff_blocks')
+        .select('energy_charge_cents')
+        .eq('tariff_structure_id', tariffId)
+        .order('block_number')
+        .limit(1);
+      
+      if (blocks && blocks.length > 0) {
+        rates.energyCharge = blocks[0].energy_charge_cents;
+      }
+    }
+    
+    setTariffRates(prev => ({ ...prev, [tariffId]: rates }));
+    return rates;
+  };
+
+  // Helper function to compare rates
+  const compareRates = (
+    docRates: { basicCharge?: number; energyCharge?: number },
+    tariffRates: { basicCharge?: number; energyCharge?: number }
+  ): 'match' | 'partial' | 'mismatch' | 'unknown' => {
+    if (!docRates.basicCharge && !docRates.energyCharge) return 'unknown';
+    if (!tariffRates.basicCharge && !tariffRates.energyCharge) return 'unknown';
+    
+    let matchCount = 0;
+    let mismatchCount = 0;
+    let comparisonCount = 0;
+    
+    // Compare basic charge (both in R/month)
+    if (docRates.basicCharge && tariffRates.basicCharge) {
+      comparisonCount++;
+      const diff = Math.abs(docRates.basicCharge - tariffRates.basicCharge);
+      const tolerance = tariffRates.basicCharge * 0.01; // 1% tolerance
+      if (diff <= tolerance) {
+        matchCount++;
+      } else {
+        mismatchCount++;
+      }
+    }
+    
+    // Compare energy charge (both in c/kWh)
+    if (docRates.energyCharge && tariffRates.energyCharge) {
+      comparisonCount++;
+      const diff = Math.abs(docRates.energyCharge - tariffRates.energyCharge);
+      const tolerance = tariffRates.energyCharge * 0.01; // 1% tolerance
+      if (diff <= tolerance) {
+        matchCount++;
+      } else {
+        mismatchCount++;
+      }
+    }
+    
+    if (comparisonCount === 0) return 'unknown';
+    if (mismatchCount > 0) return 'mismatch';
+    if (matchCount < comparisonCount) return 'partial';
+    return 'match';
+  };
+
+  // Handle viewing rate comparison
+  const handleViewRateComparison = async (meter: Meter) => {
+    const assignedTariffId = selectedTariffs[meter.id] || meter.tariff_structure_id;
+    
+    if (!assignedTariffId) {
+      toast.error("Please assign a tariff to this meter first");
+      return;
+    }
+    
+    const matchingShops = getMatchingShopNumbers(meter);
+    
+    if (matchingShops.length === 0) {
+      toast.error("No extracted document data found for this meter");
+      return;
+    }
+    
+    // Extract rates from all matching documents
+    const allDocRates = matchingShops.map(shop => extractRatesFromDocument(shop));
+    
+    // Aggregate rates (use most recent or first available)
+    const aggregatedDocRates = {
+      basicCharge: allDocRates.find(r => r.basicCharge)?.basicCharge,
+      energyCharge: allDocRates.find(r => r.energyCharge)?.energyCharge
+    };
+    
+    // Fetch tariff rates
+    const tariffRatesData = await fetchTariffRates(assignedTariffId);
+    
+    // Compare rates
+    const status = compareRates(aggregatedDocRates, tariffRatesData);
+    
+    setRateComparisonData({
+      status,
+      docRates: aggregatedDocRates,
+      tariffRates: tariffRatesData,
+      shopNumbers: matchingShops
+    });
+    setRateComparisonMeter(meter);
   };
 
   const handleSaveAssignments = async () => {
@@ -678,6 +846,24 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
                             <div className="flex items-center gap-1">
                               {currentTariffId && (
                                 <>
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          onClick={() => handleViewRateComparison(meter)}
+                                          disabled={matchingShops.length === 0}
+                                        >
+                                          <Scale className="w-4 h-4" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p>Compare rates with documents</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                  
                                   <Button
                                     variant="ghost"
                                     size="icon"
@@ -723,6 +909,172 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
           }}
         />
       )}
+
+      {/* Rate Comparison Dialog */}
+      <Dialog 
+        open={!!rateComparisonMeter} 
+        onOpenChange={() => {
+          setRateComparisonMeter(null);
+          setRateComparisonData(null);
+        }}
+      >
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Rate Comparison Analysis</DialogTitle>
+            <DialogDescription>
+              Comparing document rates with assigned tariff for {rateComparisonMeter?.meter_number}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {rateComparisonData && (
+            <div className="space-y-6">
+              {/* Status Badge */}
+              <div className="flex items-center justify-between p-4 border rounded-lg">
+                <span className="font-medium">Overall Status:</span>
+                <Badge 
+                  variant={
+                    rateComparisonData.status === 'match' ? 'default' : 
+                    rateComparisonData.status === 'partial' ? 'secondary' :
+                    rateComparisonData.status === 'mismatch' ? 'destructive' : 
+                    'outline'
+                  }
+                  className={
+                    rateComparisonData.status === 'match' ? "bg-green-500 hover:bg-green-600" :
+                    rateComparisonData.status === 'partial' ? "bg-amber-500 hover:bg-amber-600" : ""
+                  }
+                >
+                  {rateComparisonData.status.toUpperCase()}
+                </Badge>
+              </div>
+
+              {/* Rate Comparison Table */}
+              <div className="space-y-4">
+                <h4 className="font-semibold">Rate Comparison</h4>
+                
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Charge Type</TableHead>
+                      <TableHead>Document Rate</TableHead>
+                      <TableHead>Tariff Rate</TableHead>
+                      <TableHead>Match</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {/* Basic Charge Row */}
+                    {(rateComparisonData.docRates.basicCharge || rateComparisonData.tariffRates.basicCharge) && (
+                      <TableRow>
+                        <TableCell className="font-medium">Basic Charge</TableCell>
+                        <TableCell>
+                          {rateComparisonData.docRates.basicCharge ? (
+                            `R ${rateComparisonData.docRates.basicCharge.toFixed(2)}/month`
+                          ) : (
+                            <span className="text-muted-foreground">Not extracted</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {rateComparisonData.tariffRates.basicCharge ? (
+                            `R ${rateComparisonData.tariffRates.basicCharge.toFixed(2)}/month`
+                          ) : (
+                            <span className="text-muted-foreground">Not configured</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {rateComparisonData.docRates.basicCharge && 
+                           rateComparisonData.tariffRates.basicCharge ? (
+                            Math.abs(rateComparisonData.docRates.basicCharge - rateComparisonData.tariffRates.basicCharge) 
+                              <= rateComparisonData.tariffRates.basicCharge * 0.01 ? (
+                              <Badge variant="default" className="bg-green-500 hover:bg-green-600">
+                                <Check className="w-3 h-3 mr-1" /> Match
+                              </Badge>
+                            ) : (
+                              <Badge variant="destructive">
+                                <X className="w-3 h-3 mr-1" /> Mismatch
+                              </Badge>
+                            )
+                          ) : (
+                            <Badge variant="outline">N/A</Badge>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    
+                    {/* Energy Charge Row */}
+                    {(rateComparisonData.docRates.energyCharge || rateComparisonData.tariffRates.energyCharge) && (
+                      <TableRow>
+                        <TableCell className="font-medium">Energy Charge</TableCell>
+                        <TableCell>
+                          {rateComparisonData.docRates.energyCharge ? (
+                            `${rateComparisonData.docRates.energyCharge.toFixed(2)} c/kWh`
+                          ) : (
+                            <span className="text-muted-foreground">Not extracted</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {rateComparisonData.tariffRates.energyCharge ? (
+                            `${rateComparisonData.tariffRates.energyCharge.toFixed(2)} c/kWh`
+                          ) : (
+                            <span className="text-muted-foreground">Not configured</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {rateComparisonData.docRates.energyCharge && 
+                           rateComparisonData.tariffRates.energyCharge ? (
+                            Math.abs(rateComparisonData.docRates.energyCharge - rateComparisonData.tariffRates.energyCharge) 
+                              <= rateComparisonData.tariffRates.energyCharge * 0.01 ? (
+                              <Badge variant="default" className="bg-green-500 hover:bg-green-600">
+                                <Check className="w-3 h-3 mr-1" /> Match
+                              </Badge>
+                            ) : (
+                              <Badge variant="destructive">
+                                <X className="w-3 h-3 mr-1" /> Mismatch
+                              </Badge>
+                            )
+                          ) : (
+                            <Badge variant="outline">N/A</Badge>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Source Documents */}
+              <div className="space-y-3">
+                <h4 className="font-semibold">Source Documents ({rateComparisonData.shopNumbers.length})</h4>
+                <div className="flex flex-wrap gap-2">
+                  {rateComparisonData.shopNumbers.map((shop, idx) => (
+                    <Button
+                      key={idx}
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setViewingShopDoc(shop)}
+                    >
+                      <FileText className="w-3 h-3 mr-1" />
+                      {shop.shopNumber}
+                      {shop.periodStart && (
+                        <span className="ml-1 text-xs text-muted-foreground">
+                          ({new Date(shop.periodStart).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' })})
+                        </span>
+                      )}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Help Text */}
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription className="text-xs">
+                  Rates are compared with a 1% tolerance to account for rounding. 
+                  Energy rates from documents are converted from R/kWh to c/kWh for comparison.
+                </AlertDescription>
+              </Alert>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Shop Document Details Dialog */}
       <Dialog open={!!viewingShopDoc} onOpenChange={() => setViewingShopDoc(null)}>
