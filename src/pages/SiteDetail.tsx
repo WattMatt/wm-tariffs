@@ -353,6 +353,10 @@ export default function SiteDetail() {
                 <Gauge className="w-4 h-4" />
                 Meters
               </TabsTrigger>
+              <TabsTrigger value="tariffs" className="gap-2">
+                <DollarSign className="w-4 h-4" />
+                Tariffs
+              </TabsTrigger>
               <TabsTrigger value="documents" className="gap-2">
                 <FolderOpen className="w-4 h-4" />
                 Documents
@@ -360,10 +364,6 @@ export default function SiteDetail() {
               <TabsTrigger value="load-profiles" className="gap-2">
                 <TrendingUp className="w-4 h-4" />
                 Energy Profiles
-              </TabsTrigger>
-              <TabsTrigger value="tariffs" className="gap-2">
-                <DollarSign className="w-4 h-4" />
-                Tariffs
               </TabsTrigger>
               <TabsTrigger value="reconciliation" className="gap-2">
                 <BarChart3 className="w-4 h-4" />
@@ -391,16 +391,16 @@ export default function SiteDetail() {
               <MetersTab siteId={id!} />
             </TabsContent>
 
+            <TabsContent value="tariffs">
+              <TariffAssignmentTab siteId={id!} />
+            </TabsContent>
+
             <TabsContent value="documents">
               <DocumentsTab siteId={id!} />
             </TabsContent>
 
             <TabsContent value="load-profiles">
               <LoadProfilesTab siteId={id!} />
-            </TabsContent>
-
-            <TabsContent value="tariffs">
-              <TariffAssignmentTab siteId={id!} />
             </TabsContent>
 
             <TabsContent value="reconciliation">
