@@ -613,6 +613,7 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
                   <TableHead>Name</TableHead>
                   <TableHead>Pages</TableHead>
                   <TableHead>Uploaded</TableHead>
+                  <TableHead>Status</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -635,14 +636,6 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
                         {schematic.description && (
                           <span className="text-xs text-muted-foreground">{schematic.description}</span>
                         )}
-                        {schematic.file_type === "application/pdf" && (
-                          <Badge 
-                            variant={schematic.converted_image_path ? "default" : "secondary"}
-                            className="w-fit text-xs"
-                          >
-                            {schematic.converted_image_path ? "✓ Converted" : "⏳ Converting..."}
-                          </Badge>
-                        )}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -656,6 +649,18 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {new Date(schematic.created_at).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell>
+                      {schematic.file_type === "application/pdf" ? (
+                        <Badge 
+                          variant={schematic.converted_image_path ? "default" : "secondary"}
+                          className="w-fit text-xs"
+                        >
+                          {schematic.converted_image_path ? "✓ Converted" : "⏳ Converting..."}
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground text-sm">—</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
