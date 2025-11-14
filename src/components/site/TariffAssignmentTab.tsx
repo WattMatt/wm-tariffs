@@ -103,6 +103,8 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
     }>;
   } | null>(null);
   const [expandedDocuments, setExpandedDocuments] = useState<Set<number>>(new Set());
+  const [viewingAllDocs, setViewingAllDocs] = useState<{ meter: Meter; docs: DocumentShopNumber[] } | null>(null);
+  const [expandedShopDocs, setExpandedShopDocs] = useState<Set<number>>(new Set());
   const [tariffRates, setTariffRates] = useState<{
     [tariffId: string]: { 
       basicCharge?: number; 
@@ -784,28 +786,29 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
                           </TableCell>
                           <TableCell>
                             {matchingShops.length > 0 ? (
-                              <div className="flex flex-wrap gap-1">
-                                {matchingShops.map((shop, idx) => (
-                                  <TooltipProvider key={idx}>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          className="h-6 text-xs"
-                                          onClick={() => setViewingShopDoc(shop)}
-                                        >
-                                          <FileText className="w-3 h-3 mr-1" />
-                                          {shop.shopNumber}
-                                        </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent>
-                                        <p>View document details</p>
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  </TooltipProvider>
-                                ))}
-                              </div>
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-6 text-xs"
+                                      onClick={() => setViewingAllDocs({ meter, docs: matchingShops })}
+                                    >
+                                      <FileText className="w-3 h-3 mr-1" />
+                                      {matchingShops[0].shopNumber}
+                                      {matchingShops.length > 1 && (
+                                        <Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px]">
+                                          {matchingShops.length}
+                                        </Badge>
+                                      )}
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>View {matchingShops.length} document{matchingShops.length > 1 ? 's' : ''}</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
                             ) : (
                               <span className="text-muted-foreground text-sm">—</span>
                             )}
@@ -1118,6 +1121,126 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
               </Alert>
             </div>
           )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* All Documents Dialog */}
+      <Dialog open={!!viewingAllDocs} onOpenChange={() => {
+        setViewingAllDocs(null);
+        setExpandedShopDocs(new Set());
+      }}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Associated Documents</DialogTitle>
+            <DialogDescription>
+              All documents assigned to meter {viewingAllDocs?.meter.meter_number}
+            </DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="max-h-[60vh] pr-4">
+            <div className="space-y-3">
+              {viewingAllDocs?.docs.map((doc, idx) => (
+                <Collapsible
+                  key={idx}
+                  open={expandedShopDocs.has(idx)}
+                  onOpenChange={(open) => {
+                    const newSet = new Set(expandedShopDocs);
+                    if (open) {
+                      newSet.add(idx);
+                    } else {
+                      newSet.delete(idx);
+                    }
+                    setExpandedShopDocs(newSet);
+                  }}
+                  className="border rounded-lg"
+                >
+                  <CollapsibleTrigger className="w-full p-4 hover:bg-muted/50 transition-colors">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <FileText className="w-5 h-5 text-muted-foreground" />
+                        <div className="text-left">
+                          <div className="font-medium">{doc.shopNumber}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {new Date(doc.periodStart).toLocaleDateString()} - {new Date(doc.periodEnd).toLocaleDateString()}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline">{doc.currency} {doc.totalAmount.toFixed(2)}</Badge>
+                        <ChevronDown className={cn(
+                          "h-4 w-4 transition-transform",
+                          expandedShopDocs.has(idx) && "rotate-180"
+                        )} />
+                      </div>
+                    </div>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="p-4 pt-0 space-y-4">
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="text-muted-foreground">File:</span>
+                        <div className="font-medium">{doc.fileName}</div>
+                      </div>
+                      {doc.tenantName && (
+                        <div>
+                          <span className="text-muted-foreground">Tenant:</span>
+                          <div className="font-medium">{doc.tenantName}</div>
+                        </div>
+                      )}
+                      {doc.accountReference && (
+                        <div>
+                          <span className="text-muted-foreground">Account Ref:</span>
+                          <div className="font-medium">{doc.accountReference}</div>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {doc.lineItems && doc.lineItems.length > 0 && (
+                      <div>
+                        <h4 className="font-medium mb-2">Line Items</h4>
+                        <div className="border rounded-lg overflow-hidden">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Description</TableHead>
+                                <TableHead>Consumption</TableHead>
+                                <TableHead>Rate</TableHead>
+                                <TableHead className="text-right">Amount</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {doc.lineItems.map((item, itemIdx) => (
+                                <TableRow key={itemIdx}>
+                                  <TableCell>{item.description}</TableCell>
+                                  <TableCell>
+                                    {item.consumption ? `${item.consumption} kWh` : '—'}
+                                  </TableCell>
+                                  <TableCell>
+                                    {item.rate ? `${item.rate.toFixed(2)}` : '—'}
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    {doc.currency} {item.amount.toFixed(2)}
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </div>
+                    )}
+                    
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setViewingShopDoc(doc)}
+                      className="w-full"
+                    >
+                      <FileText className="w-3 h-3 mr-2" />
+                      View Full Document Details
+                    </Button>
+                  </CollapsibleContent>
+                </Collapsible>
+              ))}
+            </div>
           </ScrollArea>
         </DialogContent>
       </Dialog>
