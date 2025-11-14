@@ -41,6 +41,7 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
   const [schematicToDelete, setSchematicToDelete] = useState<Schematic | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isFetching, setIsFetching] = useState(true);
+  const [isDragging, setIsDragging] = useState(false);
 
   useEffect(() => {
     fetchSchematics();
@@ -97,6 +98,47 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
         toast.error("File size must be less than 50MB");
         return;
       }
+      setSelectedFile(file);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      const file = files[0];
+      const validTypes = ["application/pdf", "image/png", "image/jpeg", "image/svg+xml"];
+      
+      if (!validTypes.includes(file.type)) {
+        toast.error("Invalid file type. Please upload PDF, PNG, JPG, or SVG");
+        return;
+      }
+      
+      if (file.size > 52428800) {
+        toast.error("File size must be less than 50MB");
+        return;
+      }
+      
       setSelectedFile(file);
     }
   };
@@ -304,7 +346,17 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
 
               <div className="space-y-2">
                 <Label htmlFor="file">File Upload</Label>
-                <div className="border-2 border-dashed border-border rounded-lg p-6 text-center hover:border-primary transition-colors">
+                <div 
+                  className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+                    isDragging 
+                      ? 'border-primary bg-primary/5' 
+                      : 'border-border hover:border-primary'
+                  }`}
+                  onDragOver={handleDragOver}
+                  onDragEnter={handleDragEnter}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                >
                   <Upload className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
                   <Input
                     id="file"
