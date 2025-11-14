@@ -305,12 +305,16 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
       const desc = item.description?.toLowerCase() || '';
       
       // Basic charge (in R/month)
-      if (desc.includes('basic')) {
-        rates.basicCharge = item.rate;
+      if (desc.includes('basic') && !desc.includes('kwh') && !desc.includes('kva')) {
+        rates.basicCharge = item.rate || item.amount;
       }
       
       // Energy charge (in R/kWh, convert to c/kWh)
-      if ((desc.includes('kwh') || desc.includes('kva')) && !desc.includes('basic')) {
+      // Exclude generator charges and only include actual electricity/conv charges
+      if ((desc.includes('kwh') || desc.includes('kva')) && 
+          !desc.includes('basic') && 
+          !desc.includes('generator') &&
+          (desc.includes('conv') || desc.includes('electrical') || desc.includes('electricity'))) {
         rates.energyCharge = item.rate ? item.rate * 100 : undefined;
       }
     });
