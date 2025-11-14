@@ -4194,7 +4194,7 @@ export default function SchematicEditor({
                   const { generateMeterStoragePath } = await import("@/lib/storagePaths");
                   const timestamp = Date.now();
                   const snippetFileName = `snippet_${timestamp}.png`;
-                  const newSnippetPath = await generateMeterStoragePath(siteId, newMeter.meter_number, 'Snippets', snippetFileName);
+                  const { bucket: snippetBucket, path: newSnippetPath } = await generateMeterStoragePath(siteId, newMeter.meter_number, 'Snippets', snippetFileName);
                   
                   // Copy file to new location
                   const { data: snippetData, error: downloadError } = await supabase.storage
@@ -4203,7 +4203,7 @@ export default function SchematicEditor({
                   
                   if (!downloadError && snippetData) {
                     const { error: uploadError } = await supabase.storage
-                      .from('meter-snippets')
+                      .from(snippetBucket)
                       .upload(newSnippetPath, snippetData, {
                         contentType: 'image/png',
                         upsert: false
@@ -4212,7 +4212,7 @@ export default function SchematicEditor({
                     if (!uploadError) {
                       // Get new public URL
                       const { data: { publicUrl } } = supabase.storage
-                        .from('meter-snippets')
+                        .from(snippetBucket)
                         .getPublicUrl(newSnippetPath);
                       
                       // Update meter with new snippet URL

@@ -84,11 +84,14 @@ const Settings = () => {
     setIsUploading(true);
     try {
       // Upload file
+      const { generateAppAssetPath } = await import("@/lib/storagePaths");
       const fileExt = file.name.split(".").pop();
       const fileName = `app-logo-${Date.now()}.${fileExt}`;
-      const { data, error: uploadError } = await supabase.storage
-        .from("logos")
-        .upload(fileName, file, {
+      const { bucket, path: filePath } = generateAppAssetPath("Logos", fileName);
+      
+      const { error: uploadError } = await supabase.storage
+        .from(bucket)
+        .upload(filePath, file, {
           cacheControl: "3600",
           upsert: true,
         });
@@ -97,8 +100,8 @@ const Settings = () => {
 
       // Get public URL
       const { data: { publicUrl } } = supabase.storage
-        .from("logos")
-        .getPublicUrl(data.path);
+        .from(bucket)
+        .getPublicUrl(filePath);
 
       setLogoUrl(publicUrl);
       

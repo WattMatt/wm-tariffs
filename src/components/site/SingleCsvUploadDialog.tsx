@@ -107,11 +107,11 @@ export default function SingleCsvUploadDialog({
       // Generate hierarchical storage path
       const { generateMeterStoragePath } = await import("@/lib/storagePaths");
       const fileName = selectedFile.name;
-      const filePath = await generateMeterStoragePath(siteId, meter.meter_number, '', fileName);
+      const { bucket, path: filePath } = await generateMeterStoragePath(siteId, meter.meter_number, 'CSVs', fileName);
 
       // Upload file to storage
       const { error: uploadError } = await supabase.storage
-        .from("meter-csvs")
+        .from(bucket)
         .upload(filePath, selectedFile, { upsert: false });
 
       if (uploadError) {
@@ -129,7 +129,6 @@ export default function SingleCsvUploadDialog({
       const { error: trackError } = await supabase
         .from("meter_csv_files")
         .insert({
-          site_id: siteId,
           meter_id: meterId,
           file_name: fileName,
           file_path: filePath,
@@ -139,6 +138,7 @@ export default function SingleCsvUploadDialog({
           parse_status: "uploaded",
           separator: separator,
           header_row_number: parseInt(headerRowNumber) || 1,
+          site_id: siteId,
         });
 
       if (trackError) {
