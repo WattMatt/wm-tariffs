@@ -45,6 +45,8 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [selectedSchematicIds, setSelectedSchematicIds] = useState<Set<string>>(new Set());
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [schematicName, setSchematicName] = useState("");
+  const [isNameManuallyEdited, setIsNameManuallyEdited] = useState(false);
 
   useEffect(() => {
     fetchSchematics();
@@ -102,6 +104,12 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
         return;
       }
       setSelectedFile(file);
+      
+      // Auto-populate name field if empty and not manually edited
+      if (!isNameManuallyEdited && !schematicName.trim()) {
+        const nameWithoutExtension = file.name.replace(/\.(pdf|png|jpg|jpeg|svg)$/i, '');
+        setSchematicName(nameWithoutExtension);
+      }
     }
   };
 
@@ -143,6 +151,12 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
       }
       
       setSelectedFile(file);
+      
+      // Auto-populate name field if empty and not manually edited
+      if (!isNameManuallyEdited && !schematicName.trim()) {
+        const nameWithoutExtension = file.name.replace(/\.(pdf|png|jpg|jpeg|svg)$/i, '');
+        setSchematicName(nameWithoutExtension);
+      }
     }
   };
 
@@ -260,6 +274,8 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
 
       setIsDialogOpen(false);
       setSelectedFile(null);
+      setSchematicName("");
+      setIsNameManuallyEdited(false);
       fetchSchematics();
     } catch (error: any) {
       toast.error(error.message || "Failed to upload schematic");
@@ -436,7 +452,15 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
             <Network className="w-4 h-4" />
             Meter Connections
           </Button>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <Dialog open={isDialogOpen} onOpenChange={(open) => {
+            setIsDialogOpen(open);
+            if (!open) {
+              // Reset form when dialog closes
+              setSelectedFile(null);
+              setSchematicName("");
+              setIsNameManuallyEdited(false);
+            }
+          }}>
           <DialogTrigger asChild>
             <Button className="gap-2">
               <Plus className="w-4 h-4" />
@@ -451,7 +475,17 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="name">Schematic Name</Label>
-                <Input id="name" name="name" required placeholder="Main Distribution Board - Level 1" />
+                <Input 
+                  id="name" 
+                  name="name" 
+                  required 
+                  placeholder="Main Distribution Board - Level 1"
+                  value={schematicName}
+                  onChange={(e) => {
+                    setSchematicName(e.target.value);
+                    setIsNameManuallyEdited(true);
+                  }}
+                />
               </div>
 
               <div className="space-y-2">
