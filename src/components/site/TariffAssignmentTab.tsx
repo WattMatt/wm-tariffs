@@ -247,16 +247,12 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
       return false;
     });
     
-    // Deduplicate by shop number - keep only the most recent document per shop number
-    const uniqueShopNumbers = new Map<string, DocumentShopNumber>();
-    matches.forEach(doc => {
-      const existing = uniqueShopNumbers.get(doc.shopNumber);
-      if (!existing || doc.periodStart > existing.periodStart) {
-        uniqueShopNumbers.set(doc.shopNumber, doc);
-      }
+    // Sort by period start date (most recent first) and return all matches
+    return matches.sort((a, b) => {
+      const dateA = new Date(a.periodStart).getTime();
+      const dateB = new Date(b.periodStart).getTime();
+      return dateB - dateA; // Descending order (newest first)
     });
-    
-    return Array.from(uniqueShopNumbers.values());
   };
 
   const handleTariffChange = (meterId: string, tariffId: string) => {
