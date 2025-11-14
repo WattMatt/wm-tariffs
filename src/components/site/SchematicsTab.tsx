@@ -214,12 +214,14 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
         toast.info("Converting PDF to image for faster viewing...");
         
         try {
-          // Import PDF.js - use dynamic import for worker
+          // Import PDF.js
           const pdfjsLib = await import('pdfjs-dist');
           
-          // Set worker to use the npm package worker (works with Vite)
-          const pdfjsWorker = await import('pdfjs-dist/build/pdf.worker.min.mjs?url');
-          pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker.default;
+          // Set worker using Vite-compatible approach
+          pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+            'pdfjs-dist/build/pdf.worker.min.mjs',
+            import.meta.url
+          ).toString();
           
           // Load PDF from the uploaded file
           const arrayBuffer = await selectedFile.arrayBuffer();
