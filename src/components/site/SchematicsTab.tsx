@@ -413,23 +413,6 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
     }
   };
 
-  const handleSyncStorage = async () => {
-    try {
-      toast.info("Syncing storage files...");
-      const { data, error } = await supabase.functions.invoke('sync-storage-schematics', {
-        body: { siteId }
-      });
-
-      if (error) throw error;
-
-      toast.success(`Sync complete: ${data.added} added, ${data.removed} removed`);
-      fetchSchematics();
-    } catch (error: any) {
-      console.error('Sync error:', error);
-      toast.error(error.message || "Failed to sync storage");
-    }
-  };
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -449,10 +432,6 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
               {isBulkDeleting ? "Deleting..." : `Delete ${selectedSchematicIds.size} Selected`}
             </Button>
           )}
-          <Button variant="outline" onClick={handleSyncStorage} className="gap-2">
-            <Upload className="w-4 h-4" />
-            Sync Storage
-          </Button>
           <Button variant="outline" onClick={() => setShowConnectionsDialog(true)} className="gap-2">
             <Network className="w-4 h-4" />
             Meter Connections
