@@ -32,9 +32,3 @@ verify_jwt = false
 
 [functions.delete-duplicate-documents]
 verify_jwt = false
-
-[functions.migrate-storage-structure]
-verify_jwt = false
-
-[functions.cleanup-orphaned-files]
-verify_jwt = false
