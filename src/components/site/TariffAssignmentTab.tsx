@@ -804,27 +804,22 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
               </div>
 
               {selectedMeterIds.size > 0 && (
-                <div className="flex items-center gap-3 p-3 bg-primary/10 border border-primary/30 rounded-lg">
-                  <span className="text-sm font-medium">
-                    {selectedMeterIds.size} meter{selectedMeterIds.size > 1 ? 's' : ''} selected
-                  </span>
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={handleBulkClearTariffs}
-                        >
-                          <Eraser className="w-4 h-4 mr-2" />
-                          Clear Tariffs
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Clear tariff assignments for selected meters</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
+                <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/50">
+                  <div>
+                    <span className="text-sm font-medium">
+                      {selectedMeterIds.size} meter{selectedMeterIds.size > 1 ? 's' : ''} selected
+                    </span>
+                  </div>
+                  <div>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={handleBulkClearTariffs}
+                    >
+                      <Eraser className="w-4 h-4 mr-2" />
+                      Clear Tariffs
+                    </Button>
+                  </div>
                 </div>
               )}
 
