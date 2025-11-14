@@ -359,7 +359,7 @@ export default function SiteDetail() {
               </TabsTrigger>
               <TabsTrigger value="load-profiles" className="gap-2">
                 <TrendingUp className="w-4 h-4" />
-                Load Profiles
+                Energy Profiles
               </TabsTrigger>
               <TabsTrigger value="tariffs" className="gap-2">
                 <DollarSign className="w-4 h-4" />
