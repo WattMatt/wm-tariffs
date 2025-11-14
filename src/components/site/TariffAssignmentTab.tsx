@@ -753,7 +753,6 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
                       <SortableHeader column="meter_type">Type</SortableHeader>
                       <SortableHeader column="mccb_size">Breaker Size (A)</SortableHeader>
                       <TableHead>Shop Numbers</TableHead>
-                      <TableHead>Status</TableHead>
                       <TableHead>Assigned Tariff Structure</TableHead>
                       <TableHead className="w-[80px]">Actions</TableHead>
                     </TableRow>
@@ -809,19 +808,6 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
                               </div>
                             ) : (
                               <span className="text-muted-foreground text-sm">—</span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {hasUnsavedChanges(meter.id) ? (
-                              <Badge className="gap-1 bg-warning text-warning-foreground">
-                                <AlertCircle className="w-3 h-3" />
-                                Pending
-                              </Badge>
-                            ) : hasAssignment ? null : (
-                              <Badge variant="secondary" className="gap-1">
-                                <AlertCircle className="w-3 h-3" />
-                                Unassigned
-                              </Badge>
                             )}
                           </TableCell>
                           <TableCell>
