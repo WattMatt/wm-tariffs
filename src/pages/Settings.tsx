@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Upload, Save, Loader2 } from "lucide-react";
 import { StorageMigrationTool } from "@/components/admin/StorageMigrationTool";
+import { OrphanedFilesCleanup } from "@/components/admin/OrphanedFilesCleanup";
 
 const Settings = () => {
   const navigate = useNavigate();
@@ -254,7 +255,8 @@ const Settings = () => {
           </CardContent>
         </Card>
 
-        <div className="mt-8">
+        <div className="mt-8 space-y-6">
+          <OrphanedFilesCleanup />
           <StorageMigrationTool />
         </div>
       </div>
