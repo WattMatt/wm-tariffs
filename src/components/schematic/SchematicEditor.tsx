@@ -351,7 +351,7 @@ async function cropRegionAndUpload(
   sourceWidth: number,
   sourceHeight: number,
   schematicId: string
-): Promise<string> {
+): Promise<{ previewUrl: string; blob: Blob }> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
@@ -401,7 +401,7 @@ async function cropRegionAndUpload(
         scaledWidth, scaledHeight
       );
       
-      // Convert to blob for upload
+      // Store blob in memory instead of uploading to temp
       cropCanvas.toBlob(async (blob) => {
         if (!blob) {
           reject(new Error('Failed to create blob'));
@@ -409,38 +409,14 @@ async function cropRegionAndUpload(
         }
         
         try {
-          // Get meter number for the snippet (will be determined based on the detection)
-          // For now, use a placeholder - this will be updated when meter is created/assigned
-          const timestamp = Date.now();
-          const tempFileName = `snippet_${timestamp}.png`;
+          // Create a local blob URL for preview
+          const previewUrl = URL.createObjectURL(blob);
+          console.log('✅ Created blob for snippet (will upload on save)');
           
-          // We'll update this to use proper meter number after meter is saved
-          // For now, upload to a temp location that will be moved during save
-          const fileName = `temp/${schematicId}/${tempFileName}`;
-          console.log('📤 Uploading cropped image to storage:', fileName);
-          
-          const { data, error } = await supabase.storage
-            .from('client-files')
-            .upload(fileName, blob, {
-              contentType: 'image/png',
-              upsert: false
-            });
-          
-          if (error) {
-            console.error('❌ Upload error:', error);
-            reject(error);
-            return;
-          }
-          
-          // Get public URL
-          const { data: { publicUrl } } = supabase.storage
-            .from('client-files')
-            .getPublicUrl(fileName);
-          
-          console.log('✅ Upload successful, public URL:', publicUrl);
-          resolve(publicUrl);
+          // Return both the preview URL and the blob for later upload
+          resolve({ previewUrl, blob });
         } catch (err) {
-          console.error('❌ Upload failed:', err);
+          console.error('❌ Blob creation failed:', err);
           reject(err);
         }
       }, 'image/png');
@@ -4020,6 +3996,11 @@ export default function SchematicEditor({
               schematicId
             );
             
+            // Store both the preview URL and blob
+            const croppedImageData = croppedImageUrl;
+            const previewUrl = croppedImageData.previewUrl;
+            const snippetBlob = croppedImageData.blob;
+            
             // Calculate position percentages for this region
             // Rectangles use top-left origin, but meter cards use center origin
             // So we need to add half the card dimensions to center the position
@@ -4047,7 +4028,7 @@ export default function SchematicEditor({
             try {
               const { data, error } = await supabase.functions.invoke('extract-schematic-meters', {
                 body: { 
-                  imageUrl: croppedImageUrl,
+                  imageUrl: previewUrl,
                   filePath: null,
                   mode: 'extract-region',
                   region: {
@@ -4126,7 +4107,7 @@ export default function SchematicEditor({
                   cable_specification: extractedMeterData?.cable_specification || null,
                   serial_number: extractedMeterData?.serial_number || null,
                   ct_type: extractedMeterData?.ct_type || null,
-                  scanned_snippet_url: croppedImageUrl, // Save the snippet image
+                  scanned_snippet_url: null, // Will be set after upload
                   confirmation_status: 'unconfirmed', // Re-scanned meters are unconfirmed
                 })
                 .eq("id", existingMeter.id)
@@ -4158,7 +4139,7 @@ export default function SchematicEditor({
                   location: null,
                   tariff: null,
                   is_revenue_critical: false,
-                  scanned_snippet_url: croppedImageUrl, // Save the snippet image
+                  scanned_snippet_url: null, // Will be set after upload
                   confirmation_status: 'unconfirmed', // New scanned meters are unconfirmed
                 })
                 .select()
@@ -4182,57 +4163,41 @@ export default function SchematicEditor({
               continue;
             }
             
-            // Move snippet from temp location to proper hierarchical location
-            if (croppedImageUrl) {
+            // Upload snippet directly to hierarchical location
+            if (snippetBlob) {
               try {
-                // Extract temp file path from URL
-                const urlParts = croppedImageUrl.split('/client-files/');
-                if (urlParts.length === 2) {
-                  const tempPath = urlParts[1].split('?')[0]; // Remove any query params
+                // Generate proper hierarchical path for the snippet
+                const { generateMeterStoragePath } = await import("@/lib/storagePaths");
+                const timestamp = Date.now();
+                const snippetFileName = `snippet_${timestamp}.png`;
+                const { bucket: snippetBucket, path: snippetPath } = await generateMeterStoragePath(siteId, newMeter.meter_number, 'Snippets', snippetFileName);
+                
+                // Upload directly to final location
+                const { error: uploadError } = await supabase.storage
+                  .from(snippetBucket)
+                  .upload(snippetPath, snippetBlob, {
+                    contentType: 'image/png',
+                    upsert: false
+                  });
+                
+                if (!uploadError) {
+                  // Get public URL
+                  const { data: { publicUrl } } = supabase.storage
+                    .from(snippetBucket)
+                    .getPublicUrl(snippetPath);
                   
-                  // Generate proper hierarchical path for the snippet
-                  const { generateMeterStoragePath } = await import("@/lib/storagePaths");
-                  const timestamp = Date.now();
-                  const snippetFileName = `snippet_${timestamp}.png`;
-                  const { bucket: snippetBucket, path: newSnippetPath } = await generateMeterStoragePath(siteId, newMeter.meter_number, 'Snippets', snippetFileName);
+                  // Update meter with snippet URL
+                  await supabase
+                    .from('meters')
+                    .update({ scanned_snippet_url: publicUrl })
+                    .eq('id', newMeter.id);
                   
-                  // Copy file to new location
-                  const { data: snippetData, error: downloadError } = await supabase.storage
-                    .from('client-files')
-                    .download(tempPath);
-                  
-                  if (!downloadError && snippetData) {
-                    const { error: uploadError } = await supabase.storage
-                      .from(snippetBucket)
-                      .upload(newSnippetPath, snippetData, {
-                        contentType: 'image/png',
-                        upsert: false
-                      });
-                    
-                    if (!uploadError) {
-                      // Get new public URL
-                      const { data: { publicUrl } } = supabase.storage
-                        .from(snippetBucket)
-                        .getPublicUrl(newSnippetPath);
-                      
-                      // Update meter with new snippet URL
-                      await supabase
-                        .from('meters')
-                        .update({ scanned_snippet_url: publicUrl })
-                        .eq('id', newMeter.id);
-                      
-                      // Delete temp file
-                      await supabase.storage
-                        .from('client-files')
-                        .remove([tempPath]);
-                      
-                      console.log(`✅ Moved snippet from ${tempPath} to ${newSnippetPath}`);
-                    }
-                  }
+                  console.log(`✅ Uploaded snippet to ${snippetPath}`);
+                } else {
+                  console.error('Error uploading snippet:', uploadError);
                 }
               } catch (snippetError) {
-                console.error('Failed to move snippet to hierarchical location:', snippetError);
-                // Continue anyway - snippet is still accessible at temp location
+                console.error('Failed to upload snippet:', snippetError);
               }
             }
             
@@ -4747,29 +4712,6 @@ export default function SchematicEditor({
                     .eq('id', meterId);
                 }
                 setSelectedMeterIds([]);
-                
-                // Clean up temp folder for this schematic
-                try {
-                  const tempFolderPath = `temp/${schematicId}`;
-                  const { data: tempFiles, error: listError } = await supabase.storage
-                    .from('client-files')
-                    .list(tempFolderPath);
-                  
-                  if (!listError && tempFiles && tempFiles.length > 0) {
-                    const filesToDelete = tempFiles.map(file => `${tempFolderPath}/${file.name}`);
-                    const { error: deleteError } = await supabase.storage
-                      .from('client-files')
-                      .remove(filesToDelete);
-                    
-                    if (deleteError) {
-                      console.error('Error cleaning up temp folder:', deleteError);
-                    } else {
-                      console.log(`✅ Cleaned up ${filesToDelete.length} temp files`);
-                    }
-                  }
-                } catch (tempCleanupError) {
-                  console.error('Error during temp folder cleanup:', tempCleanupError);
-                }
                 
                 await fetchMeters();
                 await fetchMeterPositions();
