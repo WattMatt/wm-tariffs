@@ -10,10 +10,9 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, FileText, Upload, Eye, Network, Trash2 } from "lucide-react";
+import { Plus, FileText, Upload, Eye, Trash2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import MeterConnectionsDialog from "@/components/schematic/MeterConnectionsDialog";
 
 interface Schematic {
   id: string;
@@ -37,7 +36,6 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [showConnectionsDialog, setShowConnectionsDialog] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [schematicToDelete, setSchematicToDelete] = useState<Schematic | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -453,10 +451,6 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
               {isBulkDeleting ? "Deleting..." : `Delete ${selectedSchematicIds.size} Selected`}
             </Button>
           )}
-          <Button variant="outline" onClick={() => setShowConnectionsDialog(true)} className="gap-2">
-            <Network className="w-4 h-4" />
-            Meter Connections
-          </Button>
           <Dialog open={isDialogOpen} onOpenChange={(open) => {
             setIsDialogOpen(open);
             if (!open) {
@@ -563,13 +557,6 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
         </Dialog>
         </div>
       </div>
-
-      {showConnectionsDialog && (
-        <MeterConnectionsDialog
-          siteId={siteId}
-          onClose={() => setShowConnectionsDialog(false)}
-        />
-      )}
 
       {isFetching ? (
         <Card className="border-border/50">
