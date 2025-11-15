@@ -4186,9 +4186,9 @@ export default function SchematicEditor({
             if (croppedImageUrl) {
               try {
                 // Extract temp file path from URL
-                const urlParts = croppedImageUrl.split('/meter-snippets/');
+                const urlParts = croppedImageUrl.split('/client-files/');
                 if (urlParts.length === 2) {
-                  const tempPath = urlParts[1];
+                  const tempPath = urlParts[1].split('?')[0]; // Remove any query params
                   
                   // Generate proper hierarchical path for the snippet
                   const { generateMeterStoragePath } = await import("@/lib/storagePaths");
