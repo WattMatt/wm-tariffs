@@ -402,6 +402,9 @@ async function cropRegionAndUpload(
       );
       
       // Store blob in memory instead of uploading to temp
+      // Convert to base64 data URL for sending to edge function
+      const dataUrl = cropCanvas.toDataURL('image/png');
+      
       cropCanvas.toBlob(async (blob) => {
         if (!blob) {
           reject(new Error('Failed to create blob'));
@@ -409,12 +412,10 @@ async function cropRegionAndUpload(
         }
         
         try {
-          // Create a local blob URL for preview
-          const previewUrl = URL.createObjectURL(blob);
           console.log('✅ Created blob for snippet (will upload on save)');
           
-          // Return both the preview URL and the blob for later upload
-          resolve({ previewUrl, blob });
+          // Return both the data URL (for edge function) and the blob (for later upload)
+          resolve({ previewUrl: dataUrl, blob });
         } catch (err) {
           console.error('❌ Blob creation failed:', err);
           reject(err);
