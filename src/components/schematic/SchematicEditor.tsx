@@ -4747,6 +4747,30 @@ export default function SchematicEditor({
                     .eq('id', meterId);
                 }
                 setSelectedMeterIds([]);
+                
+                // Clean up temp folder for this schematic
+                try {
+                  const tempFolderPath = `temp/${schematicId}`;
+                  const { data: tempFiles, error: listError } = await supabase.storage
+                    .from('client-files')
+                    .list(tempFolderPath);
+                  
+                  if (!listError && tempFiles && tempFiles.length > 0) {
+                    const filesToDelete = tempFiles.map(file => `${tempFolderPath}/${file.name}`);
+                    const { error: deleteError } = await supabase.storage
+                      .from('client-files')
+                      .remove(filesToDelete);
+                    
+                    if (deleteError) {
+                      console.error('Error cleaning up temp folder:', deleteError);
+                    } else {
+                      console.log(`✅ Cleaned up ${filesToDelete.length} temp files`);
+                    }
+                  }
+                } catch (tempCleanupError) {
+                  console.error('Error during temp folder cleanup:', tempCleanupError);
+                }
+                
                 await fetchMeters();
                 await fetchMeterPositions();
                 await fetchMeterConnections();
