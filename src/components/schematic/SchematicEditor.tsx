@@ -4618,15 +4618,6 @@ export default function SchematicEditor({
             variant="outline"
             size="sm"
             onClick={async () => {
-              // Build confirmation message based on what's selected
-              const parts = [];
-              if (selectedRegionIndices.length > 0) parts.push(`${selectedRegionIndices.length} region(s)`);
-              if (selectedConnectionKeys.length > 0) parts.push(`${selectedConnectionKeys.length} connection(s)`);
-              if (selectedMeterIds.length > 0) parts.push(`${selectedMeterIds.length} meter(s)`);
-              
-              const message = `Delete ${parts.join(', ')}?${selectedMeterIds.length > 0 ? ' This will also delete all associated readings and positions.' : ''}`;
-              if (!confirm(message)) return;
-              
               // Delete regions
               if (selectedRegionIndices.length > 0 && fabricCanvas) {
                 selectedRegionIndices.forEach(index => {
@@ -4762,6 +4753,12 @@ export default function SchematicEditor({
               }
               
               if (fabricCanvas) fabricCanvas.renderAll();
+              
+              // Build success message
+              const parts = [];
+              if (selectedRegionIndices.length > 0) parts.push(`${selectedRegionIndices.length} region(s)`);
+              if (selectedConnectionKeys.length > 0) parts.push(`${selectedConnectionKeys.length} connection(s)`);
+              if (selectedMeterIds.length > 0) parts.push(`${selectedMeterIds.length} meter(s)`);
               toast.success(`Deleted ${parts.join(', ')}`);
             }}
             className="gap-2"
