@@ -94,7 +94,7 @@ export function MeterFormFields({
     const zoneSelect = document.querySelector(`select[name="zone"]`) as HTMLSelectElement;
     
     const name = nameInput?.value || '';
-    const meterType = meterTypeSelect?.value || 'tenant_meter';
+    const meterType = meterTypeSelect?.value || 'council_meter';
     const zone = zoneSelect?.value || '';
     
     if (!name) {
@@ -277,13 +277,13 @@ export function MeterFormFields({
         <Label htmlFor={`${idPrefix}_meter_type`}>
           {showLocationAndTariff ? 'Meter Type' : 'METER TYPE'}
         </Label>
-        <Select name="meter_type" defaultValue={defaultValues.meter_type || 'tenant_meter'}>
+        <Select name="meter_type" defaultValue={defaultValues.meter_type || 'council_meter'}>
             <SelectTrigger className="bg-background">
               <SelectValue placeholder="Select meter type" />
             </SelectTrigger>
             <SelectContent className="bg-background z-50">
-              <SelectItem value="bulk_meter">Bulk Meter{!showLocationAndTariff && ' (Main Incoming)'}</SelectItem>
               <SelectItem value="council_meter">Council Meter</SelectItem>
+              <SelectItem value="bulk_meter">Bulk Meter{!showLocationAndTariff && ' (Main Incoming)'}</SelectItem>
               <SelectItem value="check_meter">Check Meter{!showLocationAndTariff && ' (Verification)'}</SelectItem>
               <SelectItem value="tenant_meter">Tenant Meter</SelectItem>
               <SelectItem value="other">Other</SelectItem>

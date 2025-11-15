@@ -284,8 +284,8 @@ export const QuickMeterDialog = ({
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="bulk_meter">Bulk Meter</SelectItem>
                         <SelectItem value="council_meter">Council Meter</SelectItem>
+                        <SelectItem value="bulk_meter">Bulk Meter</SelectItem>
                         <SelectItem value="check_meter">Check Meter</SelectItem>
                         <SelectItem value="tenant_meter">Tenant Meter</SelectItem>
                         <SelectItem value="other">Other</SelectItem>

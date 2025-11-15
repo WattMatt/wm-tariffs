@@ -4094,12 +4094,12 @@ export default function SchematicEditor({
               toast.info(`No meter number found - generated ${meterNumber}`);
             }
             
-            // Validate meter_type - use bulk_meter as default
-            let meterType = extractedMeterData?.meter_type || "bulk_meter";
-            const validMeterTypes = ["bulk_meter", "council_meter", "check_meter", "tenant_meter", "other"];
+            // Validate meter_type - use council_meter as default
+            let meterType = extractedMeterData?.meter_type || "council_meter";
+            const validMeterTypes = ["council_meter", "bulk_meter", "check_meter", "tenant_meter", "other"];
             if (!validMeterTypes.includes(meterType)) {
-              console.warn(`Invalid meter_type "${meterType}", defaulting to "bulk_meter"`);
-              meterType = "bulk_meter";
+              console.warn(`Invalid meter_type "${meterType}", defaulting to "council_meter"`);
+              meterType = "council_meter";
             }
             
             // Check if meter with this number already exists for this site
@@ -5375,8 +5375,8 @@ export default function SchematicEditor({
                     <SelectValue placeholder="Select type" />
                   </SelectTrigger>
                   <SelectContent className="bg-background z-50">
-                    <SelectItem value="bulk_meter">Bulk Meter</SelectItem>
                     <SelectItem value="council_meter">Council Meter</SelectItem>
+                    <SelectItem value="bulk_meter">Bulk Meter</SelectItem>
                     <SelectItem value="check_meter">Check Meter</SelectItem>
                     <SelectItem value="tenant_meter">Tenant Meter</SelectItem>
                     <SelectItem value="other">Other</SelectItem>
@@ -5617,13 +5617,13 @@ export default function SchematicEditor({
 
                   <div className="space-y-2">
                     <Label htmlFor="confirm_meter_type">METER TYPE *</Label>
-                    <Select name="meter_type" required defaultValue={extractedMeters[selectedMeterIndex].meter_type || 'tenant_meter'}>
+                    <Select name="meter_type" required defaultValue={extractedMeters[selectedMeterIndex].meter_type || 'council_meter'}>
                       <SelectTrigger className="bg-background">
                         <SelectValue placeholder="Select meter type" />
                       </SelectTrigger>
                       <SelectContent className="bg-background z-50">
-                        <SelectItem value="bulk_meter">Bulk Meter (Main Incoming)</SelectItem>
                         <SelectItem value="council_meter">Council Meter</SelectItem>
+                        <SelectItem value="bulk_meter">Bulk Meter (Main Incoming)</SelectItem>
                         <SelectItem value="check_meter">Check Meter (Verification)</SelectItem>
                         <SelectItem value="tenant_meter">Tenant Meter</SelectItem>
                         <SelectItem value="other">Other</SelectItem>
@@ -5973,8 +5973,8 @@ export default function SchematicEditor({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="keep_existing">Keep existing</SelectItem>
-                    <SelectItem value="bulk_meter">Bulk Meter</SelectItem>
                     <SelectItem value="council_meter">Council Meter</SelectItem>
+                    <SelectItem value="bulk_meter">Bulk Meter</SelectItem>
                     <SelectItem value="check_meter">Check Meter</SelectItem>
                     <SelectItem value="tenant_meter">Tenant Meter</SelectItem>
                   </SelectContent>
