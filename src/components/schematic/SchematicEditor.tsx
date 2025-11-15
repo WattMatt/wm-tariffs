@@ -4191,17 +4191,16 @@ export default function SchematicEditor({
             if (snippetBlob) {
               try {
                 // Generate proper hierarchical path for the snippet
-                const { generateMeterStoragePath } = await import("@/lib/storagePaths");
-                const timestamp = Date.now();
-                const snippetFileName = `snippet_${timestamp}.png`;
-                const { bucket: snippetBucket, path: snippetPath } = await generateMeterStoragePath(siteId, newMeter.meter_number, 'Snippets', snippetFileName);
+                const { generateStoragePath, sanitizeName } = await import("@/lib/storagePaths");
+                const snippetFileName = `${sanitizeName(newMeter.meter_number)}_snippet.png`;
+                const { bucket: snippetBucket, path: snippetPath } = await generateStoragePath(siteId, 'Metering', 'Meters', snippetFileName);
                 
                 // Upload directly to final location
                 const { error: uploadError } = await supabase.storage
                   .from(snippetBucket)
                   .upload(snippetPath, snippetBlob, {
                     contentType: 'image/png',
-                    upsert: false
+                    upsert: true
                   });
                 
                 if (!uploadError) {
