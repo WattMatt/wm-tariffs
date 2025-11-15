@@ -4851,8 +4851,6 @@ export default function SchematicEditor({
                   toast.success(`Deleted ${selectedConnectionKeys.length} connection(s)`);
                 } else {
                   // Clear all connections
-                  if (!confirm('Clear all connections?')) return;
-                  
                   // Delete all schematic lines
                   const { error: linesError } = await supabase
                     .from('schematic_lines')
@@ -4861,7 +4859,6 @@ export default function SchematicEditor({
 
                   if (linesError) {
                     console.error('Error clearing lines:', linesError);
-                    toast.error('Failed to clear lines');
                     return;
                   }
 
@@ -4888,7 +4885,6 @@ export default function SchematicEditor({
 
                   await fetchSchematicLines();
                   await fetchMeterConnections();
-                  toast.success('All connections cleared');
                 }
               }}
               disabled={!isEditMode}
