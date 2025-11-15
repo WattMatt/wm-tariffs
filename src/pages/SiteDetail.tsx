@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -51,6 +51,7 @@ interface SupplyAuthority {
 export default function SiteDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [site, setSite] = useState<Site | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -59,6 +60,7 @@ export default function SiteDetail() {
   const [selectedProvince, setSelectedProvince] = useState<string>("");
   const [filteredAuthorities, setFilteredAuthorities] = useState<SupplyAuthority[]>([]);
   const [selectedSection, setSelectedSection] = useState<SiteSection>('metering');
+  const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'overview');
   const [siteStats, setSiteStats] = useState({
     meters: 0,
     readings: 0,
@@ -339,7 +341,7 @@ export default function SiteDetail() {
         </Card>
 
         {selectedSection === 'metering' && (
-          <Tabs defaultValue="overview" className="space-y-6">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
             <TabsList className="grid w-full grid-cols-9 lg:w-auto">
               <TabsTrigger value="overview" className="gap-2">
                 <Activity className="w-4 h-4" />

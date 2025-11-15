@@ -792,9 +792,9 @@ export default function SchematicViewer() {
       <div className="flex flex-col h-[calc(100vh-4rem)] overflow-hidden">
         <div className="flex items-center justify-between py-4 px-6 border-b shrink-0">
           <div className="flex items-center gap-4">
-            <Button variant="outline" onClick={() => navigate(`/sites/${schematic.site_id}`)}>
+            <Button variant="outline" onClick={() => navigate(`/sites/${schematic.site_id}?tab=schematics`)}>
               <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Site
+              Back to Schematic
             </Button>
             <div>
               <h1 className="text-2xl font-bold">{schematic.name}</h1>
