@@ -6125,6 +6125,7 @@ export default function SchematicEditor({
         onOpenChange={setIsConnectionsDialogOpen}
         siteId={siteId}
         schematicId={schematicId}
+        onConnectionsChanged={fetchSchematicLines}
       />
     </div>
   );

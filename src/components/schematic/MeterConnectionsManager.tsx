@@ -27,9 +27,10 @@ interface MeterConnectionsManagerProps {
   onOpenChange: (open: boolean) => void;
   siteId: string;
   schematicId: string;
+  onConnectionsChanged?: () => void;
 }
 
-export function MeterConnectionsManager({ open, onOpenChange, siteId, schematicId }: MeterConnectionsManagerProps) {
+export function MeterConnectionsManager({ open, onOpenChange, siteId, schematicId, onConnectionsChanged }: MeterConnectionsManagerProps) {
   const [meters, setMeters] = useState<MeterData[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [loading, setLoading] = useState(false);
@@ -191,6 +192,7 @@ export function MeterConnectionsManager({ open, onOpenChange, siteId, schematicI
     console.log('Connection and lines deleted successfully');
     toast.success('Connection and associated lines deleted');
     fetchConnections();
+    onConnectionsChanged?.();
   };
 
   const getMeterLabel = (meterId: string) => {
