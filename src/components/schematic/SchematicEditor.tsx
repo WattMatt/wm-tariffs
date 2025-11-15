@@ -2534,12 +2534,26 @@ export default function SchematicEditor({
     setFabricCanvas(canvas);
     setIsCanvasReady(false);
 
+    // Track if canvas is still mounted
+    let isMounted = true;
+
     // Load background image
     FabricImage.fromURL(schematicUrl, {
       crossOrigin: 'anonymous'
     }).then((img) => {
+      // Guard: Check if component is still mounted before proceeding
+      if (!isMounted) {
+        console.log('Component unmounted during image load, skipping canvas setup');
+        return;
+      }
+      
       requestAnimationFrame(() => {
-        const container = canvasRef.current?.parentElement;
+        // Double-check mount status after requestAnimationFrame
+        if (!isMounted || !canvasRef.current) {
+          return;
+        }
+        
+        const container = canvasRef.current.parentElement;
         const containerWidth = container?.clientWidth || 1400;
         
         // Use full container width without height constraint
@@ -2555,7 +2569,13 @@ export default function SchematicEditor({
         (canvas as any).originalImageWidth = imgWidth;
         (canvas as any).originalImageHeight = imgHeight;
         
-        canvas.setDimensions({ width: canvasWidth, height: canvasHeight });
+        // Guard: Only set dimensions if canvas hasn't been disposed
+        try {
+          canvas.setDimensions({ width: canvasWidth, height: canvasHeight });
+        } catch (err) {
+          console.warn('Canvas already disposed, skipping dimension update');
+          return;
+        }
         
         img.scale(scale);
         img.set({ 
@@ -2573,9 +2593,12 @@ export default function SchematicEditor({
         // Mark canvas as ready after image is loaded and canvas is resized
         setIsCanvasReady(true);
       });
+    }).catch((err) => {
+      console.error('Failed to load background image:', err);
     });
 
     return () => {
+      isMounted = false;
       window.removeEventListener('mousedown', handleNativeMouseDown, true);
       window.removeEventListener('mouseup', handleMouseUp);
       canvas.dispose();
