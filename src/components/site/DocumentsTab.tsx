@@ -817,8 +817,8 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      const currentFolderDocs = documents.filter(d => !d.is_folder && d.folder_path === currentFolderPath);
-      setSelectedDocuments(new Set(currentFolderDocs.map(doc => doc.id)));
+      const currentFolderItems = documents.filter(d => d.folder_path === currentFolderPath);
+      setSelectedDocuments(new Set(currentFolderItems.map(doc => doc.id)));
     } else {
       setSelectedDocuments(new Set());
     }
@@ -1790,7 +1790,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                   <TableRow className="bg-muted/50">
                     <TableHead className="w-12">
                       <Checkbox
-                        checked={selectedDocuments.size === documents.filter(d => !d.is_folder && d.folder_path === currentFolderPath).length && documents.filter(d => !d.is_folder && d.folder_path === currentFolderPath).length > 0}
+                        checked={selectedDocuments.size === documents.filter(d => d.folder_path === currentFolderPath).length && documents.filter(d => d.folder_path === currentFolderPath).length > 0}
                         onCheckedChange={handleSelectAll}
                       />
                     </TableHead>
@@ -1856,7 +1856,11 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                         className="cursor-pointer hover:bg-muted/50"
                       >
                         <TableCell>
-                          {/* No checkbox for folders */}
+                          <Checkbox
+                            checked={selectedDocuments.has(folder.id)}
+                            onCheckedChange={(checked) => handleSelectDocument(folder.id, checked as boolean)}
+                            onClick={(e) => e.stopPropagation()}
+                          />
                         </TableCell>
                         <TableCell
                           className="font-medium"
