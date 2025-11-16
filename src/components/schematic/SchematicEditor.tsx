@@ -3719,30 +3719,21 @@ export default function SchematicEditor({
     if (meterObjects.length > 0) {
       const meterCard = meterObjects[0] as any;
       
-      console.log('✅ Meter found, selecting and panning to it');
+      console.log('✅ Meter found, highlighting it');
       
-      // Select the meter card (will stay selected until user clicks elsewhere)
+      // Select the meter card with enhanced visibility
       fabricCanvas.setActiveObject(meterCard);
       
-      // Pan the canvas to center the meter card in view
-      const canvasCenter = {
-        x: fabricCanvas.width! / 2,
-        y: fabricCanvas.height! / 2
-      };
-      
-      const meterCenter = {
-        x: meterCard.left! + (meterCard.width! * meterCard.scaleX!) / 2,
-        y: meterCard.top! + (meterCard.height! * meterCard.scaleY!) / 2
-      };
-      
-      // Calculate the pan needed to center the meter
-      const panOffset = {
-        x: canvasCenter.x - meterCenter.x,
-        y: canvasCenter.y - meterCenter.y
-      };
-      
-      // Apply the pan
-      fabricCanvas.relativePan(new Point(panOffset.x, panOffset.y));
+      // Make the selection border more visible
+      meterCard.set({
+        borderColor: '#ff0000',
+        borderScaleFactor: 3,
+        cornerColor: '#ff0000',
+        cornerSize: 12,
+        transparentCorners: false,
+        cornerStrokeColor: '#ffffff',
+        borderOpacityWhenMoving: 1,
+      });
       
       fabricCanvas.renderAll();
       
