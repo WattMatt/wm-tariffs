@@ -1871,7 +1871,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                         <TableCell colSpan={6}>
                           <span className="text-muted-foreground text-sm">Folder</span>
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right pr-2">
                           <TooltipProvider>
                             <div className="flex justify-end gap-2">
                               <Tooltip>
@@ -2012,7 +2012,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                             </SelectContent>
                           </Select>
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right pr-2">
                          <TooltipProvider>
                            <div className="flex justify-end gap-2">
                              {doc.document_extractions?.[0] && (
