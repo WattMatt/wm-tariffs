@@ -3683,7 +3683,7 @@ export default function SchematicEditor({
     if (meterObjects.length > 0) {
       const meterCard = meterObjects[0] as any;
       
-      // Select the meter card
+      // Select the meter card (will stay selected until user clicks elsewhere)
       fabricCanvas.setActiveObject(meterCard);
       
       // Pan the canvas to center the meter card in view
@@ -3706,25 +3706,7 @@ export default function SchematicEditor({
       // Apply the pan
       fabricCanvas.relativePan(new Point(panOffset.x, panOffset.y));
       
-      // Add a temporary highlight effect
-      const originalStroke = meterCard.stroke;
-      const originalStrokeWidth = meterCard.strokeWidth;
-      
-      meterCard.set({
-        stroke: '#3b82f6',
-        strokeWidth: 4
-      });
-      
       fabricCanvas.renderAll();
-      
-      // Remove highlight after 2 seconds
-      setTimeout(() => {
-        meterCard.set({
-          stroke: originalStroke,
-          strokeWidth: originalStrokeWidth
-        });
-        fabricCanvas.renderAll();
-      }, 2000);
       
       toast.success('Meter located on schematic');
     } else {
