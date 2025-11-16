@@ -215,20 +215,24 @@ export default function MetersTab({ siteId }: MetersTabProps) {
         })
       );
       
-      // Detect duplicates by serial_number only
+      // Detect duplicates by serial_number only (excluding "Virtual" serial numbers)
       const serialNumbers = new Map<string, number>();
 
-      // Count occurrences of serial numbers
+      // Count occurrences of serial numbers (skip "Virtual")
       metersWithStatus.forEach(meter => {
-        if (meter.serial_number && meter.serial_number.trim() !== '') {
+        if (meter.serial_number && 
+            meter.serial_number.trim() !== '' && 
+            meter.serial_number.toLowerCase() !== 'virtual') {
           serialNumbers.set(meter.serial_number, (serialNumbers.get(meter.serial_number) || 0) + 1);
         }
       });
 
-      // Mark duplicates
+      // Mark duplicates (exclude "Virtual" meters from being marked as duplicates)
       const finalMeters = metersWithStatus.map(meter => {
-        const isDuplicateSerial = meter.serial_number && meter.serial_number.trim() !== '' 
-          && (serialNumbers.get(meter.serial_number) || 0) > 1;
+        const isDuplicateSerial = meter.serial_number && 
+          meter.serial_number.trim() !== '' && 
+          meter.serial_number.toLowerCase() !== 'virtual' &&
+          (serialNumbers.get(meter.serial_number) || 0) > 1;
         
         return {
           ...meter,
