@@ -17,6 +17,7 @@ import { pdfjs } from 'react-pdf';
 import { Canvas as FabricCanvas, Image as FabricImage, Rect as FabricRect, Circle } from "fabric";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { DatePicker } from "@/components/ui/date-picker";
+import { generateStoragePath } from "@/lib/storagePaths";
 
 // Set up PDF.js worker
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
@@ -421,10 +422,18 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
           const fileExt = fileName.split('.').pop()?.toLowerCase();
           const isPdf = fileExt === 'pdf';
 
-          // Upload file to storage
-          const storagePath = `${siteId}/${Date.now()}-${fileName}`;
+          // Upload file to storage using proper hierarchical path
+          const subPath = folderPath || 'Root';
+          const uniqueFileName = `${Date.now()}-${fileName}`;
+          const { bucket, path: storagePath } = await generateStoragePath(
+            siteId,
+            'Documents',
+            subPath,
+            uniqueFileName
+          );
+          
           const { data: uploadData, error: uploadError } = await supabase.storage
-            .from("client-files")
+            .from(bucket)
             .upload(storagePath, file);
 
           if (uploadError) throw uploadError;
@@ -433,10 +442,16 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
 
           if (isPdf) {
             const imageBlob = await convertPdfToImage(file);
-            const imagePath = `${siteId}/${Date.now()}-converted.png`;
+            const uniqueImageName = `${Date.now()}-converted.png`;
+            const { bucket: imageBucket, path: imagePath } = await generateStoragePath(
+              siteId,
+              'Documents',
+              subPath,
+              uniqueImageName
+            );
             
             const { error: imageUploadError } = await supabase.storage
-              .from("client-files")
+              .from(imageBucket)
               .upload(imagePath, imageBlob);
 
             if (!imageUploadError) {
@@ -680,11 +695,19 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
           const fileExt = file.name.split('.').pop()?.toLowerCase();
           const isPdf = fileExt === 'pdf';
 
-          // Upload original file to storage
-          const fileName = `${siteId}/${Date.now()}-${file.name}`;
+          // Upload original file to storage using proper hierarchical path
+          const subPath = currentFolderPath || 'Root';
+          const uniqueFileName = `${Date.now()}-${file.name}`;
+          const { bucket, path: storagePath } = await generateStoragePath(
+            siteId,
+            'Documents',
+            subPath,
+            uniqueFileName
+          );
+          
           const { data: uploadData, error: uploadError } = await supabase.storage
-            .from("client-files")
-            .upload(fileName, file);
+            .from(bucket)
+            .upload(storagePath, file);
 
           if (uploadError) throw uploadError;
 
@@ -693,10 +716,16 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
           // If it's a PDF, convert to image and upload
           if (isPdf) {
             const imageBlob = await convertPdfToImage(file);
-            const imagePath = `${siteId}/${Date.now()}-converted.png`;
+            const uniqueImageName = `${Date.now()}-converted.png`;
+            const { bucket: imageBucket, path: imagePath } = await generateStoragePath(
+              siteId,
+              'Documents',
+              subPath,
+              uniqueImageName
+            );
             
             const { error: imageUploadError } = await supabase.storage
-              .from("client-files")
+              .from(imageBucket)
               .upload(imagePath, imageBlob);
 
             if (!imageUploadError) {
