@@ -391,46 +391,57 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
         .map(f => f.contentHash!)
     );
 
+    console.log(`🔄 Processing ${selectedFiles.length} selected file(s)...`);
+    const failedFiles: { name: string; error: string }[] = [];
+    const duplicateFiles: string[] = [];
+
     for (const file of Array.from(selectedFiles)) {
-      const fileName = file.name.replace(/\.csv$/i, "");
-      const numberMatch = fileName.match(/\d+/);
-      const fileNumber = numberMatch ? numberMatch[0] : null;
+      try {
+        console.log(`📄 Processing file: ${file.name}`);
+        
+        const fileName = file.name.replace(/\.csv$/i, "");
+        const numberMatch = fileName.match(/\d+/);
+        const fileNumber = numberMatch ? numberMatch[0] : null;
 
-      console.log(`Matching file: ${file.name}, extracted number: ${fileNumber}`);
+        console.log(`  - Extracted number: ${fileNumber}`);
 
-      const matchedMeter = meters.find((m) => {
-        const serial = m.serial_number?.toLowerCase() || "";
-        const meterNum = m.meter_number?.toLowerCase() || "";
-        const name = m.name?.toLowerCase() || "";
-        const fileNameLower = fileName.toLowerCase();
+        const matchedMeter = meters.find((m) => {
+          const serial = m.serial_number?.toLowerCase() || "";
+          const meterNum = m.meter_number?.toLowerCase() || "";
+          const name = m.name?.toLowerCase() || "";
+          const fileNameLower = fileName.toLowerCase();
 
-        return (
-          serial === fileNameLower ||
-          meterNum === fileNameLower ||
-          name === fileNameLower ||
-          (fileNumber &&
-            (serial.includes(fileNumber) ||
-              meterNum.includes(fileNumber) ||
-              serial === fileNumber ||
-              meterNum === fileNumber))
-        );
-      });
+          return (
+            serial === fileNameLower ||
+            meterNum === fileNameLower ||
+            name === fileNameLower ||
+            (fileNumber &&
+              (serial.includes(fileNumber) ||
+                meterNum.includes(fileNumber) ||
+                serial === fileNumber ||
+                meterNum === fileNumber))
+          );
+        });
 
-      if (matchedMeter) {
-        console.log(`✓ Matched ${file.name} to meter ${matchedMeter.meter_number}`);
-      } else {
-        console.warn(`✗ No match found for ${file.name}`);
-      }
+        if (matchedMeter) {
+          console.log(`  ✓ Matched to meter ${matchedMeter.meter_number}`);
+        } else {
+          console.warn(`  ✗ No match found`);
+        }
 
-      // Generate content hash
-      const contentHash = await generateFileHash(file);
-      const isDuplicate = existingHashes.has(contentHash);
+        // Generate content hash
+        const contentHash = await generateFileHash(file);
+        const isDuplicate = existingHashes.has(contentHash);
 
-      // Generate preview
-      const preview = await parseCsvPreview(file, separator);
+        if (isDuplicate) {
+          console.log(`  ⚠️ Duplicate detected (skipping)`);
+          duplicateFiles.push(file.name);
+          continue;
+        }
 
-      // Skip duplicate files entirely
-      if (!isDuplicate) {
+        // Generate preview
+        const preview = await parseCsvPreview(file, separator);
+
         newFiles.push({
           file,
           name: file.name,
@@ -444,17 +455,29 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
           contentHash
         });
         existingHashes.add(contentHash);
+        console.log(`  ✅ Successfully added to queue`);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        console.error(`  ❌ Failed to process ${file.name}:`, error);
+        failedFiles.push({ name: file.name, error: errorMessage });
       }
     }
 
-    const duplicateCount = Array.from(selectedFiles).length - newFiles.length;
-    if (duplicateCount > 0) {
-      toast.warning(`${duplicateCount} duplicate file(s) detected and skipped`);
-    }
+    console.log(`✅ File processing complete: ${newFiles.length} added, ${duplicateFiles.length} duplicates, ${failedFiles.length} failed`);
 
+    // Show user feedback
+    if (duplicateFiles.length > 0) {
+      toast.warning(`${duplicateFiles.length} duplicate file(s) detected and skipped`);
+    }
+    
+    if (failedFiles.length > 0) {
+      toast.error(`Failed to process ${failedFiles.length} file(s): ${failedFiles.map(f => f.name).join(', ')}`);
+    }
     if (newFiles.length > 0) {
       setFiles(prev => [...prev, ...newFiles]);
       toast.success(`Added ${newFiles.length} new file(s) for upload`);
+    } else if (failedFiles.length === 0 && duplicateFiles.length === 0) {
+      toast.info('No files to add');
     }
     
     event.target.value = "";
