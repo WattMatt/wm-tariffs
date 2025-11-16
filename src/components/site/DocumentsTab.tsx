@@ -259,12 +259,11 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
       pathParts[pathParts.length - 1] = renameFolderName.trim();
       const newPath = pathParts.join('/');
 
-      // Update folder
+      // Update folder - only change file_name, not folder_path (it stays in the same location)
       const { error: folderError } = await supabase
         .from("site_documents")
         .update({
           file_name: renameFolderName.trim(),
-          folder_path: newPath,
         })
         .eq("id", folderId);
 
