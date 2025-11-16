@@ -297,8 +297,6 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
 
   // Delete folder
   const handleDeleteFolder = async (folderId: string, folderPath: string) => {
-    if (!confirm("Are you sure you want to delete this folder and all its contents?")) return;
-
     try {
       // Get all documents in this folder and subfolders
       const docsToDelete = documents.filter(d => 
@@ -844,8 +842,6 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
   };
 
   const handleDelete = async (id: string, filePath: string) => {
-    if (!confirm("Are you sure you want to delete this document?")) return;
-
     try {
       await supabase.storage.from("client-files").remove([filePath]);
       await supabase.from("site_documents").delete().eq("id", id);
@@ -891,8 +887,6 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
 
   const handleBulkDelete = async () => {
     if (selectedDocuments.size === 0) return;
-    
-    if (!confirm(`Are you sure you want to delete ${selectedDocuments.size} document(s)?`)) return;
 
     try {
       const docsToDelete = documents.filter(doc => selectedDocuments.has(doc.id));
@@ -936,8 +930,6 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
     if (selectedDocuments.size === 0) return;
 
     const docsToRescan = documents.filter(doc => selectedDocuments.has(doc.id));
-    
-    if (!confirm(`Re-scan ${docsToRescan.length} document(s) with AI extraction? This will update their extracted data.`)) return;
 
     setIsBulkExtracting(true);
     setUploadProgress({ current: 0, total: docsToRescan.length, action: 'Re-scanning' });
