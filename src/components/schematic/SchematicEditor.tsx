@@ -4674,6 +4674,15 @@ export default function SchematicEditor({
         
         {/* Right side: Save and Edit buttons - always stay top right */}
         <div className="flex gap-2 items-center shrink-0">
+          <Button 
+            onClick={handleCleanupOrphanedSnippets}
+            variant="outline" 
+            size="sm"
+            className="gap-2"
+          >
+            <Trash2 className="w-4 h-4" />
+            Cleanup Snippets
+          </Button>
           <Button onClick={handleSave} disabled={!isEditMode || isSaving} variant="outline" size="sm">
             <Save className="w-4 h-4 mr-2" />
             Save
@@ -4759,15 +4768,6 @@ export default function SchematicEditor({
           >
             <Scan className="w-4 h-4" />
             Scan {selectedMeterIds.length > 0 && `(${selectedMeterIds.length})`}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleCleanupOrphanedSnippets}
-            className="gap-2"
-          >
-            <Trash2 className="w-4 h-4" />
-            Cleanup Orphaned Snippets
           </Button>
           <Button
             variant="outline"
