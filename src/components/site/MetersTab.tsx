@@ -47,6 +47,7 @@ interface Meter {
   has_raw_csv?: boolean;
   has_parsed?: boolean;
   has_schematic_position?: boolean;
+  is_duplicate?: boolean;
 }
 
 interface TariffStructure {
@@ -214,7 +215,31 @@ export default function MetersTab({ siteId }: MetersTabProps) {
         })
       );
       
-      setMeters(metersWithStatus);
+      // Detect duplicates by meter_number and serial_number
+      const meterNumbers = new Map<string, number>();
+      const serialNumbers = new Map<string, number>();
+
+      // Count occurrences
+      metersWithStatus.forEach(meter => {
+        meterNumbers.set(meter.meter_number, (meterNumbers.get(meter.meter_number) || 0) + 1);
+        if (meter.serial_number && meter.serial_number.trim() !== '') {
+          serialNumbers.set(meter.serial_number, (serialNumbers.get(meter.serial_number) || 0) + 1);
+        }
+      });
+
+      // Mark duplicates
+      const finalMeters = metersWithStatus.map(meter => {
+        const isDuplicateMeterNumber = (meterNumbers.get(meter.meter_number) || 0) > 1;
+        const isDuplicateSerial = meter.serial_number && meter.serial_number.trim() !== '' 
+          && (serialNumbers.get(meter.serial_number) || 0) > 1;
+        
+        return {
+          ...meter,
+          is_duplicate: isDuplicateMeterNumber || isDuplicateSerial
+        };
+      });
+
+      setMeters(finalMeters);
     }
   };
 
@@ -989,6 +1014,15 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                         {meter.is_revenue_critical && (
                           <Badge variant="outline" className="text-destructive border-destructive">
                             Critical
+                          </Badge>
+                        )}
+                        {meter.is_duplicate && (
+                          <Badge 
+                            variant="outline" 
+                            className="bg-yellow-500/10 border-yellow-500/50 text-yellow-600 dark:text-yellow-400"
+                            title="Duplicate meter number or serial number detected"
+                          >
+                            Duplicate
                           </Badge>
                         )}
                         {meter.has_raw_csv && (
