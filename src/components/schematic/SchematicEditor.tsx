@@ -3896,6 +3896,20 @@ export default function SchematicEditor({
       toast.info(`Generated meter number: ${meterNumber}`);
     }
     
+    // Check if another meter (not this one) has the same meter_number
+    const { data: duplicateMeter } = await supabase
+      .from("meters")
+      .select("id, meter_number")
+      .eq("site_id", siteId)
+      .eq("meter_number", meterNumber)
+      .neq("id", editingMeter.id)
+      .maybeSingle();
+    
+    if (duplicateMeter) {
+      toast.error(`Meter number "${meterNumber}" is already used by another meter. Please use a unique meter number.`);
+      return;
+    }
+    
     // Get tariff_structure_id and ensure it's valid UUID or null
     const tariffValue = formData.get('tariff_structure_id') as string;
     const isValidUUID = tariffValue && tariffValue !== 'none' && tariffValue.length === 36 && tariffValue.includes('-');
@@ -3922,14 +3936,7 @@ export default function SchematicEditor({
 
     if (error) {
       console.error('Error updating meter:', error);
-      
-      // Check for duplicate meter number error
-      if (error.code === '23505' && error.message.includes('meters_site_id_meter_number_key')) {
-        const meterNumber = formData.get('meter_number');
-        toast.error(`Meter number "${meterNumber}" already exists for this site. Please use a unique meter number.`);
-      } else {
-        toast.error('Failed to save meter');
-      }
+      toast.error('Failed to save meter');
       return;
     }
 
