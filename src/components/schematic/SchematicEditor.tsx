@@ -513,6 +513,13 @@ export default function SchematicEditor({
   const [selectedMeterIds, setSelectedMeterIds] = useState<string[]>([]); // For bulk selection with Shift+click
   const [isSelectionMode, setIsSelectionMode] = useState(false); // Track whether selection mode is active
   const [deletionProgress, setDeletionProgress] = useState<{ current: number; total: number } | null>(null);
+  
+  // Scanning queue state
+  type QueuedScan = { meterId: string; meterNumber: string; snippetUrl: string; };
+  const [scanQueue, setScanQueue] = useState<QueuedScan[]>([]);
+  const [currentlyScanning, setCurrentlyScanning] = useState<QueuedScan | null>(null);
+  const [scannedCount, setScannedCount] = useState(0);
+  const isProcessingQueue = useRef(false);
   const [zoom, setZoom] = useState(1);
   const [isCanvasReady, setIsCanvasReady] = useState(false);
   const [isEditMeterDialogOpen, setIsEditMeterDialogOpen] = useState(false);
@@ -4375,6 +4382,119 @@ export default function SchematicEditor({
     toast.success(`Deleted ${selectedIndices.length} extracted meters`);
   };
 
+  // Add selected meters to scanning queue
+  const handleQueueSelectedMeters = async () => {
+    if (selectedMeterIds.length === 0) {
+      toast.error('No meters selected');
+      return;
+    }
+
+    // Fetch meter data for selected meters
+    const { data: metersData, error } = await supabase
+      .from('meters')
+      .select('id, meter_number, scanned_snippet_url')
+      .in('id', selectedMeterIds);
+
+    if (error) {
+      toast.error('Failed to fetch meter data');
+      return;
+    }
+
+    // Filter meters that have snippet URLs
+    const metersWithSnippets = metersData.filter(m => m.scanned_snippet_url);
+    
+    if (metersWithSnippets.length === 0) {
+      toast.error('Selected meters have no scanned images to extract from');
+      return;
+    }
+
+    const newQueueItems: QueuedScan[] = metersWithSnippets.map(m => ({
+      meterId: m.id,
+      meterNumber: m.meter_number,
+      snippetUrl: m.scanned_snippet_url!,
+    }));
+
+    setScanQueue(prev => [...prev, ...newQueueItems]);
+    toast.success(`Added ${newQueueItems.length} meter(s) to scan queue`);
+  };
+
+  // Process scan queue
+  useEffect(() => {
+    if (isProcessingQueue.current || scanQueue.length === 0 || currentlyScanning) return;
+    
+    const processNext = async () => {
+      isProcessingQueue.current = true;
+      const [nextScan, ...remainingQueue] = scanQueue;
+      
+      setCurrentlyScanning(nextScan);
+      setScanQueue(remainingQueue);
+
+      try {
+        const { data, error } = await supabase.functions.invoke('extract-schematic-meters', {
+          body: { 
+            imageUrl: nextScan.snippetUrl,
+            mode: 'extract-region',
+            region: {
+              x: 0,
+              y: 0,
+              width: 100,
+              height: 100,
+              imageWidth: 100,
+              imageHeight: 100,
+            }
+          }
+        });
+
+        if (error) throw error;
+
+        if (data?.meters && data.meters.length > 0) {
+          const extractedData = data.meters[0];
+          
+          // Update meter with extracted data
+          const { error: updateError } = await supabase
+            .from('meters')
+            .update({
+              name: extractedData.name || null,
+              area: extractedData.area ? parseFloat(extractedData.area) : null,
+              rating: extractedData.rating || null,
+              cable_specification: extractedData.cable_specification || null,
+              serial_number: extractedData.serial_number || null,
+              ct_type: extractedData.ct_type || null,
+              meter_type: extractedData.meter_type || 'council_meter',
+              zone: extractedData.zone || null,
+              location: extractedData.location || null,
+            })
+            .eq('id', nextScan.meterId);
+
+          if (updateError) throw updateError;
+          
+          setScannedCount(prev => prev + 1);
+          toast.success(`Scanned ${nextScan.meterNumber}`);
+        } else {
+          toast.warning(`No data extracted from ${nextScan.meterNumber}`);
+        }
+
+        await fetchMeters();
+        await fetchMeterPositions();
+      } catch (err) {
+        console.error('Scan error:', err);
+        toast.error(`Failed to scan ${nextScan.meterNumber}`);
+      } finally {
+        setCurrentlyScanning(null);
+        isProcessingQueue.current = false;
+      }
+    };
+
+    processNext();
+  }, [scanQueue, currentlyScanning]);
+
+  // Reset scanned count when queue is empty
+  useEffect(() => {
+    if (scanQueue.length === 0 && !currentlyScanning) {
+      setScannedCount(0);
+    }
+  }, [scanQueue.length, currentlyScanning]);
+
   return (
     <div className="space-y-2">
       {/* First row: Scan All and Select Regions with Save/Edit buttons */}
@@ -4613,6 +4733,16 @@ export default function SchematicEditor({
           <Button
             variant="outline"
             size="sm"
+            onClick={handleQueueSelectedMeters}
+            disabled={selectedMeterIds.length === 0 || selectedConnectionKeys.length > 0 || selectedRegionIndices.length > 0}
+            className="gap-2"
+          >
+            <Scan className="w-4 h-4" />
+            Scan {selectedMeterIds.length > 0 && `(${selectedMeterIds.length})`}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
             disabled={deletionProgress !== null}
             onClick={async () => {
               const totalToDelete = selectedRegionIndices.length + selectedMeterIds.length + selectedConnectionKeys.length;
@@ -4791,6 +4921,19 @@ export default function SchematicEditor({
               </>
             )}
           </Button>
+        </div>
+      )}
+
+      {/* Scan Queue Status */}
+      {(scanQueue.length > 0 || currentlyScanning) && (
+        <div className="flex gap-2 items-center">
+          <Badge variant="secondary" className="gap-2">
+            <Loader2 className="w-3 h-3 animate-spin" />
+            Scanning: {currentlyScanning ? currentlyScanning.meterNumber : 'Processing...'}
+          </Badge>
+          <Badge variant="outline">
+            Queue: {scanQueue.length} | Scanned: {scannedCount}
+          </Badge>
         </div>
       )}
 
