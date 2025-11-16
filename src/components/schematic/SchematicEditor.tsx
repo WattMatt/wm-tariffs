@@ -3675,9 +3675,9 @@ export default function SchematicEditor({
   useEffect(() => {
     if (!fabricCanvas || !highlightedMeterId || !isCanvasReady) return;
 
-    // Find the meter card object on the canvas
+    // Find the meter card object on the canvas (meter cards are type 'image' with data.meterId)
     const meterObjects = fabricCanvas.getObjects().filter((obj: any) => 
-      obj.data?.type === 'meter' && obj.data?.meterId === highlightedMeterId
+      obj.type === 'image' && obj.data?.meterId === highlightedMeterId
     );
 
     if (meterObjects.length > 0) {
