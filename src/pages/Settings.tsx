@@ -24,6 +24,7 @@ const Settings = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isCleaningUp, setIsCleaningUp] = useState(false);
+  const [isDeletingFolder, setIsDeletingFolder] = useState(false);
   const [isLoadingFolders, setIsLoadingFolders] = useState(false);
   const [settingsId, setSettingsId] = useState<string>("");
   const [appName, setAppName] = useState("");
@@ -265,6 +266,48 @@ const Settings = () => {
     }
   };
 
+  const handleDeleteFolder = async () => {
+    if (!currentPath) {
+      toast({
+        title: "No Folder Selected",
+        description: "Please select a folder from the dropdown first",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsDeletingFolder(true);
+    try {
+      toast({
+        title: "Deleting Folder",
+        description: `Removing folder and all contents: ${currentPath}`,
+      });
+
+      const { data, error } = await supabase.functions.invoke('cleanup-orphaned-snippets', {
+        body: { folderPath: currentPath }
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Folder Deleted",
+        description: `Deleted ${data.filesDeleted} files and removed ${data.databaseReferencesRemoved} database references. Folder removed: ${currentPath}`,
+      });
+
+      // Go back to parent folder after deletion
+      handleGoBack();
+    } catch (error: any) {
+      console.error("Delete folder error:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete folder",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeletingFolder(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <DashboardLayout>
@@ -426,7 +469,7 @@ const Settings = () => {
 
                   <Button
                     onClick={handleCleanupSnippets}
-                    disabled={isCleaningUp || !currentPath}
+                    disabled={isCleaningUp || isDeletingFolder || !currentPath}
                     variant="destructive"
                   >
                     {isCleaningUp ? (
@@ -438,6 +481,24 @@ const Settings = () => {
                       <>
                         <Trash2 className="w-4 h-4 mr-2" />
                         Delete Folder Contents
+                      </>
+                    )}
+                  </Button>
+
+                  <Button
+                    onClick={handleDeleteFolder}
+                    disabled={isCleaningUp || isDeletingFolder || !currentPath}
+                    variant="destructive"
+                  >
+                    {isDeletingFolder ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Deleting...
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Delete Folder
                       </>
                     )}
                   </Button>
