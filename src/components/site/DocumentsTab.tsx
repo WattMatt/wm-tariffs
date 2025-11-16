@@ -533,9 +533,6 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
 
     const filesArray = Array.from(files);
     setSelectedFiles(filesArray);
-    
-    // Auto-upload folders
-    handleFolderUpload(filesArray);
   };
 
   const convertPdfToImage = async (pdfFile: File): Promise<Blob> => {
@@ -675,6 +672,15 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
   const handleUpload = async () => {
     if (selectedFiles.length === 0) {
       toast.error("Please select at least one file");
+      return;
+    }
+
+    // Check if we have folder structure (files with webkitRelativePath)
+    const hasFolder = selectedFiles.some((f: any) => f.webkitRelativePath);
+    
+    if (hasFolder) {
+      // Use folder upload handler
+      await handleFolderUpload(selectedFiles);
       return;
     }
 
