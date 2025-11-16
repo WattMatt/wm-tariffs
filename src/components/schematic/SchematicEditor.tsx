@@ -524,6 +524,7 @@ export default function SchematicEditor({
   const isProcessingQueue = useRef(false);
   const [zoom, setZoom] = useState(1);
   const [isCanvasReady, setIsCanvasReady] = useState(false);
+  const [areMeterCardsLoaded, setAreMeterCardsLoaded] = useState(false);
   const [isEditMeterDialogOpen, setIsEditMeterDialogOpen] = useState(false);
   const [isBulkEditDialogOpen, setIsBulkEditDialogOpen] = useState(false);
   const [currentBulkEditIndex, setCurrentBulkEditIndex] = useState(0);
@@ -2994,6 +2995,10 @@ export default function SchematicEditor({
     });
 
     // Render saved meter positions
+    // Track meter card loading promises
+    const meterCardPromises: Promise<void>[] = [];
+    setAreMeterCardsLoaded(false);
+    
     meterPositions.forEach(pos => {
       const meter = meters.find(m => m.id === pos.meter_id);
       
@@ -3099,12 +3104,13 @@ export default function SchematicEditor({
       const savedScaleY = (pos as any).scale_y ? Number((pos as any).scale_y) : 1.0;
       
       // Generate meter card image
-      createMeterCardImage(fields, borderColor, cardWidth, cardHeight).then(imageDataUrl => {
-        // Load image from data URL
-        const imgElement = document.createElement('img');
-        imgElement.src = imageDataUrl;
-        
-        imgElement.onload = () => {
+      const cardPromise = new Promise<void>((resolve) => {
+        createMeterCardImage(fields, borderColor, cardWidth, cardHeight).then(imageDataUrl => {
+          // Load image from data URL
+          const imgElement = document.createElement('img');
+          imgElement.src = imageDataUrl;
+          
+          imgElement.onload = () => {
           // Calculate base scale to fit the target rectangle
           const baseScaleX = cardWidth / imgElement.width;
           const baseScaleY = cardHeight / imgElement.height;
@@ -3417,13 +3423,23 @@ export default function SchematicEditor({
               (snapCircle as any).isSnapPoint = true;
               (snapCircle as any).meterId = pos.meter_id;
               
-              fabricCanvas.add(snapCircle);
-            });
-          }
-          
-          fabricCanvas.renderAll();
-        };
+            fabricCanvas.add(snapCircle);
+          });
+        }
+        
+        fabricCanvas.renderAll();
+        resolve(); // Resolve when this meter card is fully loaded
+      };
+    });
       });
+      
+      meterCardPromises.push(cardPromise);
+    });
+
+    // Wait for all meter cards to load before marking as ready
+    Promise.all(meterCardPromises).then(() => {
+      setAreMeterCardsLoaded(true);
+      console.log('✅ All meter cards loaded');
     });
 
     fabricCanvas.renderAll();
@@ -3673,7 +3689,7 @@ export default function SchematicEditor({
 
   // Effect to highlight a specific meter when highlightedMeterId is provided
   useEffect(() => {
-    if (!fabricCanvas || !highlightedMeterId || !isCanvasReady) return;
+    if (!fabricCanvas || !highlightedMeterId || !areMeterCardsLoaded) return;
 
     console.log('🔍 Looking for meter with ID:', highlightedMeterId);
     
@@ -3735,7 +3751,7 @@ export default function SchematicEditor({
       console.log('❌ Meter not found on this schematic');
       toast.error('Meter not found on this schematic');
     }
-  }, [fabricCanvas, highlightedMeterId, isCanvasReady]);
+  }, [fabricCanvas, highlightedMeterId, areMeterCardsLoaded]);
 
   // Toggle background visibility
   useEffect(() => {
