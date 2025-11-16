@@ -6,7 +6,7 @@ const corsHeaders = {
 }
 
 interface CleanupRequest {
-  siteId?: string;
+  folderPath: string;
 }
 
 Deno.serve(async (req) => {
@@ -25,46 +25,24 @@ Deno.serve(async (req) => {
       }
     });
 
-    const { siteId } = await req.json() as CleanupRequest;
+    const { folderPath } = await req.json() as CleanupRequest;
 
-    console.log(`Starting cleanup for site: ${siteId || 'all sites'}`);
-
-    // Get all meter snippet URLs from database
-    let query = supabase
-      .from('meters')
-      .select('scanned_snippet_url');
-    
-    if (siteId) {
-      query = query.eq('site_id', siteId);
-    }
-
-    const { data: meters, error: metersError } = await query;
-    
-    if (metersError) {
-      throw metersError;
-    }
-
-    // Extract valid snippet paths from database
-    const validSnippetPaths = new Set<string>();
-    meters?.forEach(meter => {
-      if (meter.scanned_snippet_url) {
-        const urlParts = meter.scanned_snippet_url.split('/storage/v1/object/public/');
-        if (urlParts.length === 2) {
-          const [, ...pathParts] = urlParts[1].split('/');
-          const filePath = pathParts.join('/');
-          if (filePath) {
-            validSnippetPaths.add(filePath);
-          }
+    if (!folderPath) {
+      return new Response(
+        JSON.stringify({ error: 'folderPath is required' }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 400 
         }
-      }
-    });
+      );
+    }
 
-    console.log(`Found ${validSnippetPaths.size} valid snippet references in database`);
+    console.log(`Starting cleanup for folder: ${folderPath}`);
 
-    // Recursively list all files in the bucket
+    // List all files in the specified folder (recursively)
     const allFiles: string[] = [];
     
-    async function listFilesRecursively(path: string = '') {
+    async function listFilesRecursively(path: string) {
       const { data: items, error } = await supabase.storage
         .from('client-files')
         .list(path, {
@@ -84,30 +62,108 @@ Deno.serve(async (req) => {
           // It's a folder, recurse
           await listFilesRecursively(fullPath);
         } else {
-          // It's a file, check if it's a snippet (png in Snippets folder)
-          if (fullPath.includes('/Snippets/') && fullPath.endsWith('.png')) {
-            allFiles.push(fullPath);
-          }
+          // It's a file
+          allFiles.push(fullPath);
         }
       }
     }
 
-    await listFilesRecursively();
+    await listFilesRecursively(folderPath);
     
-    console.log(`Found ${allFiles.length} snippet files in storage`);
+    console.log(`Found ${allFiles.length} files in ${folderPath}`);
 
-    // Find orphaned files
-    const orphanedFiles = allFiles.filter(filePath => !validSnippetPaths.has(filePath));
-    
-    console.log(`Found ${orphanedFiles.length} orphaned snippet files`);
+    // Build public URLs for the files to search in database
+    const fileUrls = allFiles.map(filePath => 
+      `${supabaseUrl}/storage/v1/object/public/client-files/${filePath}`
+    );
 
-    let deletedCount = 0;
+    let databaseReferencesRemoved = 0;
+
+    // Search and remove references in meters table (scanned_snippet_url)
+    for (const url of fileUrls) {
+      const { error: meterError } = await supabase
+        .from('meters')
+        .update({ scanned_snippet_url: null })
+        .eq('scanned_snippet_url', url);
+      
+      if (!meterError) {
+        databaseReferencesRemoved++;
+      }
+    }
+
+    // Search and remove references in site_documents table (file_path and converted_image_path)
+    for (const filePath of allFiles) {
+      const { error: docError1 } = await supabase
+        .from('site_documents')
+        .delete()
+        .eq('file_path', filePath);
+      
+      if (!docError1) {
+        databaseReferencesRemoved++;
+      }
+
+      const { error: docError2 } = await supabase
+        .from('site_documents')
+        .delete()
+        .eq('converted_image_path', filePath);
+      
+      if (!docError2) {
+        databaseReferencesRemoved++;
+      }
+    }
+
+    // Search and remove references in schematics table
+    for (const filePath of allFiles) {
+      const { error: schematicError1 } = await supabase
+        .from('schematics')
+        .delete()
+        .eq('file_path', filePath);
+      
+      if (!schematicError1) {
+        databaseReferencesRemoved++;
+      }
+
+      const { error: schematicError2 } = await supabase
+        .from('schematics')
+        .delete()
+        .eq('converted_image_path', filePath);
+      
+      if (!schematicError2) {
+        databaseReferencesRemoved++;
+      }
+    }
+
+    // Search and nullify references in clients table (logo_url)
+    for (const url of fileUrls) {
+      const { error: clientError } = await supabase
+        .from('clients')
+        .update({ logo_url: null })
+        .eq('logo_url', url);
+      
+      if (!clientError) {
+        databaseReferencesRemoved++;
+      }
+    }
+
+    // Search and nullify references in settings table (logo_url)
+    for (const url of fileUrls) {
+      const { error: settingsError } = await supabase
+        .from('settings')
+        .update({ logo_url: null })
+        .eq('logo_url', url);
+      
+      if (!settingsError) {
+        databaseReferencesRemoved++;
+      }
+    }
+
+    // Delete all files from storage
+    let filesDeleted = 0;
     
-    if (orphanedFiles.length > 0) {
-      // Delete orphaned files in batches
+    if (allFiles.length > 0) {
       const batchSize = 50;
-      for (let i = 0; i < orphanedFiles.length; i += batchSize) {
-        const batch = orphanedFiles.slice(i, i + batchSize);
+      for (let i = 0; i < allFiles.length; i += batchSize) {
+        const batch = allFiles.slice(i, i + batchSize);
         
         const { error: deleteError } = await supabase.storage
           .from('client-files')
@@ -116,8 +172,8 @@ Deno.serve(async (req) => {
         if (deleteError) {
           console.error(`Error deleting batch:`, deleteError);
         } else {
-          deletedCount += batch.length;
-          console.log(`Deleted batch of ${batch.length} files (${deletedCount}/${orphanedFiles.length})`);
+          filesDeleted += batch.length;
+          console.log(`Deleted batch of ${batch.length} files (${filesDeleted}/${allFiles.length})`);
         }
       }
     }
@@ -125,10 +181,9 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        totalSnippetsInStorage: allFiles.length,
-        validSnippets: validSnippetPaths.size,
-        orphanedSnippets: orphanedFiles.length,
-        deletedCount
+        folderPath,
+        filesDeleted,
+        databaseReferencesRemoved
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
