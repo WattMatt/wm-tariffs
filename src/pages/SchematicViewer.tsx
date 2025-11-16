@@ -828,6 +828,7 @@ export default function SchematicViewer() {
                 filePath={schematic.file_path}
                 extractedMeters={extractedMeters}
                 onExtractedMetersUpdate={setExtractedMeters}
+                highlightedMeterId={highlightedMeterId || undefined}
               />
             ) : (
               <div className="flex-1 overflow-hidden flex flex-col">

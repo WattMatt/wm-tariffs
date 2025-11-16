@@ -110,6 +110,7 @@ interface SchematicEditorProps {
   filePath?: string;
   extractedMeters?: any[];
   onExtractedMetersUpdate?: (meters: any[]) => void;
+  highlightedMeterId?: string;
 }
 
 interface MeterPosition {
@@ -437,7 +438,8 @@ export default function SchematicEditor({
   siteId,
   filePath,
   extractedMeters: propExtractedMeters = [],
-  onExtractedMetersUpdate 
+  onExtractedMetersUpdate,
+  highlightedMeterId
 }: SchematicEditorProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -3668,6 +3670,67 @@ export default function SchematicEditor({
 
     fabricCanvas.renderAll();
   }, [fabricCanvas, isInitialDataLoaded, isCanvasReady, schematicLines, selectedConnectionKeys, showConnections]);
+
+  // Effect to highlight a specific meter when highlightedMeterId is provided
+  useEffect(() => {
+    if (!fabricCanvas || !highlightedMeterId || !isCanvasReady) return;
+
+    // Find the meter card object on the canvas
+    const meterObjects = fabricCanvas.getObjects().filter((obj: any) => 
+      obj.data?.type === 'meter' && obj.data?.meterId === highlightedMeterId
+    );
+
+    if (meterObjects.length > 0) {
+      const meterCard = meterObjects[0] as any;
+      
+      // Select the meter card
+      fabricCanvas.setActiveObject(meterCard);
+      
+      // Pan the canvas to center the meter card in view
+      const canvasCenter = {
+        x: fabricCanvas.width! / 2,
+        y: fabricCanvas.height! / 2
+      };
+      
+      const meterCenter = {
+        x: meterCard.left! + (meterCard.width! * meterCard.scaleX!) / 2,
+        y: meterCard.top! + (meterCard.height! * meterCard.scaleY!) / 2
+      };
+      
+      // Calculate the pan needed to center the meter
+      const panOffset = {
+        x: canvasCenter.x - meterCenter.x,
+        y: canvasCenter.y - meterCenter.y
+      };
+      
+      // Apply the pan
+      fabricCanvas.relativePan(new Point(panOffset.x, panOffset.y));
+      
+      // Add a temporary highlight effect
+      const originalStroke = meterCard.stroke;
+      const originalStrokeWidth = meterCard.strokeWidth;
+      
+      meterCard.set({
+        stroke: '#3b82f6',
+        strokeWidth: 4
+      });
+      
+      fabricCanvas.renderAll();
+      
+      // Remove highlight after 2 seconds
+      setTimeout(() => {
+        meterCard.set({
+          stroke: originalStroke,
+          strokeWidth: originalStrokeWidth
+        });
+        fabricCanvas.renderAll();
+      }, 2000);
+      
+      toast.success('Meter located on schematic');
+    } else {
+      toast.error('Meter not found on this schematic');
+    }
+  }, [fabricCanvas, highlightedMeterId, isCanvasReady]);
 
   // Toggle background visibility
   useEffect(() => {
