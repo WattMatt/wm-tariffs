@@ -4495,6 +4495,26 @@ export default function SchematicEditor({
     }
   }, [scanQueue.length, currentlyScanning]);
 
+  // Cleanup orphaned snippet images
+  const handleCleanupOrphanedSnippets = async () => {
+    try {
+      toast.info('Scanning for orphaned snippet images...');
+      
+      const { data, error } = await supabase.functions.invoke('cleanup-orphaned-snippets', {
+        body: { siteId }
+      });
+
+      if (error) throw error;
+
+      toast.success(
+        `Cleanup complete: ${data.deletedCount} orphaned snippets deleted (${data.orphanedSnippets} found out of ${data.totalSnippetsInStorage} total)`
+      );
+    } catch (err) {
+      console.error('Cleanup error:', err);
+      toast.error('Failed to cleanup orphaned snippets');
+    }
+  };
+
   return (
     <div className="space-y-2">
       {/* First row: Scan All and Select Regions with Save/Edit buttons */}
@@ -4739,6 +4759,15 @@ export default function SchematicEditor({
           >
             <Scan className="w-4 h-4" />
             Scan {selectedMeterIds.length > 0 && `(${selectedMeterIds.length})`}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleCleanupOrphanedSnippets}
+            className="gap-2"
+          >
+            <Trash2 className="w-4 h-4" />
+            Cleanup Orphaned Snippets
           </Button>
           <Button
             variant="outline"
