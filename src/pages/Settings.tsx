@@ -5,9 +5,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, Save, Loader2, Trash2 } from "lucide-react";
+import { Upload, Save, Loader2, Trash2, FolderOpen, ChevronDown } from "lucide-react";
 
 const Settings = () => {
   const navigate = useNavigate();
@@ -16,13 +24,17 @@ const Settings = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isCleaningUp, setIsCleaningUp] = useState(false);
+  const [isLoadingFolders, setIsLoadingFolders] = useState(false);
   const [settingsId, setSettingsId] = useState<string>("");
   const [appName, setAppName] = useState("");
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [currentPath, setCurrentPath] = useState<string>("");
+  const [folders, setFolders] = useState<Array<{ name: string; path: string }>>([]);
 
   useEffect(() => {
     checkAuth();
     loadSettings();
+    loadFolders("");
   }, []);
 
   const checkAuth = async () => {
@@ -56,6 +68,52 @@ const Settings = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const loadFolders = async (path: string) => {
+    setIsLoadingFolders(true);
+    try {
+      const { data, error } = await supabase.storage
+        .from('client-files')
+        .list(path, {
+          limit: 100,
+          sortBy: { column: 'name', order: 'asc' }
+        });
+
+      if (error) throw error;
+
+      // Filter only folders (items with id === null are folders in Supabase)
+      const folderList = (data || [])
+        .filter(item => item.id === null)
+        .map(item => ({
+          name: item.name,
+          path: path ? `${path}/${item.name}` : item.name
+        }));
+
+      setFolders(folderList);
+    } catch (error: any) {
+      console.error("Error loading folders:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load folders",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoadingFolders(false);
+    }
+  };
+
+  const handleFolderClick = (path: string) => {
+    setCurrentPath(path);
+    loadFolders(path);
+  };
+
+  const handleGoBack = () => {
+    const pathParts = currentPath.split('/');
+    pathParts.pop();
+    const newPath = pathParts.join('/');
+    setCurrentPath(newPath);
+    loadFolders(newPath);
   };
 
   const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -302,23 +360,70 @@ const Settings = () => {
                   Remove snippet images from storage that are no longer referenced by any meters. 
                   This helps free up storage space and keep your system clean.
                 </p>
-                <Button
-                  onClick={handleCleanupSnippets}
-                  disabled={isCleaningUp}
-                  variant="outline"
-                >
-                  {isCleaningUp ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Cleaning Up...
-                    </>
-                  ) : (
-                    <>
-                      <Trash2 className="w-4 h-4 mr-2" />
-                      Cleanup Orphaned Snippets
-                    </>
-                  )}
-                </Button>
+                <div className="flex gap-2">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" disabled={isLoadingFolders}>
+                        <FolderOpen className="w-4 h-4 mr-2" />
+                        {currentPath || "Browse Storage"}
+                        <ChevronDown className="w-4 h-4 ml-2" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="w-64 max-h-96 overflow-y-auto bg-background z-50">
+                      <DropdownMenuLabel>
+                        Current: {currentPath || "Root"}
+                      </DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      {currentPath && (
+                        <>
+                          <DropdownMenuItem onClick={handleGoBack}>
+                            <ChevronDown className="w-4 h-4 mr-2 rotate-90" />
+                            Go Back
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                        </>
+                      )}
+                      {isLoadingFolders ? (
+                        <DropdownMenuItem disabled>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Loading folders...
+                        </DropdownMenuItem>
+                      ) : folders.length === 0 ? (
+                        <DropdownMenuItem disabled>
+                          No subfolders found
+                        </DropdownMenuItem>
+                      ) : (
+                        folders.map((folder) => (
+                          <DropdownMenuItem
+                            key={folder.path}
+                            onClick={() => handleFolderClick(folder.path)}
+                          >
+                            <FolderOpen className="w-4 h-4 mr-2" />
+                            {folder.name}
+                          </DropdownMenuItem>
+                        ))
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+
+                  <Button
+                    onClick={handleCleanupSnippets}
+                    disabled={isCleaningUp}
+                    variant="outline"
+                  >
+                    {isCleaningUp ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Cleaning Up...
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Cleanup Orphaned Snippets
+                      </>
+                    )}
+                  </Button>
+                </div>
               </div>
             </div>
           </CardContent>
