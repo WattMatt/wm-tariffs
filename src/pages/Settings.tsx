@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, Save, Loader2 } from "lucide-react";
+import { Upload, Save, Loader2, Trash2 } from "lucide-react";
 
 const Settings = () => {
   const navigate = useNavigate();
@@ -15,6 +15,7 @@ const Settings = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isCleaningUp, setIsCleaningUp] = useState(false);
   const [settingsId, setSettingsId] = useState<string>("");
   const [appName, setAppName] = useState("");
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
@@ -164,6 +165,36 @@ const Settings = () => {
     }
   };
 
+  const handleCleanupSnippets = async () => {
+    setIsCleaningUp(true);
+    try {
+      toast({
+        title: "Cleanup Started",
+        description: "Scanning for orphaned snippet images...",
+      });
+
+      const { data, error } = await supabase.functions.invoke('cleanup-orphaned-snippets', {
+        body: {}
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Cleanup Complete",
+        description: `Deleted ${data.deletedCount} orphaned snippet files out of ${data.orphanedSnippets} found (${data.totalSnippetsInStorage} total in storage)`,
+      });
+    } catch (error: any) {
+      console.error("Cleanup error:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to cleanup orphaned snippets",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCleaningUp(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <DashboardLayout>
@@ -252,6 +283,43 @@ const Settings = () => {
                   </>
                 )}
               </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle>Maintenance</CardTitle>
+            <CardDescription>
+              System maintenance and cleanup operations
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-sm font-medium mb-2">Cleanup Orphaned Snippet Images</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Remove snippet images from storage that are no longer referenced by any meters. 
+                  This helps free up storage space and keep your system clean.
+                </p>
+                <Button
+                  onClick={handleCleanupSnippets}
+                  disabled={isCleaningUp}
+                  variant="outline"
+                >
+                  {isCleaningUp ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Cleaning Up...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Cleanup Orphaned Snippets
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
