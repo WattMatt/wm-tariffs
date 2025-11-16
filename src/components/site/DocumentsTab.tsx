@@ -2623,7 +2623,9 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                 if (e.key === 'Enter' && renamingFolder) {
                   const folder = documents.find(d => d.id === renamingFolder);
                   if (folder) {
-                    handleRenameFolder(renamingFolder, folder.folder_path);
+                    // Construct full path: parent path + folder name
+                    const oldFullPath = folder.folder_path ? `${folder.folder_path}/${folder.file_name}` : folder.file_name;
+                    handleRenameFolder(renamingFolder, oldFullPath);
                   }
                 }
               }}
@@ -2640,7 +2642,9 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                 if (renamingFolder) {
                   const folder = documents.find(d => d.id === renamingFolder);
                   if (folder) {
-                    handleRenameFolder(renamingFolder, folder.folder_path);
+                    // Construct full path: parent path + folder name
+                    const oldFullPath = folder.folder_path ? `${folder.folder_path}/${folder.file_name}` : folder.file_name;
+                    handleRenameFolder(renamingFolder, oldFullPath);
                   }
                 }
               }}
