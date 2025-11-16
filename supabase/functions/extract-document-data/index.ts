@@ -240,6 +240,40 @@ Return the data in a structured format with all line items in an array.`;
       .update({ extraction_status: 'completed' })
       .eq("id", documentId);
 
+    // Auto-assign meter based on shop number
+    if (extractedData.shop_number) {
+      console.log(`Attempting to auto-assign meter for shop number: ${extractedData.shop_number}`);
+      
+      // Get the site_id from the document
+      const { data: document } = await supabase
+        .from("site_documents")
+        .select("site_id")
+        .eq("id", documentId)
+        .single();
+      
+      if (document?.site_id) {
+        // Find meter with matching meter_number (shop number)
+        const { data: meter } = await supabase
+          .from("meters")
+          .select("id")
+          .eq("site_id", document.site_id)
+          .eq("meter_number", extractedData.shop_number)
+          .single();
+        
+        if (meter) {
+          // Assign the meter to the document
+          await supabase
+            .from("site_documents")
+            .update({ meter_id: meter.id })
+            .eq("id", documentId);
+          
+          console.log(`✓ Auto-assigned meter ${meter.id} to document ${documentId}`);
+        } else {
+          console.log(`⚠ No meter found with number ${extractedData.shop_number} for site ${document.site_id}`);
+        }
+      }
+    }
+
     console.log(`✓ Successfully extracted data for document ${documentId}`);
 
     return new Response(JSON.stringify({ 
