@@ -388,7 +388,10 @@ const Settings = () => {
                       <DropdownMenuSeparator />
                       {currentPath && (
                         <>
-                          <DropdownMenuItem onClick={handleGoBack}>
+                          <DropdownMenuItem onSelect={(e) => {
+                            e.preventDefault();
+                            handleGoBack();
+                          }}>
                             <ChevronDown className="w-4 h-4 mr-2 rotate-90" />
                             Go Back
                           </DropdownMenuItem>
@@ -408,7 +411,10 @@ const Settings = () => {
                         folders.map((folder) => (
                           <DropdownMenuItem
                             key={folder.path}
-                            onClick={() => handleFolderClick(folder.path)}
+                            onSelect={(e) => {
+                              e.preventDefault();
+                              handleFolderClick(folder.path);
+                            }}
                           >
                             <FolderOpen className="w-4 h-4 mr-2" />
                             {folder.name}
