@@ -1868,7 +1868,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                             {folder.file_name}
                           </div>
                         </TableCell>
-                        <TableCell colSpan={6}>
+                        <TableCell colSpan={7}>
                           <span className="text-muted-foreground text-sm">Folder</span>
                         </TableCell>
                         <TableCell className="text-right pr-2">
