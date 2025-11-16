@@ -224,28 +224,40 @@ const Settings = () => {
   };
 
   const handleCleanupSnippets = async () => {
+    if (!currentPath) {
+      toast({
+        title: "No Folder Selected",
+        description: "Please select a folder from the dropdown first",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsCleaningUp(true);
     try {
       toast({
         title: "Cleanup Started",
-        description: "Scanning for orphaned snippet images...",
+        description: `Deleting all files in: ${currentPath}`,
       });
 
       const { data, error } = await supabase.functions.invoke('cleanup-orphaned-snippets', {
-        body: {}
+        body: { folderPath: currentPath }
       });
 
       if (error) throw error;
 
       toast({
         title: "Cleanup Complete",
-        description: `Deleted ${data.deletedCount} orphaned snippet files out of ${data.orphanedSnippets} found (${data.totalSnippetsInStorage} total in storage)`,
+        description: `Deleted ${data.filesDeleted} files and removed ${data.databaseReferencesRemoved} database references from ${currentPath}`,
       });
+
+      // Refresh the folder list after cleanup
+      loadFolders(currentPath);
     } catch (error: any) {
       console.error("Cleanup error:", error);
       toast({
         title: "Error",
-        description: error.message || "Failed to cleanup orphaned snippets",
+        description: error.message || "Failed to cleanup folder",
         variant: "destructive",
       });
     } finally {
@@ -355,10 +367,10 @@ const Settings = () => {
           <CardContent className="space-y-6">
             <div className="space-y-4">
               <div>
-                <h3 className="text-sm font-medium mb-2">Cleanup Orphaned Snippet Images</h3>
+                <h3 className="text-sm font-medium mb-2">Delete Folder Contents</h3>
                 <p className="text-sm text-muted-foreground mb-4">
-                  Remove snippet images from storage that are no longer referenced by any meters. 
-                  This helps free up storage space and keep your system clean.
+                  Select a folder from the dropdown, then click cleanup to delete all files in that folder 
+                  and remove all database references to those files. This action cannot be undone.
                 </p>
                 <div className="flex gap-2">
                   <DropdownMenu>
@@ -408,18 +420,18 @@ const Settings = () => {
 
                   <Button
                     onClick={handleCleanupSnippets}
-                    disabled={isCleaningUp}
-                    variant="outline"
+                    disabled={isCleaningUp || !currentPath}
+                    variant="destructive"
                   >
                     {isCleaningUp ? (
                       <>
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Cleaning Up...
+                        Deleting...
                       </>
                     ) : (
                       <>
                         <Trash2 className="w-4 h-4 mr-2" />
-                        Cleanup Orphaned Snippets
+                        Delete Folder Contents
                       </>
                     )}
                   </Button>
