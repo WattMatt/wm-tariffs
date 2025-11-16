@@ -4283,7 +4283,7 @@ export default function SchematicEditor({
                 // Generate proper hierarchical path for the snippet
                 const { generateStoragePath, sanitizeName } = await import("@/lib/storagePaths");
                 const snippetFileName = `${sanitizeName(newMeter.meter_number)}_snippet.png`;
-                const { bucket: snippetBucket, path: snippetPath } = await generateStoragePath(siteId, 'Metering', 'Meters', snippetFileName);
+                const { bucket: snippetBucket, path: snippetPath } = await generateStoragePath(siteId, 'Metering', 'Meters/Snippets', snippetFileName);
                 
                 // Upload directly to final location
                 const { error: uploadError } = await supabase.storage

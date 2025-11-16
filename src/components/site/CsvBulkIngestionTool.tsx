@@ -554,7 +554,15 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
         // Create readable filename: ClientCode_SiteName_MeterSerial_ShortHash.csv
         const shortHash = fileItem.contentHash?.substring(0, 8) || Date.now().toString();
         const fileName = `${clientCode}_${siteName}_${meterSerial}_${shortHash}.csv`;
-        const filePath = `${siteId}/${fileItem.meterId}/${fileName}`;
+        
+        // Generate hierarchical storage path
+        const { generateStoragePath } = await import("@/lib/storagePaths");
+        const { bucket, path: filePath } = await generateStoragePath(
+          siteId,
+          'Metering',
+          'Meters/CSVs',
+          fileName
+        );
         
         // Check if file with this hash already exists in database
         const { data: existingFile } = await supabase
@@ -570,7 +578,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
         }
 
         const { error: uploadError } = await supabase.storage
-          .from('client-files')
+          .from(bucket)
           .upload(filePath, fileItem.file!, { upsert: false });
 
         if (uploadError) {
