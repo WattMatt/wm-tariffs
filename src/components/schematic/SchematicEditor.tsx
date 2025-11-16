@@ -512,6 +512,7 @@ export default function SchematicEditor({
   const [selectedMeterId, setSelectedMeterId] = useState<string | null>(null);
   const [selectedMeterIds, setSelectedMeterIds] = useState<string[]>([]); // For bulk selection with Shift+click
   const [isSelectionMode, setIsSelectionMode] = useState(false); // Track whether selection mode is active
+  const [deletionProgress, setDeletionProgress] = useState<{ current: number; total: number } | null>(null);
   const [zoom, setZoom] = useState(1);
   const [isCanvasReady, setIsCanvasReady] = useState(false);
   const [isEditMeterDialogOpen, setIsEditMeterDialogOpen] = useState(false);
@@ -4612,7 +4613,13 @@ export default function SchematicEditor({
           <Button
             variant="outline"
             size="sm"
+            disabled={deletionProgress !== null}
             onClick={async () => {
+              const totalToDelete = selectedRegionIndices.length + selectedMeterIds.length + selectedConnectionKeys.length;
+              let currentDeleted = 0;
+              
+              setDeletionProgress({ current: 0, total: totalToDelete });
+              
               // Delete regions
               if (selectedRegionIndices.length > 0 && fabricCanvas) {
                 selectedRegionIndices.forEach(index => {
@@ -4620,6 +4627,8 @@ export default function SchematicEditor({
                   if (region?.fabricRect) {
                     fabricCanvas.remove(region.fabricRect);
                   }
+                  currentDeleted++;
+                  setDeletionProgress({ current: currentDeleted, total: totalToDelete });
                 });
                 const updatedRegions = drawnRegions.filter((_, i) => !selectedRegionIndices.includes(i));
                 setDrawnRegions(updatedRegions);
@@ -4658,6 +4667,9 @@ export default function SchematicEditor({
                     .from('meter_connections')
                     .delete()
                     .match({ parent_meter_id: parentId, child_meter_id: childId });
+                  
+                  currentDeleted++;
+                  setDeletionProgress({ current: currentDeleted, total: totalToDelete });
                 }
                 setSelectedConnectionKeys([]);
                 await fetchSchematicLines();
@@ -4740,6 +4752,12 @@ export default function SchematicEditor({
                     .from('meters')
                     .delete()
                     .eq('id', meterId);
+                  
+                  currentDeleted++;
+                  setDeletionProgress({ current: currentDeleted, total: totalToDelete });
+                  
+                  // Force canvas update after each meter deletion
+                  if (fabricCanvas) fabricCanvas.renderAll();
                 }
                 setSelectedMeterIds([]);
                 
@@ -4756,11 +4774,22 @@ export default function SchematicEditor({
               if (selectedConnectionKeys.length > 0) parts.push(`${selectedConnectionKeys.length} connection(s)`);
               if (selectedMeterIds.length > 0) parts.push(`${selectedMeterIds.length} meter(s)`);
               toast.success(`Deleted ${parts.join(', ')}`);
+              
+              setDeletionProgress(null);
             }}
             className="gap-2"
           >
-            <Trash2 className="w-4 h-4" />
-            Delete ({selectedRegionIndices.length + selectedMeterIds.length + selectedConnectionKeys.length})
+            {deletionProgress ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Deleting {deletionProgress.current} of {deletionProgress.total}
+              </>
+            ) : (
+              <>
+                <Trash2 className="w-4 h-4" />
+                Delete ({selectedRegionIndices.length + selectedMeterIds.length + selectedConnectionKeys.length})
+              </>
+            )}
           </Button>
         </div>
       )}
