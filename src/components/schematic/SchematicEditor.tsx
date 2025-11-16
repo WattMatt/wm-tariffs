@@ -3675,13 +3675,35 @@ export default function SchematicEditor({
   useEffect(() => {
     if (!fabricCanvas || !highlightedMeterId || !isCanvasReady) return;
 
+    console.log('🔍 Looking for meter with ID:', highlightedMeterId);
+    
+    // Log all meter objects to see their structure
+    const allObjects = fabricCanvas.getObjects();
+    console.log('📊 Total canvas objects:', allObjects.length);
+    
+    const imageObjects = allObjects.filter((obj: any) => obj.type === 'image');
+    console.log('🖼️ Image objects:', imageObjects.length);
+    
+    imageObjects.forEach((obj: any, index) => {
+      console.log(`Image ${index}:`, {
+        type: obj.type,
+        hasData: !!obj.data,
+        meterId: obj.data?.meterId,
+        positionId: obj.data?.positionId
+      });
+    });
+
     // Find the meter card object on the canvas (meter cards are type 'image' with data.meterId)
     const meterObjects = fabricCanvas.getObjects().filter((obj: any) => 
       obj.type === 'image' && obj.data?.meterId === highlightedMeterId
     );
 
+    console.log('🎯 Found meter objects:', meterObjects.length);
+
     if (meterObjects.length > 0) {
       const meterCard = meterObjects[0] as any;
+      
+      console.log('✅ Meter found, selecting and panning to it');
       
       // Select the meter card (will stay selected until user clicks elsewhere)
       fabricCanvas.setActiveObject(meterCard);
@@ -3710,6 +3732,7 @@ export default function SchematicEditor({
       
       toast.success('Meter located on schematic');
     } else {
+      console.log('❌ Meter not found on this schematic');
       toast.error('Meter not found on this schematic');
     }
   }, [fabricCanvas, highlightedMeterId, isCanvasReady]);
