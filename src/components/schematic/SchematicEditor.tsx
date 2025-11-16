@@ -4819,15 +4819,24 @@ export default function SchematicEditor({
                   for (const meter of metersToDelete) {
                     if (meter.scanned_snippet_url) {
                       try {
-                        // Extract path from URL: https://[project].supabase.co/storage/v1/object/public/client-files/[path]
-                        const snippetPath = meter.scanned_snippet_url.split('/client-files/')[1];
-                        if (snippetPath) {
-                          const { error: storageError } = await supabase.storage
-                            .from('client-files')
-                            .remove([snippetPath]);
+                        // Parse URL format: https://[project].supabase.co/storage/v1/object/public/[bucket]/[path]
+                        const urlParts = meter.scanned_snippet_url.split('/storage/v1/object/public/');
+                        if (urlParts.length === 2) {
+                          const [bucket, ...pathParts] = urlParts[1].split('/');
+                          const filePath = pathParts.join('/');
                           
-                          if (storageError) {
-                            console.error('Error deleting snippet:', storageError);
+                          if (bucket && filePath) {
+                            console.log(`Deleting snippet from bucket: ${bucket}, path: ${filePath}`);
+                            const { error: storageError } = await supabase.storage
+                              .from(bucket)
+                              .remove([filePath]);
+                            
+                            if (storageError) {
+                              console.error(`Error deleting snippet from ${bucket}/${filePath}:`, storageError);
+                              toast.error(`Failed to delete snippet for meter ${meter.id}`);
+                            } else {
+                              console.log(`Successfully deleted snippet: ${filePath}`);
+                            }
                           }
                         }
                       } catch (err) {
