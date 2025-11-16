@@ -2770,7 +2770,7 @@ export default function SchematicEditor({
   }, [activeTool, fabricCanvas]);
 
   useEffect(() => {
-    if (!fabricCanvas || !isInitialDataLoaded) return;
+    if (!fabricCanvas || !isInitialDataLoaded || !isCanvasReady) return;
     
     // Clear all objects except the background schematic image, connection lines, and connection nodes
     const objects = fabricCanvas.getObjects();
@@ -3425,7 +3425,7 @@ export default function SchematicEditor({
     });
 
     fabricCanvas.renderAll();
-  }, [fabricCanvas, isInitialDataLoaded, meterPositions, meters, activeTool, extractedMeters, legendVisibility, selectedExtractedMeterIds, showConfirmed, showUnconfirmed]);
+  }, [fabricCanvas, isInitialDataLoaded, isCanvasReady, meterPositions, meters, activeTool, extractedMeters, legendVisibility, selectedExtractedMeterIds, showConfirmed, showUnconfirmed]);
 
   const fetchMeters = async () => {
     const { data } = await supabase
@@ -3503,7 +3503,7 @@ export default function SchematicEditor({
 
   // Render connection lines on canvas when connections or positions change
   useEffect(() => {
-    if (!fabricCanvas || !isInitialDataLoaded) return;
+    if (!fabricCanvas || !isInitialDataLoaded || !isCanvasReady) return;
 
     // Remove existing connection lines and nodes
     fabricCanvas.getObjects().forEach((obj: any) => {
@@ -3667,7 +3667,7 @@ export default function SchematicEditor({
     });
 
     fabricCanvas.renderAll();
-  }, [fabricCanvas, isInitialDataLoaded, schematicLines, selectedConnectionKeys, showConnections]);
+  }, [fabricCanvas, isInitialDataLoaded, isCanvasReady, schematicLines, selectedConnectionKeys, showConnections]);
 
   // Toggle background visibility
   useEffect(() => {
