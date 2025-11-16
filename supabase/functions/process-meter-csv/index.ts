@@ -569,7 +569,7 @@ Deno.serve(async (req) => {
       // Generate parsed file path
       const originalFileName = actualFilePath.split('/').pop()?.replace('.csv', '') || 'parsed';
       const parsedFileName = `${originalFileName}_parsed.csv`;
-      const tempParsedPath = actualFilePath.replace(fileName, `parsed/${parsedFileName}`);
+      const tempParsedPath = actualFilePath.replace('/Meters/CSVs/', '/Meters/ParsedCSVs/').replace(fileName, parsedFileName);
       
       // Upload parsed CSV to storage
       const { error: uploadError } = await supabase.storage
