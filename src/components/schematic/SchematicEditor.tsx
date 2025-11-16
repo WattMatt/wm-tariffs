@@ -2729,7 +2729,7 @@ export default function SchematicEditor({
         return;
       }
       
-      if (e.key === 'Escape' && activeTool === 'connection' && connectionPoints.length > 0) {
+      if (e.key === 'Escape' && activeTool === 'connection' && (connectionPoints.length > 0 || connectionStart)) {
         // Clean up preview nodes and lines
         connectionNodesRef.current.forEach(node => fabricCanvas.remove(node));
         connectionNodesRef.current = [];
@@ -2757,7 +2757,7 @@ export default function SchematicEditor({
     return () => {
       window.removeEventListener('keydown', handleEscapeKey);
     };
-  }, [fabricCanvas, activeTool, connectionPoints]);
+  }, [fabricCanvas, activeTool, connectionPoints, connectionStart]);
 
 
   // Update cursor when tool changes
