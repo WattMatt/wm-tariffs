@@ -46,6 +46,7 @@ interface Meter {
   created_at: string;
   has_raw_csv?: boolean;
   has_parsed?: boolean;
+  has_schematic_position?: boolean;
 }
 
 interface TariffStructure {
@@ -192,15 +193,23 @@ export default function MetersTab({ siteId }: MetersTabProps) {
             .eq("meter_id", meter.id)
             .not("parsed_file_path", "is", null);
           
+          // Check if meter has positions on any schematic
+          const { count: positionsCount } = await supabase
+            .from("meter_positions")
+            .select("*", { count: "exact", head: true })
+            .eq("meter_id", meter.id);
+          
           const hasRawCsv = (csvFilesCount ?? 0) > 0;
           const hasParsed = (parsedFilesCount ?? 0) > 0;
+          const hasSchematicPosition = (positionsCount ?? 0) > 0;
           
-          console.log(`Meter ${meter.meter_number}: Raw CSV: ${hasRawCsv}, Parsed: ${hasParsed}`);
+          console.log(`Meter ${meter.meter_number}: Raw CSV: ${hasRawCsv}, Parsed: ${hasParsed}, On Schematic: ${hasSchematicPosition}`);
           
           return {
             ...meter,
             has_raw_csv: hasRawCsv,
-            has_parsed: hasParsed
+            has_parsed: hasParsed,
+            has_schematic_position: hasSchematicPosition
           };
         })
       );
@@ -1058,7 +1067,9 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                           variant="outline"
                           size="sm"
                           onClick={() => handleViewOnSchematic(meter.id)}
-                          title="View on schematic"
+                          disabled={!meter.has_schematic_position}
+                          title={meter.has_schematic_position ? "View on schematic" : "Not placed on schematic"}
+                          className={!meter.has_schematic_position ? "opacity-40 cursor-not-allowed" : ""}
                         >
                           <MapPin className="w-4 h-4" />
                         </Button>
