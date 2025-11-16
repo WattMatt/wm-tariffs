@@ -67,6 +67,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
   const [siteMeters, setSiteMeters] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadCancelled, setUploadCancelled] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [documentType, setDocumentType] = useState<string>("municipal_account");
   const [viewingExtraction, setViewingExtraction] = useState<any>(null);
@@ -98,6 +99,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
   const [isMoving, setIsMoving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
+  const uploadCancelledRef = useRef(false);
   
   // Fabric.js canvas state
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -399,6 +401,8 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
   // Upload files from folder with structure
   const handleFolderUpload = async (files: File[]) => {
     setIsUploading(true);
+    setUploadCancelled(false);
+    uploadCancelledRef.current = false;
     setUploadProgress({ current: 0, total: files.length, action: 'Uploading' });
 
     try {
@@ -407,6 +411,12 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
       let failCount = 0;
 
       for (let i = 0; i < files.length; i++) {
+        // Check if upload was cancelled
+        if (uploadCancelledRef.current) {
+          toast.info(`Upload cancelled. ${successCount} of ${files.length} files uploaded.`);
+          break;
+        }
+
         const file = files[i] as any; // File with webkitRelativePath
         setUploadProgress({ current: i + 1, total: files.length, action: 'Uploading' });
 
@@ -516,6 +526,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
       toast.error("Failed to upload folder");
     } finally {
       setIsUploading(false);
+      setUploadCancelled(false);
       setUploadProgress({ current: 0, total: 0, action: '' });
     }
   };
@@ -685,6 +696,8 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
     }
 
     setIsUploading(true);
+    setUploadCancelled(false);
+    uploadCancelledRef.current = false;
     setUploadProgress({ current: 0, total: selectedFiles.length, action: 'Uploading' });
     
     try {
@@ -694,6 +707,12 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
 
       // Process files sequentially to show progress
       for (let i = 0; i < selectedFiles.length; i++) {
+        // Check if upload was cancelled
+        if (uploadCancelledRef.current) {
+          toast.info(`Upload cancelled. ${successCount} of ${selectedFiles.length} files uploaded.`);
+          break;
+        }
+
         const file = selectedFiles[i];
         setUploadProgress({ current: i + 1, total: selectedFiles.length, action: 'Uploading' });
         
@@ -799,6 +818,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
       toast.error("Failed to upload documents");
     } finally {
       setIsUploading(false);
+      setUploadCancelled(false);
       setUploadProgress({ current: 0, total: 0, action: '' });
     }
   };
@@ -1621,14 +1641,15 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
             <div className="space-y-2">
               <Label>&nbsp;</Label>
               <Button
-                onClick={handleUpload}
-                disabled={selectedFiles.length === 0 || isUploading || isConvertingPdf}
+                onClick={isUploading ? () => { setUploadCancelled(true); uploadCancelledRef.current = true; } : handleUpload}
+                disabled={!isUploading && (selectedFiles.length === 0 || isConvertingPdf)}
+                variant={isUploading ? "destructive" : "default"}
                 className="w-full"
               >
                 {isUploading ? (
                   <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    {uploadProgress.action} ({uploadProgress.current}/{uploadProgress.total})
+                    <XCircle className="w-4 h-4 mr-2" />
+                    Cancel Upload ({uploadProgress.current}/{uploadProgress.total})
                   </>
                 ) : isConvertingPdf ? (
                   <>
