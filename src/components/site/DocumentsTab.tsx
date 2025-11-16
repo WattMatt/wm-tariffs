@@ -425,9 +425,9 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
           const relativePath = file.webkitRelativePath || file.name;
           const pathParts = relativePath.split('/');
           const fileName = pathParts[pathParts.length - 1];
-          const folderPath = currentFolderPath
-            ? `${currentFolderPath}/${pathParts.slice(0, -1).join('/')}`
-            : pathParts.slice(0, -1).join('/');
+          
+          // Upload directly to current folder, not creating subfolders from upload
+          const folderPath = currentFolderPath;
 
           const fileExt = fileName.split('.').pop()?.toLowerCase();
           const isPdf = fileExt === 'pdf';
