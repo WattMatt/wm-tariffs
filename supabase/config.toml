@@ -29,6 +29,3 @@ verify_jwt = false
 
 [functions.delete-duplicate-documents]
 verify_jwt = false
-
-[functions.cleanup-orphaned-snippets]
-verify_jwt = false

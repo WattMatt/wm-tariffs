@@ -4495,26 +4495,6 @@ export default function SchematicEditor({
     }
   }, [scanQueue.length, currentlyScanning]);
 
-  // Cleanup orphaned snippet images
-  const handleCleanupOrphanedSnippets = async () => {
-    try {
-      toast.info('Scanning for orphaned snippet images...');
-      
-      const { data, error } = await supabase.functions.invoke('cleanup-orphaned-snippets', {
-        body: { siteId }
-      });
-
-      if (error) throw error;
-
-      toast.success(
-        `Cleanup complete: ${data.deletedCount} orphaned snippets deleted (${data.orphanedSnippets} found out of ${data.totalSnippetsInStorage} total)`
-      );
-    } catch (err) {
-      console.error('Cleanup error:', err);
-      toast.error('Failed to cleanup orphaned snippets');
-    }
-  };
-
   return (
     <div className="space-y-2">
       {/* First row: Scan All and Select Regions with Save/Edit buttons */}
@@ -4674,15 +4654,6 @@ export default function SchematicEditor({
         
         {/* Right side: Save and Edit buttons - always stay top right */}
         <div className="flex gap-2 items-center shrink-0">
-          <Button 
-            onClick={handleCleanupOrphanedSnippets}
-            variant="outline" 
-            size="sm"
-            className="gap-2"
-          >
-            <Trash2 className="w-4 h-4" />
-            Cleanup Snippets
-          </Button>
           <Button onClick={handleSave} disabled={!isEditMode || isSaving} variant="outline" size="sm">
             <Save className="w-4 h-4 mr-2" />
             Save
