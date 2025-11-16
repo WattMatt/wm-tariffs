@@ -215,13 +215,11 @@ export default function MetersTab({ siteId }: MetersTabProps) {
         })
       );
       
-      // Detect duplicates by meter_number and serial_number
-      const meterNumbers = new Map<string, number>();
+      // Detect duplicates by serial_number only
       const serialNumbers = new Map<string, number>();
 
-      // Count occurrences
+      // Count occurrences of serial numbers
       metersWithStatus.forEach(meter => {
-        meterNumbers.set(meter.meter_number, (meterNumbers.get(meter.meter_number) || 0) + 1);
         if (meter.serial_number && meter.serial_number.trim() !== '') {
           serialNumbers.set(meter.serial_number, (serialNumbers.get(meter.serial_number) || 0) + 1);
         }
@@ -229,13 +227,12 @@ export default function MetersTab({ siteId }: MetersTabProps) {
 
       // Mark duplicates
       const finalMeters = metersWithStatus.map(meter => {
-        const isDuplicateMeterNumber = (meterNumbers.get(meter.meter_number) || 0) > 1;
         const isDuplicateSerial = meter.serial_number && meter.serial_number.trim() !== '' 
           && (serialNumbers.get(meter.serial_number) || 0) > 1;
         
         return {
           ...meter,
-          is_duplicate: isDuplicateMeterNumber || isDuplicateSerial
+          is_duplicate: isDuplicateSerial
         };
       });
 
@@ -1020,7 +1017,7 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                           <Badge 
                             variant="outline" 
                             className="bg-yellow-500/10 border-yellow-500/50 text-yellow-600 dark:text-yellow-400"
-                            title="Duplicate meter number or serial number detected"
+                            title="Duplicate serial number detected"
                           >
                             Duplicate
                           </Badge>
