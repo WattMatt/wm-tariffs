@@ -4782,7 +4782,7 @@ export default function SchematicEditor({
             {deletionProgress ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                Deleting {deletionProgress.current} of {deletionProgress.total}
+                Delete ({deletionProgress.current}/{deletionProgress.total})
               </>
             ) : (
               <>
