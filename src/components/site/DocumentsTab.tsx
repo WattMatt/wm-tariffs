@@ -1577,7 +1577,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 border rounded-lg bg-muted/30">
             <div className="space-y-2">
               <Label htmlFor="document-type">Document Type</Label>
-              <Select value={documentType} onValueChange={setDocumentType}>
+              <Select value={documentType} onValueChange={setDocumentType} disabled={isUploading}>
                 <SelectTrigger id="document-type">
                   <SelectValue />
                 </SelectTrigger>
