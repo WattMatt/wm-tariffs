@@ -11,7 +11,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { FileText, Upload, Loader2, Download, Trash2, Eye, GripVertical, Plus, X, Sparkles, RefreshCw, Square, XCircle, Folder, FolderPlus, ChevronRight, ChevronDown, Home, Edit2, FolderOpen, Link, FileType } from "lucide-react";
+import { FileText, Upload, Loader2, Download, Trash2, Eye, GripVertical, Plus, X, Sparkles, RefreshCw, Square, XCircle, Folder, FolderPlus, ChevronRight, ChevronDown, Home, Edit2, FolderOpen, Link, FileType, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
 import { format } from "date-fns";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { pdfjs } from 'react-pdf';
@@ -87,6 +87,8 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
   const [isAutoAssigning, setIsAutoAssigning] = useState(false);
   const [isTypeChangeDialogOpen, setIsTypeChangeDialogOpen] = useState(false);
   const [selectedDocumentType, setSelectedDocumentType] = useState<"municipal_account" | "tenant_bill" | "other" | "report">("municipal_account");
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc" | null>(null);
   
   // Folder management state
   const [currentFolderPath, setCurrentFolderPath] = useState<string>('');
@@ -364,6 +366,93 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
   const navigateToFolder = (folderPath: string) => {
     setCurrentFolderPath(folderPath);
   };
+
+  // Handle sorting
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      if (sortDirection === "asc") {
+        setSortDirection("desc");
+      } else if (sortDirection === "desc") {
+        setSortColumn(null);
+        setSortDirection(null);
+      }
+    } else {
+      setSortColumn(column);
+      setSortDirection("asc");
+    }
+  };
+
+  // Get sorted documents
+  const getSortedDocuments = () => {
+    const filtered = documents.filter(d => !d.is_folder && d.folder_path === currentFolderPath);
+    
+    if (!sortColumn || !sortDirection) return filtered;
+
+    return [...filtered].sort((a, b) => {
+      let aValue: any;
+      let bValue: any;
+
+      switch (sortColumn) {
+        case "file_name":
+          aValue = a.file_name.toLowerCase();
+          bValue = b.file_name.toLowerCase();
+          break;
+        case "shop_number":
+          aValue = a.document_extractions?.[0]?.extracted_data?.shop_number || "";
+          bValue = b.document_extractions?.[0]?.extracted_data?.shop_number || "";
+          break;
+        case "document_type":
+          aValue = a.document_type;
+          bValue = b.document_type;
+          break;
+        case "upload_date":
+          aValue = new Date(a.upload_date).getTime();
+          bValue = new Date(b.upload_date).getTime();
+          break;
+        case "extraction_status":
+          aValue = a.extraction_status;
+          bValue = b.extraction_status;
+          break;
+        case "amount":
+          aValue = a.document_extractions?.[0]?.total_amount || 0;
+          bValue = b.document_extractions?.[0]?.total_amount || 0;
+          break;
+        default:
+          return 0;
+      }
+
+      if (sortDirection === "asc") {
+        return aValue > bValue ? 1 : aValue < bValue ? -1 : 0;
+      } else {
+        return aValue < bValue ? 1 : aValue > bValue ? -1 : 0;
+      }
+    });
+  };
+
+  // Sortable header component
+  const SortableHeader = ({ column, children }: { column: string; children: React.ReactNode }) => {
+    const isActive = sortColumn === column;
+    const Icon = isActive
+      ? sortDirection === "asc"
+        ? ArrowUp
+        : ArrowDown
+      : ArrowUpDown;
+
+    return (
+      <TableHead>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="-ml-3 h-8 data-[state=open]:bg-accent"
+          onClick={() => handleSort(column)}
+        >
+          {children}
+          <Icon className={`ml-2 h-4 w-4 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
+        </Button>
+      </TableHead>
+    );
+  };
+
 
   // Get available folders for move dialog
   const getAvailableFolders = (): string[] => {
@@ -1975,17 +2064,17 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                         onCheckedChange={handleSelectAll}
                       />
                     </TableHead>
-                    <TableHead>File Name</TableHead>
-                    <TableHead>Shop Number</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Upload Date</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Extracted Period</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead>
-                    Assigned Meter ({documents.filter(d => !d.is_folder && d.meter_id).map(d => d.meter_id).filter((id, idx, arr) => arr.indexOf(id) === idx).length}/{siteMeters.length})
-                  </TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                    <SortableHeader column="file_name">File Name</SortableHeader>
+                    <SortableHeader column="shop_number">Shop Number</SortableHeader>
+                    <SortableHeader column="document_type">Type</SortableHeader>
+                    <SortableHeader column="upload_date">Upload Date</SortableHeader>
+                    <SortableHeader column="extraction_status">Status</SortableHeader>
+                    <TableHead>Extracted Period</TableHead>
+                    <SortableHeader column="amount">Amount</SortableHeader>
+                    <TableHead>
+                      Assigned Meter ({documents.filter(d => !d.is_folder && d.meter_id).map(d => d.meter_id).filter((id, idx, arr) => arr.indexOf(id) === idx).length}/{siteMeters.length})
+                    </TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -2119,8 +2208,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                     ))}
                   
                   {/* Show documents */}
-                  {documents
-                    .filter(d => !d.is_folder && d.folder_path === currentFolderPath)
+                  {getSortedDocuments()
                     .map((doc) => (
                     <TableRow key={doc.id}>
                       <TableCell>
