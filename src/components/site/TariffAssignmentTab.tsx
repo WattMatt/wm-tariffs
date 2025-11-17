@@ -97,6 +97,7 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
   const [sortDirection, setSortDirection] = useState<"asc" | "desc" | null>(null);
   const [selectedPreviewTariffId, setSelectedPreviewTariffId] = useState<string>("");
   const [selectedMeterIds, setSelectedMeterIds] = useState<Set<string>>(new Set());
+  const [selectedChartMeter, setSelectedChartMeter] = useState<{ meter: Meter; docs: DocumentShopNumber[] } | null>(null);
   
   // Rate comparison state
   const [rateComparisonMeter, setRateComparisonMeter] = useState<Meter | null>(null);
@@ -786,220 +787,300 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
           )}
 
           {!isLoading && tariffStructures.length > 0 && meters.length > 0 && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold">Meter Tariff Assignments</h3>
-                <Button onClick={handleSaveAssignments} disabled={isSaving}>
-                  <FileCheck2 className="w-4 h-4 mr-2" />
-                  {isSaving ? "Saving..." : "Save Assignments"}
-                </Button>
-              </div>
-
-              {selectedMeterIds.size > 0 && (
-                <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/50">
-                  <div>
-                    <span className="text-sm font-medium">
-                      {selectedMeterIds.size} meter{selectedMeterIds.size > 1 ? 's' : ''} selected
-                    </span>
+            <>
+              {showDocumentCharts ? (
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold">Meter Analysis</h3>
+                  
+                  {/* Grid of charts - 3 per row */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {meters.map((meter) => {
+                      const matchingShops = getMatchingShopNumbers(meter);
+                      
+                      if (matchingShops.length === 0) return null;
+                      
+                      // Transform and sort data for chart
+                      const chartData = [...matchingShops]
+                        .sort((a, b) => new Date(a.periodStart).getTime() - new Date(b.periodStart).getTime())
+                        .map(doc => ({
+                          period: new Date(doc.periodStart).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }),
+                          amount: doc.totalAmount,
+                        }));
+                      
+                      return (
+                        <Card 
+                          key={meter.id} 
+                          className="cursor-pointer hover:shadow-lg transition-shadow"
+                          onClick={() => setSelectedChartMeter({ meter, docs: matchingShops })}
+                        >
+                          <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-medium">
+                              {meter.meter_number}
+                            </CardTitle>
+                            <CardDescription className="text-xs">
+                              {matchingShops.length} document{matchingShops.length > 1 ? 's' : ''}
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent className="pb-4">
+                            <ChartContainer
+                              config={{
+                                amount: {
+                                  label: "Amount",
+                                  color: "hsl(var(--primary))",
+                                },
+                              }}
+                              className="h-[200px]"
+                            >
+                              <ResponsiveContainer width="100%" height="100%">
+                                <LineChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 20 }}>
+                                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                                  <XAxis 
+                                    dataKey="period" 
+                                    tick={{ fontSize: 10 }}
+                                    angle={-45}
+                                    textAnchor="end"
+                                    height={60}
+                                  />
+                                  <YAxis 
+                                    tick={{ fontSize: 10 }}
+                                    tickFormatter={(value) => `R${(value / 1000).toFixed(0)}k`}
+                                  />
+                                  <ChartTooltip 
+                                    content={<ChartTooltipContent />}
+                                    formatter={(value: number) => [`R${value.toFixed(2)}`, "Amount"]}
+                                  />
+                                  <Line 
+                                    type="monotone" 
+                                    dataKey="amount" 
+                                    stroke="hsl(var(--primary))"
+                                    strokeWidth={2}
+                                    dot={{ fill: "hsl(var(--primary))", r: 3 }}
+                                    activeDot={{ r: 5 }}
+                                  />
+                                </LineChart>
+                              </ResponsiveContainer>
+                            </ChartContainer>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
                   </div>
-                  <div>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={handleBulkClearTariffs}
-                    >
-                      <Eraser className="w-4 h-4 mr-2" />
-                      Clear Tariffs
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold">Meter Tariff Assignments</h3>
+                    <Button onClick={handleSaveAssignments} disabled={isSaving}>
+                      <FileCheck2 className="w-4 h-4 mr-2" />
+                      {isSaving ? "Saving..." : "Save Assignments"}
                     </Button>
+                  </div>
+
+                  {selectedMeterIds.size > 0 && (
+                    <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/50">
+                      <div>
+                        <span className="text-sm font-medium">
+                          {selectedMeterIds.size} meter{selectedMeterIds.size > 1 ? 's' : ''} selected
+                        </span>
+                      </div>
+                      <div>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={handleBulkClearTariffs}
+                        >
+                          <Eraser className="w-4 h-4 mr-2" />
+                          Clear Tariffs
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="border rounded-lg overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-[50px]">
+                            <Checkbox
+                              checked={selectedMeterIds.size === meters.length && meters.length > 0}
+                              onCheckedChange={toggleAllMeters}
+                            />
+                          </TableHead>
+                          <SortableHeader column="meter_number">Meter Number</SortableHeader>
+                          <SortableHeader column="name">Name</SortableHeader>
+                          <SortableHeader column="meter_type">Type</SortableHeader>
+                          <SortableHeader column="mccb_size">Breaker Size (A)</SortableHeader>
+                          <TableHead>Shop Numbers</TableHead>
+                          <TableHead>Assigned Tariff Structure</TableHead>
+                          <TableHead className="w-[120px]">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {getSortedMeters().map((meter) => {
+                          const currentTariffId = selectedTariffs[meter.id] || meter.tariff_structure_id || "";
+                          const matchingShops = getMatchingShopNumbers(meter);
+
+                          return (
+                            <TableRow key={meter.id}>
+                              <TableCell>
+                                <Checkbox
+                                  checked={selectedMeterIds.has(meter.id)}
+                                  onCheckedChange={() => toggleMeterSelection(meter.id)}
+                                />
+                              </TableCell>
+                              <TableCell className="font-mono font-medium">
+                                {meter.meter_number}
+                              </TableCell>
+                              <TableCell>{meter.name || "—"}</TableCell>
+                              <TableCell>
+                                <Badge variant="outline">{meter.meter_type}</Badge>
+                              </TableCell>
+                              <TableCell>
+                                {meter.mccb_size ? (
+                                  <span className="font-medium">{meter.mccb_size}A</span>
+                                ) : meter.rating ? (
+                                  <span className="font-medium">{meter.rating}</span>
+                                ) : (
+                                  <span className="text-muted-foreground">—</span>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                {matchingShops.length > 0 ? (
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="h-6 text-xs"
+                                          onClick={() => setViewingAllDocs({ meter, docs: matchingShops })}
+                                        >
+                                          <FileText className="w-3 h-3 mr-1" />
+                                          {matchingShops[0].shopNumber}
+                                          {matchingShops.length > 1 && (
+                                            <Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px]">
+                                              {matchingShops.length}
+                                            </Badge>
+                                          )}
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p>View {matchingShops.length} document{matchingShops.length > 1 ? 's' : ''}</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                ) : (
+                                  <span className="text-muted-foreground text-sm">—</span>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                <Select
+                                  value={currentTariffId || ""}
+                                  onValueChange={(value) => handleTariffChange(meter.id, value)}
+                                >
+                                  <SelectTrigger className={cn(
+                                    "w-full",
+                                    hasUnsavedChanges(meter.id) && "border-blue-500 bg-blue-50 dark:bg-blue-950/30"
+                                  )}>
+                                    <SelectValue placeholder="Select tariff structure" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {tariffStructures.map((tariff) => (
+                                      <SelectItem key={tariff.id} value={tariff.id}>
+                                        <div className="flex flex-col">
+                                          <span className="font-medium">{tariff.name}</span>
+                                          <span className="text-xs text-muted-foreground">
+                                            {tariff.tariff_type}
+                                            {tariff.voltage_level && ` • ${tariff.voltage_level}`}
+                                            {tariff.uses_tou && " • TOU"}
+                                          </span>
+                                        </div>
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-1">
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          onClick={() => handleViewRateComparison(meter)}
+                                          disabled={!currentTariffId || matchingShops.length === 0}
+                                          className={cn(
+                                            !currentTariffId || matchingShops.length === 0 ? "opacity-50 cursor-not-allowed" : ""
+                                          )}
+                                        >
+                                          <Scale className="w-4 h-4" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p>Compare rates with documents</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                  
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          onClick={() => {
+                                            const tariffStructure = tariffStructures.find(t => t.id === currentTariffId);
+                                            if (tariffStructure) {
+                                              setViewingTariffId(currentTariffId);
+                                              setViewingTariffName(tariffStructure.name);
+                                            }
+                                          }}
+                                          disabled={!currentTariffId}
+                                          className={cn(
+                                            !currentTariffId ? "opacity-50 cursor-not-allowed" : ""
+                                          )}
+                                        >
+                                          <Eye className="w-4 h-4" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p>View tariff details</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                  
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          onClick={() => handleClearTariff(meter.id)}
+                                          disabled={!currentTariffId}
+                                          className={cn(
+                                            !currentTariffId ? "opacity-50 cursor-not-allowed" : ""
+                                          )}
+                                        >
+                                          <Eraser className="w-4 h-4" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p>Clear tariff assignment</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
                   </div>
                 </div>
               )}
-
-              <div className="border rounded-lg overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[50px]">
-                        <Checkbox
-                          checked={selectedMeterIds.size === meters.length && meters.length > 0}
-                          onCheckedChange={toggleAllMeters}
-                        />
-                      </TableHead>
-                      <SortableHeader column="meter_number">Meter Number</SortableHeader>
-                      <SortableHeader column="name">Name</SortableHeader>
-                      <SortableHeader column="meter_type">Type</SortableHeader>
-                      <SortableHeader column="mccb_size">Breaker Size (A)</SortableHeader>
-                      <TableHead>Shop Numbers</TableHead>
-                      <TableHead>Assigned Tariff Structure</TableHead>
-                      <TableHead className="w-[120px]">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {getSortedMeters().map((meter) => {
-                      const currentTariffId = selectedTariffs[meter.id];
-                      const currentTariff = tariffStructures.find((t) => t.id === currentTariffId);
-                      const hasAssignment = !!currentTariffId;
-                      const matchingShops = getMatchingShopNumbers(meter);
-
-                      return (
-                        <TableRow key={meter.id}>
-                          <TableCell>
-                            <Checkbox
-                              checked={selectedMeterIds.has(meter.id)}
-                              onCheckedChange={() => toggleMeterSelection(meter.id)}
-                            />
-                          </TableCell>
-                          <TableCell className="font-mono font-medium">
-                            {meter.meter_number}
-                          </TableCell>
-                          <TableCell>{meter.name || "—"}</TableCell>
-                          <TableCell>
-                            <Badge variant="outline">{meter.meter_type}</Badge>
-                          </TableCell>
-                          <TableCell>
-                            {meter.mccb_size ? (
-                              <span className="font-medium">{meter.mccb_size}A</span>
-                            ) : meter.rating ? (
-                              <span className="font-medium">{meter.rating}</span>
-                            ) : (
-                              <span className="text-muted-foreground">—</span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {matchingShops.length > 0 ? (
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      className="h-6 text-xs"
-                                      onClick={() => setViewingAllDocs({ meter, docs: matchingShops })}
-                                    >
-                                      <FileText className="w-3 h-3 mr-1" />
-                                      {matchingShops[0].shopNumber}
-                                      {matchingShops.length > 1 && (
-                                        <Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px]">
-                                          {matchingShops.length}
-                                        </Badge>
-                                      )}
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p>View {matchingShops.length} document{matchingShops.length > 1 ? 's' : ''}</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            ) : (
-                              <span className="text-muted-foreground text-sm">—</span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <Select
-                              value={currentTariffId || ""}
-                              onValueChange={(value) => handleTariffChange(meter.id, value)}
-                            >
-                              <SelectTrigger className={cn(
-                                "w-full",
-                                hasUnsavedChanges(meter.id) && "border-blue-500 bg-blue-50 dark:bg-blue-950/30"
-                              )}>
-                                <SelectValue placeholder="Select tariff structure" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {tariffStructures.map((tariff) => (
-                                  <SelectItem key={tariff.id} value={tariff.id}>
-                                    <div className="flex flex-col">
-                                      <span className="font-medium">{tariff.name}</span>
-                                      <span className="text-xs text-muted-foreground">
-                                        {tariff.tariff_type}
-                                        {tariff.voltage_level && ` • ${tariff.voltage_level}`}
-                                        {tariff.uses_tou && " • TOU"}
-                                      </span>
-                                    </div>
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-1">
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      onClick={() => handleViewRateComparison(meter)}
-                                      disabled={!currentTariffId || matchingShops.length === 0}
-                                      className={cn(
-                                        !currentTariffId || matchingShops.length === 0 ? "opacity-50 cursor-not-allowed" : ""
-                                      )}
-                                    >
-                                      <Scale className="w-4 h-4" />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p>Compare rates with documents</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                              
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      onClick={() => {
-                                        const tariffStructure = tariffStructures.find(t => t.id === currentTariffId);
-                                        if (tariffStructure) {
-                                          setViewingTariffId(currentTariffId);
-                                          setViewingTariffName(tariffStructure.name);
-                                        }
-                                      }}
-                                      disabled={!currentTariffId}
-                                      className={cn(
-                                        !currentTariffId ? "opacity-50 cursor-not-allowed" : ""
-                                      )}
-                                    >
-                                      <Eye className="w-4 h-4" />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p>View tariff details</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                              
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      onClick={() => handleClearTariff(meter.id)}
-                                      disabled={!currentTariffId}
-                                      className={cn(
-                                        !currentTariffId ? "opacity-50 cursor-not-allowed" : ""
-                                      )}
-                                    >
-                                      <Eraser className="w-4 h-4" />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p>Clear tariff assignment</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-            </div>
+            </>
           )}
         </CardContent>
       </Card>
@@ -1232,6 +1313,186 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
         </DialogContent>
       </Dialog>
 
+      {/* Chart Detail Dialog for Analysis Tab */}
+      <Dialog open={!!selectedChartMeter} onOpenChange={() => setSelectedChartMeter(null)}>
+        <DialogContent className="max-w-6xl max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle>Meter Analysis: {selectedChartMeter?.meter.meter_number}</DialogTitle>
+            <DialogDescription>
+              Billing cost trend and associated documents
+            </DialogDescription>
+          </DialogHeader>
+          
+          <ScrollArea className="max-h-[70vh] pr-4">
+            {selectedChartMeter && (() => {
+              const chartData = [...selectedChartMeter.docs]
+                .sort((a, b) => new Date(a.periodStart).getTime() - new Date(b.periodStart).getTime())
+                .map(doc => ({
+                  period: new Date(doc.periodStart).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }),
+                  fullPeriod: `${new Date(doc.periodStart).toLocaleDateString()} - ${new Date(doc.periodEnd).toLocaleDateString()}`,
+                  amount: doc.totalAmount,
+                  currency: doc.currency
+                }));
+              
+              const currencies = new Set(chartData.map(d => d.currency));
+              const hasMixedCurrencies = currencies.size > 1;
+              
+              return (
+                <div className="space-y-6">
+                  {/* Enlarged Chart */}
+                  <Card>
+                    <CardHeader className="pb-4">
+                      <CardTitle>Billing Cost Over Time</CardTitle>
+                      {hasMixedCurrencies && (
+                        <Alert variant="destructive" className="mt-2">
+                          <AlertCircle className="h-4 w-4" />
+                          <AlertDescription>
+                            Warning: Documents have mixed currencies ({Array.from(currencies).join(', ')})
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                    </CardHeader>
+                    <CardContent>
+                      <ChartContainer
+                        config={{
+                          amount: {
+                            label: "Amount",
+                            color: "hsl(var(--primary))",
+                          },
+                        }}
+                        className="h-[400px]"
+                      >
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 60 }}>
+                            <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                            <XAxis 
+                              dataKey="period" 
+                              tick={{ fontSize: 12 }}
+                              angle={-45}
+                              textAnchor="end"
+                              height={80}
+                            />
+                            <YAxis 
+                              tick={{ fontSize: 12 }}
+                              tickFormatter={(value) => `R${(value / 1000).toFixed(0)}k`}
+                            />
+                            <ChartTooltip 
+                              content={<ChartTooltipContent />}
+                              formatter={(value: number) => [`R${value.toFixed(2)}`, "Amount"]}
+                            />
+                            <Line 
+                              type="monotone" 
+                              dataKey="amount" 
+                              stroke="hsl(var(--primary))"
+                              strokeWidth={3}
+                              dot={{ fill: "hsl(var(--primary))", r: 5 }}
+                              activeDot={{ r: 8 }}
+                            />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </ChartContainer>
+                    </CardContent>
+                  </Card>
+
+                  {/* Associated Documents */}
+                  <div className="space-y-3">
+                    <h4 className="font-semibold">Associated Documents ({selectedChartMeter.docs.length})</h4>
+                    {selectedChartMeter.docs.map((doc, idx) => (
+                      <Collapsible
+                        key={idx}
+                        open={expandedShopDocs.has(idx)}
+                        onOpenChange={(open) => {
+                          const newExpanded = new Set(expandedShopDocs);
+                          if (open) {
+                            newExpanded.add(idx);
+                          } else {
+                            newExpanded.delete(idx);
+                          }
+                          setExpandedShopDocs(newExpanded);
+                        }}
+                        className="border rounded-lg"
+                      >
+                        <CollapsibleTrigger className="w-full p-4 hover:bg-muted/50 transition-colors">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <ChevronDown 
+                                className={cn(
+                                  "w-4 h-4 text-muted-foreground transition-transform",
+                                  expandedShopDocs.has(idx) && "rotate-180"
+                                )} 
+                              />
+                              <FileText className="w-4 h-4 text-muted-foreground" />
+                              <span className="font-medium">{doc.shopNumber}</span>
+                            </div>
+                            <div className="flex items-center gap-4">
+                              <span className="text-sm text-muted-foreground">
+                                {new Date(doc.periodStart).toLocaleDateString()} - {new Date(doc.periodEnd).toLocaleDateString()}
+                              </span>
+                              <Badge variant="outline" className="font-mono">
+                                {doc.currency} {doc.totalAmount.toFixed(2)}
+                              </Badge>
+                            </div>
+                          </div>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent className="px-4 pb-4">
+                          <div className="space-y-3 pt-2">
+                            {doc.tenantName && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium text-muted-foreground">Tenant:</span>
+                                <span className="text-sm">{doc.tenantName}</span>
+                              </div>
+                            )}
+                            {doc.accountReference && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium text-muted-foreground">Account:</span>
+                                <span className="text-sm font-mono">{doc.accountReference}</span>
+                              </div>
+                            )}
+                            {doc.lineItems && doc.lineItems.length > 0 && (
+                              <div className="space-y-2">
+                                <span className="text-sm font-medium text-muted-foreground">Line Items:</span>
+                                <div className="border rounded-lg overflow-hidden">
+                                  <Table>
+                                    <TableHeader>
+                                      <TableRow>
+                                        <TableHead className="text-xs">Description</TableHead>
+                                        <TableHead className="text-xs">Consumption</TableHead>
+                                        <TableHead className="text-xs">Rate</TableHead>
+                                        <TableHead className="text-xs text-right">Amount</TableHead>
+                                      </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                      {doc.lineItems.map((item, itemIdx) => (
+                                        <TableRow key={itemIdx}>
+                                          <TableCell className="text-xs">{item.description}</TableCell>
+                                          <TableCell className="text-xs">
+                                            {item.consumption ? `${item.consumption.toFixed(2)} kWh` : '—'}
+                                          </TableCell>
+                                          <TableCell className="text-xs">
+                                            {item.rate ? `${doc.currency} ${item.rate.toFixed(4)}` : '—'}
+                                          </TableCell>
+                                          <TableCell className="text-xs text-right font-medium">
+                                            {doc.currency} {item.amount.toFixed(2)}
+                                          </TableCell>
+                                        </TableRow>
+                                      ))}
+                                    </TableBody>
+                                  </Table>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </CollapsibleContent>
+                      </Collapsible>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
       {/* All Documents Dialog */}
       <Dialog open={!!viewingAllDocs} onOpenChange={() => {
         setViewingAllDocs(null);
@@ -1246,7 +1507,7 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
           </DialogHeader>
           
           {/* Chart Section */}
-          {showDocumentCharts && viewingAllDocs && viewingAllDocs.docs.length > 1 && (() => {
+          {!showDocumentCharts && viewingAllDocs && viewingAllDocs.docs.length > 1 && (() => {
             // Transform and sort data for chart
             const chartData = [...viewingAllDocs.docs]
               .sort((a, b) => new Date(a.periodStart).getTime() - new Date(b.periodStart).getTime())
