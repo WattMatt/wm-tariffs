@@ -676,7 +676,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
       }
 
       if (successCount > 0) {
-        toast.success(`Successfully uploaded ${successCount} file(s). AI extraction queued in background.`);
+        toast.success(`${successCount} file(s) uploaded successfully. AI extraction started in background.`);
         
         // Queue extractions in background (fire and forget)
         uploadedDocuments.forEach(doc => {
@@ -943,7 +943,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
         }
 
         const file = selectedFiles[i];
-        setUploadProgress({ current: i + 1, total: selectedFiles.length, action: 'Uploading' });
+        setUploadProgress({ current: i + 1, total: selectedFiles.length, action: 'Uploading files' });
         
         try {
           const fileExt = file.name.split('.').pop()?.toLowerCase();
@@ -1005,24 +1005,14 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
             .select()
             .single();
 
-          // Get signed URL for AI processing (use converted image if available)
-          setUploadProgress({ current: i + 1, total: selectedFiles.length, action: 'Extracting' });
-          
-          const pathToProcess = convertedImagePath || uploadData.path;
-          const { data: urlData } = await supabase.storage
-            .from("client-files")
-            .createSignedUrl(pathToProcess, 3600);
+          if (docError) throw docError;
 
-          if (urlData?.signedUrl) {
-            // Trigger AI extraction
-            await supabase.functions.invoke("extract-document-data", {
-              body: {
-                documentId: document.id,
-                fileUrl: urlData.signedUrl,
-                documentType: documentType
-              }
-            });
-          }
+          // Store document info for background extraction
+          uploadedDocuments.push({
+            id: document.id,
+            path: convertedImagePath || uploadData.path,
+            documentType: documentType
+          });
 
           successCount++;
         } catch (error) {
@@ -1032,7 +1022,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
       }
 
       if (successCount > 0) {
-        toast.success(`Successfully uploaded ${successCount} file(s). AI extraction queued in background.`);
+        toast.success(`${successCount} document(s) uploaded successfully. AI extraction started in background.`);
         
         // Queue extractions in background (fire and forget)
         uploadedDocuments.forEach(doc => {
