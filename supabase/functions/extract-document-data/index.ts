@@ -177,6 +177,43 @@ Return the data in a structured format with all line items in an array.`;
 
     const extractedData = JSON.parse(toolCall.function.arguments);
     
+    // Helper function to convert various date formats to YYYY-MM-DD
+    const convertToISODate = (dateString: string): string => {
+      if (!dateString) return dateString;
+      
+      // Already in YYYY-MM-DD format
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+        return dateString;
+      }
+      
+      // Handle DD/MM/YYYY format
+      const ddmmyyyyMatch = dateString.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+      if (ddmmyyyyMatch) {
+        const [, day, month, year] = ddmmyyyyMatch;
+        return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+      }
+      
+      // Handle MM/DD/YYYY format (less common for SA docs)
+      const mmddyyyyMatch = dateString.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+      if (mmddyyyyMatch) {
+        const [, first, second, year] = mmddyyyyMatch;
+        // Assume DD/MM/YYYY for South African documents
+        return `${year}-${second.padStart(2, '0')}-${first.padStart(2, '0')}`;
+      }
+      
+      // Return as-is if no pattern matches (will likely cause DB error which is good for debugging)
+      console.warn(`Unexpected date format: ${dateString}`);
+      return dateString;
+    };
+    
+    // Convert dates to ISO format
+    if (extractedData.period_start) {
+      extractedData.period_start = convertToISODate(extractedData.period_start);
+    }
+    if (extractedData.period_end) {
+      extractedData.period_end = convertToISODate(extractedData.period_end);
+    }
+    
     // Format shop number with DB- prefix and proper digit formatting
     if (extractedData.shop_number) {
       let shopNum = extractedData.shop_number.toString().trim();
