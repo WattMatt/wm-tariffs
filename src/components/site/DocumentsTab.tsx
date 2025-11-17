@@ -580,6 +580,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
       const { data: user } = await supabase.auth.getUser();
       let successCount = 0;
       let failCount = 0;
+      const uploadedDocuments: Array<{ id: string; path: string; documentType: string }> = [];
 
       for (let i = 0; i < files.length; i++) {
         // Check if upload was cancelled
@@ -660,21 +661,12 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
 
           if (docError) throw docError;
 
-          // Trigger AI extraction
-          const pathToProcess = convertedImagePath || uploadData.path;
-          const { data: urlData } = await supabase.storage
-            .from("client-files")
-            .createSignedUrl(pathToProcess, 3600);
-
-          if (urlData?.signedUrl) {
-            await supabase.functions.invoke("extract-document-data", {
-              body: {
-                documentId: document.id,
-                fileUrl: urlData.signedUrl,
-                documentType: documentType
-              }
-            });
-          }
+          // Store document info for background extraction
+          uploadedDocuments.push({
+            id: document.id,
+            path: convertedImagePath || uploadData.path,
+            documentType: documentType
+          });
 
           successCount++;
         } catch (error) {
@@ -684,7 +676,26 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
       }
 
       if (successCount > 0) {
-        toast.success(`${successCount} file(s) uploaded successfully`);
+        toast.success(`Successfully uploaded ${successCount} file(s). AI extraction queued in background.`);
+        
+        // Queue extractions in background (fire and forget)
+        uploadedDocuments.forEach(doc => {
+          supabase.storage
+            .from("client-files")
+            .createSignedUrl(doc.path, 3600)
+            .then(({ data: urlData }) => {
+              if (urlData?.signedUrl) {
+                supabase.functions.invoke("extract-document-data", {
+                  body: {
+                    documentId: doc.id,
+                    fileUrl: urlData.signedUrl,
+                    documentType: doc.documentType
+                  }
+                }).catch(err => console.error('Background extraction error:', err));
+              }
+            })
+            .catch(err => console.error('Failed to get signed URL:', err));
+        });
       }
       if (failCount > 0) {
         toast.error(`${failCount} file(s) failed to upload`);
@@ -921,6 +932,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
       const { data: user } = await supabase.auth.getUser();
       let successCount = 0;
       let failCount = 0;
+      const uploadedDocuments: Array<{ id: string; path: string; documentType: string }> = [];
 
       // Process files sequentially to show progress
       for (let i = 0; i < selectedFiles.length; i++) {
@@ -993,8 +1005,6 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
             .select()
             .single();
 
-          if (docError) throw docError;
-
           // Get signed URL for AI processing (use converted image if available)
           setUploadProgress({ current: i + 1, total: selectedFiles.length, action: 'Extracting' });
           
@@ -1022,7 +1032,26 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
       }
 
       if (successCount > 0) {
-        toast.success(`${successCount} document(s) uploaded successfully`);
+        toast.success(`Successfully uploaded ${successCount} file(s). AI extraction queued in background.`);
+        
+        // Queue extractions in background (fire and forget)
+        uploadedDocuments.forEach(doc => {
+          supabase.storage
+            .from("client-files")
+            .createSignedUrl(doc.path, 3600)
+            .then(({ data: urlData }) => {
+              if (urlData?.signedUrl) {
+                supabase.functions.invoke("extract-document-data", {
+                  body: {
+                    documentId: doc.id,
+                    fileUrl: urlData.signedUrl,
+                    documentType: doc.documentType
+                  }
+                }).catch(err => console.error('Background extraction error:', err));
+              }
+            })
+            .catch(err => console.error('Failed to get signed URL:', err));
+        });
       }
       if (failCount > 0) {
         toast.error(`${failCount} document(s) failed to upload`);
