@@ -801,11 +801,19 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
   };
 
   const handleAutoAssignAll = async () => {
+    if (selectedDocuments.size === 0) {
+      toast.error("No documents selected");
+      return;
+    }
+
     setIsAutoAssigning(true);
     try {
       let assignedCount = 0;
       let skippedCount = 0;
       const assignedMeters = new Set<string>();
+
+      // Get only the selected documents
+      const selectedDocs = documents.filter(doc => selectedDocuments.has(doc.id));
 
       // First, track which meters are already assigned to documents
       for (const doc of documents) {
@@ -814,7 +822,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
         }
       }
 
-      for (const doc of documents) {
+      for (const doc of selectedDocs) {
         if (doc.is_folder) continue;
         
         // Skip if document already has a meter assigned
@@ -865,6 +873,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
         `Auto-assignment complete: ${assignedCount} assigned, ${skippedCount} skipped`
       );
       fetchDocuments();
+      setSelectedDocuments(new Set()); // Clear selection after assignment
     } catch (error: any) {
       console.error("Error auto-assigning meters:", error);
       toast.error("Failed to auto-assign meters");
@@ -1974,7 +1983,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                         variant="outline"
                         size="sm"
                         onClick={handleAutoAssignAll}
-                        disabled={isAutoAssigning || documents.filter(d => !d.is_folder).length === 0}
+                        disabled={isAutoAssigning || selectedDocuments.size === 0}
                       >
                         {isAutoAssigning ? (
                           <Loader2 className="w-4 h-4 animate-spin" />
