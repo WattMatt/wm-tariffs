@@ -661,10 +661,13 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <DollarSign className="w-5 h-5" />
-            Tariff Assignment
+            {showDocumentCharts ? 'Tariff Analysis' : 'Tariff Assignment'}
           </CardTitle>
           <CardDescription>
-            Assign tariff structures from {site.supply_authorities?.name} to your meters
+            {showDocumentCharts 
+              ? 'Analyze billing costs and tariff performance for your meters'
+              : `Assign tariff structures from ${site.supply_authorities?.name} to your meters`
+            }
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
