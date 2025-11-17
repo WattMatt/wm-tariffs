@@ -10,6 +10,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { FileCheck2, AlertCircle, CheckCircle2, DollarSign, Eye, FileText, ArrowUpDown, ArrowUp, ArrowDown, Eraser, Scale, Check, X, ChevronDown } from "lucide-react";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts";
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -1235,6 +1237,92 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
               All documents assigned to meter {viewingAllDocs?.meter.meter_number}
             </DialogDescription>
           </DialogHeader>
+          
+          {/* Chart Section */}
+          {viewingAllDocs && viewingAllDocs.docs.length > 1 && (() => {
+            // Transform and sort data for chart
+            const chartData = [...viewingAllDocs.docs]
+              .sort((a, b) => new Date(a.periodStart).getTime() - new Date(b.periodStart).getTime())
+              .map(doc => ({
+                period: new Date(doc.periodStart).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }),
+                fullPeriod: `${new Date(doc.periodStart).toLocaleDateString()} - ${new Date(doc.periodEnd).toLocaleDateString()}`,
+                amount: doc.totalAmount,
+                currency: doc.currency
+              }));
+            
+            // Check for mixed currencies
+            const currencies = new Set(chartData.map(d => d.currency));
+            const hasMixedCurrencies = currencies.size > 1;
+            
+            return (
+              <Card className="mb-4">
+                <CardHeader className="pb-4">
+                  <CardTitle className="text-lg">Billing Cost Over Time</CardTitle>
+                  {hasMixedCurrencies && (
+                    <Alert variant="destructive" className="mt-2">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>
+                        Warning: Documents have mixed currencies ({Array.from(currencies).join(', ')})
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </CardHeader>
+                <CardContent>
+                  <ChartContainer
+                    config={{
+                      amount: {
+                        label: "Amount",
+                        color: "hsl(var(--primary))",
+                      },
+                    }}
+                    className="h-[300px]"
+                  >
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 60 }}>
+                        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                        <XAxis 
+                          dataKey="period" 
+                          angle={-45}
+                          textAnchor="end"
+                          height={80}
+                          className="text-xs"
+                        />
+                        <YAxis 
+                          tickFormatter={(value) => `R ${value.toLocaleString()}`}
+                          className="text-xs"
+                        />
+                        <ChartTooltip
+                          content={
+                            <ChartTooltipContent
+                              labelFormatter={(value, payload) => {
+                                if (payload && payload[0]) {
+                                  return payload[0].payload.fullPeriod;
+                                }
+                                return value;
+                              }}
+                              formatter={(value: number, name: string, item: any) => [
+                                `${item.payload.currency} ${value.toFixed(2)}`,
+                                "Amount"
+                              ]}
+                            />
+                          }
+                        />
+                        <Line 
+                          type="monotone" 
+                          dataKey="amount" 
+                          stroke="hsl(var(--primary))"
+                          strokeWidth={2}
+                          dot={{ fill: "hsl(var(--primary))", r: 4 }}
+                          activeDot={{ r: 6 }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </ChartContainer>
+                </CardContent>
+              </Card>
+            );
+          })()}
+          
           <ScrollArea className="max-h-[60vh] pr-4">
             <div className="space-y-3">
               {viewingAllDocs?.docs.map((doc, idx) => (
