@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 
 interface TariffAssignmentTabProps {
   siteId: string;
+  hideLocationInfo?: boolean;
 }
 
 interface Site {
@@ -80,7 +81,7 @@ interface DocumentShopNumber {
   }>;
 }
 
-export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps) {
+export default function TariffAssignmentTab({ siteId, hideLocationInfo = false }: TariffAssignmentTabProps) {
   const [site, setSite] = useState<Site | null>(null);
   const [tariffStructures, setTariffStructures] = useState<TariffStructure[]>([]);
   const [meters, setMeters] = useState<Meter[]>([]);
@@ -666,20 +667,22 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Province</Label>
-              <div className="p-3 border rounded-md bg-muted/50">
-                <p className="font-medium">{site.supply_authorities?.region}</p>
+          {!hideLocationInfo && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Province</Label>
+                <div className="p-3 border rounded-md bg-muted/50">
+                  <p className="font-medium">{site.supply_authorities?.region}</p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Municipality / Supply Authority</Label>
+                <div className="p-3 border rounded-md bg-muted/50">
+                  <p className="font-medium">{site.supply_authorities?.name}</p>
+                </div>
               </div>
             </div>
-            <div className="space-y-2">
-              <Label>Municipality / Supply Authority</Label>
-              <div className="p-3 border rounded-md bg-muted/50">
-                <p className="font-medium">{site.supply_authorities?.name}</p>
-              </div>
-            </div>
-          </div>
+          )}
 
           {!isLoading && tariffStructures.length > 0 && (
             <div className="border rounded-lg p-4 space-y-3 bg-card">
