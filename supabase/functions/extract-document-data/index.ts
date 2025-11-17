@@ -96,7 +96,7 @@ Return the data in a structured format with all line items in an array.`;
                 },
                 currency: {
                   type: "string",
-                  description: "Currency code (e.g., ZAR)"
+                  description: "Currency - ALWAYS use 'R' regardless of whether the document shows 'ZAR', 'Rand', or 'R'"
                 },
                 line_items: {
                   type: "array",
@@ -238,6 +238,13 @@ Return the data in a structured format with all line items in an array.`;
       console.log(`Formatted shop number: ${extractedData.shop_number}`);
     }
     
+    // Normalize currency to always be "R"
+    if (extractedData.currency) {
+      const currencyStr = extractedData.currency.toString().toUpperCase().trim();
+      // Convert any variation (ZAR, RAND, R, etc.) to just "R"
+      extractedData.currency = 'R';
+    }
+    
     console.log("Extracted data:", extractedData);
 
     // Delete any existing extractions for this document before creating a new one
@@ -259,7 +266,7 @@ Return the data in a structured format with all line items in an array.`;
         period_start: extractedData.period_start,
         period_end: extractedData.period_end,
         total_amount: extractedData.total_amount,
-        currency: extractedData.currency || 'ZAR',
+        currency: extractedData.currency || 'R',
         extracted_data: extractedData,
         confidence_score: 0.85 // Could be calculated based on AI response
       })
