@@ -415,93 +415,97 @@ const Settings = () => {
                   Select a folder from the dropdown, then click cleanup to delete all files in that folder 
                   and remove all database references to those files. This action cannot be undone.
                 </p>
-                <div className="flex gap-2">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="outline" disabled={isLoadingFolders}>
-                        <FolderOpen className="w-4 h-4 mr-2" />
-                        {currentPath || "Browse Storage"}
-                        <ChevronDown className="w-4 h-4 ml-2" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent className="w-64 max-h-96 overflow-y-auto bg-background z-50">
-                      <DropdownMenuLabel>
-                        Current: {currentPath || "Root"}
-                      </DropdownMenuLabel>
-                      <DropdownMenuSeparator />
-                      {currentPath && (
-                        <>
-                          <DropdownMenuItem onSelect={(e) => {
-                            e.preventDefault();
-                            handleGoBack();
-                          }}>
-                            <ChevronDown className="w-4 h-4 mr-2 rotate-90" />
-                            Go Back
+                <div className="space-y-3">
+                  <div className="w-full max-w-full">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" disabled={isLoadingFolders} className="w-full max-w-full justify-start truncate">
+                          <FolderOpen className="w-4 h-4 mr-2 flex-shrink-0" />
+                          <span className="truncate">{currentPath || "Browse Storage"}</span>
+                          <ChevronDown className="w-4 h-4 ml-2 flex-shrink-0" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent className="w-64 max-h-96 overflow-y-auto bg-background z-50">
+                        <DropdownMenuLabel>
+                          Current: {currentPath || "Root"}
+                        </DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        {currentPath && (
+                          <>
+                            <DropdownMenuItem onSelect={(e) => {
+                              e.preventDefault();
+                              handleGoBack();
+                            }}>
+                              <ChevronDown className="w-4 h-4 mr-2 rotate-90" />
+                              Go Back
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                          </>
+                        )}
+                        {isLoadingFolders ? (
+                          <DropdownMenuItem disabled>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Loading folders...
                           </DropdownMenuItem>
-                          <DropdownMenuSeparator />
+                        ) : folders.length === 0 ? (
+                          <DropdownMenuItem disabled>
+                            No subfolders found
+                          </DropdownMenuItem>
+                        ) : (
+                          folders.map((folder) => (
+                            <DropdownMenuItem
+                              key={folder.path}
+                              onSelect={(e) => {
+                                e.preventDefault();
+                                handleFolderClick(folder.path);
+                              }}
+                            >
+                              <FolderOpen className="w-4 h-4 mr-2" />
+                              {folder.name}
+                            </DropdownMenuItem>
+                          ))
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={handleCleanupSnippets}
+                      disabled={isCleaningUp || isDeletingFolder || !currentPath}
+                      variant="destructive"
+                    >
+                      {isCleaningUp ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Deleting...
+                        </>
+                      ) : (
+                        <>
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Delete Folder Contents
                         </>
                       )}
-                      {isLoadingFolders ? (
-                        <DropdownMenuItem disabled>
+                    </Button>
+
+                    <Button
+                      onClick={handleDeleteFolder}
+                      disabled={isCleaningUp || isDeletingFolder || !currentPath}
+                      variant="destructive"
+                    >
+                      {isDeletingFolder ? (
+                        <>
                           <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Loading folders...
-                        </DropdownMenuItem>
-                      ) : folders.length === 0 ? (
-                        <DropdownMenuItem disabled>
-                          No subfolders found
-                        </DropdownMenuItem>
+                          Deleting...
+                        </>
                       ) : (
-                        folders.map((folder) => (
-                          <DropdownMenuItem
-                            key={folder.path}
-                            onSelect={(e) => {
-                              e.preventDefault();
-                              handleFolderClick(folder.path);
-                            }}
-                          >
-                            <FolderOpen className="w-4 h-4 mr-2" />
-                            {folder.name}
-                          </DropdownMenuItem>
-                        ))
+                        <>
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Delete Folder
+                        </>
                       )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-
-                  <Button
-                    onClick={handleCleanupSnippets}
-                    disabled={isCleaningUp || isDeletingFolder || !currentPath}
-                    variant="destructive"
-                  >
-                    {isCleaningUp ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Deleting...
-                      </>
-                    ) : (
-                      <>
-                        <Trash2 className="w-4 h-4 mr-2" />
-                        Delete Folder Contents
-                      </>
-                    )}
-                  </Button>
-
-                  <Button
-                    onClick={handleDeleteFolder}
-                    disabled={isCleaningUp || isDeletingFolder || !currentPath}
-                    variant="destructive"
-                  >
-                    {isDeletingFolder ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Deleting...
-                      </>
-                    ) : (
-                      <>
-                        <Trash2 className="w-4 h-4 mr-2" />
-                        Delete Folder
-                      </>
-                    )}
-                  </Button>
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>
