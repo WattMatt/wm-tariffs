@@ -906,12 +906,6 @@ export default function DocumentsTab({ siteId, onUploadProgressChange }: Documen
       for (const doc of selectedDocs) {
         if (doc.is_folder) continue;
         
-        // Skip if document already has a meter assigned
-        if (doc.meter_id) {
-          skippedCount++;
-          continue;
-        }
-        
         // Get shop number from extraction data
         const extraction = doc.document_extractions?.[0];
         const shopNumber = extraction?.extracted_data?.shop_number;
@@ -932,7 +926,14 @@ export default function DocumentsTab({ siteId, onUploadProgressChange }: Documen
           continue;
         }
         
-        console.log(`✓ Found meter ${matchingMeter.meter_number} for document ${doc.file_name}`);
+        // Skip if this document already has the correct meter assigned
+        if (doc.meter_id === matchingMeter.id) {
+          console.log(`✓ Document ${doc.file_name} already has correct meter ${matchingMeter.meter_number}`);
+          skippedCount++;
+          continue;
+        }
+        
+        console.log(`✓ Assigning meter ${matchingMeter.meter_number} to document ${doc.file_name}`);
 
         // Check if meter is already assigned to another document in the same folder
         const folderPath = doc.folder_path || '';
@@ -944,7 +945,7 @@ export default function DocumentsTab({ siteId, onUploadProgressChange }: Documen
           continue;
         }
 
-        // Assign the meter
+        // Assign/reassign the meter
         const { error } = await supabase
           .from("site_documents")
           .update({ meter_id: matchingMeter.id })
