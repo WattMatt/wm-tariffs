@@ -862,15 +862,23 @@ export default function DocumentsTab({ siteId, onUploadProgressChange }: Documen
     try {
       let assignedCount = 0;
       let skippedCount = 0;
-      const assignedMeters = new Set<string>();
+      const meterPeriodMap = new Map<string, Set<string>>(); // meter_id -> Set of period keys
 
       // Get only the selected documents
       const selectedDocs = documents.filter(doc => selectedDocuments.has(doc.id));
 
-      // First, track which meters are already assigned to documents
+      // Build a map of meter assignments by billing period
       for (const doc of documents) {
         if (!doc.is_folder && doc.meter_id) {
-          assignedMeters.add(doc.meter_id);
+          const extraction = doc.document_extractions?.[0];
+          if (extraction?.period_start && extraction?.period_end) {
+            const periodKey = `${extraction.period_start}|${extraction.period_end}`;
+            
+            if (!meterPeriodMap.has(doc.meter_id)) {
+              meterPeriodMap.set(doc.meter_id, new Set());
+            }
+            meterPeriodMap.get(doc.meter_id)!.add(periodKey);
+          }
         }
       }
 
@@ -883,9 +891,11 @@ export default function DocumentsTab({ siteId, onUploadProgressChange }: Documen
           continue;
         }
         
-        // Get shop number from extraction data
+        // Get shop number and billing period from extraction data
         const extraction = doc.document_extractions?.[0];
         const shopNumber = extraction?.extracted_data?.shop_number;
+        const periodStart = extraction?.period_start;
+        const periodEnd = extraction?.period_end;
         
         if (!shopNumber) {
           skippedCount++;
@@ -897,24 +907,38 @@ export default function DocumentsTab({ siteId, onUploadProgressChange }: Documen
           (meter) => meter.meter_number.toLowerCase() === shopNumber.toLowerCase()
         );
 
-        // Skip if meter is already assigned to another document
-        if (matchingMeter && assignedMeters.has(matchingMeter.id)) {
+        if (!matchingMeter) {
           skippedCount++;
           continue;
         }
 
-        if (matchingMeter) {
-          const { error } = await supabase
-            .from("site_documents")
-            .update({ meter_id: matchingMeter.id })
-            .eq("id", doc.id);
-
-          if (!error) {
-            assignedCount++;
-            // Mark this meter as assigned
-            assignedMeters.add(matchingMeter.id);
-          } else {
+        // Check if meter is already assigned to document with same billing period
+        if (periodStart && periodEnd) {
+          const periodKey = `${periodStart}|${periodEnd}`;
+          const meterPeriods = meterPeriodMap.get(matchingMeter.id);
+          
+          if (meterPeriods && meterPeriods.has(periodKey)) {
+            console.log(`⚠ Skipping: Meter ${shopNumber} already assigned for period ${periodStart} to ${periodEnd}`);
             skippedCount++;
+            continue;
+          }
+        }
+
+        // Assign the meter
+        const { error } = await supabase
+          .from("site_documents")
+          .update({ meter_id: matchingMeter.id })
+          .eq("id", doc.id);
+
+        if (!error) {
+          assignedCount++;
+          // Mark this meter-period combination as assigned
+          if (periodStart && periodEnd) {
+            const periodKey = `${periodStart}|${periodEnd}`;
+            if (!meterPeriodMap.has(matchingMeter.id)) {
+              meterPeriodMap.set(matchingMeter.id, new Set());
+            }
+            meterPeriodMap.get(matchingMeter.id)!.add(periodKey);
           }
         } else {
           skippedCount++;
