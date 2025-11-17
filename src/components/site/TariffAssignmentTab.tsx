@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 interface TariffAssignmentTabProps {
   siteId: string;
   hideLocationInfo?: boolean;
+  showDocumentCharts?: boolean;
 }
 
 interface Site {
@@ -81,7 +82,7 @@ interface DocumentShopNumber {
   }>;
 }
 
-export default function TariffAssignmentTab({ siteId, hideLocationInfo = false }: TariffAssignmentTabProps) {
+export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, showDocumentCharts = false }: TariffAssignmentTabProps) {
   const [site, setSite] = useState<Site | null>(null);
   const [tariffStructures, setTariffStructures] = useState<TariffStructure[]>([]);
   const [meters, setMeters] = useState<Meter[]>([]);
@@ -1242,7 +1243,7 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false }
           </DialogHeader>
           
           {/* Chart Section */}
-          {viewingAllDocs && viewingAllDocs.docs.length > 1 && (() => {
+          {showDocumentCharts && viewingAllDocs && viewingAllDocs.docs.length > 1 && (() => {
             // Transform and sort data for chart
             const chartData = [...viewingAllDocs.docs]
               .sort((a, b) => new Date(a.periodStart).getTime() - new Date(b.periodStart).getTime())
