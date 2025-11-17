@@ -298,13 +298,53 @@ Return the data in a structured format with all line items in an array.`;
           .single();
         
         if (meter) {
-          // Assign the meter to the document
-          await supabase
+          // Check if this meter is already assigned to another document with same billing period
+          const { data: existingAssignments } = await supabase
             .from("site_documents")
-            .update({ meter_id: meter.id })
-            .eq("id", documentId);
+            .select("id, file_name, document_extractions(period_start, period_end)")
+            .eq("meter_id", meter.id)
+            .neq("id", documentId);
           
-          console.log(`✓ Auto-assigned meter ${meter.id} to document ${documentId}`);
+          let canAssign = true;
+          let conflictReason = "";
+          
+          if (existingAssignments && existingAssignments.length > 0) {
+            // Check if any existing assignment has overlapping billing period
+            for (const existing of existingAssignments) {
+              const existingExtractions = existing.document_extractions as any[];
+              if (existingExtractions && existingExtractions.length > 0) {
+                const existingExtraction = existingExtractions[0];
+                
+                // Compare billing periods
+                if (existingExtraction.period_start === extractedData.period_start &&
+                    existingExtraction.period_end === extractedData.period_end) {
+                  canAssign = false;
+                  conflictReason = `Meter ${extractedData.shop_number} is already assigned to document "${existing.file_name}" for the same billing period (${extractedData.period_start} to ${extractedData.period_end})`;
+                  break;
+                }
+              }
+            }
+          }
+          
+          if (canAssign) {
+            // Assign the meter to the document
+            await supabase
+              .from("site_documents")
+              .update({ meter_id: meter.id })
+              .eq("id", documentId);
+            
+            console.log(`✓ Auto-assigned meter ${meter.id} to document ${documentId}`);
+          } else {
+            console.log(`⚠ Cannot auto-assign: ${conflictReason}`);
+            
+            // Update document with warning status
+            await supabase
+              .from("site_documents")
+              .update({ 
+                extraction_status: 'completed_with_warning'
+              })
+              .eq("id", documentId);
+          }
         } else {
           console.log(`⚠ No meter found with number ${extractedData.shop_number} for site ${document.site_id}`);
         }
