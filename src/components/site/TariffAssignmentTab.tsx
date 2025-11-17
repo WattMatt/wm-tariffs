@@ -826,9 +826,6 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                         />
                       </TableHead>
                       <SortableHeader column="meter_number">Meter Number</SortableHeader>
-                      <SortableHeader column="name">Name</SortableHeader>
-                      <SortableHeader column="meter_type">Type</SortableHeader>
-                      <SortableHeader column="mccb_size">Breaker Size (A)</SortableHeader>
                       <TableHead>Shop Numbers</TableHead>
                       <TableHead>Assigned Tariff Structure</TableHead>
                       <TableHead className="w-[120px]">Actions</TableHead>
@@ -851,19 +848,6 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                           </TableCell>
                           <TableCell className="font-mono font-medium">
                             {meter.meter_number}
-                          </TableCell>
-                          <TableCell>{meter.name || "—"}</TableCell>
-                          <TableCell>
-                            <Badge variant="outline">{meter.meter_type}</Badge>
-                          </TableCell>
-                          <TableCell>
-                            {meter.mccb_size ? (
-                              <span className="font-medium">{meter.mccb_size}A</span>
-                            ) : meter.rating ? (
-                              <span className="font-medium">{meter.rating}</span>
-                            ) : (
-                              <span className="text-muted-foreground">—</span>
-                            )}
                           </TableCell>
                           <TableCell>
                             {matchingShops.length > 0 ? (
