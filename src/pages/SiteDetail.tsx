@@ -12,7 +12,7 @@ import MetersTab from "@/components/site/MetersTab";
 import SchematicsTab from "@/components/site/SchematicsTab";
 import ReconciliationTab from "@/components/site/ReconciliationTab";
 import LoadProfilesTab from "@/components/site/LoadProfilesTab";
-import TariffAssignmentTab from "@/components/site/TariffAssignmentTab";
+import TariffsTab from "@/components/site/TariffsTab";
 import CostCalculationTab from "@/components/site/CostCalculationTab";
 import SiteReportExport from "@/components/site/SiteReportExport";
 import DocumentsTab from "@/components/site/DocumentsTab";
@@ -423,7 +423,7 @@ export default function SiteDetail() {
             </TabsContent>
 
             <TabsContent value="tariffs">
-              <TariffAssignmentTab siteId={id!} />
+              <TariffsTab siteId={id!} />
             </TabsContent>
 
             <TabsContent value="documents">
