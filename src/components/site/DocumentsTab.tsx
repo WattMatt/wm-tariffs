@@ -805,9 +805,23 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
     try {
       let assignedCount = 0;
       let skippedCount = 0;
+      const assignedMeters = new Set<string>();
+
+      // First, track which meters are already assigned to documents
+      for (const doc of documents) {
+        if (!doc.is_folder && doc.meter_id) {
+          assignedMeters.add(doc.meter_id);
+        }
+      }
 
       for (const doc of documents) {
         if (doc.is_folder) continue;
+        
+        // Skip if document already has a meter assigned
+        if (doc.meter_id) {
+          skippedCount++;
+          continue;
+        }
         
         // Get shop number from extraction data
         const extraction = doc.document_extractions?.[0];
@@ -823,6 +837,12 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
           (meter) => meter.meter_number.toLowerCase() === shopNumber.toLowerCase()
         );
 
+        // Skip if meter is already assigned to another document
+        if (matchingMeter && assignedMeters.has(matchingMeter.id)) {
+          skippedCount++;
+          continue;
+        }
+
         if (matchingMeter) {
           const { error } = await supabase
             .from("site_documents")
@@ -831,6 +851,8 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
 
           if (!error) {
             assignedCount++;
+            // Mark this meter as assigned
+            assignedMeters.add(matchingMeter.id);
           } else {
             skippedCount++;
           }
