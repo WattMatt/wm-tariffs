@@ -800,6 +800,21 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
     }
   };
 
+  const handleCancelUpload = () => {
+    // Set cancellation flags
+    setUploadCancelled(true);
+    uploadCancelledRef.current = true;
+    
+    // Immediately reset all upload state
+    setIsUploading(false);
+    setSelectedFiles([]);
+    setUploadProgress({ current: 0, total: 0, action: '' });
+    
+    // Reset file input refs to allow new uploads
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    if (folderInputRef.current) folderInputRef.current.value = '';
+  };
+
   const handleAutoAssignAll = async () => {
     if (selectedDocuments.size === 0) {
       toast.error("No documents selected");
@@ -1870,7 +1885,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
             <div className="space-y-2">
               <Label>&nbsp;</Label>
               <Button
-                onClick={isUploading ? () => { setUploadCancelled(true); uploadCancelledRef.current = true; } : handleUpload}
+                onClick={isUploading ? handleCancelUpload : handleUpload}
                 disabled={!isUploading && (selectedFiles.length === 0 || isConvertingPdf)}
                 variant={isUploading ? "destructive" : "default"}
                 className="w-full"
