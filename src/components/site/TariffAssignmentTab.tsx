@@ -66,6 +66,7 @@ interface DocumentShopNumber {
   currency: string;
   tenantName?: string;
   accountReference?: string;
+  meterId?: string;
   lineItems?: Array<{
     description: string;
     meter_number?: string;
@@ -193,12 +194,13 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
         .select(`
           id,
           file_name,
+          meter_id,
           document_extractions (
             extracted_data
           )
         `)
         .eq("site_id", siteId)
-        .eq("extraction_status", "completed");
+        .in("extraction_status", ["completed", "completed_with_warning"]);
 
       if (error) throw error;
 
@@ -218,6 +220,7 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
               currency: extractedData.currency || 'ZAR',
               tenantName: extractedData.tenant_name,
               accountReference: extractedData.account_reference,
+              meterId: (doc as any).meter_id,
               lineItems: extractedData.line_items
             });
           }
@@ -231,30 +234,10 @@ export default function TariffAssignmentTab({ siteId }: TariffAssignmentTabProps
   };
 
   const getMatchingShopNumbers = (meter: Meter): DocumentShopNumber[] => {
-    // Extract just the number part from meter_number (e.g., "DB-11" → "11")
-    const meterNumberParts = meter.meter_number.match(/\d+[A-Z]?$/i);
-    const cleanMeterNumber = meterNumberParts ? meterNumberParts[0] : meter.meter_number;
+    // Only return documents explicitly assigned to this meter via meter_id
+    const matches = documentShopNumbers.filter(doc => doc.meterId === meter.id);
     
-    const matches = documentShopNumbers.filter(doc => {
-      const shopNum = doc.shopNumber.toLowerCase();
-      const meterNum = cleanMeterNumber.toLowerCase();
-      const fullMeterNum = meter.meter_number.toLowerCase();
-      const meterName = (meter.name || '').toLowerCase();
-      
-      // Exact match is preferred
-      if (shopNum === meterNum || shopNum === fullMeterNum) {
-        return true;
-      }
-      
-      // Match if shop number is found in meter name
-      if (meterName && shopNum === meterName) {
-        return true;
-      }
-      
-      return false;
-    });
-    
-    // Sort by period start date (most recent first) and return all matches
+    // Sort by period start date (most recent first)
     return matches.sort((a, b) => {
       const dateA = new Date(a.periodStart).getTime();
       const dateB = new Date(b.periodStart).getTime();
