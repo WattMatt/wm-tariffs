@@ -688,7 +688,7 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
             </div>
           )}
 
-          {!isLoading && tariffStructures.length > 0 && (
+          {!isLoading && tariffStructures.length > 0 && !showDocumentCharts && (
             <div className="border rounded-lg p-4 space-y-3 bg-card">
               <div className="space-y-2">
                 <Label>Available Tariff Structures</Label>
