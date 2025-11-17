@@ -222,13 +222,35 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
     try {
       const { data: user } = await supabase.auth.getUser();
       const targetPath = parentPath || currentFolderPath;
+      const folderName = newFolderName.trim();
+      const fullFolderPath = targetPath ? `${targetPath}/${folderName}` : folderName;
 
+      // Create a placeholder file in storage to establish the folder structure
+      const placeholderFileName = '.folderkeeper';
+      const { bucket, path: placeholderPath } = await generateStoragePath(
+        siteId,
+        'Metering',
+        `Documents/${fullFolderPath}`,
+        placeholderFileName
+      );
+
+      // Upload a tiny placeholder file to create the folder in storage
+      const placeholderBlob = new Blob(['folder'], { type: 'text/plain' });
+      const { error: storageError } = await supabase.storage
+        .from(bucket)
+        .upload(placeholderPath, placeholderBlob);
+
+      if (storageError && storageError.message !== 'The resource already exists') {
+        throw storageError;
+      }
+
+      // Create database record for the folder
       const { error } = await supabase
         .from("site_documents")
         .insert({
           site_id: siteId,
-          file_name: newFolderName.trim(),
-          file_path: '', // Folders don't have a storage path
+          file_name: folderName,
+          file_path: placeholderPath, // Store the placeholder path
           file_size: 0,
           document_type: 'other' as any,
           uploaded_by: user.user?.id || null,
@@ -370,14 +392,73 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
 
     setIsMoving(true);
     try {
-      const selectedDocs = documents.filter(d => selectedDocuments.has(d.id));
+      const selectedDocs = documents.filter(d => selectedDocuments.has(d.id) && !d.is_folder);
       // Convert "__root__" back to empty string for database
       const destinationPath = moveDestinationFolder === "__root__" ? "" : moveDestinationFolder;
       
       for (const doc of selectedDocs) {
+        // Move the actual file in storage
+        const oldPath = doc.file_path;
+        const fileName = oldPath.split('/').pop() || doc.file_name;
+        
+        // Generate new storage path
+        const subPath = destinationPath || 'Root';
+        const { bucket, path: newPath } = await generateStoragePath(
+          siteId,
+          'Metering',
+          `Documents/${subPath}`,
+          fileName
+        );
+
+        // Copy file to new location
+        const { data: fileData } = await supabase.storage
+          .from(bucket)
+          .download(oldPath);
+
+        if (fileData) {
+          const { error: uploadError } = await supabase.storage
+            .from(bucket)
+            .upload(newPath, fileData);
+
+          if (uploadError) throw uploadError;
+
+          // Delete old file
+          await supabase.storage.from(bucket).remove([oldPath]);
+        }
+
+        // Handle converted image path if it exists
+        let newConvertedImagePath = doc.converted_image_path;
+        if (doc.converted_image_path) {
+          const convertedFileName = doc.converted_image_path.split('/').pop() || 'converted.png';
+          const { bucket: imgBucket, path: newImgPath } = await generateStoragePath(
+            siteId,
+            'Metering',
+            `Documents/${subPath}`,
+            convertedFileName
+          );
+
+          const { data: imgData } = await supabase.storage
+            .from(imgBucket)
+            .download(doc.converted_image_path);
+
+          if (imgData) {
+            await supabase.storage
+              .from(imgBucket)
+              .upload(newImgPath, imgData);
+
+            await supabase.storage.from(imgBucket).remove([doc.converted_image_path]);
+            newConvertedImagePath = newImgPath;
+          }
+        }
+
+        // Update database record with new paths
         const { error } = await supabase
           .from("site_documents")
-          .update({ folder_path: destinationPath })
+          .update({ 
+            folder_path: destinationPath,
+            file_path: newPath,
+            converted_image_path: newConvertedImagePath
+          })
           .eq("id", doc.id);
 
         if (error) throw error;
