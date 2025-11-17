@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Gauge, BarChart3, FileText, Building2, Coins, Pencil, TrendingUp, DollarSign, Activity, Calendar, FolderOpen, Sun, Zap } from "lucide-react";
+import { ArrowLeft, Gauge, BarChart3, FileText, Building2, Coins, Pencil, TrendingUp, DollarSign, Activity, Calendar, FolderOpen, Sun, Zap, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import MetersTab from "@/components/site/MetersTab";
@@ -67,6 +67,12 @@ export default function SiteDetail() {
     latestReading: null as string | null,
     schematics: 0,
   });
+  const [uploadProgress, setUploadProgress] = useState<{
+    isUploading: boolean;
+    current: number;
+    total: number;
+    action: string;
+  }>({ isUploading: false, current: 0, total: 0, action: '' });
 
   useEffect(() => {
     if (id) {
@@ -227,6 +233,29 @@ export default function SiteDetail() {
             </Button>
           </div>
         </div>
+
+        {uploadProgress.isUploading && (
+          <Card className="border-primary/50 bg-primary/5">
+            <CardContent className="py-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                  <div>
+                    <p className="font-medium">{uploadProgress.action}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {uploadProgress.current} of {uploadProgress.total} files
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-2xl font-bold">
+                    {Math.round((uploadProgress.current / uploadProgress.total) * 100)}%
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card className="border-border/50 shadow-sm hover:shadow-md transition-shadow">
@@ -398,7 +427,10 @@ export default function SiteDetail() {
             </TabsContent>
 
             <TabsContent value="documents">
-              <DocumentsTab siteId={id!} />
+              <DocumentsTab 
+                siteId={id!} 
+                onUploadProgressChange={setUploadProgress}
+              />
             </TabsContent>
 
             <TabsContent value="load-profiles">
