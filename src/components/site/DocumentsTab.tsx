@@ -7,10 +7,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { FileText, Upload, Loader2, Download, Trash2, Eye, GripVertical, Plus, X, Sparkles, RefreshCw, Square, XCircle, Folder, FolderPlus, ChevronRight, ChevronDown, Home, Edit2, FolderOpen, Link } from "lucide-react";
+import { FileText, Upload, Loader2, Download, Trash2, Eye, GripVertical, Plus, X, Sparkles, RefreshCw, Square, XCircle, Folder, FolderPlus, ChevronRight, ChevronDown, Home, Edit2, FolderOpen, Link, FileType } from "lucide-react";
 import { format } from "date-fns";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { pdfjs } from 'react-pdf';
@@ -84,6 +85,8 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
   const [bulkEditQueue, setBulkEditQueue] = useState<string[]>([]);
   const [currentBulkEditIndex, setCurrentBulkEditIndex] = useState(0);
   const [isAutoAssigning, setIsAutoAssigning] = useState(false);
+  const [isTypeChangeDialogOpen, setIsTypeChangeDialogOpen] = useState(false);
+  const [selectedDocumentType, setSelectedDocumentType] = useState<"municipal_account" | "tenant_bill" | "other" | "report">("municipal_account");
   
   // Folder management state
   const [currentFolderPath, setCurrentFolderPath] = useState<string>('');
@@ -988,6 +991,39 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
     }
   };
 
+  const handleBulkTypeChange = async () => {
+    const documentsToUpdate = Array.from(selectedDocuments).filter(id => {
+      const doc = documents.find(d => d.id === id);
+      return doc && !doc.is_folder;
+    });
+
+    if (documentsToUpdate.length === 0) {
+      toast.error("No documents selected");
+      return;
+    }
+
+    setIsBulkExtracting(true);
+
+    try {
+      const { error } = await supabase
+        .from('site_documents')
+        .update({ document_type: selectedDocumentType })
+        .in('id', documentsToUpdate);
+
+      if (error) throw error;
+
+      toast.success(`Updated ${documentsToUpdate.length} document(s)`);
+      fetchDocuments();
+      setSelectedDocuments(new Set());
+    } catch (error) {
+      console.error("Bulk type change error:", error);
+      toast.error("Failed to update document types");
+    } finally {
+      setIsBulkExtracting(false);
+      setIsTypeChangeDialogOpen(false);
+    }
+  };
+
   const handleBulkDownload = async () => {
     if (selectedDocuments.size === 0) return;
 
@@ -1838,6 +1874,22 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                     </TooltipTrigger>
                     <TooltipContent>
                       <p>Auto-assign Meters</p>
+                    </TooltipContent>
+                  </Tooltip>
+                  
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setIsTypeChangeDialogOpen(true)}
+                        disabled={isBulkExtracting}
+                      >
+                        <FileType className="w-4 h-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Change Document Type</p>
                     </TooltipContent>
                   </Tooltip>
                   
@@ -2821,6 +2873,63 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
               onClick={() => creatingSubfolderFor && handleCreateFolder(creatingSubfolderFor)}
             >
               Create
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Change Document Type Dialog */}
+      <Dialog open={isTypeChangeDialogOpen} onOpenChange={setIsTypeChangeDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Change Document Type</DialogTitle>
+            <DialogDescription>
+              Change the type for {Array.from(selectedDocuments).filter(id => {
+                const doc = documents.find(d => d.id === id);
+                return doc && !doc.is_folder;
+              }).length} selected document(s)
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-3">
+              <Label>Select Document Type</Label>
+              <RadioGroup value={selectedDocumentType} onValueChange={(value: any) => setSelectedDocumentType(value)}>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="municipal_account" id="municipal_account" />
+                  <Label htmlFor="municipal_account" className="font-normal cursor-pointer">Municipal Account</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="tenant_bill" id="tenant_bill" />
+                  <Label htmlFor="tenant_bill" className="font-normal cursor-pointer">Tenant Bill</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="other" id="other" />
+                  <Label htmlFor="other" className="font-normal cursor-pointer">Other</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="report" id="report" />
+                  <Label htmlFor="report" className="font-normal cursor-pointer">Report</Label>
+                </div>
+              </RadioGroup>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsTypeChangeDialogOpen(false)}
+              disabled={isBulkExtracting}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleBulkTypeChange} disabled={isBulkExtracting}>
+              {isBulkExtracting ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Updating...
+                </>
+              ) : (
+                'Confirm'
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
