@@ -25,6 +25,12 @@ pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/b
 
 interface DocumentsTabProps {
   siteId: string;
+  onUploadProgressChange?: (progress: {
+    isUploading: boolean;
+    current: number;
+    total: number;
+    action: string;
+  }) => void;
 }
 
 interface SiteDocument {
@@ -63,7 +69,7 @@ interface FolderItem {
   isExpanded?: boolean;
 }
 
-export default function DocumentsTab({ siteId }: DocumentsTabProps) {
+export default function DocumentsTab({ siteId, onUploadProgressChange }: DocumentsTabProps) {
   const [documents, setDocuments] = useState<SiteDocument[]>([]);
   const [siteMeters, setSiteMeters] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -105,6 +111,26 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
   const uploadCancelledRef = useRef(false);
+  
+  // Helper function to update progress both locally and in parent
+  const updateUploadProgress = (progress: { current: number; total: number; action: string }) => {
+    setUploadProgress(progress);
+    onUploadProgressChange?.({
+      isUploading: true,
+      ...progress
+    });
+  };
+
+  // Helper function to clear upload progress
+  const clearUploadProgress = () => {
+    setUploadProgress({ current: 0, total: 0, action: '' });
+    onUploadProgressChange?.({
+      isUploading: false,
+      current: 0,
+      total: 0,
+      action: ''
+    });
+  };
   
   // Fabric.js canvas state
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -574,7 +600,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
     setIsUploading(true);
     setUploadCancelled(false);
     uploadCancelledRef.current = false;
-    setUploadProgress({ current: 0, total: files.length, action: 'Uploading' });
+    updateUploadProgress({ current: 0, total: files.length, action: 'Uploading files' });
 
     try {
       const { data: user } = await supabase.auth.getUser();
@@ -590,7 +616,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
         }
 
         const file = files[i] as any; // File with webkitRelativePath
-        setUploadProgress({ current: i + 1, total: files.length, action: 'Uploading' });
+        updateUploadProgress({ current: i + 1, total: files.length, action: 'Uploading files' });
 
         try {
           // Extract folder path from webkitRelativePath
@@ -709,7 +735,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
     } finally {
       setIsUploading(false);
       setUploadCancelled(false);
-      setUploadProgress({ current: 0, total: 0, action: '' });
+      clearUploadProgress();
     }
   };
 
@@ -819,7 +845,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
     // Immediately reset all upload state
     setIsUploading(false);
     setSelectedFiles([]);
-    setUploadProgress({ current: 0, total: 0, action: '' });
+    clearUploadProgress();
     
     // Reset file input refs to allow new uploads
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -926,7 +952,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
     setIsUploading(true);
     setUploadCancelled(false);
     uploadCancelledRef.current = false;
-    setUploadProgress({ current: 0, total: selectedFiles.length, action: 'Uploading' });
+    updateUploadProgress({ current: 0, total: selectedFiles.length, action: 'Uploading files' });
     
     try {
       const { data: user } = await supabase.auth.getUser();
@@ -943,7 +969,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
         }
 
         const file = selectedFiles[i];
-        setUploadProgress({ current: i + 1, total: selectedFiles.length, action: 'Uploading files' });
+        updateUploadProgress({ current: i + 1, total: selectedFiles.length, action: 'Uploading files' });
         
         try {
           const fileExt = file.name.split('.').pop()?.toLowerCase();
@@ -1055,7 +1081,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
     } finally {
       setIsUploading(false);
       setUploadCancelled(false);
-      setUploadProgress({ current: 0, total: 0, action: '' });
+      clearUploadProgress();
     }
   };
 
@@ -1203,7 +1229,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
     const docsToRescan = documents.filter(doc => selectedDocuments.has(doc.id));
 
     setIsBulkExtracting(true);
-    setUploadProgress({ current: 0, total: docsToRescan.length, action: 'Re-scanning' });
+    updateUploadProgress({ current: 0, total: docsToRescan.length, action: 'Re-scanning documents' });
 
     let successCount = 0;
     let failCount = 0;
@@ -1211,7 +1237,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
     try {
       for (let i = 0; i < docsToRescan.length; i++) {
         const doc = docsToRescan[i];
-        setUploadProgress({ current: i + 1, total: docsToRescan.length, action: 'Re-scanning' });
+        updateUploadProgress({ current: i + 1, total: docsToRescan.length, action: 'Re-scanning documents' });
 
         try {
           // Get signed URL for the document
@@ -1256,7 +1282,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
       toast.error("Failed to complete bulk re-scan");
     } finally {
       setIsBulkExtracting(false);
-      setUploadProgress({ current: 0, total: 0, action: '' });
+      clearUploadProgress();
     }
   };
 
