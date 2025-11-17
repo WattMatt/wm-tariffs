@@ -788,7 +788,11 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
           {!isLoading && tariffStructures.length > 0 && meters.length > 0 && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold">Tariff Analysis</h3>
+                <h3 className="text-lg font-semibold">Meter Tariff Assignments</h3>
+                <Button onClick={handleSaveAssignments} disabled={isSaving}>
+                  <FileCheck2 className="w-4 h-4 mr-2" />
+                  {isSaving ? "Saving..." : "Save Assignments"}
+                </Button>
               </div>
 
               {selectedMeterIds.size > 0 && (
@@ -822,8 +826,12 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                         />
                       </TableHead>
                       <SortableHeader column="meter_number">Meter Number</SortableHeader>
+                      <SortableHeader column="name">Name</SortableHeader>
+                      <SortableHeader column="meter_type">Type</SortableHeader>
+                      <SortableHeader column="mccb_size">Breaker Size (A)</SortableHeader>
                       <TableHead>Shop Numbers</TableHead>
                       <TableHead>Assigned Tariff Structure</TableHead>
+                      <TableHead className="w-[120px]">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -843,6 +851,19 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                           </TableCell>
                           <TableCell className="font-mono font-medium">
                             {meter.meter_number}
+                          </TableCell>
+                          <TableCell>{meter.name || "—"}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{meter.meter_type}</Badge>
+                          </TableCell>
+                          <TableCell>
+                            {meter.mccb_size ? (
+                              <span className="font-medium">{meter.mccb_size}A</span>
+                            ) : meter.rating ? (
+                              <span className="font-medium">{meter.rating}</span>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
                           </TableCell>
                           <TableCell>
                             {matchingShops.length > 0 ? (
@@ -874,18 +895,103 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                             )}
                           </TableCell>
                           <TableCell>
-                            {currentTariff ? (
-                              <div className="flex flex-col">
-                                <span className="font-medium">{currentTariff.name}</span>
-                                <span className="text-xs text-muted-foreground">
-                                  {currentTariff.tariff_type}
-                                  {currentTariff.voltage_level && ` • ${currentTariff.voltage_level}`}
-                                  {currentTariff.uses_tou && " • TOU"}
-                                </span>
-                              </div>
-                            ) : (
-                              <span className="text-muted-foreground">—</span>
-                            )}
+                            <Select
+                              value={currentTariffId || ""}
+                              onValueChange={(value) => handleTariffChange(meter.id, value)}
+                            >
+                              <SelectTrigger className={cn(
+                                "w-full",
+                                hasUnsavedChanges(meter.id) && "border-blue-500 bg-blue-50 dark:bg-blue-950/30"
+                              )}>
+                                <SelectValue placeholder="Select tariff structure" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {tariffStructures.map((tariff) => (
+                                  <SelectItem key={tariff.id} value={tariff.id}>
+                                    <div className="flex flex-col">
+                                      <span className="font-medium">{tariff.name}</span>
+                                      <span className="text-xs text-muted-foreground">
+                                        {tariff.tariff_type}
+                                        {tariff.voltage_level && ` • ${tariff.voltage_level}`}
+                                        {tariff.uses_tou && " • TOU"}
+                                      </span>
+                                    </div>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => handleViewRateComparison(meter)}
+                                      disabled={!currentTariffId || matchingShops.length === 0}
+                                      className={cn(
+                                        !currentTariffId || matchingShops.length === 0 ? "opacity-50 cursor-not-allowed" : ""
+                                      )}
+                                    >
+                                      <Scale className="w-4 h-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Compare rates with documents</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                              
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => {
+                                        const tariffStructure = tariffStructures.find(t => t.id === currentTariffId);
+                                        if (tariffStructure) {
+                                          setViewingTariffId(currentTariffId);
+                                          setViewingTariffName(tariffStructure.name);
+                                        }
+                                      }}
+                                      disabled={!currentTariffId}
+                                      className={cn(
+                                        !currentTariffId ? "opacity-50 cursor-not-allowed" : ""
+                                      )}
+                                    >
+                                      <Eye className="w-4 h-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>View tariff details</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                              
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => handleClearTariff(meter.id)}
+                                      disabled={!currentTariffId}
+                                      className={cn(
+                                        !currentTariffId ? "opacity-50 cursor-not-allowed" : ""
+                                      )}
+                                    >
+                                      <Eraser className="w-4 h-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Clear tariff assignment</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            </div>
                           </TableCell>
                         </TableRow>
                       );
