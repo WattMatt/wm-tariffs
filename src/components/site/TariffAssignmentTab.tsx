@@ -788,11 +788,7 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
           {!isLoading && tariffStructures.length > 0 && meters.length > 0 && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold">Meter Tariff Assignments</h3>
-                <Button onClick={handleSaveAssignments} disabled={isSaving}>
-                  <FileCheck2 className="w-4 h-4 mr-2" />
-                  {isSaving ? "Saving..." : "Save Assignments"}
-                </Button>
+                <h3 className="text-lg font-semibold">Tariff Analysis</h3>
               </div>
 
               {selectedMeterIds.size > 0 && (
