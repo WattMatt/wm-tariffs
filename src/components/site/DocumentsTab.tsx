@@ -1881,7 +1881,7 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
                             className="gap-2"
                           >
                             <Home className="w-4 h-4" />
-                            Root
+                            Documents
                           </Button>
                           {currentFolderPath && (
                             <>
