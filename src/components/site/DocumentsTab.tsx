@@ -862,23 +862,20 @@ export default function DocumentsTab({ siteId, onUploadProgressChange }: Documen
     try {
       let assignedCount = 0;
       let skippedCount = 0;
-      const meterPeriodMap = new Map<string, Set<string>>(); // meter_id -> Set of period keys
+      const folderMeterMap = new Map<string, Set<string>>(); // folderPath -> Set of meter IDs
 
       // Get only the selected documents
       const selectedDocs = documents.filter(doc => selectedDocuments.has(doc.id));
 
-      // Build a map of meter assignments by billing period
+      // Build a map of meter assignments by folder
       for (const doc of documents) {
         if (!doc.is_folder && doc.meter_id) {
-          const extraction = doc.document_extractions?.[0];
-          if (extraction?.period_start && extraction?.period_end) {
-            const periodKey = `${extraction.period_start}|${extraction.period_end}`;
-            
-            if (!meterPeriodMap.has(doc.meter_id)) {
-              meterPeriodMap.set(doc.meter_id, new Set());
-            }
-            meterPeriodMap.get(doc.meter_id)!.add(periodKey);
+          const folderPath = doc.folder_path || '';
+          
+          if (!folderMeterMap.has(folderPath)) {
+            folderMeterMap.set(folderPath, new Set());
           }
+          folderMeterMap.get(folderPath)!.add(doc.meter_id);
         }
       }
 
@@ -891,11 +888,9 @@ export default function DocumentsTab({ siteId, onUploadProgressChange }: Documen
           continue;
         }
         
-        // Get shop number and billing period from extraction data
+        // Get shop number from extraction data
         const extraction = doc.document_extractions?.[0];
         const shopNumber = extraction?.extracted_data?.shop_number;
-        const periodStart = extraction?.period_start;
-        const periodEnd = extraction?.period_end;
         
         if (!shopNumber) {
           skippedCount++;
@@ -912,16 +907,14 @@ export default function DocumentsTab({ siteId, onUploadProgressChange }: Documen
           continue;
         }
 
-        // Check if meter is already assigned to document with same billing period
-        if (periodStart && periodEnd) {
-          const periodKey = `${periodStart}|${periodEnd}`;
-          const meterPeriods = meterPeriodMap.get(matchingMeter.id);
-          
-          if (meterPeriods && meterPeriods.has(periodKey)) {
-            console.log(`⚠ Skipping: Meter ${shopNumber} already assigned for period ${periodStart} to ${periodEnd}`);
-            skippedCount++;
-            continue;
-          }
+        // Check if meter is already assigned to another document in the same folder
+        const folderPath = doc.folder_path || '';
+        const folderMeters = folderMeterMap.get(folderPath);
+        
+        if (folderMeters && folderMeters.has(matchingMeter.id)) {
+          console.log(`⚠ Skipping: Meter ${shopNumber} already assigned to another document in folder "${folderPath}"`);
+          skippedCount++;
+          continue;
         }
 
         // Assign the meter
@@ -932,14 +925,11 @@ export default function DocumentsTab({ siteId, onUploadProgressChange }: Documen
 
         if (!error) {
           assignedCount++;
-          // Mark this meter-period combination as assigned
-          if (periodStart && periodEnd) {
-            const periodKey = `${periodStart}|${periodEnd}`;
-            if (!meterPeriodMap.has(matchingMeter.id)) {
-              meterPeriodMap.set(matchingMeter.id, new Set());
-            }
-            meterPeriodMap.get(matchingMeter.id)!.add(periodKey);
+          // Mark this meter as assigned in this folder
+          if (!folderMeterMap.has(folderPath)) {
+            folderMeterMap.set(folderPath, new Set());
           }
+          folderMeterMap.get(folderPath)!.add(matchingMeter.id);
         } else {
           skippedCount++;
         }
