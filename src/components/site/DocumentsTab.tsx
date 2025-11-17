@@ -435,8 +435,8 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
           const uniqueFileName = `${Date.now()}-${fileName}`;
           const { bucket, path: storagePath } = await generateStoragePath(
             siteId,
-            'Documents',
-            subPath,
+            'Metering',
+            `Documents/${subPath}`,
             uniqueFileName
           );
           
@@ -453,8 +453,8 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
             const uniqueImageName = `${Date.now()}-converted.png`;
             const { bucket: imageBucket, path: imagePath } = await generateStoragePath(
               siteId,
-              'Documents',
-              subPath,
+              'Metering',
+              `Documents/${subPath}`,
               uniqueImageName
             );
             
@@ -723,8 +723,8 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
           const uniqueFileName = `${Date.now()}-${file.name}`;
           const { bucket, path: storagePath } = await generateStoragePath(
             siteId,
-            'Documents',
-            subPath,
+            'Metering',
+            `Documents/${subPath}`,
             uniqueFileName
           );
           
@@ -742,8 +742,8 @@ export default function DocumentsTab({ siteId }: DocumentsTabProps) {
             const uniqueImageName = `${Date.now()}-converted.png`;
             const { bucket: imageBucket, path: imagePath } = await generateStoragePath(
               siteId,
-              'Documents',
-              subPath,
+              'Metering',
+              `Documents/${subPath}`,
               uniqueImageName
             );
             
