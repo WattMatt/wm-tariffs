@@ -1167,6 +1167,8 @@ export default function DocumentsTab({ siteId, onUploadProgressChange }: Documen
     switch (status) {
       case 'completed':
         return <Badge variant="default" className="bg-accent">Extracted</Badge>;
+      case 'completed_with_warning':
+        return <Badge variant="default" className="bg-yellow-500 hover:bg-yellow-600">Duplicate</Badge>;
       case 'pending':
         return <Badge variant="secondary">Pending</Badge>;
       case 'failed':
