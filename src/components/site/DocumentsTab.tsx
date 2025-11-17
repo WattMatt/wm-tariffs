@@ -143,9 +143,33 @@ export default function DocumentsTab({ siteId, onUploadProgressChange }: Documen
   const startMarkerRef = useRef<Circle | null>(null);
   const currentImageRef = useRef<FabricImage | null>(null);
 
+
   useEffect(() => {
     fetchDocuments();
     fetchSiteMeters();
+
+    // Set up real-time subscription for document updates
+    const channel = supabase
+      .channel('site-documents-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'site_documents',
+          filter: `site_id=eq.${siteId}`
+        },
+        (payload) => {
+          console.log('Document change detected:', payload);
+          // Refresh documents when changes occur
+          fetchDocuments();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [siteId]);
   
   const fetchSiteMeters = async () => {
@@ -903,9 +927,12 @@ export default function DocumentsTab({ siteId, onUploadProgressChange }: Documen
         );
 
         if (!matchingMeter) {
+          console.log(`⚠ No meter found for shop number: ${shopNumber}`);
           skippedCount++;
           continue;
         }
+        
+        console.log(`✓ Found meter ${matchingMeter.meter_number} for document ${doc.file_name}`);
 
         // Check if meter is already assigned to another document in the same folder
         const folderPath = doc.folder_path || '';
@@ -938,7 +965,11 @@ export default function DocumentsTab({ siteId, onUploadProgressChange }: Documen
       toast.success(
         `Auto-assignment complete: ${assignedCount} assigned, ${skippedCount} skipped`
       );
-      fetchDocuments();
+      
+      // Add a small delay to ensure database updates propagate
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      await fetchDocuments();
       setSelectedDocuments(new Set()); // Clear selection after assignment
     } catch (error: any) {
       console.error("Error auto-assigning meters:", error);
