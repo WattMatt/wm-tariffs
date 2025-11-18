@@ -1,5 +1,5 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { DollarSign, BarChart3 } from "lucide-react";
+import { DollarSign, BarChart3, Scale } from "lucide-react";
 import TariffAssignmentTab from "./TariffAssignmentTab";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -10,7 +10,7 @@ interface TariffsTabProps {
 export default function TariffsTab({ siteId }: TariffsTabProps) {
   return (
     <Tabs defaultValue="assignments" className="space-y-6">
-      <TabsList className="grid w-full grid-cols-2 lg:w-auto">
+      <TabsList className="grid w-full grid-cols-3 lg:w-auto">
         <TabsTrigger value="assignments" className="gap-2">
           <DollarSign className="w-4 h-4" />
           Assignments
@@ -19,6 +19,10 @@ export default function TariffsTab({ siteId }: TariffsTabProps) {
           <BarChart3 className="w-4 h-4" />
           Analysis
         </TabsTrigger>
+        <TabsTrigger value="comparison" className="gap-2">
+          <Scale className="w-4 h-4" />
+          Comparison
+        </TabsTrigger>
       </TabsList>
 
       <TabsContent value="assignments">
@@ -26,6 +30,10 @@ export default function TariffsTab({ siteId }: TariffsTabProps) {
       </TabsContent>
 
       <TabsContent value="analysis">
+        <TariffAssignmentTab siteId={siteId} hideLocationInfo={true} showDocumentCharts={true} />
+      </TabsContent>
+
+      <TabsContent value="comparison">
         <TariffAssignmentTab siteId={siteId} hideLocationInfo={true} showDocumentCharts={true} />
       </TabsContent>
     </Tabs>
