@@ -832,7 +832,7 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                               className="h-[200px]"
                             >
                               <ResponsiveContainer width="100%" height="100%">
-                                <LineChart data={chartData} margin={{ top: 5, right: 30, left: -20, bottom: 20 }}>
+                                <LineChart data={chartData} margin={{ top: 5, right: -10, left: -20, bottom: 20 }}>
                                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                                   <XAxis 
                                     dataKey="period" 
