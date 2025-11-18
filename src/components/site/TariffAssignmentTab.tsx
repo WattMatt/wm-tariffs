@@ -9,7 +9,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { FileCheck2, AlertCircle, CheckCircle2, DollarSign, Eye, FileText, ArrowUpDown, ArrowUp, ArrowDown, Eraser, Scale, Check, X, ChevronDown } from "lucide-react";
+import { FileCheck2, AlertCircle, CheckCircle2, DollarSign, Eye, FileText, ArrowUpDown, ArrowUp, ArrowDown, Eraser, Scale, Check, X, ChevronDown, Filter } from "lucide-react";
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
@@ -19,6 +19,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import TariffDetailsDialog from "@/components/tariffs/TariffDetailsDialog";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DatePicker } from "@/components/ui/date-picker";
+import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 
 interface TariffAssignmentTabProps {
@@ -99,7 +100,70 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
   const [selectedPreviewTariffId, setSelectedPreviewTariffId] = useState<string>("");
   const [fromDate, setFromDate] = useState<Date | undefined>(undefined);
   const [toDate, setToDate] = useState<Date | undefined>(undefined);
+  const [activeFilterFrom, setActiveFilterFrom] = useState<Date | undefined>(undefined);
+  const [activeFilterTo, setActiveFilterTo] = useState<Date | undefined>(undefined);
   const [selectedMeterIds, setSelectedMeterIds] = useState<Set<string>>(new Set());
+
+  // Apply date range filter
+  const applyDateFilter = () => {
+    setActiveFilterFrom(fromDate);
+    setActiveFilterTo(toDate);
+  };
+
+  // Clear date range filter
+  const clearDateFilter = () => {
+    setFromDate(undefined);
+    setToDate(undefined);
+    setActiveFilterFrom(undefined);
+    setActiveFilterTo(undefined);
+  };
+
+  // Filter and fill missing months in data
+  const getFilteredAndFilledData = (shops: DocumentShopNumber[]) => {
+    // If no filter is active, return original data
+    if (!activeFilterFrom || !activeFilterTo) {
+      return shops;
+    }
+
+    // Create array of all months in the range
+    const start = new Date(activeFilterFrom.getFullYear(), activeFilterFrom.getMonth(), 1);
+    const end = new Date(activeFilterTo.getFullYear(), activeFilterTo.getMonth(), 1);
+    
+    const allMonths: Array<{ month: Date; data: DocumentShopNumber | null }> = [];
+    const current = new Date(start);
+    
+    while (current <= end) {
+      const monthStart = new Date(current.getFullYear(), current.getMonth(), 1);
+      const monthEnd = new Date(current.getFullYear(), current.getMonth() + 1, 0, 23, 59, 59);
+      
+      // Find matching document for this month
+      const matchingDoc = shops.find(shop => {
+        const periodStart = new Date(shop.periodStart);
+        return periodStart >= monthStart && periodStart <= monthEnd;
+      });
+      
+      allMonths.push({
+        month: new Date(current),
+        data: matchingDoc || null
+      });
+      
+      current.setMonth(current.getMonth() + 1);
+    }
+
+    // Convert back to DocumentShopNumber format, filling nulls with placeholder data
+    return allMonths.map(({ month, data }) => {
+      if (data) return data;
+      
+      // Create placeholder with null amount for missing data
+      return {
+        shopNumber: '',
+        totalAmount: null,
+        periodStart: month.toISOString(),
+        periodEnd: new Date(month.getFullYear(), month.getMonth() + 1, 0).toISOString(),
+        lineItems: []
+      } as DocumentShopNumber;
+    });
+  };
 
   // Helper function to calculate seasonal averages
   const calculateSeasonalAverages = (docs: DocumentShopNumber[]) => {
@@ -132,7 +196,10 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
 
   // Helper function to add seasonal averages to chart data
   const addSeasonalAverages = (docs: DocumentShopNumber[]) => {
-    const { winterAvg, summerAvg } = calculateSeasonalAverages(docs);
+    // Filter out null data for average calculations
+    const validDocs = docs.filter(doc => doc.totalAmount !== null);
+    const { winterAvg, summerAvg } = calculateSeasonalAverages(validDocs);
+    
     // South African electricity seasons:
     // Winter/High Demand: June, July, August
     // Summer/Low Demand: September through May (all other months)
@@ -145,7 +212,7 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
         const month = new Date(doc.periodStart).getMonth() + 1;
         return {
           period: new Date(doc.periodStart).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }),
-          amount: doc.totalAmount,
+          amount: doc.totalAmount || null, // Keep null for missing data
           winterAvg: winterMonths.includes(month) ? winterAvg : null,
           summerAvg: summerMonths.includes(month) ? summerAvg : null,
         };
@@ -814,8 +881,8 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                   )}
                 </span>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
+              <div className="flex flex-col sm:flex-row gap-4 items-end">
+                <div className="flex-1 space-y-2">
                   <Label>Month From</Label>
                   <DatePicker
                     date={fromDate}
@@ -824,7 +891,7 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                     monthOnly={true}
                   />
                 </div>
-                <div className="space-y-2">
+                <div className="flex-1 space-y-2">
                   <Label>Month To</Label>
                   <DatePicker
                     date={toDate}
@@ -833,7 +900,32 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                     monthOnly={true}
                   />
                 </div>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={applyDateFilter}
+                    disabled={!fromDate || !toDate}
+                    className="whitespace-nowrap"
+                  >
+                    <Filter className="h-4 w-4 mr-2" />
+                    Apply Filter
+                  </Button>
+                  {(activeFilterFrom || activeFilterTo) && (
+                    <Button
+                      onClick={clearDateFilter}
+                      variant="outline"
+                      className="whitespace-nowrap"
+                    >
+                      <X className="h-4 w-4 mr-2" />
+                      Clear
+                    </Button>
+                  )}
+                </div>
               </div>
+              {(activeFilterFrom && activeFilterTo) && (
+                <div className="text-sm text-muted-foreground bg-muted/50 p-2 rounded-md">
+                  Showing data from <span className="font-medium">{format(activeFilterFrom, 'MMM yyyy')}</span> to <span className="font-medium">{format(activeFilterTo, 'MMM yyyy')}</span>
+                </div>
+              )}
             </div>
           )}
 
@@ -890,8 +982,13 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                       
                       if (matchingShops.length === 0) return null;
                       
+                      // Apply date filter and fill missing months
+                      const filteredShops = getFilteredAndFilledData(matchingShops);
+                      
+                      if (filteredShops.length === 0) return null;
+                      
                       // Transform and sort data for chart with seasonal averages
-                      const chartData = addSeasonalAverages(matchingShops);
+                      const chartData = addSeasonalAverages(filteredShops);
                       
                       return (
                         <Card 
