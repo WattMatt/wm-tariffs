@@ -272,19 +272,23 @@ export default function TariffAssignmentTab({
 
   const calculateAllCosts = async () => {
     if (!hideSeasonalAverages) return;
-    
+
+    console.log('[Cost Calculation] Starting calculation for', documentShopNumbers.length, 'documents');
     setIsCalculatingCosts(true);
     const costs: { [docId: string]: number } = {};
-    
+
     for (const doc of documentShopNumbers) {
       if (!doc.meterId) continue;
-      
+
       const meter = meters.find(m => m.id === doc.meterId);
       if (!meter) continue;
-      
+
       const tariffId = selectedTariffs[meter.id] || meter.tariff_structure_id;
-      if (!tariffId) continue;
-      
+      if (!tariffId) {
+        console.log('[Cost Calculation] No tariff for meter', meter.meter_number);
+        continue;
+      }
+
       try {
         const result = await calculateMeterCost(
           meter.id,
@@ -292,15 +296,19 @@ export default function TariffAssignmentTab({
           new Date(doc.periodStart),
           new Date(doc.periodEnd)
         );
-        
+
         if (!result.hasError) {
           costs[doc.documentId] = result.totalCost;
+          console.log('[Cost Calculation] Calculated cost for doc', doc.documentId, ':', result.totalCost);
+        } else {
+          console.log('[Cost Calculation] Error for doc', doc.documentId, ':', result.errorMessage);
         }
       } catch (error) {
         console.error(`Failed to calculate cost for document ${doc.documentId}:`, error);
       }
     }
-    
+
+    console.log('[Cost Calculation] Final costs object:', costs);
     setCalculatedCosts(costs);
     setIsCalculatingCosts(false);
   };
@@ -1044,10 +1052,13 @@ export default function TariffAssignmentTab({
                       
                       // Add calculated costs for comparison mode
                       if (hideSeasonalAverages) {
+                        console.log('[Chart Data] Before adding costs:', chartData.map(d => ({ period: d.period, docId: d.documentId })));
+                        console.log('[Chart Data] Available calculated costs:', calculatedCosts);
                         chartData = chartData.map(item => ({
                           ...item,
                           calculatedAmount: item.documentId ? calculatedCosts[item.documentId] : null,
                         }));
+                        console.log('[Chart Data] After adding costs:', chartData.map((d: any) => ({ period: d.period, amount: d.amount, calc: d.calculatedAmount })));
                       }
                       
                       return (
