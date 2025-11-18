@@ -810,7 +810,7 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                       return (
                         <Card 
                           key={meter.id} 
-                          className="cursor-pointer hover:shadow-lg transition-shadow"
+                          className="cursor-pointer hover:shadow-lg transition-shadow overflow-hidden"
                           onClick={() => setSelectedChartMeter({ meter, docs: matchingShops })}
                         >
                           <CardHeader className="text-center pb-2">
@@ -821,7 +821,7 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                               {matchingShops.length} document{matchingShops.length > 1 ? 's' : ''}
                             </CardDescription>
                           </CardHeader>
-                          <CardContent className="pt-0 pb-4">
+                          <CardContent className="pt-0 pb-4 px-2">
                             <ChartContainer
                               config={{
                                 amount: {
@@ -829,10 +829,10 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                                   color: "hsl(var(--primary))",
                                 },
                               }}
-                              className="h-[200px]"
+                              className="h-[200px] w-full"
                             >
                               <ResponsiveContainer width="100%" height="100%">
-                                <LineChart data={chartData} margin={{ top: 5, right: -10, left: -20, bottom: 20 }}>
+                                <LineChart data={chartData} margin={{ top: 5, right: 5, left: 0, bottom: 20 }}>
                                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                                   <XAxis 
                                     dataKey="period" 
