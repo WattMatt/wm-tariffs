@@ -270,11 +270,42 @@ export default function TariffAssignmentTab({
     }
   }, [hideSeasonalAverages]);
 
+  // Load calculated costs from database
   const calculateAllCosts = async () => {
     if (!hideSeasonalAverages) return;
 
     setIsCalculatingCosts(true);
-    const costs: { [docId: string]: number } = {};
+    
+    try {
+      // Fetch all stored calculations for documents at this site
+      const { data: calculations, error } = await supabase
+        .from("document_tariff_calculations")
+        .select("document_id, total_cost")
+        .in("document_id", documentShopNumbers.map(d => d.documentId));
+
+      if (error) {
+        console.error("Error loading calculated costs:", error);
+        setIsCalculatingCosts(false);
+        return;
+      }
+
+      // Build costs lookup
+      const costs: { [docId: string]: number } = {};
+      calculations?.forEach(calc => {
+        costs[calc.document_id] = calc.total_cost;
+      });
+
+      setCalculatedCosts(costs);
+    } catch (error) {
+      console.error("Failed to load calculated costs:", error);
+    } finally {
+      setIsCalculatingCosts(false);
+    }
+  };
+
+  // Calculate and store costs for all meters with documents
+  const calculateAndStoreCosts = async () => {
+    const calculations = [];
 
     for (const doc of documentShopNumbers) {
       if (!doc.meterId) continue;
@@ -286,23 +317,63 @@ export default function TariffAssignmentTab({
       if (!tariffId) continue;
 
       try {
+        // Fetch total kWh for the period
+        const { data: readingsData } = await supabase
+          .from("meter_readings")
+          .select("kwh_value")
+          .eq("meter_id", meter.id)
+          .gte("reading_timestamp", doc.periodStart)
+          .lte("reading_timestamp", doc.periodEnd);
+
+        const totalKwh = readingsData?.reduce((sum, r) => sum + Number(r.kwh_value), 0) || 0;
+
         const result = await calculateMeterCost(
           meter.id,
           tariffId,
           new Date(doc.periodStart),
-          new Date(doc.periodEnd)
+          new Date(doc.periodEnd),
+          totalKwh
         );
 
-        if (!result.hasError) {
-          costs[doc.documentId] = result.totalCost;
-        }
+        const tariff = tariffStructures.find(t => t.id === tariffId);
+        const variance = doc.totalAmount ? result.totalCost - doc.totalAmount : null;
+        const variancePercentage = doc.totalAmount ? (variance! / doc.totalAmount) * 100 : null;
+
+        calculations.push({
+          document_id: doc.documentId,
+          meter_id: meter.id,
+          tariff_structure_id: tariffId,
+          period_start: doc.periodStart,
+          period_end: doc.periodEnd,
+          total_cost: result.totalCost,
+          energy_cost: result.energyCost,
+          fixed_charges: result.fixedCharges,
+          total_kwh: totalKwh,
+          avg_cost_per_kwh: totalKwh ? result.totalCost / totalKwh : 0,
+          document_billed_amount: doc.totalAmount,
+          variance_amount: variance,
+          variance_percentage: variancePercentage,
+          tariff_name: tariff?.name || result.tariffName,
+          calculation_error: result.hasError ? result.errorMessage : null,
+        });
       } catch (error) {
         console.error(`Failed to calculate cost for document ${doc.documentId}:`, error);
       }
     }
 
-    setCalculatedCosts(costs);
-    setIsCalculatingCosts(false);
+    // Store all calculations in the database (upsert to handle updates)
+    if (calculations.length > 0) {
+      const { error } = await supabase
+        .from("document_tariff_calculations")
+        .upsert(calculations, { 
+          onConflict: 'document_id,meter_id,tariff_structure_id',
+          ignoreDuplicates: false 
+        });
+
+      if (error) {
+        console.error("Error storing calculated costs:", error);
+      }
+    }
   };
 
   const fetchSiteData = async () => {
@@ -700,6 +771,9 @@ export default function TariffAssignmentTab({
       } else {
         toast.success(`Successfully saved ${successful} tariff assignments`);
       }
+      
+      // Calculate and store costs for all assigned meters with documents
+      await calculateAndStoreCosts();
       
       fetchMeters();
     } catch (error) {

@@ -127,6 +127,91 @@ export type Database = {
           },
         ]
       }
+      document_tariff_calculations: {
+        Row: {
+          avg_cost_per_kwh: number | null
+          calculation_error: string | null
+          created_at: string
+          document_billed_amount: number | null
+          document_id: string
+          energy_cost: number
+          fixed_charges: number
+          id: string
+          meter_id: string
+          period_end: string
+          period_start: string
+          tariff_name: string | null
+          tariff_structure_id: string | null
+          total_cost: number
+          total_kwh: number
+          updated_at: string
+          variance_amount: number | null
+          variance_percentage: number | null
+        }
+        Insert: {
+          avg_cost_per_kwh?: number | null
+          calculation_error?: string | null
+          created_at?: string
+          document_billed_amount?: number | null
+          document_id: string
+          energy_cost?: number
+          fixed_charges?: number
+          id?: string
+          meter_id: string
+          period_end: string
+          period_start: string
+          tariff_name?: string | null
+          tariff_structure_id?: string | null
+          total_cost?: number
+          total_kwh?: number
+          updated_at?: string
+          variance_amount?: number | null
+          variance_percentage?: number | null
+        }
+        Update: {
+          avg_cost_per_kwh?: number | null
+          calculation_error?: string | null
+          created_at?: string
+          document_billed_amount?: number | null
+          document_id?: string
+          energy_cost?: number
+          fixed_charges?: number
+          id?: string
+          meter_id?: string
+          period_end?: string
+          period_start?: string
+          tariff_name?: string | null
+          tariff_structure_id?: string | null
+          total_cost?: number
+          total_kwh?: number
+          updated_at?: string
+          variance_amount?: number | null
+          variance_percentage?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_tariff_calculations_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "site_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_tariff_calculations_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_tariff_calculations_tariff_structure_id_fkey"
+            columns: ["tariff_structure_id"]
+            isOneToOne: false
+            referencedRelation: "tariff_structures"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meter_connections: {
         Row: {
           child_meter_id: string
