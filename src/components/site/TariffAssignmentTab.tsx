@@ -10,7 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { FileCheck2, AlertCircle, CheckCircle2, DollarSign, Eye, FileText, ArrowUpDown, ArrowUp, ArrowDown, Eraser, Scale, Check, X, ChevronDown } from "lucide-react";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -832,7 +832,7 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                               className="h-[200px] w-full"
                             >
                               <ResponsiveContainer width="100%" height="100%">
-                                <LineChart data={chartData} margin={{ top: 5, right: 5, left: 0, bottom: 20 }}>
+                                <BarChart data={chartData} margin={{ top: 5, right: 5, left: 0, bottom: 20 }}>
                                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                                   <XAxis 
                                     dataKey="period" 
@@ -849,14 +849,12 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                                     content={<ChartTooltipContent />}
                                     formatter={(value: number) => [`R${value.toFixed(2)}`, "Amount"]}
                                   />
-                                  <Line 
-                                    type="monotone" 
+                                  <Bar 
                                     dataKey="amount" 
-                                    stroke="hsl(var(--primary))"
-                                    strokeWidth={2}
-                                    dot={{ fill: "hsl(var(--primary))", r: 3 }}
+                                    fill="hsl(var(--primary))"
+                                    radius={[4, 4, 0, 0]}
                                   />
-                                </LineChart>
+                                </BarChart>
                               </ResponsiveContainer>
                             </ChartContainer>
                           </CardContent>
@@ -1362,7 +1360,7 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                         className="h-[400px]"
                       >
                         <ResponsiveContainer width="100%" height="100%">
-                          <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 60 }}>
+                          <BarChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 60 }}>
                             <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                             <XAxis 
                               dataKey="period" 
@@ -1379,15 +1377,12 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                               content={<ChartTooltipContent />}
                               formatter={(value: number) => [`R${value.toFixed(2)}`, "Amount"]}
                             />
-                            <Line 
-                              type="monotone" 
+                            <Bar 
                               dataKey="amount" 
-                              stroke="hsl(var(--primary))"
-                              strokeWidth={3}
-                              dot={{ fill: "hsl(var(--primary))", r: 5 }}
-                              activeDot={{ r: 8 }}
+                              fill="hsl(var(--primary))"
+                              radius={[4, 4, 0, 0]}
                             />
-                          </LineChart>
+                          </BarChart>
                         </ResponsiveContainer>
                       </ChartContainer>
                     </CardContent>
@@ -1545,7 +1540,7 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                     className="h-[300px]"
                   >
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 60 }}>
+                      <BarChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 60 }}>
                         <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                         <XAxis 
                           dataKey="period" 
@@ -1574,15 +1569,12 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                             />
                           }
                         />
-                        <Line 
-                          type="monotone" 
+                        <Bar 
                           dataKey="amount" 
-                          stroke="hsl(var(--primary))"
-                          strokeWidth={2}
-                          dot={{ fill: "hsl(var(--primary))", r: 4 }}
-                          activeDot={{ r: 6 }}
+                          fill="hsl(var(--primary))"
+                          radius={[4, 4, 0, 0]}
                         />
-                      </LineChart>
+                      </BarChart>
                     </ResponsiveContainer>
                   </ChartContainer>
                 </CardContent>
