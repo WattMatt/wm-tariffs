@@ -19,6 +19,7 @@ interface DatePickerProps {
   showTime?: boolean;
   onTimeChange?: (time: string) => void;
   defaultTime?: string;
+  monthOnly?: boolean;
 }
 
 export function DatePicker({
@@ -30,7 +31,9 @@ export function DatePicker({
   showTime = false,
   onTimeChange,
   defaultTime,
+  monthOnly = false,
 }: DatePickerProps) {
+  const formatString = monthOnly ? "MMM yyyy" : "dd MMM yyyy";
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -44,7 +47,7 @@ export function DatePicker({
           disabled={disabled}
         >
           <CalendarIcon className="mr-2 h-4 w-4" />
-          {date ? format(date, "dd MMM yyyy") : <span>{placeholder}</span>}
+          {date ? format(date, formatString) : <span>{placeholder}</span>}
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="start">
@@ -56,6 +59,7 @@ export function DatePicker({
           showTime={showTime}
           onTimeChange={onTimeChange}
           defaultTime={defaultTime}
+          monthOnly={monthOnly}
           className="pointer-events-auto"
         />
       </PopoverContent>
