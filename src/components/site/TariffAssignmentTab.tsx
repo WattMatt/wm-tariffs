@@ -772,10 +772,15 @@ export default function TariffAssignmentTab({
         toast.success(`Successfully saved ${successful} tariff assignments`);
       }
       
-      // Calculate and store costs for all assigned meters with documents
-      await calculateAndStoreCosts();
-      
       fetchMeters();
+      
+      // Calculate and store costs in the background (non-blocking)
+      calculateAndStoreCosts().then(() => {
+        toast.success("Tariff cost calculations completed");
+      }).catch((error) => {
+        console.error("Error calculating costs:", error);
+        toast.error("Failed to calculate costs for some documents");
+      });
     } catch (error) {
       console.error("Error saving tariff assignments:", error);
       toast.error("Failed to save tariff assignments");
