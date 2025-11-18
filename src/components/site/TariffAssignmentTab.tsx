@@ -10,7 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { FileCheck2, AlertCircle, CheckCircle2, DollarSign, Eye, FileText, ArrowUpDown, ArrowUp, ArrowDown, Eraser, Scale, Check, X, ChevronDown } from "lucide-react";
-import { BarChart, Bar, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts";
+import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -879,7 +879,7 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                               className="h-[250px] w-full"
                             >
                               <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={chartData} margin={{ top: 5, right: 5, left: 0, bottom: 20 }}>
+                                <ComposedChart data={chartData} margin={{ top: 5, right: 5, left: 0, bottom: 20 }}>
                                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                                   <XAxis 
                                     dataKey="period" 
@@ -917,7 +917,7 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                                     dot={false}
                                     connectNulls={false}
                                   />
-                                </BarChart>
+                                </ComposedChart>
                               </ResponsiveContainer>
                             </ChartContainer>
                           </CardContent>
@@ -1424,7 +1424,7 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                         className="h-[400px]"
                       >
                         <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 60 }}>
+                          <ComposedChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 60 }}>
                             <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                             <XAxis 
                               dataKey="period" 
@@ -1462,7 +1462,7 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                               dot={false}
                               connectNulls={false}
                             />
-                          </BarChart>
+                          </ComposedChart>
                         </ResponsiveContainer>
                       </ChartContainer>
                     </CardContent>
@@ -1621,7 +1621,7 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                     className="h-[300px]"
                   >
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 60 }}>
+                      <ComposedChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 60 }}>
                         <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                         <XAxis 
                           dataKey="period" 
@@ -1666,7 +1666,7 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                           dot={false}
                           connectNulls={false}
                         />
-                      </BarChart>
+                      </ComposedChart>
                     </ResponsiveContainer>
                   </ChartContainer>
                 </CardContent>
