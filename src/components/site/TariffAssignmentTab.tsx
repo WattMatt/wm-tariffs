@@ -272,32 +272,17 @@ export default function TariffAssignmentTab({
   const calculateAllCosts = async () => {
     if (!hideSeasonalAverages) return;
     
-    console.log('Starting cost calculation...');
-    console.log('Document shop numbers:', documentShopNumbers.length);
-    console.log('Meters:', meters.length);
-    
     setIsCalculatingCosts(true);
     const costs: { [docId: string]: number } = {};
     
     for (const doc of documentShopNumbers) {
-      if (!doc.meterId) {
-        console.log(`Skipping doc ${doc.documentId} - no meterId`);
-        continue;
-      }
+      if (!doc.meterId) continue;
       
       const meter = meters.find(m => m.id === doc.meterId);
-      if (!meter) {
-        console.log(`Skipping doc ${doc.documentId} - meter not found`);
-        continue;
-      }
+      if (!meter) continue;
       
       const tariffId = selectedTariffs[meter.id] || meter.tariff_structure_id;
-      if (!tariffId) {
-        console.log(`Skipping doc ${doc.documentId} for meter ${meter.meter_number} - no tariff assigned`);
-        continue;
-      }
-      
-      console.log(`Calculating cost for doc ${doc.documentId}, meter ${meter.meter_number}, tariff ${tariffId}`);
+      if (!tariffId) continue;
       
       try {
         const result = await calculateMeterCost(
@@ -307,19 +292,14 @@ export default function TariffAssignmentTab({
           new Date(doc.periodEnd)
         );
         
-        console.log(`Calculation result for ${doc.documentId}:`, result);
-        
         if (!result.hasError) {
           costs[doc.documentId] = result.totalCost;
-        } else {
-          console.error(`Calculation error for ${doc.documentId}:`, result.errorMessage);
         }
       } catch (error) {
         console.error(`Failed to calculate cost for document ${doc.documentId}:`, error);
       }
     }
     
-    console.log('Final calculated costs:', costs);
     setCalculatedCosts(costs);
     setIsCalculatingCosts(false);
   };
