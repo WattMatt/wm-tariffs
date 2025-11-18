@@ -127,18 +127,15 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
   // Helper function to add seasonal averages to chart data
   const addSeasonalAverages = (docs: DocumentShopNumber[]) => {
     const { winterAvg, summerAvg } = calculateSeasonalAverages(docs);
-    const winterMonths = [6, 7, 8];
-    const summerMonths = [12, 1, 2];
     
     return [...docs]
       .sort((a, b) => new Date(a.periodStart).getTime() - new Date(b.periodStart).getTime())
       .map(doc => {
-        const month = new Date(doc.periodStart).getMonth() + 1;
         return {
           period: new Date(doc.periodStart).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }),
           amount: doc.totalAmount,
-          winterAvg: winterMonths.includes(month) ? winterAvg : null,
-          summerAvg: summerMonths.includes(month) ? summerAvg : null,
+          winterAvg: winterAvg,
+          summerAvg: summerAvg,
         };
       });
   };
