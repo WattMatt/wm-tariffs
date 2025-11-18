@@ -21,6 +21,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { DatePicker } from "@/components/ui/date-picker";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { calculateMeterCost } from "@/lib/costCalculation";
 
 interface TariffAssignmentTabProps {
   siteId: string;
@@ -225,6 +226,8 @@ export default function TariffAssignmentTab({
       });
   };
   const [selectedChartMeter, setSelectedChartMeter] = useState<{ meter: Meter; docs: DocumentShopNumber[] } | null>(null);
+  const [calculatedCosts, setCalculatedCosts] = useState<{ [docId: string]: number }>({});
+  const [isCalculatingCosts, setIsCalculatingCosts] = useState(false);
   
   // Rate comparison state
   const [rateComparisonMeter, setRateComparisonMeter] = useState<Meter | null>(null);
@@ -258,6 +261,48 @@ export default function TariffAssignmentTab({
       fetchTariffStructures();
     }
   }, [site?.supply_authority_id]);
+
+  // Calculate costs for comparison mode
+  useEffect(() => {
+    if (hideSeasonalAverages && documentShopNumbers.length > 0 && meters.length > 0) {
+      calculateAllCosts();
+    }
+  }, [hideSeasonalAverages, documentShopNumbers, meters, selectedTariffs]);
+
+  const calculateAllCosts = async () => {
+    if (!hideSeasonalAverages) return;
+    
+    setIsCalculatingCosts(true);
+    const costs: { [docId: string]: number } = {};
+    
+    for (const doc of documentShopNumbers) {
+      if (!doc.meterId) continue;
+      
+      const meter = meters.find(m => m.id === doc.meterId);
+      if (!meter) continue;
+      
+      const tariffId = selectedTariffs[meter.id] || meter.tariff_structure_id;
+      if (!tariffId) continue;
+      
+      try {
+        const result = await calculateMeterCost(
+          meter.id,
+          tariffId,
+          new Date(doc.periodStart),
+          new Date(doc.periodEnd)
+        );
+        
+        if (!result.hasError) {
+          costs[doc.documentId] = result.totalCost;
+        }
+      } catch (error) {
+        console.error(`Failed to calculate cost for document ${doc.documentId}:`, error);
+      }
+    }
+    
+    setCalculatedCosts(costs);
+    setIsCalculatingCosts(false);
+  };
 
   const fetchSiteData = async () => {
     const { data, error } = await supabase
@@ -994,7 +1039,20 @@ export default function TariffAssignmentTab({
                       if (filteredShops.length === 0) return null;
                       
                       // Transform and sort data for chart with seasonal averages
-                      const chartData = addSeasonalAverages(filteredShops);
+                      let chartData = addSeasonalAverages(filteredShops);
+                      
+                      // Add calculated costs for comparison mode
+                      if (hideSeasonalAverages) {
+                        chartData = chartData.map(item => {
+                          const doc = filteredShops.find(d => 
+                            new Date(d.periodStart).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }) === item.period
+                          );
+                          return {
+                            ...item,
+                            calculatedAmount: doc?.documentId ? calculatedCosts[doc.documentId] : null,
+                          };
+                        });
+                      }
                       
                       return (
                         <Card 
@@ -1016,8 +1074,12 @@ export default function TariffAssignmentTab({
                             <ChartContainer
                               config={{
                                 amount: {
-                                  label: "Amount",
+                                  label: hideSeasonalAverages ? "Document Amount" : "Amount",
                                   color: "hsl(var(--primary))",
+                                },
+                                calculatedAmount: {
+                                  label: "Calculated from Tariff",
+                                  color: "hsl(142 76% 36%)",
                                 },
                                 winterAvg: {
                                   label: "Winter Average",
@@ -1046,13 +1108,21 @@ export default function TariffAssignmentTab({
                                   />
                                   <ChartTooltip 
                                     content={<ChartTooltipContent />}
-                                    formatter={(value: number) => [`R${value.toFixed(2)}`, "Amount"]}
                                   />
                                   <Bar 
                                     dataKey="amount" 
                                     fill="hsl(var(--primary))"
                                     radius={[4, 4, 0, 0]}
+                                    name={hideSeasonalAverages ? "Document Amount" : "Amount"}
                                   />
+                                  {hideSeasonalAverages && (
+                                    <Bar 
+                                      dataKey="calculatedAmount" 
+                                      fill="hsl(142 76% 36%)"
+                                      radius={[4, 4, 0, 0]}
+                                      name="Calculated from Tariff"
+                                    />
+                                  )}
                                   {!hideSeasonalAverages && (
                                     <>
                                       <Line
@@ -1541,7 +1611,20 @@ export default function TariffAssignmentTab({
           
           <ScrollArea className="max-h-[70vh] pr-4">
             {selectedChartMeter && (() => {
-              const chartData = addSeasonalAverages(selectedChartMeter.docs);
+              let chartData = addSeasonalAverages(selectedChartMeter.docs);
+              
+              // Add calculated costs for comparison mode
+              if (hideSeasonalAverages) {
+                chartData = chartData.map(item => {
+                  const doc = selectedChartMeter.docs.find(d => 
+                    new Date(d.periodStart).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }) === item.period
+                  );
+                  return {
+                    ...item,
+                    calculatedAmount: doc?.documentId ? calculatedCosts[doc.documentId] : null,
+                  };
+                });
+              }
               
               const currencies = new Set(selectedChartMeter.docs.map(d => d.currency));
               const hasMixedCurrencies = currencies.size > 1;
@@ -1565,8 +1648,12 @@ export default function TariffAssignmentTab({
                       <ChartContainer
                         config={{
                           amount: {
-                            label: "Amount",
+                            label: hideSeasonalAverages ? "Document Amount" : "Amount",
                             color: "hsl(var(--primary))",
+                          },
+                          calculatedAmount: {
+                            label: "Calculated from Tariff",
+                            color: "hsl(142 76% 36%)",
                           },
                           winterAvg: {
                             label: "Winter Average",
@@ -1595,13 +1682,21 @@ export default function TariffAssignmentTab({
                             />
                             <ChartTooltip 
                               content={<ChartTooltipContent />}
-                              formatter={(value: number) => [`R${value.toFixed(2)}`, "Amount"]}
                             />
                             <Bar 
                               dataKey="amount" 
                               fill="hsl(var(--primary))"
                               radius={[4, 4, 0, 0]}
+                              name={hideSeasonalAverages ? "Document Amount" : "Amount"}
                             />
+                            {hideSeasonalAverages && (
+                              <Bar 
+                                dataKey="calculatedAmount" 
+                                fill="hsl(142 76% 36%)"
+                                radius={[4, 4, 0, 0]}
+                                name="Calculated from Tariff"
+                              />
+                            )}
                             {!hideSeasonalAverages && (
                               <>
                                 <Line
