@@ -222,6 +222,7 @@ export default function TariffAssignmentTab({
           amount: doc.totalAmount || null, // Keep null for missing data
           winterAvg: winterMonths.includes(month) ? winterAvg : null,
           summerAvg: summerMonths.includes(month) ? summerAvg : null,
+          documentId: doc.documentId, // Preserve document ID for lookups
         };
       });
   };
@@ -1043,15 +1044,10 @@ export default function TariffAssignmentTab({
                       
                       // Add calculated costs for comparison mode
                       if (hideSeasonalAverages) {
-                        chartData = chartData.map(item => {
-                          const doc = filteredShops.find(d => 
-                            new Date(d.periodStart).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }) === item.period
-                          );
-                          return {
-                            ...item,
-                            calculatedAmount: doc?.documentId ? calculatedCosts[doc.documentId] : null,
-                          };
-                        });
+                        chartData = chartData.map(item => ({
+                          ...item,
+                          calculatedAmount: item.documentId ? calculatedCosts[item.documentId] : null,
+                        }));
                       }
                       
                       return (
@@ -1615,15 +1611,10 @@ export default function TariffAssignmentTab({
               
               // Add calculated costs for comparison mode
               if (hideSeasonalAverages) {
-                chartData = chartData.map(item => {
-                  const doc = selectedChartMeter.docs.find(d => 
-                    new Date(d.periodStart).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }) === item.period
-                  );
-                  return {
-                    ...item,
-                    calculatedAmount: doc?.documentId ? calculatedCosts[doc.documentId] : null,
-                  };
-                });
+                chartData = chartData.map(item => ({
+                  ...item,
+                  calculatedAmount: item.documentId ? calculatedCosts[item.documentId] : null,
+                }));
               }
               
               const currencies = new Set(selectedChartMeter.docs.map(d => d.currency));
