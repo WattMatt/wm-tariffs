@@ -813,13 +813,15 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                           className="cursor-pointer hover:shadow-lg transition-shadow overflow-hidden"
                           onClick={() => setSelectedChartMeter({ meter, docs: matchingShops })}
                         >
-                          <CardHeader className="text-center pb-2">
-                            <CardTitle className="text-lg">
-                              {meter.meter_number}
-                            </CardTitle>
-                            <CardDescription>
-                              {matchingShops.length} document{matchingShops.length > 1 ? 's' : ''}
-                            </CardDescription>
+                          <CardHeader className="pb-2 px-4 pt-4">
+                            <div className="flex items-center justify-between">
+                              <CardTitle className="text-lg">
+                                {meter.meter_number}
+                              </CardTitle>
+                              <Badge variant="secondary" className="text-xs">
+                                {matchingShops.length} doc{matchingShops.length > 1 ? 's' : ''}
+                              </Badge>
+                            </div>
                           </CardHeader>
                           <CardContent className="pt-0 pb-4 px-2">
                             <ChartContainer
@@ -829,7 +831,7 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                                   color: "hsl(var(--primary))",
                                 },
                               }}
-                              className="h-[200px] w-full"
+                              className="h-[250px] w-full"
                             >
                               <ResponsiveContainer width="100%" height="100%">
                                 <BarChart data={chartData} margin={{ top: 5, right: 5, left: 0, bottom: 20 }}>
