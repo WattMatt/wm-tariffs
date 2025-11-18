@@ -127,15 +127,18 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
   // Helper function to add seasonal averages to chart data
   const addSeasonalAverages = (docs: DocumentShopNumber[]) => {
     const { winterAvg, summerAvg } = calculateSeasonalAverages(docs);
+    const winterMonths = [6, 7, 8]; // June, July, August
+    const summerMonths = [12, 1, 2]; // December, January, February
     
     return [...docs]
       .sort((a, b) => new Date(a.periodStart).getTime() - new Date(b.periodStart).getTime())
       .map(doc => {
+        const month = new Date(doc.periodStart).getMonth() + 1;
         return {
           period: new Date(doc.periodStart).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }),
           amount: doc.totalAmount,
-          winterAvg: winterAvg,
-          summerAvg: summerAvg,
+          winterAvg: winterMonths.includes(month) ? winterAvg : null,
+          summerAvg: summerMonths.includes(month) ? summerAvg : null,
         };
       });
   };
@@ -869,11 +872,11 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                                 },
                                 winterAvg: {
                                   label: "Winter Average",
-                                  color: "hsl(210 100% 45%)",
+                                  color: "hsl(200 100% 40%)",
                                 },
                                 summerAvg: {
                                   label: "Summer Average",
-                                  color: "hsl(25 95% 53%)",
+                                  color: "hsl(25 100% 50%)",
                                 },
                               }}
                               className="h-[250px] w-full"
@@ -904,17 +907,17 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                                   <Line
                                     type="monotone"
                                     dataKey="winterAvg"
-                                    stroke="hsl(210 100% 45%)"
-                                    strokeWidth={2}
-                                    dot={false}
+                                    stroke="hsl(200 100% 40%)"
+                                    strokeWidth={3}
+                                    dot={{ r: 4, fill: "hsl(200 100% 40%)" }}
                                     connectNulls={false}
                                   />
                                   <Line
                                     type="monotone"
                                     dataKey="summerAvg"
-                                    stroke="hsl(25 95% 53%)"
-                                    strokeWidth={2}
-                                    dot={false}
+                                    stroke="hsl(25 100% 50%)"
+                                    strokeWidth={3}
+                                    dot={{ r: 4, fill: "hsl(25 100% 50%)" }}
                                     connectNulls={false}
                                   />
                                 </ComposedChart>
@@ -1414,11 +1417,11 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                           },
                           winterAvg: {
                             label: "Winter Average",
-                            color: "hsl(210 100% 45%)",
+                            color: "hsl(200 100% 40%)",
                           },
                           summerAvg: {
                             label: "Summer Average",
-                            color: "hsl(25 95% 53%)",
+                            color: "hsl(25 100% 50%)",
                           },
                         }}
                         className="h-[400px]"
@@ -1449,17 +1452,17 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                             <Line
                               type="monotone"
                               dataKey="winterAvg"
-                              stroke="hsl(210 100% 45%)"
-                              strokeWidth={3}
-                              dot={false}
+                              stroke="hsl(200 100% 40%)"
+                              strokeWidth={4}
+                              dot={{ r: 5, fill: "hsl(200 100% 40%)" }}
                               connectNulls={false}
                             />
                             <Line
                               type="monotone"
                               dataKey="summerAvg"
-                              stroke="hsl(25 95% 53%)"
-                              strokeWidth={3}
-                              dot={false}
+                              stroke="hsl(25 100% 50%)"
+                              strokeWidth={4}
+                              dot={{ r: 5, fill: "hsl(25 100% 50%)" }}
                               connectNulls={false}
                             />
                           </ComposedChart>
@@ -1611,11 +1614,11 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                       },
                       winterAvg: {
                         label: "Winter Average",
-                        color: "hsl(210 100% 45%)",
+                        color: "hsl(200 100% 40%)",
                       },
                       summerAvg: {
                         label: "Summer Average",
-                        color: "hsl(25 95% 53%)",
+                        color: "hsl(25 100% 50%)",
                       },
                     }}
                     className="h-[300px]"
@@ -1653,17 +1656,17 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                         <Line
                           type="monotone"
                           dataKey="winterAvg"
-                          stroke="hsl(210 100% 45%)"
-                          strokeWidth={2.5}
-                          dot={false}
+                          stroke="hsl(200 100% 40%)"
+                          strokeWidth={3.5}
+                          dot={{ r: 4, fill: "hsl(200 100% 40%)" }}
                           connectNulls={false}
                         />
                         <Line
                           type="monotone"
                           dataKey="summerAvg"
-                          stroke="hsl(25 95% 53%)"
-                          strokeWidth={2.5}
-                          dot={false}
+                          stroke="hsl(25 100% 50%)"
+                          strokeWidth={3.5}
+                          dot={{ r: 4, fill: "hsl(25 100% 50%)" }}
                           connectNulls={false}
                         />
                       </ComposedChart>
