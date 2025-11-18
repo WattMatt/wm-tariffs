@@ -1047,6 +1047,14 @@ export default function TariffAssignmentTab({
                           : null,
                       }));
                       
+                      console.log('[CHART DATA DEBUG]', {
+                        hideSeasonalAverages,
+                        calculatedCostsCount: Object.keys(calculatedCosts).length,
+                        calculatedCosts,
+                        sampleChartItem: chartData[0],
+                        allCalculatedAmounts: chartData.map(d => ({ period: d.period, calc: d.calculatedAmount, docId: d.documentId }))
+                      });
+                      
                       return (
                         <Card 
                           key={meter.id} 
