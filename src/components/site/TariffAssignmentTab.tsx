@@ -824,7 +824,7 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                               </div>
                             </div>
                           </div>
-                          <CardContent className="pt-20 pb-4">
+                          <CardContent className="pt-28 pb-4">
                             <ChartContainer
                               config={{
                                 amount: {
