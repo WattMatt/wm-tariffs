@@ -18,6 +18,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { ScrollArea } from "@/components/ui/scroll-area";
 import TariffDetailsDialog from "@/components/tariffs/TariffDetailsDialog";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DatePicker } from "@/components/ui/date-picker";
 import { cn } from "@/lib/utils";
 
 interface TariffAssignmentTabProps {
@@ -96,6 +97,8 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc" | null>(null);
   const [selectedPreviewTariffId, setSelectedPreviewTariffId] = useState<string>("");
+  const [fromDate, setFromDate] = useState<Date | undefined>(undefined);
+  const [toDate, setToDate] = useState<Date | undefined>(undefined);
   const [selectedMeterIds, setSelectedMeterIds] = useState<Set<string>>(new Set());
 
   // Helper function to calculate seasonal averages
@@ -792,6 +795,45 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                       </Tooltip>
                     </TooltipProvider>
                   )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {showDocumentCharts && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between text-sm text-muted-foreground">
+                <span>
+                  {documentShopNumbers.length > 0 && (
+                    <>Earliest: {new Date(Math.min(...documentShopNumbers.map(d => new Date(d.periodStart).getTime()))).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })} at 00:30</>
+                  )}
+                </span>
+                <span>
+                  {documentShopNumbers.length > 0 && (
+                    <>Latest: {new Date(Math.max(...documentShopNumbers.map(d => new Date(d.periodEnd).getTime()))).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })} at 23:30</>
+                  )}
+                </span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Date & Time From</Label>
+                  <DatePicker
+                    date={fromDate}
+                    onDateChange={setFromDate}
+                    placeholder="Pick start date & time"
+                    showTime={true}
+                    defaultTime="00:30"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Date & Time To</Label>
+                  <DatePicker
+                    date={toDate}
+                    onDateChange={setToDate}
+                    placeholder="Pick end date & time"
+                    showTime={true}
+                    defaultTime="23:30"
+                  />
                 </div>
               </div>
             </div>
