@@ -273,7 +273,6 @@ export default function TariffAssignmentTab({
   const calculateAllCosts = async () => {
     if (!hideSeasonalAverages) return;
 
-    console.log('[Cost Calculation] Starting calculation for', documentShopNumbers.length, 'documents');
     setIsCalculatingCosts(true);
     const costs: { [docId: string]: number } = {};
 
@@ -284,10 +283,7 @@ export default function TariffAssignmentTab({
       if (!meter) continue;
 
       const tariffId = selectedTariffs[meter.id] || meter.tariff_structure_id;
-      if (!tariffId) {
-        console.log('[Cost Calculation] No tariff for meter', meter.meter_number);
-        continue;
-      }
+      if (!tariffId) continue;
 
       try {
         const result = await calculateMeterCost(
@@ -299,16 +295,12 @@ export default function TariffAssignmentTab({
 
         if (!result.hasError) {
           costs[doc.documentId] = result.totalCost;
-          console.log('[Cost Calculation] Calculated cost for doc', doc.documentId, ':', result.totalCost);
-        } else {
-          console.log('[Cost Calculation] Error for doc', doc.documentId, ':', result.errorMessage);
         }
       } catch (error) {
         console.error(`Failed to calculate cost for document ${doc.documentId}:`, error);
       }
     }
 
-    console.log('[Cost Calculation] Final costs object:', costs);
     setCalculatedCosts(costs);
     setIsCalculatingCosts(false);
   };
@@ -1047,23 +1039,13 @@ export default function TariffAssignmentTab({
                       
                       if (filteredShops.length === 0) return null;
                       
-                      // Transform and sort data for chart with seasonal averages
-                      let chartData = addSeasonalAverages(filteredShops);
-                      
-                      console.log('[CHART DEBUG] hideSeasonalAverages:', hideSeasonalAverages, 'calculatedCosts count:', Object.keys(calculatedCosts).length);
-                      
-                      // Add calculated costs for comparison mode
-                      if (hideSeasonalAverages) {
-                        console.log('[Chart Data] Before adding costs:', chartData.map(d => ({ period: d.period, docId: d.documentId })));
-                        console.log('[Chart Data] Available calculated costs:', calculatedCosts);
-                        chartData = chartData.map(item => ({
-                          ...item,
-                          calculatedAmount: item.documentId ? calculatedCosts[item.documentId] : null,
-                        }));
-                        console.log('[Chart Data] After adding costs:', chartData.map((d: any) => ({ period: d.period, amount: d.amount, calc: d.calculatedAmount })));
-                      } else {
-                        console.log('[CHART DEBUG] NOT adding costs - hideSeasonalAverages is false');
-                      }
+                      // Transform and sort data for chart
+                      let chartData = addSeasonalAverages(filteredShops).map(item => ({
+                        ...item,
+                        calculatedAmount: hideSeasonalAverages && item.documentId 
+                          ? calculatedCosts[item.documentId] || null
+                          : null,
+                      }));
                       
                       return (
                         <Card 
@@ -1622,21 +1604,12 @@ export default function TariffAssignmentTab({
           
           <ScrollArea className="max-h-[70vh] pr-4">
             {selectedChartMeter && (() => {
-              let chartData = addSeasonalAverages(selectedChartMeter.docs);
-              
-              console.log('[MODAL CHART DEBUG] hideSeasonalAverages:', hideSeasonalAverages, 'calculatedCosts count:', Object.keys(calculatedCosts).length);
-              
-              // Add calculated costs for comparison mode
-              if (hideSeasonalAverages) {
-                console.log('[Modal Chart Data] Before adding costs:', chartData.map(d => ({ period: d.period, docId: d.documentId })));
-                chartData = chartData.map(item => ({
-                  ...item,
-                  calculatedAmount: item.documentId ? calculatedCosts[item.documentId] : null,
-                }));
-                console.log('[Modal Chart Data] After adding costs:', chartData.map((d: any) => ({ period: d.period, calc: d.calculatedAmount })));
-              } else {
-                console.log('[MODAL CHART DEBUG] NOT adding costs - hideSeasonalAverages is false');
-              }
+              const chartData = addSeasonalAverages(selectedChartMeter.docs).map(item => ({
+                ...item,
+                calculatedAmount: hideSeasonalAverages && item.documentId
+                  ? calculatedCosts[item.documentId] || null
+                  : null,
+              }));
               
               const currencies = new Set(selectedChartMeter.docs.map(d => d.currency));
               const hasMixedCurrencies = currencies.size > 1;
