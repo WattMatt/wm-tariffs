@@ -10,7 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { FileCheck2, AlertCircle, CheckCircle2, DollarSign, Eye, FileText, ArrowUpDown, ArrowUp, ArrowDown, Eraser, Scale, Check, X, ChevronDown } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts";
+import { BarChart, Bar, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -97,6 +97,51 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
   const [sortDirection, setSortDirection] = useState<"asc" | "desc" | null>(null);
   const [selectedPreviewTariffId, setSelectedPreviewTariffId] = useState<string>("");
   const [selectedMeterIds, setSelectedMeterIds] = useState<Set<string>>(new Set());
+
+  // Helper function to calculate seasonal averages
+  const calculateSeasonalAverages = (docs: DocumentShopNumber[]) => {
+    const winterMonths = [6, 7, 8]; // June, July, August
+    const summerMonths = [12, 1, 2]; // December, January, February
+    
+    const winterDocs = docs.filter(doc => {
+      const month = new Date(doc.periodStart).getMonth() + 1;
+      return winterMonths.includes(month);
+    });
+    
+    const summerDocs = docs.filter(doc => {
+      const month = new Date(doc.periodStart).getMonth() + 1;
+      return summerMonths.includes(month);
+    });
+    
+    const winterAvg = winterDocs.length > 0
+      ? winterDocs.reduce((sum, doc) => sum + doc.totalAmount, 0) / winterDocs.length
+      : null;
+    
+    const summerAvg = summerDocs.length > 0
+      ? summerDocs.reduce((sum, doc) => sum + doc.totalAmount, 0) / summerDocs.length
+      : null;
+    
+    return { winterAvg, summerAvg };
+  };
+
+  // Helper function to add seasonal averages to chart data
+  const addSeasonalAverages = (docs: DocumentShopNumber[]) => {
+    const { winterAvg, summerAvg } = calculateSeasonalAverages(docs);
+    const winterMonths = [6, 7, 8];
+    const summerMonths = [12, 1, 2];
+    
+    return [...docs]
+      .sort((a, b) => new Date(a.periodStart).getTime() - new Date(b.periodStart).getTime())
+      .map(doc => {
+        const month = new Date(doc.periodStart).getMonth() + 1;
+        return {
+          period: new Date(doc.periodStart).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }),
+          amount: doc.totalAmount,
+          winterAvg: winterMonths.includes(month) ? winterAvg : null,
+          summerAvg: summerMonths.includes(month) ? summerAvg : null,
+        };
+      });
+  };
   const [selectedChartMeter, setSelectedChartMeter] = useState<{ meter: Meter; docs: DocumentShopNumber[] } | null>(null);
   
   // Rate comparison state
@@ -799,13 +844,8 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                       
                       if (matchingShops.length === 0) return null;
                       
-                      // Transform and sort data for chart
-                      const chartData = [...matchingShops]
-                        .sort((a, b) => new Date(a.periodStart).getTime() - new Date(b.periodStart).getTime())
-                        .map(doc => ({
-                          period: new Date(doc.periodStart).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }),
-                          amount: doc.totalAmount,
-                        }));
+                      // Transform and sort data for chart with seasonal averages
+                      const chartData = addSeasonalAverages(matchingShops);
                       
                       return (
                         <Card 
@@ -829,6 +869,14 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                                 amount: {
                                   label: "Amount",
                                   color: "hsl(var(--primary))",
+                                },
+                                winterAvg: {
+                                  label: "Winter Average",
+                                  color: "hsl(210 100% 45%)",
+                                },
+                                summerAvg: {
+                                  label: "Summer Average",
+                                  color: "hsl(25 95% 53%)",
                                 },
                               }}
                               className="h-[250px] w-full"
@@ -855,6 +903,22 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                                     dataKey="amount" 
                                     fill="hsl(var(--primary))"
                                     radius={[4, 4, 0, 0]}
+                                  />
+                                  <Line
+                                    type="monotone"
+                                    dataKey="winterAvg"
+                                    stroke="hsl(210 100% 45%)"
+                                    strokeWidth={2}
+                                    dot={false}
+                                    connectNulls={false}
+                                  />
+                                  <Line
+                                    type="monotone"
+                                    dataKey="summerAvg"
+                                    stroke="hsl(25 95% 53%)"
+                                    strokeWidth={2}
+                                    dot={false}
+                                    connectNulls={false}
                                   />
                                 </BarChart>
                               </ResponsiveContainer>
@@ -1324,16 +1388,9 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
           
           <ScrollArea className="max-h-[70vh] pr-4">
             {selectedChartMeter && (() => {
-              const chartData = [...selectedChartMeter.docs]
-                .sort((a, b) => new Date(a.periodStart).getTime() - new Date(b.periodStart).getTime())
-                .map(doc => ({
-                  period: new Date(doc.periodStart).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }),
-                  fullPeriod: `${new Date(doc.periodStart).toLocaleDateString()} - ${new Date(doc.periodEnd).toLocaleDateString()}`,
-                  amount: doc.totalAmount,
-                  currency: doc.currency
-                }));
+              const chartData = addSeasonalAverages(selectedChartMeter.docs);
               
-              const currencies = new Set(chartData.map(d => d.currency));
+              const currencies = new Set(selectedChartMeter.docs.map(d => d.currency));
               const hasMixedCurrencies = currencies.size > 1;
               
               return (
@@ -1357,6 +1414,14 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                           amount: {
                             label: "Amount",
                             color: "hsl(var(--primary))",
+                          },
+                          winterAvg: {
+                            label: "Winter Average",
+                            color: "hsl(210 100% 45%)",
+                          },
+                          summerAvg: {
+                            label: "Summer Average",
+                            color: "hsl(25 95% 53%)",
                           },
                         }}
                         className="h-[400px]"
@@ -1383,6 +1448,22 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                               dataKey="amount" 
                               fill="hsl(var(--primary))"
                               radius={[4, 4, 0, 0]}
+                            />
+                            <Line
+                              type="monotone"
+                              dataKey="winterAvg"
+                              stroke="hsl(210 100% 45%)"
+                              strokeWidth={3}
+                              dot={false}
+                              connectNulls={false}
+                            />
+                            <Line
+                              type="monotone"
+                              dataKey="summerAvg"
+                              stroke="hsl(25 95% 53%)"
+                              strokeWidth={3}
+                              dot={false}
+                              connectNulls={false}
                             />
                           </BarChart>
                         </ResponsiveContainer>
@@ -1504,18 +1585,11 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
           
           {/* Chart Section */}
           {!showDocumentCharts && viewingAllDocs && viewingAllDocs.docs.length > 1 && (() => {
-            // Transform and sort data for chart
-            const chartData = [...viewingAllDocs.docs]
-              .sort((a, b) => new Date(a.periodStart).getTime() - new Date(b.periodStart).getTime())
-              .map(doc => ({
-                period: new Date(doc.periodStart).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }),
-                fullPeriod: `${new Date(doc.periodStart).toLocaleDateString()} - ${new Date(doc.periodEnd).toLocaleDateString()}`,
-                amount: doc.totalAmount,
-                currency: doc.currency
-              }));
+            // Transform and sort data for chart with seasonal averages
+            const chartData = addSeasonalAverages(viewingAllDocs.docs);
             
             // Check for mixed currencies
-            const currencies = new Set(chartData.map(d => d.currency));
+            const currencies = new Set(viewingAllDocs.docs.map(d => d.currency));
             const hasMixedCurrencies = currencies.size > 1;
             
             return (
@@ -1538,6 +1612,14 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                         label: "Amount",
                         color: "hsl(var(--primary))",
                       },
+                      winterAvg: {
+                        label: "Winter Average",
+                        color: "hsl(210 100% 45%)",
+                      },
+                      summerAvg: {
+                        label: "Summer Average",
+                        color: "hsl(25 95% 53%)",
+                      },
                     }}
                     className="h-[300px]"
                   >
@@ -1558,14 +1640,9 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                         <ChartTooltip
                           content={
                             <ChartTooltipContent
-                              labelFormatter={(value, payload) => {
-                                if (payload && payload[0]) {
-                                  return payload[0].payload.fullPeriod;
-                                }
-                                return value;
-                              }}
-                              formatter={(value: number, name: string, item: any) => [
-                                `${item.payload.currency} ${value.toFixed(2)}`,
+                              labelFormatter={(value) => value}
+                              formatter={(value: number) => [
+                                `R ${value.toFixed(2)}`,
                                 "Amount"
                               ]}
                             />
@@ -1575,6 +1652,22 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                           dataKey="amount" 
                           fill="hsl(var(--primary))"
                           radius={[4, 4, 0, 0]}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="winterAvg"
+                          stroke="hsl(210 100% 45%)"
+                          strokeWidth={2.5}
+                          dot={false}
+                          connectNulls={false}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="summerAvg"
+                          stroke="hsl(25 95% 53%)"
+                          strokeWidth={2.5}
+                          dot={false}
+                          connectNulls={false}
                         />
                       </BarChart>
                     </ResponsiveContainer>
