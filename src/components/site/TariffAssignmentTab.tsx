@@ -814,7 +814,7 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                           onClick={() => setSelectedChartMeter({ meter, docs: matchingShops })}
                         >
                           {/* Title area at top */}
-                          <div className="absolute top-0 left-0 right-0 flex items-center justify-center pointer-events-none z-10 pt-6 pb-2">
+                          <div className="absolute top-0 left-0 right-0 flex items-center justify-center pointer-events-none z-10 pt-4 pb-2">
                             <div className="text-center">
                               <div className="text-lg font-semibold text-foreground/80">
                                 {meter.meter_number}
@@ -824,7 +824,7 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                               </div>
                             </div>
                           </div>
-                          <CardContent className="pt-6 pb-4">
+                          <CardContent className="pt-20 pb-4">
                             <ChartContainer
                               config={{
                                 amount: {
@@ -832,10 +832,10 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                                   color: "hsl(var(--primary))",
                                 },
                               }}
-                              className="h-[200px]"
+                              className="h-[220px]"
                             >
                               <ResponsiveContainer width="100%" height="100%">
-                                <LineChart data={chartData} margin={{ top: 5, right: 30, left: 10, bottom: 20 }}>
+                                <LineChart data={chartData} margin={{ top: 10, right: 30, left: 10, bottom: 25 }}>
                                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                                   <XAxis 
                                     dataKey="period" 
