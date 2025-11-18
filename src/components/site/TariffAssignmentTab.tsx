@@ -100,8 +100,11 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
 
   // Helper function to calculate seasonal averages
   const calculateSeasonalAverages = (docs: DocumentShopNumber[]) => {
-    const winterMonths = [6, 7, 8]; // June, July, August
-    const summerMonths = [12, 1, 2]; // December, January, February
+    // South African electricity seasons:
+    // Winter/High Demand: June, July, August
+    // Summer/Low Demand: September through May (all other months)
+    const winterMonths = [6, 7, 8];
+    const summerMonths = [1, 2, 3, 4, 5, 9, 10, 11, 12];
     
     const winterDocs = docs.filter(doc => {
       const month = new Date(doc.periodStart).getMonth() + 1;
@@ -127,8 +130,11 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
   // Helper function to add seasonal averages to chart data
   const addSeasonalAverages = (docs: DocumentShopNumber[]) => {
     const { winterAvg, summerAvg } = calculateSeasonalAverages(docs);
-    const winterMonths = [6, 7, 8]; // June, July, August
-    const summerMonths = [12, 1, 2]; // December, January, February
+    // South African electricity seasons:
+    // Winter/High Demand: June, July, August
+    // Summer/Low Demand: September through May (all other months)
+    const winterMonths = [6, 7, 8];
+    const summerMonths = [1, 2, 3, 4, 5, 9, 10, 11, 12];
     
     return [...docs]
       .sort((a, b) => new Date(a.periodStart).getTime() - new Date(b.periodStart).getTime())
