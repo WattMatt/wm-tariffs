@@ -234,11 +234,25 @@ export default function TariffAssignmentTab({
   const [rateComparisonMeter, setRateComparisonMeter] = useState<Meter | null>(null);
   const [rateComparisonData, setRateComparisonData] = useState<{
     overallStatus: 'match' | 'partial' | 'mismatch' | 'unknown';
-    tariffRates: { basicCharge?: number; energyCharge?: number };
     documentComparisons: Array<{
-      shop: DocumentShopNumber;
-      docRates: { basicCharge?: number; energyCharge?: number };
-      status: 'match' | 'partial' | 'mismatch' | 'unknown';
+      calculation: {
+        id: string;
+        document_id: string;
+        total_cost: number;
+        energy_cost: number;
+        fixed_charges: number;
+        total_kwh: number;
+        avg_cost_per_kwh: number | null;
+        document_billed_amount: number | null;
+        variance_amount: number | null;
+        variance_percentage: number | null;
+        calculation_error: string | null;
+        tariff_name: string | null;
+        period_start: string;
+        period_end: string;
+      };
+      document: DocumentShopNumber;
+      hasError: boolean;
     }>;
   } | null>(null);
   const [expandedDocuments, setExpandedDocuments] = useState<Set<number>>(new Set());
@@ -659,49 +673,40 @@ export default function TariffAssignmentTab({
     return rates;
   };
 
-  // Helper function to compare rates
-  const compareRates = (
-    docRates: { basicCharge?: number; energyCharge?: number },
-    tariffRates: { basicCharge?: number; energyCharge?: number }
+  // Helper function to calculate overall status based on stored calculations
+  const calculateOverallStatus = (
+    comparisons: Array<{ calculation: any; document: any; hasError: boolean }>
   ): 'match' | 'partial' | 'mismatch' | 'unknown' => {
-    if (!docRates.basicCharge && !docRates.energyCharge) return 'unknown';
-    if (!tariffRates.basicCharge && !tariffRates.energyCharge) return 'unknown';
+    if (comparisons.length === 0) return 'unknown';
     
     let matchCount = 0;
+    let partialCount = 0;
     let mismatchCount = 0;
-    let comparisonCount = 0;
+    let unknownCount = 0;
     
-    // Compare basic charge (both in R/month)
-    if (docRates.basicCharge && tariffRates.basicCharge) {
-      comparisonCount++;
-      const diff = Math.abs(docRates.basicCharge - tariffRates.basicCharge);
-      const tolerance = tariffRates.basicCharge * 0.01; // 1% tolerance
-      if (diff <= tolerance) {
-        matchCount++;
+    comparisons.forEach(comp => {
+      if (comp.hasError || !comp.calculation.variance_percentage) {
+        unknownCount++;
       } else {
-        mismatchCount++;
+        const variancePercent = Math.abs(comp.calculation.variance_percentage);
+        if (variancePercent <= 5) {
+          matchCount++;
+        } else if (variancePercent <= 10) {
+          partialCount++;
+        } else {
+          mismatchCount++;
+        }
       }
-    }
+    });
     
-    // Compare energy charge (both in c/kWh)
-    if (docRates.energyCharge && tariffRates.energyCharge) {
-      comparisonCount++;
-      const diff = Math.abs(docRates.energyCharge - tariffRates.energyCharge);
-      const tolerance = tariffRates.energyCharge * 0.01; // 1% tolerance
-      if (diff <= tolerance) {
-        matchCount++;
-      } else {
-        mismatchCount++;
-      }
-    }
-    
-    if (comparisonCount === 0) return 'unknown';
+    // Worst status wins
     if (mismatchCount > 0) return 'mismatch';
-    if (matchCount < comparisonCount) return 'partial';
+    if (partialCount > 0) return 'partial';
+    if (unknownCount > 0) return 'unknown';
     return 'match';
   };
 
-  // Handle viewing rate comparison
+  // Handle viewing rate comparison - Fetch from stored calculations
   const handleViewRateComparison = async (meter: Meter) => {
     const assignedTariffId = selectedTariffs[meter.id] || meter.tariff_structure_id;
     
@@ -710,36 +715,68 @@ export default function TariffAssignmentTab({
       return;
     }
     
-    const matchingShops = getMatchingShopNumbers(meter);
+    // Fetch stored calculations from document_tariff_calculations table
+    const { data: storedCalculations, error } = await supabase
+      .from("document_tariff_calculations")
+      .select(`
+        id,
+        document_id,
+        meter_id,
+        tariff_structure_id,
+        period_start,
+        period_end,
+        total_cost,
+        energy_cost,
+        fixed_charges,
+        total_kwh,
+        avg_cost_per_kwh,
+        document_billed_amount,
+        variance_amount,
+        variance_percentage,
+        calculation_error,
+        tariff_name
+      `)
+      .eq("meter_id", meter.id)
+      .eq("tariff_structure_id", assignedTariffId)
+      .order("period_start", { ascending: false });
     
-    if (matchingShops.length === 0) {
-      toast.error("No extracted document data found for this meter");
+    if (error) {
+      console.error("Error fetching stored calculations:", error);
+      toast.error("Failed to fetch stored calculations");
       return;
     }
     
-    // Fetch tariff rates once
-    const tariffRatesData = await fetchTariffRates(assignedTariffId);
+    if (!storedCalculations || storedCalculations.length === 0) {
+      toast.error("No calculated costs found. Please save tariff assignments first to calculate costs.");
+      return;
+    }
     
-    // Create a comparison for each document
-    const documentComparisons = matchingShops.map(shop => {
-      const docRates = extractRatesFromDocument(shop);
-      const status = compareRates(docRates, tariffRatesData);
-      return {
-        shop,
-        docRates,
-        status
-      };
-    });
+    // Match calculations with document data
+    const documentComparisons = storedCalculations
+      .map(calc => {
+        // Find matching document from documentShopNumbers
+        const matchingDoc = documentShopNumbers.find(doc => doc.documentId === calc.document_id);
+        
+        if (!matchingDoc) return null;
+        
+        return {
+          calculation: calc,
+          document: matchingDoc,
+          hasError: !!calc.calculation_error
+        };
+      })
+      .filter((comp): comp is NonNullable<typeof comp> => comp !== null);
     
-    // Calculate overall status (worst status wins)
-    const statusPriority = { 'mismatch': 3, 'partial': 2, 'unknown': 1, 'match': 0 };
-    const overallStatus = documentComparisons.reduce((worst, current) => {
-      return statusPriority[current.status] > statusPriority[worst] ? current.status : worst;
-    }, 'match' as 'match' | 'partial' | 'mismatch' | 'unknown');
+    if (documentComparisons.length === 0) {
+      toast.error("No matching documents found for stored calculations");
+      return;
+    }
+    
+    // Calculate overall status based on variance
+    const overallStatus = calculateOverallStatus(documentComparisons);
     
     setRateComparisonData({
       overallStatus,
-      tariffRates: tariffRatesData,
       documentComparisons
     });
     setRateComparisonMeter(meter);
@@ -1493,12 +1530,34 @@ export default function TariffAssignmentTab({
                   </Badge>
                 </div>
 
-                {/* Rate Comparison - One section per document */}
+                {/* Cost Comparison - One section per document */}
                 <div className="space-y-3">
-                  <h4 className="font-semibold">Rate Comparison by Document</h4>
+                  <h4 className="font-semibold">Cost Comparison by Document</h4>
                 
                 {rateComparisonData.documentComparisons.map((comparison, idx) => {
                   const isExpanded = expandedDocuments.has(idx);
+                  const calc = comparison.calculation;
+                  const doc = comparison.document;
+                  
+                  // Calculate variance badge
+                  const getVarianceBadge = () => {
+                    if (calc.calculation_error) {
+                      return { variant: 'destructive' as const, label: 'ERROR', className: '' };
+                    }
+                    if (!calc.variance_percentage) {
+                      return { variant: 'outline' as const, label: 'NO DATA', className: '' };
+                    }
+                    const variancePercent = Math.abs(calc.variance_percentage);
+                    if (variancePercent <= 5) {
+                      return { variant: 'default' as const, label: `${variancePercent.toFixed(1)}%`, className: 'bg-green-500 hover:bg-green-600' };
+                    } else if (variancePercent <= 10) {
+                      return { variant: 'secondary' as const, label: `${variancePercent.toFixed(1)}%`, className: 'bg-amber-500 hover:bg-amber-600' };
+                    } else {
+                      return { variant: 'destructive' as const, label: `${variancePercent.toFixed(1)}%`, className: '' };
+                    }
+                  };
+                  
+                  const badge = getVarianceBadge();
                   
                   return (
                     <Collapsible
@@ -1526,130 +1585,92 @@ export default function TariffAssignmentTab({
                               )} 
                             />
                             <FileText className="w-4 h-4 text-muted-foreground" />
-                            <span className="font-medium">{comparison.shop.shopNumber}</span>
-                            {comparison.shop.periodStart && (
-                              <span className="text-sm text-muted-foreground">
-                                ({new Date(comparison.shop.periodStart).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' })})
-                              </span>
-                            )}
+                            <span className="font-medium">{doc.shopNumber}</span>
+                            <span className="text-sm text-muted-foreground">
+                              ({new Date(calc.period_start).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' })} - {new Date(calc.period_end).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' })})
+                            </span>
                           </div>
                           <Badge 
-                            variant={
-                              comparison.status === 'match' ? 'default' : 
-                              comparison.status === 'partial' ? 'secondary' :
-                              comparison.status === 'mismatch' ? 'destructive' : 
-                              'outline'
-                            }
-                            className={
-                              comparison.status === 'match' ? "bg-green-500 hover:bg-green-600" :
-                              comparison.status === 'partial' ? "bg-amber-500 hover:bg-amber-600" : ""
-                            }
+                            variant={badge.variant}
+                            className={badge.className}
                           >
-                            {comparison.status.toUpperCase()}
+                            {badge.label}
                           </Badge>
                         </div>
                       </CollapsibleTrigger>
 
                       <CollapsibleContent className="px-4 pb-4 space-y-4">
-                        {/* Comparison Table for this document */}
+                        {/* Error Display */}
+                        {calc.calculation_error && (
+                          <div className="p-3 bg-destructive/10 border border-destructive rounded-md">
+                            <p className="text-sm font-medium text-destructive">Calculation Error:</p>
+                            <p className="text-sm text-destructive/80 mt-1">{calc.calculation_error}</p>
+                          </div>
+                        )}
+                        
+                        {/* Summary Cards */}
+                        <div className="grid grid-cols-3 gap-3">
+                          <div className="p-3 border rounded-lg">
+                            <p className="text-xs text-muted-foreground mb-1">Document Amount</p>
+                            <p className="text-lg font-semibold">
+                              {calc.document_billed_amount ? `R ${calc.document_billed_amount.toFixed(2)}` : 'N/A'}
+                            </p>
+                          </div>
+                          <div className="p-3 border rounded-lg">
+                            <p className="text-xs text-muted-foreground mb-1">Calculated Cost</p>
+                            <p className="text-lg font-semibold">R {calc.total_cost.toFixed(2)}</p>
+                          </div>
+                          <div className="p-3 border rounded-lg">
+                            <p className="text-xs text-muted-foreground mb-1">Variance</p>
+                            <p className={cn(
+                              "text-lg font-semibold",
+                              calc.variance_amount && calc.variance_amount > 0 ? "text-red-600" : 
+                              calc.variance_amount && calc.variance_amount < 0 ? "text-green-600" : ""
+                            )}>
+                              {calc.variance_amount ? `R ${calc.variance_amount.toFixed(2)}` : 'N/A'}
+                            </p>
+                          </div>
+                        </div>
+                        
+                        {/* Detailed Breakdown Table */}
                         <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Charge Type</TableHead>
-                          <TableHead>Document Rate</TableHead>
-                          <TableHead>Tariff Rate</TableHead>
-                          <TableHead>Match</TableHead>
+                          <TableHead>Item</TableHead>
+                          <TableHead className="text-right">Amount</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {/* Basic Charge Row */}
-                        {(comparison.docRates.basicCharge || rateComparisonData.tariffRates.basicCharge) && (
+                        <TableRow>
+                          <TableCell className="font-medium">Energy Cost</TableCell>
+                          <TableCell className="text-right">R {calc.energy_cost.toFixed(2)}</TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell className="font-medium">Fixed Charges</TableCell>
+                          <TableCell className="text-right">R {calc.fixed_charges.toFixed(2)}</TableCell>
+                        </TableRow>
+                        <TableRow className="border-t-2">
+                          <TableCell className="font-semibold">Total Calculated Cost</TableCell>
+                          <TableCell className="text-right font-semibold">R {calc.total_cost.toFixed(2)}</TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell className="font-medium text-muted-foreground">Total kWh</TableCell>
+                          <TableCell className="text-right">{calc.total_kwh.toFixed(2)} kWh</TableCell>
+                        </TableRow>
+                        {calc.avg_cost_per_kwh && (
                           <TableRow>
-                            <TableCell className="font-medium">Basic Charge</TableCell>
-                            <TableCell>
-                              {comparison.docRates.basicCharge ? (
-                                `R ${comparison.docRates.basicCharge.toFixed(2)}/month`
-                              ) : (
-                                <span className="text-muted-foreground">Not extracted</span>
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              {rateComparisonData.tariffRates.basicCharge ? (
-                                `R ${rateComparisonData.tariffRates.basicCharge.toFixed(2)}/month`
-                              ) : (
-                                <span className="text-muted-foreground">Not configured</span>
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              {comparison.docRates.basicCharge && 
-                               rateComparisonData.tariffRates.basicCharge ? (
-                                Math.abs(comparison.docRates.basicCharge - rateComparisonData.tariffRates.basicCharge) 
-                                  <= rateComparisonData.tariffRates.basicCharge * 0.01 ? (
-                                  <Badge variant="default" className="bg-green-500 hover:bg-green-600">
-                                    <Check className="w-3 h-3 mr-1" /> Match
-                                  </Badge>
-                                ) : (
-                                  <Badge variant="destructive">
-                                    <X className="w-3 h-3 mr-1" /> Mismatch
-                                  </Badge>
-                                )
-                              ) : (
-                                <Badge variant="outline">N/A</Badge>
-                              )}
-                            </TableCell>
+                            <TableCell className="font-medium text-muted-foreground">Avg Cost per kWh</TableCell>
+                            <TableCell className="text-right">R {calc.avg_cost_per_kwh.toFixed(4)}</TableCell>
                           </TableRow>
                         )}
-                        
-                        {/* Energy Charge Row */}
-                        {(comparison.docRates.energyCharge || rateComparisonData.tariffRates.energyCharge) && (
+                        {calc.tariff_name && (
                           <TableRow>
-                            <TableCell className="font-medium">Energy Charge</TableCell>
-                            <TableCell>
-                              {comparison.docRates.energyCharge ? (
-                                `${comparison.docRates.energyCharge.toFixed(2)} c/kWh`
-                              ) : (
-                                <span className="text-muted-foreground">Not extracted</span>
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              {rateComparisonData.tariffRates.energyCharge ? (
-                                `${rateComparisonData.tariffRates.energyCharge.toFixed(2)} c/kWh`
-                              ) : (
-                                <span className="text-muted-foreground">Not configured</span>
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              {comparison.docRates.energyCharge && 
-                               rateComparisonData.tariffRates.energyCharge ? (
-                                Math.abs(comparison.docRates.energyCharge - rateComparisonData.tariffRates.energyCharge) 
-                                  <= rateComparisonData.tariffRates.energyCharge * 0.01 ? (
-                                  <Badge variant="default" className="bg-green-500 hover:bg-green-600">
-                                    <Check className="w-3 h-3 mr-1" /> Match
-                                  </Badge>
-                                ) : (
-                                  <Badge variant="destructive">
-                                    <X className="w-3 h-3 mr-1" /> Mismatch
-                                  </Badge>
-                                )
-                              ) : (
-                                <Badge variant="outline">N/A</Badge>
-                              )}
-                            </TableCell>
+                            <TableCell className="font-medium text-muted-foreground">Tariff Used</TableCell>
+                            <TableCell className="text-right">{calc.tariff_name}</TableCell>
                           </TableRow>
                         )}
                       </TableBody>
-                    </Table>
-
-                        {/* View Document Button */}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setViewingShopDoc(comparison.shop)}
-                          className="w-full"
-                        >
-                          <FileText className="w-3 h-3 mr-2" />
-                          View Document Details
-                        </Button>
+                        </Table>
                       </CollapsibleContent>
                     </Collapsible>
                   );
@@ -1660,9 +1681,9 @@ export default function TariffAssignmentTab({
               <Alert>
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription className="text-xs">
-                  Rates are compared with a 1% tolerance to account for rounding. 
-                  Energy rates from documents are converted from R/kWh to c/kWh for comparison.
-                  Each source document is compared separately to the assigned tariff.
+                  Cost comparisons are based on pre-calculated values stored in the database.
+                  Variance indicates the difference between the calculated cost and the document billed amount.
+                  Green (&le;5%), Amber (5-10%), Red (&gt;10%) indicate the level of variance.
                 </AlertDescription>
               </Alert>
             </div>
