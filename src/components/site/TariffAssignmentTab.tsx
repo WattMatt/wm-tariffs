@@ -26,6 +26,7 @@ interface TariffAssignmentTabProps {
   siteId: string;
   hideLocationInfo?: boolean;
   showDocumentCharts?: boolean;
+  hideSeasonalAverages?: boolean;
 }
 
 interface Site {
@@ -84,7 +85,12 @@ interface DocumentShopNumber {
   }>;
 }
 
-export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, showDocumentCharts = false }: TariffAssignmentTabProps) {
+export default function TariffAssignmentTab({ 
+  siteId, 
+  hideLocationInfo = false, 
+  showDocumentCharts = false,
+  hideSeasonalAverages = false
+}: TariffAssignmentTabProps) {
   const [site, setSite] = useState<Site | null>(null);
   const [tariffStructures, setTariffStructures] = useState<TariffStructure[]>([]);
   const [meters, setMeters] = useState<Meter[]>([]);
@@ -1047,22 +1053,26 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                                     fill="hsl(var(--primary))"
                                     radius={[4, 4, 0, 0]}
                                   />
-                                  <Line
-                                    type="monotone"
-                                    dataKey="winterAvg"
-                                    stroke="hsl(200 100% 40%)"
-                                    strokeWidth={3}
-                                    dot={{ r: 4, fill: "hsl(200 100% 40%)" }}
-                                    connectNulls={false}
-                                  />
-                                  <Line
-                                    type="monotone"
-                                    dataKey="summerAvg"
-                                    stroke="hsl(25 100% 50%)"
-                                    strokeWidth={3}
-                                    dot={{ r: 4, fill: "hsl(25 100% 50%)" }}
-                                    connectNulls={false}
-                                  />
+                                  {!hideSeasonalAverages && (
+                                    <>
+                                      <Line
+                                        type="monotone"
+                                        dataKey="winterAvg"
+                                        stroke="hsl(200 100% 40%)"
+                                        strokeWidth={3}
+                                        dot={{ r: 4, fill: "hsl(200 100% 40%)" }}
+                                        connectNulls={false}
+                                      />
+                                      <Line
+                                        type="monotone"
+                                        dataKey="summerAvg"
+                                        stroke="hsl(25 100% 50%)"
+                                        strokeWidth={3}
+                                        dot={{ r: 4, fill: "hsl(25 100% 50%)" }}
+                                        connectNulls={false}
+                                      />
+                                    </>
+                                  )}
                                 </ComposedChart>
                               </ResponsiveContainer>
                             </ChartContainer>
@@ -1592,22 +1602,26 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                               fill="hsl(var(--primary))"
                               radius={[4, 4, 0, 0]}
                             />
-                            <Line
-                              type="monotone"
-                              dataKey="winterAvg"
-                              stroke="hsl(200 100% 40%)"
-                              strokeWidth={4}
-                              dot={{ r: 5, fill: "hsl(200 100% 40%)" }}
-                              connectNulls={false}
-                            />
-                            <Line
-                              type="monotone"
-                              dataKey="summerAvg"
-                              stroke="hsl(25 100% 50%)"
-                              strokeWidth={4}
-                              dot={{ r: 5, fill: "hsl(25 100% 50%)" }}
-                              connectNulls={false}
-                            />
+                            {!hideSeasonalAverages && (
+                              <>
+                                <Line
+                                  type="monotone"
+                                  dataKey="winterAvg"
+                                  stroke="hsl(200 100% 40%)"
+                                  strokeWidth={4}
+                                  dot={{ r: 5, fill: "hsl(200 100% 40%)" }}
+                                  connectNulls={false}
+                                />
+                                <Line
+                                  type="monotone"
+                                  dataKey="summerAvg"
+                                  stroke="hsl(25 100% 50%)"
+                                  strokeWidth={4}
+                                  dot={{ r: 5, fill: "hsl(25 100% 50%)" }}
+                                  connectNulls={false}
+                                />
+                              </>
+                            )}
                           </ComposedChart>
                         </ResponsiveContainer>
                       </ChartContainer>
