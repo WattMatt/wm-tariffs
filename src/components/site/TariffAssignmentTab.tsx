@@ -810,18 +810,21 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                       return (
                         <Card 
                           key={meter.id} 
-                          className="cursor-pointer hover:shadow-lg transition-shadow"
+                          className="cursor-pointer hover:shadow-lg transition-shadow relative"
                           onClick={() => setSelectedChartMeter({ meter, docs: matchingShops })}
                         >
-                          <CardHeader className="pb-2">
-                            <CardTitle className="text-sm font-medium">
-                              {meter.meter_number}
-                            </CardTitle>
-                            <CardDescription className="text-xs">
-                              {matchingShops.length} document{matchingShops.length > 1 ? 's' : ''}
-                            </CardDescription>
-                          </CardHeader>
-                          <CardContent className="pb-4">
+                          <CardContent className="pt-6 pb-4">
+                            {/* Centered meter name overlay */}
+                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+                              <div className="text-center">
+                                <div className="text-lg font-semibold text-foreground/80">
+                                  {meter.meter_number}
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  {matchingShops.length} document{matchingShops.length > 1 ? 's' : ''}
+                                </div>
+                              </div>
+                            </div>
                             <ChartContainer
                               config={{
                                 amount: {
@@ -832,7 +835,7 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
                               className="h-[200px]"
                             >
                               <ResponsiveContainer width="100%" height="100%">
-                                <LineChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 20 }}>
+                                <LineChart data={chartData} margin={{ top: 5, right: 30, left: 10, bottom: 20 }}>
                                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                                   <XAxis 
                                     dataKey="period" 
