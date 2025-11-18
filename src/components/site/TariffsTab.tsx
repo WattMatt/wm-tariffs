@@ -34,7 +34,7 @@ export default function TariffsTab({ siteId }: TariffsTabProps) {
       </TabsContent>
 
       <TabsContent value="comparison">
-        <TariffAssignmentTab siteId={siteId} hideLocationInfo={true} showDocumentCharts={true} />
+        <TariffAssignmentTab siteId={siteId} hideLocationInfo={true} showDocumentCharts={true} hideSeasonalAverages={true} />
       </TabsContent>
     </Tabs>
   );
