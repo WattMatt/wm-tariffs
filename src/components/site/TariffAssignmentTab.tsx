@@ -263,12 +263,12 @@ export default function TariffAssignmentTab({
     }
   }, [site?.supply_authority_id]);
 
-  // Calculate costs for comparison mode
+  // Calculate costs for comparison mode - only when first entering comparison mode
   useEffect(() => {
-    if (hideSeasonalAverages && documentShopNumbers.length > 0 && meters.length > 0) {
+    if (hideSeasonalAverages && documentShopNumbers.length > 0 && meters.length > 0 && Object.keys(calculatedCosts).length === 0) {
       calculateAllCosts();
     }
-  }, [hideSeasonalAverages, documentShopNumbers, meters, selectedTariffs]);
+  }, [hideSeasonalAverages]);
 
   const calculateAllCosts = async () => {
     if (!hideSeasonalAverages) return;
@@ -1046,14 +1046,6 @@ export default function TariffAssignmentTab({
                           ? calculatedCosts[item.documentId] || null
                           : null,
                       }));
-                      
-                      console.log('[CHART DATA DEBUG]', {
-                        hideSeasonalAverages,
-                        calculatedCostsCount: Object.keys(calculatedCosts).length,
-                        calculatedCosts,
-                        sampleChartItem: chartData[0],
-                        allCalculatedAmounts: chartData.map(d => ({ period: d.period, calc: d.calculatedAmount, docId: d.documentId }))
-                      });
                       
                       return (
                         <Card 
