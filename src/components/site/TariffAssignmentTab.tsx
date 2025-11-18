@@ -816,23 +816,21 @@ export default function TariffAssignmentTab({ siteId, hideLocationInfo = false, 
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Date & Time From</Label>
+                  <Label>Month From</Label>
                   <DatePicker
                     date={fromDate}
                     onDateChange={setFromDate}
-                    placeholder="Pick start date & time"
-                    showTime={true}
-                    defaultTime="00:30"
+                    placeholder="Pick start month"
+                    monthOnly={true}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Date & Time To</Label>
+                  <Label>Month To</Label>
                   <DatePicker
                     date={toDate}
                     onDateChange={setToDate}
-                    placeholder="Pick end date & time"
-                    showTime={true}
-                    defaultTime="23:30"
+                    placeholder="Pick end month"
+                    monthOnly={true}
                   />
                 </div>
               </div>
