@@ -563,28 +563,8 @@ export default function TariffAssignmentTab({
     // Only return documents explicitly assigned to this meter via meter_id
     const matches = documentShopNumbers.filter(doc => doc.meterId === meter.id);
     
-    // For council/bulk meters, adjust totalAmount to only include electricity charges
-    const adjustedMatches = matches.map(doc => {
-      if (meter.meter_type === 'council_meter' || meter.meter_type === 'bulk_meter') {
-        // Filter line items to only include electricity charges
-        const electricityItems = doc.lineItems?.filter(item =>
-          item.description?.toLowerCase().includes('electricity')
-        ) || [];
-        
-        // Calculate electricity-only total
-        const electricityTotal = electricityItems.reduce((sum, item) => sum + item.amount, 0);
-        
-        // Return document with adjusted totalAmount
-        return {
-          ...doc,
-          totalAmount: electricityTotal,
-        };
-      }
-      return doc;
-    });
-    
     // Sort by period start date (most recent first)
-    return adjustedMatches.sort((a, b) => {
+    return matches.sort((a, b) => {
       const dateA = new Date(a.periodStart).getTime();
       const dateB = new Date(b.periodStart).getTime();
       return dateB - dateA; // Descending order (newest first)
