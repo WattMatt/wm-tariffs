@@ -206,7 +206,7 @@ export default function TariffAssignmentTab({
     return { winterAvg, summerAvg };
   };
 
-  // Helper function to add seasonal averages to chart data with continuous segments
+  // Helper function to add seasonal averages with properly segmented lines
   const addSeasonalAverages = (docs: DocumentShopNumber[]) => {
     // Use calculated costs as primary data source, with document amounts as fallback
     const validDocs = docs.filter(doc => {
@@ -214,7 +214,7 @@ export default function TariffAssignmentTab({
       return calculatedCost !== undefined && calculatedCost !== null;
     });
     
-    // Calculate seasonal averages - use calculated costs if available, otherwise use document amounts
+    // Calculate seasonal averages
     let winterAvg: number | null = null;
     let summerAvg: number | null = null;
     
@@ -223,15 +223,12 @@ export default function TariffAssignmentTab({
       winterAvg = avgData.winterAvg;
       summerAvg = avgData.summerAvg;
     } else if (docs.length > 0) {
-      // Fallback to document amounts if no calculated costs
       const avgData = calculateSeasonalAverages(docs);
       winterAvg = avgData.winterAvg;
       summerAvg = avgData.summerAvg;
     }
     
-    // South African electricity seasons:
-    // Winter/High Demand: June, July, August
-    // Summer/Low Demand: September through May (all other months)
+    // South African electricity seasons
     const winterMonths = [6, 7, 8];
     const summerMonths = [1, 2, 3, 4, 5, 9, 10, 11, 12];
     
@@ -240,31 +237,42 @@ export default function TariffAssignmentTab({
       new Date(a.periodStart).getTime() - new Date(b.periodStart).getTime()
     );
     
-    // Map each document with seasonal segment detection
+    // Track season segments to break lines across season changes
+    let winterSegment = 0;
+    let summerSegment = 0;
+    let lastSeason: 'winter' | 'summer' | null = null;
+    
     return sortedDocs.map((doc, index) => {
       const month = new Date(doc.periodStart).getMonth() + 1;
       const calculatedCost = calculatedCosts[doc.documentId];
       const isWinter = winterMonths.includes(month);
       const isSummer = summerMonths.includes(month);
+      const currentSeason = isWinter ? 'winter' : isSummer ? 'summer' : null;
       
-      // Check if previous document was in the same season
-      const prevDoc = index > 0 ? sortedDocs[index - 1] : null;
-      const prevMonth = prevDoc ? new Date(prevDoc.periodStart).getMonth() + 1 : null;
-      const prevIsWinter = prevMonth ? winterMonths.includes(prevMonth) : false;
-      const prevIsSummer = prevMonth ? summerMonths.includes(prevMonth) : false;
+      // Increment segment counter when season changes
+      if (lastSeason && currentSeason && lastSeason !== currentSeason) {
+        if (currentSeason === 'winter') winterSegment++;
+        if (currentSeason === 'summer') summerSegment++;
+      }
+      lastSeason = currentSeason;
       
-      // Determine if this is a continuous segment or a new one
-      const winterValue = isWinter ? winterAvg : null;
-      const summerValue = isSummer ? summerAvg : null;
-      
-      return {
+      // Create base data point
+      const dataPoint: any = {
         period: new Date(doc.periodStart).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }),
         amount: calculatedCost !== undefined ? calculatedCost : (doc.totalAmount || 0),
         documentAmount: doc.totalAmount || null,
-        winterAvg: winterValue,
-        summerAvg: summerValue,
         documentId: doc.documentId,
       };
+      
+      // Add segmented seasonal averages
+      if (isWinter) {
+        dataPoint[`winterAvg_${winterSegment}`] = winterAvg;
+      }
+      if (isSummer) {
+        dataPoint[`summerAvg_${summerSegment}`] = summerAvg;
+      }
+      
+      return dataPoint;
     });
   };
   
@@ -1484,26 +1492,35 @@ export default function TariffAssignmentTab({
                                   <ChartTooltip 
                                     content={<ChartTooltipContent />}
                                   />
-                                  {!hideSeasonalAverages && (
-                                    <>
-                                      <Line
-                                        type="monotone"
-                                        dataKey="winterAvg"
-                                        stroke="hsl(200 100% 40%)"
-                                        strokeWidth={3}
-                                        dot={{ r: 4, fill: "hsl(200 100% 40%)" }}
-                                        connectNulls={false}
-                                      />
-                                      <Line
-                                        type="monotone"
-                                        dataKey="summerAvg"
-                                        stroke="hsl(25 100% 50%)"
-                                        strokeWidth={3}
-                                        dot={{ r: 4, fill: "hsl(25 100% 50%)" }}
-                                        connectNulls={false}
-                                      />
-                                    </>
-                                  )}
+                                   {!hideSeasonalAverages && (() => {
+                                    // Extract all unique seasonal segment keys from the data
+                                    const segmentKeys = new Set<string>();
+                                    chartData.forEach((point: any) => {
+                                      Object.keys(point).forEach(key => {
+                                        if (key.startsWith('winterAvg_') || key.startsWith('summerAvg_')) {
+                                          segmentKeys.add(key);
+                                        }
+                                      });
+                                    });
+                                    
+                                    // Render a Line for each segment
+                                    return Array.from(segmentKeys).map(key => {
+                                      const isWinter = key.startsWith('winterAvg_');
+                                      const color = isWinter ? "hsl(200 100% 40%)" : "hsl(25 100% 50%)";
+                                      
+                                      return (
+                                        <Line
+                                          key={key}
+                                          type="monotone"
+                                          dataKey={key}
+                                          stroke={color}
+                                          strokeWidth={3}
+                                          dot={{ r: 4, fill: color }}
+                                          connectNulls={false}
+                                        />
+                                      );
+                                    });
+                                  })()}
                                   <Bar 
                                     dataKey="amount" 
                                     fill="hsl(var(--muted-foreground))"
@@ -2166,26 +2183,35 @@ export default function TariffAssignmentTab({
                             <ChartTooltip 
                               content={<ChartTooltipContent />}
                             />
-                            {!hideSeasonalAverages && (
-                              <>
-                                <Line
-                                  type="monotone"
-                                  dataKey="winterAvg"
-                                  stroke="hsl(200 100% 40%)"
-                                  strokeWidth={4}
-                                  dot={{ r: 5, fill: "hsl(200 100% 40%)" }}
-                                  connectNulls={false}
-                                />
-                                <Line
-                                  type="monotone"
-                                  dataKey="summerAvg"
-                                  stroke="hsl(25 100% 50%)"
-                                  strokeWidth={4}
-                                  dot={{ r: 5, fill: "hsl(25 100% 50%)" }}
-                                  connectNulls={false}
-                                />
-                              </>
-                            )}
+                            {!hideSeasonalAverages && (() => {
+                              // Extract all unique seasonal segment keys from the data
+                              const segmentKeys = new Set<string>();
+                              chartData.forEach((point: any) => {
+                                Object.keys(point).forEach(key => {
+                                  if (key.startsWith('winterAvg_') || key.startsWith('summerAvg_')) {
+                                    segmentKeys.add(key);
+                                  }
+                                });
+                              });
+                              
+                              // Render a Line for each segment
+                              return Array.from(segmentKeys).map(key => {
+                                const isWinter = key.startsWith('winterAvg_');
+                                const color = isWinter ? "hsl(200 100% 40%)" : "hsl(25 100% 50%)";
+                                
+                                return (
+                                  <Line
+                                    key={key}
+                                    type="monotone"
+                                    dataKey={key}
+                                    stroke={color}
+                                    strokeWidth={4}
+                                    dot={{ r: 5, fill: color }}
+                                    connectNulls={false}
+                                  />
+                                );
+                              });
+                            })()}
                             <Bar 
                               dataKey="amount" 
                               fill="hsl(var(--muted-foreground))"
@@ -2447,22 +2473,35 @@ export default function TariffAssignmentTab({
                           fill="hsl(var(--primary))"
                           radius={[4, 4, 0, 0]}
                         />
-                        <Line
-                          type="monotone"
-                          dataKey="winterAvg"
-                          stroke="hsl(200 100% 40%)"
-                          strokeWidth={3.5}
-                          dot={{ r: 4, fill: "hsl(200 100% 40%)" }}
-                          connectNulls={false}
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="summerAvg"
-                          stroke="hsl(25 100% 50%)"
-                          strokeWidth={3.5}
-                          dot={{ r: 4, fill: "hsl(25 100% 50%)" }}
-                          connectNulls={false}
-                        />
+                        {(() => {
+                          // Extract all unique seasonal segment keys from the data
+                          const segmentKeys = new Set<string>();
+                          chartData.forEach((point: any) => {
+                            Object.keys(point).forEach(key => {
+                              if (key.startsWith('winterAvg_') || key.startsWith('summerAvg_')) {
+                                segmentKeys.add(key);
+                              }
+                            });
+                          });
+                          
+                          // Render a Line for each segment
+                          return Array.from(segmentKeys).map(key => {
+                            const isWinter = key.startsWith('winterAvg_');
+                            const color = isWinter ? "hsl(200 100% 40%)" : "hsl(25 100% 50%)";
+                            
+                            return (
+                              <Line
+                                key={key}
+                                type="monotone"
+                                dataKey={key}
+                                stroke={color}
+                                strokeWidth={3.5}
+                                dot={{ r: 4, fill: color }}
+                                connectNulls={false}
+                              />
+                            );
+                          });
+                        })()}
                       </ComposedChart>
                     </ResponsiveContainer>
                   </ChartContainer>
