@@ -206,9 +206,15 @@ export default function TariffAssignmentTab({
 
   // Helper function to add seasonal averages to chart data
   const addSeasonalAverages = (docs: DocumentShopNumber[]) => {
-    // Filter out null data for average calculations
-    const validDocs = docs.filter(doc => doc.totalAmount !== null);
-    const { winterAvg, summerAvg } = calculateSeasonalAverages(validDocs);
+    // Use calculated costs as primary data source, with document amounts for comparison
+    const validDocs = docs.filter(doc => {
+      const calculatedCost = calculatedCosts[doc.documentId];
+      return calculatedCost !== undefined && calculatedCost !== null;
+    });
+    
+    const { winterAvg, summerAvg } = validDocs.length > 0 
+      ? calculateSeasonalAveragesFromCalculated(validDocs)
+      : { winterAvg: null, summerAvg: null };
     
     // South African electricity seasons:
     // Winter/High Demand: June, July, August
@@ -220,14 +226,43 @@ export default function TariffAssignmentTab({
       .sort((a, b) => new Date(a.periodStart).getTime() - new Date(b.periodStart).getTime())
       .map(doc => {
         const month = new Date(doc.periodStart).getMonth() + 1;
+        const calculatedCost = calculatedCosts[doc.documentId];
+        
         return {
           period: new Date(doc.periodStart).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }),
-          amount: doc.totalAmount || null, // Keep null for missing data
+          amount: calculatedCost !== undefined ? calculatedCost : null, // Use calculated cost as primary
+          documentAmount: doc.totalAmount || null, // Keep document amount for comparison
           winterAvg: winterMonths.includes(month) ? winterAvg : null,
           summerAvg: summerMonths.includes(month) ? summerAvg : null,
           documentId: doc.documentId, // Preserve document ID for lookups
         };
       });
+  };
+  
+  // Calculate seasonal averages from calculated costs
+  const calculateSeasonalAveragesFromCalculated = (docs: DocumentShopNumber[]) => {
+    const winterMonths = [6, 7, 8];
+    const summerMonths = [1, 2, 3, 4, 5, 9, 10, 11, 12];
+    
+    const winterDocs = docs.filter(doc => {
+      const month = new Date(doc.periodStart).getMonth() + 1;
+      return winterMonths.includes(month);
+    });
+    
+    const summerDocs = docs.filter(doc => {
+      const month = new Date(doc.periodStart).getMonth() + 1;
+      return summerMonths.includes(month);
+    });
+    
+    const winterAvg = winterDocs.length > 0
+      ? winterDocs.reduce((sum, doc) => sum + (calculatedCosts[doc.documentId] || 0), 0) / winterDocs.length
+      : null;
+    
+    const summerAvg = summerDocs.length > 0
+      ? summerDocs.reduce((sum, doc) => sum + (calculatedCosts[doc.documentId] || 0), 0) / summerDocs.length
+      : null;
+    
+    return { winterAvg, summerAvg };
   };
   const [selectedChartMeter, setSelectedChartMeter] = useState<{ meter: Meter; docs: DocumentShopNumber[] } | null>(null);
   const [calculatedCosts, setCalculatedCosts] = useState<{ [docId: string]: number }>({});
@@ -280,17 +315,15 @@ export default function TariffAssignmentTab({
     }
   }, [site?.supply_authority_id]);
 
-  // Calculate costs for comparison mode - only when first entering comparison mode
+  // Load calculated costs when documents are available
   useEffect(() => {
-    if (hideSeasonalAverages && documentShopNumbers.length > 0 && meters.length > 0 && Object.keys(calculatedCosts).length === 0) {
+    if (documentShopNumbers.length > 0 && meters.length > 0) {
       calculateAllCosts();
     }
-  }, [hideSeasonalAverages]);
+  }, [documentShopNumbers.length, meters.length]);
 
   // Load calculated costs from database
   const calculateAllCosts = async () => {
-    if (!hideSeasonalAverages) return;
-
     setIsCalculatingCosts(true);
     
     try {
@@ -1184,12 +1217,7 @@ export default function TariffAssignmentTab({
                       if (filteredShops.length === 0) return null;
                       
                       // Transform and sort data for chart
-                      let chartData = addSeasonalAverages(filteredShops).map(item => ({
-                        ...item,
-                        calculatedAmount: hideSeasonalAverages && item.documentId 
-                          ? calculatedCosts[item.documentId] || null
-                          : null,
-                      }));
+                      let chartData = addSeasonalAverages(filteredShops);
                       
                       return (
                         <Card 
@@ -1211,12 +1239,12 @@ export default function TariffAssignmentTab({
                             <ChartContainer
                               config={{
                                 amount: {
-                                  label: hideSeasonalAverages ? "Document Amount" : "Amount",
+                                  label: "Calculated Cost",
                                   color: "hsl(var(--primary))",
                                 },
-                                calculatedAmount: {
-                                  label: "Calculated from Tariff",
-                                  color: "hsl(142 76% 36%)",
+                                documentAmount: {
+                                  label: "Document Billed",
+                                  color: "hsl(var(--muted-foreground))",
                                 },
                                 winterAvg: {
                                   label: "Winter Average",
@@ -1246,20 +1274,6 @@ export default function TariffAssignmentTab({
                                   <ChartTooltip 
                                     content={<ChartTooltipContent />}
                                   />
-                                  <Bar 
-                                    dataKey="amount" 
-                                    fill="hsl(var(--primary))"
-                                    radius={[4, 4, 0, 0]}
-                                    name={hideSeasonalAverages ? "Document Amount" : "Amount"}
-                                  />
-                                  {hideSeasonalAverages && (
-                                    <Bar 
-                                      dataKey="calculatedAmount" 
-                                      fill="hsl(142 76% 36%)"
-                                      radius={[4, 4, 0, 0]}
-                                      name="Calculated from Tariff"
-                                    />
-                                  )}
                                   {!hideSeasonalAverages && (
                                     <>
                                       <Line
@@ -1279,6 +1293,21 @@ export default function TariffAssignmentTab({
                                         connectNulls={false}
                                       />
                                     </>
+                                  )}
+                                  <Bar 
+                                    dataKey="amount" 
+                                    fill="hsl(var(--primary))"
+                                    radius={[4, 4, 0, 0]}
+                                    name="Calculated Cost"
+                                  />
+                                  {hideSeasonalAverages && (
+                                    <Bar 
+                                      dataKey="documentAmount" 
+                                      fill="hsl(var(--muted-foreground))"
+                                      radius={[4, 4, 0, 0]}
+                                      name="Document Billed"
+                                      opacity={0.5}
+                                    />
                                   )}
                                 </ComposedChart>
                               </ResponsiveContainer>
@@ -1750,12 +1779,7 @@ export default function TariffAssignmentTab({
           
           <ScrollArea className="max-h-[70vh] pr-4">
             {selectedChartMeter && (() => {
-              const chartData = addSeasonalAverages(selectedChartMeter.docs).map(item => ({
-                ...item,
-                calculatedAmount: hideSeasonalAverages && item.documentId
-                  ? calculatedCosts[item.documentId] || null
-                  : null,
-              }));
+              const chartData = addSeasonalAverages(selectedChartMeter.docs);
               
               const currencies = new Set(selectedChartMeter.docs.map(d => d.currency));
               const hasMixedCurrencies = currencies.size > 1;
@@ -1779,12 +1803,12 @@ export default function TariffAssignmentTab({
                       <ChartContainer
                         config={{
                           amount: {
-                            label: hideSeasonalAverages ? "Document Amount" : "Amount",
+                            label: "Calculated Cost",
                             color: "hsl(var(--primary))",
                           },
-                          calculatedAmount: {
-                            label: "Calculated from Tariff",
-                            color: "hsl(142 76% 36%)",
+                          documentAmount: {
+                            label: "Document Billed",
+                            color: "hsl(var(--muted-foreground))",
                           },
                           winterAvg: {
                             label: "Winter Average",
@@ -1814,20 +1838,6 @@ export default function TariffAssignmentTab({
                             <ChartTooltip 
                               content={<ChartTooltipContent />}
                             />
-                            <Bar 
-                              dataKey="amount" 
-                              fill="hsl(var(--primary))"
-                              radius={[4, 4, 0, 0]}
-                              name={hideSeasonalAverages ? "Document Amount" : "Amount"}
-                            />
-                            {hideSeasonalAverages && (
-                              <Bar 
-                                dataKey="calculatedAmount" 
-                                fill="hsl(142 76% 36%)"
-                                radius={[4, 4, 0, 0]}
-                                name="Calculated from Tariff"
-                              />
-                            )}
                             {!hideSeasonalAverages && (
                               <>
                                 <Line
@@ -1847,6 +1857,21 @@ export default function TariffAssignmentTab({
                                   connectNulls={false}
                                 />
                               </>
+                            )}
+                            <Bar 
+                              dataKey="amount" 
+                              fill="hsl(var(--primary))"
+                              radius={[4, 4, 0, 0]}
+                              name="Calculated Cost"
+                            />
+                            {hideSeasonalAverages && (
+                              <Bar 
+                                dataKey="documentAmount" 
+                                fill="hsl(var(--muted-foreground))"
+                                radius={[4, 4, 0, 0]}
+                                name="Document Billed"
+                                opacity={0.5}
+                              />
                             )}
                           </ComposedChart>
                         </ResponsiveContainer>
