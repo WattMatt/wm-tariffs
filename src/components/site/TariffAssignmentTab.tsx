@@ -1707,41 +1707,97 @@ export default function TariffAssignmentTab({
                           </div>
                         </div>
                         
-                        {/* Detailed Breakdown Table */}
+                        {/* Detailed Breakdown Table with Comparison */}
                         <Table>
                       <TableHeader>
                         <TableRow>
                           <TableHead>Item</TableHead>
-                          <TableHead className="text-right">Amount</TableHead>
+                          <TableHead className="text-right">Document</TableHead>
+                          <TableHead className="text-right">Calculated</TableHead>
+                          <TableHead className="text-right">Variance</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         <TableRow>
                           <TableCell className="font-medium">Energy Cost</TableCell>
+                          <TableCell className="text-right text-muted-foreground">
+                            {doc.lineItems?.reduce((sum, item) => 
+                              sum + (item.description?.toLowerCase().includes('energy') ? item.amount : 0), 0
+                            ).toFixed(2) || '—'}
+                          </TableCell>
                           <TableCell className="text-right">R {calc.energy_cost.toFixed(2)}</TableCell>
+                          <TableCell className="text-right">
+                            {doc.lineItems?.reduce((sum, item) => 
+                              sum + (item.description?.toLowerCase().includes('energy') ? item.amount : 0), 0
+                            ) 
+                              ? `R ${(calc.energy_cost - doc.lineItems.reduce((sum, item) => 
+                                  sum + (item.description?.toLowerCase().includes('energy') ? item.amount : 0), 0
+                                )).toFixed(2)}`
+                              : '—'
+                            }
+                          </TableCell>
                         </TableRow>
                         <TableRow>
                           <TableCell className="font-medium">Fixed Charges</TableCell>
+                          <TableCell className="text-right text-muted-foreground">
+                            {doc.lineItems?.reduce((sum, item) => 
+                              sum + (!item.description?.toLowerCase().includes('energy') && 
+                                     !item.description?.toLowerCase().includes('total') ? item.amount : 0), 0
+                            ).toFixed(2) || '—'}
+                          </TableCell>
                           <TableCell className="text-right">R {calc.fixed_charges.toFixed(2)}</TableCell>
+                          <TableCell className="text-right">
+                            {doc.lineItems?.reduce((sum, item) => 
+                              sum + (!item.description?.toLowerCase().includes('energy') && 
+                                     !item.description?.toLowerCase().includes('total') ? item.amount : 0), 0
+                            ) 
+                              ? `R ${(calc.fixed_charges - doc.lineItems.reduce((sum, item) => 
+                                  sum + (!item.description?.toLowerCase().includes('energy') && 
+                                         !item.description?.toLowerCase().includes('total') ? item.amount : 0), 0
+                                )).toFixed(2)}`
+                              : '—'
+                            }
+                          </TableCell>
                         </TableRow>
                         <TableRow className="border-t-2">
-                          <TableCell className="font-semibold">Total Calculated Cost</TableCell>
+                          <TableCell className="font-semibold">Total Cost</TableCell>
+                          <TableCell className="text-right font-semibold">
+                            R {calc.document_billed_amount?.toFixed(2) || doc.totalAmount?.toFixed(2) || '—'}
+                          </TableCell>
                           <TableCell className="text-right font-semibold">R {calc.total_cost.toFixed(2)}</TableCell>
+                          <TableCell className={cn(
+                            "text-right font-semibold",
+                            calc.variance_amount && calc.variance_amount > 0 ? "text-red-600" : 
+                            calc.variance_amount && calc.variance_amount < 0 ? "text-green-600" : ""
+                          )}>
+                            {calc.variance_amount ? `R ${calc.variance_amount.toFixed(2)}` : '—'}
+                          </TableCell>
                         </TableRow>
                         <TableRow>
                           <TableCell className="font-medium text-muted-foreground">Total kWh</TableCell>
-                          <TableCell className="text-right">{calc.total_kwh.toFixed(2)} kWh</TableCell>
+                          <TableCell className="text-right text-muted-foreground">
+                            {doc.lineItems?.reduce((sum, item) => 
+                              sum + (item.consumption || 0), 0
+                            ).toFixed(2) || '—'} kWh
+                          </TableCell>
+                          <TableCell className="text-right" colSpan={2}>{calc.total_kwh.toFixed(2)} kWh</TableCell>
                         </TableRow>
                         {calc.avg_cost_per_kwh && (
                           <TableRow>
                             <TableCell className="font-medium text-muted-foreground">Avg Cost per kWh</TableCell>
-                            <TableCell className="text-right">R {calc.avg_cost_per_kwh.toFixed(4)}</TableCell>
+                            <TableCell className="text-right text-muted-foreground">
+                              {doc.totalAmount && doc.lineItems?.reduce((sum, item) => sum + (item.consumption || 0), 0)
+                                ? `R ${(doc.totalAmount / doc.lineItems.reduce((sum, item) => sum + (item.consumption || 0), 0)).toFixed(4)}`
+                                : '—'
+                              }
+                            </TableCell>
+                            <TableCell className="text-right" colSpan={2}>R {calc.avg_cost_per_kwh.toFixed(4)}</TableCell>
                           </TableRow>
                         )}
                         {calc.tariff_name && (
                           <TableRow>
                             <TableCell className="font-medium text-muted-foreground">Tariff Used</TableCell>
-                            <TableCell className="text-right">{calc.tariff_name}</TableCell>
+                            <TableCell className="text-right text-muted-foreground" colSpan={3}>{calc.tariff_name}</TableCell>
                           </TableRow>
                         )}
                       </TableBody>
