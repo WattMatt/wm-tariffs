@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -91,6 +91,9 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
   const [isLoadingDateRanges, setIsLoadingDateRanges] = useState(false);
   const [revenueReconciliationEnabled, setRevenueReconciliationEnabled] = useState(false);
   const [isCalculatingRevenue, setIsCalculatingRevenue] = useState(false);
+  
+  // Cancel reconciliation ref
+  const cancelReconciliationRef = useRef(false);
 
   // Persistent reconciliation state key
   const reconciliationStateKey = `reconciliation_state_${siteId}`;
@@ -1064,6 +1067,11 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     const retryingMeters = new Set<string>();
     
     for (let i = 0; i < meters.length; i += batchSize) {
+      // Check if reconciliation was cancelled
+      if (cancelReconciliationRef.current) {
+        throw new Error('Reconciliation cancelled by user');
+      }
+      
       const batch = meters.slice(i, i + batchSize);
       const batchNumber = Math.floor(i / batchSize) + 1;
       const totalBatches = Math.ceil(meters.length / batchSize);
@@ -1369,6 +1377,9 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     setIsColumnsOpen(false);
     setIsMetersOpen(false);
 
+    // Reset cancel flag
+    cancelReconciliationRef.current = false;
+    
     setIsLoading(true);
     setReconciliationProgress({current: 0, total: 0});
     setFailedMeters(new Map());
@@ -1567,12 +1578,25 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       } else {
         toast.success("Reconciliation complete");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Reconciliation error:", error);
-      toast.error("Failed to complete reconciliation. Please try again.");
+      
+      // Check if error was due to cancellation
+      if (error.message === 'Reconciliation cancelled by user') {
+        toast.info("Reconciliation cancelled");
+      } else {
+        toast.error("Failed to complete reconciliation. Please try again.");
+      }
     } finally {
       setIsLoading(false);
+      setIsCalculatingRevenue(false);
+      cancelReconciliationRef.current = false;
     }
+  };
+
+  const cancelReconciliation = () => {
+    cancelReconciliationRef.current = true;
+    toast.info("Cancelling reconciliation...");
   };
 
   const saveReconciliation = async (runName: string, notes: string) => {
@@ -2629,6 +2653,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           revenueData={reconciliationData?.revenueData || null}
           onReconcileEnergy={() => handleReconcile(false)}
           onReconcileRevenue={() => handleReconcile(true)}
+          onCancelReconciliation={cancelReconciliation}
           isLoadingEnergy={isLoading && !isCalculatingRevenue}
           isLoadingRevenue={isCalculatingRevenue}
           energyProgress={reconciliationProgress}

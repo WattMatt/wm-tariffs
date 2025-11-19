@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { FileDown, Download, ChevronRight, Save, Loader2, Zap, Calculator, DollarSign } from "lucide-react";
+import { FileDown, Download, ChevronRight, Save, Loader2, Zap, Calculator, DollarSign, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -69,6 +69,7 @@ interface ReconciliationResultsViewProps {
   revenueData?: RevenueData | null;
   onReconcileEnergy?: () => void;
   onReconcileRevenue?: () => void;
+  onCancelReconciliation?: () => void;
   isLoadingEnergy?: boolean;
   isLoadingRevenue?: boolean;
   energyProgress?: { current: number; total: number };
@@ -98,6 +99,7 @@ export default function ReconciliationResultsView({
   revenueData = null,
   onReconcileEnergy,
   onReconcileRevenue,
+  onCancelReconciliation,
   isLoadingEnergy = false,
   isLoadingRevenue = false,
   energyProgress = { current: 0, total: 0 },
@@ -387,7 +389,18 @@ export default function ReconciliationResultsView({
               </>
             )}
           </TabsTrigger>
-          <TabsTrigger 
+          {(isLoadingEnergy || isLoadingRevenue) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onCancelReconciliation}
+              className="ml-2 text-muted-foreground hover:text-destructive"
+            >
+              <X className="h-4 w-4 mr-1" />
+              Cancel
+            </Button>
+          )}
+          <TabsTrigger
             value="revenue" 
             onClick={() => {
               if (!revenueData) {
