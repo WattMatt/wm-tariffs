@@ -1425,21 +1425,6 @@ export default function TariffAssignmentTab({
             </div>
           )}
 
-          <div className="flex items-center gap-4 p-4 bg-primary/5 border border-primary/20 rounded-lg">
-            <div className="flex-1 text-center">
-              <p className="text-2xl font-bold text-primary">{stats.assigned}</p>
-              <p className="text-sm text-muted-foreground">Assigned</p>
-            </div>
-            <div className="flex-1 text-center">
-              <p className="text-2xl font-bold text-muted-foreground">{stats.unassigned}</p>
-              <p className="text-sm text-muted-foreground">Unassigned</p>
-            </div>
-            <div className="flex-1 text-center">
-              <p className="text-2xl font-bold">{stats.total}</p>
-              <p className="text-sm text-muted-foreground">Total Meters</p>
-            </div>
-          </div>
-
           {isLoading && (
             <div className="flex items-center justify-center py-8">
               <p className="text-muted-foreground">Loading tariff structures...</p>
