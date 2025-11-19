@@ -246,10 +246,7 @@ export default function TariffAssignmentTab({
         if (lastSeason && currentSegmentDocs.length > 0) {
           const segmentIndex = lastSeason === 'winter' ? winterSegment : summerSegment;
           const values = currentSegmentDocs
-            .map(d => {
-              const calculatedCost = calculatedCosts[d.documentId];
-              return calculatedCost !== undefined ? calculatedCost : (d.totalAmount || 0);
-            })
+            .map(d => d.totalAmount || 0)
             .filter(v => v > 0);
           
           if (values.length > 0) {
@@ -276,10 +273,7 @@ export default function TariffAssignmentTab({
       if (index === sortedDocs.length - 1 && currentSegmentDocs.length > 0) {
         const segmentIndex = currentSeason === 'winter' ? winterSegment : summerSegment;
         const values = currentSegmentDocs
-          .map(d => {
-            const calculatedCost = calculatedCosts[d.documentId];
-            return calculatedCost !== undefined ? calculatedCost : (d.totalAmount || 0);
-          })
+          .map(d => d.totalAmount || 0)
           .filter(v => v > 0);
         
         if (values.length > 0) {
@@ -297,14 +291,13 @@ export default function TariffAssignmentTab({
     // Second pass: create data points with segment-specific averages
     return sortedDocs.map((doc) => {
       const month = new Date(doc.periodStart).getMonth() + 1;
-      const calculatedCost = calculatedCosts[doc.documentId];
       const isWinter = winterMonths.includes(month);
       const isSummer = summerMonths.includes(month);
       
       // Create base data point
       const dataPoint: any = {
         period: new Date(doc.periodStart).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }),
-        amount: calculatedCost !== undefined ? calculatedCost : (doc.totalAmount || 0),
+        amount: doc.totalAmount || 0,
         documentAmount: doc.totalAmount || null,
         documentId: doc.documentId,
       };
