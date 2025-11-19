@@ -208,26 +208,6 @@ export default function TariffAssignmentTab({
 
   // Helper function to add seasonal averages with properly segmented lines
   const addSeasonalAverages = (docs: DocumentShopNumber[]) => {
-    // Use calculated costs as primary data source, with document amounts as fallback
-    const validDocs = docs.filter(doc => {
-      const calculatedCost = calculatedCosts[doc.documentId];
-      return calculatedCost !== undefined && calculatedCost !== null;
-    });
-    
-    // Calculate seasonal averages
-    let winterAvg: number | null = null;
-    let summerAvg: number | null = null;
-    
-    if (validDocs.length > 0) {
-      const avgData = calculateSeasonalAveragesFromCalculated(validDocs);
-      winterAvg = avgData.winterAvg;
-      summerAvg = avgData.summerAvg;
-    } else if (docs.length > 0) {
-      const avgData = calculateSeasonalAverages(docs);
-      winterAvg = avgData.winterAvg;
-      summerAvg = avgData.summerAvg;
-    }
-    
     // South African electricity seasons
     const winterMonths = [6, 7, 8];
     const summerMonths = [1, 2, 3, 4, 5, 9, 10, 11, 12];
@@ -237,24 +217,88 @@ export default function TariffAssignmentTab({
       new Date(a.periodStart).getTime() - new Date(b.periodStart).getTime()
     );
     
-    // Track season segments to break lines across season changes
-    let winterSegment = 0;
-    let summerSegment = 0;
-    let lastSeason: 'winter' | 'summer' | null = null;
+    // First pass: identify all continuous segments and calculate their averages
+    interface Segment {
+      season: 'winter' | 'summer';
+      segmentIndex: number;
+      docs: DocumentShopNumber[];
+      average: number;
+    }
     
-    return sortedDocs.map((doc, index) => {
+    const segments: Segment[] = [];
+    let winterSegment = -1;
+    let summerSegment = -1;
+    let lastSeason: 'winter' | 'summer' | null = null;
+    let currentSegmentDocs: DocumentShopNumber[] = [];
+    
+    sortedDocs.forEach((doc, index) => {
       const month = new Date(doc.periodStart).getMonth() + 1;
-      const calculatedCost = calculatedCosts[doc.documentId];
       const isWinter = winterMonths.includes(month);
       const isSummer = summerMonths.includes(month);
       const currentSeason = isWinter ? 'winter' : isSummer ? 'summer' : null;
       
-      // Increment segment counter when season changes
-      if (lastSeason && currentSeason && lastSeason !== currentSeason) {
+      if (!currentSeason) return;
+      
+      // Check if we're starting a new segment
+      if (lastSeason !== currentSeason) {
+        // Save previous segment if it exists
+        if (lastSeason && currentSegmentDocs.length > 0) {
+          const segmentIndex = lastSeason === 'winter' ? winterSegment : summerSegment;
+          const values = currentSegmentDocs
+            .map(d => {
+              const calculatedCost = calculatedCosts[d.documentId];
+              return calculatedCost !== undefined ? calculatedCost : (d.totalAmount || 0);
+            })
+            .filter(v => v > 0);
+          
+          if (values.length > 0) {
+            const average = values.reduce((sum, val) => sum + val, 0) / values.length;
+            segments.push({
+              season: lastSeason,
+              segmentIndex,
+              docs: [...currentSegmentDocs],
+              average
+            });
+          }
+        }
+        
+        // Start new segment
+        currentSegmentDocs = [];
         if (currentSeason === 'winter') winterSegment++;
         if (currentSeason === 'summer') summerSegment++;
       }
+      
+      currentSegmentDocs.push(doc);
       lastSeason = currentSeason;
+      
+      // Handle last segment
+      if (index === sortedDocs.length - 1 && currentSegmentDocs.length > 0) {
+        const segmentIndex = currentSeason === 'winter' ? winterSegment : summerSegment;
+        const values = currentSegmentDocs
+          .map(d => {
+            const calculatedCost = calculatedCosts[d.documentId];
+            return calculatedCost !== undefined ? calculatedCost : (d.totalAmount || 0);
+          })
+          .filter(v => v > 0);
+        
+        if (values.length > 0) {
+          const average = values.reduce((sum, val) => sum + val, 0) / values.length;
+          segments.push({
+            season: currentSeason,
+            segmentIndex,
+            docs: [...currentSegmentDocs],
+            average
+          });
+        }
+      }
+    });
+    
+    // Second pass: create data points with segment-specific averages
+    return sortedDocs.map((doc) => {
+      const month = new Date(doc.periodStart).getMonth() + 1;
+      const calculatedCost = calculatedCosts[doc.documentId];
+      const isWinter = winterMonths.includes(month);
+      const isSummer = summerMonths.includes(month);
       
       // Create base data point
       const dataPoint: any = {
@@ -264,12 +308,17 @@ export default function TariffAssignmentTab({
         documentId: doc.documentId,
       };
       
-      // Add segmented seasonal averages
-      if (isWinter) {
-        dataPoint[`winterAvg_${winterSegment}`] = winterAvg;
-      }
-      if (isSummer) {
-        dataPoint[`summerAvg_${summerSegment}`] = summerAvg;
+      // Find which segment this document belongs to and add its average
+      const matchingSegment = segments.find(seg => 
+        seg.docs.some(d => d.documentId === doc.documentId)
+      );
+      
+      if (matchingSegment) {
+        if (matchingSegment.season === 'winter') {
+          dataPoint[`winterAvg_${matchingSegment.segmentIndex}`] = matchingSegment.average;
+        } else {
+          dataPoint[`summerAvg_${matchingSegment.segmentIndex}`] = matchingSegment.average;
+        }
       }
       
       return dataPoint;
