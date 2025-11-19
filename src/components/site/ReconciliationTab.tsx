@@ -696,14 +696,14 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     if (selectedMetersForSummation.has(meterId) && selectedMetersForSummation.size > 1) {
       selectedMetersForSummation.forEach(id => {
         const currentLevel = newLevels.get(id) || 0;
-        const newLevel = Math.min(currentLevel + 1, 3); // Max 3 levels
+        const newLevel = Math.min(currentLevel + 1, 6); // Max 6 levels
         newLevels.set(id, newLevel);
       });
       toast.success(`Indented ${selectedMetersForSummation.size} meter(s)`);
     } else {
       // Otherwise just indent this meter
       const currentLevel = newLevels.get(meterId) || 0;
-      const newLevel = Math.min(currentLevel + 1, 3); // Max 3 levels
+      const newLevel = Math.min(currentLevel + 1, 6); // Max 6 levels
       newLevels.set(meterId, newLevel);
     }
     
@@ -2246,13 +2246,13 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8"
-                      disabled={selectedMetersForSummation.size === 0 || Array.from(selectedMetersForSummation).every(id => (meterIndentLevels.get(id) || 0) === 3)}
+                      disabled={selectedMetersForSummation.size === 0 || Array.from(selectedMetersForSummation).every(id => (meterIndentLevels.get(id) || 0) === 6)}
                       onClick={() => {
                         if (selectedMetersForSummation.size > 0) {
                           const newLevels = new Map(meterIndentLevels);
                           selectedMetersForSummation.forEach(meterId => {
                             const currentLevel = newLevels.get(meterId) || 0;
-                            if (currentLevel < 3) {
+                            if (currentLevel < 6) {
                               newLevels.set(meterId, currentLevel + 1);
                             }
                           });
@@ -2420,7 +2420,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                               size="sm"
                               className="h-8 w-8 p-0"
                               onClick={() => handleIndentMeter(meter.id)}
-                              disabled={indentLevel >= 3}
+                              disabled={indentLevel >= 6}
                             >
                               <ChevronRight className="h-4 w-4" />
                             </Button>
