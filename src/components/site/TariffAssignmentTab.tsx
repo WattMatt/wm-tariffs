@@ -114,6 +114,7 @@ export default function TariffAssignmentTab({
   const [activeFilterTo, setActiveFilterTo] = useState<Date | undefined>(undefined);
   const [selectedMeterIds, setSelectedMeterIds] = useState<Set<string>>(new Set());
   const [viewingDocCalculations, setViewingDocCalculations] = useState<any[]>([]);
+  const [chartDialogCalculations, setChartDialogCalculations] = useState<Record<string, any>>({});
 
   // Apply date range filter
   const applyDateFilter = () => {
@@ -1825,7 +1826,10 @@ export default function TariffAssignmentTab({
       </Dialog>
 
       {/* Chart Detail Dialog for Analysis Tab */}
-      <Dialog open={!!selectedChartMeter} onOpenChange={() => setSelectedChartMeter(null)}>
+      <Dialog open={!!selectedChartMeter} onOpenChange={() => {
+        setSelectedChartMeter(null);
+        setChartDialogCalculations({});
+      }}>
         <DialogContent className="max-w-6xl max-h-[90vh]">
           <DialogHeader>
             <DialogTitle>Meter Analysis: {selectedChartMeter?.meter.meter_number}</DialogTitle>
@@ -1840,6 +1844,27 @@ export default function TariffAssignmentTab({
               
               const currencies = new Set(selectedChartMeter.docs.map(d => d.currency));
               const hasMixedCurrencies = currencies.size > 1;
+              
+              // Fetch calculations when dialog opens
+              if (Object.keys(chartDialogCalculations).length === 0) {
+                const docIds = selectedChartMeter.docs.map(d => d.documentId);
+                supabase
+                  .from("document_tariff_calculations")
+                  .select(`
+                    *,
+                    tariff_structures!inner(name)
+                  `)
+                  .in("document_id", docIds)
+                  .then(({ data, error }) => {
+                    if (!error && data) {
+                      const calcsByDoc: Record<string, any> = {};
+                      data.forEach(calc => {
+                        calcsByDoc[calc.document_id] = calc;
+                      });
+                      setChartDialogCalculations(calcsByDoc);
+                    }
+                  });
+              }
               
               return (
                 <div className="space-y-6">
@@ -2023,6 +2048,131 @@ export default function TariffAssignmentTab({
                                 </div>
                               </div>
                             )}
+                            
+                            {/* Tariff Comparison */}
+                            {chartDialogCalculations[doc.documentId] && (() => {
+                              const calc = chartDialogCalculations[doc.documentId];
+                              return (
+                                <div className="space-y-2 mt-4 pt-4 border-t">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-sm font-medium text-muted-foreground">Rate Comparison: Document vs Tariff</span>
+                                    <Badge variant={Math.abs(calc.variance_percentage || 0) > 10 ? "destructive" : "secondary"} className="text-xs">
+                                      {calc.variance_percentage !== null 
+                                        ? `${calc.variance_percentage >= 0 ? '+' : ''}${calc.variance_percentage.toFixed(1)}%`
+                                        : 'N/A'}
+                                    </Badge>
+                                  </div>
+                                  <div className="border rounded-lg overflow-hidden">
+                                    <Table>
+                                      <TableHeader>
+                                        <TableRow>
+                                          <TableHead className="text-xs">Metric</TableHead>
+                                          <TableHead className="text-xs text-right">Document</TableHead>
+                                          <TableHead className="text-xs text-right">Calculated</TableHead>
+                                          <TableHead className="text-xs text-right">Variance</TableHead>
+                                        </TableRow>
+                                      </TableHeader>
+                                      <TableBody>
+                                        <TableRow>
+                                          <TableCell className="text-xs font-medium">Total kWh</TableCell>
+                                          <TableCell className="text-xs text-right">
+                                            {doc.lineItems?.find(item => 
+                                              item.consumption && item.description?.toLowerCase().includes('kwh')
+                                            )?.consumption?.toFixed(2) || '—'}
+                                          </TableCell>
+                                          <TableCell className="text-xs text-right">{calc.total_kwh.toFixed(2)}</TableCell>
+                                          <TableCell className="text-xs text-right text-muted-foreground">—</TableCell>
+                                        </TableRow>
+                                        <TableRow>
+                                          <TableCell className="text-xs font-medium">Energy Cost</TableCell>
+                                          <TableCell className="text-xs text-right">
+                                            {doc.currency} {(doc.lineItems?.find(item => 
+                                              item.description?.toLowerCase().includes('energy') || 
+                                              item.description?.toLowerCase().includes('kwh ch')
+                                            )?.amount || 0).toFixed(2)}
+                                          </TableCell>
+                                          <TableCell className="text-xs text-right">
+                                            {doc.currency} {calc.energy_cost.toFixed(2)}
+                                          </TableCell>
+                                          <TableCell className="text-xs text-right text-muted-foreground">
+                                            {(() => {
+                                              const docEnergy = doc.lineItems?.find(item => 
+                                                item.description?.toLowerCase().includes('energy') || 
+                                                item.description?.toLowerCase().includes('kwh ch')
+                                              )?.amount || 0;
+                                              const variance = calc.energy_cost - docEnergy;
+                                              return variance !== 0 ? `${variance >= 0 ? '+' : ''}${variance.toFixed(2)}` : '—';
+                                            })()}
+                                          </TableCell>
+                                        </TableRow>
+                                        <TableRow>
+                                          <TableCell className="text-xs font-medium">Fixed Charges</TableCell>
+                                          <TableCell className="text-xs text-right">
+                                            {doc.currency} {(doc.lineItems?.find(item => 
+                                              item.description?.toLowerCase().includes('basic') || 
+                                              item.description?.toLowerCase().includes('fixed')
+                                            )?.amount || 0).toFixed(2)}
+                                          </TableCell>
+                                          <TableCell className="text-xs text-right">
+                                            {doc.currency} {calc.fixed_charges.toFixed(2)}
+                                          </TableCell>
+                                          <TableCell className="text-xs text-right text-muted-foreground">
+                                            {(() => {
+                                              const docFixed = doc.lineItems?.find(item => 
+                                                item.description?.toLowerCase().includes('basic') || 
+                                                item.description?.toLowerCase().includes('fixed')
+                                              )?.amount || 0;
+                                              const variance = calc.fixed_charges - docFixed;
+                                              return variance !== 0 ? `${variance >= 0 ? '+' : ''}${variance.toFixed(2)}` : '—';
+                                            })()}
+                                          </TableCell>
+                                        </TableRow>
+                                        <TableRow className="bg-muted/50 font-semibold">
+                                          <TableCell className="text-xs">Total Cost</TableCell>
+                                          <TableCell className="text-xs text-right">
+                                            {doc.currency} {calc.document_billed_amount?.toFixed(2) || doc.totalAmount.toFixed(2)}
+                                          </TableCell>
+                                          <TableCell className="text-xs text-right">
+                                            {doc.currency} {calc.total_cost.toFixed(2)}
+                                          </TableCell>
+                                          <TableCell className={cn(
+                                            "text-xs text-right font-medium",
+                                            calc.variance_amount && Math.abs(calc.variance_amount) > 0 
+                                              ? calc.variance_amount > 0 ? "text-destructive" : "text-green-600"
+                                              : ""
+                                          )}>
+                                            {calc.variance_amount !== null 
+                                              ? `${calc.variance_amount >= 0 ? '+' : ''}${calc.variance_amount.toFixed(2)}`
+                                              : '—'}
+                                          </TableCell>
+                                        </TableRow>
+                                        <TableRow>
+                                          <TableCell className="text-xs font-medium">Avg Cost/kWh</TableCell>
+                                          <TableCell className="text-xs text-right">
+                                            {(() => {
+                                              const consumption = doc.lineItems?.find(item => 
+                                                item.consumption && item.description?.toLowerCase().includes('kwh')
+                                              )?.consumption;
+                                              const avgRate = consumption && consumption > 0
+                                                ? (calc.document_billed_amount || doc.totalAmount) / consumption
+                                                : null;
+                                              return avgRate ? `${doc.currency} ${avgRate.toFixed(4)}` : '—';
+                                            })()}
+                                          </TableCell>
+                                          <TableCell className="text-xs text-right">
+                                            {doc.currency} {calc.avg_cost_per_kwh?.toFixed(4) || '—'}
+                                          </TableCell>
+                                          <TableCell className="text-xs text-right text-muted-foreground">—</TableCell>
+                                        </TableRow>
+                                      </TableBody>
+                                    </Table>
+                                  </div>
+                                  <div className="text-xs text-muted-foreground mt-1">
+                                    Tariff: {calc.tariff_structures?.name || calc.tariff_name || 'N/A'}
+                                  </div>
+                                </div>
+                              );
+                            })()}
                           </div>
                         </CollapsibleContent>
                       </Collapsible>
