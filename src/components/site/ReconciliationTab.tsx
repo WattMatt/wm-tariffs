@@ -2180,7 +2180,48 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                   />
                 </div>
                 <div className="flex-1 flex items-center gap-2">
-                  <div className="w-[72px]"></div> {/* Space for indent buttons */}
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      disabled={selectedMetersForSummation.size === 0 || Array.from(selectedMetersForSummation).every(id => (meterIndentLevels.get(id) || 0) === 0)}
+                      onClick={() => {
+                        if (selectedMetersForSummation.size > 0) {
+                          const newLevels = new Map(meterIndentLevels);
+                          selectedMetersForSummation.forEach(meterId => {
+                            const currentLevel = newLevels.get(meterId) || 0;
+                            if (currentLevel > 0) {
+                              newLevels.set(meterId, currentLevel - 1);
+                            }
+                          });
+                          setMeterIndentLevels(newLevels);
+                        }
+                      }}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      disabled={selectedMetersForSummation.size === 0 || Array.from(selectedMetersForSummation).every(id => (meterIndentLevels.get(id) || 0) === 3)}
+                      onClick={() => {
+                        if (selectedMetersForSummation.size > 0) {
+                          const newLevels = new Map(meterIndentLevels);
+                          selectedMetersForSummation.forEach(meterId => {
+                            const currentLevel = newLevels.get(meterId) || 0;
+                            if (currentLevel < 3) {
+                              newLevels.set(meterId, currentLevel + 1);
+                            }
+                          });
+                          setMeterIndentLevels(newLevels);
+                        }
+                      }}
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
                   <div className="flex-1 flex items-center justify-between p-3">
                     <button 
                       onClick={() => {
