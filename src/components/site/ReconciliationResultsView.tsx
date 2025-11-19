@@ -213,7 +213,7 @@ export default function ReconciliationResultsView({
                 </Button>
               )}
               <span className="font-mono text-sm font-semibold">{meter.meter_number}</span>
-              {meter.hasData === false && !meter.hasError && (
+              {meter.hasData === false && !meter.hasError && childIds.length === 0 && (
                 <Badge variant="outline" className="text-xs">No data in range</Badge>
               )}
               {meter.hasError && (
