@@ -662,6 +662,28 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     setMeterIndentLevels(newLevels);
   };
 
+  const handleBulkIndent = () => {
+    const newLevels = new Map(meterIndentLevels);
+    selectedMetersForSummation.forEach(meterId => {
+      const currentLevel = newLevels.get(meterId) || 0;
+      const newLevel = Math.min(currentLevel + 1, 3); // Max 3 levels
+      newLevels.set(meterId, newLevel);
+    });
+    setMeterIndentLevels(newLevels);
+    toast.success(`Indented ${selectedMetersForSummation.size} meter(s)`);
+  };
+
+  const handleBulkOutdent = () => {
+    const newLevels = new Map(meterIndentLevels);
+    selectedMetersForSummation.forEach(meterId => {
+      const currentLevel = newLevels.get(meterId) || 0;
+      const newLevel = Math.max(currentLevel - 1, 0); // Min 0 levels
+      newLevels.set(meterId, newLevel);
+    });
+    setMeterIndentLevels(newLevels);
+    toast.success(`Outdented ${selectedMetersForSummation.size} meter(s)`);
+  };
+
   const handleDragStart = (e: React.DragEvent, meterId: string) => {
     setDraggedMeterId(meterId);
     e.dataTransfer.effectAllowed = "move";
@@ -2131,11 +2153,47 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                 <CollapsibleTrigger className="flex items-center justify-between w-full mb-3 hover:underline">
                   <div className="flex flex-col items-start gap-1">
                     <Label className="text-sm font-semibold cursor-pointer">Meters Associated with This Site</Label>
-                    <span className="text-xs text-muted-foreground font-normal">Select multiple meters and drag to reorder</span>
+                    <span className="text-xs text-muted-foreground font-normal">Select multiple meters and drag to reorder or indent</span>
                   </div>
                   <ChevronRight className={cn("h-4 w-4 transition-transform", isMetersOpen && "rotate-90")} />
                 </CollapsibleTrigger>
                 <CollapsibleContent>
+              
+              {/* Bulk actions for selected meters */}
+              {selectedMetersForSummation.size > 0 && (
+                <div className="mb-3 p-3 bg-primary/10 rounded-lg border border-primary/30 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary" className="bg-primary/20">
+                      {selectedMetersForSummation.size} meter(s) selected
+                    </Badge>
+                    <span className="text-xs text-muted-foreground">
+                      Drag to move or use buttons to indent
+                    </span>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleBulkOutdent}
+                      disabled={Array.from(selectedMetersForSummation).every(id => (meterIndentLevels.get(id) || 0) === 0)}
+                      className="h-8 gap-1"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                      <span className="text-xs">Outdent</span>
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleBulkIndent}
+                      disabled={Array.from(selectedMetersForSummation).every(id => (meterIndentLevels.get(id) || 0) >= 3)}
+                      className="h-8 gap-1"
+                    >
+                      <span className="text-xs">Indent</span>
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
               
               {/* Column Headers */}
               <div className="flex items-center gap-2 mb-2 pb-2 border-b">
