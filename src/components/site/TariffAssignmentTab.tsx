@@ -208,15 +208,26 @@ export default function TariffAssignmentTab({
 
   // Helper function to add seasonal averages to chart data
   const addSeasonalAverages = (docs: DocumentShopNumber[]) => {
-    // Use calculated costs as primary data source, with document amounts for comparison
+    // Use calculated costs as primary data source, with document amounts as fallback
     const validDocs = docs.filter(doc => {
       const calculatedCost = calculatedCosts[doc.documentId];
       return calculatedCost !== undefined && calculatedCost !== null;
     });
     
-    const { winterAvg, summerAvg } = validDocs.length > 0 
-      ? calculateSeasonalAveragesFromCalculated(validDocs)
-      : { winterAvg: null, summerAvg: null };
+    // Calculate seasonal averages - use calculated costs if available, otherwise use document amounts
+    let winterAvg: number | null = null;
+    let summerAvg: number | null = null;
+    
+    if (validDocs.length > 0) {
+      const avgData = calculateSeasonalAveragesFromCalculated(validDocs);
+      winterAvg = avgData.winterAvg;
+      summerAvg = avgData.summerAvg;
+    } else if (docs.length > 0) {
+      // Fallback to document amounts if no calculated costs
+      const avgData = calculateSeasonalAverages(docs);
+      winterAvg = avgData.winterAvg;
+      summerAvg = avgData.summerAvg;
+    }
     
     // South African electricity seasons:
     // Winter/High Demand: June, July, August
