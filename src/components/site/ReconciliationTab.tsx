@@ -91,6 +91,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
   const [isLoadingDateRanges, setIsLoadingDateRanges] = useState(false);
   const [revenueReconciliationEnabled, setRevenueReconciliationEnabled] = useState(false);
   const [isCalculatingRevenue, setIsCalculatingRevenue] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
   
   // Cancel reconciliation ref
   const cancelReconciliationRef = useRef(false);
@@ -1111,6 +1112,11 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     retryCount = 0,
     retryingMeters?: Set<string>
   ): Promise<any> => {
+    // Check for cancellation at the start
+    if (cancelReconciliationRef.current) {
+      throw new Error('Reconciliation cancelled by user');
+    }
+    
     const maxRetries = 3;
     const clientTimeout = 10000; // 10 seconds client-side timeout
     
@@ -1125,6 +1131,11 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       // Wrap entire pagination loop in client-side timeout
       const fetchAllPages = async () => {
         while (hasMore) {
+          // Check for cancellation during pagination
+          if (cancelReconciliationRef.current) {
+            throw new Error('Reconciliation cancelled by user');
+          }
+          
           const { data: pageReadings, error: pageError } = await supabase
             .from("meter_readings")
             .select("kwh_value, reading_timestamp, metadata")
@@ -1583,6 +1594,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       
       // Check if error was due to cancellation
       if (error.message === 'Reconciliation cancelled by user') {
+        console.log("Reconciliation cancelled successfully");
         toast.info("Reconciliation cancelled");
       } else {
         toast.error("Failed to complete reconciliation. Please try again.");
@@ -1590,13 +1602,19 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     } finally {
       setIsLoading(false);
       setIsCalculatingRevenue(false);
+      setIsCancelling(false);
       cancelReconciliationRef.current = false;
+      console.log("Reconciliation cleanup complete");
     }
   };
 
   const cancelReconciliation = () => {
-    cancelReconciliationRef.current = true;
-    toast.info("Cancelling reconciliation...");
+    if (!isCancelling) {
+      setIsCancelling(true);
+      cancelReconciliationRef.current = true;
+      console.log("Cancellation requested");
+      toast.info("Cancelling reconciliation...");
+    }
   };
 
   const saveReconciliation = async (runName: string, notes: string) => {
@@ -2654,6 +2672,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           onReconcileEnergy={() => handleReconcile(false)}
           onReconcileRevenue={() => handleReconcile(true)}
           onCancelReconciliation={cancelReconciliation}
+          isCancelling={isCancelling}
           isLoadingEnergy={isLoading && !isCalculatingRevenue}
           isLoadingRevenue={isCalculatingRevenue}
           energyProgress={reconciliationProgress}
