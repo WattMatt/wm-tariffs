@@ -643,6 +643,11 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
   const handleDragStart = (e: React.DragEvent, meterId: string) => {
     setDraggedMeterId(meterId);
     e.dataTransfer.effectAllowed = "move";
+    
+    // If dragging a selected meter, add visual feedback for multi-select
+    if (selectedMetersForSummation.has(meterId) && selectedMetersForSummation.size > 1) {
+      e.dataTransfer.setData("text/plain", `${selectedMetersForSummation.size} meters`);
+    }
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -667,20 +672,54 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       return;
     }
 
-    const draggedIndex = availableMeters.findIndex(m => m.id === draggedMeterId);
     const targetIndex = availableMeters.findIndex(m => m.id === targetMeterId);
-
-    if (draggedIndex === -1 || targetIndex === -1) {
+    if (targetIndex === -1) {
       setDraggedMeterId(null);
       setDragOverMeterId(null);
       return;
     }
 
-    const newMeters = [...availableMeters];
-    const [removed] = newMeters.splice(draggedIndex, 1);
-    newMeters.splice(targetIndex, 0, removed);
+    // Check if we're dragging multiple selected meters
+    const isDraggingMultiple = selectedMetersForSummation.has(draggedMeterId) && selectedMetersForSummation.size > 1;
+    
+    if (isDraggingMultiple) {
+      // Move all selected meters together
+      const selectedMeterIds = Array.from(selectedMetersForSummation);
+      const nonSelectedMeters = availableMeters.filter(m => !selectedMetersForSummation.has(m.id));
+      const selectedMeters = availableMeters.filter(m => selectedMetersForSummation.has(m.id));
+      
+      // Insert selected meters at target position
+      const newMeters = [...nonSelectedMeters];
+      const insertIndex = newMeters.findIndex(m => m.id === targetMeterId);
+      
+      if (insertIndex !== -1) {
+        newMeters.splice(insertIndex, 0, ...selectedMeters);
+      } else {
+        // Target is one of the selected meters, insert before it
+        const targetInSelected = selectedMeters.findIndex(m => m.id === targetMeterId);
+        if (targetInSelected !== -1) {
+          newMeters.push(...selectedMeters);
+        }
+      }
+      
+      setAvailableMeters(newMeters);
+    } else {
+      // Single meter drag
+      const draggedIndex = availableMeters.findIndex(m => m.id === draggedMeterId);
+      
+      if (draggedIndex === -1) {
+        setDraggedMeterId(null);
+        setDragOverMeterId(null);
+        return;
+      }
 
-    setAvailableMeters(newMeters);
+      const newMeters = [...availableMeters];
+      const [removed] = newMeters.splice(draggedIndex, 1);
+      newMeters.splice(targetIndex, 0, removed);
+
+      setAvailableMeters(newMeters);
+    }
+    
     setDraggedMeterId(null);
     setDragOverMeterId(null);
   };
@@ -2068,7 +2107,10 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
             <Collapsible open={isMetersOpen} onOpenChange={setIsMetersOpen}>
               <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
                 <CollapsibleTrigger className="flex items-center justify-between w-full mb-3 hover:underline">
-                  <Label className="text-sm font-semibold cursor-pointer">Meters Associated with This Site</Label>
+                  <div className="flex flex-col items-start gap-1">
+                    <Label className="text-sm font-semibold cursor-pointer">Meters Associated with This Site</Label>
+                    <span className="text-xs text-muted-foreground font-normal">Select multiple meters and drag to reorder</span>
+                  </div>
                   <ChevronRight className={cn("h-4 w-4 transition-transform", isMetersOpen && "rotate-90")} />
                 </CollapsibleTrigger>
                 <CollapsibleContent>
@@ -2142,9 +2184,10 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                           </div>
                           <div 
                             className={cn(
-                              "flex items-center justify-between flex-1 p-3 rounded-md border bg-card hover:bg-accent/5 transition-colors cursor-move",
+                              "flex items-center justify-between flex-1 p-3 rounded-md border bg-card hover:bg-accent/5 transition-colors cursor-move relative",
                               isDragging && "opacity-50",
-                              isDragOver && "border-primary border-2"
+                              isDragOver && "border-primary border-2",
+                              selectedMetersForSummation.has(meter.id) && "ring-2 ring-primary/20"
                             )}
                             draggable
                             onDragStart={(e) => handleDragStart(e, meter.id)}
@@ -2154,6 +2197,11 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                             onDrop={(e) => handleDrop(e, meter.id)}
                             onDragEnd={handleDragEnd}
                           >
+                            {selectedMetersForSummation.has(meter.id) && selectedMetersForSummation.size > 1 && draggedMeterId === meter.id && (
+                              <div className="absolute -top-2 -right-2 bg-primary text-primary-foreground text-xs rounded-full w-6 h-6 flex items-center justify-center font-semibold z-10">
+                                {selectedMetersForSummation.size}
+                              </div>
+                            )}
                             <div className="flex items-center gap-2 flex-1">
                               {indentLevel > 0 && (
                                 <ArrowRight className="h-4 w-4 text-muted-foreground" />
