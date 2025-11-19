@@ -2424,7 +2424,7 @@ export default function TariffAssignmentTab({
         setExpandedShopDocs(new Set());
         setViewingAllDocsCalculations({});
       }}>
-        <DialogContent className="max-w-4xl">
+        <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Associated Documents</DialogTitle>
             <DialogDescription>
@@ -2454,7 +2454,7 @@ export default function TariffAssignmentTab({
                     </Alert>
                   )}
                 </CardHeader>
-                <CardContent>
+                <CardContent className="pb-2">
                   <ChartContainer
                     config={{
                       amount: {
@@ -2470,21 +2470,24 @@ export default function TariffAssignmentTab({
                         color: "hsl(25 100% 50%)",
                       },
                     }}
-                    className="h-[300px]"
+                    className="h-[280px] w-full"
                   >
                     <ResponsiveContainer width="100%" height="100%">
-                      <ComposedChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 60 }}>
+                      <ComposedChart data={chartData} margin={{ top: 10, right: 20, left: 10, bottom: 70 }}>
                         <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                         <XAxis 
                           dataKey="period" 
                           angle={-45}
                           textAnchor="end"
-                          height={80}
+                          height={70}
                           className="text-xs"
+                          tick={{ fontSize: 11 }}
                         />
                         <YAxis 
                           tickFormatter={(value) => `R ${value.toLocaleString()}`}
                           className="text-xs"
+                          tick={{ fontSize: 11 }}
+                          width={80}
                         />
                         <ChartTooltip
                           content={<ChartTooltipContent />}
@@ -2502,7 +2505,7 @@ export default function TariffAssignmentTab({
             );
           })()}
           
-          <ScrollArea className="max-h-[60vh] pr-4">
+          <ScrollArea className="flex-1 pr-4 overflow-y-auto">
             {viewingAllDocs && (() => {
               // Fetch calculations when dialog opens
               if (Object.keys(viewingAllDocsCalculations).length === 0) {
