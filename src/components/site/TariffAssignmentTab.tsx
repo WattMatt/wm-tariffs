@@ -113,6 +113,7 @@ export default function TariffAssignmentTab({
   const [activeFilterFrom, setActiveFilterFrom] = useState<Date | undefined>(undefined);
   const [activeFilterTo, setActiveFilterTo] = useState<Date | undefined>(undefined);
   const [selectedMeterIds, setSelectedMeterIds] = useState<Set<string>>(new Set());
+  const [viewingDocCalculations, setViewingDocCalculations] = useState<any[]>([]);
 
   // Apply date range filter
   const applyDateFilter = () => {
@@ -2250,8 +2251,11 @@ export default function TariffAssignmentTab({
       </Dialog>
 
       {/* Shop Document Details Dialog */}
-      <Dialog open={!!viewingShopDoc} onOpenChange={() => setViewingShopDoc(null)}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+      <Dialog open={!!viewingShopDoc} onOpenChange={() => {
+        setViewingShopDoc(null);
+        setViewingDocCalculations([]);
+      }}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Document Details</DialogTitle>
             <DialogDescription>
@@ -2261,6 +2265,25 @@ export default function TariffAssignmentTab({
           
           {viewingShopDoc && (
             <div className="space-y-4">
+              {/* Fetch calculations on dialog open */}
+              {(() => {
+                // Fetch calculations when dialog opens
+                if (viewingDocCalculations.length === 0 && viewingShopDoc.meterId) {
+                  supabase
+                    .from("document_tariff_calculations")
+                    .select(`
+                      *,
+                      tariff_structures!inner(name)
+                    `)
+                    .eq("document_id", viewingShopDoc.documentId)
+                    .then(({ data, error }) => {
+                      if (!error && data) {
+                        setViewingDocCalculations(data);
+                      }
+                    });
+                }
+                return null;
+              })()}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label className="text-xs text-muted-foreground">Period Start</Label>
@@ -2311,10 +2334,135 @@ export default function TariffAssignmentTab({
                   </div>
                 )}
 
+                {/* Tariff Comparison Section */}
+                {viewingDocCalculations.length > 0 && (
+                  <div className="space-y-3 border-t pt-4">
+                    <Label className="text-base font-semibold">Rate Comparison: Document vs Assigned Tariff</Label>
+                    <div className="space-y-4">
+                      {viewingDocCalculations.map((calc, idx) => (
+                        <div key={idx} className="border rounded-lg p-4 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium">{calc.tariff_structures?.name || 'Tariff Calculation'}</span>
+                            <Badge variant={Math.abs(calc.variance_percentage || 0) > 10 ? "destructive" : "secondary"}>
+                              {calc.variance_percentage !== null 
+                                ? `${calc.variance_percentage >= 0 ? '+' : ''}${calc.variance_percentage.toFixed(1)}%`
+                                : 'N/A'}
+                            </Badge>
+                          </div>
+                          
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Metric</TableHead>
+                                <TableHead className="text-right">Document</TableHead>
+                                <TableHead className="text-right">Calculated</TableHead>
+                                <TableHead className="text-right">Variance</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              <TableRow>
+                                <TableCell className="font-medium">Total kWh</TableCell>
+                                <TableCell className="text-right">
+                                  {viewingShopDoc.lineItems?.find(item => 
+                                    item.consumption && item.description?.toLowerCase().includes('kwh')
+                                  )?.consumption?.toFixed(2) || '—'}
+                                </TableCell>
+                                <TableCell className="text-right">{calc.total_kwh.toFixed(2)}</TableCell>
+                                <TableCell className="text-right">—</TableCell>
+                              </TableRow>
+                              <TableRow>
+                                <TableCell className="font-medium">Energy Cost</TableCell>
+                                <TableCell className="text-right">
+                                  {viewingShopDoc.currency} {(viewingShopDoc.lineItems?.find(item => 
+                                    item.description?.toLowerCase().includes('energy') || 
+                                    item.description?.toLowerCase().includes('kwh ch')
+                                  )?.amount || 0).toFixed(2)}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  {viewingShopDoc.currency} {calc.energy_cost.toFixed(2)}
+                                </TableCell>
+                                <TableCell className="text-right text-muted-foreground">
+                                  {(() => {
+                                    const docEnergy = viewingShopDoc.lineItems?.find(item => 
+                                      item.description?.toLowerCase().includes('energy') || 
+                                      item.description?.toLowerCase().includes('kwh ch')
+                                    )?.amount || 0;
+                                    const variance = calc.energy_cost - docEnergy;
+                                    return variance !== 0 ? `${variance >= 0 ? '+' : ''}${variance.toFixed(2)}` : '—';
+                                  })()}
+                                </TableCell>
+                              </TableRow>
+                              <TableRow>
+                                <TableCell className="font-medium">Fixed Charges</TableCell>
+                                <TableCell className="text-right">
+                                  {viewingShopDoc.currency} {(viewingShopDoc.lineItems?.find(item => 
+                                    item.description?.toLowerCase().includes('basic') || 
+                                    item.description?.toLowerCase().includes('fixed')
+                                  )?.amount || 0).toFixed(2)}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  {viewingShopDoc.currency} {calc.fixed_charges.toFixed(2)}
+                                </TableCell>
+                                <TableCell className="text-right text-muted-foreground">
+                                  {(() => {
+                                    const docFixed = viewingShopDoc.lineItems?.find(item => 
+                                      item.description?.toLowerCase().includes('basic') || 
+                                      item.description?.toLowerCase().includes('fixed')
+                                    )?.amount || 0;
+                                    const variance = calc.fixed_charges - docFixed;
+                                    return variance !== 0 ? `${variance >= 0 ? '+' : ''}${variance.toFixed(2)}` : '—';
+                                  })()}
+                                </TableCell>
+                              </TableRow>
+                              <TableRow className="font-semibold bg-muted/50">
+                                <TableCell>Total Cost</TableCell>
+                                <TableCell className="text-right">
+                                  {viewingShopDoc.currency} {calc.document_billed_amount?.toFixed(2) || viewingShopDoc.totalAmount.toFixed(2)}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  {viewingShopDoc.currency} {calc.total_cost.toFixed(2)}
+                                </TableCell>
+                                <TableCell className={cn(
+                                  "text-right font-medium",
+                                  calc.variance_amount && Math.abs(calc.variance_amount) > 0 
+                                    ? calc.variance_amount > 0 ? "text-destructive" : "text-green-600"
+                                    : ""
+                                )}>
+                                  {calc.variance_amount !== null 
+                                    ? `${calc.variance_amount >= 0 ? '+' : ''}${calc.variance_amount.toFixed(2)}`
+                                    : '—'}
+                                </TableCell>
+                              </TableRow>
+                              <TableRow>
+                                <TableCell className="font-medium">Avg Cost per kWh</TableCell>
+                                <TableCell className="text-right">
+                                  {(() => {
+                                    const consumption = viewingShopDoc.lineItems?.find(item => 
+                                      item.consumption && item.description?.toLowerCase().includes('kwh')
+                                    )?.consumption;
+                                    const avgRate = consumption && consumption > 0
+                                      ? (calc.document_billed_amount || viewingShopDoc.totalAmount) / consumption
+                                      : null;
+                                    return avgRate ? `${viewingShopDoc.currency} ${avgRate.toFixed(4)}` : '—';
+                                  })()}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  {viewingShopDoc.currency} {calc.avg_cost_per_kwh?.toFixed(4) || '—'}
+                                </TableCell>
+                                <TableCell className="text-right">—</TableCell>
+                              </TableRow>
+                            </TableBody>
+                          </Table>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Line Items Section */}
                 {viewingShopDoc.lineItems && viewingShopDoc.lineItems.length > 0 && (
-                  <div className="space-y-3">
-                    <Label className="text-sm font-medium">Line Items</Label>
+                  <div className="space-y-3 border-t pt-4">
+                    <Label className="text-sm font-medium">Document Line Items</Label>
                     <Accordion type="single" collapsible className="w-full">
                       {viewingShopDoc.lineItems.map((item, index) => (
                         <AccordionItem key={index} value={`item-${index}`}>
