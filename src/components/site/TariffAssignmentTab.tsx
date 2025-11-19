@@ -1904,42 +1904,84 @@ export default function TariffAssignmentTab({
                         <TableRow>
                           <TableCell className="font-medium">Energy Cost</TableCell>
                           <TableCell className="text-right text-muted-foreground">
-                            {doc.lineItems?.reduce((sum, item) => 
-                              sum + (item.description?.toLowerCase().includes('energy') ? item.amount : 0), 0
-                            ).toFixed(2) || '—'}
+                            {(() => {
+                              // Filter line items for council/bulk meters to exclude non-electricity charges
+                              const filteredItems = rateComparisonMeter?.meter_type === 'council_meter' || 
+                                                   rateComparisonMeter?.meter_type === 'bulk_meter'
+                                ? doc.lineItems?.filter(item => 
+                                    !item.description?.toLowerCase().includes('generator') &&
+                                    !item.description?.toLowerCase().includes('water')
+                                  )
+                                : doc.lineItems;
+                              
+                              return filteredItems?.reduce((sum, item) => 
+                                sum + (item.description?.toLowerCase().includes('energy') || 
+                                       item.description?.toLowerCase().includes('kwh') ? item.amount : 0), 0
+                              ).toFixed(2) || '—';
+                            })()}
                           </TableCell>
                           <TableCell className="text-right">R {calc.energy_cost.toFixed(2)}</TableCell>
                           <TableCell className="text-right">
-                            {doc.lineItems?.reduce((sum, item) => 
-                              sum + (item.description?.toLowerCase().includes('energy') ? item.amount : 0), 0
-                            ) 
-                              ? `R ${(calc.energy_cost - doc.lineItems.reduce((sum, item) => 
-                                  sum + (item.description?.toLowerCase().includes('energy') ? item.amount : 0), 0
-                                )).toFixed(2)}`
-                              : '—'
-                            }
+                            {(() => {
+                              const filteredItems = rateComparisonMeter?.meter_type === 'council_meter' || 
+                                                   rateComparisonMeter?.meter_type === 'bulk_meter'
+                                ? doc.lineItems?.filter(item => 
+                                    !item.description?.toLowerCase().includes('generator') &&
+                                    !item.description?.toLowerCase().includes('water')
+                                  )
+                                : doc.lineItems;
+                              
+                              const docEnergyCost = filteredItems?.reduce((sum, item) => 
+                                sum + (item.description?.toLowerCase().includes('energy') || 
+                                       item.description?.toLowerCase().includes('kwh') ? item.amount : 0), 0
+                              );
+                              
+                              return docEnergyCost 
+                                ? `R ${(calc.energy_cost - docEnergyCost).toFixed(2)}`
+                                : '—';
+                            })()}
                           </TableCell>
                         </TableRow>
                         <TableRow>
                           <TableCell className="font-medium">Fixed Charges</TableCell>
                           <TableCell className="text-right text-muted-foreground">
-                            {doc.lineItems?.reduce((sum, item) => 
-                              sum + (!item.description?.toLowerCase().includes('energy') && 
-                                     !item.description?.toLowerCase().includes('total') ? item.amount : 0), 0
-                            ).toFixed(2) || '—'}
+                            {(() => {
+                              const filteredItems = rateComparisonMeter?.meter_type === 'council_meter' || 
+                                                   rateComparisonMeter?.meter_type === 'bulk_meter'
+                                ? doc.lineItems?.filter(item => 
+                                    !item.description?.toLowerCase().includes('generator') &&
+                                    !item.description?.toLowerCase().includes('water')
+                                  )
+                                : doc.lineItems;
+                              
+                              return filteredItems?.reduce((sum, item) => 
+                                sum + (!item.description?.toLowerCase().includes('energy') && 
+                                       !item.description?.toLowerCase().includes('kwh') &&
+                                       !item.description?.toLowerCase().includes('total') ? item.amount : 0), 0
+                              ).toFixed(2) || '—';
+                            })()}
                           </TableCell>
                           <TableCell className="text-right">R {calc.fixed_charges.toFixed(2)}</TableCell>
                           <TableCell className="text-right">
-                            {doc.lineItems?.reduce((sum, item) => 
-                              sum + (!item.description?.toLowerCase().includes('energy') && 
-                                     !item.description?.toLowerCase().includes('total') ? item.amount : 0), 0
-                            ) 
-                              ? `R ${(calc.fixed_charges - doc.lineItems.reduce((sum, item) => 
-                                  sum + (!item.description?.toLowerCase().includes('energy') && 
-                                         !item.description?.toLowerCase().includes('total') ? item.amount : 0), 0
-                                )).toFixed(2)}`
-                              : '—'
-                            }
+                            {(() => {
+                              const filteredItems = rateComparisonMeter?.meter_type === 'council_meter' || 
+                                                   rateComparisonMeter?.meter_type === 'bulk_meter'
+                                ? doc.lineItems?.filter(item => 
+                                    !item.description?.toLowerCase().includes('generator') &&
+                                    !item.description?.toLowerCase().includes('water')
+                                  )
+                                : doc.lineItems;
+                              
+                              const docFixedCharges = filteredItems?.reduce((sum, item) => 
+                                sum + (!item.description?.toLowerCase().includes('energy') && 
+                                       !item.description?.toLowerCase().includes('kwh') &&
+                                       !item.description?.toLowerCase().includes('total') ? item.amount : 0), 0
+                              );
+                              
+                              return docFixedCharges 
+                                ? `R ${(calc.fixed_charges - docFixedCharges).toFixed(2)}`
+                                : '—';
+                            })()}
                           </TableCell>
                         </TableRow>
                         <TableRow className="border-t-2">
