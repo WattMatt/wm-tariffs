@@ -208,7 +208,7 @@ export default function TariffAssignmentTab({
   };
 
   // Helper function to add seasonal averages with properly segmented lines
-  const addSeasonalAverages = (docs: DocumentShopNumber[]) => {
+  const addSeasonalAverages = (docs: DocumentShopNumber[], calculatedCostsMap?: { [docId: string]: number }) => {
     // South African electricity seasons
     const winterMonths = [6, 7, 8];
     const summerMonths = [1, 2, 3, 4, 5, 9, 10, 11, 12];
@@ -246,7 +246,12 @@ export default function TariffAssignmentTab({
         if (lastSeason && currentSegmentDocs.length > 0) {
           const segmentIndex = lastSeason === 'winter' ? winterSegment : summerSegment;
           const values = currentSegmentDocs
-            .map(d => d.totalAmount || 0)
+            .map(d => {
+              // Use calculated costs if available, otherwise use document amount
+              return calculatedCostsMap && calculatedCostsMap[d.documentId] !== undefined
+                ? calculatedCostsMap[d.documentId]
+                : (d.totalAmount || 0);
+            })
             .filter(v => v > 0);
           
           if (values.length > 0) {
@@ -273,7 +278,12 @@ export default function TariffAssignmentTab({
       if (index === sortedDocs.length - 1 && currentSegmentDocs.length > 0) {
         const segmentIndex = currentSeason === 'winter' ? winterSegment : summerSegment;
         const values = currentSegmentDocs
-          .map(d => d.totalAmount || 0)
+          .map(d => {
+            // Use calculated costs if available, otherwise use document amount
+            return calculatedCostsMap && calculatedCostsMap[d.documentId] !== undefined
+              ? calculatedCostsMap[d.documentId]
+              : (d.totalAmount || 0);
+          })
           .filter(v => v > 0);
         
         if (values.length > 0) {
@@ -297,7 +307,10 @@ export default function TariffAssignmentTab({
       // Create base data point
       const dataPoint: any = {
         period: new Date(doc.periodStart).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }),
-        amount: doc.totalAmount || 0,
+        // Use calculated cost if available, otherwise use document amount
+        amount: calculatedCostsMap && calculatedCostsMap[doc.documentId] !== undefined
+          ? calculatedCostsMap[doc.documentId]
+          : (doc.totalAmount || 0),
         documentAmount: doc.totalAmount || null,
         documentId: doc.documentId,
       };
@@ -1463,7 +1476,7 @@ export default function TariffAssignmentTab({
                       if (filteredShops.length === 0) return null;
                       
                       // Transform and sort data for chart
-                      let chartData = addSeasonalAverages(filteredShops);
+                      let chartData = addSeasonalAverages(filteredShops, calculatedCosts);
                       
                       return (
                         <Card 
@@ -2131,7 +2144,7 @@ export default function TariffAssignmentTab({
           
           <ScrollArea className="max-h-[70vh] pr-4">
             {selectedChartMeter && (() => {
-              const chartData = addSeasonalAverages(selectedChartMeter.docs);
+              const chartData = addSeasonalAverages(selectedChartMeter.docs, chartDialogCalculations);
               
               const currencies = new Set(selectedChartMeter.docs.map(d => d.currency));
               const hasMixedCurrencies = currencies.size > 1;
