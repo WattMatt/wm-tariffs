@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -726,6 +726,179 @@ export default function TariffAssignmentTab({
     
     setTariffRates(prev => ({ ...prev, [tariffId]: rates }));
     return rates;
+  };
+
+  // Helper function to categorize line items by charge type
+  const categorizeLineItems = (lineItems: any[]) => {
+    const categories = {
+      energy: [] as any[],
+      basic: [] as any[],
+      generator: [] as any[],
+      other: [] as any[]
+    };
+    
+    lineItems?.forEach(item => {
+      const desc = item.description?.toLowerCase() || '';
+      
+      if ((desc.includes('kwh') || desc.includes('energy') || desc.includes('conv') || desc.includes('consumption')) && 
+          !desc.includes('generator') && !desc.includes('basic')) {
+        categories.energy.push(item);
+      } else if (desc.includes('basic') || desc.includes('fixed') || desc.includes('admin')) {
+        categories.basic.push(item);
+      } else if (desc.includes('generator') || desc.includes('gen')) {
+        categories.generator.push(item);
+      } else {
+        categories.other.push(item);
+      }
+    });
+    
+    return categories;
+  };
+
+  // Helper function to extract charge type data
+  interface ChargeTypeRow {
+    name: string;
+    doc: { consumption: string; rate: string; cost: string };
+    calc: { consumption: string; rate: string; cost: string };
+    variance: { consumption: { value: string; color: string }; rate: { value: string; color: string }; cost: { value: string; color: string } };
+  }
+
+  const extractChargeTypeData = (
+    doc: any,
+    calc: any,
+    categories: ReturnType<typeof categorizeLineItems>,
+    currency: string
+  ): ChargeTypeRow[] => {
+    const rows: ChargeTypeRow[] = [];
+    
+    // Calculate variance with color coding
+    const calcVariance = (docVal: number | null, calcVal: number | null, unit: string = '') => {
+      if (docVal === null || calcVal === null) {
+        return { value: '—', color: '' };
+      }
+      const variance = calcVal - docVal;
+      const prefix = variance >= 0 ? '+' : '';
+      const color = variance > 0 ? 'text-destructive' : variance < 0 ? 'text-green-600' : '';
+      return { 
+        value: `${prefix}${variance.toFixed(2)}${unit}`, 
+        color 
+      };
+    };
+    
+    // Energy Charge
+    if (categories.energy.length > 0 || calc.energy_cost > 0) {
+      const energyItems = categories.energy;
+      const docConsumption = energyItems.reduce((sum, item) => sum + (item.consumption || 0), 0);
+      const docRate = energyItems.length > 0 && energyItems[0].rate 
+        ? energyItems[0].rate 
+        : docConsumption > 0 ? energyItems.reduce((sum, item) => sum + (item.amount || 0), 0) / docConsumption : null;
+      const docCost = energyItems.reduce((sum, item) => sum + (item.amount || 0), 0);
+      
+      const calcConsumption = calc.total_kwh || 0;
+      const calcRate = calcConsumption > 0 ? calc.energy_cost / calcConsumption : null;
+      const calcCost = calc.energy_cost || 0;
+      
+      rows.push({
+        name: 'Energy Charge',
+        doc: {
+          consumption: docConsumption > 0 ? `${docConsumption.toFixed(2)} kWh` : '—',
+          rate: docRate !== null ? `${currency} ${docRate.toFixed(4)}/kWh` : '—',
+          cost: docCost > 0 ? `${currency} ${docCost.toFixed(2)}` : '—'
+        },
+        calc: {
+          consumption: calcConsumption > 0 ? `${calcConsumption.toFixed(2)} kWh` : '—',
+          rate: calcRate !== null ? `${currency} ${calcRate.toFixed(4)}/kWh` : '—',
+          cost: calcCost > 0 ? `${currency} ${calcCost.toFixed(2)}` : '—'
+        },
+        variance: {
+          consumption: calcVariance(docConsumption > 0 ? docConsumption : null, calcConsumption > 0 ? calcConsumption : null, ' kWh'),
+          rate: calcVariance(docRate, calcRate, `/kWh`),
+          cost: calcVariance(docCost > 0 ? docCost : null, calcCost > 0 ? calcCost : null)
+        }
+      });
+    }
+    
+    // Basic/Fixed Charge
+    if (categories.basic.length > 0 || calc.fixed_charges > 0) {
+      const basicItems = categories.basic;
+      const docCost = basicItems.reduce((sum, item) => sum + (item.amount || 0), 0);
+      const calcCost = calc.fixed_charges || 0;
+      
+      rows.push({
+        name: 'Basic Charge',
+        doc: {
+          consumption: '—',
+          rate: '—',
+          cost: docCost > 0 ? `${currency} ${docCost.toFixed(2)}` : '—'
+        },
+        calc: {
+          consumption: '—',
+          rate: '—',
+          cost: calcCost > 0 ? `${currency} ${calcCost.toFixed(2)}` : '—'
+        },
+        variance: {
+          consumption: { value: '—', color: '' },
+          rate: { value: '—', color: '' },
+          cost: calcVariance(docCost > 0 ? docCost : null, calcCost > 0 ? calcCost : null)
+        }
+      });
+    }
+    
+    // Generator Charge (document only typically)
+    if (categories.generator.length > 0) {
+      const genItems = categories.generator;
+      const docConsumption = genItems.reduce((sum, item) => sum + (item.consumption || 0), 0);
+      const docRate = genItems.length > 0 && genItems[0].rate ? genItems[0].rate : null;
+      const docCost = genItems.reduce((sum, item) => sum + (item.amount || 0), 0);
+      
+      rows.push({
+        name: 'Generator Charge',
+        doc: {
+          consumption: docConsumption > 0 ? `${docConsumption.toFixed(2)} kWh` : '—',
+          rate: docRate !== null ? `${currency} ${docRate.toFixed(4)}/kWh` : '—',
+          cost: docCost > 0 ? `${currency} ${docCost.toFixed(2)}` : '—'
+        },
+        calc: {
+          consumption: '—',
+          rate: '—',
+          cost: '—'
+        },
+        variance: {
+          consumption: { value: '—', color: '' },
+          rate: { value: '—', color: '' },
+          cost: calcVariance(docCost > 0 ? docCost : null, null)
+        }
+      });
+    }
+    
+    // Other charges
+    if (categories.other.length > 0) {
+      const otherItems = categories.other;
+      const docCost = otherItems.reduce((sum, item) => sum + (item.amount || 0), 0);
+      
+      if (docCost > 0) {
+        rows.push({
+          name: 'Other Charges',
+          doc: {
+            consumption: '—',
+            rate: '—',
+            cost: `${currency} ${docCost.toFixed(2)}`
+          },
+          calc: {
+            consumption: '—',
+            rate: '—',
+            cost: '—'
+          },
+          variance: {
+            consumption: { value: '—', color: '' },
+            rate: { value: '—', color: '' },
+            cost: calcVariance(docCost, null)
+          }
+        });
+      }
+    }
+    
+    return rows;
   };
 
   // Helper function to calculate overall status based on stored calculations
@@ -2052,6 +2225,9 @@ export default function TariffAssignmentTab({
                             {/* Tariff Comparison */}
                             {chartDialogCalculations[doc.documentId] && (() => {
                               const calc = chartDialogCalculations[doc.documentId];
+                              const categories = categorizeLineItems(doc.lineItems || []);
+                              const chargeRows = extractChargeTypeData(doc, calc, categories, doc.currency);
+                              
                               return (
                                 <div className="space-y-2 mt-4 pt-4 border-t">
                                   <div className="flex items-center justify-between">
@@ -2066,71 +2242,53 @@ export default function TariffAssignmentTab({
                                     <Table>
                                       <TableHeader>
                                         <TableRow>
-                                          <TableHead className="text-xs">Metric</TableHead>
+                                          <TableHead className="text-xs">Charge Type</TableHead>
+                                          <TableHead className="text-xs">Quantity</TableHead>
                                           <TableHead className="text-xs text-right">Document</TableHead>
                                           <TableHead className="text-xs text-right">Calculated</TableHead>
                                           <TableHead className="text-xs text-right">Variance</TableHead>
                                         </TableRow>
                                       </TableHeader>
                                       <TableBody>
-                                        <TableRow>
-                                          <TableCell className="text-xs font-medium">Total kWh</TableCell>
-                                          <TableCell className="text-xs text-right">
-                                            {doc.lineItems?.find(item => 
-                                              item.consumption && item.description?.toLowerCase().includes('kwh')
-                                            )?.consumption?.toFixed(2) || '—'}
-                                          </TableCell>
-                                          <TableCell className="text-xs text-right">{calc.total_kwh.toFixed(2)}</TableCell>
-                                          <TableCell className="text-xs text-right text-muted-foreground">—</TableCell>
-                                        </TableRow>
-                                        <TableRow>
-                                          <TableCell className="text-xs font-medium">Energy Cost</TableCell>
-                                          <TableCell className="text-xs text-right">
-                                            {doc.currency} {(doc.lineItems?.find(item => 
-                                              item.description?.toLowerCase().includes('energy') || 
-                                              item.description?.toLowerCase().includes('kwh ch')
-                                            )?.amount || 0).toFixed(2)}
-                                          </TableCell>
-                                          <TableCell className="text-xs text-right">
-                                            {doc.currency} {calc.energy_cost.toFixed(2)}
-                                          </TableCell>
-                                          <TableCell className="text-xs text-right text-muted-foreground">
-                                            {(() => {
-                                              const docEnergy = doc.lineItems?.find(item => 
-                                                item.description?.toLowerCase().includes('energy') || 
-                                                item.description?.toLowerCase().includes('kwh ch')
-                                              )?.amount || 0;
-                                              const variance = calc.energy_cost - docEnergy;
-                                              return variance !== 0 ? `${variance >= 0 ? '+' : ''}${variance.toFixed(2)}` : '—';
-                                            })()}
-                                          </TableCell>
-                                        </TableRow>
-                                        <TableRow>
-                                          <TableCell className="text-xs font-medium">Fixed Charges</TableCell>
-                                          <TableCell className="text-xs text-right">
-                                            {doc.currency} {(doc.lineItems?.find(item => 
-                                              item.description?.toLowerCase().includes('basic') || 
-                                              item.description?.toLowerCase().includes('fixed')
-                                            )?.amount || 0).toFixed(2)}
-                                          </TableCell>
-                                          <TableCell className="text-xs text-right">
-                                            {doc.currency} {calc.fixed_charges.toFixed(2)}
-                                          </TableCell>
-                                          <TableCell className="text-xs text-right text-muted-foreground">
-                                            {(() => {
-                                              const docFixed = doc.lineItems?.find(item => 
-                                                item.description?.toLowerCase().includes('basic') || 
-                                                item.description?.toLowerCase().includes('fixed')
-                                              )?.amount || 0;
-                                              const variance = calc.fixed_charges - docFixed;
-                                              return variance !== 0 ? `${variance >= 0 ? '+' : ''}${variance.toFixed(2)}` : '—';
-                                            })()}
-                                          </TableCell>
-                                        </TableRow>
+                                        {chargeRows.map((row, rowIdx) => (
+                                          <React.Fragment key={rowIdx}>
+                                            {/* Consumption Row */}
+                                            <TableRow>
+                                              <TableCell rowSpan={3} className="text-xs font-semibold border-r">
+                                                {row.name}
+                                              </TableCell>
+                                              <TableCell className="text-xs text-muted-foreground">Consumption</TableCell>
+                                              <TableCell className="text-xs text-right">{row.doc.consumption}</TableCell>
+                                              <TableCell className="text-xs text-right">{row.calc.consumption}</TableCell>
+                                              <TableCell className={cn("text-xs text-right", row.variance.consumption.color)}>
+                                                {row.variance.consumption.value}
+                                              </TableCell>
+                                            </TableRow>
+                                            {/* Rate Row */}
+                                            <TableRow>
+                                              <TableCell className="text-xs text-muted-foreground">Rate</TableCell>
+                                              <TableCell className="text-xs text-right">{row.doc.rate}</TableCell>
+                                              <TableCell className="text-xs text-right">{row.calc.rate}</TableCell>
+                                              <TableCell className={cn("text-xs text-right", row.variance.rate.color)}>
+                                                {row.variance.rate.value}
+                                              </TableCell>
+                                            </TableRow>
+                                            {/* Cost Row */}
+                                            <TableRow className="border-b-2">
+                                              <TableCell className="text-xs text-muted-foreground">Cost</TableCell>
+                                              <TableCell className="text-xs text-right font-medium">{row.doc.cost}</TableCell>
+                                              <TableCell className="text-xs text-right font-medium">{row.calc.cost}</TableCell>
+                                              <TableCell className={cn("text-xs text-right font-medium", row.variance.cost.color)}>
+                                                {row.variance.cost.value}
+                                              </TableCell>
+                                            </TableRow>
+                                          </React.Fragment>
+                                        ))}
+                                        {/* Summary Row */}
                                         <TableRow className="bg-muted/50 font-semibold">
-                                          <TableCell className="text-xs">Total Cost</TableCell>
+                                          <TableCell colSpan={2} className="text-xs">TOTAL</TableCell>
                                           <TableCell className="text-xs text-right">
-                                            {doc.currency} {calc.document_billed_amount?.toFixed(2) || doc.totalAmount.toFixed(2)}
+                                            {doc.currency} {(calc.document_billed_amount?.toFixed(2) || doc.totalAmount.toFixed(2))}
                                           </TableCell>
                                           <TableCell className="text-xs text-right">
                                             {doc.currency} {calc.total_cost.toFixed(2)}
@@ -2142,27 +2300,9 @@ export default function TariffAssignmentTab({
                                               : ""
                                           )}>
                                             {calc.variance_amount !== null 
-                                              ? `${calc.variance_amount >= 0 ? '+' : ''}${calc.variance_amount.toFixed(2)}`
+                                              ? `${calc.variance_amount >= 0 ? '+' : ''}${doc.currency} ${calc.variance_amount.toFixed(2)}`
                                               : '—'}
                                           </TableCell>
-                                        </TableRow>
-                                        <TableRow>
-                                          <TableCell className="text-xs font-medium">Avg Cost/kWh</TableCell>
-                                          <TableCell className="text-xs text-right">
-                                            {(() => {
-                                              const consumption = doc.lineItems?.find(item => 
-                                                item.consumption && item.description?.toLowerCase().includes('kwh')
-                                              )?.consumption;
-                                              const avgRate = consumption && consumption > 0
-                                                ? (calc.document_billed_amount || doc.totalAmount) / consumption
-                                                : null;
-                                              return avgRate ? `${doc.currency} ${avgRate.toFixed(4)}` : '—';
-                                            })()}
-                                          </TableCell>
-                                          <TableCell className="text-xs text-right">
-                                            {doc.currency} {calc.avg_cost_per_kwh?.toFixed(4) || '—'}
-                                          </TableCell>
-                                          <TableCell className="text-xs text-right text-muted-foreground">—</TableCell>
                                         </TableRow>
                                       </TableBody>
                                     </Table>
