@@ -365,11 +365,13 @@ export default function ReconciliationResultsView({
           <TabsTrigger 
             value="energy" 
             onClick={() => {
-              if (!meters || meters.length === 0) {
+              if (isLoadingEnergy) {
+                onCancelReconciliation?.();
+              } else if (!meters || meters.length === 0) {
                 onReconcileEnergy?.();
               }
             }}
-            disabled={!canReconcile || isLoadingEnergy || isLoadingRevenue}
+            disabled={!canReconcile || isLoadingRevenue}
             className="gap-2 h-12 bg-muted text-foreground hover:bg-muted/80 data-[state=active]:bg-muted/90 data-[state=active]:text-foreground data-[state=active]:shadow-md disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
           >
             {isLoadingEnergy ? (
@@ -389,25 +391,16 @@ export default function ReconciliationResultsView({
               </>
             )}
           </TabsTrigger>
-          {(isLoadingEnergy || isLoadingRevenue) && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onCancelReconciliation}
-              className="ml-2 text-muted-foreground hover:text-destructive"
-            >
-              <X className="h-4 w-4 mr-1" />
-              Cancel
-            </Button>
-          )}
           <TabsTrigger
             value="revenue" 
             onClick={() => {
-              if (!revenueData) {
+              if (isLoadingRevenue) {
+                onCancelReconciliation?.();
+              } else if (!revenueData) {
                 onReconcileRevenue?.();
               }
             }}
-            disabled={!canReconcile || isLoadingEnergy || isLoadingRevenue}
+            disabled={!canReconcile || isLoadingEnergy}
             className="gap-2 h-12 bg-muted text-foreground hover:bg-muted/80 data-[state=active]:bg-muted/90 data-[state=active]:text-foreground data-[state=active]:shadow-md disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
           >
             {isLoadingRevenue ? (
