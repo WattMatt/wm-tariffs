@@ -2302,7 +2302,7 @@ export default function TariffAssignmentTab({
                                 {new Date(doc.periodStart).toLocaleDateString()} - {new Date(doc.periodEnd).toLocaleDateString()}
                               </span>
                               <Badge variant="outline" className="font-mono">
-                                {doc.currency} {doc.totalAmount.toFixed(2)}
+                                R {doc.totalAmount.toFixed(2)}
                               </Badge>
                             </div>
                           </div>
