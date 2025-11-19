@@ -2466,7 +2466,7 @@ export default function TariffAssignmentTab({
                     config={{
                       amount: {
                         label: "Amount",
-                        color: "hsl(var(--muted-foreground))",
+                        color: "hsl(220 13% 69%)",
                       },
                       winterAvg: {
                         label: "Winter Average",
@@ -2498,7 +2498,7 @@ export default function TariffAssignmentTab({
                         />
                         <Bar 
                           dataKey="amount" 
-                          fill="hsl(var(--muted-foreground))"
+                          fill="hsl(220 13% 69%)"
                           radius={[4, 4, 0, 0]}
                         />
                       </ComposedChart>
