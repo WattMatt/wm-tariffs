@@ -70,6 +70,7 @@ interface ReconciliationResultsViewProps {
   onReconcileEnergy?: () => void;
   onReconcileRevenue?: () => void;
   onCancelReconciliation?: () => void;
+  isCancelling?: boolean;
   isLoadingEnergy?: boolean;
   isLoadingRevenue?: boolean;
   energyProgress?: { current: number; total: number };
@@ -100,6 +101,7 @@ export default function ReconciliationResultsView({
   onReconcileEnergy,
   onReconcileRevenue,
   onCancelReconciliation,
+  isCancelling = false,
   isLoadingEnergy = false,
   isLoadingRevenue = false,
   energyProgress = { current: 0, total: 0 },
@@ -377,7 +379,7 @@ export default function ReconciliationResultsView({
             {isLoadingEnergy ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                <span>Analyzing... {energyProgress.current}/{energyProgress.total}</span>
+                <span>{isCancelling ? 'Cancelling...' : `Analyzing... ${energyProgress.current}/${energyProgress.total}`}</span>
               </>
             ) : meters && meters.length > 0 ? (
               <>
@@ -406,7 +408,7 @@ export default function ReconciliationResultsView({
             {isLoadingRevenue ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                <span>Calculating... {revenueProgress.current}/{revenueProgress.total}</span>
+                <span>{isCancelling ? 'Cancelling...' : `Calculating... ${revenueProgress.current}/${revenueProgress.total}`}</span>
               </>
             ) : revenueData ? (
               <>
