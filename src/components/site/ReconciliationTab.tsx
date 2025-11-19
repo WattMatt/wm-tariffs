@@ -343,9 +343,31 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
             
             // Add all children of this meter
             const children = childrenMap.get(meterId) || [];
+            
+            // Helper function to get meter type priority
+            const getMeterTypePriority = (meterType: string): number => {
+              switch (meterType) {
+                case 'bulk_meter': return 0;
+                case 'check_meter': return 1;
+                case 'tenant_meter': return 2;
+                case 'other': return 3;
+                default: return 3;
+              }
+            };
+            
             children.sort((a, b) => {
               const meterA = meterMap.get(a);
               const meterB = meterMap.get(b);
+              
+              // First sort by meter type priority
+              const priorityA = getMeterTypePriority(meterA?.meter_type || '');
+              const priorityB = getMeterTypePriority(meterB?.meter_type || '');
+              
+              if (priorityA !== priorityB) {
+                return priorityA - priorityB;
+              }
+              
+              // Then sort alphabetically by meter number
               return (meterA?.meter_number || '').localeCompare(meterB?.meter_number || '');
             });
             
