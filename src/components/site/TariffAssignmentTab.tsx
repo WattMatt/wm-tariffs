@@ -2444,16 +2444,6 @@ export default function TariffAssignmentTab({
             // Transform and sort data for chart with seasonal averages
             const chartData = addSeasonalAverages(viewingAllDocs.docs);
             
-            // Add calculated costs to chart data
-            chartData.forEach((point: any) => {
-              const doc = viewingAllDocs.docs.find(d => 
-                `${new Date(d.periodStart).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}` === point.period
-              );
-              if (doc && viewingAllDocsCalculations[doc.documentId]) {
-                point.calculatedAmount = viewingAllDocsCalculations[doc.documentId].total_cost;
-              }
-            });
-            
             // Check for mixed currencies
             const currencies = new Set(viewingAllDocs.docs.map(d => d.currency));
             const hasMixedCurrencies = currencies.size > 1;
@@ -2475,12 +2465,8 @@ export default function TariffAssignmentTab({
                   <ChartContainer
                     config={{
                       amount: {
-                        label: "Document Billed",
-                        color: "hsl(var(--primary))",
-                      },
-                      calculatedAmount: {
-                        label: "Calculated Cost",
-                        color: "hsl(25 100% 50%)",
+                        label: "Amount",
+                        color: "hsl(var(--muted-foreground))",
                       },
                       winterAvg: {
                         label: "Winter Average",
@@ -2512,18 +2498,8 @@ export default function TariffAssignmentTab({
                         />
                         <Bar 
                           dataKey="amount" 
-                          fill="hsl(var(--primary))"
+                          fill="hsl(var(--muted-foreground))"
                           radius={[4, 4, 0, 0]}
-                          name="Document Billed"
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="calculatedAmount"
-                          stroke="hsl(25 100% 50%)"
-                          strokeWidth={3.5}
-                          dot={{ r: 5, fill: "hsl(25 100% 50%)" }}
-                          connectNulls={false}
-                          name="Calculated Cost"
                         />
                       </ComposedChart>
                     </ResponsiveContainer>
