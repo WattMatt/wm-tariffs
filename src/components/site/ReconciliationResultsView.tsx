@@ -379,7 +379,7 @@ export default function ReconciliationResultsView({
             {isLoadingEnergy ? (
               <>
                 <X className="h-4 w-4" />
-                <span>{isCancelling ? 'Cancelling...' : `Cancel (${energyProgress.current}/${energyProgress.total})`}</span>
+                <span>{isCancelling ? 'Cancelling...' : `Cancel Analyzing... ${energyProgress.current}/${energyProgress.total}`}</span>
               </>
             ) : meters && meters.length > 0 ? (
               <>
@@ -408,7 +408,7 @@ export default function ReconciliationResultsView({
             {isLoadingRevenue ? (
               <>
                 <X className="h-4 w-4" />
-                <span>{isCancelling ? 'Cancelling...' : `Cancel (${revenueProgress.current}/${revenueProgress.total})`}</span>
+                <span>{isCancelling ? 'Cancelling...' : `Cancel Calculating... ${revenueProgress.current}/${revenueProgress.total}`}</span>
               </>
             ) : revenueData ? (
               <>
