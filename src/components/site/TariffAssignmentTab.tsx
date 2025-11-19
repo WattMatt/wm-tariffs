@@ -628,7 +628,7 @@ export default function TariffAssignmentTab({
             periodStart: extractedData.period_start || '',
             periodEnd: extractedData.period_end || '',
             totalAmount: extractedData.total_amount || 0,
-            currency: extractedData.currency || 'ZAR',
+            currency: extractedData.currency || 'R',
             tenantName: extractedData.tenant_name,
             accountReference: extractedData.account_reference,
             meterId: (doc as any).meter_id,
