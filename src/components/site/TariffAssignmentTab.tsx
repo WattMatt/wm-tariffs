@@ -206,7 +206,7 @@ export default function TariffAssignmentTab({
     return { winterAvg, summerAvg };
   };
 
-  // Helper function to add seasonal averages to chart data
+  // Helper function to add seasonal averages to chart data with continuous segments
   const addSeasonalAverages = (docs: DocumentShopNumber[]) => {
     // Use calculated costs as primary data source, with document amounts as fallback
     const validDocs = docs.filter(doc => {
@@ -235,21 +235,37 @@ export default function TariffAssignmentTab({
     const winterMonths = [6, 7, 8];
     const summerMonths = [1, 2, 3, 4, 5, 9, 10, 11, 12];
     
-    return [...docs]
-      .sort((a, b) => new Date(a.periodStart).getTime() - new Date(b.periodStart).getTime())
-      .map(doc => {
-        const month = new Date(doc.periodStart).getMonth() + 1;
-        const calculatedCost = calculatedCosts[doc.documentId];
-        
-        return {
-          period: new Date(doc.periodStart).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }),
-          amount: calculatedCost !== undefined ? calculatedCost : (doc.totalAmount || 0), // Fall back to document amount if no calculation
-          documentAmount: doc.totalAmount || null, // Keep document amount for comparison
-          winterAvg: winterMonths.includes(month) ? winterAvg : null,
-          summerAvg: summerMonths.includes(month) ? summerAvg : null,
-          documentId: doc.documentId, // Preserve document ID for lookups
-        };
-      });
+    // Sort documents by date
+    const sortedDocs = [...docs].sort((a, b) => 
+      new Date(a.periodStart).getTime() - new Date(b.periodStart).getTime()
+    );
+    
+    // Map each document with seasonal segment detection
+    return sortedDocs.map((doc, index) => {
+      const month = new Date(doc.periodStart).getMonth() + 1;
+      const calculatedCost = calculatedCosts[doc.documentId];
+      const isWinter = winterMonths.includes(month);
+      const isSummer = summerMonths.includes(month);
+      
+      // Check if previous document was in the same season
+      const prevDoc = index > 0 ? sortedDocs[index - 1] : null;
+      const prevMonth = prevDoc ? new Date(prevDoc.periodStart).getMonth() + 1 : null;
+      const prevIsWinter = prevMonth ? winterMonths.includes(prevMonth) : false;
+      const prevIsSummer = prevMonth ? summerMonths.includes(prevMonth) : false;
+      
+      // Determine if this is a continuous segment or a new one
+      const winterValue = isWinter ? winterAvg : null;
+      const summerValue = isSummer ? summerAvg : null;
+      
+      return {
+        period: new Date(doc.periodStart).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }),
+        amount: calculatedCost !== undefined ? calculatedCost : (doc.totalAmount || 0),
+        documentAmount: doc.totalAmount || null,
+        winterAvg: winterValue,
+        summerAvg: summerValue,
+        documentId: doc.documentId,
+      };
+    });
   };
   
   // Calculate seasonal averages from calculated costs
