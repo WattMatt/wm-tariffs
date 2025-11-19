@@ -78,6 +78,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
   const [failedMeters, setFailedMeters] = useState<Map<string, string>>(new Map()); // meter_id -> error message
   const [isColumnsOpen, setIsColumnsOpen] = useState(true); // Control collapse state of columns section
   const [isMetersOpen, setIsMetersOpen] = useState(true); // Control collapse state of meters section
+  const [sortColumn, setSortColumn] = useState<'meter' | 'grid' | 'solar' | 'status' | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [documentDateRanges, setDocumentDateRanges] = useState<Array<{
     id: string;
     document_type: string;
@@ -2165,15 +2167,94 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
               
               {/* Column Headers */}
               <div className="flex items-center gap-2 mb-2 pb-2 border-b">
-                <div className="w-6 text-xs font-semibold text-left">Summate</div>
+                <div className="w-6 flex items-center justify-start">
+                  <Checkbox
+                    checked={availableMeters.length > 0 && selectedMetersForSummation.size === availableMeters.length}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        setSelectedMetersForSummation(new Set(availableMeters.map(m => m.id)));
+                      } else {
+                        setSelectedMetersForSummation(new Set());
+                      }
+                    }}
+                  />
+                </div>
                 <div className="flex-1 flex items-center gap-2">
                   <div className="w-[72px]"></div> {/* Space for indent buttons */}
                   <div className="flex-1 flex items-center justify-between p-3">
-                    <div className="text-xs font-semibold">Meter Number</div>
+                    <button 
+                      onClick={() => {
+                        if (sortColumn === 'meter') {
+                          setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+                        } else {
+                          setSortColumn('meter');
+                          setSortDirection('asc');
+                        }
+                      }}
+                      className="flex items-center gap-1 text-xs font-semibold hover:text-primary transition-colors"
+                    >
+                      Meter Number
+                      <ChevronRight className={cn(
+                        "h-3 w-3 transition-transform",
+                        sortColumn === 'meter' && sortDirection === 'asc' && "-rotate-90",
+                        sortColumn === 'meter' && sortDirection === 'desc' && "rotate-90"
+                      )} />
+                    </button>
                     <div className="flex items-center gap-6">
-                      <div className="w-24 text-xs font-semibold text-center">Grid Supply</div>
-                      <div className="w-24 text-xs font-semibold text-center">Solar Supply</div>
-                      <div className="w-24 text-xs font-semibold text-center">Data Status</div>
+                      <button 
+                        onClick={() => {
+                          if (sortColumn === 'grid') {
+                            setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+                          } else {
+                            setSortColumn('grid');
+                            setSortDirection('asc');
+                          }
+                        }}
+                        className="w-24 flex items-center justify-center gap-1 text-xs font-semibold hover:text-primary transition-colors"
+                      >
+                        Grid Supply
+                        <ChevronRight className={cn(
+                          "h-3 w-3 transition-transform",
+                          sortColumn === 'grid' && sortDirection === 'asc' && "-rotate-90",
+                          sortColumn === 'grid' && sortDirection === 'desc' && "rotate-90"
+                        )} />
+                      </button>
+                      <button 
+                        onClick={() => {
+                          if (sortColumn === 'solar') {
+                            setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+                          } else {
+                            setSortColumn('solar');
+                            setSortDirection('asc');
+                          }
+                        }}
+                        className="w-24 flex items-center justify-center gap-1 text-xs font-semibold hover:text-primary transition-colors"
+                      >
+                        Solar Supply
+                        <ChevronRight className={cn(
+                          "h-3 w-3 transition-transform",
+                          sortColumn === 'solar' && sortDirection === 'asc' && "-rotate-90",
+                          sortColumn === 'solar' && sortDirection === 'desc' && "rotate-90"
+                        )} />
+                      </button>
+                      <button 
+                        onClick={() => {
+                          if (sortColumn === 'status') {
+                            setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+                          } else {
+                            setSortColumn('status');
+                            setSortDirection('asc');
+                          }
+                        }}
+                        className="w-24 flex items-center justify-center gap-1 text-xs font-semibold hover:text-primary transition-colors"
+                      >
+                        Data Status
+                        <ChevronRight className={cn(
+                          "h-3 w-3 transition-transform",
+                          sortColumn === 'status' && sortDirection === 'asc' && "-rotate-90",
+                          sortColumn === 'status' && sortDirection === 'desc' && "rotate-90"
+                        )} />
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -2183,7 +2264,39 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                 {availableMeters.length === 0 ? (
                   <div className="text-sm text-muted-foreground italic">No meters found for this site</div>
                 ) : (
-                  availableMeters.map((meter) => {
+                  (() => {
+                    let sortedMeters = [...availableMeters];
+                    
+                    if (sortColumn) {
+                      sortedMeters.sort((a, b) => {
+                        let compareValue = 0;
+                        
+                        switch (sortColumn) {
+                          case 'meter':
+                            compareValue = a.meter_number.localeCompare(b.meter_number);
+                            break;
+                          case 'grid':
+                            const aGrid = a.meter_type === 'bulk' || a.meter_type === 'check';
+                            const bGrid = b.meter_type === 'bulk' || b.meter_type === 'check';
+                            compareValue = aGrid === bGrid ? 0 : aGrid ? -1 : 1;
+                            break;
+                          case 'solar':
+                            const aSolar = a.meter_type === 'solar';
+                            const bSolar = b.meter_type === 'solar';
+                            compareValue = aSolar === bSolar ? 0 : aSolar ? -1 : 1;
+                            break;
+                          case 'status':
+                            const aHasData = a.hasData ? 1 : 0;
+                            const bHasData = b.hasData ? 1 : 0;
+                            compareValue = aHasData - bHasData;
+                            break;
+                        }
+                        
+                        return sortDirection === 'asc' ? compareValue : -compareValue;
+                      });
+                    }
+                    
+                    return sortedMeters.map((meter) => {
                     const indentLevel = meterIndentLevels.get(meter.id) || 0;
                     const contentMarginLeft = indentLevel * 24; // 24px per indent level - only for content, not checkbox
                     const isDragging = draggedMeterId === meter.id;
@@ -2310,7 +2423,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                         </div>
                       </div>
                     );
-                  })
+                  })})()
                 )}
               </div>
               </CollapsibleContent>
