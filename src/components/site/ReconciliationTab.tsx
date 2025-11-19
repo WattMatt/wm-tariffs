@@ -92,6 +92,47 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
   const [revenueReconciliationEnabled, setRevenueReconciliationEnabled] = useState(false);
   const [isCalculatingRevenue, setIsCalculatingRevenue] = useState(false);
 
+  // Persistent reconciliation state key
+  const reconciliationStateKey = `reconciliation_state_${siteId}`;
+
+  // Restore persistent state on mount
+  useEffect(() => {
+    const savedState = localStorage.getItem(reconciliationStateKey);
+    if (savedState) {
+      try {
+        const parsed = JSON.parse(savedState);
+        if (parsed.isLoading || parsed.isCalculatingRevenue) {
+          setIsLoading(parsed.isLoading || false);
+          setIsCalculatingRevenue(parsed.isCalculatingRevenue || false);
+          setReconciliationProgress(parsed.reconciliationProgress || { current: 0, total: 0 });
+          if (parsed.reconciliationData) {
+            setReconciliationData(parsed.reconciliationData);
+          }
+          toast.info("Resuming reconciliation process...");
+        }
+      } catch (e) {
+        console.error("Failed to restore reconciliation state:", e);
+      }
+    }
+  }, [siteId, reconciliationStateKey]);
+  
+  // Save reconciliation state to localStorage whenever it changes
+  useEffect(() => {
+    if (isLoading || isCalculatingRevenue) {
+      const stateToSave = {
+        isLoading,
+        isCalculatingRevenue,
+        reconciliationProgress,
+        reconciliationData,
+        timestamp: Date.now()
+      };
+      localStorage.setItem(reconciliationStateKey, JSON.stringify(stateToSave));
+    } else {
+      // Clear state when reconciliation completes
+      localStorage.removeItem(reconciliationStateKey);
+    }
+  }, [isLoading, isCalculatingRevenue, reconciliationProgress, reconciliationData, reconciliationStateKey]);
+
   // Save reconciliation settings
   const saveReconciliationSettings = async () => {
     try {
@@ -2488,7 +2529,15 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setReconciliationData(null)}
+                  onClick={() => {
+                    if (isLoading || isCalculatingRevenue) {
+                      toast.error("Cannot clear results while reconciliation is in progress");
+                      return;
+                    }
+                    setReconciliationData(null);
+                    localStorage.removeItem(reconciliationStateKey);
+                  }}
+                  disabled={isLoading || isCalculatingRevenue}
                   className="w-full"
                 >
                   <Eraser className="w-4 h-4 mr-2" />
