@@ -98,6 +98,9 @@ export default function TariffAssignmentTab({
   const [selectedTariffs, setSelectedTariffs] = useState<{ [meterId: string]: string }>({});
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isCalculating, setIsCalculating] = useState(false);
+  const [calculationProgress, setCalculationProgress] = useState({ current: 0, total: 0 });
+  const [cancelCalculations, setCancelCalculations] = useState(false);
   const [viewingTariffId, setViewingTariffId] = useState<string | null>(null);
   const [viewingTariffName, setViewingTariffName] = useState<string>("");
   const [documentShopNumbers, setDocumentShopNumbers] = useState<DocumentShopNumber[]>([]);
@@ -320,10 +323,21 @@ export default function TariffAssignmentTab({
   // Calculate and store costs for all meters with documents
   const calculateAndStoreCosts = async () => {
     const calculations = [];
+    const docsToProcess = documentShopNumbers.filter(doc => doc.meterId);
+    const total = docsToProcess.length;
+    
+    setCalculationProgress({ current: 0, total });
+    setIsCalculating(true);
+    setCancelCalculations(false);
 
-    for (const doc of documentShopNumbers) {
-      if (!doc.meterId) continue;
+    for (let i = 0; i < docsToProcess.length; i++) {
+      // Check if user cancelled
+      if (cancelCalculations) {
+        console.log("Calculations cancelled by user");
+        break;
+      }
 
+      const doc = docsToProcess[i];
       const meter = meters.find(m => m.id === doc.meterId);
       if (!meter) continue;
 
@@ -370,13 +384,16 @@ export default function TariffAssignmentTab({
           tariff_name: tariff?.name || result.tariffName,
           calculation_error: result.hasError ? result.errorMessage : null,
         });
+        
+        // Update progress
+        setCalculationProgress({ current: i + 1, total });
       } catch (error) {
         console.error(`Failed to calculate cost for document ${doc.documentId}:`, error);
       }
     }
 
     // Store all calculations in the database (upsert to handle updates)
-    if (calculations.length > 0) {
+    if (calculations.length > 0 && !cancelCalculations) {
       const { error } = await supabase
         .from("document_tariff_calculations")
         .upsert(calculations, { 
@@ -388,6 +405,9 @@ export default function TariffAssignmentTab({
         console.error("Error storing calculated costs:", error);
       }
     }
+    
+    setIsCalculating(false);
+    setCalculationProgress({ current: 0, total: 0 });
   };
 
   const fetchSiteData = async () => {
@@ -809,11 +829,16 @@ export default function TariffAssignmentTab({
         toast.success(`Successfully saved ${successful} tariff assignments`);
       }
       
+      setIsSaving(false);
       fetchMeters();
       
       // Calculate and store costs in the background (non-blocking)
       calculateAndStoreCosts().then(() => {
-        toast.success("Tariff cost calculations completed");
+        if (!cancelCalculations) {
+          toast.success("Tariff cost calculations completed");
+        } else {
+          toast.info("Calculations cancelled");
+        }
       }).catch((error) => {
         console.error("Error calculating costs:", error);
         toast.error("Failed to calculate costs for some documents");
@@ -821,9 +846,12 @@ export default function TariffAssignmentTab({
     } catch (error) {
       console.error("Error saving tariff assignments:", error);
       toast.error("Failed to save tariff assignments");
-    } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleCancelCalculations = () => {
+    setCancelCalculations(true);
   };
 
   const getAssignmentStats = () => {
@@ -1265,9 +1293,27 @@ export default function TariffAssignmentTab({
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <h3 className="text-lg font-semibold">Meter Tariff Assignments</h3>
-                    <Button onClick={handleSaveAssignments} disabled={isSaving}>
-                      <FileCheck2 className="w-4 h-4 mr-2" />
-                      {isSaving ? "Saving..." : "Save Assignments"}
+                    <Button 
+                      onClick={isCalculating ? handleCancelCalculations : handleSaveAssignments} 
+                      disabled={isSaving || isCalculating}
+                      variant={isCalculating ? "destructive" : "default"}
+                    >
+                      {isCalculating ? (
+                        <>
+                          <X className="w-4 h-4 mr-2" />
+                          Calculating {calculationProgress.current}/{calculationProgress.total} (Click to Cancel)
+                        </>
+                      ) : isSaving ? (
+                        <>
+                          <FileCheck2 className="w-4 h-4 mr-2" />
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <FileCheck2 className="w-4 h-4 mr-2" />
+                          Save Assignments
+                        </>
+                      )}
                     </Button>
                   </div>
 
