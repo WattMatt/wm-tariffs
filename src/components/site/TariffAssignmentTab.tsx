@@ -115,6 +115,7 @@ export default function TariffAssignmentTab({
   const [selectedMeterIds, setSelectedMeterIds] = useState<Set<string>>(new Set());
   const [viewingDocCalculations, setViewingDocCalculations] = useState<any[]>([]);
   const [chartDialogCalculations, setChartDialogCalculations] = useState<Record<string, any>>({});
+  const [viewingAllDocsCalculations, setViewingAllDocsCalculations] = useState<Record<string, any>>({});
 
   // Apply date range filter
   const applyDateFilter = () => {
@@ -2428,6 +2429,7 @@ export default function TariffAssignmentTab({
       <Dialog open={!!viewingAllDocs} onOpenChange={() => {
         setViewingAllDocs(null);
         setExpandedShopDocs(new Set());
+        setViewingAllDocsCalculations({});
       }}>
         <DialogContent className="max-w-4xl">
           <DialogHeader>
@@ -2545,6 +2547,32 @@ export default function TariffAssignmentTab({
           })()}
           
           <ScrollArea className="max-h-[60vh] pr-4">
+            {viewingAllDocs && (() => {
+              // Fetch calculations when dialog opens
+              if (Object.keys(viewingAllDocsCalculations).length === 0) {
+                const docIds = viewingAllDocs.docs.map(d => d.documentId);
+                supabase
+                  .from("document_tariff_calculations")
+                  .select(`
+                    *,
+                    tariff_structures!inner(name)
+                  `)
+                  .in("document_id", docIds)
+                  .eq("meter_id", viewingAllDocs.meter.id)
+                  .then(({ data, error }) => {
+                    if (!error && data) {
+                      const calcsByDoc: Record<string, any> = {};
+                      data.forEach(calc => {
+                        calcsByDoc[calc.document_id] = calc;
+                      });
+                      setViewingAllDocsCalculations(calcsByDoc);
+                    }
+                  });
+              }
+              
+              return null;
+            })()}
+            
             <div className="space-y-3">
               {viewingAllDocs?.docs.map((doc, idx) => (
                 <Collapsible
@@ -2601,49 +2629,100 @@ export default function TariffAssignmentTab({
                       )}
                     </div>
                     
-                    {doc.lineItems && doc.lineItems.length > 0 && (
-                      <div>
-                        <h4 className="font-medium mb-2">Line Items</h4>
-                        <div className="border rounded-lg overflow-hidden">
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead>Description</TableHead>
-                                <TableHead>Consumption</TableHead>
-                                <TableHead>Rate</TableHead>
-                                <TableHead className="text-right">Amount</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {(() => {
-                                // Filter line items for council/bulk meters to only show electricity charges
-                                const displayItems = viewingAllDocs?.meter.meter_type === 'council_meter' || 
-                                                    viewingAllDocs?.meter.meter_type === 'bulk_meter'
-                                  ? doc.lineItems.filter(item => 
-                                      item.description?.toLowerCase().includes('electricity')
-                                    )
-                                  : doc.lineItems;
-                                
-                                return displayItems.map((item, itemIdx) => (
-                                  <TableRow key={itemIdx}>
-                                    <TableCell>{item.description}</TableCell>
-                                    <TableCell>
-                                      {item.consumption ? `${item.consumption} kWh` : '—'}
-                                    </TableCell>
-                                    <TableCell>
-                                      {item.rate ? `${item.rate.toFixed(2)}` : '—'}
-                                    </TableCell>
-                                    <TableCell className="text-right">
-                                      {doc.currency} {item.amount.toFixed(2)}
-                                    </TableCell>
-                                  </TableRow>
-                                ));
-                              })()}
-                            </TableBody>
-                          </Table>
+                    {(() => {
+                      const calc = viewingAllDocsCalculations[doc.documentId];
+                      if (!calc) return null;
+                      
+                      return (
+                        <div className="space-y-3">
+                          <h4 className="font-medium">Rate Comparison: Document vs Assigned Tariff</h4>
+                          <div className="border rounded-lg p-4 space-y-3">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-medium">{calc.tariff_structures?.name || 'Tariff Calculation'}</span>
+                              <Badge variant={Math.abs(calc.variance_percentage || 0) > 10 ? "destructive" : "secondary"}>
+                                {calc.variance_percentage !== null 
+                                  ? `${calc.variance_percentage >= 0 ? '+' : ''}${calc.variance_percentage.toFixed(1)}%`
+                                  : 'N/A'}
+                              </Badge>
+                            </div>
+                            
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead>Metric</TableHead>
+                                  <TableHead className="text-right">Document</TableHead>
+                                  <TableHead className="text-right">Calculated</TableHead>
+                                  <TableHead className="text-right">Variance</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                <TableRow>
+                                  <TableCell className="font-medium">Total kWh</TableCell>
+                                  <TableCell className="text-right">{calc.total_kwh.toFixed(2)}</TableCell>
+                                  <TableCell className="text-right">{calc.total_kwh.toFixed(2)}</TableCell>
+                                  <TableCell className="text-right text-muted-foreground">—</TableCell>
+                                </TableRow>
+                                <TableRow>
+                                  <TableCell className="font-medium">Energy Cost</TableCell>
+                                  <TableCell className="text-right">
+                                    R {(doc.lineItems?.find(item => 
+                                      item.description?.toLowerCase().includes('kwh ch')
+                                    )?.amount || 0).toFixed(2)}
+                                  </TableCell>
+                                  <TableCell className="text-right">R {calc.energy_cost.toFixed(2)}</TableCell>
+                                  <TableCell className="text-right text-muted-foreground">
+                                    {(() => {
+                                      const docEnergy = doc.lineItems?.find(item => 
+                                        item.description?.toLowerCase().includes('kwh ch')
+                                      )?.amount || 0;
+                                      const variance = calc.energy_cost - docEnergy;
+                                      return variance !== 0 ? `${variance >= 0 ? '+' : ''}${variance.toFixed(2)}` : '—';
+                                    })()}
+                                  </TableCell>
+                                </TableRow>
+                                <TableRow>
+                                  <TableCell className="font-medium">Fixed Charges</TableCell>
+                                  <TableCell className="text-right">
+                                    R {(doc.lineItems?.find(item => 
+                                      item.description?.toLowerCase().includes('basic') || 
+                                      item.description?.toLowerCase().includes('fixed')
+                                    )?.amount || 0).toFixed(2)}
+                                  </TableCell>
+                                  <TableCell className="text-right">R {calc.fixed_charges.toFixed(2)}</TableCell>
+                                  <TableCell className="text-right text-muted-foreground">
+                                    {(() => {
+                                      const docFixed = doc.lineItems?.find(item => 
+                                        item.description?.toLowerCase().includes('basic') || 
+                                        item.description?.toLowerCase().includes('fixed')
+                                      )?.amount || 0;
+                                      const variance = calc.fixed_charges - docFixed;
+                                      return variance !== 0 ? `${variance >= 0 ? '+' : ''}${variance.toFixed(2)}` : '—';
+                                    })()}
+                                  </TableCell>
+                                </TableRow>
+                                <TableRow className="font-semibold bg-muted/50">
+                                  <TableCell>Total Cost</TableCell>
+                                  <TableCell className="text-right">
+                                    R {(calc.document_billed_amount || doc.totalAmount).toFixed(2)}
+                                  </TableCell>
+                                  <TableCell className="text-right">R {calc.total_cost.toFixed(2)}</TableCell>
+                                  <TableCell className={cn(
+                                    "text-right font-medium",
+                                    calc.variance_amount && Math.abs(calc.variance_amount) > 0 
+                                      ? calc.variance_amount > 0 ? "text-destructive" : "text-green-600"
+                                      : ""
+                                  )}>
+                                    {calc.variance_amount !== null 
+                                      ? `${calc.variance_amount >= 0 ? '+' : ''}${calc.variance_amount.toFixed(2)}`
+                                      : '—'}
+                                  </TableCell>
+                                </TableRow>
+                              </TableBody>
+                            </Table>
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      );
+                    })()}
                     
                     <Button
                       variant="outline"
