@@ -527,21 +527,29 @@ export default function TariffAssignmentTab({
         const extraction = doc.document_extractions?.[0];
         if (extraction?.extracted_data) {
           const extractedData = extraction.extracted_data as any;
-          if (extractedData?.shop_number) {
-            shopNumbers.push({
-              documentId: doc.id,
-              fileName: doc.file_name,
-              shopNumber: extractedData.shop_number,
-              periodStart: extractedData.period_start || '',
-              periodEnd: extractedData.period_end || '',
-              totalAmount: extractedData.total_amount || 0,
-              currency: extractedData.currency || 'ZAR',
-              tenantName: extractedData.tenant_name,
-              accountReference: extractedData.account_reference,
-              meterId: (doc as any).meter_id,
-              lineItems: extractedData.line_items
-            });
+          
+          // Determine identifier with fallbacks for different meter types
+          let identifier = extractedData.shop_number;
+          if (!identifier) {
+            // For council/bulk meters without shop numbers
+            identifier = extractedData.account_reference || 
+                         extractedData.tenant_name || 
+                         "Council Invoice";
           }
+
+          shopNumbers.push({
+            documentId: doc.id,
+            fileName: doc.file_name,
+            shopNumber: identifier,
+            periodStart: extractedData.period_start || '',
+            periodEnd: extractedData.period_end || '',
+            totalAmount: extractedData.total_amount || 0,
+            currency: extractedData.currency || 'ZAR',
+            tenantName: extractedData.tenant_name,
+            accountReference: extractedData.account_reference,
+            meterId: (doc as any).meter_id,
+            lineItems: extractedData.line_items
+          });
         }
       });
 
