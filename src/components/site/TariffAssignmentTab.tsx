@@ -2188,40 +2188,6 @@ export default function TariffAssignmentTab({
                                 <span className="text-sm font-mono">{doc.accountReference}</span>
                               </div>
                             )}
-                            {doc.lineItems && doc.lineItems.length > 0 && (
-                              <div className="space-y-2">
-                                <span className="text-sm font-medium text-muted-foreground">Line Items:</span>
-                                <div className="border rounded-lg overflow-hidden">
-                                  <Table>
-                                    <TableHeader>
-                                      <TableRow>
-                                        <TableHead className="text-xs">Description</TableHead>
-                                        <TableHead className="text-xs">Consumption</TableHead>
-                                        <TableHead className="text-xs">Rate</TableHead>
-                                        <TableHead className="text-xs text-right">Amount</TableHead>
-                                      </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                      {doc.lineItems.map((item, itemIdx) => (
-                                        <TableRow key={itemIdx}>
-                                          <TableCell className="text-xs">{item.description}</TableCell>
-                                          <TableCell className="text-xs">
-                                            {item.consumption ? `${item.consumption.toFixed(2)} kWh` : '—'}
-                                          </TableCell>
-                                          <TableCell className="text-xs">
-                                            {item.rate ? `${doc.currency} ${item.rate.toFixed(4)}` : '—'}
-                                          </TableCell>
-                                          <TableCell className="text-xs text-right font-medium">
-                                            {doc.currency} {item.amount.toFixed(2)}
-                                          </TableCell>
-                                        </TableRow>
-                                      ))}
-                                    </TableBody>
-                                  </Table>
-                                </div>
-                              </div>
-                            )}
-                            
                             {/* Tariff Comparison */}
                             {chartDialogCalculations[doc.documentId] && (() => {
                               const calc = chartDialogCalculations[doc.documentId];
