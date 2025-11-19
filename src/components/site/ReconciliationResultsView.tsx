@@ -242,7 +242,7 @@ export default function ReconciliationResultsView({
             )}
           </div>
           <div className="flex items-center gap-4">
-            {meter.hasData !== false && !meter.hasError && (
+            {((meter.hasData !== false || childIds.length > 0) && !meter.hasError) && (
               <>
                 {isRevenueView ? (
                   // Revenue View - Show only costs
