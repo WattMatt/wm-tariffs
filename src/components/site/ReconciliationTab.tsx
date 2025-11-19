@@ -1612,8 +1612,23 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     if (!isCancelling) {
       setIsCancelling(true);
       cancelReconciliationRef.current = true;
-      console.log("Cancellation requested");
-      toast.info("Cancelling reconciliation...");
+      console.log("Cancellation requested - forcing cleanup");
+      
+      // Force cleanup immediately
+      setIsLoading(false);
+      setIsCalculatingRevenue(false);
+      setReconciliationProgress({ current: 0, total: 0 });
+      
+      toast.info("Reconciliation cancelled");
+      
+      // Clear persistent state
+      localStorage.removeItem(reconciliationStateKey);
+      
+      // Reset cancel flag after a delay
+      setTimeout(() => {
+        setIsCancelling(false);
+        cancelReconciliationRef.current = false;
+      }, 1000);
     }
   };
 
