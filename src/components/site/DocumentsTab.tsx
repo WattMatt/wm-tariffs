@@ -2560,9 +2560,16 @@ export default function DocumentsTab({ siteId, onUploadProgressChange }: Documen
                   <div className="space-y-2">
                     <Label>Period Start</Label>
                     <DatePicker
-                      date={editedData.period_start ? new Date(editedData.period_start) : undefined}
+                      date={editedData.period_start ? new Date(editedData.period_start + 'T00:00:00') : undefined}
                       onDateChange={(date) => {
-                        setEditedData({ ...editedData, period_start: date ? date.toISOString().split('T')[0] : null });
+                        if (date) {
+                          const year = date.getFullYear();
+                          const month = String(date.getMonth() + 1).padStart(2, '0');
+                          const day = String(date.getDate()).padStart(2, '0');
+                          setEditedData({ ...editedData, period_start: `${year}-${month}-${day}` });
+                        } else {
+                          setEditedData({ ...editedData, period_start: null });
+                        }
                       }}
                       placeholder="Pick a date"
                       disabled={!isEditing}
@@ -2571,9 +2578,16 @@ export default function DocumentsTab({ siteId, onUploadProgressChange }: Documen
                   <div className="space-y-2">
                     <Label>Period End</Label>
                     <DatePicker
-                      date={editedData.period_end ? new Date(editedData.period_end) : undefined}
+                      date={editedData.period_end ? new Date(editedData.period_end + 'T00:00:00') : undefined}
                       onDateChange={(date) => {
-                        setEditedData({ ...editedData, period_end: date ? date.toISOString().split('T')[0] : null });
+                        if (date) {
+                          const year = date.getFullYear();
+                          const month = String(date.getMonth() + 1).padStart(2, '0');
+                          const day = String(date.getDate()).padStart(2, '0');
+                          setEditedData({ ...editedData, period_end: `${year}-${month}-${day}` });
+                        } else {
+                          setEditedData({ ...editedData, period_end: null });
+                        }
                       }}
                       placeholder="Pick a date"
                       disabled={!isEditing}
