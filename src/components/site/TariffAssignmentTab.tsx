@@ -1905,12 +1905,11 @@ export default function TariffAssignmentTab({
                           <TableCell className="font-medium">Energy Cost</TableCell>
                           <TableCell className="text-right text-muted-foreground">
                             {(() => {
-                              // Filter line items for council/bulk meters to exclude non-electricity charges
+                              // Filter line items for council/bulk meters to only include electricity charges
                               const filteredItems = rateComparisonMeter?.meter_type === 'council_meter' || 
                                                    rateComparisonMeter?.meter_type === 'bulk_meter'
                                 ? doc.lineItems?.filter(item => 
-                                    !item.description?.toLowerCase().includes('generator') &&
-                                    !item.description?.toLowerCase().includes('water')
+                                    item.description?.toLowerCase().includes('electricity')
                                   )
                                 : doc.lineItems;
                               
@@ -1926,8 +1925,7 @@ export default function TariffAssignmentTab({
                               const filteredItems = rateComparisonMeter?.meter_type === 'council_meter' || 
                                                    rateComparisonMeter?.meter_type === 'bulk_meter'
                                 ? doc.lineItems?.filter(item => 
-                                    !item.description?.toLowerCase().includes('generator') &&
-                                    !item.description?.toLowerCase().includes('water')
+                                    item.description?.toLowerCase().includes('electricity')
                                   )
                                 : doc.lineItems;
                               
@@ -1949,8 +1947,7 @@ export default function TariffAssignmentTab({
                               const filteredItems = rateComparisonMeter?.meter_type === 'council_meter' || 
                                                    rateComparisonMeter?.meter_type === 'bulk_meter'
                                 ? doc.lineItems?.filter(item => 
-                                    !item.description?.toLowerCase().includes('generator') &&
-                                    !item.description?.toLowerCase().includes('water')
+                                    item.description?.toLowerCase().includes('electricity')
                                   )
                                 : doc.lineItems;
                               
@@ -1967,8 +1964,7 @@ export default function TariffAssignmentTab({
                               const filteredItems = rateComparisonMeter?.meter_type === 'council_meter' || 
                                                    rateComparisonMeter?.meter_type === 'bulk_meter'
                                 ? doc.lineItems?.filter(item => 
-                                    !item.description?.toLowerCase().includes('generator') &&
-                                    !item.description?.toLowerCase().includes('water')
+                                    item.description?.toLowerCase().includes('electricity')
                                   )
                                 : doc.lineItems;
                               
