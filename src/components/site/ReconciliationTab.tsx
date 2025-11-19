@@ -1437,12 +1437,12 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       if (gridSupplyMeters.length === 0 && solarEnergyMeters.length === 0) {
         // Grid Supply: bulk meters (MB-*)
         gridSupplyMeters = meterData.filter((m) => m.meter_type === "bulk_meter");
-        // Solar: no automatic assignment - user must manually assign
-        solarEnergyMeters = [];
+        // Solar: meters with type "solar"
+        solarEnergyMeters = meterData.filter((m) => m.meter_type === "solar");
         
         console.log("No meter assignments found. Using automatic categorization:");
         console.log(`  Grid Supply: ${gridSupplyMeters.length} bulk meters`);
-        console.log(`  Solar: 0 (requires manual assignment)`);
+        console.log(`  Solar: ${solarEnergyMeters.length} solar meters`);
       }
       
       // Keep existing meter type filters
