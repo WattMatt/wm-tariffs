@@ -2515,20 +2515,30 @@ export default function TariffAssignmentTab({
                               </TableRow>
                             </TableHeader>
                             <TableBody>
-                              {doc.lineItems.map((item, itemIdx) => (
-                                <TableRow key={itemIdx}>
-                                  <TableCell>{item.description}</TableCell>
-                                  <TableCell>
-                                    {item.consumption ? `${item.consumption} kWh` : '—'}
-                                  </TableCell>
-                                  <TableCell>
-                                    {item.rate ? `${item.rate.toFixed(2)}` : '—'}
-                                  </TableCell>
-                                  <TableCell className="text-right">
-                                    {doc.currency} {item.amount.toFixed(2)}
-                                  </TableCell>
-                                </TableRow>
-                              ))}
+                              {(() => {
+                                // Filter line items for council/bulk meters to only show electricity charges
+                                const displayItems = viewingAllDocs?.meter.meter_type === 'council_meter' || 
+                                                    viewingAllDocs?.meter.meter_type === 'bulk_meter'
+                                  ? doc.lineItems.filter(item => 
+                                      item.description?.toLowerCase().includes('electricity')
+                                    )
+                                  : doc.lineItems;
+                                
+                                return displayItems.map((item, itemIdx) => (
+                                  <TableRow key={itemIdx}>
+                                    <TableCell>{item.description}</TableCell>
+                                    <TableCell>
+                                      {item.consumption ? `${item.consumption} kWh` : '—'}
+                                    </TableCell>
+                                    <TableCell>
+                                      {item.rate ? `${item.rate.toFixed(2)}` : '—'}
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                      {doc.currency} {item.amount.toFixed(2)}
+                                    </TableCell>
+                                  </TableRow>
+                                ));
+                              })()}
                             </TableBody>
                           </Table>
                         </div>
@@ -2766,7 +2776,20 @@ export default function TariffAssignmentTab({
                   <div className="space-y-3 border-t pt-4">
                     <Label className="text-sm font-medium">Document Line Items</Label>
                     <Accordion type="single" collapsible className="w-full">
-                      {viewingShopDoc.lineItems.map((item, index) => (
+                      {(() => {
+                        // Find the meter for this document and filter line items for council/bulk meters
+                        const docMeter = viewingShopDoc.meterId 
+                          ? meters.find(m => m.id === viewingShopDoc.meterId)
+                          : null;
+                        
+                        const displayItems = docMeter?.meter_type === 'council_meter' || 
+                                            docMeter?.meter_type === 'bulk_meter'
+                          ? viewingShopDoc.lineItems.filter(item => 
+                              item.description?.toLowerCase().includes('electricity')
+                            )
+                          : viewingShopDoc.lineItems;
+                        
+                        return displayItems.map((item, index) => (
                         <AccordionItem key={index} value={`item-${index}`}>
                           <AccordionTrigger className="hover:no-underline">
                             <div className="flex items-center justify-between w-full pr-4">
@@ -2817,7 +2840,8 @@ export default function TariffAssignmentTab({
                             </div>
                           </AccordionContent>
                         </AccordionItem>
-                      ))}
+                        ));
+                      })()}
                     </Accordion>
                   </div>
                 )}
