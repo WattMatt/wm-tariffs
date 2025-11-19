@@ -1296,17 +1296,17 @@ export default function TariffAssignmentTab({
                                   )}
                                   <Bar 
                                     dataKey="amount" 
-                                    fill="hsl(var(--primary))"
+                                    fill="hsl(var(--muted-foreground))"
                                     radius={[4, 4, 0, 0]}
                                     name="Calculated Cost"
+                                    opacity={0.5}
                                   />
                                   {hideSeasonalAverages && (
                                     <Bar 
                                       dataKey="documentAmount" 
-                                      fill="hsl(var(--muted-foreground))"
+                                      fill="hsl(var(--primary))"
                                       radius={[4, 4, 0, 0]}
                                       name="Document Billed"
-                                      opacity={0.5}
                                     />
                                   )}
                                 </ComposedChart>
@@ -1916,17 +1916,17 @@ export default function TariffAssignmentTab({
                             )}
                             <Bar 
                               dataKey="amount" 
-                              fill="hsl(var(--primary))"
+                              fill="hsl(var(--muted-foreground))"
                               radius={[4, 4, 0, 0]}
                               name="Calculated Cost"
+                              opacity={0.5}
                             />
                             {hideSeasonalAverages && (
                               <Bar 
                                 dataKey="documentAmount" 
-                                fill="hsl(var(--muted-foreground))"
+                                fill="hsl(var(--primary))"
                                 radius={[4, 4, 0, 0]}
                                 name="Document Billed"
-                                opacity={0.5}
                               />
                             )}
                           </ComposedChart>
