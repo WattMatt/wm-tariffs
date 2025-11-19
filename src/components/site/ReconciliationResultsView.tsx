@@ -276,14 +276,17 @@ export default function ReconciliationResultsView({
                   // Energy View - Show kWh
                   <div className="text-right">
                     <div className="text-sm font-medium">
-                      {meter.totalKwh.toFixed(2)} kWh
+                      {childIds.length > 0 ? hierarchicalTotal.toFixed(2) : meter.totalKwh.toFixed(2)} kWh
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      {meter.readingsCount} readings
+                      {childIds.length > 0 
+                        ? `(sum of ${childIds.length} child meter${childIds.length > 1 ? 's' : ''})`
+                        : `${meter.readingsCount} readings`
+                      }
                     </div>
-                    {childIds.length > 0 && (
+                    {childIds.length > 0 && meter.totalKwh > 0 && (
                       <div className="text-xs text-muted-foreground mt-1">
-                        Σ children: {hierarchicalTotal.toFixed(2)} kWh
+                        Direct: {meter.totalKwh.toFixed(2)} kWh
                       </div>
                     )}
                   </div>
