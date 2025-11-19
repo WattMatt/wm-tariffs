@@ -232,7 +232,7 @@ export default function TariffAssignmentTab({
         
         return {
           period: new Date(doc.periodStart).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }),
-          amount: calculatedCost !== undefined ? calculatedCost : null, // Use calculated cost as primary
+          amount: calculatedCost !== undefined ? calculatedCost : (doc.totalAmount || 0), // Fall back to document amount if no calculation
           documentAmount: doc.totalAmount || null, // Keep document amount for comparison
           winterAvg: winterMonths.includes(month) ? winterAvg : null,
           summerAvg: summerMonths.includes(month) ? summerAvg : null,
