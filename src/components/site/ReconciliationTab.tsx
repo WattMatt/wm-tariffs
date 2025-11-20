@@ -316,17 +316,17 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         ) || [];
 
         // Build parent-child map for hierarchy
-        // DB structure: parent_meter_id is downstream (child), child_meter_id is upstream (parent)
+        // DB structure: parent_meter_id is the parent (upstream), child_meter_id is the child (downstream)
         // For display: we want childrenMap where key = parent, value = children
         const childrenMap = new Map<string, string[]>();
         
         siteConnections.forEach(conn => {
-          // conn.child_meter_id is the parent (upstream)
-          // conn.parent_meter_id is the child (downstream)
-          if (!childrenMap.has(conn.child_meter_id)) {
-            childrenMap.set(conn.child_meter_id, []);
+          // conn.parent_meter_id is the parent (upstream)
+          // conn.child_meter_id is the child (downstream)
+          if (!childrenMap.has(conn.parent_meter_id)) {
+            childrenMap.set(conn.parent_meter_id, []);
           }
-          childrenMap.get(conn.child_meter_id)!.push(conn.parent_meter_id);
+          childrenMap.get(conn.parent_meter_id)!.push(conn.child_meter_id);
         });
 
         // Check which meters have actual readings data
@@ -357,18 +357,18 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         const connectionsMap = new Map<string, string[]>();
         
         siteConnections.forEach(conn => {
-          // conn.parent_meter_id is the child (downstream)
-          // conn.child_meter_id is the parent (upstream)
-          const parentMeter = metersWithData.find(m => m.id === conn.child_meter_id);
+          // conn.parent_meter_id is the parent (upstream)
+          // conn.child_meter_id is the child (downstream)
+          const parentMeter = metersWithData.find(m => m.id === conn.parent_meter_id);
           if (parentMeter) {
-            meterParentMap.set(conn.parent_meter_id, parentMeter.meter_number);
+            meterParentMap.set(conn.child_meter_id, parentMeter.meter_number);
           }
           
           // Build connections map for calculations: parent -> children
-          if (!connectionsMap.has(conn.child_meter_id)) {
-            connectionsMap.set(conn.child_meter_id, []);
+          if (!connectionsMap.has(conn.parent_meter_id)) {
+            connectionsMap.set(conn.parent_meter_id, []);
           }
-          connectionsMap.get(conn.child_meter_id)!.push(conn.parent_meter_id);
+          connectionsMap.get(conn.parent_meter_id)!.push(conn.child_meter_id);
         });
         
         setMeterConnectionsMap(connectionsMap);
