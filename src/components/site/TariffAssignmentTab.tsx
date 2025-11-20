@@ -212,7 +212,7 @@ export default function TariffAssignmentTab({
     const winterMonths = [6, 7, 8];
     const summerMonths = [1, 2, 3, 4, 5, 9, 10, 11, 12];
     const sortedDocs = [...docs].sort((a, b) => 
-      new Date(a.periodStart).getTime() - new Date(b.periodStart).getTime()
+      new Date(a.periodEnd).getTime() - new Date(b.periodEnd).getTime()
     );
     
     interface Segment {
@@ -229,7 +229,7 @@ export default function TariffAssignmentTab({
     let currentSegmentDocs: DocumentShopNumber[] = [];
     
     sortedDocs.forEach((doc, index) => {
-      const month = new Date(doc.periodStart).getMonth() + 1;
+      const month = new Date(doc.periodEnd).getMonth() + 1;
       const isWinter = winterMonths.includes(month);
       const isSummer = summerMonths.includes(month);
       const currentSeason = isWinter ? 'winter' : isSummer ? 'summer' : null;
@@ -272,7 +272,7 @@ export default function TariffAssignmentTab({
     
     return sortedDocs.map((doc) => {
       const dataPoint: any = {
-        period: new Date(doc.periodStart).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }),
+        period: new Date(doc.periodEnd).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }),
         amount: doc.totalAmount || null,
         documentAmount: doc.totalAmount || null,
         documentId: doc.documentId,
@@ -299,7 +299,7 @@ export default function TariffAssignmentTab({
     const winterMonths = [6, 7, 8];
     const summerMonths = [1, 2, 3, 4, 5, 9, 10, 11, 12];
     const sortedDocs = [...docs].sort((a, b) => 
-      new Date(a.periodStart).getTime() - new Date(b.periodStart).getTime()
+      new Date(a.periodEnd).getTime() - new Date(b.periodEnd).getTime()
     );
     
     interface Segment {
@@ -316,7 +316,7 @@ export default function TariffAssignmentTab({
     let currentSegmentDocs: DocumentShopNumber[] = [];
     
     sortedDocs.forEach((doc, index) => {
-      const month = new Date(doc.periodStart).getMonth() + 1;
+      const month = new Date(doc.periodEnd).getMonth() + 1;
       const isWinter = winterMonths.includes(month);
       const isSummer = summerMonths.includes(month);
       const currentSeason = isWinter ? 'winter' : isSummer ? 'summer' : null;
@@ -359,7 +359,7 @@ export default function TariffAssignmentTab({
     
     return sortedDocs.map((doc) => {
       const dataPoint: any = {
-        period: new Date(doc.periodStart).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }),
+        period: new Date(doc.periodEnd).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }),
         amount: reconciliationCostsMap[doc.documentId] !== undefined ? reconciliationCostsMap[doc.documentId] : null,
         documentAmount: doc.totalAmount || null,
         documentId: doc.documentId,
@@ -394,7 +394,7 @@ export default function TariffAssignmentTab({
     const winterMonths = [6, 7, 8];
     const summerMonths = [1, 2, 3, 4, 5, 9, 10, 11, 12];
     const sortedDocs = [...docs].sort((a, b) => 
-      new Date(a.periodStart).getTime() - new Date(b.periodStart).getTime()
+      new Date(a.periodEnd).getTime() - new Date(b.periodEnd).getTime()
     );
     
     interface Segment {
@@ -411,7 +411,7 @@ export default function TariffAssignmentTab({
     let currentSegmentDocs: DocumentShopNumber[] = [];
     
     sortedDocs.forEach((doc, index) => {
-      const month = new Date(doc.periodStart).getMonth() + 1;
+      const month = new Date(doc.periodEnd).getMonth() + 1;
       const isWinter = winterMonths.includes(month);
       const isSummer = summerMonths.includes(month);
       const currentSeason = isWinter ? 'winter' : isSummer ? 'summer' : null;
@@ -454,7 +454,7 @@ export default function TariffAssignmentTab({
     
     return sortedDocs.map((doc) => {
       const dataPoint: any = {
-        period: new Date(doc.periodStart).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }),
+        period: new Date(doc.periodEnd).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }),
         amount: calculatedCostsMap[doc.documentId] || null,
         documentAmount: doc.totalAmount || null,
         documentId: doc.documentId,
@@ -482,12 +482,12 @@ export default function TariffAssignmentTab({
     const summerMonths = [1, 2, 3, 4, 5, 9, 10, 11, 12];
     
     const winterDocs = docs.filter(doc => {
-      const month = new Date(doc.periodStart).getMonth() + 1;
+      const month = new Date(doc.periodEnd).getMonth() + 1;
       return winterMonths.includes(month);
     });
     
     const summerDocs = docs.filter(doc => {
-      const month = new Date(doc.periodStart).getMonth() + 1;
+      const month = new Date(doc.periodEnd).getMonth() + 1;
       return summerMonths.includes(month);
     });
     
