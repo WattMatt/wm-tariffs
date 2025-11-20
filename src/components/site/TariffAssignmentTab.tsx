@@ -246,13 +246,8 @@ export default function TariffAssignmentTab({
         if (lastSeason && currentSegmentDocs.length > 0) {
           const segmentIndex = lastSeason === 'winter' ? winterSegment : summerSegment;
           const values = currentSegmentDocs
-            .map(d => {
-              // Use calculated costs if available, otherwise use document amount
-              return calculatedCostsMap && calculatedCostsMap[d.documentId] !== undefined
-                ? calculatedCostsMap[d.documentId]
-                : (d.totalAmount || 0);
-            })
-            .filter(v => v > 0);
+            .map(d => calculatedCostsMap[d.documentId])
+            .filter(v => v !== undefined && v > 0);
           
           if (values.length > 0) {
             const average = values.reduce((sum, val) => sum + val, 0) / values.length;
@@ -278,13 +273,8 @@ export default function TariffAssignmentTab({
       if (index === sortedDocs.length - 1 && currentSegmentDocs.length > 0) {
         const segmentIndex = currentSeason === 'winter' ? winterSegment : summerSegment;
         const values = currentSegmentDocs
-          .map(d => {
-            // Use calculated costs if available, otherwise use document amount
-            return calculatedCostsMap && calculatedCostsMap[d.documentId] !== undefined
-              ? calculatedCostsMap[d.documentId]
-              : (d.totalAmount || 0);
-          })
-          .filter(v => v > 0);
+          .map(d => calculatedCostsMap[d.documentId])
+          .filter(v => v !== undefined && v > 0);
         
         if (values.length > 0) {
           const average = values.reduce((sum, val) => sum + val, 0) / values.length;
@@ -299,37 +289,40 @@ export default function TariffAssignmentTab({
     });
     
     // Second pass: create data points with segment-specific averages
-    return sortedDocs.map((doc) => {
-      const month = new Date(doc.periodStart).getMonth() + 1;
-      const isWinter = winterMonths.includes(month);
-      const isSummer = summerMonths.includes(month);
-      
-      // Create base data point
-      const dataPoint: any = {
-        period: new Date(doc.periodStart).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }),
-        // Use calculated cost if available, otherwise use document amount
-        amount: calculatedCostsMap && calculatedCostsMap[doc.documentId] !== undefined
-          ? calculatedCostsMap[doc.documentId]
-          : (doc.totalAmount || 0),
-        documentAmount: doc.totalAmount || null,
-        documentId: doc.documentId,
-      };
-      
-      // Find which segment this document belongs to and add its average
-      const matchingSegment = segments.find(seg => 
-        seg.docs.some(d => d.documentId === doc.documentId)
-      );
-      
-      if (matchingSegment) {
-        if (matchingSegment.season === 'winter') {
-          dataPoint[`winterAvg_${matchingSegment.segmentIndex}`] = matchingSegment.average;
-        } else {
-          dataPoint[`summerAvg_${matchingSegment.segmentIndex}`] = matchingSegment.average;
+    // When calculatedCostsMap is provided, ONLY include documents that have data in the map
+    return sortedDocs
+      .filter(doc => !calculatedCostsMap || calculatedCostsMap[doc.documentId] !== undefined)
+      .map((doc) => {
+        const month = new Date(doc.periodStart).getMonth() + 1;
+        const isWinter = winterMonths.includes(month);
+        const isSummer = summerMonths.includes(month);
+        
+        // Create base data point
+        const dataPoint: any = {
+          period: new Date(doc.periodStart).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }),
+          // Use calculated cost if available, otherwise use document amount
+          amount: calculatedCostsMap && calculatedCostsMap[doc.documentId] !== undefined
+            ? calculatedCostsMap[doc.documentId]
+            : (doc.totalAmount || 0),
+          documentAmount: doc.totalAmount || null,
+          documentId: doc.documentId,
+        };
+        
+        // Find which segment this document belongs to and add its average
+        const matchingSegment = segments.find(seg => 
+          seg.docs.some(d => d.documentId === doc.documentId)
+        );
+        
+        if (matchingSegment) {
+          if (matchingSegment.season === 'winter') {
+            dataPoint[`winterAvg_${matchingSegment.segmentIndex}`] = matchingSegment.average;
+          } else {
+            dataPoint[`summerAvg_${matchingSegment.segmentIndex}`] = matchingSegment.average;
+          }
         }
-      }
-      
-      return dataPoint;
-    });
+        
+        return dataPoint;
+      });
   };
   
   // Calculate seasonal averages from calculated costs
