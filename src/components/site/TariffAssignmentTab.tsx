@@ -361,6 +361,19 @@ export default function TariffAssignmentTab({
   const [calculatedCosts, setCalculatedCosts] = useState<{ [docId: string]: number }>({});
   const [isCalculatingCosts, setIsCalculatingCosts] = useState(false);
   
+  // Reconciliation costs state (for comparison tab)
+  const [reconciliationCosts, setReconciliationCosts] = useState<{ 
+    [meterId: string]: { 
+      [dateRangeKey: string]: {
+        total_cost: number;
+        run_name: string;
+        date_from: string;
+        date_to: string;
+      }
+    } 
+  }>({});
+  const [isLoadingReconciliationCosts, setIsLoadingReconciliationCosts] = useState(false);
+  
   // Rate comparison state
   const [rateComparisonMeter, setRateComparisonMeter] = useState<Meter | null>(null);
   const [rateComparisonData, setRateComparisonData] = useState<{
@@ -415,6 +428,13 @@ export default function TariffAssignmentTab({
     }
   }, [documentShopNumbers.length, meters.length]);
 
+  // Fetch reconciliation costs when in comparison mode
+  useEffect(() => {
+    if (hideSeasonalAverages) {
+      fetchReconciliationCosts();
+    }
+  }, [hideSeasonalAverages, siteId]);
+
   // Load calculated costs from database
   const calculateAllCosts = async () => {
     setIsCalculatingCosts(true);
@@ -444,6 +464,94 @@ export default function TariffAssignmentTab({
     } finally {
       setIsCalculatingCosts(false);
     }
+  };
+
+  // Fetch reconciliation costs for comparison tab
+  const fetchReconciliationCosts = async () => {
+    setIsLoadingReconciliationCosts(true);
+    
+    try {
+      const { data: runs, error } = await supabase
+        .from('reconciliation_runs')
+        .select(`
+          id,
+          run_name,
+          date_from,
+          date_to,
+          reconciliation_meter_results(
+            meter_id,
+            total_cost,
+            energy_cost,
+            fixed_charges
+          )
+        `)
+        .eq('site_id', siteId)
+        .order('date_from', { ascending: false });
+
+      if (error) {
+        console.error("Error fetching reconciliation costs:", error);
+        return;
+      }
+
+      // Build mapping structure
+      const costsMap: typeof reconciliationCosts = {};
+      runs?.forEach(run => {
+        run.reconciliation_meter_results?.forEach((result: any) => {
+          if (!costsMap[result.meter_id]) {
+            costsMap[result.meter_id] = {};
+          }
+          const periodKey = `${run.date_from}_${run.date_to}`;
+          costsMap[result.meter_id][periodKey] = {
+            total_cost: result.total_cost || 0,
+            run_name: run.run_name,
+            date_from: run.date_from,
+            date_to: run.date_to
+          };
+        });
+      });
+
+      setReconciliationCosts(costsMap);
+    } catch (error) {
+      console.error("Error fetching reconciliation costs:", error);
+    } finally {
+      setIsLoadingReconciliationCosts(false);
+    }
+  };
+
+  // Helper to get reconciliation cost for a document
+  const getReconciliationCostForDocument = (meterId: string, periodStart: string, periodEnd: string): number | null => {
+    const meterCosts = reconciliationCosts[meterId];
+    if (!meterCosts) return null;
+
+    const docStart = new Date(periodStart);
+    const docEnd = new Date(periodEnd);
+
+    // Find matching reconciliation run by date overlap
+    for (const [periodKey, costData] of Object.entries(meterCosts)) {
+      const runStart = new Date(costData.date_from);
+      const runEnd = new Date(costData.date_to);
+
+      // Check if document period falls within reconciliation period
+      if (docStart >= runStart && docEnd <= runEnd) {
+        return costData.total_cost;
+      }
+    }
+
+    return null;
+  };
+
+  // Build reconciliation costs map for a specific meter's documents
+  const getReconciliationCostsMap = (meterId: string, docs: DocumentShopNumber[]): { [docId: string]: number } => {
+    const costsMap: { [docId: string]: number } = {};
+    
+    docs.forEach(doc => {
+      const cost = getReconciliationCostForDocument(meterId, doc.periodStart, doc.periodEnd);
+      if (cost !== null) {
+        costsMap[doc.documentId] = cost;
+      }
+    });
+
+    return costsMap;
   };
 
   // Calculate and store costs for all meters with documents
@@ -1476,7 +1584,11 @@ export default function TariffAssignmentTab({
                       if (filteredShops.length === 0) return null;
                       
                       // Transform and sort data for chart
-                      let chartData = addSeasonalAverages(filteredShops, calculatedCosts);
+                      // Use reconciliation costs in comparison mode, otherwise use calculated costs
+                      const costsToUse = hideSeasonalAverages 
+                        ? getReconciliationCostsMap(meter.id, filteredShops)
+                        : calculatedCosts;
+                      let chartData = addSeasonalAverages(filteredShops, costsToUse);
                       
                       return (
                         <Card 
@@ -1498,7 +1610,7 @@ export default function TariffAssignmentTab({
                             <ChartContainer
                               config={{
                                 amount: {
-                                  label: "Calculated Cost",
+                                  label: hideSeasonalAverages ? "Reconciliation Cost" : "Calculated Cost",
                                   color: "hsl(var(--primary))",
                                 },
                                 documentAmount: {
@@ -1566,7 +1678,7 @@ export default function TariffAssignmentTab({
                                     dataKey="amount" 
                                     fill="hsl(var(--muted-foreground))"
                                     radius={[4, 4, 0, 0]}
-                                    name="Calculated Cost"
+                                    name={hideSeasonalAverages ? "Reconciliation Cost" : "Calculated Cost"}
                                     opacity={0.5}
                                   />
                                   {hideSeasonalAverages && (
@@ -2144,7 +2256,11 @@ export default function TariffAssignmentTab({
           
           <ScrollArea className="max-h-[70vh] pr-4">
             {selectedChartMeter && (() => {
-              const chartData = addSeasonalAverages(selectedChartMeter.docs, chartDialogCalculations);
+              // Use reconciliation costs in comparison mode, otherwise use dialog calculations
+              const costsToUse = hideSeasonalAverages 
+                ? getReconciliationCostsMap(selectedChartMeter.meter.id, selectedChartMeter.docs)
+                : chartDialogCalculations;
+              const chartData = addSeasonalAverages(selectedChartMeter.docs, costsToUse);
               
               const currencies = new Set(selectedChartMeter.docs.map(d => d.currency));
               const hasMixedCurrencies = currencies.size > 1;
@@ -2189,7 +2305,7 @@ export default function TariffAssignmentTab({
                       <ChartContainer
                         config={{
                           amount: {
-                            label: "Calculated Cost",
+                            label: hideSeasonalAverages ? "Reconciliation Cost" : "Calculated Cost",
                             color: "hsl(var(--primary))",
                           },
                           documentAmount: {
@@ -2257,7 +2373,7 @@ export default function TariffAssignmentTab({
                               dataKey="amount" 
                               fill="hsl(var(--muted-foreground))"
                               radius={[4, 4, 0, 0]}
-                              name="Calculated Cost"
+                              name={hideSeasonalAverages ? "Reconciliation Cost" : "Calculated Cost"}
                               opacity={0.5}
                             />
                             {hideSeasonalAverages && (
@@ -2448,7 +2564,11 @@ export default function TariffAssignmentTab({
           {/* Chart Section */}
           {!showDocumentCharts && viewingAllDocs && viewingAllDocs.docs.length > 1 && (() => {
             // Transform and sort data for chart with seasonal averages
-            const chartData = addSeasonalAverages(viewingAllDocs.docs);
+            // Use reconciliation costs in comparison mode
+            const costsToUse = hideSeasonalAverages 
+              ? getReconciliationCostsMap(viewingAllDocs.meter.id, viewingAllDocs.docs)
+              : undefined;
+            const chartData = addSeasonalAverages(viewingAllDocs.docs, costsToUse);
             
             // Check for mixed currencies
             const currencies = new Set(viewingAllDocs.docs.map(d => d.currency));
