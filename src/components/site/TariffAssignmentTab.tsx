@@ -2309,7 +2309,11 @@ export default function TariffAssignmentTab({
                               <TableRow key={itemIdx}>
                                 <TableCell className="font-medium">{item.description}</TableCell>
                                 <TableCell className="text-right font-mono">
-                                  {item.rate && item.rate > 0 ? `R ${item.rate.toFixed(4)}/kWh` : '—'}
+                                  {item.rate && item.rate > 0 
+                                    ? `R ${item.rate.toFixed(4)}/kWh` 
+                                    : item.amount 
+                                      ? `R ${item.amount.toFixed(2)}`
+                                      : '—'}
                                 </TableCell>
                                 <TableCell className="text-right font-mono text-primary">
                                   {calc.avg_cost_per_kwh && item.rate && item.rate > 0 
