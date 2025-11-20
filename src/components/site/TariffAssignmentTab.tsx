@@ -2277,15 +2277,154 @@ export default function TariffAssignmentTab({
                   const calc = comparison.calculation;
                   const doc = comparison.document;
                   
-                  // Calculate variance badge
+                  // Calculate document-level variance from line item rate variances
+                  const calculateDocumentVariance = () => {
+                    if (calc.calculation_error) {
+                      return null;
+                    }
+                    
+                    if (!doc.lineItems || doc.lineItems.length === 0) {
+                      return null;
+                    }
+                    
+                    const lineItemVariances: number[] = [];
+                    
+                    doc.lineItems.forEach((item) => {
+                      // Try to find matching tariff rate for this line item
+                      let tariffRate: string | null = null;
+                      const description = item.description.toLowerCase();
+                      const tariffDetails = comparison.tariffDetails;
+                      
+                      // Determine season based on billing period
+                      const periodMonth = new Date(calc.period_start).getMonth() + 1;
+                      const isHighSeason = periodMonth >= 6 && periodMonth <= 8;
+                      const touSeason = isHighSeason ? 'winter' : 'summer';
+                      const chargeSeason = isHighSeason ? 'high' : 'low';
+                      
+                      // Use item.unit field to determine charge type
+                      const itemUnit = item.unit || 'kWh';
+                      const unitLower = itemUnit.toLowerCase();
+                      const isDemandCharge = unitLower === 'kva';
+                      const isEnergyCharge = unitLower === 'kwh';
+                      const isBasicCharge = itemUnit === 'Monthly' || description.includes('basic');
+                      
+                      // Skip Emergency supply - no standard tariff rate applies
+                      if (item.supply !== 'Emergency') {
+                        // Determine charge type and find matching rate
+                        if (isBasicCharge || (item.amount && !item.rate)) {
+                          const matchingCharge = tariffDetails.charges.find(charge => {
+                            const chargeDesc = (charge.description || charge.charge_type).toLowerCase();
+                            return description.includes('basic') && chargeDesc.includes('basic');
+                          });
+                          
+                          if (matchingCharge) {
+                            tariffRate = `R ${matchingCharge.charge_amount.toFixed(2)}`;
+                          }
+                        } else if (isDemandCharge && item.rate && item.rate > 0) {
+                          const demandCharge = tariffDetails.charges.find(charge => 
+                            charge.charge_type === `demand_${chargeSeason}_season` ||
+                            (charge.charge_type.toLowerCase().includes('demand') && 
+                             charge.charge_type.toLowerCase().includes(chargeSeason))
+                          );
+                          
+                          if (demandCharge && (demandCharge.unit === 'R/kVA' || demandCharge.unit === 'c/kVA')) {
+                            const rateValue = demandCharge.unit === 'c/kVA' 
+                              ? demandCharge.charge_amount / 100 
+                              : demandCharge.charge_amount;
+                            tariffRate = `R ${rateValue.toFixed(4)}/kVA`;
+                          }
+                        } else if (!isDemandCharge && item.rate && item.rate > 0) {
+                          // Try TOU periods
+                          if (tariffDetails.periods.length > 0) {
+                            const seasonalPeriods = tariffDetails.periods.filter(p => 
+                              p.season.toLowerCase().includes(touSeason)
+                            );
+                            
+                            if (seasonalPeriods.length > 0) {
+                              const standardPeriod = seasonalPeriods.find(p => 
+                                p.period_type.toLowerCase().includes('standard') || 
+                                p.period_type.toLowerCase().includes('off')
+                              );
+                              
+                              if (standardPeriod) {
+                                tariffRate = `R ${(standardPeriod.energy_charge_cents / 100).toFixed(4)}/kWh`;
+                              } else {
+                                const avgRate = seasonalPeriods.reduce((sum, p) => sum + p.energy_charge_cents, 0) / seasonalPeriods.length;
+                                tariffRate = `R ${(avgRate / 100).toFixed(4)}/kWh`;
+                              }
+                            }
+                          }
+                          
+                          // Try block-based tariffs
+                          if (!tariffRate && tariffDetails.blocks.length > 0 && item.consumption) {
+                            const matchingBlock = tariffDetails.blocks.find(block => {
+                              if (block.kwh_to === null) {
+                                return item.consumption! >= block.kwh_from;
+                              }
+                              return item.consumption! >= block.kwh_from && item.consumption! <= block.kwh_to;
+                            });
+                            if (matchingBlock) {
+                              tariffRate = `R ${(matchingBlock.energy_charge_cents / 100).toFixed(4)}/kWh`;
+                            }
+                          }
+                          
+                          // Try seasonal charges
+                          if (!tariffRate && tariffDetails.charges.length > 0) {
+                            const seasonalCharge = tariffDetails.charges.find(charge => {
+                              const chargeTypeLower = charge.charge_type.toLowerCase();
+                              return chargeTypeLower === `energy_${chargeSeason}_season` ||
+                                     (chargeTypeLower.includes('energy') && chargeTypeLower.includes(chargeSeason)) ||
+                                     (chargeTypeLower.includes('energy') && 
+                                      (chargeTypeLower.includes('both') || chargeTypeLower.includes('all')));
+                            });
+                            
+                            if (seasonalCharge && seasonalCharge.unit === 'c/kWh') {
+                              tariffRate = `R ${(seasonalCharge.charge_amount / 100).toFixed(4)}/kWh`;
+                            }
+                          }
+                        }
+                      }
+                      
+                      // Calculate variance for this line item
+                      let variancePercent: number | null = null;
+                      if (item.rate && tariffRate) {
+                        if (itemUnit === 'kWh' && tariffRate.includes('/kWh')) {
+                          const tariffRateValue = parseFloat(tariffRate.replace('R ', '').replace('/kWh', ''));
+                          variancePercent = ((tariffRateValue - item.rate) / item.rate) * 100;
+                        } else if (itemUnit === 'kVA' && tariffRate.includes('/kVA')) {
+                          const tariffRateValue = parseFloat(tariffRate.replace('R ', '').replace('/kVA', ''));
+                          variancePercent = ((tariffRateValue - item.rate) / item.rate) * 100;
+                        }
+                      } else if (itemUnit === 'Monthly' && item.amount && tariffRate) {
+                        const tariffAmount = parseFloat(tariffRate.replace('R ', ''));
+                        variancePercent = ((tariffAmount - item.amount) / item.amount) * 100;
+                      }
+                      
+                      // Add to array if we have a valid variance
+                      if (variancePercent !== null) {
+                        lineItemVariances.push(Math.abs(variancePercent));
+                      }
+                    });
+                    
+                    // Return average of absolute variances
+                    if (lineItemVariances.length === 0) {
+                      return null;
+                    }
+                    
+                    return lineItemVariances.reduce((sum, v) => sum + v, 0) / lineItemVariances.length;
+                  };
+                  
+                  const documentVariance = calculateDocumentVariance();
+                  
+                  // Calculate variance badge using rate-based variance
                   const getVarianceBadge = () => {
                     if (calc.calculation_error) {
                       return { variant: 'destructive' as const, label: 'ERROR', className: '' };
                     }
-                    if (!calc.variance_percentage) {
+                    if (documentVariance === null) {
                       return { variant: 'outline' as const, label: 'NO DATA', className: '' };
                     }
-                    const variancePercent = Math.abs(calc.variance_percentage);
+                    const variancePercent = documentVariance;
                     if (variancePercent <= 5) {
                       return { variant: 'default' as const, label: `${variancePercent.toFixed(1)}%`, className: 'bg-green-500 hover:bg-green-600' };
                     } else if (variancePercent <= 10) {
