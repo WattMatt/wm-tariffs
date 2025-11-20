@@ -2336,7 +2336,7 @@ export default function TariffAssignmentTab({
                         <TableRow>
                           <TableHead>Item</TableHead>
                           <TableHead className="text-right">Document</TableHead>
-                          <TableHead className="text-right">Calculated</TableHead>
+                          <TableHead className="text-right">Assigned</TableHead>
                           <TableHead className="text-right">Variance</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -2408,11 +2408,16 @@ export default function TariffAssignmentTab({
                                 }
                               }
                               
-                              // Calculate variance only if both rates are available
-                              let variance: number | null = null;
+                              // Calculate variance as percentage
+                              let variancePercent: number | null = null;
                               if (item.rate && tariffRate && tariffRate.includes('/kWh')) {
+                                // For energy charges - compare rates
                                 const tariffRateValue = parseFloat(tariffRate.replace('R ', '').replace('/kWh', ''));
-                                variance = item.rate - tariffRateValue;
+                                variancePercent = ((tariffRateValue - item.rate) / item.rate) * 100;
+                              } else if (item.amount && tariffRate && !tariffRate.includes('/kWh')) {
+                                // For fixed charges - compare amounts
+                                const tariffAmount = parseFloat(tariffRate.replace('R ', ''));
+                                variancePercent = ((tariffAmount - item.amount) / item.amount) * 100;
                               }
                               
                               return (
@@ -2430,13 +2435,13 @@ export default function TariffAssignmentTab({
                                   </TableCell>
                                   <TableCell className={cn(
                                     "text-right font-mono",
-                                    variance !== null
-                                      ? variance > 0 
+                                    variancePercent !== null
+                                      ? variancePercent > 0 
                                         ? "text-red-600" 
                                         : "text-green-600"
                                       : "text-muted-foreground"
                                   )}>
-                                    {variance !== null ? `R ${variance.toFixed(4)}` : '—'}
+                                    {variancePercent !== null ? `${variancePercent > 0 ? '+' : ''}${variancePercent.toFixed(1)}%` : '—'}
                                   </TableCell>
                                 </TableRow>
                               );
