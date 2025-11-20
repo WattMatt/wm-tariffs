@@ -1276,12 +1276,16 @@ export default function DocumentsTab({ siteId, onUploadProgressChange }: Documen
     const result: SiteDocument[] = [];
     const processedFolders = new Set<string>();
     
+    console.log('Getting documents in folders:', folderIds);
+    console.log('All documents:', documents.map(d => ({ id: d.id, name: d.file_name, parent: d.parent_folder_id, isFolder: d.is_folder })));
+    
     const processFolder = (folderId: string) => {
       if (processedFolders.has(folderId)) return;
       processedFolders.add(folderId);
       
       // Get all documents and subfolders with this parent_folder_id
       const childItems = documents.filter(doc => doc.parent_folder_id === folderId);
+      console.log(`Folder ${folderId} has ${childItems.length} child items:`, childItems.map(c => c.file_name));
       
       childItems.forEach(item => {
         if (item.is_folder) {
@@ -1295,6 +1299,7 @@ export default function DocumentsTab({ siteId, onUploadProgressChange }: Documen
     };
     
     folderIds.forEach(folderId => processFolder(folderId));
+    console.log(`Found ${result.length} total documents in folders`);
     return result;
   };
 
