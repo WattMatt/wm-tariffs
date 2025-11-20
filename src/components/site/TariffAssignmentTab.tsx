@@ -2305,30 +2305,31 @@ export default function TariffAssignmentTab({
                       <TableBody>
                         {doc.lineItems && doc.lineItems.length > 0 ? (
                           <>
-                            {doc.lineItems
-                              .filter(item => item.rate && item.rate > 0)
-                              .map((item, itemIdx) => (
-                                <TableRow key={itemIdx}>
-                                  <TableCell className="font-medium">{item.description}</TableCell>
-                                  <TableCell className="text-right font-mono">R {item.rate.toFixed(4)}/kWh</TableCell>
-                                  <TableCell className="text-right font-mono text-primary">
-                                    {calc.avg_cost_per_kwh ? `R ${calc.avg_cost_per_kwh.toFixed(4)}/kWh` : '—'}
-                                  </TableCell>
-                                  <TableCell className={cn(
-                                    "text-right font-mono",
-                                    calc.avg_cost_per_kwh && item.rate > calc.avg_cost_per_kwh ? "text-red-600" : "text-green-600"
-                                  )}>
-                                    {calc.avg_cost_per_kwh ? `R ${(item.rate - calc.avg_cost_per_kwh).toFixed(4)}` : '—'}
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            {doc.lineItems.filter(item => item.rate && item.rate > 0).length === 0 && (
-                              <TableRow>
-                                <TableCell colSpan={4} className="text-center text-muted-foreground italic py-8">
-                                  No rates found in document line items
+                            {doc.lineItems.map((item, itemIdx) => (
+                              <TableRow key={itemIdx}>
+                                <TableCell className="font-medium">{item.description}</TableCell>
+                                <TableCell className="text-right font-mono">
+                                  {item.rate && item.rate > 0 ? `R ${item.rate.toFixed(4)}/kWh` : '—'}
+                                </TableCell>
+                                <TableCell className="text-right font-mono text-primary">
+                                  {calc.avg_cost_per_kwh && item.rate && item.rate > 0 
+                                    ? `R ${calc.avg_cost_per_kwh.toFixed(4)}/kWh` 
+                                    : '—'}
+                                </TableCell>
+                                <TableCell className={cn(
+                                  "text-right font-mono",
+                                  calc.avg_cost_per_kwh && item.rate && item.rate > 0
+                                    ? item.rate > calc.avg_cost_per_kwh 
+                                      ? "text-red-600" 
+                                      : "text-green-600"
+                                    : "text-muted-foreground"
+                                )}>
+                                  {calc.avg_cost_per_kwh && item.rate && item.rate > 0
+                                    ? `R ${(item.rate - calc.avg_cost_per_kwh).toFixed(4)}`
+                                    : '—'}
                                 </TableCell>
                               </TableRow>
-                            )}
+                            ))}
                           </>
                         ) : (
                           <TableRow>
