@@ -3007,17 +3007,6 @@ export default function TariffAssignmentTab({
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        {(() => {
-                          const calc = viewingAllDocsCalculations[doc.documentId];
-                          if (calc && calc.variance_percentage !== null) {
-                            return (
-                              <Badge variant={Math.abs(calc.variance_percentage) > 10 ? "destructive" : "secondary"}>
-                                {calc.variance_percentage >= 0 ? '+' : ''}{calc.variance_percentage.toFixed(1)}%
-                              </Badge>
-                            );
-                          }
-                          return null;
-                        })()}
                         <Badge variant="outline">{doc.currency} {doc.totalAmount.toFixed(2)}</Badge>
                         <ChevronDown className={cn(
                           "h-4 w-4 transition-transform",
