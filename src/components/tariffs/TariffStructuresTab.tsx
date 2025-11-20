@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, FileText, Eye, Trash2, Pencil, Clock, RefreshCw } from "lucide-react";
+import { Plus, FileText, Eye, Trash2, Pencil, Clock, RefreshCw, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
 import TariffEditDialog from "./TariffEditDialog";
@@ -46,6 +46,10 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [sortConfig, setSortConfig] = useState<{
+    column: string | null;
+    direction: 'asc' | 'desc' | null;
+  }>({ column: null, direction: null });
   const [selectedTariffForEdit, setSelectedTariffForEdit] = useState<{ id: string; name: string; mode: "view" | "edit" } | null>(null);
 
   useEffect(() => {
@@ -66,6 +70,7 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
     } else {
       setStructures(data || []);
       setSelectedTariffs(new Set()); // Clear selection when refreshing
+      setSortConfig({ column: null, direction: null }); // Reset sort when data refreshes
     }
   };
 
@@ -85,6 +90,76 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
       newSelection.delete(tariffId);
     }
     setSelectedTariffs(newSelection);
+  };
+
+  const handleSort = (column: string) => {
+    setSortConfig(current => {
+      if (current.column === column) {
+        // Cycle through: asc -> desc -> null (default)
+        if (current.direction === 'asc') return { column, direction: 'desc' };
+        if (current.direction === 'desc') return { column: null, direction: null };
+      }
+      return { column, direction: 'asc' };
+    });
+  };
+
+  const getSortedStructures = () => {
+    if (!sortConfig.column || !sortConfig.direction) {
+      return structures; // Return default order
+    }
+
+    return [...structures].sort((a, b) => {
+      let aValue: any;
+      let bValue: any;
+
+      switch (sortConfig.column) {
+        case 'name':
+          aValue = a.name.toLowerCase();
+          bValue = b.name.toLowerCase();
+          break;
+        case 'authority':
+          aValue = (a.supply_authorities?.name || '').toLowerCase();
+          bValue = (b.supply_authorities?.name || '').toLowerCase();
+          break;
+        case 'type':
+          aValue = a.tariff_type.toLowerCase();
+          bValue = b.tariff_type.toLowerCase();
+          break;
+        case 'tou':
+          aValue = a.uses_tou ? (a.tou_type || '').toLowerCase() : '';
+          bValue = b.uses_tou ? (b.tou_type || '').toLowerCase() : '';
+          break;
+        case 'effective_from':
+          aValue = new Date(a.effective_from).getTime();
+          bValue = new Date(b.effective_from).getTime();
+          break;
+        default:
+          return 0;
+      }
+
+      if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+  };
+
+  const SortableHeader = ({ column, children }: { column: string; children: React.ReactNode }) => {
+    const isActive = sortConfig.column === column;
+    const direction = isActive ? sortConfig.direction : null;
+    
+    return (
+      <TableHead 
+        className="cursor-pointer select-none hover:bg-muted/50"
+        onClick={() => handleSort(column)}
+      >
+        <div className="flex items-center gap-2">
+          {children}
+          {direction === 'asc' && <ArrowUp className="w-4 h-4" />}
+          {direction === 'desc' && <ArrowDown className="w-4 h-4" />}
+          {!direction && <ArrowUpDown className="w-4 h-4 text-muted-foreground/50" />}
+        </div>
+      </TableHead>
+    );
   };
 
   const handleDeleteSelected = async () => {
@@ -364,17 +439,17 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
                       aria-label="Select all tariffs"
                     />
                   </TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Authority</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>TOU</TableHead>
-                  <TableHead>Effective From</TableHead>
+                  <SortableHeader column="name">Name</SortableHeader>
+                  <SortableHeader column="authority">Authority</SortableHeader>
+                  <SortableHeader column="type">Type</SortableHeader>
+                  <SortableHeader column="tou">TOU</SortableHeader>
+                  <SortableHeader column="effective_from">Effective From</SortableHeader>
                   <TableHead>Status</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {structures.map((structure) => (
+                {getSortedStructures().map((structure) => (
                   <TableRow key={structure.id}>
                     <TableCell>
                       <Checkbox
