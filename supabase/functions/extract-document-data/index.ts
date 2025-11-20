@@ -47,11 +47,11 @@ Extract the following information:
 - Line items array: For EACH row in the billing table, extract:
   * Description (e.g., "Electrical", "Water", "Misc")
   * Meter number (if shown in the table)
-  * Unit (CRITICAL: Extract the unit type such as "kWh", "kVA", "kW" from the description, meter number, or table headers. Look for indicators like "(kWh)", "(kVA)", or text containing "kwh", "kva", etc.)
-  * Previous reading (the starting meter value)
-  * Current reading (the ending meter value)
-  * Consumption (units used, should be current - previous)
-  * Rate (price per unit, in cents or rands)
+  * Unit (CRITICAL: Determine the unit type from the description or table headers. The ONLY valid options are: "kWh" (kilowatt-hours for energy consumption), "kVA" (kilovolt-amperes for demand charges), or "Monthly" (for fixed monthly charges like basic fees). Look for indicators like "(kWh)", "(kVA)", "Conv", "Demand", "Basic", or "Monthly" in the description.)
+  * Previous reading (the starting meter value, only applicable for kWh and kVA)
+  * Current reading (the ending meter value, only applicable for kWh and kVA)
+  * Consumption (units used, should be current - previous for kWh and kVA)
+  * Rate (price per unit in cents or rands)
   * Amount (line item total, should be consumption × rate)
 
 Return the data in a structured format with all line items in an array.`;
@@ -115,7 +115,8 @@ Return the data in a structured format with all line items in an array.`;
                       },
                       unit: {
                         type: "string",
-                        description: "Unit type extracted from the description, meter number, or table headers (e.g., 'kWh', 'kVA', 'kW'). Look for text like '(kWh)', '(kVA)', or indicators in the description."
+                        description: "Unit type for this line item. Must be one of: 'kWh' (for energy consumption charges), 'kVA' (for demand charges), or 'Monthly' (for fixed monthly charges like basic fees). Determine from the description - look for keywords like 'Conv', 'Consumption', 'kWh' for energy; 'Demand', 'kVA' for demand; 'Basic', 'Fixed', 'Monthly' for monthly charges.",
+                        enum: ["kWh", "kVA", "Monthly"]
                       },
                       previous_reading: { 
                         type: "number", 
