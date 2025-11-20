@@ -296,12 +296,12 @@ export default function TariffAssignmentTab({
       const isSummer = summerMonths.includes(month);
       
       // Create base data point
-      // If there's a calculated cost in the map, use it; otherwise use document amount
+      // If there's a calculated cost in the map, use it; otherwise set to null (no bar)
       const dataPoint: any = {
         period: new Date(doc.periodStart).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }),
         amount: calculatedCostsMap && calculatedCostsMap[doc.documentId] !== undefined
           ? calculatedCostsMap[doc.documentId]
-          : (doc.totalAmount || 0),
+          : null,
         documentAmount: doc.totalAmount || null,
         documentId: doc.documentId,
       };
@@ -555,16 +555,13 @@ export default function TariffAssignmentTab({
 
       console.log(`  Checking reconciliation period: ${runStart.toISOString()} to ${runEnd.toISOString()}, cost: ${costData.total_cost}`);
 
-      // Check if dates match (allowing for 3-day variance to account for date inconsistencies)
-      const docStartTime = docStart.getTime();
+      // Only check end dates (allowing for 2-day variance)
       const docEndTime = docEnd.getTime();
-      const runStartTime = runStart.getTime();
       const runEndTime = runEnd.getTime();
       
-      const startMatches = Math.abs(docStartTime - runStartTime) < 86400000 * 3; // Within 3 days
-      const endMatches = Math.abs(docEndTime - runEndTime) < 86400000 * 3; // Within 3 days
+      const endMatches = Math.abs(docEndTime - runEndTime) < 86400000 * 2; // Within 2 days
       
-      if (startMatches && endMatches) {
+      if (endMatches) {
         console.log(`  ✓ Match found! Using cost: ${costData.total_cost}`);
         return costData.total_cost;
       }
