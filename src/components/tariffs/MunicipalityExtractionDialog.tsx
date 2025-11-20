@@ -1354,18 +1354,35 @@ export default function MunicipalityExtractionDialog({
                                   </div>
                                 </div>
                                 
-                                <div>
-                                  <Label className="text-xs">Effective From</Label>
-                                  <Input
-                                    type="date"
-                                    value={tariff.effectiveFrom || new Date().toISOString().split('T')[0]}
-                                    onChange={(e) => {
-                                      const updated = [...extractedData.tariffStructures];
-                                      updated[tariffIdx].effectiveFrom = e.target.value;
-                                      setExtractedData({ ...extractedData, tariffStructures: updated });
-                                    }}
-                                    className="h-9 mt-1"
-                                  />
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div>
+                                    <Label className="text-xs">Effective From</Label>
+                                    <Input
+                                      type="date"
+                                      value={tariff.effectiveFrom || new Date().toISOString().split('T')[0]}
+                                      onChange={(e) => {
+                                        const updated = [...extractedData.tariffStructures];
+                                        updated[tariffIdx].effectiveFrom = e.target.value;
+                                        setExtractedData({ ...extractedData, tariffStructures: updated });
+                                      }}
+                                      className="h-9 mt-1"
+                                      required
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label className="text-xs">Effective To</Label>
+                                    <Input
+                                      type="date"
+                                      value={tariff.effectiveTo || new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0]}
+                                      onChange={(e) => {
+                                        const updated = [...extractedData.tariffStructures];
+                                        updated[tariffIdx].effectiveTo = e.target.value;
+                                        setExtractedData({ ...extractedData, tariffStructures: updated });
+                                      }}
+                                      className="h-9 mt-1"
+                                      required
+                                    />
+                                  </div>
                                 </div>
                                 
                                 {/* Section Visibility Checkboxes */}
