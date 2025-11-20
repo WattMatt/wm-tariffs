@@ -2710,12 +2710,25 @@ export default function TariffAssignmentTab({
                                 )} 
                               />
                               <FileText className="w-4 h-4 text-muted-foreground" />
-                              <span className="font-medium">{doc.shopNumber}</span>
+                              <div className="flex items-center gap-3">
+                                <span className="font-medium">{doc.shopNumber}</span>
+                                <span className="text-sm text-muted-foreground">
+                                  {new Date(doc.periodStart).toLocaleDateString()} - {new Date(doc.periodEnd).toLocaleDateString()}
+                                </span>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-4">
-                              <span className="text-sm text-muted-foreground">
-                                {new Date(doc.periodStart).toLocaleDateString()} - {new Date(doc.periodEnd).toLocaleDateString()}
-                              </span>
+                            <div className="flex items-center gap-2">
+                              {(() => {
+                                const calc = chartDialogCalculations[doc.documentId];
+                                if (calc && calc.variance_percentage !== null) {
+                                  return (
+                                    <Badge variant={Math.abs(calc.variance_percentage) > 10 ? "destructive" : "secondary"} className="text-xs">
+                                      {calc.variance_percentage >= 0 ? '+' : ''}{calc.variance_percentage.toFixed(1)}%
+                                    </Badge>
+                                  );
+                                }
+                                return null;
+                              })()}
                               <Badge variant="outline" className="font-mono">
                                 R {doc.totalAmount.toFixed(2)}
                               </Badge>
@@ -2748,11 +2761,6 @@ export default function TariffAssignmentTab({
                                     <span className="text-sm font-medium text-muted-foreground">
                                       Rate Comparison: Document vs {hideSeasonalAverages ? 'Reconciliation' : 'Tariff'}
                                     </span>
-                                    <Badge variant={Math.abs(calc.variance_percentage || 0) > 10 ? "destructive" : "secondary"} className="text-xs">
-                                      {calc.variance_percentage !== null 
-                                        ? `${calc.variance_percentage >= 0 ? '+' : ''}${calc.variance_percentage.toFixed(1)}%`
-                                        : 'N/A'}
-                                    </Badge>
                                   </div>
                                   <div className="border rounded-lg overflow-hidden">
                                     <Table>
@@ -2984,7 +2992,7 @@ export default function TariffAssignmentTab({
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <FileText className="w-5 h-5 text-muted-foreground" />
-                        <div className="text-left">
+                        <div className="flex items-center gap-3">
                           <div className="font-medium">{doc.shopNumber}</div>
                           <div className="text-sm text-muted-foreground">
                             {new Date(doc.periodStart).toLocaleDateString()} - {new Date(doc.periodEnd).toLocaleDateString()}
@@ -2992,6 +3000,17 @@ export default function TariffAssignmentTab({
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
+                        {(() => {
+                          const calc = viewingAllDocsCalculations[doc.documentId];
+                          if (calc && calc.variance_percentage !== null) {
+                            return (
+                              <Badge variant={Math.abs(calc.variance_percentage) > 10 ? "destructive" : "secondary"}>
+                                {calc.variance_percentage >= 0 ? '+' : ''}{calc.variance_percentage.toFixed(1)}%
+                              </Badge>
+                            );
+                          }
+                          return null;
+                        })()}
                         <Badge variant="outline">{doc.currency} {doc.totalAmount.toFixed(2)}</Badge>
                         <ChevronDown className={cn(
                           "h-4 w-4 transition-transform",
@@ -3030,11 +3049,6 @@ export default function TariffAssignmentTab({
                           <div className="border rounded-lg p-4 space-y-3">
                             <div className="flex items-center justify-between">
                               <span className="text-sm font-medium">{calc.tariff_structures?.name || 'Tariff Calculation'}</span>
-                              <Badge variant={Math.abs(calc.variance_percentage || 0) > 10 ? "destructive" : "secondary"}>
-                                {calc.variance_percentage !== null 
-                                  ? `${calc.variance_percentage >= 0 ? '+' : ''}${calc.variance_percentage.toFixed(1)}%`
-                                  : 'N/A'}
-                              </Badge>
                             </div>
                             
                             <Table>
@@ -3225,11 +3239,6 @@ export default function TariffAssignmentTab({
                         <div key={idx} className="border rounded-lg p-4 space-y-3">
                           <div className="flex items-center justify-between">
                             <span className="text-sm font-medium">{calc.tariff_structures?.name || 'Tariff Calculation'}</span>
-                            <Badge variant={Math.abs(calc.variance_percentage || 0) > 10 ? "destructive" : "secondary"}>
-                              {calc.variance_percentage !== null 
-                                ? `${calc.variance_percentage >= 0 ? '+' : ''}${calc.variance_percentage.toFixed(1)}%`
-                                : 'N/A'}
-                            </Badge>
                           </div>
                           
                           <Table>
