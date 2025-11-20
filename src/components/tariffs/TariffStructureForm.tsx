@@ -43,6 +43,7 @@ interface TariffData {
   meterConfiguration: string;
   description: string;
   effectiveFrom: string;
+  effectiveTo?: string;
   blocks: EnergyBlock[];
   seasonalEnergy: SeasonalCharge[];
   touSeasons: TouSeason[];
@@ -64,6 +65,7 @@ export default function TariffStructureForm({ onSubmit, isLoading, initialData, 
     meterConfiguration: "prepaid",
     description: "",
     effectiveFrom: new Date().toISOString().split('T')[0],
+    effectiveTo: undefined,
     blocks: [],
     seasonalEnergy: [],
     touSeasons: [],
@@ -288,16 +290,29 @@ export default function TariffStructureForm({ onSubmit, isLoading, initialData, 
               </div>
             </div>
 
-            <div>
-              <Label className="text-xs">Effective From</Label>
-              <Input
-                type="date"
-                value={tariffData.effectiveFrom}
-                onChange={(e) => setTariffData({ ...tariffData, effectiveFrom: e.target.value })}
-                required
-                disabled={readOnly}
-                className="h-9 mt-1"
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">Effective From</Label>
+                <Input
+                  type="date"
+                  value={tariffData.effectiveFrom}
+                  onChange={(e) => setTariffData({ ...tariffData, effectiveFrom: e.target.value })}
+                  required
+                  disabled={readOnly}
+                  className="h-9 mt-1"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Effective To (Optional)</Label>
+                <Input
+                  type="date"
+                  value={tariffData.effectiveTo || ''}
+                  onChange={(e) => setTariffData({ ...tariffData, effectiveTo: e.target.value || undefined })}
+                  disabled={readOnly}
+                  className="h-9 mt-1"
+                  placeholder="Leave empty for ongoing"
+                />
+              </div>
             </div>
           </div>
         </div>
