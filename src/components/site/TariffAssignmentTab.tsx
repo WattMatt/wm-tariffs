@@ -2316,7 +2316,7 @@ export default function TariffAssignmentTab({
                           </div>
                         </div>
                         
-                        {/* Detailed Breakdown Table with Comparison */}
+                        {/* Rates Comparison Table */}
                         <Table>
                       <TableHeader>
                         <TableRow>
@@ -2327,159 +2327,38 @@ export default function TariffAssignmentTab({
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        <TableRow>
-                          <TableCell className="font-medium">Energy Cost</TableCell>
-                          <TableCell className="text-right text-muted-foreground">
-                            {(() => {
-                              // Filter line items for council/bulk meters to only include electricity charges
-                              const filteredItems = rateComparisonMeter?.meter_type === 'council_meter' || 
-                                                   rateComparisonMeter?.meter_type === 'bulk_meter'
-                                ? doc.lineItems?.filter(item => 
-                                    item.description?.toLowerCase().includes('electricity')
-                                  )
-                                : doc.lineItems;
-                              
-                              return filteredItems?.reduce((sum, item) => 
-                                sum + (item.description?.toLowerCase().includes('energy') || 
-                                       item.description?.toLowerCase().includes('kwh') ? item.amount : 0), 0
-                              ).toFixed(2) || '—';
-                            })()}
-                          </TableCell>
-                          <TableCell className="text-right">R {calc.energy_cost.toFixed(2)}</TableCell>
-                          <TableCell className="text-right">
-                            {(() => {
-                              const filteredItems = rateComparisonMeter?.meter_type === 'council_meter' || 
-                                                   rateComparisonMeter?.meter_type === 'bulk_meter'
-                                ? doc.lineItems?.filter(item => 
-                                    item.description?.toLowerCase().includes('electricity')
-                                  )
-                                : doc.lineItems;
-                              
-                              const docEnergyCost = filteredItems?.reduce((sum, item) => 
-                                sum + (item.description?.toLowerCase().includes('energy') || 
-                                       item.description?.toLowerCase().includes('kwh') ? item.amount : 0), 0
-                              );
-                              
-                              return docEnergyCost 
-                                ? `R ${(calc.energy_cost - docEnergyCost).toFixed(2)}`
-                                : '—';
-                            })()}
-                          </TableCell>
-                        </TableRow>
-                        <TableRow>
-                          <TableCell className="font-medium">Fixed Charges</TableCell>
-                          <TableCell className="text-right text-muted-foreground">
-                            {(() => {
-                              const filteredItems = rateComparisonMeter?.meter_type === 'council_meter' || 
-                                                   rateComparisonMeter?.meter_type === 'bulk_meter'
-                                ? doc.lineItems?.filter(item => 
-                                    item.description?.toLowerCase().includes('electricity')
-                                  )
-                                : doc.lineItems;
-                              
-                              return filteredItems?.reduce((sum, item) => 
-                                sum + (!item.description?.toLowerCase().includes('energy') && 
-                                       !item.description?.toLowerCase().includes('kwh') &&
-                                       !item.description?.toLowerCase().includes('total') ? item.amount : 0), 0
-                              ).toFixed(2) || '—';
-                            })()}
-                          </TableCell>
-                          <TableCell className="text-right">R {calc.fixed_charges.toFixed(2)}</TableCell>
-                          <TableCell className="text-right">
-                            {(() => {
-                              const filteredItems = rateComparisonMeter?.meter_type === 'council_meter' || 
-                                                   rateComparisonMeter?.meter_type === 'bulk_meter'
-                                ? doc.lineItems?.filter(item => 
-                                    item.description?.toLowerCase().includes('electricity')
-                                  )
-                                : doc.lineItems;
-                              
-                              const docFixedCharges = filteredItems?.reduce((sum, item) => 
-                                sum + (!item.description?.toLowerCase().includes('energy') && 
-                                       !item.description?.toLowerCase().includes('kwh') &&
-                                       !item.description?.toLowerCase().includes('total') ? item.amount : 0), 0
-                              );
-                              
-                              return docFixedCharges 
-                                ? `R ${(calc.fixed_charges - docFixedCharges).toFixed(2)}`
-                                : '—';
-                            })()}
-                          </TableCell>
-                        </TableRow>
-                        <TableRow className="border-t-2">
-                          <TableCell className="font-semibold">Total Cost</TableCell>
-                          <TableCell className="text-right font-semibold">
-                            R {calc.document_billed_amount?.toFixed(2) || doc.totalAmount?.toFixed(2) || '—'}
-                          </TableCell>
-                          <TableCell className="text-right font-semibold">R {calc.total_cost.toFixed(2)}</TableCell>
-                          <TableCell className={cn(
-                            "text-right font-semibold",
-                            calc.variance_amount && calc.variance_amount > 0 ? "text-red-600" : 
-                            calc.variance_amount && calc.variance_amount < 0 ? "text-green-600" : ""
-                          )}>
-                            {calc.variance_amount ? `R ${calc.variance_amount.toFixed(2)}` : '—'}
-                          </TableCell>
-                        </TableRow>
-                        <TableRow>
-                          <TableCell className="font-medium text-muted-foreground">Total kWh</TableCell>
-                          <TableCell className="text-right text-muted-foreground">
-                            {doc.lineItems?.reduce((sum, item) => 
-                              sum + (item.consumption || 0), 0
-                            ).toFixed(2) || '—'} kWh
-                          </TableCell>
-                          <TableCell className="text-right" colSpan={2}>{calc.total_kwh.toFixed(2)} kWh</TableCell>
-                        </TableRow>
-                        {calc.avg_cost_per_kwh && (
+                        {doc.lineItems && doc.lineItems.length > 0 ? (
+                          <>
+                            {doc.lineItems
+                              .filter(item => item.rate && item.rate > 0)
+                              .map((item, itemIdx) => (
+                                <TableRow key={itemIdx}>
+                                  <TableCell className="font-medium">{item.description}</TableCell>
+                                  <TableCell className="text-right font-mono">R {item.rate.toFixed(4)}/kWh</TableCell>
+                                  <TableCell className="text-right font-mono text-primary">
+                                    {calc.avg_cost_per_kwh ? `R ${calc.avg_cost_per_kwh.toFixed(4)}/kWh` : '—'}
+                                  </TableCell>
+                                  <TableCell className={cn(
+                                    "text-right font-mono",
+                                    calc.avg_cost_per_kwh && item.rate > calc.avg_cost_per_kwh ? "text-red-600" : "text-green-600"
+                                  )}>
+                                    {calc.avg_cost_per_kwh ? `R ${(item.rate - calc.avg_cost_per_kwh).toFixed(4)}` : '—'}
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            {doc.lineItems.filter(item => item.rate && item.rate > 0).length === 0 && (
+                              <TableRow>
+                                <TableCell colSpan={4} className="text-center text-muted-foreground italic py-8">
+                                  No rates found in document line items
+                                </TableCell>
+                              </TableRow>
+                            )}
+                          </>
+                        ) : (
                           <TableRow>
-                            <TableCell className="font-medium text-muted-foreground">Rates Comparison</TableCell>
-                            <TableCell className="text-right text-muted-foreground" colSpan={3}>
-                              <div className="space-y-1">
-                                {doc.lineItems && doc.lineItems.length > 0 ? (
-                                  <>
-                                    {doc.lineItems
-                                      .filter(item => item.rate && item.rate > 0)
-                                      .map((item, itemIdx) => (
-                                        <div key={itemIdx} className="flex justify-between items-center text-xs">
-                                          <span className="text-left">{item.description}</span>
-                                          <div className="flex gap-4">
-                                            <span className="font-mono">Doc: R {item.rate.toFixed(4)}/kWh</span>
-                                            <span className="font-mono text-primary">Tariff: R {calc.avg_cost_per_kwh.toFixed(4)}/kWh</span>
-                                            <span className={cn(
-                                              "font-mono",
-                                              item.rate > calc.avg_cost_per_kwh ? "text-red-600" : "text-green-600"
-                                            )}>
-                                              Diff: R {(item.rate - calc.avg_cost_per_kwh).toFixed(4)}
-                                            </span>
-                                          </div>
-                                        </div>
-                                      ))}
-                                    {doc.lineItems.filter(item => item.rate && item.rate > 0).length === 0 && (
-                                      <div className="text-xs text-muted-foreground italic">No rates found in document line items</div>
-                                    )}
-                                  </>
-                                ) : (
-                                  <div className="text-xs text-muted-foreground italic">No line item details available</div>
-                                )}
-                              </div>
+                            <TableCell colSpan={4} className="text-center text-muted-foreground italic py-8">
+                              No line item details available
                             </TableCell>
-                          </TableRow>
-                        )}
-                        {calc.avg_cost_per_kwh && (
-                          <TableRow>
-                            <TableCell className="font-medium text-muted-foreground">Overall Avg Cost per kWh</TableCell>
-                            <TableCell className="text-right text-muted-foreground">
-                              {doc.totalAmount && doc.lineItems?.reduce((sum, item) => sum + (item.consumption || 0), 0)
-                                ? `R ${(doc.totalAmount / doc.lineItems.reduce((sum, item) => sum + (item.consumption || 0), 0)).toFixed(4)}`
-                                : '—'
-                              }
-                            </TableCell>
-                            <TableCell className="text-right" colSpan={2}>R {calc.avg_cost_per_kwh.toFixed(4)}</TableCell>
-                          </TableRow>
-                        )}
-                        {calc.tariff_name && (
-                          <TableRow>
-                            <TableCell className="font-medium text-muted-foreground">Tariff Used</TableCell>
-                            <TableCell className="text-right text-muted-foreground" colSpan={3}>{calc.tariff_name}</TableCell>
                           </TableRow>
                         )}
                       </TableBody>
