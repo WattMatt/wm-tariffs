@@ -2292,30 +2292,6 @@ export default function TariffAssignmentTab({
                           </div>
                         )}
                         
-                        {/* Summary Cards */}
-                        <div className="grid grid-cols-3 gap-3">
-                          <div className="p-3 border rounded-lg">
-                            <p className="text-xs text-muted-foreground mb-1">Document Amount</p>
-                            <p className="text-lg font-semibold">
-                              {calc.document_billed_amount ? `R ${calc.document_billed_amount.toFixed(2)}` : 'N/A'}
-                            </p>
-                          </div>
-                          <div className="p-3 border rounded-lg">
-                            <p className="text-xs text-muted-foreground mb-1">Calculated Cost</p>
-                            <p className="text-lg font-semibold">R {calc.total_cost.toFixed(2)}</p>
-                          </div>
-                          <div className="p-3 border rounded-lg">
-                            <p className="text-xs text-muted-foreground mb-1">Variance</p>
-                            <p className={cn(
-                              "text-lg font-semibold",
-                              calc.variance_amount && calc.variance_amount > 0 ? "text-red-600" : 
-                              calc.variance_amount && calc.variance_amount < 0 ? "text-green-600" : ""
-                            )}>
-                              {calc.variance_amount ? `R ${calc.variance_amount.toFixed(2)}` : 'N/A'}
-                            </p>
-                          </div>
-                        </div>
-                        
                         {/* Rates Comparison Table */}
                         <Table>
                       <TableHeader>
