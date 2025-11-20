@@ -79,6 +79,7 @@ interface DocumentShopNumber {
     description: string;
     meter_number?: string;
     unit?: 'kWh' | 'kVA' | 'Monthly';
+    supply?: 'Normal' | 'Emergency';
     previous_reading?: number;
     current_reading?: number;
     consumption?: number;
@@ -1382,6 +1383,20 @@ export default function TariffAssignmentTab({
     return 'match';
   };
 
+  // Helper to get charge type label from unit
+  const getChargeTypeLabel = (unit?: string): string => {
+    switch (unit) {
+      case 'kWh':
+        return 'Seasonal Charge';
+      case 'kVA':
+        return 'Demand Charge';
+      case 'Monthly':
+        return 'Basic Charge';
+      default:
+        return 'Charge';
+    }
+  };
+
   // Handle viewing rate comparison - Fetch from stored calculations
   const handleViewRateComparison = async (meter: Meter) => {
     const assignedTariffId = selectedTariffs[meter.id] || meter.tariff_structure_id;
@@ -2478,7 +2493,9 @@ export default function TariffAssignmentTab({
 
                               return (
                                 <TableRow key={itemIdx}>
-                                  <TableCell className="font-medium">{item.description}</TableCell>
+                                  <TableCell className="font-medium">
+                                    {item.supply || 'Normal'} ({getChargeTypeLabel(item.unit)})
+                                  </TableCell>
                                   <TableCell className="text-right font-mono">
                                     {item.rate && item.rate > 0 
                                       ? `R ${item.rate.toFixed(4)}/${itemUnit}`
