@@ -2356,65 +2356,21 @@ export default function TariffAssignmentTab({
                               const touSeason = isHighSeason ? 'winter' : 'summer'; // For TOU periods
                               const chargeSeason = isHighSeason ? 'high' : 'low'; // For tariff_charges
                               
-                              // Check what type of charge this is based on description
-                              const isDemandCharge = description.includes('kva') || description.includes('demand');
+                              // Enhanced charge type detection using multiple signals
+                              const isDemandCharge = description.includes('kva') || description.includes('demand') || (item.rate && item.rate > 50);
                               const isEnergyCharge = description.includes('kwh') || description.includes('conv') || description.includes('consumption');
-                              const isBasicCharge = description.includes('basic') && !item.rate;
+                              const isBasicCharge = description.includes('basic');
                               
-                              // For items with both energy and demand (e.g., "kWh/kVA"), show both rates
-                              if (isDemandCharge && isEnergyCharge && item.rate && item.rate > 0) {
-                                // Find both energy and demand rates
-                                const demandCharge = tariffDetails.charges.find(charge => 
-                                  charge.charge_type === `demand_${chargeSeason}_season` ||
-                                  (charge.charge_type.toLowerCase().includes('demand') && 
-                                   charge.charge_type.toLowerCase().includes(chargeSeason))
-                                );
+                              // Determine charge type and find matching rate (only ONE rate per item)
+                              if (isBasicCharge || (item.amount && !item.rate)) {
+                                // This is a basic/fixed charge - find matching tariff charge
+                                const matchingCharge = tariffDetails.charges.find(charge => {
+                                  const chargeDesc = (charge.description || charge.charge_type).toLowerCase();
+                                  return description.includes('basic') && chargeDesc.includes('basic');
+                                });
                                 
-                                let energyRate = null;
-                                // Try TOU periods first
-                                if (tariffDetails.periods.length > 0) {
-                                  const seasonalPeriods = tariffDetails.periods.filter(p => 
-                                    p.season.toLowerCase().includes(touSeason)
-                                  );
-                                  if (seasonalPeriods.length > 0) {
-                                    const standardPeriod = seasonalPeriods.find(p => 
-                                      p.period_type.toLowerCase().includes('standard') || 
-                                      p.period_type.toLowerCase().includes('off')
-                                    );
-                                    if (standardPeriod) {
-                                      energyRate = (standardPeriod.energy_charge_cents / 100).toFixed(4);
-                                    } else {
-                                      const avgRate = seasonalPeriods.reduce((sum, p) => sum + p.energy_charge_cents, 0) / seasonalPeriods.length;
-                                      energyRate = (avgRate / 100).toFixed(4);
-                                    }
-                                  }
-                                }
-                                
-                                // If no TOU rate, try seasonal charges
-                                if (!energyRate && tariffDetails.charges.length > 0) {
-                                  const seasonalCharge = tariffDetails.charges.find(charge => 
-                                    charge.charge_type === `energy_${chargeSeason}_season` ||
-                                    (charge.charge_type.toLowerCase().includes('energy') && 
-                                     charge.charge_type.toLowerCase().includes(chargeSeason))
-                                  );
-                                  if (seasonalCharge && seasonalCharge.unit === 'c/kWh') {
-                                    energyRate = (seasonalCharge.charge_amount / 100).toFixed(4);
-                                  }
-                                }
-                                
-                                // Build combined rate display
-                                const parts = [];
-                                if (energyRate) {
-                                  parts.push(`R ${energyRate}/kWh`);
-                                }
-                                if (demandCharge && (demandCharge.unit === 'R/kVA' || demandCharge.unit === 'c/kVA')) {
-                                  const demandRateValue = demandCharge.unit === 'c/kVA' 
-                                    ? demandCharge.charge_amount / 100 
-                                    : demandCharge.charge_amount;
-                                  parts.push(`R ${demandRateValue.toFixed(4)}/kVA`);
-                                }
-                                if (parts.length > 0) {
-                                  tariffRate = parts.join('\n');
+                                if (matchingCharge) {
+                                  tariffRate = `R ${matchingCharge.charge_amount.toFixed(2)}`;
                                 }
                               } else if (isDemandCharge && item.rate && item.rate > 0) {
                                 // Pure demand charge
@@ -2430,8 +2386,8 @@ export default function TariffAssignmentTab({
                                     : demandCharge.charge_amount;
                                   tariffRate = `R ${rateValue.toFixed(4)}/kVA`;
                                 }
-                              } else if (item.rate && item.rate > 0) {
-                                // This is an energy charge - try to find matching tariff rate
+                              } else if (!isDemandCharge && item.rate && item.rate > 0) {
+                                // This is an energy charge - find matching tariff rate
                                 
                                 // First, try to find seasonal rate from TOU periods
                                 if (tariffDetails.periods.length > 0) {
@@ -2482,55 +2438,18 @@ export default function TariffAssignmentTab({
                                     tariffRate = `R ${(seasonalCharge.charge_amount / 100).toFixed(4)}/kWh`;
                                   }
                                 }
-                              } else if (isBasicCharge || (item.amount && !item.rate)) {
-                                // This is a basic/fixed charge - try to find matching tariff charge
-                                
-                                // Look for matching charge type
-                                const matchingCharge = tariffDetails.charges.find(charge => {
-                                  const chargeDesc = (charge.description || charge.charge_type).toLowerCase();
-                                  
-                                  // Match basic/fixed charges
-                                  if (description.includes('basic') && chargeDesc.includes('basic')) {
-                                    return true;
-                                  }
-                                  
-                                  return false;
-                                });
-                                
-                                if (matchingCharge) {
-                                  tariffRate = `R ${matchingCharge.charge_amount.toFixed(2)}`;
-                                }
                               }
                               
-                              // Calculate variance as percentage
+                              // Calculate variance as percentage (simplified for single-line rates)
                               let variancePercent: number | null = null;
                               if (item.rate && tariffRate) {
-                                // For combined rates, extract the relevant rate
-                                const lines = tariffRate.split('\n');
-                                
-                                // Determine which rate to use for comparison based on document rate context
-                                const docDescription = item.description.toLowerCase();
-                                let relevantRate = null;
-                                
-                                if (docDescription.includes('kwh') && !docDescription.includes('kva')) {
-                                  // Document shows energy rate only - use energy rate from tariff
-                                  relevantRate = lines.find(line => line.includes('/kWh'));
-                                } else if (docDescription.includes('kva') && !docDescription.includes('kwh')) {
-                                  // Document shows demand rate only - use demand rate from tariff  
-                                  relevantRate = lines.find(line => line.includes('/kVA'));
-                                } else if (docDescription.includes('kwh') && docDescription.includes('kva')) {
-                                  // Document shows both - use energy rate (first rate in doc)
-                                  relevantRate = lines.find(line => line.includes('/kWh'));
-                                }
-                                
-                                if (relevantRate) {
-                                  if (relevantRate.includes('/kWh')) {
-                                    const tariffRateValue = parseFloat(relevantRate.replace('R ', '').replace('/kWh', ''));
-                                    variancePercent = ((tariffRateValue - item.rate) / item.rate) * 100;
-                                  } else if (relevantRate.includes('/kVA')) {
-                                    const tariffRateValue = parseFloat(relevantRate.replace('R ', '').replace('/kVA', ''));
-                                    variancePercent = ((tariffRateValue - item.rate) / item.rate) * 100;
-                                  }
+                                // Extract rate value based on type
+                                if (tariffRate.includes('/kWh')) {
+                                  const tariffRateValue = parseFloat(tariffRate.replace('R ', '').replace('/kWh', ''));
+                                  variancePercent = ((tariffRateValue - item.rate) / item.rate) * 100;
+                                } else if (tariffRate.includes('/kVA')) {
+                                  const tariffRateValue = parseFloat(tariffRate.replace('R ', '').replace('/kVA', ''));
+                                  variancePercent = ((tariffRateValue - item.rate) / item.rate) * 100;
                                 }
                               } else if (item.amount && tariffRate && !tariffRate.includes('/kWh') && !tariffRate.includes('/kVA')) {
                                 // For fixed charges - compare amounts
@@ -2543,17 +2462,15 @@ export default function TariffAssignmentTab({
                                   <TableCell className="font-medium">{item.description}</TableCell>
                                   <TableCell className="text-right font-mono">
                                     {item.rate && item.rate > 0 
-                                      ? `R ${item.rate.toFixed(4)}/kWh` 
+                                      ? isDemandCharge 
+                                        ? `R ${item.rate.toFixed(4)}/kVA`
+                                        : `R ${item.rate.toFixed(4)}/kWh`
                                       : item.amount 
                                         ? `R ${item.amount.toFixed(2)}`
                                         : '—'}
                                   </TableCell>
                                   <TableCell className="text-right font-mono text-primary">
-                                    {tariffRate ? (
-                                      <div className="whitespace-pre-line">
-                                        {tariffRate}
-                                      </div>
-                                    ) : '—'}
+                                    {tariffRate || '—'}
                                   </TableCell>
                                   <TableCell className={cn(
                                     "text-right font-mono",
