@@ -2353,14 +2353,16 @@ export default function TariffAssignmentTab({
                                 
                                 // Determine season based on billing period
                                 const periodMonth = new Date(calc.period_start).getMonth() + 1; // 1-12
-                                // Summer: Jun-Aug (6-8), Winter: Sep-May (9-12, 1-5)
-                                const season = (periodMonth >= 6 && periodMonth <= 8) ? 'summer' : 'winter';
+                                // In SA electricity tariffs: High season (winter) = Jun-Aug (6-8), Low season (summer) = Sep-May (9-12, 1-5)
+                                const isHighSeason = periodMonth >= 6 && periodMonth <= 8;
+                                const touSeason = isHighSeason ? 'winter' : 'summer'; // For TOU periods
+                                const chargeSeason = isHighSeason ? 'high' : 'low'; // For tariff_charges
                                 
                                 // First, try to find seasonal rate from TOU periods
                                 if (tariffDetails.periods.length > 0) {
                                   // Filter by season
                                   const seasonalPeriods = tariffDetails.periods.filter(p => 
-                                    p.season.toLowerCase().includes(season)
+                                    p.season.toLowerCase().includes(touSeason)
                                   );
                                   
                                   if (seasonalPeriods.length > 0) {
@@ -2396,9 +2398,9 @@ export default function TariffAssignmentTab({
                                 // If still no rate found, check tariff_charges for seasonal energy rates
                                 if (!tariffRate && tariffDetails.charges.length > 0) {
                                   const seasonalCharge = tariffDetails.charges.find(charge => 
-                                    charge.charge_type === `energy_${season}_season` ||
+                                    charge.charge_type === `energy_${chargeSeason}_season` ||
                                     (charge.charge_type.toLowerCase().includes('energy') && 
-                                     charge.charge_type.toLowerCase().includes(season))
+                                     charge.charge_type.toLowerCase().includes(chargeSeason))
                                   );
                                   
                                   if (seasonalCharge && seasonalCharge.unit === 'c/kWh') {
