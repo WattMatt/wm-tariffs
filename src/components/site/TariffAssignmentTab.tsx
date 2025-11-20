@@ -2357,10 +2357,12 @@ export default function TariffAssignmentTab({
                               const touSeason = isHighSeason ? 'winter' : 'summer'; // For TOU periods
                               const chargeSeason = isHighSeason ? 'high' : 'low'; // For tariff_charges
                               
-                              // Enhanced charge type detection using multiple signals
-                              const isDemandCharge = description.includes('kva') || description.includes('demand') || (item.rate && item.rate > 50);
-                              const isEnergyCharge = description.includes('kwh') || description.includes('conv') || description.includes('consumption');
-                              const isBasicCharge = description.includes('basic');
+                              // Use item.unit field to determine charge type (more reliable than description)
+                              const itemUnit = item.unit || 'kWh'; // Default to kWh if no unit specified
+                              const unitLower = itemUnit.toLowerCase();
+                              const isDemandCharge = unitLower === 'kva';
+                              const isEnergyCharge = unitLower === 'kwh';
+                              const isBasicCharge = itemUnit === 'Monthly' || description.includes('basic');
                               
                               // Determine charge type and find matching rate (only ONE rate per item)
                               if (isBasicCharge || (item.amount && !item.rate)) {
@@ -2441,19 +2443,18 @@ export default function TariffAssignmentTab({
                                 }
                               }
                               
-                              // Calculate variance as percentage (simplified for single-line rates)
+                              // Calculate variance as percentage using the item's actual unit
                               let variancePercent: number | null = null;
-                              const unit = item.unit || 'kWh';
                               if (item.rate && tariffRate) {
-                                // Extract rate value based on explicit unit
-                                if (unit === 'kWh' && tariffRate.includes('/kWh')) {
+                                // Extract rate value based on explicit unit from item
+                                if (itemUnit === 'kWh' && tariffRate.includes('/kWh')) {
                                   const tariffRateValue = parseFloat(tariffRate.replace('R ', '').replace('/kWh', ''));
                                   variancePercent = ((tariffRateValue - item.rate) / item.rate) * 100;
-                                } else if (unit === 'kVA' && tariffRate.includes('/kVA')) {
+                                } else if (itemUnit === 'kVA' && tariffRate.includes('/kVA')) {
                                   const tariffRateValue = parseFloat(tariffRate.replace('R ', '').replace('/kVA', ''));
                                   variancePercent = ((tariffRateValue - item.rate) / item.rate) * 100;
                                 }
-                              } else if (unit === 'Monthly' && item.amount && tariffRate) {
+                              } else if (itemUnit === 'Monthly' && item.amount && tariffRate) {
                                 // For fixed monthly charges - compare amounts
                                 const tariffAmount = parseFloat(tariffRate.replace('R ', ''));
                                 variancePercent = ((tariffAmount - item.amount) / item.amount) * 100;
@@ -2464,9 +2465,7 @@ export default function TariffAssignmentTab({
                                   <TableCell className="font-medium">{item.description}</TableCell>
                                   <TableCell className="text-right font-mono">
                                     {item.rate && item.rate > 0 
-                                      ? isDemandCharge 
-                                        ? `R ${item.rate.toFixed(4)}/kVA`
-                                        : `R ${item.rate.toFixed(4)}/kWh`
+                                      ? `R ${item.rate.toFixed(4)}/${itemUnit}`
                                       : item.amount 
                                         ? `R ${item.amount.toFixed(2)}`
                                         : '—'}
