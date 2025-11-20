@@ -1486,6 +1486,10 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         setIsCalculatingRevenue(true);
         toast.info("Calculating revenue for meters with tariffs...");
         
+        // Count meters that need revenue calculation and reset progress
+        const metersWithTariffs = meterData.filter(m => m.tariff_structure_id && m.totalKwhPositive > 0);
+        setReconciliationProgress({ current: 0, total: metersWithTariffs.length });
+        
         const meterRevenues = new Map();
         let gridSupplyCost = 0;
         let solarCost = 0;
@@ -1506,6 +1510,13 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
             );
             
             meterRevenues.set(meter.id, costResult);
+            
+            // Update progress counter
+            const currentIndex = meterRevenues.size;
+            setReconciliationProgress({ 
+              current: currentIndex, 
+              total: metersWithTariffs.length 
+            });
             
             // Categorize costs based on meter assignment and type
             const assignment = meterAssignments.get(meter.id);
