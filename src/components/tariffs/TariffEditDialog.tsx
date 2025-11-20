@@ -188,6 +188,7 @@ export default function TariffEditDialog({
           meter_configuration: data.meterConfiguration,
           description: data.description,
           effective_from: data.effectiveFrom,
+          effective_to: data.effectiveTo,
           uses_tou: data.touSeasons.length > 0,
           tou_type: data.touSeasons.length > 0 ? "custom" : null
         })
