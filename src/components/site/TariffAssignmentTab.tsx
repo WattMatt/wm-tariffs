@@ -2351,8 +2351,37 @@ export default function TariffAssignmentTab({
                                 // This is an energy charge - try to find matching tariff rate
                                 const tariffDetails = comparison.tariffDetails;
                                 
-                                // For block-based tariffs, find the appropriate block
-                                if (tariffDetails.blocks.length > 0 && item.consumption) {
+                                // Determine season based on billing period
+                                const periodMonth = new Date(calc.period_start).getMonth() + 1; // 1-12
+                                // Summer: Jun-Aug (6-8), Winter: Sep-May (9-12, 1-5)
+                                const season = (periodMonth >= 6 && periodMonth <= 8) ? 'summer' : 'winter';
+                                
+                                // First, try to find seasonal rate from TOU periods
+                                if (tariffDetails.periods.length > 0) {
+                                  // Filter by season
+                                  const seasonalPeriods = tariffDetails.periods.filter(p => 
+                                    p.season.toLowerCase().includes(season)
+                                  );
+                                  
+                                  if (seasonalPeriods.length > 0) {
+                                    // For conventional tariffs, use standard/off-peak rate or average
+                                    const standardPeriod = seasonalPeriods.find(p => 
+                                      p.period_type.toLowerCase().includes('standard') || 
+                                      p.period_type.toLowerCase().includes('off')
+                                    );
+                                    
+                                    if (standardPeriod) {
+                                      tariffRate = `R ${(standardPeriod.energy_charge_cents / 100).toFixed(4)}/kWh`;
+                                    } else {
+                                      // Use average of seasonal periods
+                                      const avgRate = seasonalPeriods.reduce((sum, p) => sum + p.energy_charge_cents, 0) / seasonalPeriods.length;
+                                      tariffRate = `R ${(avgRate / 100).toFixed(4)}/kWh`;
+                                    }
+                                  }
+                                }
+                                
+                                // If no seasonal rate found, try block-based tariffs
+                                if (!tariffRate && tariffDetails.blocks.length > 0 && item.consumption) {
                                   const matchingBlock = tariffDetails.blocks.find(block => {
                                     if (block.kwh_to === null) {
                                       return item.consumption! >= block.kwh_from;
@@ -2362,12 +2391,6 @@ export default function TariffAssignmentTab({
                                   if (matchingBlock) {
                                     tariffRate = `R ${(matchingBlock.energy_charge_cents / 100).toFixed(4)}/kWh`;
                                   }
-                                }
-                                
-                                // For TOU tariffs, show the average or first period rate
-                                if (!tariffRate && tariffDetails.periods.length > 0) {
-                                  const avgRate = tariffDetails.periods.reduce((sum, p) => sum + p.energy_charge_cents, 0) / tariffDetails.periods.length;
-                                  tariffRate = `R ${(avgRate / 100).toFixed(4)}/kWh`;
                                 }
                               } else if (item.amount && !item.rate) {
                                 // This is a fixed charge - try to find matching tariff charge
