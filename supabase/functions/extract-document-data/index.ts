@@ -47,6 +47,7 @@ Extract the following information:
 - Line items array: For EACH row in the billing table, extract:
   * Description (e.g., "Electrical", "Water", "Misc")
   * Meter number (if shown in the table)
+  * Unit (CRITICAL: Extract the unit type such as "kWh", "kVA", "kW" from the description, meter number, or table headers. Look for indicators like "(kWh)", "(kVA)", or text containing "kwh", "kva", etc.)
   * Previous reading (the starting meter value)
   * Current reading (the ending meter value)
   * Consumption (units used, should be current - previous)
@@ -111,6 +112,10 @@ Return the data in a structured format with all line items in an array.`;
                       meter_number: { 
                         type: "string", 
                         description: "Meter number if shown in the table row" 
+                      },
+                      unit: {
+                        type: "string",
+                        description: "Unit type extracted from the description, meter number, or table headers (e.g., 'kWh', 'kVA', 'kW'). Look for text like '(kWh)', '(kVA)', or indicators in the description."
                       },
                       previous_reading: { 
                         type: "number", 
