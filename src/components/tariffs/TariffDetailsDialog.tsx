@@ -17,6 +17,7 @@ interface TariffData {
   meterConfiguration: string;
   description: string;
   effectiveFrom: string;
+  effectiveTo: string;
   blocks: any[];
   seasonalEnergy: any[];
   touSeasons: any[];
@@ -76,6 +77,7 @@ export default function TariffDetailsDialog({ tariffId, tariffName, onClose }: T
         meterConfiguration: tariff.meter_configuration || "prepaid",
         description: tariff.description || "",
         effectiveFrom: tariff.effective_from,
+        effectiveTo: tariff.effective_to || tariff.effective_from,
         blocks: (blocks || []).map(block => ({
           blockNumber: block.block_number,
           kwhFrom: block.kwh_from,

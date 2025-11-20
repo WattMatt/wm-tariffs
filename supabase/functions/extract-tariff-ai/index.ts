@@ -137,7 +137,7 @@ Return your findings in JSON format.`;
                       },
                       effectiveTo: {
                         type: 'string',
-                        description: 'End date when this tariff expires (YYYY-MM-DD format), leave empty if ongoing'
+                        description: 'End date when this tariff expires (YYYY-MM-DD format)'
                       },
                       voltageLevel: {
                         type: 'string',
@@ -204,7 +204,7 @@ Return your findings in JSON format.`;
                         }
                       }
                     },
-                    required: ['name', 'tariffType', 'usesTou', 'blocks', 'charges']
+                    required: ['name', 'tariffType', 'effectiveFrom', 'effectiveTo', 'usesTou', 'blocks', 'charges']
                   }
                 }
               },

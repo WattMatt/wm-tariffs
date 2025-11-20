@@ -43,7 +43,7 @@ interface TariffData {
   meterConfiguration: string;
   description: string;
   effectiveFrom: string;
-  effectiveTo?: string;
+  effectiveTo: string;
   blocks: EnergyBlock[];
   seasonalEnergy: SeasonalCharge[];
   touSeasons: TouSeason[];
@@ -65,7 +65,7 @@ export default function TariffStructureForm({ onSubmit, isLoading, initialData, 
     meterConfiguration: "prepaid",
     description: "",
     effectiveFrom: new Date().toISOString().split('T')[0],
-    effectiveTo: undefined,
+    effectiveTo: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0],
     blocks: [],
     seasonalEnergy: [],
     touSeasons: [],
@@ -303,14 +303,14 @@ export default function TariffStructureForm({ onSubmit, isLoading, initialData, 
                 />
               </div>
               <div>
-                <Label className="text-xs">Effective To (Optional)</Label>
+                <Label className="text-xs">Effective To</Label>
                 <Input
                   type="date"
-                  value={tariffData.effectiveTo || ''}
-                  onChange={(e) => setTariffData({ ...tariffData, effectiveTo: e.target.value || undefined })}
+                  value={tariffData.effectiveTo}
+                  onChange={(e) => setTariffData({ ...tariffData, effectiveTo: e.target.value })}
+                  required
                   disabled={readOnly}
                   className="h-9 mt-1"
-                  placeholder="Leave empty for ongoing"
                 />
               </div>
             </div>
