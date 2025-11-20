@@ -1276,30 +1276,54 @@ export default function DocumentsTab({ siteId, onUploadProgressChange }: Documen
     const result: SiteDocument[] = [];
     const processedFolders = new Set<string>();
     
-    console.log('Getting documents in folders:', folderIds);
-    console.log('All documents:', documents.map(d => ({ id: d.id, name: d.file_name, parent: d.parent_folder_id, isFolder: d.is_folder })));
+    // Build a map of folder ID to folder path for quick lookup
+    const folderMap = new Map<string, { name: string; fullPath: string }>();
+    documents.forEach(doc => {
+      if (doc.is_folder) {
+        const fullPath = doc.folder_path 
+          ? `${doc.folder_path}/${doc.file_name}`
+          : doc.file_name;
+        folderMap.set(doc.id, { name: doc.file_name, fullPath });
+      }
+    });
     
     const processFolder = (folderId: string) => {
       if (processedFolders.has(folderId)) return;
       processedFolders.add(folderId);
       
-      // Get all documents and subfolders with this parent_folder_id
-      const childItems = documents.filter(doc => doc.parent_folder_id === folderId);
-      console.log(`Folder ${folderId} has ${childItems.length} child items:`, childItems.map(c => c.file_name));
+      const folder = folderMap.get(folderId);
+      if (!folder) return;
       
-      childItems.forEach(item => {
-        if (item.is_folder) {
-          // Recursively process subfolder
-          processFolder(item.id);
-        } else {
-          // Add document to result
-          result.push(item);
+      // Match documents where folder_path matches this folder
+      documents.forEach(doc => {
+        if (!doc.is_folder) {
+          // For root level folders: doc.folder_path === "October 2025"
+          // For nested folders: doc.folder_path starts with full path
+          if (doc.folder_path === folder.name || 
+              doc.folder_path === folder.fullPath ||
+              doc.folder_path.startsWith(folder.fullPath + '/')) {
+            result.push(doc);
+          }
+        }
+      });
+      
+      // Find and process subfolders (folders whose folder_path starts with this folder's path)
+      documents.forEach(doc => {
+        if (doc.is_folder && doc.id !== folderId) {
+          const docFullPath = doc.folder_path 
+            ? `${doc.folder_path}/${doc.file_name}`
+            : doc.file_name;
+          
+          // Check if this is a direct or nested subfolder
+          if (docFullPath.startsWith(folder.fullPath + '/') || 
+              doc.folder_path === folder.name) {
+            processFolder(doc.id);
+          }
         }
       });
     };
     
     folderIds.forEach(folderId => processFolder(folderId));
-    console.log(`Found ${result.length} total documents in folders`);
     return result;
   };
 
