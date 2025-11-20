@@ -1584,10 +1584,17 @@ export default function TariffAssignmentTab({
                       if (filteredShops.length === 0) return null;
                       
                       // Transform and sort data for chart
-                      // Use reconciliation costs in comparison mode, otherwise use calculated costs
-                      const costsToUse = hideSeasonalAverages 
-                        ? getReconciliationCostsMap(meter.id, filteredShops)
-                        : calculatedCosts;
+                      // Comparison tab: use reconciliation costs
+                      // Analysis tab: use document extracted values (no cost map)
+                      // Assignments tab: use calculated tariff costs
+                      let costsToUse;
+                      if (hideSeasonalAverages) {
+                        costsToUse = getReconciliationCostsMap(meter.id, filteredShops);
+                      } else if (showDocumentCharts) {
+                        costsToUse = undefined; // Use document amounts
+                      } else {
+                        costsToUse = calculatedCosts; // Use calculated tariff costs
+                      }
                       let chartData = addSeasonalAverages(filteredShops, costsToUse);
                       
                       return (
@@ -1610,7 +1617,7 @@ export default function TariffAssignmentTab({
                             <ChartContainer
                               config={{
                                 amount: {
-                                  label: hideSeasonalAverages ? "Reconciliation Cost" : "Calculated Cost",
+                                  label: hideSeasonalAverages ? "Reconciliation Cost" : (showDocumentCharts ? "Document Amount" : "Calculated Cost"),
                                   color: "hsl(var(--primary))",
                                 },
                                 documentAmount: {
@@ -1678,7 +1685,7 @@ export default function TariffAssignmentTab({
                                     dataKey="amount" 
                                     fill="hsl(var(--muted-foreground))"
                                     radius={[4, 4, 0, 0]}
-                                    name={hideSeasonalAverages ? "Reconciliation Cost" : "Calculated Cost"}
+                                    name={hideSeasonalAverages ? "Reconciliation Cost" : (showDocumentCharts ? "Document Amount" : "Calculated Cost")}
                                     opacity={0.5}
                                   />
                                   {hideSeasonalAverages && (
@@ -2256,10 +2263,17 @@ export default function TariffAssignmentTab({
           
           <ScrollArea className="max-h-[70vh] pr-4">
             {selectedChartMeter && (() => {
-              // Use reconciliation costs in comparison mode, otherwise use dialog calculations
-              const costsToUse = hideSeasonalAverages 
-                ? getReconciliationCostsMap(selectedChartMeter.meter.id, selectedChartMeter.docs)
-                : chartDialogCalculations;
+              // Comparison tab: use reconciliation costs
+              // Analysis tab: use document extracted values (no cost map)
+              // Assignments tab: use dialog calculations
+              let costsToUse;
+              if (hideSeasonalAverages) {
+                costsToUse = getReconciliationCostsMap(selectedChartMeter.meter.id, selectedChartMeter.docs);
+              } else if (showDocumentCharts) {
+                costsToUse = undefined; // Use document amounts
+              } else {
+                costsToUse = chartDialogCalculations;
+              }
               const chartData = addSeasonalAverages(selectedChartMeter.docs, costsToUse);
               
               const currencies = new Set(selectedChartMeter.docs.map(d => d.currency));
@@ -2305,7 +2319,7 @@ export default function TariffAssignmentTab({
                       <ChartContainer
                         config={{
                           amount: {
-                            label: hideSeasonalAverages ? "Reconciliation Cost" : "Calculated Cost",
+                            label: hideSeasonalAverages ? "Reconciliation Cost" : (showDocumentCharts ? "Document Amount" : "Calculated Cost"),
                             color: "hsl(var(--primary))",
                           },
                           documentAmount: {
@@ -2373,7 +2387,7 @@ export default function TariffAssignmentTab({
                               dataKey="amount" 
                               fill="hsl(var(--muted-foreground))"
                               radius={[4, 4, 0, 0]}
-                              name={hideSeasonalAverages ? "Reconciliation Cost" : "Calculated Cost"}
+                              name={hideSeasonalAverages ? "Reconciliation Cost" : (showDocumentCharts ? "Document Amount" : "Calculated Cost")}
                               opacity={0.5}
                             />
                             {hideSeasonalAverages && (
@@ -2564,10 +2578,16 @@ export default function TariffAssignmentTab({
           {/* Chart Section */}
           {!showDocumentCharts && viewingAllDocs && viewingAllDocs.docs.length > 1 && (() => {
             // Transform and sort data for chart with seasonal averages
-            // Use reconciliation costs in comparison mode
-            const costsToUse = hideSeasonalAverages 
-              ? getReconciliationCostsMap(viewingAllDocs.meter.id, viewingAllDocs.docs)
-              : undefined;
+            // Comparison tab: use reconciliation costs
+            // Analysis tab: use document extracted values
+            let costsToUse;
+            if (hideSeasonalAverages) {
+              costsToUse = getReconciliationCostsMap(viewingAllDocs.meter.id, viewingAllDocs.docs);
+            } else if (showDocumentCharts) {
+              costsToUse = undefined; // Use document amounts
+            } else {
+              costsToUse = undefined; // Assignments tab uses document amounts too
+            }
             const chartData = addSeasonalAverages(viewingAllDocs.docs, costsToUse);
             
             // Check for mixed currencies
