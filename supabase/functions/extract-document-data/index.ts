@@ -25,6 +25,23 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // Retry logic for AI API calls
+    const maxRetries = 3;
+    const retryDelay = 2000; // 2 seconds
+    
+    const callAIWithRetry = async (url: string, options: any, attempt = 1): Promise<Response> => {
+      const response = await fetch(url, options);
+      
+      // If we get a 503 (Service Unavailable) and haven't exceeded retries, try again
+      if (response.status === 503 && attempt < maxRetries) {
+        console.log(`AI API returned 503, retrying (attempt ${attempt + 1}/${maxRetries})...`);
+        await new Promise(resolve => setTimeout(resolve, retryDelay * attempt));
+        return callAIWithRetry(url, options, attempt + 1);
+      }
+      
+      return response;
+    };
+
     // Define the extraction prompt based on document type
     const systemPrompt = documentType === 'municipal_account'
       ? `You are an expert at extracting data from South African municipal electricity accounts. Extract the following information:
@@ -57,8 +74,8 @@ Extract the following information:
 
 Return the data in a structured format with all line items in an array.`;
 
-    // Call Lovable AI for document extraction
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    // Call Lovable AI for document extraction with retry logic
+    const aiResponse = await callAIWithRetry("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${LOVABLE_API_KEY}`,
@@ -177,6 +194,15 @@ Return the data in a structured format with all line items in an array.`;
     if (!aiResponse.ok) {
       const errorText = await aiResponse.text();
       console.error("AI API error:", aiResponse.status, errorText);
+      
+      if (aiResponse.status === 503) {
+        throw new Error("AI service is temporarily unavailable. Please try again in a few moments.");
+      } else if (aiResponse.status === 429) {
+        throw new Error("Rate limit exceeded. Please wait a moment and try again.");
+      } else if (aiResponse.status === 402) {
+        throw new Error("AI credits depleted. Please add credits to your workspace.");
+      }
+      
       throw new Error(`AI extraction failed: ${aiResponse.status}`);
     }
 
