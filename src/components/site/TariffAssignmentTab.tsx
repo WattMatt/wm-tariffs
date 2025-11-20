@@ -305,6 +305,14 @@ export default function TariffAssignmentTab({
         documentAmount: doc.totalAmount || null,
         documentId: doc.documentId,
       };
+
+      console.log(`📈 Data point for ${dataPoint.period}:`, {
+        documentId: doc.documentId,
+        hasReconciliation: calculatedCostsMap && calculatedCostsMap[doc.documentId] !== undefined,
+        reconciliationAmount: calculatedCostsMap?.[doc.documentId],
+        documentAmount: doc.totalAmount,
+        finalAmount: dataPoint.amount
+      });
       
       // Find which segment this document belongs to and add its average
       const matchingSegment = segments.find(seg => 
@@ -422,9 +430,24 @@ export default function TariffAssignmentTab({
   // Fetch reconciliation costs when in comparison mode
   useEffect(() => {
     if (hideSeasonalAverages) {
+      console.log('🔄 COMPARISON TAB ACTIVATED - Fetching reconciliation costs');
+      console.log(`   Site ID: ${siteId}`);
       fetchReconciliationCosts();
+    } else {
+      console.log('📋 Analysis/Assignments tab active - no reconciliation fetch');
     }
   }, [hideSeasonalAverages, siteId]);
+
+  // State inspection for reconciliation costs
+  useEffect(() => {
+    console.log('🔍 Reconciliation costs state updated:', {
+      meterCount: Object.keys(reconciliationCosts).length,
+      meterIds: Object.keys(reconciliationCosts),
+      sampleData: Object.keys(reconciliationCosts).length > 0 
+        ? reconciliationCosts[Object.keys(reconciliationCosts)[0]] 
+        : 'no data'
+    });
+  }, [reconciliationCosts]);
 
   // Load calculated costs from database
   const calculateAllCosts = async () => {
@@ -517,7 +540,12 @@ export default function TariffAssignmentTab({
         });
       });
 
-      console.log(`Built reconciliation costs map with ${Object.keys(costsMap).length} meters`);
+      console.log(`✅ Built reconciliation costs map with ${Object.keys(costsMap).length} meters`);
+      console.log('Meter IDs in map:', Object.keys(costsMap));
+      if (Object.keys(costsMap).length > 0) {
+        const firstMeterId = Object.keys(costsMap)[0];
+        console.log(`Sample data for meter ${firstMeterId}:`, costsMap[firstMeterId]);
+      }
       setReconciliationCosts(costsMap);
     } catch (error) {
       console.error("Error fetching reconciliation costs:", error);
@@ -529,10 +557,13 @@ export default function TariffAssignmentTab({
   // Helper to get reconciliation cost for a document
   const getReconciliationCostForDocument = (meterId: string, periodStart: string, periodEnd: string): number | null => {
     const meterCosts = reconciliationCosts[meterId];
+    console.log(`💰 Looking for cost: meter ${meterId}, period ${periodStart} to ${periodEnd}`);
     if (!meterCosts) {
-      console.log(`No reconciliation costs found for meter ${meterId}`);
+      console.log(`   ❌ Meter ${meterId} not in reconciliation state!`);
+      console.log(`   Available meters:`, Object.keys(reconciliationCosts));
       return null;
     }
+    console.log(`   ✅ Meter found with ${Object.keys(meterCosts).length} periods`);
 
     // Parse document dates
     const docStart = new Date(periodStart);
@@ -575,7 +606,12 @@ export default function TariffAssignmentTab({
   const getReconciliationCostsMap = (meterId: string, docs: DocumentShopNumber[]): { [docId: string]: number } => {
     const costsMap: { [docId: string]: number } = {};
     
-    console.log(`Building reconciliation costs map for meter ${meterId} with ${docs.length} documents`);
+    console.log(`🔍 Building costs map for meter ${meterId}`);
+    console.log(`   Documents to process: ${docs.length}`);
+    console.log(`   Meter in reconciliation state: ${!!reconciliationCosts[meterId]}`);
+    if (reconciliationCosts[meterId]) {
+      console.log(`   Available periods:`, Object.keys(reconciliationCosts[meterId]));
+    }
     
     docs.forEach(doc => {
       const cost = getReconciliationCostForDocument(meterId, doc.periodStart, doc.periodEnd);
@@ -1626,7 +1662,11 @@ export default function TariffAssignmentTab({
                       // Assignments tab: use calculated tariff costs
                       let costsToUse;
                       if (hideSeasonalAverages) {
+                        console.log(`📊 Rendering chart for meter ${meter.id} in comparison mode`);
+                        console.log(`   Reconciliation state populated:`, Object.keys(reconciliationCosts).length > 0);
                         costsToUse = getReconciliationCostsMap(meter.id, filteredShops);
+                        console.log(`   Costs map result:`, costsToUse);
+                        console.log(`   Mapped ${Object.keys(costsToUse).length} documents to costs`);
                       } else if (showDocumentCharts) {
                         costsToUse = undefined; // Use document amounts
                       } else {
