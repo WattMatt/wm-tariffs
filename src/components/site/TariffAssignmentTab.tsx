@@ -289,40 +289,38 @@ export default function TariffAssignmentTab({
     });
     
     // Second pass: create data points with segment-specific averages
-    // When calculatedCostsMap is provided, ONLY include documents that have data in the map
-    return sortedDocs
-      .filter(doc => !calculatedCostsMap || calculatedCostsMap[doc.documentId] !== undefined)
-      .map((doc) => {
-        const month = new Date(doc.periodStart).getMonth() + 1;
-        const isWinter = winterMonths.includes(month);
-        const isSummer = summerMonths.includes(month);
-        
-        // Create base data point
-        const dataPoint: any = {
-          period: new Date(doc.periodStart).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }),
-          // Use calculated cost if available, otherwise use document amount
-          amount: calculatedCostsMap && calculatedCostsMap[doc.documentId] !== undefined
-            ? calculatedCostsMap[doc.documentId]
-            : (doc.totalAmount || 0),
-          documentAmount: doc.totalAmount || null,
-          documentId: doc.documentId,
-        };
-        
-        // Find which segment this document belongs to and add its average
-        const matchingSegment = segments.find(seg => 
-          seg.docs.some(d => d.documentId === doc.documentId)
-        );
-        
-        if (matchingSegment) {
-          if (matchingSegment.season === 'winter') {
-            dataPoint[`winterAvg_${matchingSegment.segmentIndex}`] = matchingSegment.average;
-          } else {
-            dataPoint[`summerAvg_${matchingSegment.segmentIndex}`] = matchingSegment.average;
-          }
+    // ALWAYS include all documents, regardless of whether they have reconciliation data
+    return sortedDocs.map((doc) => {
+      const month = new Date(doc.periodStart).getMonth() + 1;
+      const isWinter = winterMonths.includes(month);
+      const isSummer = summerMonths.includes(month);
+      
+      // Create base data point
+      // If there's a calculated cost in the map, use it; otherwise use document amount
+      const dataPoint: any = {
+        period: new Date(doc.periodStart).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }),
+        amount: calculatedCostsMap && calculatedCostsMap[doc.documentId] !== undefined
+          ? calculatedCostsMap[doc.documentId]
+          : (doc.totalAmount || 0),
+        documentAmount: doc.totalAmount || null,
+        documentId: doc.documentId,
+      };
+      
+      // Find which segment this document belongs to and add its average
+      const matchingSegment = segments.find(seg => 
+        seg.docs.some(d => d.documentId === doc.documentId)
+      );
+      
+      if (matchingSegment) {
+        if (matchingSegment.season === 'winter') {
+          dataPoint[`winterAvg_${matchingSegment.segmentIndex}`] = matchingSegment.average;
+        } else {
+          dataPoint[`summerAvg_${matchingSegment.segmentIndex}`] = matchingSegment.average;
         }
-        
-        return dataPoint;
-      });
+      }
+      
+      return dataPoint;
+    });
   };
   
   // Calculate seasonal averages from calculated costs
@@ -557,14 +555,14 @@ export default function TariffAssignmentTab({
 
       console.log(`  Checking reconciliation period: ${runStart.toISOString()} to ${runEnd.toISOString()}, cost: ${costData.total_cost}`);
 
-      // Check if dates match (allowing for 2-day variance on both start and end)
+      // Check if dates match (allowing for 3-day variance to account for date inconsistencies)
       const docStartTime = docStart.getTime();
       const docEndTime = docEnd.getTime();
       const runStartTime = runStart.getTime();
       const runEndTime = runEnd.getTime();
       
-      const startMatches = Math.abs(docStartTime - runStartTime) < 86400000 * 2; // Within 2 days
-      const endMatches = Math.abs(docEndTime - runEndTime) < 86400000 * 2; // Within 2 days
+      const startMatches = Math.abs(docStartTime - runStartTime) < 86400000 * 3; // Within 3 days
+      const endMatches = Math.abs(docEndTime - runEndTime) < 86400000 * 3; // Within 3 days
       
       if (startMatches && endMatches) {
         console.log(`  ✓ Match found! Using cost: ${costData.total_cost}`);
