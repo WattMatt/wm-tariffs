@@ -207,18 +207,14 @@ export default function TariffAssignmentTab({
     return { winterAvg, summerAvg };
   };
 
-  // Helper function to add seasonal averages with properly segmented lines
-  const addSeasonalAverages = (docs: DocumentShopNumber[], calculatedCostsMap?: { [docId: string]: number }) => {
-    // South African electricity seasons
+  // Helper function for Analysis tab: always uses document amounts
+  const prepareAnalysisData = (docs: DocumentShopNumber[]) => {
     const winterMonths = [6, 7, 8];
     const summerMonths = [1, 2, 3, 4, 5, 9, 10, 11, 12];
-    
-    // Sort documents by date
     const sortedDocs = [...docs].sort((a, b) => 
       new Date(a.periodStart).getTime() - new Date(b.periodStart).getTime()
     );
     
-    // First pass: identify all continuous segments and calculate their averages
     interface Segment {
       season: 'winter' | 'summer';
       segmentIndex: number;
@@ -240,27 +236,19 @@ export default function TariffAssignmentTab({
       
       if (!currentSeason) return;
       
-      // Check if we're starting a new segment
       if (lastSeason !== currentSeason) {
-        // Save previous segment if it exists
         if (lastSeason && currentSegmentDocs.length > 0) {
           const segmentIndex = lastSeason === 'winter' ? winterSegment : summerSegment;
           const values = currentSegmentDocs
-            .map(d => calculatedCostsMap?.[d.documentId] ?? d.totalAmount)
+            .map(d => d.totalAmount)
             .filter(v => v !== undefined && v > 0);
           
           if (values.length > 0) {
             const average = values.reduce((sum, val) => sum + val, 0) / values.length;
-            segments.push({
-              season: lastSeason,
-              segmentIndex,
-              docs: [...currentSegmentDocs],
-              average
-            });
+            segments.push({ season: lastSeason, segmentIndex, docs: [...currentSegmentDocs], average });
           }
         }
         
-        // Start new segment
         currentSegmentDocs = [];
         if (currentSeason === 'winter') winterSegment++;
         if (currentSeason === 'summer') summerSegment++;
@@ -269,52 +257,209 @@ export default function TariffAssignmentTab({
       currentSegmentDocs.push(doc);
       lastSeason = currentSeason;
       
-      // Handle last segment
       if (index === sortedDocs.length - 1 && currentSegmentDocs.length > 0) {
         const segmentIndex = currentSeason === 'winter' ? winterSegment : summerSegment;
         const values = currentSegmentDocs
-          .map(d => calculatedCostsMap?.[d.documentId] ?? d.totalAmount)
+          .map(d => d.totalAmount)
           .filter(v => v !== undefined && v > 0);
         
         if (values.length > 0) {
           const average = values.reduce((sum, val) => sum + val, 0) / values.length;
-          segments.push({
-            season: currentSeason,
-            segmentIndex,
-            docs: [...currentSegmentDocs],
-            average
-          });
+          segments.push({ season: currentSeason, segmentIndex, docs: [...currentSegmentDocs], average });
         }
       }
     });
     
-    // Second pass: create data points with segment-specific averages
-    // ALWAYS include all documents, regardless of whether they have reconciliation data
     return sortedDocs.map((doc) => {
+      const dataPoint: any = {
+        period: new Date(doc.periodStart).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }),
+        amount: doc.totalAmount || null,
+        documentAmount: doc.totalAmount || null,
+        documentId: doc.documentId,
+      };
+      
+      const matchingSegment = segments.find(seg => 
+        seg.docs.some(d => d.documentId === doc.documentId)
+      );
+      
+      if (matchingSegment) {
+        if (matchingSegment.season === 'winter') {
+          dataPoint[`winterAvg_${matchingSegment.segmentIndex}`] = matchingSegment.average;
+        } else {
+          dataPoint[`summerAvg_${matchingSegment.segmentIndex}`] = matchingSegment.average;
+        }
+      }
+      
+      return dataPoint;
+    });
+  };
+
+  // Helper function for Comparison tab: shows reconciliation costs only when available
+  const prepareComparisonData = (docs: DocumentShopNumber[], reconciliationCostsMap: { [docId: string]: number }) => {
+    const winterMonths = [6, 7, 8];
+    const summerMonths = [1, 2, 3, 4, 5, 9, 10, 11, 12];
+    const sortedDocs = [...docs].sort((a, b) => 
+      new Date(a.periodStart).getTime() - new Date(b.periodStart).getTime()
+    );
+    
+    interface Segment {
+      season: 'winter' | 'summer';
+      segmentIndex: number;
+      docs: DocumentShopNumber[];
+      average: number;
+    }
+    
+    const segments: Segment[] = [];
+    let winterSegment = -1;
+    let summerSegment = -1;
+    let lastSeason: 'winter' | 'summer' | null = null;
+    let currentSegmentDocs: DocumentShopNumber[] = [];
+    
+    sortedDocs.forEach((doc, index) => {
       const month = new Date(doc.periodStart).getMonth() + 1;
       const isWinter = winterMonths.includes(month);
       const isSummer = summerMonths.includes(month);
+      const currentSeason = isWinter ? 'winter' : isSummer ? 'summer' : null;
       
-      // Create base data point
-      // If there's a calculated cost in the map, use it; otherwise set to null (no bar)
+      if (!currentSeason) return;
+      
+      if (lastSeason !== currentSeason) {
+        if (lastSeason && currentSegmentDocs.length > 0) {
+          const segmentIndex = lastSeason === 'winter' ? winterSegment : summerSegment;
+          const values = currentSegmentDocs
+            .map(d => reconciliationCostsMap[d.documentId])
+            .filter(v => v !== undefined && v > 0);
+          
+          if (values.length > 0) {
+            const average = values.reduce((sum, val) => sum + val, 0) / values.length;
+            segments.push({ season: lastSeason, segmentIndex, docs: [...currentSegmentDocs], average });
+          }
+        }
+        
+        currentSegmentDocs = [];
+        if (currentSeason === 'winter') winterSegment++;
+        if (currentSeason === 'summer') summerSegment++;
+      }
+      
+      currentSegmentDocs.push(doc);
+      lastSeason = currentSeason;
+      
+      if (index === sortedDocs.length - 1 && currentSegmentDocs.length > 0) {
+        const segmentIndex = currentSeason === 'winter' ? winterSegment : summerSegment;
+        const values = currentSegmentDocs
+          .map(d => reconciliationCostsMap[d.documentId])
+          .filter(v => v !== undefined && v > 0);
+        
+        if (values.length > 0) {
+          const average = values.reduce((sum, val) => sum + val, 0) / values.length;
+          segments.push({ season: currentSeason, segmentIndex, docs: [...currentSegmentDocs], average });
+        }
+      }
+    });
+    
+    return sortedDocs.map((doc) => {
       const dataPoint: any = {
         period: new Date(doc.periodStart).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }),
-        amount: calculatedCostsMap && calculatedCostsMap[doc.documentId] !== undefined
-          ? calculatedCostsMap[doc.documentId]
-          : doc.totalAmount || null,
+        amount: reconciliationCostsMap[doc.documentId] !== undefined ? reconciliationCostsMap[doc.documentId] : null,
         documentAmount: doc.totalAmount || null,
         documentId: doc.documentId,
       };
 
-      console.log(`📈 Data point for ${dataPoint.period}:`, {
+      console.log(`📈 Comparison data point for ${dataPoint.period}:`, {
         documentId: doc.documentId,
-        hasReconciliation: calculatedCostsMap && calculatedCostsMap[doc.documentId] !== undefined,
-        reconciliationAmount: calculatedCostsMap?.[doc.documentId],
+        hasReconciliation: reconciliationCostsMap[doc.documentId] !== undefined,
+        reconciliationAmount: reconciliationCostsMap[doc.documentId],
         documentAmount: doc.totalAmount,
         finalAmount: dataPoint.amount
       });
       
-      // Find which segment this document belongs to and add its average
+      const matchingSegment = segments.find(seg => 
+        seg.docs.some(d => d.documentId === doc.documentId)
+      );
+      
+      if (matchingSegment) {
+        if (matchingSegment.season === 'winter') {
+          dataPoint[`winterAvg_${matchingSegment.segmentIndex}`] = matchingSegment.average;
+        } else {
+          dataPoint[`summerAvg_${matchingSegment.segmentIndex}`] = matchingSegment.average;
+        }
+      }
+      
+      return dataPoint;
+    });
+  };
+
+  // Helper function for Assignments tab: uses calculated tariff costs
+  const prepareAssignmentsData = (docs: DocumentShopNumber[], calculatedCostsMap: { [docId: string]: number }) => {
+    const winterMonths = [6, 7, 8];
+    const summerMonths = [1, 2, 3, 4, 5, 9, 10, 11, 12];
+    const sortedDocs = [...docs].sort((a, b) => 
+      new Date(a.periodStart).getTime() - new Date(b.periodStart).getTime()
+    );
+    
+    interface Segment {
+      season: 'winter' | 'summer';
+      segmentIndex: number;
+      docs: DocumentShopNumber[];
+      average: number;
+    }
+    
+    const segments: Segment[] = [];
+    let winterSegment = -1;
+    let summerSegment = -1;
+    let lastSeason: 'winter' | 'summer' | null = null;
+    let currentSegmentDocs: DocumentShopNumber[] = [];
+    
+    sortedDocs.forEach((doc, index) => {
+      const month = new Date(doc.periodStart).getMonth() + 1;
+      const isWinter = winterMonths.includes(month);
+      const isSummer = summerMonths.includes(month);
+      const currentSeason = isWinter ? 'winter' : isSummer ? 'summer' : null;
+      
+      if (!currentSeason) return;
+      
+      if (lastSeason !== currentSeason) {
+        if (lastSeason && currentSegmentDocs.length > 0) {
+          const segmentIndex = lastSeason === 'winter' ? winterSegment : summerSegment;
+          const values = currentSegmentDocs
+            .map(d => calculatedCostsMap[d.documentId])
+            .filter(v => v !== undefined && v > 0);
+          
+          if (values.length > 0) {
+            const average = values.reduce((sum, val) => sum + val, 0) / values.length;
+            segments.push({ season: lastSeason, segmentIndex, docs: [...currentSegmentDocs], average });
+          }
+        }
+        
+        currentSegmentDocs = [];
+        if (currentSeason === 'winter') winterSegment++;
+        if (currentSeason === 'summer') summerSegment++;
+      }
+      
+      currentSegmentDocs.push(doc);
+      lastSeason = currentSeason;
+      
+      if (index === sortedDocs.length - 1 && currentSegmentDocs.length > 0) {
+        const segmentIndex = currentSeason === 'winter' ? winterSegment : summerSegment;
+        const values = currentSegmentDocs
+          .map(d => calculatedCostsMap[d.documentId])
+          .filter(v => v !== undefined && v > 0);
+        
+        if (values.length > 0) {
+          const average = values.reduce((sum, val) => sum + val, 0) / values.length;
+          segments.push({ season: currentSeason, segmentIndex, docs: [...currentSegmentDocs], average });
+        }
+      }
+    });
+    
+    return sortedDocs.map((doc) => {
+      const dataPoint: any = {
+        period: new Date(doc.periodStart).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }),
+        amount: calculatedCostsMap[doc.documentId] || null,
+        documentAmount: doc.totalAmount || null,
+        documentId: doc.documentId,
+      };
+      
       const matchingSegment = segments.find(seg => 
         seg.docs.some(d => d.documentId === doc.documentId)
       );
@@ -1656,23 +1801,23 @@ export default function TariffAssignmentTab({
                       
                       if (filteredShops.length === 0) return null;
                       
-                      // Transform and sort data for chart
-                      // Comparison tab: use reconciliation costs
-                      // Analysis tab: use document extracted values (no cost map)
-                      // Assignments tab: use calculated tariff costs
-                      let costsToUse;
+                      // Transform and sort data for chart using appropriate function for each tab
+                      let chartData;
                       if (hideSeasonalAverages) {
+                        // Comparison tab: use reconciliation costs (only show blue bars when data exists)
                         console.log(`📊 Rendering chart for meter ${meter.id} in comparison mode`);
                         console.log(`   Reconciliation state populated:`, Object.keys(reconciliationCosts).length > 0);
-                        costsToUse = getReconciliationCostsMap(meter.id, filteredShops);
-                        console.log(`   Costs map result:`, costsToUse);
-                        console.log(`   Mapped ${Object.keys(costsToUse).length} documents to costs`);
+                        const costsMap = getReconciliationCostsMap(meter.id, filteredShops);
+                        console.log(`   Costs map result:`, costsMap);
+                        console.log(`   Mapped ${Object.keys(costsMap).length} documents to costs`);
+                        chartData = prepareComparisonData(filteredShops, costsMap);
                       } else if (showDocumentCharts) {
-                        costsToUse = undefined; // Use document amounts
+                        // Analysis tab: always use document amounts
+                        chartData = prepareAnalysisData(filteredShops);
                       } else {
-                        costsToUse = calculatedCosts; // Use calculated tariff costs
+                        // Assignments tab: use calculated tariff costs
+                        chartData = prepareAssignmentsData(filteredShops, calculatedCosts);
                       }
-                      let chartData = addSeasonalAverages(filteredShops, costsToUse);
                       
                       return (
                         <Card 
@@ -2343,15 +2488,15 @@ export default function TariffAssignmentTab({
               // Comparison tab: use reconciliation costs
               // Analysis tab: use document extracted values (no cost map)
               // Assignments tab: use dialog calculations
-              let costsToUse;
+              let chartData;
               if (hideSeasonalAverages) {
-                costsToUse = getReconciliationCostsMap(selectedChartMeter.meter.id, selectedChartMeter.docs);
+                const costsMap = getReconciliationCostsMap(selectedChartMeter.meter.id, selectedChartMeter.docs);
+                chartData = prepareComparisonData(selectedChartMeter.docs, costsMap);
               } else if (showDocumentCharts) {
-                costsToUse = undefined; // Use document amounts
+                chartData = prepareAnalysisData(selectedChartMeter.docs);
               } else {
-                costsToUse = chartDialogCalculations;
+                chartData = prepareAssignmentsData(selectedChartMeter.docs, chartDialogCalculations);
               }
-              const chartData = addSeasonalAverages(selectedChartMeter.docs, costsToUse);
               
               const currencies = new Set(selectedChartMeter.docs.map(d => d.currency));
               const hasMixedCurrencies = currencies.size > 1;
@@ -2715,15 +2860,14 @@ export default function TariffAssignmentTab({
             // Transform and sort data for chart with seasonal averages
             // Comparison tab: use reconciliation costs
             // Analysis tab: use document extracted values
-            let costsToUse;
+            let chartData;
             if (hideSeasonalAverages) {
-              costsToUse = getReconciliationCostsMap(viewingAllDocs.meter.id, viewingAllDocs.docs);
-            } else if (showDocumentCharts) {
-              costsToUse = undefined; // Use document amounts
+              const costsMap = getReconciliationCostsMap(viewingAllDocs.meter.id, viewingAllDocs.docs);
+              chartData = prepareComparisonData(viewingAllDocs.docs, costsMap);
             } else {
-              costsToUse = undefined; // Assignments tab uses document amounts too
+              // Both Analysis and Assignments tabs use document amounts for "View All Documents"
+              chartData = prepareAnalysisData(viewingAllDocs.docs);
             }
-            const chartData = addSeasonalAverages(viewingAllDocs.docs, costsToUse);
             
             // Check for mixed currencies
             const currencies = new Set(viewingAllDocs.docs.map(d => d.currency));
