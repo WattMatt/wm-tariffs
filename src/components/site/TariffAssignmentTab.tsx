@@ -2431,7 +2431,42 @@ export default function TariffAssignmentTab({
                         </TableRow>
                         {calc.avg_cost_per_kwh && (
                           <TableRow>
-                            <TableCell className="font-medium text-muted-foreground">Avg Cost per kWh</TableCell>
+                            <TableCell className="font-medium text-muted-foreground">Rates Comparison</TableCell>
+                            <TableCell className="text-right text-muted-foreground" colSpan={3}>
+                              <div className="space-y-1">
+                                {doc.lineItems && doc.lineItems.length > 0 ? (
+                                  <>
+                                    {doc.lineItems
+                                      .filter(item => item.rate && item.rate > 0)
+                                      .map((item, itemIdx) => (
+                                        <div key={itemIdx} className="flex justify-between items-center text-xs">
+                                          <span className="text-left">{item.description}</span>
+                                          <div className="flex gap-4">
+                                            <span className="font-mono">Doc: R {item.rate.toFixed(4)}/kWh</span>
+                                            <span className="font-mono text-primary">Tariff: R {calc.avg_cost_per_kwh.toFixed(4)}/kWh</span>
+                                            <span className={cn(
+                                              "font-mono",
+                                              item.rate > calc.avg_cost_per_kwh ? "text-red-600" : "text-green-600"
+                                            )}>
+                                              Diff: R {(item.rate - calc.avg_cost_per_kwh).toFixed(4)}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    {doc.lineItems.filter(item => item.rate && item.rate > 0).length === 0 && (
+                                      <div className="text-xs text-muted-foreground italic">No rates found in document line items</div>
+                                    )}
+                                  </>
+                                ) : (
+                                  <div className="text-xs text-muted-foreground italic">No line item details available</div>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                        {calc.avg_cost_per_kwh && (
+                          <TableRow>
+                            <TableCell className="font-medium text-muted-foreground">Overall Avg Cost per kWh</TableCell>
                             <TableCell className="text-right text-muted-foreground">
                               {doc.totalAmount && doc.lineItems?.reduce((sum, item) => sum + (item.consumption || 0), 0)
                                 ? `R ${(doc.totalAmount / doc.lineItems.reduce((sum, item) => sum + (item.consumption || 0), 0)).toFixed(4)}`
