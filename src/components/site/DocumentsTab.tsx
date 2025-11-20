@@ -1271,10 +1271,58 @@ export default function DocumentsTab({ siteId, onUploadProgressChange }: Documen
     }
   };
 
+  // Helper function to recursively get all documents within folders
+  const getDocumentsInFolders = (folderIds: string[]): SiteDocument[] => {
+    const result: SiteDocument[] = [];
+    const processedFolders = new Set<string>();
+    
+    const processFolder = (folderId: string) => {
+      if (processedFolders.has(folderId)) return;
+      processedFolders.add(folderId);
+      
+      // Get all documents and subfolders with this parent_folder_id
+      const childItems = documents.filter(doc => doc.parent_folder_id === folderId);
+      
+      childItems.forEach(item => {
+        if (item.is_folder) {
+          // Recursively process subfolder
+          processFolder(item.id);
+        } else {
+          // Add document to result
+          result.push(item);
+        }
+      });
+    };
+    
+    folderIds.forEach(folderId => processFolder(folderId));
+    return result;
+  };
+
   const handleBulkRescan = async () => {
     if (selectedDocuments.size === 0) return;
 
-    const docsToRescan = documents.filter(doc => selectedDocuments.has(doc.id));
+    const selectedItems = documents.filter(doc => selectedDocuments.has(doc.id));
+    
+    // Check if only folders are selected
+    const onlyFoldersSelected = selectedItems.every(item => item.is_folder);
+    
+    let docsToRescan: SiteDocument[];
+    
+    if (onlyFoldersSelected) {
+      // Get all documents within selected folders recursively
+      const folderIds = selectedItems.map(item => item.id);
+      docsToRescan = getDocumentsInFolders(folderIds);
+      
+      if (docsToRescan.length === 0) {
+        toast.error("No documents found in selected folders");
+        return;
+      }
+      
+      toast.info(`Found ${docsToRescan.length} document(s) in ${folderIds.length} folder(s) to rescan`);
+    } else {
+      // Filter only non-folder documents from selection
+      docsToRescan = selectedItems.filter(doc => !doc.is_folder);
+    }
 
     setIsBulkExtracting(true);
     updateUploadProgress({ current: 0, total: docsToRescan.length, action: 'Re-scanning documents' });
