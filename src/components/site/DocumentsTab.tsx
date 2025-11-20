@@ -2753,20 +2753,38 @@ export default function DocumentsTab({ siteId, onUploadProgressChange }: Documen
                                       />
                                     </div>
                                     
-                                    <div>
-                                      <Label className="text-sm">Meter Number</Label>
-                                      <Input
-                                        value={item.meter_number || ''}
-                                        onChange={(e) => {
-                                          const newItems = [...editedData.extracted_data.line_items];
-                                          newItems[index] = { ...newItems[index], meter_number: e.target.value };
-                                          setEditedData({
-                                            ...editedData,
-                                            extracted_data: { ...editedData.extracted_data, line_items: newItems }
-                                          });
-                                        }}
-                                        disabled={!isEditing}
-                                      />
+                                    <div className="grid grid-cols-[1fr_auto] gap-3">
+                                      <div>
+                                        <Label className="text-sm">Meter Number</Label>
+                                        <Input
+                                          value={item.meter_number || ''}
+                                          onChange={(e) => {
+                                            const newItems = [...editedData.extracted_data.line_items];
+                                            newItems[index] = { ...newItems[index], meter_number: e.target.value };
+                                            setEditedData({
+                                              ...editedData,
+                                              extracted_data: { ...editedData.extracted_data, line_items: newItems }
+                                            });
+                                          }}
+                                          disabled={!isEditing}
+                                        />
+                                      </div>
+                                      <div className="w-32">
+                                        <Label className="text-sm">Unit</Label>
+                                        <Input
+                                          value={item.unit || ''}
+                                          onChange={(e) => {
+                                            const newItems = [...editedData.extracted_data.line_items];
+                                            newItems[index] = { ...newItems[index], unit: e.target.value };
+                                            setEditedData({
+                                              ...editedData,
+                                              extracted_data: { ...editedData.extracted_data, line_items: newItems }
+                                            });
+                                          }}
+                                          placeholder="kWh/kVA"
+                                          disabled={!isEditing}
+                                        />
+                                      </div>
                                     </div>
                                     
                                     <div className="grid grid-cols-2 gap-3">
