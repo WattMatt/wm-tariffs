@@ -735,7 +735,7 @@ export default function TariffAssignmentTab({
       const docEndTime = docEnd.getTime();
       const runEndTime = runEnd.getTime();
       
-      const endMatches = Math.abs(docEndTime - runEndTime) < 86400000 * 2; // Within 2 days
+      const endMatches = Math.abs(docEndTime - runEndTime) < 86400000 * 5; // Within 5 days
       
       if (endMatches) {
         console.log(`  ✓ Match found! Using cost: ${costData.total_cost}`);
