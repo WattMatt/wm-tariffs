@@ -2431,11 +2431,27 @@ export default function TariffAssignmentTab({
                                 
                                 // If still no rate found, check tariff_charges for seasonal energy rates
                                 if (!tariffRate && tariffDetails.charges.length > 0) {
-                                  const seasonalCharge = tariffDetails.charges.find(charge => 
-                                    charge.charge_type === `energy_${chargeSeason}_season` ||
-                                    (charge.charge_type.toLowerCase().includes('energy') && 
-                                     charge.charge_type.toLowerCase().includes(chargeSeason))
-                                  );
+                                  const seasonalCharge = tariffDetails.charges.find(charge => {
+                                    const chargeTypeLower = charge.charge_type.toLowerCase();
+                                    
+                                    // Match exact season pattern
+                                    if (chargeTypeLower === `energy_${chargeSeason}_season`) {
+                                      return true;
+                                    }
+                                    
+                                    // Match charges that contain both "energy" and the season name
+                                    if (chargeTypeLower.includes('energy') && chargeTypeLower.includes(chargeSeason)) {
+                                      return true;
+                                    }
+                                    
+                                    // Match "both_seasons" or "all" energy charges (apply to any season)
+                                    if (chargeTypeLower.includes('energy') && 
+                                        (chargeTypeLower.includes('both') || chargeTypeLower.includes('all'))) {
+                                      return true;
+                                    }
+                                    
+                                    return false;
+                                  });
                                   
                                   if (seasonalCharge && seasonalCharge.unit === 'c/kWh') {
                                     tariffRate = `R ${(seasonalCharge.charge_amount / 100).toFixed(4)}/kWh`;
