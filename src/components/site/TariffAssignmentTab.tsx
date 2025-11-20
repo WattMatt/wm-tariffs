@@ -471,34 +471,47 @@ export default function TariffAssignmentTab({
     setIsLoadingReconciliationCosts(true);
     
     try {
-      const { data: runs, error } = await supabase
+      // Step 1: Fetch all reconciliation runs for the site
+      const { data: runs, error: runsError } = await supabase
         .from('reconciliation_runs')
-        .select(`
-          id,
-          run_name,
-          date_from,
-          date_to,
-          reconciliation_meter_results(
-            meter_id,
-            total_cost,
-            energy_cost,
-            fixed_charges
-          )
-        `)
+        .select('id, run_name, date_from, date_to')
         .eq('site_id', siteId)
         .order('date_from', { ascending: false });
 
-      if (error) {
-        console.error("Error fetching reconciliation costs:", error);
+      if (runsError) {
+        console.error("Error fetching reconciliation runs:", runsError);
         return;
       }
 
-      console.log("Fetched reconciliation runs:", runs);
+      if (!runs || runs.length === 0) {
+        console.log("No reconciliation runs found for site");
+        setReconciliationCosts({});
+        return;
+      }
 
-      // Build mapping structure
+      console.log(`Fetched ${runs.length} reconciliation runs`);
+
+      // Step 2: Fetch all meter results for these runs
+      const runIds = runs.map(r => r.id);
+      const { data: meterResults, error: resultsError } = await supabase
+        .from('reconciliation_meter_results')
+        .select('reconciliation_run_id, meter_id, total_cost, energy_cost, fixed_charges')
+        .in('reconciliation_run_id', runIds);
+
+      if (resultsError) {
+        console.error("Error fetching meter results:", resultsError);
+        return;
+      }
+
+      console.log(`Fetched ${meterResults?.length || 0} meter results`);
+
+      // Step 3: Build mapping structure
       const costsMap: typeof reconciliationCosts = {};
-      runs?.forEach(run => {
-        run.reconciliation_meter_results?.forEach((result: any) => {
+      
+      runs.forEach(run => {
+        const runResults = meterResults?.filter(mr => mr.reconciliation_run_id === run.id) || [];
+        
+        runResults.forEach(result => {
           if (!costsMap[result.meter_id]) {
             costsMap[result.meter_id] = {};
           }
@@ -509,11 +522,11 @@ export default function TariffAssignmentTab({
             date_from: run.date_from,
             date_to: run.date_to
           };
-          console.log(`Added reconciliation cost for meter ${result.meter_id}: ${result.total_cost} for period ${run.date_from} to ${run.date_to}`);
+          console.log(`Meter ${result.meter_id}: R${result.total_cost} for ${run.date_from} to ${run.date_to}`);
         });
       });
 
-      console.log("Built reconciliation costs map:", costsMap);
+      console.log(`Built reconciliation costs map with ${Object.keys(costsMap).length} meters`);
       setReconciliationCosts(costsMap);
     } catch (error) {
       console.error("Error fetching reconciliation costs:", error);
@@ -551,10 +564,14 @@ export default function TariffAssignmentTab({
 
       console.log(`  Checking reconciliation period: ${runStart.toISOString()} to ${runEnd.toISOString()}, cost: ${costData.total_cost}`);
 
-      // Check if dates match (allowing for some flexibility)
-      // Documents should fall within or match the reconciliation period
-      const startMatches = Math.abs(docStart.getTime() - runStart.getTime()) < 86400000 * 5; // Within 5 days
-      const endMatches = Math.abs(docEnd.getTime() - runEnd.getTime()) < 86400000 * 5; // Within 5 days
+      // Check if dates match (allowing for 2-day variance on both start and end)
+      const docStartTime = docStart.getTime();
+      const docEndTime = docEnd.getTime();
+      const runStartTime = runStart.getTime();
+      const runEndTime = runEnd.getTime();
+      
+      const startMatches = Math.abs(docStartTime - runStartTime) < 86400000 * 2; // Within 2 days
+      const endMatches = Math.abs(docEndTime - runEndTime) < 86400000 * 2; // Within 2 days
       
       if (startMatches && endMatches) {
         console.log(`  ✓ Match found! Using cost: ${costData.total_cost}`);
