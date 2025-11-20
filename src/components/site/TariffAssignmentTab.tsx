@@ -493,6 +493,8 @@ export default function TariffAssignmentTab({
         return;
       }
 
+      console.log("Fetched reconciliation runs:", runs);
+
       // Build mapping structure
       const costsMap: typeof reconciliationCosts = {};
       runs?.forEach(run => {
@@ -507,9 +509,11 @@ export default function TariffAssignmentTab({
             date_from: run.date_from,
             date_to: run.date_to
           };
+          console.log(`Added reconciliation cost for meter ${result.meter_id}: ${result.total_cost} for period ${run.date_from} to ${run.date_to}`);
         });
       });
 
+      console.log("Built reconciliation costs map:", costsMap);
       setReconciliationCosts(costsMap);
     } catch (error) {
       console.error("Error fetching reconciliation costs:", error);
@@ -521,22 +525,44 @@ export default function TariffAssignmentTab({
   // Helper to get reconciliation cost for a document
   const getReconciliationCostForDocument = (meterId: string, periodStart: string, periodEnd: string): number | null => {
     const meterCosts = reconciliationCosts[meterId];
-    if (!meterCosts) return null;
+    if (!meterCosts) {
+      console.log(`No reconciliation costs found for meter ${meterId}`);
+      return null;
+    }
 
+    // Parse document dates
     const docStart = new Date(periodStart);
     const docEnd = new Date(periodEnd);
+    
+    // Normalize to date-only for comparison (ignore time)
+    docStart.setHours(0, 0, 0, 0);
+    docEnd.setHours(23, 59, 59, 999);
+
+    console.log(`Looking for reconciliation cost for meter ${meterId}, document period: ${docStart.toISOString()} to ${docEnd.toISOString()}`);
 
     // Find matching reconciliation run by date overlap
     for (const [periodKey, costData] of Object.entries(meterCosts)) {
       const runStart = new Date(costData.date_from);
       const runEnd = new Date(costData.date_to);
+      
+      // Normalize reconciliation dates
+      runStart.setHours(0, 0, 0, 0);
+      runEnd.setHours(23, 59, 59, 999);
 
-      // Check if document period falls within reconciliation period
-      if (docStart >= runStart && docEnd <= runEnd) {
+      console.log(`  Checking reconciliation period: ${runStart.toISOString()} to ${runEnd.toISOString()}, cost: ${costData.total_cost}`);
+
+      // Check if dates match (allowing for some flexibility)
+      // Documents should fall within or match the reconciliation period
+      const startMatches = Math.abs(docStart.getTime() - runStart.getTime()) < 86400000 * 5; // Within 5 days
+      const endMatches = Math.abs(docEnd.getTime() - runEnd.getTime()) < 86400000 * 5; // Within 5 days
+      
+      if (startMatches && endMatches) {
+        console.log(`  ✓ Match found! Using cost: ${costData.total_cost}`);
         return costData.total_cost;
       }
     }
 
+    console.log(`  ✗ No matching reconciliation period found`);
     return null;
   };
 
@@ -544,13 +570,19 @@ export default function TariffAssignmentTab({
   const getReconciliationCostsMap = (meterId: string, docs: DocumentShopNumber[]): { [docId: string]: number } => {
     const costsMap: { [docId: string]: number } = {};
     
+    console.log(`Building reconciliation costs map for meter ${meterId} with ${docs.length} documents`);
+    
     docs.forEach(doc => {
       const cost = getReconciliationCostForDocument(meterId, doc.periodStart, doc.periodEnd);
       if (cost !== null) {
         costsMap[doc.documentId] = cost;
+        console.log(`  Mapped doc ${doc.documentId} (${doc.periodStart} to ${doc.periodEnd}) -> cost: ${cost}`);
+      } else {
+        console.log(`  No cost found for doc ${doc.documentId} (${doc.periodStart} to ${doc.periodEnd})`);
       }
     });
 
+    console.log(`Final reconciliation costs map for meter ${meterId}:`, costsMap);
     return costsMap;
   };
 
