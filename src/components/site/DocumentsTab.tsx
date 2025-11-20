@@ -2760,6 +2760,7 @@ export default function DocumentsTab({ siteId, onUploadProgressChange }: Documen
                                     ...(editedData.extracted_data?.line_items || []),
                                     {
                                       description: '',
+                                      supply: 'Normal',
                                       meter_number: '',
                                       previous_reading: 0,
                                       current_reading: 0,
@@ -2814,20 +2815,45 @@ export default function DocumentsTab({ siteId, onUploadProgressChange }: Documen
                                       )}
                                     </div>
                                     
-                                    <div>
-                                      <Label className="text-sm">Description</Label>
-                                      <Input
-                                        value={item.description || ''}
-                                        onChange={(e) => {
-                                          const newItems = [...editedData.extracted_data.line_items];
-                                          newItems[index] = { ...newItems[index], description: e.target.value };
-                                          setEditedData({
-                                            ...editedData,
-                                            extracted_data: { ...editedData.extracted_data, line_items: newItems }
-                                          });
-                                        }}
-                                        disabled={!isEditing}
-                                      />
+                                    <div className="grid grid-cols-[1fr_auto] gap-3">
+                                      <div>
+                                        <Label className="text-sm">Description</Label>
+                                        <Input
+                                          value={item.description || ''}
+                                          onChange={(e) => {
+                                            const newItems = [...editedData.extracted_data.line_items];
+                                            newItems[index] = { ...newItems[index], description: e.target.value };
+                                            setEditedData({
+                                              ...editedData,
+                                              extracted_data: { ...editedData.extracted_data, line_items: newItems }
+                                            });
+                                          }}
+                                          disabled={!isEditing}
+                                        />
+                                      </div>
+                                      <div className="w-40">
+                                        <Label className="text-sm">Supply</Label>
+                                        <Select
+                                          value={item.supply || 'Normal'}
+                                          onValueChange={(value) => {
+                                            const newItems = [...editedData.extracted_data.line_items];
+                                            newItems[index] = { ...newItems[index], supply: value };
+                                            setEditedData({
+                                              ...editedData,
+                                              extracted_data: { ...editedData.extracted_data, line_items: newItems }
+                                            });
+                                          }}
+                                          disabled={!isEditing}
+                                        >
+                                          <SelectTrigger>
+                                            <SelectValue />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="Normal">Normal</SelectItem>
+                                            <SelectItem value="Emergency">Emergency</SelectItem>
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
                                     </div>
                                     
                                     <div className="grid grid-cols-[1fr_auto] gap-3">
@@ -2976,57 +3002,51 @@ export default function DocumentsTab({ siteId, onUploadProgressChange }: Documen
                               // Sort line items by their order in the array to maintain document order
                               const sortedItems = [...editedData.extracted_data.line_items];
                               
-                              // Identify generator items by keywords in description or meter designation
-                              const isGeneratorItem = (item: any) => {
-                                const desc = item.description?.toLowerCase() || '';
-                                const meter = item.meter_number?.toLowerCase() || '';
-                                return desc.includes('generator') || 
-                                       desc.includes('standby') || 
-                                       desc.includes('gen ') ||
-                                       meter.includes('_t2') || // T2 meters are typically generator
-                                       meter.includes('gen');
+                              // Use the supply field to separate items
+                              const isEmergencySupply = (item: any) => {
+                                return item.supply === 'Emergency';
                               };
                               
-                              const councilItems = sortedItems.filter((item: any) => !isGeneratorItem(item));
-                              const generatorItems = sortedItems.filter((item: any) => isGeneratorItem(item));
+                              const normalItems = sortedItems.filter((item: any) => !isEmergencySupply(item));
+                              const emergencyItems = sortedItems.filter((item: any) => isEmergencySupply(item));
                               
-                              const councilKwh = councilItems.reduce((sum: number, item: any) => sum + (item.consumption || 0), 0);
-                              const councilAmount = councilItems.reduce((sum: number, item: any) => sum + (item.amount || 0), 0);
-                              const generatorKwh = generatorItems.reduce((sum: number, item: any) => sum + (item.consumption || 0), 0);
-                              const generatorAmount = generatorItems.reduce((sum: number, item: any) => sum + (item.amount || 0), 0);
+                              const normalKwh = normalItems.reduce((sum: number, item: any) => sum + (item.consumption || 0), 0);
+                              const normalAmount = normalItems.reduce((sum: number, item: any) => sum + (item.amount || 0), 0);
+                              const emergencyKwh = emergencyItems.reduce((sum: number, item: any) => sum + (item.consumption || 0), 0);
+                              const emergencyAmount = emergencyItems.reduce((sum: number, item: any) => sum + (item.amount || 0), 0);
                               
                               return (
                                 <>
                                   <div className="p-4 border rounded-lg bg-primary/5">
-                                    <div className="text-sm font-medium text-muted-foreground mb-2">Council Supply</div>
+                                    <div className="text-sm font-medium text-muted-foreground mb-2">Normal Supply</div>
                                     <div className="space-y-1">
                                       <div className="flex justify-between items-center">
                                         <span className="text-sm">Consumption:</span>
-                                        <span className="font-semibold">{councilKwh.toFixed(2)} kWh</span>
+                                        <span className="font-semibold">{normalKwh.toFixed(2)} kWh</span>
                                       </div>
                                       <div className="flex justify-between items-center">
                                         <span className="text-sm">Amount:</span>
-                                        <span className="font-semibold">{editedData.currency} {councilAmount.toFixed(2)}</span>
+                                        <span className="font-semibold">{editedData.currency} {normalAmount.toFixed(2)}</span>
                                       </div>
                                       <div className="text-xs text-muted-foreground mt-2">
-                                        {councilItems.length} line item(s)
+                                        {normalItems.length} line item(s)
                                       </div>
                                     </div>
                                   </div>
                                   
                                   <div className="p-4 border rounded-lg bg-accent/5">
-                                    <div className="text-sm font-medium text-muted-foreground mb-2">Generator/Standby Supply</div>
+                                    <div className="text-sm font-medium text-muted-foreground mb-2">Emergency Supply</div>
                                     <div className="space-y-1">
                                       <div className="flex justify-between items-center">
                                         <span className="text-sm">Consumption:</span>
-                                        <span className="font-semibold">{generatorKwh.toFixed(2)} kWh</span>
+                                        <span className="font-semibold">{emergencyKwh.toFixed(2)} kWh</span>
                                       </div>
                                       <div className="flex justify-between items-center">
                                         <span className="text-sm">Amount:</span>
-                                        <span className="font-semibold">{editedData.currency} {generatorAmount.toFixed(2)}</span>
+                                        <span className="font-semibold">{editedData.currency} {emergencyAmount.toFixed(2)}</span>
                                       </div>
                                       <div className="text-xs text-muted-foreground mt-2">
-                                        {generatorItems.length} line item(s)
+                                        {emergencyItems.length} line item(s)
                                       </div>
                                     </div>
                                   </div>

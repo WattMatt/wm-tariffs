@@ -46,6 +46,7 @@ Extract the following information:
 - Shop number (CRITICAL: Extract ONLY the raw shop number WITHOUT any "DB-" prefix. The system will add the prefix automatically. The shop number is usually located BELOW the tenant name and account reference)
 - Line items array: For EACH row in the billing table, extract:
   * Description (e.g., "Electrical", "Water", "Misc")
+  * Supply (CRITICAL: If the description contains the word "Generator", set this to "Emergency", otherwise set it to "Normal")
   * Meter number (if shown in the table)
   * Unit (CRITICAL: Determine the unit type from the description or table headers. The ONLY valid options are: "kWh" (kilowatt-hours for energy consumption), "kVA" (kilovolt-amperes for demand charges), or "Monthly" (for fixed monthly charges like basic fees). Look for indicators like "(kWh)", "(kVA)", "Conv", "Demand", "Basic", or "Monthly" in the description.)
   * Previous reading (the starting meter value, only applicable for kWh and kVA)
@@ -108,6 +109,11 @@ Return the data in a structured format with all line items in an array.`;
                       description: { 
                         type: "string", 
                         description: "Description of the charge (e.g., 'Electrical', 'Water', 'Misc')" 
+                      },
+                      supply: {
+                        type: "string",
+                        description: "Supply type - 'Emergency' if the description contains 'Generator', otherwise 'Normal'",
+                        enum: ["Normal", "Emergency"]
                       },
                       meter_number: { 
                         type: "string", 
