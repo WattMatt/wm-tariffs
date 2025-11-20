@@ -469,10 +469,12 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
                       {structure.uses_tou ? (
                         <div className="flex items-center gap-1">
                           <Clock className="w-4 h-4 text-primary" />
-                          <span className="text-sm capitalize">{structure.tou_type}</span>
+                          <span className="text-sm capitalize">
+                            {structure.tou_type || 'TOU'}
+                          </span>
                         </div>
                       ) : (
-                        <span className="text-muted-foreground">—</span>
+                        <span className="text-sm text-muted-foreground">Block</span>
                       )}
                     </TableCell>
                     <TableCell className="text-muted-foreground">
