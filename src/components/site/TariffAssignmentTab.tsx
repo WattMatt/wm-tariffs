@@ -2346,17 +2346,36 @@ export default function TariffAssignmentTab({
                             {doc.lineItems.map((item, itemIdx) => {
                               // Try to find matching tariff rate for this line item
                               let tariffRate: string | null = null;
+                              const description = item.description.toLowerCase();
+                              const tariffDetails = comparison.tariffDetails;
                               
-                              if (item.rate && item.rate > 0) {
-                                // This is an energy charge - try to find matching tariff rate
-                                const tariffDetails = comparison.tariffDetails;
+                              // Determine season based on billing period
+                              const periodMonth = new Date(calc.period_start).getMonth() + 1; // 1-12
+                              // In SA electricity tariffs: High season (winter) = Jun-Aug (6-8), Low season (summer) = Sep-May (9-12, 1-5)
+                              const isHighSeason = periodMonth >= 6 && periodMonth <= 8;
+                              const touSeason = isHighSeason ? 'winter' : 'summer'; // For TOU periods
+                              const chargeSeason = isHighSeason ? 'high' : 'low'; // For tariff_charges
+                              
+                              // Check what type of charge this is based on description
+                              const isDemandCharge = description.includes('kva') || description.includes('demand');
+                              const isBasicCharge = description.includes('basic') && !item.rate;
+                              
+                              if (isDemandCharge && item.rate && item.rate > 0) {
+                                // This is a demand charge - find seasonal demand rate
+                                const demandCharge = tariffDetails.charges.find(charge => 
+                                  charge.charge_type === `demand_${chargeSeason}_season` ||
+                                  (charge.charge_type.toLowerCase().includes('demand') && 
+                                   charge.charge_type.toLowerCase().includes(chargeSeason))
+                                );
                                 
-                                // Determine season based on billing period
-                                const periodMonth = new Date(calc.period_start).getMonth() + 1; // 1-12
-                                // In SA electricity tariffs: High season (winter) = Jun-Aug (6-8), Low season (summer) = Sep-May (9-12, 1-5)
-                                const isHighSeason = periodMonth >= 6 && periodMonth <= 8;
-                                const touSeason = isHighSeason ? 'winter' : 'summer'; // For TOU periods
-                                const chargeSeason = isHighSeason ? 'high' : 'low'; // For tariff_charges
+                                if (demandCharge && (demandCharge.unit === 'R/kVA' || demandCharge.unit === 'c/kVA')) {
+                                  const rateValue = demandCharge.unit === 'c/kVA' 
+                                    ? demandCharge.charge_amount / 100 
+                                    : demandCharge.charge_amount;
+                                  tariffRate = `R ${rateValue.toFixed(4)}/kVA`;
+                                }
+                              } else if (item.rate && item.rate > 0) {
+                                // This is an energy charge - try to find matching tariff rate
                                 
                                 // First, try to find seasonal rate from TOU periods
                                 if (tariffDetails.periods.length > 0) {
@@ -2407,10 +2426,8 @@ export default function TariffAssignmentTab({
                                     tariffRate = `R ${(seasonalCharge.charge_amount / 100).toFixed(4)}/kWh`;
                                   }
                                 }
-                              } else if (item.amount && !item.rate) {
-                                // This is a fixed charge - try to find matching tariff charge
-                                const tariffDetails = comparison.tariffDetails;
-                                const description = item.description.toLowerCase();
+                              } else if (isBasicCharge || (item.amount && !item.rate)) {
+                                // This is a basic/fixed charge - try to find matching tariff charge
                                 
                                 // Look for matching charge type
                                 const matchingCharge = tariffDetails.charges.find(charge => {
@@ -2421,34 +2438,27 @@ export default function TariffAssignmentTab({
                                     return true;
                                   }
                                   
-                                  // Match demand charges (kVA)
-                                  if ((description.includes('demand') || description.includes('kva')) && 
-                                      (chargeDesc.includes('demand') || chargeDesc.includes('kva'))) {
-                                    return true;
-                                  }
-                                  
                                   return false;
                                 });
                                 
                                 if (matchingCharge) {
-                                  if (matchingCharge.unit === 'c/kVA' || matchingCharge.unit === 'R/kVA') {
-                                    const rateValue = matchingCharge.unit === 'c/kVA' 
-                                      ? matchingCharge.charge_amount / 100 
-                                      : matchingCharge.charge_amount;
-                                    tariffRate = `R ${rateValue.toFixed(4)}/kVA`;
-                                  } else {
-                                    tariffRate = `R ${matchingCharge.charge_amount.toFixed(2)}`;
-                                  }
+                                  tariffRate = `R ${matchingCharge.charge_amount.toFixed(2)}`;
                                 }
                               }
                               
                               // Calculate variance as percentage
                               let variancePercent: number | null = null;
-                              if (item.rate && tariffRate && tariffRate.includes('/kWh')) {
-                                // For energy charges - compare rates
-                                const tariffRateValue = parseFloat(tariffRate.replace('R ', '').replace('/kWh', ''));
-                                variancePercent = ((tariffRateValue - item.rate) / item.rate) * 100;
-                              } else if (item.amount && tariffRate && !tariffRate.includes('/kWh')) {
+                              if (item.rate && tariffRate) {
+                                if (tariffRate.includes('/kWh')) {
+                                  // For energy charges - compare rates
+                                  const tariffRateValue = parseFloat(tariffRate.replace('R ', '').replace('/kWh', ''));
+                                  variancePercent = ((tariffRateValue - item.rate) / item.rate) * 100;
+                                } else if (tariffRate.includes('/kVA')) {
+                                  // For demand charges - compare rates
+                                  const tariffRateValue = parseFloat(tariffRate.replace('R ', '').replace('/kVA', ''));
+                                  variancePercent = ((tariffRateValue - item.rate) / item.rate) * 100;
+                                }
+                              } else if (item.amount && tariffRate && !tariffRate.includes('/kWh') && !tariffRate.includes('/kVA')) {
                                 // For fixed charges - compare amounts
                                 const tariffAmount = parseFloat(tariffRate.replace('R ', ''));
                                 variancePercent = ((tariffAmount - item.amount) / item.amount) * 100;
