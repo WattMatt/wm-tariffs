@@ -246,7 +246,7 @@ export default function TariffAssignmentTab({
         if (lastSeason && currentSegmentDocs.length > 0) {
           const segmentIndex = lastSeason === 'winter' ? winterSegment : summerSegment;
           const values = currentSegmentDocs
-            .map(d => calculatedCostsMap[d.documentId])
+            .map(d => calculatedCostsMap?.[d.documentId])
             .filter(v => v !== undefined && v > 0);
           
           if (values.length > 0) {
@@ -273,7 +273,7 @@ export default function TariffAssignmentTab({
       if (index === sortedDocs.length - 1 && currentSegmentDocs.length > 0) {
         const segmentIndex = currentSeason === 'winter' ? winterSegment : summerSegment;
         const values = currentSegmentDocs
-          .map(d => calculatedCostsMap[d.documentId])
+          .map(d => calculatedCostsMap?.[d.documentId])
           .filter(v => v !== undefined && v > 0);
         
         if (values.length > 0) {
