@@ -62,6 +62,7 @@ Your task is to analyze the provided spreadsheet data and extract:
 1. NERSA increase percentage (look for patterns like "12.72%", "NERSA: 15%", "approved increase", etc.)
 2. All tariff structures with their names
 3. For each tariff structure:
+   - Effective From and Effective To dates (look for date ranges, financial years like "2024/2025", or period indicators)
    - Tariff blocks (kWh ranges with cents/kWh rates)
    - Additional charges (fixed charges, demand charges, etc. with amounts and units)
    - Whether it uses Time-of-Use (TOU) pricing
@@ -129,6 +130,14 @@ Return your findings in JSON format.`;
                         type: 'string',
                         enum: ['domestic', 'commercial', 'industrial', 'agricultural'],
                         description: 'Tariff type: domestic (residential/household), commercial (business), industrial (manufacturing), agricultural (farming)'
+                      },
+                      effectiveFrom: {
+                        type: 'string',
+                        description: 'Start date when this tariff becomes effective (YYYY-MM-DD format)'
+                      },
+                      effectiveTo: {
+                        type: 'string',
+                        description: 'End date when this tariff expires (YYYY-MM-DD format), leave empty if ongoing'
                       },
                       voltageLevel: {
                         type: 'string',
