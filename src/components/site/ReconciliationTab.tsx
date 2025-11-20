@@ -1653,7 +1653,9 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       // Get current user
       const { data: { user } } = await supabase.auth.getUser();
       
-      // 1. Insert reconciliation run
+      // 1. Insert reconciliation run with meter order
+      const meterOrder = availableMeters.map(m => m.id);
+      
       const { data: run, error: runError } = await supabase
         .from('reconciliation_runs')
         .insert({
@@ -1674,21 +1676,29 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           solar_cost: reconciliationData.revenueData?.solarCost || 0,
           tenant_cost: reconciliationData.revenueData?.tenantCost || 0,
           total_revenue: reconciliationData.revenueData?.totalRevenue || 0,
-          avg_cost_per_kwh: reconciliationData.revenueData?.avgCostPerKwh || 0
+          avg_cost_per_kwh: reconciliationData.revenueData?.avgCostPerKwh || 0,
+          meter_order: meterOrder
         })
         .select()
         .single();
       
       if (runError) throw runError;
       
-      // 2. Prepare all meters with their assignments
-      const allMeters = [
-        ...(reconciliationData.bulkMeters || []).map((m: any) => ({ ...m, assignment: 'grid_supply' })),
-        ...(reconciliationData.solarMeters || []).map((m: any) => ({ ...m, assignment: 'solar' })),
-        ...(reconciliationData.tenantMeters || []).map((m: any) => ({ ...m, assignment: 'tenant' })),
-        ...(reconciliationData.checkMeters || []).map((m: any) => ({ ...m, assignment: 'check' })),
-        ...(reconciliationData.unassignedMeters || []).map((m: any) => ({ ...m, assignment: 'unassigned' }))
-      ];
+      // 2. Prepare all meters in hierarchical order with their assignments
+      // Create a map of meter data from reconciliationData organized by meter ID
+      const meterDataMap = new Map<string, any>();
+      
+      [...(reconciliationData.bulkMeters || []).map((m: any) => ({ ...m, assignment: 'grid_supply' })),
+       ...(reconciliationData.solarMeters || []).map((m: any) => ({ ...m, assignment: 'solar' })),
+       ...(reconciliationData.tenantMeters || []).map((m: any) => ({ ...m, assignment: 'tenant' })),
+       ...(reconciliationData.checkMeters || []).map((m: any) => ({ ...m, assignment: 'check' })),
+       ...(reconciliationData.unassignedMeters || []).map((m: any) => ({ ...m, assignment: 'unassigned' }))
+      ].forEach(m => meterDataMap.set(m.id, m));
+      
+      // Use availableMeters to maintain hierarchical order
+      const allMeters = availableMeters
+        .filter(m => meterDataMap.has(m.id))
+        .map(m => meterDataMap.get(m.id));
       
       // 3. Calculate hierarchical totals for meters with children
       const meterMap = new Map(allMeters.map(m => [m.id, m]));

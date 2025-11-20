@@ -39,6 +39,7 @@ interface ReconciliationRun {
   tenant_cost: number;
   total_revenue: number;
   avg_cost_per_kwh: number;
+  meter_order: string[];
   reconciliation_meter_results: MeterResult[];
 }
 
@@ -377,10 +378,21 @@ export default function ReconciliationHistoryTab({ siteId, siteName }: Reconcili
                 recoveryRate={selectedRun.recovery_rate}
                 discrepancy={selectedRun.discrepancy}
                 distributionTotal={selectedRun.total_supply - selectedRun.bulk_total - selectedRun.solar_total}
-                meters={selectedRun.reconciliation_meter_results.map(m => ({
-                  id: m.meter_id,
-                  meter_number: m.meter_number,
-                  meter_name: m.meter_name || undefined,
+                meters={(() => {
+                  // Sort meters by saved meter_order to preserve hierarchy
+                  const meterResults = selectedRun.reconciliation_meter_results;
+                  if (selectedRun.meter_order && selectedRun.meter_order.length > 0) {
+                    const meterMap = new Map(meterResults.map(m => [m.meter_id, m]));
+                    const orderedMeters = selectedRun.meter_order
+                      .map(meterId => meterMap.get(meterId))
+                      .filter(m => m !== undefined);
+                    // Add any meters not in the order (shouldn't happen, but safety check)
+                    const orderedIds = new Set(selectedRun.meter_order);
+                    const remainingMeters = meterResults.filter(m => !orderedIds.has(m.meter_id));
+                    return [...orderedMeters, ...remainingMeters].map(m => ({
+                      id: m.meter_id,
+                      meter_number: m.meter_number,
+                      meter_name: m.meter_name || undefined,
                   meter_type: m.meter_type,
                   location: m.location || undefined,
                   assignment: m.assignment,

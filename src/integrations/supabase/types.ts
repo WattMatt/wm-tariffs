@@ -670,6 +670,7 @@ export type Database = {
           discrepancy: number
           grid_supply_cost: number | null
           id: string
+          meter_order: string[] | null
           notes: string | null
           recovery_rate: number
           revenue_enabled: boolean | null
@@ -694,6 +695,7 @@ export type Database = {
           discrepancy?: number
           grid_supply_cost?: number | null
           id?: string
+          meter_order?: string[] | null
           notes?: string | null
           recovery_rate?: number
           revenue_enabled?: boolean | null
@@ -718,6 +720,7 @@ export type Database = {
           discrepancy?: number
           grid_supply_cost?: number | null
           id?: string
+          meter_order?: string[] | null
           notes?: string | null
           recovery_rate?: number
           revenue_enabled?: boolean | null
