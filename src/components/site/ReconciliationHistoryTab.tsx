@@ -381,37 +381,45 @@ export default function ReconciliationHistoryTab({ siteId, siteName }: Reconcili
                 meters={(() => {
                   // Sort meters by saved meter_order to preserve hierarchy
                   const meterResults = selectedRun.reconciliation_meter_results;
+                  
+                  const mapMeter = (m: MeterResult) => ({
+                    id: m.meter_id,
+                    meter_number: m.meter_number,
+                    meter_name: m.meter_name || undefined,
+                    meter_type: m.meter_type,
+                    location: m.location || undefined,
+                    assignment: m.assignment,
+                    totalKwh: m.total_kwh,
+                    totalKwhPositive: m.total_kwh_positive,
+                    totalKwhNegative: m.total_kwh_negative,
+                    readingsCount: m.readings_count,
+                    columnTotals: m.column_totals || undefined,
+                    columnMaxValues: m.column_max_values || undefined,
+                    hasData: m.readings_count > 0,
+                    hasError: m.has_error,
+                    errorMessage: m.error_message || undefined,
+                    tariffName: m.tariff_name || undefined,
+                    energyCost: m.energy_cost,
+                    fixedCharges: m.fixed_charges,
+                    totalCost: m.total_cost,
+                    avgCostPerKwh: m.avg_cost_per_kwh,
+                    costCalculationError: m.cost_calculation_error || undefined,
+                  });
+                  
                   if (selectedRun.meter_order && selectedRun.meter_order.length > 0) {
                     const meterMap = new Map(meterResults.map(m => [m.meter_id, m]));
                     const orderedMeters = selectedRun.meter_order
                       .map(meterId => meterMap.get(meterId))
-                      .filter(m => m !== undefined);
-                    // Add any meters not in the order (shouldn't happen, but safety check)
+                      .filter((m): m is MeterResult => m !== undefined);
+                    // Add any meters not in the order (safety check)
                     const orderedIds = new Set(selectedRun.meter_order);
                     const remainingMeters = meterResults.filter(m => !orderedIds.has(m.meter_id));
-                    return [...orderedMeters, ...remainingMeters].map(m => ({
-                      id: m.meter_id,
-                      meter_number: m.meter_number,
-                      meter_name: m.meter_name || undefined,
-                  meter_type: m.meter_type,
-                  location: m.location || undefined,
-                  assignment: m.assignment,
-                  totalKwh: m.total_kwh,
-                  totalKwhPositive: m.total_kwh_positive,
-                  totalKwhNegative: m.total_kwh_negative,
-                  readingsCount: m.readings_count,
-                  columnTotals: m.column_totals || undefined,
-                  columnMaxValues: m.column_max_values || undefined,
-                  hasData: m.readings_count > 0,
-                  hasError: m.has_error,
-                  errorMessage: m.error_message || undefined,
-                  tariffName: m.tariff_name || undefined,
-                  energyCost: m.energy_cost,
-                  fixedCharges: m.fixed_charges,
-                  totalCost: m.total_cost,
-                  avgCostPerKwh: m.avg_cost_per_kwh,
-                  costCalculationError: m.cost_calculation_error || undefined,
-                }))}
+                    return [...orderedMeters, ...remainingMeters].map(mapMeter);
+                  } else {
+                    // Fallback if no meter_order is saved (old data)
+                    return meterResults.map(mapMeter);
+                  }
+                })()}
                 meterAssignments={new Map(
                   selectedRun.reconciliation_meter_results.map(m => [
                     m.meter_id,
