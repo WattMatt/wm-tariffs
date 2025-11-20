@@ -2442,21 +2442,22 @@ export default function TariffAssignmentTab({
                               
                               // Calculate variance as percentage (simplified for single-line rates)
                               let variancePercent: number | null = null;
+                              const unit = item.unit || 'kWh';
                               if (item.rate && tariffRate) {
-                                // Extract rate value based on type
-                                if (tariffRate.includes('/kWh')) {
+                                // Extract rate value based on explicit unit
+                                if (unit === 'kWh' && tariffRate.includes('/kWh')) {
                                   const tariffRateValue = parseFloat(tariffRate.replace('R ', '').replace('/kWh', ''));
                                   variancePercent = ((tariffRateValue - item.rate) / item.rate) * 100;
-                                } else if (tariffRate.includes('/kVA')) {
+                                } else if (unit === 'kVA' && tariffRate.includes('/kVA')) {
                                   const tariffRateValue = parseFloat(tariffRate.replace('R ', '').replace('/kVA', ''));
                                   variancePercent = ((tariffRateValue - item.rate) / item.rate) * 100;
                                 }
-                              } else if (item.amount && tariffRate && !tariffRate.includes('/kWh') && !tariffRate.includes('/kVA')) {
-                                // For fixed charges - compare amounts
+                              } else if (unit === 'Monthly' && item.amount && tariffRate) {
+                                // For fixed monthly charges - compare amounts
                                 const tariffAmount = parseFloat(tariffRate.replace('R ', ''));
                                 variancePercent = ((tariffAmount - item.amount) / item.amount) * 100;
                               }
-                              
+
                               return (
                                 <TableRow key={itemIdx}>
                                   <TableCell className="font-medium">{item.description}</TableCell>
