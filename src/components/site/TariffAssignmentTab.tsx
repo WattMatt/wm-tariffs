@@ -2379,97 +2379,102 @@ export default function TariffAssignmentTab({
                               const isEnergyCharge = unitLower === 'kwh';
                               const isBasicCharge = itemUnit === 'Monthly' || description.includes('basic');
                               
-                              // Determine charge type and find matching rate (only ONE rate per item)
-                              if (isBasicCharge || (item.amount && !item.rate)) {
-                                // This is a basic/fixed charge - find matching tariff charge
-                                const matchingCharge = tariffDetails.charges.find(charge => {
-                                  const chargeDesc = (charge.description || charge.charge_type).toLowerCase();
-                                  return description.includes('basic') && chargeDesc.includes('basic');
-                                });
-                                
-                                if (matchingCharge) {
-                                  tariffRate = `R ${matchingCharge.charge_amount.toFixed(2)}`;
-                                }
-                              } else if (isDemandCharge && item.rate && item.rate > 0) {
-                                // Pure demand charge
-                                const demandCharge = tariffDetails.charges.find(charge => 
-                                  charge.charge_type === `demand_${chargeSeason}_season` ||
-                                  (charge.charge_type.toLowerCase().includes('demand') && 
-                                   charge.charge_type.toLowerCase().includes(chargeSeason))
-                                );
-                                
-                                if (demandCharge && (demandCharge.unit === 'R/kVA' || demandCharge.unit === 'c/kVA')) {
-                                  const rateValue = demandCharge.unit === 'c/kVA' 
-                                    ? demandCharge.charge_amount / 100 
-                                    : demandCharge.charge_amount;
-                                  tariffRate = `R ${rateValue.toFixed(4)}/kVA`;
-                                }
-                              } else if (!isDemandCharge && item.rate && item.rate > 0) {
-                                // This is an energy charge - find matching tariff rate
-                                
-                                // First, try to find seasonal rate from TOU periods
-                                if (tariffDetails.periods.length > 0) {
-                                  // Filter by season
-                                  const seasonalPeriods = tariffDetails.periods.filter(p => 
-                                    p.season.toLowerCase().includes(touSeason)
+                              // Skip tariff matching for Emergency supply - no standard tariff rate applies
+                              if (item.supply === 'Emergency') {
+                                // Leave tariffRate as null - will display as "—"
+                              } else {
+                                // Determine charge type and find matching rate (only ONE rate per item)
+                                if (isBasicCharge || (item.amount && !item.rate)) {
+                                  // This is a basic/fixed charge - find matching tariff charge
+                                  const matchingCharge = tariffDetails.charges.find(charge => {
+                                    const chargeDesc = (charge.description || charge.charge_type).toLowerCase();
+                                    return description.includes('basic') && chargeDesc.includes('basic');
+                                  });
+                                  
+                                  if (matchingCharge) {
+                                    tariffRate = `R ${matchingCharge.charge_amount.toFixed(2)}`;
+                                  }
+                                } else if (isDemandCharge && item.rate && item.rate > 0) {
+                                  // Pure demand charge
+                                  const demandCharge = tariffDetails.charges.find(charge => 
+                                    charge.charge_type === `demand_${chargeSeason}_season` ||
+                                    (charge.charge_type.toLowerCase().includes('demand') && 
+                                     charge.charge_type.toLowerCase().includes(chargeSeason))
                                   );
                                   
-                                  if (seasonalPeriods.length > 0) {
-                                    // For conventional tariffs, use standard/off-peak rate or average
-                                    const standardPeriod = seasonalPeriods.find(p => 
-                                      p.period_type.toLowerCase().includes('standard') || 
-                                      p.period_type.toLowerCase().includes('off')
+                                  if (demandCharge && (demandCharge.unit === 'R/kVA' || demandCharge.unit === 'c/kVA')) {
+                                    const rateValue = demandCharge.unit === 'c/kVA' 
+                                      ? demandCharge.charge_amount / 100 
+                                      : demandCharge.charge_amount;
+                                    tariffRate = `R ${rateValue.toFixed(4)}/kVA`;
+                                  }
+                                } else if (!isDemandCharge && item.rate && item.rate > 0) {
+                                  // This is an energy charge - find matching tariff rate
+                                  
+                                  // First, try to find seasonal rate from TOU periods
+                                  if (tariffDetails.periods.length > 0) {
+                                    // Filter by season
+                                    const seasonalPeriods = tariffDetails.periods.filter(p => 
+                                      p.season.toLowerCase().includes(touSeason)
                                     );
                                     
-                                    if (standardPeriod) {
-                                      tariffRate = `R ${(standardPeriod.energy_charge_cents / 100).toFixed(4)}/kWh`;
-                                    } else {
-                                      // Use average of seasonal periods
-                                      const avgRate = seasonalPeriods.reduce((sum, p) => sum + p.energy_charge_cents, 0) / seasonalPeriods.length;
-                                      tariffRate = `R ${(avgRate / 100).toFixed(4)}/kWh`;
+                                    if (seasonalPeriods.length > 0) {
+                                      // For conventional tariffs, use standard/off-peak rate or average
+                                      const standardPeriod = seasonalPeriods.find(p => 
+                                        p.period_type.toLowerCase().includes('standard') || 
+                                        p.period_type.toLowerCase().includes('off')
+                                      );
+                                      
+                                      if (standardPeriod) {
+                                        tariffRate = `R ${(standardPeriod.energy_charge_cents / 100).toFixed(4)}/kWh`;
+                                      } else {
+                                        // Use average of seasonal periods
+                                        const avgRate = seasonalPeriods.reduce((sum, p) => sum + p.energy_charge_cents, 0) / seasonalPeriods.length;
+                                        tariffRate = `R ${(avgRate / 100).toFixed(4)}/kWh`;
+                                      }
                                     }
                                   }
-                                }
-                                
-                                // If no seasonal rate found, try block-based tariffs
-                                if (!tariffRate && tariffDetails.blocks.length > 0 && item.consumption) {
-                                  const matchingBlock = tariffDetails.blocks.find(block => {
-                                    if (block.kwh_to === null) {
-                                      return item.consumption! >= block.kwh_from;
-                                    }
-                                    return item.consumption! >= block.kwh_from && item.consumption! <= block.kwh_to;
-                                  });
-                                  if (matchingBlock) {
-                                    tariffRate = `R ${(matchingBlock.energy_charge_cents / 100).toFixed(4)}/kWh`;
-                                  }
-                                }
-                                
-                                // If still no rate found, check tariff_charges for seasonal energy rates
-                                if (!tariffRate && tariffDetails.charges.length > 0) {
-                                  const seasonalCharge = tariffDetails.charges.find(charge => {
-                                    const chargeTypeLower = charge.charge_type.toLowerCase();
-                                    
-                                    // Match exact season pattern
-                                    if (chargeTypeLower === `energy_${chargeSeason}_season`) {
-                                      return true;
-                                    }
-                                    
-                                    // Match charges that contain both "energy" and the season name
-                                    if (chargeTypeLower.includes('energy') && chargeTypeLower.includes(chargeSeason)) {
-                                      return true;
-                                    }
-                                    
-                                    // Match "both_seasons" or "all" energy charges (apply to any season)
-                                    if (chargeTypeLower.includes('energy') && 
-                                        (chargeTypeLower.includes('both') || chargeTypeLower.includes('all'))) {
-                                      return true;
-                                    }
-                                    
-                                    return false;
-                                  });
                                   
-                                  if (seasonalCharge && seasonalCharge.unit === 'c/kWh') {
-                                    tariffRate = `R ${(seasonalCharge.charge_amount / 100).toFixed(4)}/kWh`;
+                                  // If no seasonal rate found, try block-based tariffs
+                                  if (!tariffRate && tariffDetails.blocks.length > 0 && item.consumption) {
+                                    const matchingBlock = tariffDetails.blocks.find(block => {
+                                      if (block.kwh_to === null) {
+                                        return item.consumption! >= block.kwh_from;
+                                      }
+                                      return item.consumption! >= block.kwh_from && item.consumption! <= block.kwh_to;
+                                    });
+                                    if (matchingBlock) {
+                                      tariffRate = `R ${(matchingBlock.energy_charge_cents / 100).toFixed(4)}/kWh`;
+                                    }
+                                  }
+                                  
+                                  // If still no rate found, check tariff_charges for seasonal energy rates
+                                  if (!tariffRate && tariffDetails.charges.length > 0) {
+                                    const seasonalCharge = tariffDetails.charges.find(charge => {
+                                      const chargeTypeLower = charge.charge_type.toLowerCase();
+                                      
+                                      // Match exact season pattern
+                                      if (chargeTypeLower === `energy_${chargeSeason}_season`) {
+                                        return true;
+                                      }
+                                      
+                                      // Match charges that contain both "energy" and the season name
+                                      if (chargeTypeLower.includes('energy') && chargeTypeLower.includes(chargeSeason)) {
+                                        return true;
+                                      }
+                                      
+                                      // Match "both_seasons" or "all" energy charges (apply to any season)
+                                      if (chargeTypeLower.includes('energy') && 
+                                          (chargeTypeLower.includes('both') || chargeTypeLower.includes('all'))) {
+                                        return true;
+                                      }
+                                      
+                                      return false;
+                                    });
+                                    
+                                    if (seasonalCharge && seasonalCharge.unit === 'c/kWh') {
+                                      tariffRate = `R ${(seasonalCharge.charge_amount / 100).toFixed(4)}/kWh`;
+                                    }
                                   }
                                 }
                               }
