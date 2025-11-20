@@ -923,6 +923,7 @@ export default function MunicipalityExtractionDialog({
       
       const tariffName = structure.tariffName || structure.name;
       const effectiveFrom = structure.effectiveFrom || new Date().toISOString().split('T')[0];
+      const effectiveTo = structure.effectiveTo || new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0];
       const tariffType = structure.tariffType || 'commercial';
       const meterConfiguration = structure.meterConfiguration || null;
       
@@ -939,6 +940,21 @@ export default function MunicipalityExtractionDialog({
       
       if (existingTariff) {
         console.log(`Tariff "${tariffName}" already exists, updating...`);
+        
+        // Update the tariff structure with new data
+        const { error: updateError } = await supabase
+          .from('tariff_structures')
+          .update({
+            tariff_type: tariffType,
+            meter_configuration: meterConfiguration,
+            effective_from: effectiveFrom,
+            effective_to: effectiveTo,
+            uses_tou: structure.usesTou || false,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingTariff.id);
+        
+        if (updateError) throw new Error(`Failed to update tariff: ${updateError.message}`);
         
         // Delete existing blocks, charges, and periods
         await Promise.all([
@@ -958,6 +974,7 @@ export default function MunicipalityExtractionDialog({
             meter_configuration: meterConfiguration,
             uses_tou: structure.usesTou || false,
             effective_from: effectiveFrom,
+            effective_to: effectiveTo,
             active: true
           })
           .select()
