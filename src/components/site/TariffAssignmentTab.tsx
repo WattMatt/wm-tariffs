@@ -541,6 +541,28 @@ export default function TariffAssignmentTab({
       };
       document: DocumentShopNumber;
       hasError: boolean;
+      tariffDetails: {
+        blocks: Array<{
+          block_number: number;
+          kwh_from: number;
+          kwh_to: number | null;
+          energy_charge_cents: number;
+        }>;
+        periods: Array<{
+          season: string;
+          day_type: string;
+          period_type: string;
+          start_hour: number;
+          end_hour: number;
+          energy_charge_cents: number;
+        }>;
+        charges: Array<{
+          charge_type: string;
+          description: string | null;
+          charge_amount: number;
+          unit: string;
+        }>;
+      };
     }>;
   } | null>(null);
   const [expandedDocuments, setExpandedDocuments] = useState<Set<number>>(new Set());
@@ -1404,6 +1426,17 @@ export default function TariffAssignmentTab({
       return;
     }
     
+    // Fetch tariff structure details (blocks, TOU periods, charges)
+    const [
+      { data: tariffBlocks },
+      { data: tariffPeriods },
+      { data: tariffCharges }
+    ] = await Promise.all([
+      supabase.from("tariff_blocks").select("*").eq("tariff_structure_id", assignedTariffId).order("block_number"),
+      supabase.from("tariff_time_periods").select("*").eq("tariff_structure_id", assignedTariffId),
+      supabase.from("tariff_charges").select("*").eq("tariff_structure_id", assignedTariffId)
+    ]);
+    
     // Match calculations with document data
     const documentComparisons = storedCalculations
       .map(calc => {
@@ -1415,7 +1448,12 @@ export default function TariffAssignmentTab({
         return {
           calculation: calc,
           document: matchingDoc,
-          hasError: !!calc.calculation_error
+          hasError: !!calc.calculation_error,
+          tariffDetails: {
+            blocks: tariffBlocks || [],
+            periods: tariffPeriods || [],
+            charges: tariffCharges || []
+          }
         };
       })
       .filter((comp): comp is NonNullable<typeof comp> => comp !== null);
@@ -2302,38 +2340,84 @@ export default function TariffAssignmentTab({
                           <TableHead className="text-right">Variance</TableHead>
                         </TableRow>
                       </TableHeader>
-                      <TableBody>
+                       <TableBody>
                         {doc.lineItems && doc.lineItems.length > 0 ? (
                           <>
-                            {doc.lineItems.map((item, itemIdx) => (
-                              <TableRow key={itemIdx}>
-                                <TableCell className="font-medium">{item.description}</TableCell>
-                                <TableCell className="text-right font-mono">
-                                  {item.rate && item.rate > 0 
-                                    ? `R ${item.rate.toFixed(4)}/kWh` 
-                                    : item.amount 
-                                      ? `R ${item.amount.toFixed(2)}`
-                                      : '—'}
-                                </TableCell>
-                                <TableCell className="text-right font-mono text-primary">
-                                  {calc.avg_cost_per_kwh && item.rate && item.rate > 0 
-                                    ? `R ${calc.avg_cost_per_kwh.toFixed(4)}/kWh` 
-                                    : '—'}
-                                </TableCell>
-                                <TableCell className={cn(
-                                  "text-right font-mono",
-                                  calc.avg_cost_per_kwh && item.rate && item.rate > 0
-                                    ? item.rate > calc.avg_cost_per_kwh 
-                                      ? "text-red-600" 
-                                      : "text-green-600"
-                                    : "text-muted-foreground"
-                                )}>
-                                  {calc.avg_cost_per_kwh && item.rate && item.rate > 0
-                                    ? `R ${(item.rate - calc.avg_cost_per_kwh).toFixed(4)}`
-                                    : '—'}
-                                </TableCell>
-                              </TableRow>
-                            ))}
+                            {doc.lineItems.map((item, itemIdx) => {
+                              // Try to find matching tariff rate for this line item
+                              let tariffRate: string | null = null;
+                              
+                              if (item.rate && item.rate > 0) {
+                                // This is an energy charge - try to find matching tariff rate
+                                const tariffDetails = comparison.tariffDetails;
+                                
+                                // For block-based tariffs, find the appropriate block
+                                if (tariffDetails.blocks.length > 0 && item.consumption) {
+                                  const matchingBlock = tariffDetails.blocks.find(block => {
+                                    if (block.kwh_to === null) {
+                                      return item.consumption! >= block.kwh_from;
+                                    }
+                                    return item.consumption! >= block.kwh_from && item.consumption! <= block.kwh_to;
+                                  });
+                                  if (matchingBlock) {
+                                    tariffRate = `R ${(matchingBlock.energy_charge_cents / 100).toFixed(4)}/kWh`;
+                                  }
+                                }
+                                
+                                // For TOU tariffs, show the average or first period rate
+                                if (!tariffRate && tariffDetails.periods.length > 0) {
+                                  const avgRate = tariffDetails.periods.reduce((sum, p) => sum + p.energy_charge_cents, 0) / tariffDetails.periods.length;
+                                  tariffRate = `R ${(avgRate / 100).toFixed(4)}/kWh`;
+                                }
+                              } else if (item.amount && !item.rate) {
+                                // This is a fixed charge - try to find matching tariff charge
+                                const tariffDetails = comparison.tariffDetails;
+                                const description = item.description.toLowerCase();
+                                
+                                // Look for matching charge type
+                                const matchingCharge = tariffDetails.charges.find(charge => {
+                                  const chargeDesc = (charge.description || charge.charge_type).toLowerCase();
+                                  return description.includes('basic') && chargeDesc.includes('basic');
+                                });
+                                
+                                if (matchingCharge) {
+                                  tariffRate = `R ${matchingCharge.charge_amount.toFixed(2)}`;
+                                }
+                              }
+                              
+                              // Calculate variance only if both rates are available
+                              let variance: number | null = null;
+                              if (item.rate && tariffRate && tariffRate.includes('/kWh')) {
+                                const tariffRateValue = parseFloat(tariffRate.replace('R ', '').replace('/kWh', ''));
+                                variance = item.rate - tariffRateValue;
+                              }
+                              
+                              return (
+                                <TableRow key={itemIdx}>
+                                  <TableCell className="font-medium">{item.description}</TableCell>
+                                  <TableCell className="text-right font-mono">
+                                    {item.rate && item.rate > 0 
+                                      ? `R ${item.rate.toFixed(4)}/kWh` 
+                                      : item.amount 
+                                        ? `R ${item.amount.toFixed(2)}`
+                                        : '—'}
+                                  </TableCell>
+                                  <TableCell className="text-right font-mono text-primary">
+                                    {tariffRate || '—'}
+                                  </TableCell>
+                                  <TableCell className={cn(
+                                    "text-right font-mono",
+                                    variance !== null
+                                      ? variance > 0 
+                                        ? "text-red-600" 
+                                        : "text-green-600"
+                                      : "text-muted-foreground"
+                                  )}>
+                                    {variance !== null ? `R ${variance.toFixed(4)}` : '—'}
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
                           </>
                         ) : (
                           <TableRow>
