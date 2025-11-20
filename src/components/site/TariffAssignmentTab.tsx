@@ -78,6 +78,7 @@ interface DocumentShopNumber {
   lineItems?: Array<{
     description: string;
     meter_number?: string;
+    unit?: 'kWh' | 'kVA' | 'Monthly';
     previous_reading?: number;
     current_reading?: number;
     consumption?: number;
