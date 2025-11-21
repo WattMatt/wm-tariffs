@@ -2055,8 +2055,9 @@ export default function TariffAssignmentTab({
                     </div>
                   )}
 
-                  <div className="border rounded-lg overflow-hidden">
-                    <Table>
+                  <div className="border rounded-lg">
+                    <div className="overflow-x-auto">
+                      <Table>
                       <TableHeader>
                         <TableRow>
                           <TableHead className="w-[50px]">
@@ -2236,6 +2237,7 @@ export default function TariffAssignmentTab({
                         })}
                       </TableBody>
                     </Table>
+                    </div>
                   </div>
                 </div>
               )}
