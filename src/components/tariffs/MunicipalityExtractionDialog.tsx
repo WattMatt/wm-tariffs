@@ -924,7 +924,7 @@ export default function MunicipalityExtractionDialog({
       const tariffName = structure.tariffName || structure.name;
       const effectiveFrom = structure.effectiveFrom || new Date().toISOString().split('T')[0];
       const effectiveTo = structure.effectiveTo || new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0];
-      const tariffType = structure.tariffType || 'commercial';
+      const tariffType = structure.tariffType || 'domestic';
       const meterConfiguration = structure.meterConfiguration || null;
       
       // Check if tariff already exists (including effective date)
@@ -1330,7 +1330,7 @@ export default function MunicipalityExtractionDialog({
                                   <div>
                                     <Label className="text-xs">Tariff Type</Label>
                                     <Select
-                                      value={tariff.tariffType || "commercial"}
+                                      value={tariff.tariffType || "domestic"}
                                       onValueChange={(value) => {
                                         const updated = [...extractedData.tariffStructures];
                                         updated[tariffIdx].tariffType = value;
@@ -1341,8 +1341,8 @@ export default function MunicipalityExtractionDialog({
                                         <SelectValue />
                                       </SelectTrigger>
                                       <SelectContent>
+                                        <SelectItem value="domestic">Domestic</SelectItem>
                                         <SelectItem value="commercial">Commercial</SelectItem>
-                                        <SelectItem value="residential">Residential</SelectItem>
                                         <SelectItem value="industrial">Industrial</SelectItem>
                                         <SelectItem value="agricultural">Agricultural</SelectItem>
                                       </SelectContent>
