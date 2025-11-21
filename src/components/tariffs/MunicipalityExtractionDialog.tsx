@@ -875,11 +875,11 @@ export default function MunicipalityExtractionDialog({
   const saveMunicipalityData = async (extractedData: any) => {
     console.log("Saving municipality data:", extractedData);
     
-    // Check if supply authority already exists
+    // Check if supply authority already exists (case-insensitive)
     const { data: existingAuthority } = await supabase
       .from("supply_authorities")
-      .select("id")
-      .eq("name", extractedData.supplyAuthority.name)
+      .select("id, name")
+      .ilike("name", extractedData.supplyAuthority.name)
       .maybeSingle();
 
     let authorityId: string;

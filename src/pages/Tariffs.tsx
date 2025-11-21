@@ -3,9 +3,12 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import TariffStructuresTab from "@/components/tariffs/TariffStructuresTab";
 import TariffImportDialog from "@/components/tariffs/TariffImportDialog";
+import { toast } from "sonner";
 
 interface SupplyAuthority {
   id: string;
@@ -70,6 +73,12 @@ export default function Tariffs() {
     }
   };
 
+  const handleRefresh = async () => {
+    toast.info("Refreshing tariff data...");
+    await fetchAuthorities();
+    toast.success("Tariff data refreshed");
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -80,7 +89,12 @@ export default function Tariffs() {
               Select a province and municipality to view and manage tariff structures
             </p>
           </div>
-          <TariffImportDialog />
+          <div className="flex gap-2">
+            <Button variant="outline" size="icon" onClick={handleRefresh}>
+              <RefreshCw className="h-4 w-4" />
+            </Button>
+            <TariffImportDialog />
+          </div>
         </div>
 
         <Card className="border-border/50">
