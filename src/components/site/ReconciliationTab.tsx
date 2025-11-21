@@ -98,6 +98,42 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
 
   // Persistent reconciliation state key
   const reconciliationStateKey = `reconciliation_state_${siteId}`;
+  
+  // localStorage key for manual indent levels
+  const indentLevelsStorageKey = `reconciliation-indent-levels-${siteId}`;
+  
+  // Save manual indent levels to localStorage
+  const saveIndentLevelsToStorage = (levels: Map<string, number>) => {
+    try {
+      const levelsObj = Object.fromEntries(levels);
+      localStorage.setItem(indentLevelsStorageKey, JSON.stringify(levelsObj));
+    } catch (error) {
+      console.error("Error saving indent levels to localStorage:", error);
+    }
+  };
+  
+  // Load manual indent levels from localStorage
+  const loadIndentLevelsFromStorage = (): Map<string, number> => {
+    try {
+      const stored = localStorage.getItem(indentLevelsStorageKey);
+      if (stored) {
+        const levelsObj = JSON.parse(stored);
+        return new Map(Object.entries(levelsObj).map(([k, v]) => [k, v as number]));
+      }
+    } catch (error) {
+      console.error("Error loading indent levels from localStorage:", error);
+    }
+    return new Map();
+  };
+  
+  // Clear manual indent levels from localStorage
+  const clearIndentLevelsFromStorage = () => {
+    try {
+      localStorage.removeItem(indentLevelsStorageKey);
+    } catch (error) {
+      console.error("Error clearing indent levels from localStorage:", error);
+    }
+  };
 
   // Restore persistent state on mount
   useEffect(() => {
@@ -515,7 +551,18 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           setAvailableMeters(hierarchicalMeters);
         }
         
-        setMeterIndentLevels(indentLevels);
+        // Merge database hierarchy with any saved manual indent overrides
+        const savedIndentLevels = loadIndentLevelsFromStorage();
+        const mergedIndentLevels = new Map(indentLevels);
+        
+        // Apply saved manual overrides (they take precedence)
+        savedIndentLevels.forEach((level, meterId) => {
+          if (mergedIndentLevels.has(meterId)) {
+            mergedIndentLevels.set(meterId, level);
+          }
+        });
+        
+        setMeterIndentLevels(mergedIndentLevels);
         setMeterParentInfo(meterParentMap);
 
         // Fetch date ranges for all meters with data
@@ -712,6 +759,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     }
     
     setMeterIndentLevels(newLevels);
+    saveIndentLevelsToStorage(newLevels); // Persist to localStorage
   };
 
   const handleOutdentMeter = (meterId: string) => {
@@ -733,6 +781,15 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     }
     
     setMeterIndentLevels(newLevels);
+    saveIndentLevelsToStorage(newLevels); // Persist to localStorage
+  };
+  
+  // Reset meter hierarchy to database defaults
+  const handleResetHierarchy = () => {
+    clearIndentLevelsFromStorage();
+    toast.success("Meter hierarchy reset. Refreshing...");
+    // Trigger re-fetch by setting meters to empty which will cause useEffect to re-run
+    setAvailableMeters([]);
   };
 
   const handleDragStart = (e: React.DragEvent, meterId: string) => {
@@ -2359,6 +2416,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                             }
                           });
                           setMeterIndentLevels(newLevels);
+                          saveIndentLevelsToStorage(newLevels);
                         }
                       }}
                     >
@@ -2379,10 +2437,21 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                             }
                           });
                           setMeterIndentLevels(newLevels);
+                          saveIndentLevelsToStorage(newLevels);
                         }
                       }}
                     >
                       <ChevronRight className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 ml-2"
+                      onClick={handleResetHierarchy}
+                      title="Reset hierarchy to database defaults"
+                    >
+                      <RotateCcw className="h-3 w-3 mr-1" />
+                      Reset
                     </Button>
                   </div>
                   <div className="flex-1 flex items-center justify-between p-3">
