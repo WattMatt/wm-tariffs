@@ -23,6 +23,8 @@ interface TariffStructure {
   supply_authorities: {
     name: string;
   } | null;
+  tariff_blocks: any[];
+  tariff_charges: any[];
 }
 
 interface SupplyAuthority {
@@ -61,7 +63,7 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
   const fetchStructures = async () => {
     const { data, error } = await supabase
       .from("tariff_structures")
-      .select("*, supply_authorities(name)")
+      .select("*, supply_authorities(name), tariff_blocks(*), tariff_charges(*)")
       .eq("supply_authority_id", supplyAuthorityId)
       .order("created_at", { ascending: false });
 
@@ -442,7 +444,7 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
                   <SortableHeader column="name">Name</SortableHeader>
                   <SortableHeader column="authority">Authority</SortableHeader>
                   <SortableHeader column="type">Type</SortableHeader>
-                  {structures.some(s => s.uses_tou) && <SortableHeader column="tou">TOU</SortableHeader>}
+                  <TableHead>Tariff</TableHead>
                   <SortableHeader column="effective_from">Effective From</SortableHeader>
                   <TableHead>Status</TableHead>
                   <TableHead>Actions</TableHead>
@@ -465,20 +467,17 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
                         {structure.tariff_type}
                       </Badge>
                     </TableCell>
-                    {structures.some(s => s.uses_tou) && (
-                      <TableCell>
-                        {structure.uses_tou ? (
-                          <div className="flex items-center gap-1">
-                            <Clock className="w-4 h-4 text-primary" />
-                            <span className="text-sm capitalize">
-                              {structure.tou_type || 'TOU'}
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-sm text-muted-foreground">Block</span>
-                        )}
-                      </TableCell>
-                    )}
+                    <TableCell>
+                      {structure.uses_tou ? (
+                        <span className="text-sm font-medium">TOU</span>
+                      ) : structure.tariff_blocks && structure.tariff_blocks.length > 0 ? (
+                        <span className="text-sm font-medium">Block</span>
+                      ) : structure.tariff_charges && structure.tariff_charges.some((c: any) => c.charge_type.startsWith('energy_') || c.charge_type === 'seasonal_energy') ? (
+                        <span className="text-sm font-medium">Seasonal</span>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-muted-foreground">
                       {new Date(structure.effective_from).toLocaleDateString()}
                     </TableCell>
