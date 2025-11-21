@@ -290,7 +290,7 @@ export default function TariffStructureForm({ onSubmit, isLoading, initialData, 
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="prepaid">Prepaid</SelectItem>
-                    <SelectItem value="conventional">Conventional</SelectItem>
+                    <SelectItem value="postpaid">Postpaid</SelectItem>
                     <SelectItem value="both">Both</SelectItem>
                   </SelectContent>
                 </Select>
