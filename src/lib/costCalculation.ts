@@ -8,6 +8,16 @@ export interface CostCalculationResult {
   tariffName: string;
   hasError: boolean;
   errorMessage?: string;
+  tariffPeriodsUsed?: Array<{
+    tariffId: string;
+    tariffName: string;
+    effectiveFrom: string;
+    effectiveTo: string | null;
+    dateFrom: string;
+    dateTo: string;
+    kwh: number;
+    cost: number;
+  }>;
 }
 
 export interface MeterReading {
@@ -250,6 +260,161 @@ export async function calculateMeterCost(
       tariffName: "Error",
       hasError: true,
       errorMessage: error.message || "Unknown error",
+    };
+  }
+}
+
+/**
+ * Calculate electricity cost for a meter across multiple tariff periods
+ * This function handles scenarios where the date range spans multiple tariff effective periods
+ * @param meterId - Meter ID
+ * @param supplyAuthorityId - Supply authority ID
+ * @param tariffName - Tariff name (not ID, to support multiple periods)
+ * @param dateFrom - Start date for calculation
+ * @param dateTo - End date for calculation
+ * @returns Cost calculation result with breakdown by period
+ */
+export async function calculateMeterCostAcrossPeriods(
+  meterId: string,
+  supplyAuthorityId: string,
+  tariffName: string,
+  dateFrom: Date,
+  dateTo: Date
+): Promise<CostCalculationResult> {
+  try {
+    // Fetch all applicable tariff periods for this date range
+    const { data: tariffPeriods, error: periodsError } = await supabase.rpc(
+      'get_applicable_tariff_periods',
+      {
+        p_supply_authority_id: supplyAuthorityId,
+        p_tariff_name: tariffName,
+        p_date_from: dateFrom.toISOString(),
+        p_date_to: dateTo.toISOString()
+      }
+    );
+
+    if (periodsError || !tariffPeriods || tariffPeriods.length === 0) {
+      return {
+        energyCost: 0,
+        fixedCharges: 0,
+        totalCost: 0,
+        avgCostPerKwh: 0,
+        tariffName: tariffName,
+        hasError: true,
+        errorMessage: `No tariff periods found for "${tariffName}" in the specified date range`,
+      };
+    }
+
+    // If only one period, use the standard calculation
+    if (tariffPeriods.length === 1) {
+      const result = await calculateMeterCost(
+        meterId,
+        tariffPeriods[0].tariff_id,
+        dateFrom,
+        dateTo
+      );
+      return {
+        ...result,
+        tariffPeriodsUsed: [{
+          tariffId: tariffPeriods[0].tariff_id,
+          tariffName: tariffPeriods[0].tariff_name,
+          effectiveFrom: tariffPeriods[0].effective_from,
+          effectiveTo: tariffPeriods[0].effective_to,
+          dateFrom: dateFrom.toISOString(),
+          dateTo: dateTo.toISOString(),
+          kwh: 0,
+          cost: result.totalCost
+        }]
+      };
+    }
+
+    // Multiple periods - split date range and calculate for each segment
+    let totalEnergyCost = 0;
+    let totalFixedCharges = 0;
+    let totalKwh = 0;
+    const periodBreakdown: Array<{
+      tariffId: string;
+      tariffName: string;
+      effectiveFrom: string;
+      effectiveTo: string | null;
+      dateFrom: string;
+      dateTo: string;
+      kwh: number;
+      cost: number;
+    }> = [];
+
+    for (let i = 0; i < tariffPeriods.length; i++) {
+      const period = tariffPeriods[i];
+      const periodEffectiveFrom = new Date(period.effective_from);
+      const periodEffectiveTo = period.effective_to ? new Date(period.effective_to) : dateTo;
+
+      // Calculate the segment date range (intersection of requested range and period validity)
+      const segmentStart = new Date(Math.max(dateFrom.getTime(), periodEffectiveFrom.getTime()));
+      const segmentEnd = new Date(Math.min(dateTo.getTime(), periodEffectiveTo.getTime()));
+
+      // Skip if segment is invalid
+      if (segmentStart > segmentEnd) {
+        continue;
+      }
+
+      // Fetch readings for this segment
+      const { data: readingsData } = await supabase
+        .from("meter_readings")
+        .select("kwh_value")
+        .eq("meter_id", meterId)
+        .gte("reading_timestamp", segmentStart.toISOString())
+        .lte("reading_timestamp", segmentEnd.toISOString());
+
+      const segmentKwh = (readingsData || []).reduce((sum, r) => sum + Number(r.kwh_value), 0);
+
+      // Calculate cost for this segment
+      const segmentResult = await calculateMeterCost(
+        meterId,
+        period.tariff_id,
+        segmentStart,
+        segmentEnd,
+        segmentKwh
+      );
+
+      if (!segmentResult.hasError) {
+        totalEnergyCost += segmentResult.energyCost;
+        totalFixedCharges += segmentResult.fixedCharges;
+        totalKwh += segmentKwh;
+
+        periodBreakdown.push({
+          tariffId: period.tariff_id,
+          tariffName: period.tariff_name,
+          effectiveFrom: period.effective_from,
+          effectiveTo: period.effective_to,
+          dateFrom: segmentStart.toISOString(),
+          dateTo: segmentEnd.toISOString(),
+          kwh: segmentKwh,
+          cost: segmentResult.totalCost
+        });
+      }
+    }
+
+    const totalCost = totalEnergyCost + totalFixedCharges;
+    const avgCostPerKwh = totalKwh > 0 ? totalCost / totalKwh : 0;
+
+    return {
+      energyCost: totalEnergyCost,
+      fixedCharges: totalFixedCharges,
+      totalCost,
+      avgCostPerKwh,
+      tariffName,
+      hasError: false,
+      tariffPeriodsUsed: periodBreakdown
+    };
+  } catch (error: any) {
+    return {
+      energyCost: 0,
+      fixedCharges: 0,
+      totalCost: 0,
+      avgCostPerKwh: 0,
+      tariffName,
+      hasError: true,
+      errorMessage: error.message || "Unknown error in multi-period calculation",
     };
   }
 }
