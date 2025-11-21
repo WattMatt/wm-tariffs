@@ -1423,6 +1423,19 @@ export default function TariffAssignmentTab({
       return;
     }
     
+    // Fetch site data to get supply_authority_id (needed for RPC call)
+    if (!site?.supply_authority_id) {
+      toast.error("Site must have a supply authority assigned");
+      return;
+    }
+
+    // Get the assigned tariff name for multi-period support
+    const assignedTariff = tariffStructures.find(t => t.id === assignedTariffId);
+    if (!assignedTariff) {
+      toast.error("Could not find assigned tariff structure");
+      return;
+    }
+    
     // Fetch stored calculations from document_tariff_calculations table
     const { data: storedCalculations, error } = await supabase
       .from("document_tariff_calculations")
@@ -1459,24 +1472,35 @@ export default function TariffAssignmentTab({
       return;
     }
     
-    // Fetch tariff structure details (blocks, TOU periods, charges)
-    const [
-      { data: tariffBlocks },
-      { data: tariffPeriods },
-      { data: tariffCharges }
-    ] = await Promise.all([
-      supabase.from("tariff_blocks").select("*").eq("tariff_structure_id", assignedTariffId).order("block_number"),
-      supabase.from("tariff_time_periods").select("*").eq("tariff_structure_id", assignedTariffId),
-      supabase.from("tariff_charges").select("*").eq("tariff_structure_id", assignedTariffId)
-    ]);
-    
-    // Match calculations with document data
-    const documentComparisons = storedCalculations
-      .map(calc => {
+    // For each document, fetch period-specific tariff details
+    const documentComparisons = await Promise.all(
+      storedCalculations.map(async (calc) => {
         // Find matching document from documentShopNumbers
         const matchingDoc = documentShopNumbers.find(doc => doc.documentId === calc.document_id);
         
         if (!matchingDoc) return null;
+        
+        // Use RPC to find the applicable tariff structure for this document's billing period
+        const { data: applicableTariffs } = await supabase.rpc('get_applicable_tariff_periods', {
+          p_supply_authority_id: site.supply_authority_id,
+          p_tariff_name: assignedTariff.name,
+          p_date_from: calc.period_start,
+          p_date_to: calc.period_end
+        });
+        
+        // Get the tariff structure ID for this specific period (fallback to assigned if not found)
+        const periodTariffId = applicableTariffs?.[0]?.tariff_id || assignedTariffId;
+        
+        // Fetch period-specific tariff details
+        const [
+          { data: tariffBlocks },
+          { data: tariffPeriods },
+          { data: tariffCharges }
+        ] = await Promise.all([
+          supabase.from("tariff_blocks").select("*").eq("tariff_structure_id", periodTariffId).order("block_number"),
+          supabase.from("tariff_time_periods").select("*").eq("tariff_structure_id", periodTariffId),
+          supabase.from("tariff_charges").select("*").eq("tariff_structure_id", periodTariffId)
+        ]);
         
         return {
           calculation: calc,
@@ -1489,19 +1513,21 @@ export default function TariffAssignmentTab({
           }
         };
       })
-      .filter((comp): comp is NonNullable<typeof comp> => comp !== null);
+    );
     
-    if (documentComparisons.length === 0) {
+    const validComparisons = documentComparisons.filter((comp): comp is NonNullable<typeof comp> => comp !== null);
+    
+    if (validComparisons.length === 0) {
       toast.error("No matching documents found for stored calculations");
       return;
     }
     
     // Calculate overall status based on variance
-    const overallStatus = calculateOverallStatus(documentComparisons);
+    const overallStatus = calculateOverallStatus(validComparisons);
     
     setRateComparisonData({
       overallStatus,
-      documentComparisons
+      documentComparisons: validComparisons
     });
     setRateComparisonMeter(meter);
     setExpandedDocuments(new Set()); // Start with all documents collapsed
