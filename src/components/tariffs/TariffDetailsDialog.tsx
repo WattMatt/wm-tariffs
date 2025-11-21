@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -9,6 +10,13 @@ interface TariffDetailsDialogProps {
   tariffId: string;
   tariffName: string;
   onClose: () => void;
+}
+
+interface TariffPeriod {
+  id: string;
+  effective_from: string;
+  effective_to: string | null;
+  supply_authority_id: string;
 }
 
 interface TariffData {
@@ -28,12 +36,47 @@ interface TariffData {
 export default function TariffDetailsDialog({ tariffId, tariffName, onClose }: TariffDetailsDialogProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [tariffData, setTariffData] = useState<TariffData | null>(null);
+  const [availablePeriods, setAvailablePeriods] = useState<TariffPeriod[]>([]);
+  const [selectedPeriodId, setSelectedPeriodId] = useState(tariffId);
 
   useEffect(() => {
-    fetchTariffData();
-  }, [tariffId]);
+    fetchAvailablePeriods();
+  }, []);
 
-  const fetchTariffData = async () => {
+  useEffect(() => {
+    if (selectedPeriodId) {
+      fetchTariffData(selectedPeriodId);
+    }
+  }, [selectedPeriodId]);
+
+  const fetchAvailablePeriods = async () => {
+    try {
+      // First get the supply_authority_id from the initial tariff
+      const { data: initialTariff, error: initialError } = await supabase
+        .from("tariff_structures")
+        .select("supply_authority_id, name")
+        .eq("id", tariffId)
+        .single();
+
+      if (initialError) throw initialError;
+
+      // Fetch all tariff periods with the same name and supply authority
+      const { data: periods, error: periodsError } = await supabase
+        .from("tariff_structures")
+        .select("id, effective_from, effective_to, supply_authority_id")
+        .eq("name", initialTariff.name)
+        .eq("supply_authority_id", initialTariff.supply_authority_id)
+        .order("effective_from", { ascending: false });
+
+      if (periodsError) throw periodsError;
+
+      setAvailablePeriods(periods || []);
+    } catch (error: any) {
+      toast.error(`Failed to load tariff periods: ${error.message}`);
+    }
+  };
+
+  const fetchTariffData = async (periodId: string) => {
     setIsLoading(true);
 
     try {
@@ -41,7 +84,7 @@ export default function TariffDetailsDialog({ tariffId, tariffName, onClose }: T
       const { data: tariff, error: tariffError } = await supabase
         .from("tariff_structures")
         .select("*")
-        .eq("id", tariffId)
+        .eq("id", periodId)
         .single();
 
       if (tariffError) throw tariffError;
@@ -50,20 +93,20 @@ export default function TariffDetailsDialog({ tariffId, tariffName, onClose }: T
       const { data: blocks } = await supabase
         .from("tariff_blocks")
         .select("*")
-        .eq("tariff_structure_id", tariffId)
+        .eq("tariff_structure_id", periodId)
         .order("block_number", { ascending: true });
 
       // Fetch charges
       const { data: charges } = await supabase
         .from("tariff_charges")
         .select("*")
-        .eq("tariff_structure_id", tariffId);
+        .eq("tariff_structure_id", periodId);
 
       // Fetch TOU periods
       const { data: touPeriods } = await supabase
         .from("tariff_time_periods")
         .select("*")
-        .eq("tariff_structure_id", tariffId)
+        .eq("tariff_structure_id", periodId)
         .order("season", { ascending: true });
 
       // Transform data to match form structure
@@ -153,6 +196,12 @@ export default function TariffDetailsDialog({ tariffId, tariffName, onClose }: T
     return Array.from(grouped.values());
   };
 
+  const formatDateRange = (from: string, to: string | null) => {
+    const fromDate = new Date(from).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    const toDate = to ? new Date(to).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'Present';
+    return `${fromDate} - ${toDate}`;
+  };
+
   return (
     <Dialog open={true} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl">
@@ -162,6 +211,24 @@ export default function TariffDetailsDialog({ tariffId, tariffName, onClose }: T
             Viewing details for {tariffName}
           </DialogDescription>
         </DialogHeader>
+
+        {availablePeriods.length > 1 && (
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Select Tariff Period</label>
+            <Select value={selectedPeriodId} onValueChange={setSelectedPeriodId}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {availablePeriods.map((period) => (
+                  <SelectItem key={period.id} value={period.id}>
+                    {formatDateRange(period.effective_from, period.effective_to)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         {isLoading ? (
           <div className="flex items-center justify-center py-8">
