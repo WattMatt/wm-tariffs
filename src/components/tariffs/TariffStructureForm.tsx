@@ -4,7 +4,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Trash2, GripVertical } from "lucide-react";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Plus, Trash2, GripVertical, CalendarIcon } from "lucide-react";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 
 interface EnergyBlock {
   blockNumber: number;
@@ -72,6 +76,9 @@ export default function TariffStructureForm({ onSubmit, isLoading, initialData, 
     basicCharge: undefined,
     demandCharges: []
   });
+
+  const [isEffectiveFromOpen, setIsEffectiveFromOpen] = useState(false);
+  const [isEffectiveToOpen, setIsEffectiveToOpen] = useState(false);
 
   const [visibleSections, setVisibleSections] = useState({
     blocks: !!(initialData?.blocks?.length),
@@ -293,25 +300,71 @@ export default function TariffStructureForm({ onSubmit, isLoading, initialData, 
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs">Effective From</Label>
-                <Input
-                  type="date"
-                  value={tariffData.effectiveFrom}
-                  onChange={(e) => setTariffData({ ...tariffData, effectiveFrom: e.target.value })}
-                  required
-                  disabled={readOnly}
-                  className="h-9 mt-1"
-                />
+                <Popover open={isEffectiveFromOpen} onOpenChange={setIsEffectiveFromOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal h-9 mt-1",
+                        !tariffData.effectiveFrom && "text-muted-foreground"
+                      )}
+                      disabled={readOnly}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {tariffData.effectiveFrom ? format(new Date(tariffData.effectiveFrom), "PP") : "Pick a date"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0 bg-popover z-50" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={tariffData.effectiveFrom ? new Date(tariffData.effectiveFrom) : undefined}
+                      onSelect={(date) => {
+                        if (date) {
+                          setTariffData({ ...tariffData, effectiveFrom: date.toISOString().split('T')[0] });
+                          setIsEffectiveFromOpen(false);
+                        }
+                      }}
+                      className={cn("p-3 pointer-events-auto")}
+                      fromYear={2000}
+                      toYear={2050}
+                      captionLayout="dropdown-buttons"
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
               <div>
                 <Label className="text-xs">Effective To</Label>
-                <Input
-                  type="date"
-                  value={tariffData.effectiveTo}
-                  onChange={(e) => setTariffData({ ...tariffData, effectiveTo: e.target.value })}
-                  required
-                  disabled={readOnly}
-                  className="h-9 mt-1"
-                />
+                <Popover open={isEffectiveToOpen} onOpenChange={setIsEffectiveToOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal h-9 mt-1",
+                        !tariffData.effectiveTo && "text-muted-foreground"
+                      )}
+                      disabled={readOnly}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {tariffData.effectiveTo ? format(new Date(tariffData.effectiveTo), "PP") : "Pick a date"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0 bg-popover z-50" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={tariffData.effectiveTo ? new Date(tariffData.effectiveTo) : undefined}
+                      onSelect={(date) => {
+                        if (date) {
+                          setTariffData({ ...tariffData, effectiveTo: date.toISOString().split('T')[0] });
+                          setIsEffectiveToOpen(false);
+                        }
+                      }}
+                      className={cn("p-3 pointer-events-auto")}
+                      fromYear={2000}
+                      toYear={2050}
+                      captionLayout="dropdown-buttons"
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
             </div>
           </div>
