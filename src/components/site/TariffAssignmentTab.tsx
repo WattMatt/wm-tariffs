@@ -59,6 +59,7 @@ interface Meter {
   name: string;
   tariff: string | null;
   tariff_structure_id: string | null;
+  assigned_tariff_name: string | null;
   meter_type: string;
   mccb_size: number | null;
   rating: string | null;
@@ -918,14 +919,23 @@ export default function TariffAssignmentTab({
       return;
     }
 
-    setTariffStructures(data || []);
+    // Group tariffs by name and select the most recent period for each name
+    const tariffMap = new Map<string, TariffStructure>();
+    (data || []).forEach((tariff) => {
+      const existing = tariffMap.get(tariff.name);
+      if (!existing || new Date(tariff.effective_from) > new Date(existing.effective_from)) {
+        tariffMap.set(tariff.name, tariff);
+      }
+    });
+
+    setTariffStructures(Array.from(tariffMap.values()));
     setIsLoading(false);
   };
 
   const fetchMeters = async () => {
     const { data, error } = await supabase
       .from("meters")
-      .select("id, meter_number, name, tariff, tariff_structure_id, meter_type, mccb_size, rating")
+      .select("id, meter_number, name, tariff, tariff_structure_id, assigned_tariff_name, meter_type, mccb_size, rating")
       .eq("site_id", siteId)
       .order("meter_number");
 
@@ -1497,10 +1507,16 @@ export default function TariffAssignmentTab({
       // Update all meters - both with assignments and without
       const updates = meters.map((meter) => {
         const tariffId = selectedTariffs[meter.id] || null;
+        // Get the tariff name for multi-period support
+        const tariffName = tariffId 
+          ? tariffStructures.find(t => t.id === tariffId)?.name || null
+          : null;
+        
         return supabase
           .from("meters")
           .update({ 
             tariff_structure_id: tariffId,
+            assigned_tariff_name: tariffName,
             tariff: tariffId // Keep tariff column in sync for backward compatibility
           })
           .eq("id", meter.id);

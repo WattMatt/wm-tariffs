@@ -22,7 +22,7 @@ import ReconciliationCompareTab from "./ReconciliationCompareTab";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Switch } from "@/components/ui/switch";
-import { calculateMeterCost } from "@/lib/costCalculation";
+import { calculateMeterCost, calculateMeterCostAcrossPeriods } from "@/lib/costCalculation";
 
 interface ReconciliationTabProps {
   siteId: string;
@@ -1396,10 +1396,23 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     setFailedMeters(new Map());
 
     try {
+      // Fetch site details including supply authority
+      const { data: siteData, error: siteError } = await supabase
+        .from("sites")
+        .select("id, name, supply_authority_id")
+        .eq("id", siteId)
+        .single();
+
+      if (siteError || !siteData?.supply_authority_id) {
+        toast.error("Site supply authority not configured");
+        setIsLoading(false);
+        return;
+      }
+
       // Fetch all meters for the site with tariff assignments
       const { data: meters, error: metersError } = await supabase
         .from("meters")
-        .select("id, meter_number, meter_type, tariff_structure_id, name, location")
+        .select("id, meter_number, meter_type, tariff_structure_id, assigned_tariff_name, name, location")
         .eq("site_id", siteId);
 
       if (metersError) {
@@ -1499,8 +1512,39 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         
         // Process all meters that have tariff assignments
         for (const meter of meterData) {
-          // Use tariff_structure_id from meter data (already fetched)
-          if (meter.tariff_structure_id && meter.totalKwhPositive > 0) {
+          // Use assigned_tariff_name for multi-period support, fallback to tariff_structure_id
+          if (meter.assigned_tariff_name && meter.totalKwhPositive > 0) {
+            const costResult = await calculateMeterCostAcrossPeriods(
+              meter.id,
+              siteData.supply_authority_id,
+              meter.assigned_tariff_name,
+              new Date(fullDateTimeFrom),
+              new Date(fullDateTimeTo)
+            );
+            
+            meterRevenues.set(meter.id, costResult);
+            
+            // Update progress counter
+            const currentIndex = meterRevenues.size;
+            setReconciliationProgress({ 
+              current: currentIndex, 
+              total: metersWithTariffs.length 
+            });
+            
+            // Categorize costs based on meter assignment and type
+            const assignment = meterAssignments.get(meter.id);
+            if (assignment === "grid_supply") {
+              gridSupplyCost += costResult.totalCost;
+            } else if (assignment === "solar_energy") {
+              solarCost += costResult.totalCost;
+            } else if (meter.meter_type === "tenant_meter") {
+              tenantCost += costResult.totalCost;
+            }
+            
+            totalKwhWithTariffs += meter.totalKwh;
+            totalCostCalculated += costResult.totalCost;
+          } else if (meter.tariff_structure_id && meter.totalKwhPositive > 0) {
+            // Fallback to old method for meters without assigned_tariff_name
             const costResult = await calculateMeterCost(
               meter.id,
               meter.tariff_structure_id,

@@ -439,6 +439,7 @@ export type Database = {
       meters: {
         Row: {
           area: number | null
+          assigned_tariff_name: string | null
           cable_specification: string | null
           confirmation_status: string | null
           created_at: string | null
@@ -465,6 +466,7 @@ export type Database = {
         }
         Insert: {
           area?: number | null
+          assigned_tariff_name?: string | null
           cable_specification?: string | null
           confirmation_status?: string | null
           created_at?: string | null
@@ -491,6 +493,7 @@ export type Database = {
         }
         Update: {
           area?: number | null
+          assigned_tariff_name?: string | null
           cable_specification?: string | null
           confirmation_status?: string | null
           created_at?: string | null
@@ -1333,6 +1336,22 @@ export type Database = {
         Args: { p_site_id: string }
         Returns: {
           total_deleted: number
+        }[]
+      }
+      get_applicable_tariff_periods: {
+        Args: {
+          p_date_from: string
+          p_date_to: string
+          p_supply_authority_id: string
+          p_tariff_name: string
+        }
+        Returns: {
+          effective_from: string
+          effective_to: string
+          tariff_id: string
+          tariff_name: string
+          tariff_type: string
+          uses_tou: boolean
         }[]
       }
       has_role: {
