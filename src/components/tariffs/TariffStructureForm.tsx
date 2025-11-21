@@ -74,11 +74,11 @@ export default function TariffStructureForm({ onSubmit, isLoading, initialData, 
   });
 
   const [visibleSections, setVisibleSections] = useState({
-    blocks: initialData?.blocks && initialData.blocks.length > 0,
-    seasonalEnergy: initialData?.seasonalEnergy && initialData.seasonalEnergy.length > 0,
-    touEnergy: initialData?.touSeasons && initialData.touSeasons.length > 0,
+    blocks: !!(initialData?.blocks?.length),
+    seasonalEnergy: !!(initialData?.seasonalEnergy?.length),
+    touEnergy: !!(initialData?.touSeasons?.length),
     basicCharge: !!initialData?.basicCharge,
-    demandCharges: initialData?.demandCharges && initialData.demandCharges.length > 0
+    demandCharges: !!(initialData?.demandCharges?.length)
   });
 
   // Update tariffData and visibleSections when initialData changes
