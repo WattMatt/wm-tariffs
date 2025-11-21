@@ -222,13 +222,17 @@ export default function TariffEditDialog({
 
       // Insert seasonal energy charges
       if (data.seasonalEnergy.length > 0) {
-        const chargesToInsert = data.seasonalEnergy.map(charge => ({
-          tariff_structure_id: tariffId,
-          charge_type: "seasonal_energy",
-          description: charge.season,
-          charge_amount: charge.rate,
-          unit: charge.unit
-        }));
+        const chargesToInsert = data.seasonalEnergy.map(charge => {
+          // Convert season to charge_type format (e.g., "High Season" -> "energy_high_season")
+          const chargeType = `energy_${charge.season.toLowerCase().replace(/\s+/g, '_')}`;
+          return {
+            tariff_structure_id: tariffId,
+            charge_type: chargeType,
+            description: charge.season,
+            charge_amount: charge.rate,
+            unit: charge.unit
+          };
+        });
 
         const { error: chargesError } = await supabase
           .from("tariff_charges")
@@ -293,13 +297,17 @@ export default function TariffEditDialog({
 
       // Insert demand charges
       if (data.demandCharges.length > 0) {
-        const demandChargesToInsert = data.demandCharges.map(charge => ({
-          tariff_structure_id: tariffId,
-          charge_type: "demand_charge",
-          description: charge.season,
-          charge_amount: charge.rate,
-          unit: charge.unit
-        }));
+        const demandChargesToInsert = data.demandCharges.map(charge => {
+          // Convert season to charge_type format (e.g., "High Season" -> "demand_high_season")
+          const chargeType = `demand_${charge.season.toLowerCase().replace(/\s+/g, '_')}`;
+          return {
+            tariff_structure_id: tariffId,
+            charge_type: chargeType,
+            description: charge.season,
+            charge_amount: charge.rate,
+            unit: charge.unit
+          };
+        });
 
         const { error: demandError } = await supabase
           .from("tariff_charges")
