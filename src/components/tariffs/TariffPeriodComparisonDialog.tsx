@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
@@ -39,12 +40,16 @@ interface TariffPeriodComparisonDialogProps {
   tariffStructures: TariffStructure[];
 }
 
+const CHARGE_TYPES = [
+  { value: "basicCharge", label: "Basic Charge", unit: "R/month" },
+  { value: "energyLowSeason", label: "Energy Charge - Low Season", unit: "c/kWh" },
+  { value: "energyHighSeason", label: "Energy Charge - High Season", unit: "c/kWh" },
+  { value: "demandLowSeason", label: "Demand Charge - Low Season", unit: "R/kVA" },
+  { value: "demandHighSeason", label: "Demand Charge - High Season", unit: "R/kVA" },
+];
+
 const chartConfig = {
-  basicCharge: { label: "Basic Charge", color: "hsl(var(--chart-1))" },
-  energyLowSeason: { label: "Energy (Low Season)", color: "hsl(var(--chart-2))" },
-  energyHighSeason: { label: "Energy (High Season)", color: "hsl(var(--chart-3))" },
-  demandLowSeason: { label: "Demand (Low Season)", color: "hsl(var(--chart-4))" },
-  demandHighSeason: { label: "Demand (High Season)", color: "hsl(var(--chart-5))" },
+  value: { label: "Value", color: "hsl(220 14% 65%)" }, // Grey bar color from reference
 };
 
 export default function TariffPeriodComparisonDialog({
@@ -55,6 +60,7 @@ export default function TariffPeriodComparisonDialog({
 }: TariffPeriodComparisonDialogProps) {
   const [comparisonData, setComparisonData] = useState<ComparisonData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedChargeType, setSelectedChargeType] = useState<string>("basicCharge");
 
   useEffect(() => {
     if (open && tariffStructures.length > 0) {
@@ -112,79 +118,14 @@ export default function TariffPeriodComparisonDialog({
     return { percentChange, isIncrease: percentChange > 0, isZero: percentChange === 0 };
   };
 
-  const renderChart = (
-    title: string,
-    dataKey: keyof ComparisonData,
-    unit: string,
-    color: string
-  ) => {
-    const hasData = comparisonData.some((d) => d[dataKey] !== undefined);
-    const change = calculateChange(dataKey);
-
-    if (!hasData) {
-      return (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">{title}</CardTitle>
-            <CardDescription>{unit}</CardDescription>
-          </CardHeader>
-          <CardContent className="flex items-center justify-center h-[250px] text-muted-foreground">
-            No data available for this charge type
-          </CardContent>
-        </Card>
-      );
-    }
-
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">{title}</CardTitle>
-          <CardDescription className="flex items-center gap-2">
-            {unit}
-            {change && !change.isZero && (
-              <span className="flex items-center gap-1 text-sm font-medium">
-                {change.isIncrease ? (
-                  <TrendingUp className="h-4 w-4 text-destructive" />
-                ) : (
-                  <TrendingDown className="h-4 w-4 text-green-600" />
-                )}
-                <span className={change.isIncrease ? "text-destructive" : "text-green-600"}>
-                  {change.isIncrease ? "+" : ""}
-                  {change.percentChange.toFixed(1)}%
-                </span>
-              </span>
-            )}
-            {change?.isZero && (
-              <span className="flex items-center gap-1 text-sm font-medium text-muted-foreground">
-                <Minus className="h-4 w-4" />
-                No change
-              </span>
-            )}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ChartContainer config={chartConfig} className="h-[250px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={comparisonData}>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                <XAxis
-                  dataKey="period"
-                  tick={{ fontSize: 12 }}
-                  className="text-muted-foreground"
-                />
-                <YAxis tick={{ fontSize: 12 }} className="text-muted-foreground" />
-                <ChartTooltip
-                  content={<ChartTooltipContent />}
-                  formatter={(value: number) => [value.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), title]}
-                />
-                <Bar dataKey={dataKey} fill={color} radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </ChartContainer>
-        </CardContent>
-      </Card>
-    );
-  };
+  const selectedType = CHARGE_TYPES.find(t => t.value === selectedChargeType);
+  const chartData = comparisonData.map(d => ({
+    period: d.period,
+    value: d[selectedChargeType as keyof ComparisonData] as number | undefined
+  }));
+  
+  const hasData = chartData.some((d) => d.value !== undefined);
+  const change = calculateChange(selectedChargeType as keyof ComparisonData);
 
   if (tariffStructures.length < 2) {
     return (
@@ -201,12 +142,28 @@ export default function TariffPeriodComparisonDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Tariff Period Comparison: {groupName}</DialogTitle>
-          <DialogDescription>
-            Comparing {tariffStructures.length} period{tariffStructures.length !== 1 ? "s" : ""}
-          </DialogDescription>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <DialogTitle>Tariff Period Comparison: {groupName}</DialogTitle>
+              <DialogDescription>
+                Comparing {tariffStructures.length} period{tariffStructures.length !== 1 ? "s" : ""}
+              </DialogDescription>
+            </div>
+            <Select value={selectedChargeType} onValueChange={setSelectedChargeType}>
+              <SelectTrigger className="w-[280px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CHARGE_TYPES.map((type) => (
+                  <SelectItem key={type.value} value={type.value}>
+                    {type.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </DialogHeader>
 
         {loading ? (
@@ -214,12 +171,65 @@ export default function TariffPeriodComparisonDialog({
             Loading comparison data...
           </div>
         ) : (
-          <div className="space-y-6 py-4">
-            {renderChart("Basic Charge", "basicCharge", "R/month", chartConfig.basicCharge.color)}
-            {renderChart("Energy Charge - Low Season", "energyLowSeason", "c/kWh", chartConfig.energyLowSeason.color)}
-            {renderChart("Energy Charge - High Season", "energyHighSeason", "c/kWh", chartConfig.energyHighSeason.color)}
-            {renderChart("Demand Charge - Low Season", "demandLowSeason", "R/kVA", chartConfig.demandLowSeason.color)}
-            {renderChart("Demand Charge - High Season", "demandHighSeason", "R/kVA", chartConfig.demandHighSeason.color)}
+          <div className="py-4">
+            {hasData ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">{selectedType?.label}</CardTitle>
+                  <CardDescription className="flex items-center gap-2">
+                    {selectedType?.unit}
+                    {change && !change.isZero && (
+                      <span className="flex items-center gap-1 text-sm font-medium">
+                        {change.isIncrease ? (
+                          <TrendingUp className="h-4 w-4 text-destructive" />
+                        ) : (
+                          <TrendingDown className="h-4 w-4 text-green-600" />
+                        )}
+                        <span className={change.isIncrease ? "text-destructive" : "text-green-600"}>
+                          {change.isIncrease ? "+" : ""}
+                          {change.percentChange.toFixed(1)}%
+                        </span>
+                      </span>
+                    )}
+                    {change?.isZero && (
+                      <span className="flex items-center gap-1 text-sm font-medium text-muted-foreground">
+                        <Minus className="h-4 w-4" />
+                        No change
+                      </span>
+                    )}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ChartContainer config={chartConfig} className="h-[400px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={chartData}>
+                        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                        <XAxis
+                          dataKey="period"
+                          tick={{ fontSize: 12 }}
+                          className="text-muted-foreground"
+                        />
+                        <YAxis tick={{ fontSize: 12 }} className="text-muted-foreground" />
+                        <ChartTooltip
+                          content={<ChartTooltipContent />}
+                          formatter={(value: number) => [
+                            value.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+                            selectedType?.label
+                          ]}
+                        />
+                        <Bar dataKey="value" fill={chartConfig.value.color} radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </ChartContainer>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card>
+                <CardContent className="flex items-center justify-center h-[400px] text-muted-foreground">
+                  No data available for {selectedType?.label}
+                </CardContent>
+              </Card>
+            )}
           </div>
         )}
       </DialogContent>
