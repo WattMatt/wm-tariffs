@@ -2523,10 +2523,26 @@ export default function TariffAssignmentTab({
                           <TableHead className="text-right">Variance</TableHead>
                         </TableRow>
                       </TableHeader>
-                       <TableBody>
+                      <TableBody>
                         {doc.lineItems && doc.lineItems.length > 0 ? (
                           <>
-                            {doc.lineItems.map((item, itemIdx) => {
+                            {[...doc.lineItems]
+                              .sort((a, b) => {
+                                // Define sort order: Seasonal (1), Basic (2), Emergency Seasonal (3), Demand (4)
+                                const getOrder = (item: any) => {
+                                  const unit = item.unit || 'kWh';
+                                  const isEmergency = item.supply === 'Emergency';
+                                  
+                                  if (unit === 'kWh' && !isEmergency) return 1; // Seasonal Charge
+                                  if (unit === 'Monthly') return 2; // Basic Charge
+                                  if (unit === 'kWh' && isEmergency) return 3; // Emergency Seasonal
+                                  if (unit === 'kVA') return 4; // Demand Charge
+                                  return 5; // Other
+                                };
+                                
+                                return getOrder(a) - getOrder(b);
+                              })
+                              .map((item, itemIdx) => {
                               // Try to find matching tariff rate for this line item
                               let tariffRate: string | null = null;
                               const description = item.description.toLowerCase();
@@ -2559,7 +2575,7 @@ export default function TariffAssignmentTab({
                                   });
                                   
                                   if (matchingCharge) {
-                                    tariffRate = `R ${matchingCharge.charge_amount.toFixed(2)}`;
+                                    tariffRate = `${matchingCharge.charge_amount.toFixed(2)}`;
                                   }
                                 } else if (isDemandCharge && item.rate && item.rate > 0) {
                                   // Pure demand charge
@@ -2573,7 +2589,7 @@ export default function TariffAssignmentTab({
                                     const rateValue = demandCharge.unit === 'c/kVA' 
                                       ? demandCharge.charge_amount / 100 
                                       : demandCharge.charge_amount;
-                                    tariffRate = `R ${rateValue.toFixed(4)}/kVA`;
+                                    tariffRate = `${rateValue.toFixed(4)}`;
                                   }
                                 } else if (!isDemandCharge && item.rate && item.rate > 0) {
                                   // This is an energy charge - find matching tariff rate
@@ -2593,11 +2609,11 @@ export default function TariffAssignmentTab({
                                       );
                                       
                                       if (standardPeriod) {
-                                        tariffRate = `R ${(standardPeriod.energy_charge_cents / 100).toFixed(4)}/kWh`;
+                                        tariffRate = `${(standardPeriod.energy_charge_cents / 100).toFixed(4)}`;
                                       } else {
                                         // Use average of seasonal periods
                                         const avgRate = seasonalPeriods.reduce((sum, p) => sum + p.energy_charge_cents, 0) / seasonalPeriods.length;
-                                        tariffRate = `R ${(avgRate / 100).toFixed(4)}/kWh`;
+                                        tariffRate = `${(avgRate / 100).toFixed(4)}`;
                                       }
                                     }
                                   }
@@ -2611,7 +2627,7 @@ export default function TariffAssignmentTab({
                                       return item.consumption! >= block.kwh_from && item.consumption! <= block.kwh_to;
                                     });
                                     if (matchingBlock) {
-                                      tariffRate = `R ${(matchingBlock.energy_charge_cents / 100).toFixed(4)}/kWh`;
+                                      tariffRate = `${(matchingBlock.energy_charge_cents / 100).toFixed(4)}`;
                                     }
                                   }
                                   
@@ -2640,7 +2656,7 @@ export default function TariffAssignmentTab({
                                     });
                                     
                                     if (seasonalCharge && seasonalCharge.unit === 'c/kWh') {
-                                      tariffRate = `R ${(seasonalCharge.charge_amount / 100).toFixed(4)}/kWh`;
+                                      tariffRate = `${(seasonalCharge.charge_amount / 100).toFixed(4)}`;
                                     }
                                   }
                                 }
@@ -2648,31 +2664,30 @@ export default function TariffAssignmentTab({
                               
                               // Calculate variance as percentage using the item's actual unit
                               let variancePercent: number | null = null;
-                              if (item.rate && tariffRate) {
-                                // Extract rate value based on explicit unit from item
-                                if (itemUnit === 'kWh' && tariffRate.includes('/kWh')) {
-                                  const tariffRateValue = parseFloat(tariffRate.replace('R ', '').replace('/kWh', ''));
-                                  variancePercent = ((tariffRateValue - item.rate) / item.rate) * 100;
-                                } else if (itemUnit === 'kVA' && tariffRate.includes('/kVA')) {
-                                  const tariffRateValue = parseFloat(tariffRate.replace('R ', '').replace('/kVA', ''));
+                              if (item.rate && item.rate > 0 && tariffRate) {
+                                // Extract rate value (now tariffRate is just the number as string)
+                                const tariffRateValue = parseFloat(tariffRate);
+                                if (!isNaN(tariffRateValue)) {
                                   variancePercent = ((tariffRateValue - item.rate) / item.rate) * 100;
                                 }
-                              } else if (itemUnit === 'Monthly' && item.amount && tariffRate) {
+                              } else if (itemUnit === 'Monthly' && item.amount && item.amount > 0 && tariffRate) {
                                 // For fixed monthly charges - compare amounts
-                                const tariffAmount = parseFloat(tariffRate.replace('R ', ''));
-                                variancePercent = ((tariffAmount - item.amount) / item.amount) * 100;
+                                const tariffAmount = parseFloat(tariffRate);
+                                if (!isNaN(tariffAmount)) {
+                                  variancePercent = ((tariffAmount - item.amount) / item.amount) * 100;
+                                }
                               }
 
                               return (
                                 <TableRow key={itemIdx}>
                                   <TableCell className="font-medium">
-                                    {item.supply || 'Normal'} ({getChargeTypeLabel(item.unit)})
+                                    {item.supply || 'Normal'} (R/{itemUnit}) - {getChargeTypeLabel(item.unit)}
                                   </TableCell>
                                   <TableCell className="text-right font-mono">
                                     {item.rate && item.rate > 0 
-                                      ? `R ${item.rate.toFixed(4)}/${itemUnit}`
+                                      ? item.rate.toFixed(4)
                                       : item.amount 
-                                        ? `R ${item.amount.toFixed(2)}`
+                                        ? item.amount.toFixed(2)
                                         : '—'}
                                   </TableCell>
                                   <TableCell className="text-right font-mono text-primary">
