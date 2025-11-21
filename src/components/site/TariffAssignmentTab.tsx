@@ -803,6 +803,13 @@ export default function TariffAssignmentTab({
     const docsToProcess = documentShopNumbers.filter(doc => doc.meterId);
     const total = docsToProcess.length;
     
+    // Count unique meters for better progress messaging
+    const uniqueMeters = new Set(docsToProcess.map(doc => doc.meterId)).size;
+    
+    console.log(`📊 Starting cost calculations:`);
+    console.log(`   ${total} documents across ${uniqueMeters} meters`);
+    console.log(`   Average: ${(total / uniqueMeters).toFixed(1)} documents per meter`);
+    
     setCalculationProgress({ current: 0, total });
     setIsCalculating(true);
     setCancelCalculations(false);
@@ -1536,6 +1543,9 @@ export default function TariffAssignmentTab({
       fetchMeters();
       
       // Calculate and store costs in the background (non-blocking)
+      const docsWithMeters = documentShopNumbers.filter(doc => doc.meterId);
+      const uniqueMeterCount = new Set(docsWithMeters.map(d => d.meterId)).size;
+      toast.info(`Calculating costs for ${docsWithMeters.length} bills across ${uniqueMeterCount} meters...`);
       calculateAndStoreCosts().then(() => {
         if (!cancelCalculations) {
           toast.success("Tariff cost calculations completed");
@@ -2009,7 +2019,7 @@ export default function TariffAssignmentTab({
                       {isCalculating ? (
                         <>
                           <X className="w-4 h-4 mr-2" />
-                          Calculating {calculationProgress.current}/{calculationProgress.total} (Click to Cancel)
+                          Calculating Bill Costs: {calculationProgress.current}/{calculationProgress.total} (Click to Cancel)
                         </>
                       ) : isSaving ? (
                         <>
