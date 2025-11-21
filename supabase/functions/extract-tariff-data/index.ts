@@ -71,6 +71,12 @@ CRITICAL RULES:
 4. If you cannot find a municipality name in the text, DO NOT include it
 5. Extract the EXACT text as it appears - do not correct spellings or format names
 
+TARIFF TYPE VALIDATION:
+- ONLY use these exact tariff types: "domestic", "commercial", "industrial", "agricultural"
+- Do NOT create any other tariff types
+- Map any other category names to one of these four types
+- If a tariff doesn't fit any category, use "commercial" as default
+
 SEARCH PATTERN:
 - Look for municipality headers (usually in format: "MUNICIPALITY_NAME - XX.XX%")
 - Format typically: "BA-PHALABORWA - 12.92%"
@@ -93,13 +99,13 @@ Return ONLY a JSON array of objects:
     "name": "EXACT_NAME_AS_SHOWN",
     "nersaIncrease": XX.XX,
     "province": "Province name if found in text"${extractAll ? `,
-    "tariffStructures": [
-      {
-        "name": "Tariff name",
-        "tariffType": "domestic/commercial/industrial",
-        "effectiveFrom": "2024-07-01",
-        "usesTou": false,
-        "blocks": [
+     "tariffStructures": [
+       {
+         "name": "Tariff name",
+         "tariffType": "domestic|commercial|industrial|agricultural",
+         "effectiveFrom": "2024-07-01",
+         "usesTou": false,
+         "blocks": [
           {
             "blockNumber": 1,
             "kwhFrom": 0,
@@ -203,11 +209,17 @@ async function extractMunicipalityTariffs(documentContent: string, municipalityN
 
 CRITICAL RULES:
 1. Extract ONLY tariffs for "${municipalityName}" - ignore all other municipalities
-2. Each municipality has multiple tariff categories (Domestic, Commercial, Industrial, etc.)
+2. Each municipality has multiple tariff categories (Domestic, Commercial, Industrial, Agricultural)
 3. Look for section headers indicating tariff types
 4. Extract ALL charges: energy charges (c/kWh), capacity charges (R/kVA), service charges (R/day)
 5. Handle TOU periods if present (Peak/Standard/Off-peak with times)
 6. Handle blocks for domestic tariffs (0-600 kWh, 600+ kWh, etc.)
+
+TARIFF TYPE VALIDATION:
+- ONLY use these exact tariff types: "domestic", "commercial", "industrial", "agricultural"
+- Do NOT create any other tariff types
+- Map any other category names to one of these four types
+- If a tariff doesn't fit any category, use "commercial" as default
 
 SEARCH PATTERN:
 - Find "${municipalityName}" header in text
@@ -378,13 +390,21 @@ EXTRACTION PROCESS
 ═══════════════════════════════════════════════════════
 1. Check if municipality name is visible → extract if present, use "" if not
 2. Check if NERSA increase % is visible → extract if present, use 0 if not  
-3. Scan image for ALL tariff categories (Domestic, Commercial, Industrial, etc.)
+3. Scan image for ALL tariff categories (Domestic, Commercial, Industrial, Agricultural)
 4. For EACH tariff found:
    a. Extract exact tariff name
    b. Look for block tables with kWh ranges and rates
    c. Extract EVERY block row you see
    d. Look for charges (basic, energy, demand)
    e. Extract ALL charges you see
+
+═══════════════════════════════════════════════════════
+TARIFF TYPE VALIDATION
+═══════════════════════════════════════════════════════
+✓ ONLY use these exact tariff types: "domestic", "commercial", "industrial", "agricultural"
+✓ Do NOT create any other tariff types
+✓ Map any other category names to one of these four types
+✓ If a tariff doesn't fit any category, use "commercial" as default
 
 ═══════════════════════════════════════════════════════
 CRITICAL RULES
