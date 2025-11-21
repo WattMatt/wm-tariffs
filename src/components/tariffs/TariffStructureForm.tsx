@@ -798,7 +798,10 @@ export default function TariffStructureForm({ onSubmit, isLoading, initialData, 
       {!readOnly && (
         <div className="sticky bottom-0 bg-background pt-3 border-t">
           <Button type="submit" className="w-full" disabled={isLoading || !tariffData.tariffName}>
-            {isLoading ? "Creating Tariff..." : "Create Tariff"}
+            {isLoading 
+              ? (initialData ? "Saving Tariff..." : "Creating Tariff...") 
+              : (initialData ? "Save Tariff" : "Create Tariff")
+            }
           </Button>
         </div>
       )}
