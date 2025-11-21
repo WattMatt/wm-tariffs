@@ -11,6 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import TariffEditDialog from "./TariffEditDialog";
 import TariffStructureForm from "./TariffStructureForm";
+import TariffPeriodComparisonDialog from "./TariffPeriodComparisonDialog";
 
 interface TariffStructure {
   id: string;
@@ -18,6 +19,7 @@ interface TariffStructure {
   tariff_type: string;
   meter_configuration: string | null;
   effective_from: string;
+  effective_to: string | null;
   active: boolean;
   uses_tou: boolean;
   tou_type: string | null;
@@ -55,6 +57,7 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
   }>({ column: null, direction: null });
   const [selectedTariffForEdit, setSelectedTariffForEdit] = useState<{ id: string; name: string; mode: "view" | "edit" } | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
+  const [comparisonDialogOpen, setComparisonDialogOpen] = useState<string | null>(null);
 
   useEffect(() => {
     if (supplyAuthorityId) {
@@ -500,9 +503,15 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
                             {firstStructure.supply_authorities?.name || "—"}
                           </div>
                         </div>
-                        <Badge className="shrink-0 bg-muted text-muted-foreground">
-                          {groupStructures.length} period{groupStructures.length !== 1 ? "s" : ""}
-                        </Badge>
+                    <Badge 
+                      className="shrink-0 bg-muted text-muted-foreground cursor-pointer hover:bg-muted/80 transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setComparisonDialogOpen(groupName);
+                      }}
+                    >
+                      {groupStructures.length} period{groupStructures.length !== 1 ? "s" : ""}
+                    </Badge>
                         <Badge className={getTariffTypeBadge(firstStructure.tariff_type)}>
                           {firstStructure.tariff_type}
                         </Badge>
@@ -603,6 +612,15 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
           supplyAuthorityId={supplyAuthorityId}
           onClose={() => setSelectedTariffForEdit(null)}
           onSave={fetchStructures}
+        />
+      )}
+
+      {comparisonDialogOpen && (
+        <TariffPeriodComparisonDialog
+          open={!!comparisonDialogOpen}
+          onOpenChange={(open) => !open && setComparisonDialogOpen(null)}
+          groupName={comparisonDialogOpen}
+          tariffStructures={getGroupedStructures().get(comparisonDialogOpen) || []}
         />
       )}
     </div>
