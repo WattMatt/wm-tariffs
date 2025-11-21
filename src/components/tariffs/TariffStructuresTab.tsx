@@ -5,9 +5,10 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, FileText, Eye, Trash2, Pencil, Clock, RefreshCw, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { Plus, FileText, Eye, Trash2, Pencil, Clock, RefreshCw, ArrowUpDown, ArrowUp, ArrowDown, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import TariffEditDialog from "./TariffEditDialog";
 import TariffStructureForm from "./TariffStructureForm";
 
@@ -53,6 +54,7 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
     direction: 'asc' | 'desc' | null;
   }>({ column: null, direction: null });
   const [selectedTariffForEdit, setSelectedTariffForEdit] = useState<{ id: string; name: string; mode: "view" | "edit" } | null>(null);
+  const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
 
   useEffect(() => {
     if (supplyAuthorityId) {
@@ -143,6 +145,45 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
       if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
       return 0;
     });
+  };
+
+  const getGroupedStructures = () => {
+    const sorted = getSortedStructures();
+    const grouped = new Map<string, TariffStructure[]>();
+    
+    sorted.forEach(structure => {
+      const existing = grouped.get(structure.name) || [];
+      existing.push(structure);
+      grouped.set(structure.name, existing);
+    });
+    
+    return grouped;
+  };
+
+  const handleSelectGroup = (groupName: string, checked: boolean) => {
+    const groupStructures = structures.filter(s => s.name === groupName);
+    const newSelection = new Set(selectedTariffs);
+    
+    groupStructures.forEach(structure => {
+      if (checked) {
+        newSelection.add(structure.id);
+      } else {
+        newSelection.delete(structure.id);
+      }
+    });
+    
+    setSelectedTariffs(newSelection);
+  };
+
+  const isGroupSelected = (groupName: string) => {
+    const groupStructures = structures.filter(s => s.name === groupName);
+    return groupStructures.length > 0 && groupStructures.every(s => selectedTariffs.has(s.id));
+  };
+
+  const isGroupPartiallySelected = (groupName: string) => {
+    const groupStructures = structures.filter(s => s.name === groupName);
+    const selectedCount = groupStructures.filter(s => selectedTariffs.has(s.id)).length;
+    return selectedCount > 0 && selectedCount < groupStructures.length;
   };
 
   const SortableHeader = ({ column, children }: { column: string; children: React.ReactNode }) => {
@@ -427,89 +468,129 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
           <CardHeader>
             <CardTitle>All Tariff Structures</CardTitle>
             <CardDescription>
-              {structures.length} structure{structures.length !== 1 ? "s" : ""} configured
+              {getGroupedStructures().size} unique tariff{getGroupedStructures().size !== 1 ? "s" : ""} • {structures.length} total period{structures.length !== 1 ? "s" : ""}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-12">
-                    <Checkbox
-                      checked={selectedTariffs.size === structures.length && structures.length > 0}
-                      onCheckedChange={handleSelectAll}
-                      aria-label="Select all tariffs"
-                    />
-                  </TableHead>
-                  <SortableHeader column="name">Name</SortableHeader>
-                  <SortableHeader column="authority">Authority</SortableHeader>
-                  <SortableHeader column="type">Type</SortableHeader>
-                  <TableHead>Tariff</TableHead>
-                  <SortableHeader column="effective_from">Effective From</SortableHeader>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {getSortedStructures().map((structure) => (
-                  <TableRow key={structure.id}>
-                    <TableCell>
-                      <Checkbox
-                        checked={selectedTariffs.has(structure.id)}
-                        onCheckedChange={(checked) => handleSelectTariff(structure.id, checked as boolean)}
-                        aria-label={`Select ${structure.name}`}
-                      />
-                    </TableCell>
-                    <TableCell className="font-medium">{structure.name}</TableCell>
-                    <TableCell>{structure.supply_authorities?.name || "—"}</TableCell>
-                    <TableCell>
-                      <Badge className={getTariffTypeBadge(structure.tariff_type)}>
-                        {structure.tariff_type}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {structure.uses_tou ? (
-                        <span className="text-sm font-medium">TOU</span>
-                      ) : structure.tariff_blocks && structure.tariff_blocks.length > 0 ? (
-                        <span className="text-sm font-medium">Block</span>
-                      ) : structure.tariff_charges && structure.tariff_charges.some((c: any) => c.charge_type.startsWith('energy_') || c.charge_type === 'seasonal_energy') ? (
-                        <span className="text-sm font-medium">Seasonal</span>
-                      ) : (
-                        <span className="text-sm text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {new Date(structure.effective_from).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell>
-                      {structure.active ? (
-                        <Badge className="bg-accent text-accent-foreground">Active</Badge>
-                      ) : (
-                        <Badge variant="outline">Inactive</Badge>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={() => setSelectedTariffForEdit({ id: structure.id, name: structure.name, mode: "view" })}
-                        >
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={() => setSelectedTariffForEdit({ id: structure.id, name: structure.name, mode: "edit" })}
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </Button>
+            <Accordion type="multiple" value={expandedGroups} onValueChange={setExpandedGroups}>
+              {Array.from(getGroupedStructures()).map(([groupName, groupStructures]) => {
+                const firstStructure = groupStructures[0];
+                const hasActiveStatus = groupStructures.some(s => s.active);
+                const earliestDate = groupStructures.reduce((earliest, s) => 
+                  new Date(s.effective_from) < new Date(earliest.effective_from) ? s : earliest
+                ).effective_from;
+                const latestStructure = groupStructures.reduce((latest, s) => 
+                  new Date(s.effective_from) > new Date(latest.effective_from) ? s : latest
+                );
+                
+                return (
+                  <AccordionItem key={groupName} value={groupName} className="border-b border-border/50">
+                    <AccordionTrigger className="hover:no-underline py-4">
+                      <div className="flex items-center gap-4 w-full pr-4">
+                        <Checkbox
+                          checked={isGroupSelected(groupName)}
+                          onCheckedChange={(checked) => handleSelectGroup(groupName, checked as boolean)}
+                          onClick={(e) => e.stopPropagation()}
+                          className={isGroupPartiallySelected(groupName) ? "data-[state=checked]:bg-primary/50" : ""}
+                          aria-label={`Select all periods for ${groupName}`}
+                        />
+                        <div className="flex-1 text-left">
+                          <div className="font-medium">{groupName}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {firstStructure.supply_authorities?.name || "—"}
+                          </div>
+                        </div>
+                        <Badge className="shrink-0 bg-muted text-muted-foreground">
+                          {groupStructures.length} period{groupStructures.length !== 1 ? "s" : ""}
+                        </Badge>
+                        <Badge className={getTariffTypeBadge(firstStructure.tariff_type)}>
+                          {firstStructure.tariff_type}
+                        </Badge>
+                        <div className="text-sm text-muted-foreground shrink-0">
+                          {new Date(earliestDate).toLocaleDateString()} - {hasActiveStatus ? "Present" : new Date(latestStructure.effective_from).toLocaleDateString()}
+                        </div>
+                        {hasActiveStatus && (
+                          <Badge className="bg-accent text-accent-foreground shrink-0">Active</Badge>
+                        )}
                       </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <div className="pl-10 pr-4 pb-4">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="w-12"></TableHead>
+                              <TableHead>Effective From</TableHead>
+                              <TableHead>Effective To</TableHead>
+                              <TableHead>Tariff Structure</TableHead>
+                              <TableHead>Status</TableHead>
+                              <TableHead>Actions</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {groupStructures
+                              .sort((a, b) => new Date(b.effective_from).getTime() - new Date(a.effective_from).getTime())
+                              .map((structure) => (
+                              <TableRow key={structure.id}>
+                                <TableCell>
+                                  <Checkbox
+                                    checked={selectedTariffs.has(structure.id)}
+                                    onCheckedChange={(checked) => handleSelectTariff(structure.id, checked as boolean)}
+                                    aria-label={`Select ${structure.name} from ${new Date(structure.effective_from).toLocaleDateString()}`}
+                                  />
+                                </TableCell>
+                                <TableCell className="text-muted-foreground">
+                                  {new Date(structure.effective_from).toLocaleDateString()}
+                                </TableCell>
+                                <TableCell className="text-muted-foreground">
+                                  {structure.active ? "Present" : "—"}
+                                </TableCell>
+                                <TableCell>
+                                  {structure.uses_tou ? (
+                                    <span className="text-sm font-medium">TOU</span>
+                                  ) : structure.tariff_blocks && structure.tariff_blocks.length > 0 ? (
+                                    <span className="text-sm font-medium">Block</span>
+                                  ) : structure.tariff_charges && structure.tariff_charges.some((c: any) => c.charge_type.startsWith('energy_') || c.charge_type === 'seasonal_energy') ? (
+                                    <span className="text-sm font-medium">Seasonal</span>
+                                  ) : (
+                                    <span className="text-sm text-muted-foreground">—</span>
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  {structure.active ? (
+                                    <Badge className="bg-accent text-accent-foreground">Active</Badge>
+                                  ) : (
+                                    <Badge variant="outline">Inactive</Badge>
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex gap-2">
+                                    <Button
+                                      variant="outline"
+                                      size="icon"
+                                      onClick={() => setSelectedTariffForEdit({ id: structure.id, name: structure.name, mode: "view" })}
+                                    >
+                                      <Eye className="w-4 h-4" />
+                                    </Button>
+                                    <Button
+                                      variant="outline"
+                                      size="icon"
+                                      onClick={() => setSelectedTariffForEdit({ id: structure.id, name: structure.name, mode: "edit" })}
+                                    >
+                                      <Pencil className="w-4 h-4" />
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                );
+              })}
+            </Accordion>
           </CardContent>
         </Card>
       )}
