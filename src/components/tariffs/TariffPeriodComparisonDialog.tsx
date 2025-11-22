@@ -115,7 +115,30 @@ export default function TariffPeriodComparisonDialog({
     if (!firstValue || !lastValue) return null;
 
     const percentChange = ((lastValue - firstValue) / firstValue) * 100;
-    return { percentChange, isIncrease: percentChange > 0, isZero: percentChange === 0 };
+    
+    // Calculate average year-on-year increase
+    let totalYoyChange = 0;
+    let validPeriods = 0;
+    
+    for (let i = 1; i < comparisonData.length; i++) {
+      const prevValue = comparisonData[i - 1][dataKey] as number | undefined;
+      const currValue = comparisonData[i][dataKey] as number | undefined;
+      
+      if (prevValue && currValue) {
+        const yoyChange = ((currValue - prevValue) / prevValue) * 100;
+        totalYoyChange += yoyChange;
+        validPeriods++;
+      }
+    }
+    
+    const avgYoyChange = validPeriods > 0 ? totalYoyChange / validPeriods : 0;
+    
+    return { 
+      percentChange, 
+      avgYoyChange,
+      isIncrease: percentChange > 0, 
+      isZero: percentChange === 0 
+    };
   };
 
   const selectedType = CHARGE_TYPES.find(t => t.value === selectedChargeType);
@@ -174,22 +197,31 @@ export default function TariffPeriodComparisonDialog({
           <div className="py-4">
             {hasData ? (
               <Card>
-                <CardHeader>
+                 <CardHeader>
                   <CardTitle className="text-lg">{selectedType?.label}</CardTitle>
-                  <CardDescription className="flex items-center gap-2">
+                  <CardDescription className="flex items-center gap-4">
                     {selectedType?.unit}
                     {change && !change.isZero && (
-                      <span className="flex items-center gap-1 text-sm font-medium">
-                        {change.isIncrease ? (
-                          <TrendingUp className="h-4 w-4 text-destructive" />
-                        ) : (
-                          <TrendingDown className="h-4 w-4 text-green-600" />
-                        )}
-                        <span className={change.isIncrease ? "text-destructive" : "text-green-600"}>
-                          {change.isIncrease ? "+" : ""}
-                          {change.percentChange.toFixed(1)}%
+                      <>
+                        <span className="flex items-center gap-1 text-sm font-medium">
+                          {change.isIncrease ? (
+                            <TrendingUp className="h-4 w-4 text-destructive" />
+                          ) : (
+                            <TrendingDown className="h-4 w-4 text-green-600" />
+                          )}
+                          <span className={change.isIncrease ? "text-destructive" : "text-green-600"}>
+                            {change.isIncrease ? "+" : ""}
+                            {change.percentChange.toFixed(1)}%
+                          </span>
                         </span>
-                      </span>
+                        <span className="flex items-center gap-1 text-sm font-medium text-muted-foreground">
+                          <span className="text-xs">Avg YoY:</span>
+                          <span className={change.avgYoyChange > 0 ? "text-destructive" : "text-green-600"}>
+                            {change.avgYoyChange > 0 ? "+" : ""}
+                            {change.avgYoyChange.toFixed(1)}%
+                          </span>
+                        </span>
+                      </>
                     )}
                     {change?.isZero && (
                       <span className="flex items-center gap-1 text-sm font-medium text-muted-foreground">
