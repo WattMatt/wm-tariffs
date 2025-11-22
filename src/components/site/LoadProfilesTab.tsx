@@ -329,6 +329,11 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
 
   // Mouse event handlers for zoom selection
   const handleMouseDown = (e: any) => {
+    // Prevent default text selection behavior
+    if (e?.nativeEvent) {
+      e.nativeEvent.preventDefault();
+    }
+    
     if (e && e.activeLabel) {
       setRefAreaLeft(e.activeLabel);
       setIsSelecting(true);
@@ -336,12 +341,22 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
   };
 
   const handleMouseMove = (e: any) => {
+    // Prevent text selection during drag
+    if (e?.nativeEvent) {
+      e.nativeEvent.preventDefault();
+    }
+    
     if (isSelecting && e && e.activeLabel) {
       setRefAreaRight(e.activeLabel);
     }
   };
 
-  const handleMouseUp = () => {
+  const handleMouseUp = (e?: any) => {
+    // Prevent any lingering text selection
+    if (e?.nativeEvent) {
+      e.nativeEvent.preventDefault();
+    }
+    
     if (!refAreaLeft || !refAreaRight) {
       setIsSelecting(false);
       setRefAreaLeft(null);
