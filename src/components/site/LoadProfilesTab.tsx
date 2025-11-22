@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
@@ -938,7 +938,41 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                 </div>
               </div>
 
-              {showGraph && selectedQuantities.size > 0 && (
+              {showGraph && selectedQuantities.size > 0 && (() => {
+                // Calculate date range once for tick formatting
+                const data = isManipulationApplied ? manipulatedData : loadProfileData;
+                
+                const isShortRange = useMemo(() => {
+                  if (data.length === 0) return false;
+                  const firstDate = new Date(data[0]?.timestampStr);
+                  const lastDate = new Date(data[data.length - 1]?.timestampStr);
+                  const daysDiff = (lastDate.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24);
+                  return daysDiff <= 7;
+                }, [data]);
+                
+                const threeHourTicks = useMemo(() => {
+                  if (!isShortRange || data.length === 0) return undefined;
+                  
+                  const ticks: string[] = [];
+                  const firstDate = new Date(data[0]?.timestampStr);
+                  const lastDate = new Date(data[data.length - 1]?.timestampStr);
+                  
+                  // Round down to nearest 3-hour interval
+                  const startHour = Math.floor(firstDate.getHours() / 3) * 3;
+                  const startTime = new Date(firstDate);
+                  startTime.setHours(startHour, 0, 0, 0);
+                  
+                  // Generate ticks every 3 hours
+                  let currentTime = startTime;
+                  while (currentTime <= lastDate) {
+                    ticks.push(currentTime.toISOString());
+                    currentTime = new Date(currentTime.getTime() + 3 * 60 * 60 * 1000); // +3 hours
+                  }
+                  
+                  return ticks;
+                }, [data, isShortRange]);
+                
+                return (
                 <div className="mt-6 space-y-4 relative">
                   {/* Reset View button - positioned absolutely over chart */}
                   {(yAxisMin !== "" || yAxisMax !== "" || zoomState.startIndex !== null) && (
@@ -1006,198 +1040,173 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                             />
                           ));
                         })()}
-                         <XAxis 
-                          dataKey="timestampStr"
-                          height={120}
-                          tickLine={false}
-                          interval={0}
-                          tick={(props: any) => {
-                            const { x, y, payload } = props;
-                            if (!payload?.value) return null;
-                            
-                            try {
+                         {isShortRange ? (
+                          // SHORT RANGE: 3-hour interval ticks
+                          <XAxis 
+                            dataKey="timestampStr"
+                            height={120}
+                            tickLine={false}
+                            ticks={threeHourTicks}
+                            interval={0}
+                            tick={(props: any) => {
+                              const { x, y, payload } = props;
+                              if (!payload?.value) return null;
+                              
                               const currentDate = new Date(payload.value);
-                              const data = isManipulationApplied ? manipulatedData : loadProfileData;
-                              
-                              // Calculate if date range is 7 days or less
-                              if (data.length > 0) {
-                                const firstDate = new Date(data[0]?.timestampStr);
-                                const lastDate = new Date(data[data.length - 1]?.timestampStr);
-                                const daysDiff = (lastDate.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24);
-                                const isShortRange = daysDiff <= 7;
-                                
-                                // SHORT RANGE MODE: Show 3-hour interval time ticks
-                                if (isShortRange) {
-                                  const hour = currentDate.getHours();
-                                  const minute = currentDate.getMinutes();
-                                  const isThreeHourMark = hour % 3 === 0 && minute === 0;
-                                  const isMidnight = hour === 0 && minute === 0;
-                                  
-                                  // Only show ticks for 3-hour intervals
-                                  if (!isThreeHourMark) return null;
-                                  
-                                  return (
-                                    <g transform={`translate(${x},${y})`}>
-                                      {/* Time label - show for all 3-hour marks */}
-                                      <text 
-                                        x={0} 
-                                        y={0} 
-                                        dy={16} 
-                                        textAnchor="middle" 
-                                        fill="currentColor"
-                                        fontSize={10}
-                                      >
-                                        {format(currentDate, 'HH:mm')}
-                                      </text>
-                                      
-                                      {/* Date labels - only show at midnight (day boundaries) */}
-                                      {isMidnight && (
-                                        <>
-                                          <text 
-                                            x={0} 
-                                            y={0} 
-                                            dy={38} 
-                                            textAnchor="middle" 
-                                            fill="currentColor"
-                                            fontSize={11}
-                                          >
-                                            {currentDate.getDate()}
-                                          </text>
-                                          <text 
-                                            x={0} 
-                                            y={0} 
-                                            dy={60} 
-                                            textAnchor="middle" 
-                                            fill="currentColor"
-                                            fontSize={11}
-                                            fontWeight="500"
-                                          >
-                                            {format(currentDate, 'MMM')}
-                                          </text>
-                                          <text 
-                                            x={0} 
-                                            y={0} 
-                                            dy={82} 
-                                            textAnchor="middle" 
-                                            fill="currentColor"
-                                            fontSize={10}
-                                          >
-                                            {currentDate.getFullYear()}
-                                          </text>
-                                        </>
-                                      )}
-                                    </g>
-                                  );
-                                }
-                              }
-                              
-                              // LONG RANGE MODE: Original behavior with day-centered labels
-                              // Find all day boundaries
-                              const dayBoundaries: { timestamp: string, day: number, month: number, year: number }[] = [];
-                              let lastDay: number | null = null;
-                              
-                              data.forEach((point) => {
-                                if (point.timestampStr) {
-                                  const date = new Date(point.timestampStr);
-                                  const currentDay = date.getDate();
-                                  
-                                  if (lastDay === null || currentDay !== lastDay) {
-                                    dayBoundaries.push({
-                                      timestamp: point.timestampStr,
-                                      day: currentDay,
-                                      month: date.getMonth(),
-                                      year: date.getFullYear()
-                                    });
-                                  }
-                                  lastDay = currentDay;
-                                }
-                              });
-                              
-                              // Find which day segment this timestamp belongs to
-                              let dayIndex = -1;
-                              for (let i = 0; i < dayBoundaries.length; i++) {
-                                const startTime = new Date(dayBoundaries[i].timestamp).getTime();
-                                const endTime = i < dayBoundaries.length - 1
-                                  ? new Date(dayBoundaries[i + 1].timestamp).getTime()
-                                  : new Date(data[data.length - 1].timestampStr).getTime();
-                                const centerTime = (startTime + endTime) / 2;
-                                
-                                // If this timestamp is close to the center of this day segment
-                                if (Math.abs(currentDate.getTime() - centerTime) < 15 * 60 * 1000) { // within 15 minutes
-                                  dayIndex = i;
-                                  break;
-                                }
-                              }
-                              
-                              // Only show label if this is a center point
-                              if (dayIndex === -1) return null;
-                              
-                              const dayInfo = dayBoundaries[dayIndex];
-                              
-                              // Determine if we should show month/year
-                              const monthDays = dayBoundaries.filter(d => 
-                                d.month === dayInfo.month && d.year === dayInfo.year
-                              );
-                              const yearDays = dayBoundaries.filter(d => 
-                                d.year === dayInfo.year
-                              );
-                              
-                              const monthCenterIdx = Math.floor(monthDays.length / 2);
-                              const yearCenterIdx = Math.floor(yearDays.length / 2);
-                              
-                              const showMonth = monthDays[monthCenterIdx]?.day === dayInfo.day;
-                              const showYear = yearDays[yearCenterIdx]?.day === dayInfo.day;
+                              const hour = currentDate.getHours();
+                              const isMidnight = hour === 0;
                               
                               return (
                                 <g transform={`translate(${x},${y})`}>
-                                  {/* Day number */}
+                                  {/* Time label for all 3-hour marks */}
                                   <text 
-                                    x={0} 
-                                    y={0} 
-                                    dy={16} 
+                                    x={0} y={0} dy={16} 
                                     textAnchor="middle" 
                                     fill="currentColor"
-                                    fontSize={12}
+                                    fontSize={10}
                                   >
-                                    {dayInfo.day}
+                                    {format(currentDate, 'HH:mm')}
                                   </text>
                                   
-                                  {/* Month name */}
-                                  {showMonth && (
+                                  {/* Date labels only at midnight */}
+                                  {isMidnight && (
+                                    <>
+                                      <text x={0} y={0} dy={38} textAnchor="middle" fill="currentColor" fontSize={11}>
+                                        {currentDate.getDate()}
+                                      </text>
+                                      <text x={0} y={0} dy={60} textAnchor="middle" fill="currentColor" fontSize={11} fontWeight="500">
+                                        {format(currentDate, 'MMM')}
+                                      </text>
+                                      <text x={0} y={0} dy={82} textAnchor="middle" fill="currentColor" fontSize={10}>
+                                        {currentDate.getFullYear()}
+                                      </text>
+                                    </>
+                                  )}
+                                </g>
+                              );
+                            }}
+                          />
+                        ) : (
+                          // LONG RANGE: Day-centered labels
+                          <XAxis 
+                            dataKey="timestampStr"
+                            height={120}
+                            tickLine={false}
+                            interval={0}
+                            tick={(props: any) => {
+                              const { x, y, payload } = props;
+                              if (!payload?.value) return null;
+                              
+                              try {
+                                const currentDate = new Date(payload.value);
+                                
+                                // Find all day boundaries
+                                const dayBoundaries: { timestamp: string, day: number, month: number, year: number }[] = [];
+                                let lastDay: number | null = null;
+                                
+                                data.forEach((point) => {
+                                  if (point.timestampStr) {
+                                    const date = new Date(point.timestampStr);
+                                    const currentDay = date.getDate();
+                                    
+                                    if (lastDay === null || currentDay !== lastDay) {
+                                      dayBoundaries.push({
+                                        timestamp: point.timestampStr,
+                                        day: currentDay,
+                                        month: date.getMonth(),
+                                        year: date.getFullYear()
+                                      });
+                                    }
+                                    lastDay = currentDay;
+                                  }
+                                });
+                                
+                                // Find which day segment this timestamp belongs to
+                                let dayIndex = -1;
+                                for (let i = 0; i < dayBoundaries.length; i++) {
+                                  const startTime = new Date(dayBoundaries[i].timestamp).getTime();
+                                  const endTime = i < dayBoundaries.length - 1
+                                    ? new Date(dayBoundaries[i + 1].timestamp).getTime()
+                                    : new Date(data[data.length - 1].timestampStr).getTime();
+                                  const centerTime = (startTime + endTime) / 2;
+                                  
+                                  // If this timestamp is close to the center of this day segment
+                                  if (Math.abs(currentDate.getTime() - centerTime) < 15 * 60 * 1000) { // within 15 minutes
+                                    dayIndex = i;
+                                    break;
+                                  }
+                                }
+                                
+                                // Only show label if this is a center point
+                                if (dayIndex === -1) return null;
+                                
+                                const dayInfo = dayBoundaries[dayIndex];
+                                
+                                // Determine if we should show month/year
+                                const monthDays = dayBoundaries.filter(d => 
+                                  d.month === dayInfo.month && d.year === dayInfo.year
+                                );
+                                const yearDays = dayBoundaries.filter(d => 
+                                  d.year === dayInfo.year
+                                );
+                                
+                                const monthCenterIdx = Math.floor(monthDays.length / 2);
+                                const yearCenterIdx = Math.floor(yearDays.length / 2);
+                                
+                                const showMonth = monthDays[monthCenterIdx]?.day === dayInfo.day;
+                                const showYear = yearDays[yearCenterIdx]?.day === dayInfo.day;
+                                
+                                return (
+                                  <g transform={`translate(${x},${y})`}>
+                                    {/* Day number */}
                                     <text 
                                       x={0} 
                                       y={0} 
-                                       dy={38} 
-                                       textAnchor="middle" 
-                                       fill="currentColor"
-                                       fontSize={13}
-                                       fontWeight="500"
-                                     >
-                                       {format(new Date(dayInfo.timestamp), 'MMM')}
-                                     </text>
-                                   )}
-                                   
-                                   {/* Year */}
-                                   {showYear && (
-                                     <text 
-                                       x={0} 
-                                       y={0} 
-                                       dy={60} 
-                                       textAnchor="middle" 
-                                       fill="currentColor"
-                                       fontSize={12}
-                                     >
-                                       {dayInfo.year}
-                                     </text>
-                                   )}
-                                 </g>
-                               );
+                                      dy={16} 
+                                      textAnchor="middle" 
+                                      fill="currentColor"
+                                      fontSize={12}
+                                    >
+                                      {dayInfo.day}
+                                    </text>
+                                    
+                                    {/* Month name */}
+                                    {showMonth && (
+                                      <text 
+                                        x={0} 
+                                        y={0} 
+                                        dy={38} 
+                                        textAnchor="middle" 
+                                        fill="currentColor"
+                                        fontSize={13}
+                                        fontWeight="500"
+                                      >
+                                        {format(new Date(dayInfo.timestamp), 'MMM')}
+                                      </text>
+                                    )}
+                                    
+                                    {/* Year */}
+                                    {showYear && (
+                                      <text 
+                                        x={0} 
+                                        y={0} 
+                                        dy={60} 
+                                        textAnchor="middle" 
+                                        fill="currentColor"
+                                        fontSize={12}
+                                      >
+                                        {dayInfo.year}
+                                      </text>
+                                    )}
+                                  </g>
+                                );
                               } catch (error) {
                                 console.error('Error rendering X-axis tick:', error);
                                 return null;
                               }
-                         }}
-                         />
+                            }}
+                          />
+                        )}
                          <YAxis domain={getYAxisDomain()} />
                          <Tooltip 
                            labelFormatter={(label) => {
@@ -1271,7 +1280,8 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                     </ResponsiveContainer>
                   </div>
                 </div>
-              )}
+                );
+              })()}
 
             </div>
           )}
