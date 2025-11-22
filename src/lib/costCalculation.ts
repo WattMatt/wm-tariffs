@@ -233,7 +233,7 @@ export async function calculateMeterCost(
     let fixedCharges = 0;
     if (tariff.tariff_charges) {
       fixedCharges = tariff.tariff_charges.reduce((sum: number, charge: any) => {
-        if (charge.charge_type === "basic_monthly") {
+        if (charge.charge_type === "basic_monthly" || charge.charge_type === "basic_charge") {
           return sum + Number(charge.charge_amount);
         }
         return sum;

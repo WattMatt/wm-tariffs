@@ -1851,6 +1851,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           meter_name: meter.name || null,
           location: meter.location || null,
           assignment: meter.assignment,
+          tariff_structure_id: meter.tariff_structure_id,
           total_kwh: meter.totalKwh || 0,
           total_kwh_positive: meter.totalKwhPositive || 0,
           total_kwh_negative: meter.totalKwhNegative || 0,
