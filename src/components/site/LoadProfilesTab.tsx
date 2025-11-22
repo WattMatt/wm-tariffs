@@ -1007,7 +1007,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                       })()}
                        <XAxis 
                         dataKey="timestampStr"
-                        height={100}
+                        height={120}
                         tickLine={false}
                         interval={0}
                         tick={(props: any) => {
@@ -1018,6 +1018,79 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                             const currentDate = new Date(payload.value);
                             const data = isManipulationApplied ? manipulatedData : loadProfileData;
                             
+                            // Calculate if date range is 7 days or less
+                            if (data.length > 0) {
+                              const firstDate = new Date(data[0]?.timestampStr);
+                              const lastDate = new Date(data[data.length - 1]?.timestampStr);
+                              const daysDiff = (lastDate.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24);
+                              const isShortRange = daysDiff <= 7;
+                              
+                              // SHORT RANGE MODE: Show 3-hour interval time ticks
+                              if (isShortRange) {
+                                const hour = currentDate.getHours();
+                                const minute = currentDate.getMinutes();
+                                const isThreeHourMark = hour % 3 === 0 && minute === 0;
+                                const isMidnight = hour === 0 && minute === 0;
+                                
+                                // Only show ticks for 3-hour intervals
+                                if (!isThreeHourMark) return null;
+                                
+                                return (
+                                  <g transform={`translate(${x},${y})`}>
+                                    {/* Time label - show for all 3-hour marks */}
+                                    <text 
+                                      x={0} 
+                                      y={0} 
+                                      dy={16} 
+                                      textAnchor="middle" 
+                                      fill="currentColor"
+                                      fontSize={10}
+                                    >
+                                      {format(currentDate, 'HH:mm')}
+                                    </text>
+                                    
+                                    {/* Date labels - only show at midnight (day boundaries) */}
+                                    {isMidnight && (
+                                      <>
+                                        <text 
+                                          x={0} 
+                                          y={0} 
+                                          dy={38} 
+                                          textAnchor="middle" 
+                                          fill="currentColor"
+                                          fontSize={11}
+                                        >
+                                          {currentDate.getDate()}
+                                        </text>
+                                        <text 
+                                          x={0} 
+                                          y={0} 
+                                          dy={60} 
+                                          textAnchor="middle" 
+                                          fill="currentColor"
+                                          fontSize={11}
+                                          fontWeight="500"
+                                        >
+                                          {format(currentDate, 'MMM')}
+                                        </text>
+                                        <text 
+                                          x={0} 
+                                          y={0} 
+                                          dy={82} 
+                                          textAnchor="middle" 
+                                          fill="currentColor"
+                                          fontSize={10}
+                                        >
+                                          {currentDate.getFullYear()}
+                                        </text>
+                                      </>
+                                    )}
+                                  </g>
+                                );
+                              }
+                            }
+                            
+                            // LONG RANGE MODE: Original behavior with day-centered labels
                             // Find all day boundaries
                             const dayBoundaries: { timestamp: string, day: number, month: number, year: number }[] = [];
                             let lastDay: number | null = null;
