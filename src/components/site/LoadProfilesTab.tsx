@@ -4,7 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine } from "recharts";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine, ReferenceArea } from "recharts";
 import { format, parseISO } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -54,6 +54,15 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
   const [isDateToOpen, setIsDateToOpen] = useState(false);
   const [earliestDate, setEarliestDate] = useState<string | null>(null);
   const [latestDate, setLatestDate] = useState<string | null>(null);
+  
+  // Zoom state
+  const [zoomState, setZoomState] = useState<{ startIndex: number | null; endIndex: number | null }>({ 
+    startIndex: null, 
+    endIndex: null 
+  });
+  const [refAreaLeft, setRefAreaLeft] = useState<string | null>(null);
+  const [refAreaRight, setRefAreaRight] = useState<string | null>(null);
+  const [isSelecting, setIsSelecting] = useState(false);
 
   useEffect(() => {
     fetchMeters();
@@ -313,9 +322,53 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
   };
 
   const handleResetView = () => {
-    const currentData = isManipulationApplied ? manipulatedData : loadProfileData;
     setYAxisMin("");
     setYAxisMax("");
+    setZoomState({ startIndex: null, endIndex: null });
+  };
+
+  // Mouse event handlers for zoom selection
+  const handleMouseDown = (e: any) => {
+    if (e && e.activeLabel) {
+      setRefAreaLeft(e.activeLabel);
+      setIsSelecting(true);
+    }
+  };
+
+  const handleMouseMove = (e: any) => {
+    if (isSelecting && e && e.activeLabel) {
+      setRefAreaRight(e.activeLabel);
+    }
+  };
+
+  const handleMouseUp = () => {
+    if (!refAreaLeft || !refAreaRight) {
+      setIsSelecting(false);
+      setRefAreaLeft(null);
+      setRefAreaRight(null);
+      return;
+    }
+
+    const currentData = isManipulationApplied ? manipulatedData : loadProfileData;
+    
+    // Find indices of the selected range
+    let startIdx = currentData.findIndex(d => d.timestampStr === refAreaLeft);
+    let endIdx = currentData.findIndex(d => d.timestampStr === refAreaRight);
+
+    // Swap if dragged from right to left
+    if (startIdx > endIdx) {
+      [startIdx, endIdx] = [endIdx, startIdx];
+    }
+
+    // Only zoom if selection is meaningful (at least 2 data points)
+    if (endIdx - startIdx >= 1) {
+      setZoomState({ startIndex: startIdx, endIndex: endIdx + 1 });
+    }
+
+    // Reset selection
+    setIsSelecting(false);
+    setRefAreaLeft(null);
+    setRefAreaRight(null);
   };
 
 
@@ -727,42 +780,34 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                   >
                     Graph
                   </Button>
-                </div>
-                
-                {/* Y-Axis Controls */}
-                <div className="w-[180px] space-y-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="y-min" className="font-semibold">Y-Axis Min</Label>
-                    <Input
-                      id="y-min"
-                      type="text"
-                      placeholder="Auto"
-                      value={yAxisMin}
-                      onChange={(e) => setYAxisMin(e.target.value)}
-                      className="h-10"
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="y-max" className="font-semibold">Y-Axis Max</Label>
-                    <Input
-                      id="y-max"
-                      type="text"
-                      placeholder="Auto"
-                      value={yAxisMax}
-                      onChange={(e) => setYAxisMax(e.target.value)}
-                      className="h-10"
-                    />
-                  </div>
-                  
-                  <Button
-                    variant="secondary"
-                    onClick={handleResetView}
-                    className="w-full rounded-full"
-                  >
-                    Reset View
-                  </Button>
-                </div>
+                 </div>
+ 
+                 {/* Y-Axis Controls */}
+                 <div className="w-[180px] space-y-2">
+                   <div className="space-y-2">
+                     <Label htmlFor="y-min" className="font-semibold">Y-Axis Min</Label>
+                     <Input
+                       id="y-min"
+                       type="text"
+                       placeholder="Auto"
+                       value={yAxisMin}
+                       onChange={(e) => setYAxisMin(e.target.value)}
+                       className="h-10"
+                     />
+                   </div>
+                   
+                   <div className="space-y-2">
+                     <Label htmlFor="y-max" className="font-semibold">Y-Axis Max</Label>
+                     <Input
+                       id="y-max"
+                       type="text"
+                       placeholder="Auto"
+                       value={yAxisMax}
+                       onChange={(e) => setYAxisMax(e.target.value)}
+                       className="h-10"
+                     />
+                   </div>
+                 </div>
 
                 {/* Data Manipulation */}
                 <div className="flex-1 space-y-2 border-l pl-4">
@@ -879,11 +924,33 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
               </div>
 
               {showGraph && selectedQuantities.size > 0 && (
-                <div className="mt-6 space-y-4">
+                <div className="mt-6 space-y-4 relative">
+                  {/* Reset View button - positioned absolutely over chart */}
+                  {(yAxisMin !== "" || yAxisMax !== "" || zoomState.startIndex !== null) && (
+                    <Button
+                      variant="secondary"
+                      onClick={handleResetView}
+                      className="absolute top-2 right-12 z-10 rounded-full"
+                      size="sm"
+                    >
+                      Reset View
+                    </Button>
+                  )}
+                  
                   <ResponsiveContainer width="100%" height={500}>
                     <LineChart
-                      data={isManipulationApplied ? manipulatedData : loadProfileData}
+                      data={(() => {
+                        const baseData = isManipulationApplied ? manipulatedData : loadProfileData;
+                        if (zoomState.startIndex !== null && zoomState.endIndex !== null) {
+                          return baseData.slice(zoomState.startIndex, zoomState.endIndex);
+                        }
+                        return baseData;
+                      })()}
                       margin={{ top: 40, right: 30, left: 0, bottom: 5 }}
+                      onMouseDown={handleMouseDown}
+                      onMouseMove={handleMouseMove}
+                      onMouseUp={handleMouseUp}
+                      onMouseLeave={() => setRefAreaRight(null)}
                     >
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
                       <Legend 
@@ -1079,6 +1146,17 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                           />
                         );
                       })}
+                      
+                      {/* Selection rectangle for zoom */}
+                      {refAreaLeft && refAreaRight && (
+                        <ReferenceArea
+                          x1={refAreaLeft}
+                          x2={refAreaRight}
+                          strokeOpacity={0.3}
+                          fill="hsl(var(--primary))"
+                          fillOpacity={0.3}
+                        />
+                      )}
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
