@@ -1261,7 +1261,7 @@ export default function TariffAssignmentTab({
       const docCost = energyItems.reduce((sum, item) => sum + (item.amount || 0), 0);
       
       const calcConsumption = calc.total_kwh || 0;
-      const calcRate = calcConsumption > 0 ? calc.energy_cost / calcConsumption : null;
+      const calcRate = calc.avg_cost_per_kwh || null;
       const calcCost = calc.energy_cost || 0;
       
       rows.push({
@@ -2838,6 +2838,7 @@ export default function TariffAssignmentTab({
                               energy_cost: matchingResult.energy_cost,
                               fixed_charges: matchingResult.fixed_charges,
                               total_cost: matchingResult.total_cost,
+                              avg_cost_per_kwh: matchingResult.avg_cost_per_kwh,
                               variance_amount: variance,
                               variance_percentage: variancePercentage,
                               tariff_structures: {
