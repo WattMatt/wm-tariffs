@@ -62,6 +62,7 @@ interface MeterResult {
   tariff_name: string | null;
   energy_cost: number;
   fixed_charges: number;
+  demand_charges: number;
   total_cost: number;
   avg_cost_per_kwh: number;
   cost_calculation_error: string | null;
@@ -433,6 +434,7 @@ export default function ReconciliationHistoryTab({ siteId, siteName }: Reconcili
                       {
                         energyCost: m.energy_cost,
                         fixedCharges: m.fixed_charges,
+                        demandCharges: m.demand_charges || 0,
                         totalCost: m.total_cost,
                         avgCostPerKwh: m.avg_cost_per_kwh,
                         tariffName: m.tariff_name || 'Unknown',

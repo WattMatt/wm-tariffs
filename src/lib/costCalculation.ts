@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 export interface CostCalculationResult {
   energyCost: number;
   fixedCharges: number;
+  demandCharges: number;
   totalCost: number;
   avgCostPerKwh: number;
   tariffName: string;
@@ -53,6 +54,7 @@ export async function calculateMeterCost(
       return {
         energyCost: 0,
         fixedCharges: 0,
+        demandCharges: 0,
         totalCost: 0,
         avgCostPerKwh: 0,
         tariffName: "Unknown",
@@ -90,6 +92,7 @@ export async function calculateMeterCost(
         return {
           energyCost: 0,
           fixedCharges: 0,
+          demandCharges: 0,
           totalCost: 0,
           avgCostPerKwh: 0,
           tariffName: tariff.name,
@@ -207,6 +210,7 @@ export async function calculateMeterCost(
             return {
               energyCost: 0,
               fixedCharges: 0,
+              demandCharges: 0,
               totalCost: 0,
               avgCostPerKwh: 0,
               tariffName: tariff.name,
@@ -220,6 +224,7 @@ export async function calculateMeterCost(
         return {
           energyCost: 0,
           fixedCharges: 0,
+          demandCharges: 0,
           totalCost: 0,
           avgCostPerKwh: 0,
           tariffName: tariff.name,
@@ -240,12 +245,46 @@ export async function calculateMeterCost(
       }, 0);
     }
 
-    const totalCost = energyCost + fixedCharges;
+    // Add demand charges (kVA-based)
+    let demandCharges = 0;
+    if (tariff.tariff_charges) {
+      // Fetch max kVA for the period
+      const { data: kvaData } = await supabase
+        .from("meter_readings")
+        .select("kva_value")
+        .eq("meter_id", meterId)
+        .gte("reading_timestamp", dateFrom.toISOString())
+        .lte("reading_timestamp", dateTo.toISOString())
+        .order("kva_value", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const maxKva = kvaData?.kva_value || 0;
+
+      if (maxKva > 0) {
+        // Determine season for demand charge
+        const startMonth = dateFrom.getMonth() + 1;
+        const endMonth = dateTo.getMonth() + 1;
+        const isHighSeason = (startMonth >= 6 && startMonth <= 8) || (endMonth >= 6 && endMonth <= 8);
+
+        const demandChargeType = isHighSeason ? "demand_high_season" : "demand_low_season";
+        const demandCharge = tariff.tariff_charges.find(
+          (c: any) => c.charge_type === demandChargeType
+        );
+
+        if (demandCharge) {
+          demandCharges = maxKva * Number(demandCharge.charge_amount);
+        }
+      }
+    }
+
+    const totalCost = energyCost + fixedCharges + demandCharges;
     const avgCostPerKwh = calculatedTotalKwh > 0 ? totalCost / calculatedTotalKwh : 0;
 
     return {
       energyCost,
       fixedCharges,
+      demandCharges,
       totalCost,
       avgCostPerKwh,
       tariffName: tariff.name,
@@ -255,6 +294,7 @@ export async function calculateMeterCost(
     return {
       energyCost: 0,
       fixedCharges: 0,
+      demandCharges: 0,
       totalCost: 0,
       avgCostPerKwh: 0,
       tariffName: "Error",
@@ -279,7 +319,8 @@ export async function calculateMeterCostAcrossPeriods(
   supplyAuthorityId: string,
   tariffName: string,
   dateFrom: Date,
-  dateTo: Date
+  dateTo: Date,
+  totalKwh?: number
 ): Promise<CostCalculationResult> {
   try {
     // Fetch all applicable tariff periods for this date range
@@ -297,6 +338,7 @@ export async function calculateMeterCostAcrossPeriods(
       return {
         energyCost: 0,
         fixedCharges: 0,
+        demandCharges: 0,
         totalCost: 0,
         avgCostPerKwh: 0,
         tariffName: tariffName,
@@ -311,7 +353,8 @@ export async function calculateMeterCostAcrossPeriods(
         meterId,
         tariffPeriods[0].tariff_id,
         dateFrom,
-        dateTo
+        dateTo,
+        totalKwh
       );
       return {
         ...result,
@@ -331,7 +374,8 @@ export async function calculateMeterCostAcrossPeriods(
     // Multiple periods - split date range and calculate for each segment
     let totalEnergyCost = 0;
     let totalFixedCharges = 0;
-    let totalKwh = 0;
+    let totalDemandCharges = 0;
+    let calculatedTotalKwh = 0;
     const periodBreakdown: Array<{
       tariffId: string;
       tariffName: string;
@@ -379,7 +423,8 @@ export async function calculateMeterCostAcrossPeriods(
       if (!segmentResult.hasError) {
         totalEnergyCost += segmentResult.energyCost;
         totalFixedCharges += segmentResult.fixedCharges;
-        totalKwh += segmentKwh;
+        totalDemandCharges += segmentResult.demandCharges;
+        calculatedTotalKwh += segmentKwh;
 
         periodBreakdown.push({
           tariffId: period.tariff_id,
@@ -394,12 +439,13 @@ export async function calculateMeterCostAcrossPeriods(
       }
     }
 
-    const totalCost = totalEnergyCost + totalFixedCharges;
-    const avgCostPerKwh = totalKwh > 0 ? totalCost / totalKwh : 0;
+    const totalCost = totalEnergyCost + totalFixedCharges + totalDemandCharges;
+    const avgCostPerKwh = calculatedTotalKwh > 0 ? totalCost / calculatedTotalKwh : 0;
 
     return {
       energyCost: totalEnergyCost,
       fixedCharges: totalFixedCharges,
+      demandCharges: totalDemandCharges,
       totalCost,
       avgCostPerKwh,
       tariffName,
@@ -410,6 +456,7 @@ export async function calculateMeterCostAcrossPeriods(
     return {
       energyCost: 0,
       fixedCharges: 0,
+      demandCharges: 0,
       totalCost: 0,
       avgCostPerKwh: 0,
       tariffName,

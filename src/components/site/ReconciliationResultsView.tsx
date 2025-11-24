@@ -26,6 +26,7 @@ interface MeterData {
   tariffName?: string;
   energyCost?: number;
   fixedCharges?: number;
+  demandCharges?: number;
   totalCost?: number;
   avgCostPerKwh?: number;
   costCalculationError?: string;
@@ -35,6 +36,7 @@ interface RevenueData {
   meterRevenues: Map<string, {
     energyCost: number;
     fixedCharges: number;
+    demandCharges: number;
     totalCost: number;
     avgCostPerKwh: number;
     tariffName: string;
