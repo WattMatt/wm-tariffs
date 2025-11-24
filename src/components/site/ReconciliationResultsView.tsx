@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -127,6 +127,23 @@ export default function ReconciliationResultsView({
   bulkProgress = { currentDocument: '', current: 0, total: 0 },
 }: ReconciliationResultsViewProps) {
   const [expandedMeters, setExpandedMeters] = useState<Set<string>>(new Set());
+
+  // Memoize handlers to prevent re-creation on every render
+  const handleEnergyTabClick = useCallback(() => {
+    if (isLoadingEnergy) {
+      onCancelReconciliation?.();
+    } else if (!meters || meters.length === 0) {
+      onReconcileEnergy?.();
+    }
+  }, [isLoadingEnergy, meters?.length, onCancelReconciliation, onReconcileEnergy]);
+
+  const handleRevenueTabClick = useCallback(() => {
+    if (isLoadingRevenue) {
+      onCancelReconciliation?.();
+    } else if (!revenueData) {
+      onReconcileRevenue?.();
+    }
+  }, [isLoadingRevenue, revenueData, onCancelReconciliation, onReconcileRevenue]);
 
   const toggleMeterExpanded = (meterId: string) => {
     setExpandedMeters((prev) => {
@@ -415,13 +432,7 @@ export default function ReconciliationResultsView({
         <TabsList className="grid w-full grid-cols-2 h-auto p-1 gap-2 bg-transparent">
           <TabsTrigger 
             value="energy" 
-            onClick={() => {
-              if (isLoadingEnergy) {
-                onCancelReconciliation?.();
-              } else if (!meters || meters.length === 0) {
-                onReconcileEnergy?.();
-              }
-            }}
+            onClick={handleEnergyTabClick}
             disabled={!canReconcile || isLoadingRevenue}
             className="gap-2 h-12 bg-muted text-foreground hover:bg-muted/80 data-[state=active]:bg-muted/90 data-[state=active]:text-foreground data-[state=active]:shadow-md disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
           >
@@ -444,13 +455,7 @@ export default function ReconciliationResultsView({
           </TabsTrigger>
           <TabsTrigger
             value="revenue" 
-            onClick={() => {
-              if (isLoadingRevenue) {
-                onCancelReconciliation?.();
-              } else if (!revenueData) {
-                onReconcileRevenue?.();
-              }
-            }}
+            onClick={handleRevenueTabClick}
             disabled={!canReconcile || isLoadingEnergy}
             className="gap-2 h-12 bg-muted text-foreground hover:bg-muted/80 data-[state=active]:bg-muted/90 data-[state=active]:text-foreground data-[state=active]:shadow-md disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
           >

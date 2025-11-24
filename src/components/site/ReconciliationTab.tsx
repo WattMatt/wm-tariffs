@@ -2375,6 +2375,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
   };
 
   // Memoize the meters array to prevent infinite re-renders
+  // Only recreate when reconciliationData or availableMeters actually change
   const memoizedMeters = useMemo(() => {
     if (!reconciliationData) return [];
     
@@ -2385,23 +2386,33 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       ...(reconciliationData.checkMeters || []),
       ...(reconciliationData.distribution || []),
       ...(reconciliationData.otherMeters || [])
-    ].map(m => ({
-      ...m,
-      hasData: m.hasData !== undefined ? m.hasData : true,
-      hasError: m.hasError || failedMeters.has(m.id),
-      errorMessage: m.errorMessage || failedMeters.get(m.id)
-    }));
+    ];
 
     // Create a map for quick lookup
-    const meterMap = new Map(allMeters.map(m => [m.id, m]));
+    const meterMap = new Map(allMeters.map(m => [m.id, {
+      ...m,
+      hasData: m.hasData !== undefined ? m.hasData : true,
+      hasError: m.hasError || false,
+      errorMessage: m.errorMessage || null
+    }]));
 
     // Order meters according to availableMeters (which has the hierarchy)
     const orderedMeters = availableMeters
-      .map(availMeter => meterMap.get(availMeter.id))
+      .map(availMeter => {
+        const meterData = meterMap.get(availMeter.id);
+        if (!meterData) return undefined;
+        
+        // Add error info from failedMeters if it exists
+        return {
+          ...meterData,
+          hasError: meterData.hasError || failedMeters.has(availMeter.id),
+          errorMessage: meterData.errorMessage || failedMeters.get(availMeter.id) || null
+        };
+      })
       .filter(m => m !== undefined);
 
     return orderedMeters;
-  }, [reconciliationData, availableMeters, failedMeters]);
+  }, [reconciliationData, availableMeters.length]);
 
   return (
     <Tabs defaultValue="analysis" className="space-y-6">
