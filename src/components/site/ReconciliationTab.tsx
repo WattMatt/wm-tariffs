@@ -1505,27 +1505,30 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       endDateTime
     );
 
+    // Ensure meterData is an array
+    const safeMeters = Array.isArray(meterData) ? meterData : [];
+    
     // Filter meters based on user assignments
     // Fallback: if no assignments exist, use meter types
-    let gridSupplyMeters = meterData.filter((m) => meterAssignments.get(m.id) === "grid_supply");
-    let solarEnergyMeters = meterData.filter((m) => meterAssignments.get(m.id) === "solar_energy");
+    let gridSupplyMeters = safeMeters.filter((m) => meterAssignments.get(m.id) === "grid_supply");
+    let solarEnergyMeters = safeMeters.filter((m) => meterAssignments.get(m.id) === "solar_energy");
     
     // If no manual assignments, fall back to meter types
     if (gridSupplyMeters.length === 0 && solarEnergyMeters.length === 0) {
-      gridSupplyMeters = meterData.filter((m) => m.meter_type === "bulk_meter");
+      gridSupplyMeters = safeMeters.filter((m) => m.meter_type === "bulk_meter");
       solarEnergyMeters = [];
     }
     
-    const checkMeters = meterData.filter((m) => m.meter_type === "check_meter");
-    const tenantMeters = meterData.filter((m) => m.meter_type === "tenant_meter");
+    const checkMeters = safeMeters.filter((m) => m.meter_type === "check_meter");
+    const tenantMeters = safeMeters.filter((m) => m.meter_type === "tenant_meter");
     
     const assignedMeterIds = new Set([
-      ...gridSupplyMeters.map(m => m.id),
-      ...solarEnergyMeters.map(m => m.id),
-      ...tenantMeters.map(m => m.id),
-      ...checkMeters.map(m => m.id)
+      ...(Array.isArray(gridSupplyMeters) ? gridSupplyMeters.map(m => m.id) : []),
+      ...(Array.isArray(solarEnergyMeters) ? solarEnergyMeters.map(m => m.id) : []),
+      ...(Array.isArray(tenantMeters) ? tenantMeters.map(m => m.id) : []),
+      ...(Array.isArray(checkMeters) ? checkMeters.map(m => m.id) : [])
     ]);
-    const unassignedMeters = meterData.filter(m => !assignedMeterIds.has(m.id));
+    const unassignedMeters = Array.isArray(safeMeters) ? safeMeters.filter(m => !assignedMeterIds.has(m.id)) : [];
 
     // Grid Supply: sum all positive values from all grid supply meters
     const bulkTotal = gridSupplyMeters.reduce((sum, m) => sum + (m.totalKwhPositive || 0), 0);
@@ -1624,18 +1627,21 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     }
 
     return {
-      meterData,
+      meterData: safeMeters,
       errors,
       reconciliationData: {
-        bulkMeters: gridSupplyMeters,
-        checkMeters,
-        otherMeters: [...solarEnergyMeters, ...unassignedMeters],
-        tenantMeters,
-        councilBulk: gridSupplyMeters,
-        solarMeters: solarEnergyMeters,
-        distribution: tenantMeters,
-        distributionMeters: tenantMeters,
-        unassignedMeters,
+        bulkMeters: Array.isArray(gridSupplyMeters) ? gridSupplyMeters : [],
+        checkMeters: Array.isArray(checkMeters) ? checkMeters : [],
+        otherMeters: [
+          ...(Array.isArray(solarEnergyMeters) ? solarEnergyMeters : []),
+          ...(Array.isArray(unassignedMeters) ? unassignedMeters : [])
+        ],
+        tenantMeters: Array.isArray(tenantMeters) ? tenantMeters : [],
+        councilBulk: Array.isArray(gridSupplyMeters) ? gridSupplyMeters : [],
+        solarMeters: Array.isArray(solarEnergyMeters) ? solarEnergyMeters : [],
+        distribution: Array.isArray(tenantMeters) ? tenantMeters : [],
+        distributionMeters: Array.isArray(tenantMeters) ? tenantMeters : [],
+        unassignedMeters: Array.isArray(unassignedMeters) ? unassignedMeters : [],
         bulkTotal,
         councilTotal: bulkTotal,
         otherTotal,
