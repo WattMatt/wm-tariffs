@@ -94,6 +94,11 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
   const [isCancelling, setIsCancelling] = useState(false);
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
   const [isBulkProcessing, setIsBulkProcessing] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState<{
+    currentDocument: string;
+    current: number;
+    total: number;
+  }>({ currentDocument: '', current: 0, total: 0 });
   
   // Cancel reconciliation ref
   const cancelReconciliationRef = useRef(false);
@@ -1894,6 +1899,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     }
 
     setIsBulkProcessing(true);
+    const totalDocs = selectedDocumentIds.length;
 
     try {
       let successCount = 0;
@@ -1901,10 +1907,18 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       const errors: string[] = [];
 
       // Process each document with its own specific date range
-      for (const docId of selectedDocumentIds) {
+      for (let i = 0; i < selectedDocumentIds.length; i++) {
+        const docId = selectedDocumentIds[i];
         try {
           const doc = documentDateRanges.find(d => d.id === docId);
           if (!doc) continue;
+
+          // Update progress state
+          setBulkProgress({
+            currentDocument: doc.file_name,
+            current: i + 1,
+            total: totalDocs
+          });
 
           // Use this document's specific date range
           const startDate = new Date(doc.period_start);
@@ -1937,6 +1951,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       }
 
       setSelectedDocumentIds([]);
+      setBulkProgress({ currentDocument: '', current: 0, total: 0 });
     } catch (error) {
       console.error("Bulk reconciliation error:", error);
       toast.error("Failed to complete bulk reconciliation");
@@ -3159,6 +3174,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           bulkSelectedCount={selectedDocumentIds.length}
           onBulkReconcile={handleBulkReconcile}
           isBulkProcessing={isBulkProcessing}
+          bulkProgress={bulkProgress}
         />
       )}
 
