@@ -27,14 +27,52 @@ export interface MeterReading {
 }
 
 /**
- * Helper function to calculate the number of months in a date range
- * Used for prorating monthly charges
+ * Calculate prorated basic charges based on calendar month days.
+ * Tariffs are applied on calendar month basis (1st to last day),
+ * but billing cycles run 21st to 20th, so we prorate by actual days.
+ * 
+ * @param dateFrom - Start of billing period
+ * @param dateTo - End of billing period  
+ * @param monthlyCharge - The monthly basic charge amount from the tariff
+ * @returns Total prorated basic charges
  */
-function calculateMonthsInRange(dateFrom: Date, dateTo: Date): number {
-  const startMonth = dateFrom.getFullYear() * 12 + dateFrom.getMonth();
-  const endMonth = dateTo.getFullYear() * 12 + dateTo.getMonth();
-  // +1 because if we're in May to June, that's 2 months (May and June)
-  return Math.max(1, endMonth - startMonth + 1);
+function calculateProratedBasicCharges(
+  dateFrom: Date,
+  dateTo: Date,
+  monthlyCharge: number
+): number {
+  let totalCharges = 0;
+  let current = new Date(dateFrom);
+  
+  while (current <= dateTo) {
+    const year = current.getFullYear();
+    const month = current.getMonth();
+    
+    // Get the total days in this calendar month
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    
+    // Calculate the start and end of our period within this month
+    const monthStart = new Date(year, month, 1);
+    const monthEnd = new Date(year, month, daysInMonth);
+    
+    // Find overlap between our period and this calendar month
+    const periodStartInMonth = new Date(Math.max(current.getTime(), monthStart.getTime()));
+    const periodEndInMonth = new Date(Math.min(dateTo.getTime(), monthEnd.getTime()));
+    
+    // Calculate days in this month that fall within our period
+    const daysInPeriod = Math.floor(
+      (periodEndInMonth.getTime() - periodStartInMonth.getTime()) / (1000 * 60 * 60 * 24)
+    ) + 1;
+    
+    // Prorate the basic charge for this month
+    const proratedCharge = (monthlyCharge * daysInPeriod) / daysInMonth;
+    totalCharges += proratedCharge;
+    
+    // Move to the first day of the next month
+    current = new Date(year, month + 1, 1);
+  }
+  
+  return totalCharges;
 }
 
 /**
@@ -245,17 +283,16 @@ export async function calculateMeterCost(
       }
     }
 
-    // Add fixed charges (multiply by number of months in the period)
+    // Add fixed charges (prorated by calendar month days)
     let fixedCharges = 0;
     if (tariff.tariff_charges) {
-      const monthsInPeriod = calculateMonthsInRange(dateFrom, dateTo);
       const monthlyCharge = tariff.tariff_charges.reduce((sum: number, charge: any) => {
         if (charge.charge_type === "basic_monthly" || charge.charge_type === "basic_charge") {
           return sum + Number(charge.charge_amount);
         }
         return sum;
       }, 0);
-      fixedCharges = monthlyCharge * monthsInPeriod;
+      fixedCharges = calculateProratedBasicCharges(dateFrom, dateTo, monthlyCharge);
     }
 
     // Add demand charges (kVA-based)
@@ -385,9 +422,6 @@ export async function calculateMeterCostAcrossPeriods(
     }
 
     // Multiple periods - split date range and calculate for each segment
-    // Calculate total days for proper proration
-    const totalDays = Math.ceil((dateTo.getTime() - dateFrom.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-    const totalMonths = calculateMonthsInRange(dateFrom, dateTo);
     
     let totalEnergyCost = 0;
     let totalFixedCharges = 0;
@@ -418,10 +452,6 @@ export async function calculateMeterCostAcrossPeriods(
         continue;
       }
 
-      // Calculate segment days for proration
-      const segmentDays = Math.ceil((segmentEnd.getTime() - segmentStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-      const proportion = segmentDays / totalDays;
-
       // Fetch readings for this segment
       const { data: readingsData } = await supabase
         .from("meter_readings")
@@ -442,11 +472,8 @@ export async function calculateMeterCostAcrossPeriods(
       );
 
       if (!segmentResult.hasError) {
-        // Prorate fixed charges based on the proportion of days in this segment
-        const proratedFixedCharges = segmentResult.fixedCharges * proportion;
-        
         totalEnergyCost += segmentResult.energyCost;
-        totalFixedCharges += proratedFixedCharges;
+        totalFixedCharges += segmentResult.fixedCharges;
         totalDemandCharges += segmentResult.demandCharges;
         calculatedTotalKwh += segmentKwh;
 
