@@ -1887,7 +1887,12 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           const parentMeterPromises = allMeters
             .filter(meter => {
               const hierarchicalTotal = hierarchicalTotals.get(meter.id);
-              return hierarchicalTotal && hierarchicalTotal > 0 && !meterRevenues.has(meter.id);
+              const existingRevenue = meterRevenues.get(meter.id);
+              // Include parent meters with hierarchical totals that either:
+              // 1. Don't have revenue calculated yet, OR
+              // 2. Have revenue but with 0 cost (because they used total_kwh instead of hierarchical_total)
+              return hierarchicalTotal && hierarchicalTotal > 0 && 
+                     (!existingRevenue || (existingRevenue as any).totalCost === 0);
             })
             .map(async (meter) => {
               const hierarchicalTotal = hierarchicalTotals.get(meter.id)!;
