@@ -1656,7 +1656,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     };
   };
 
-  const handleReconcile = async (enableRevenue?: boolean) => {
+  const handleReconcile = useCallback(async (enableRevenue?: boolean) => {
     if (!dateFrom || !dateTo) {
       toast.error("Please select a date range");
       return;
@@ -1737,7 +1737,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       setIsCancelling(false);
       cancelReconciliationRef.current = false;
     }
-  };
+  }, [dateFrom, dateTo, previewData, selectedColumns, timeFrom, timeTo, revenueReconciliationEnabled]);
 
   const cancelReconciliation = () => {
     if (!isCancelling) {
