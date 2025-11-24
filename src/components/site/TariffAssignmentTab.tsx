@@ -2820,7 +2820,9 @@ export default function TariffAssignmentTab({
           </DialogHeader>
           
           <ScrollArea className="max-h-[70vh] pr-4">
-            {selectedChartMeter && (() => {
+            {selectedChartMeter && (
+              <div key={`${selectedChartMeter.meter.id}-${selectedChartMetric}`}>
+                {(() => {
               // Comparison tab: use reconciliation costs
               // Analysis tab: use document extracted values (no cost map)
               // Assignments tab: use dialog calculations
@@ -3253,6 +3255,8 @@ export default function TariffAssignmentTab({
                 </div>
               );
             })()}
+              </div>
+            )}
           </ScrollArea>
         </DialogContent>
       </Dialog>
