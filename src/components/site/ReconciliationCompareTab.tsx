@@ -35,6 +35,7 @@ interface MeterResult {
   assignment: string;
   total_kwh: number;
   readings_count: number;
+  hierarchical_total: number;
 }
 
 export default function ReconciliationCompareTab({ siteId }: ReconciliationCompareTabProps) {

@@ -66,6 +66,7 @@ interface MeterResult {
   total_cost: number;
   avg_cost_per_kwh: number;
   cost_calculation_error: string | null;
+  hierarchical_total: number;
 }
 
 export default function ReconciliationHistoryTab({ siteId, siteName }: ReconciliationHistoryTabProps) {
@@ -142,6 +143,7 @@ export default function ReconciliationHistoryTab({ siteId, siteName }: Reconcili
         "Assignment": m.assignment,
         "Location": m.location || "",
         "Total kWh": m.total_kwh.toFixed(2),
+        "Hierarchical Total kWh": m.hierarchical_total ? m.hierarchical_total.toFixed(2) : "",
         "Positive kWh": m.total_kwh_positive.toFixed(2),
         "Negative kWh": m.total_kwh_negative.toFixed(2),
         "Readings Count": m.readings_count,
@@ -224,6 +226,7 @@ export default function ReconciliationHistoryTab({ siteId, siteName }: Reconcili
         "Assignment": m.assignment,
         "Location": m.location || "",
         "Total kWh": m.total_kwh.toFixed(2),
+        "Hierarchical Total kWh": m.hierarchical_total ? m.hierarchical_total.toFixed(2) : "",
         "Positive kWh": m.total_kwh_positive.toFixed(2),
         "Negative kWh": m.total_kwh_negative.toFixed(2),
         "Readings Count": m.readings_count,
@@ -405,6 +408,7 @@ export default function ReconciliationHistoryTab({ siteId, siteName }: Reconcili
                     totalCost: m.total_cost,
                     avgCostPerKwh: m.avg_cost_per_kwh,
                     costCalculationError: m.cost_calculation_error || undefined,
+                    hierarchicalTotal: m.hierarchical_total,
                   });
                   
                   if (selectedRun.meter_order && selectedRun.meter_order.length > 0) {
