@@ -439,8 +439,8 @@ export default function TariffAssignmentTab({
       
       const dataPoint: any = {
         period: formatDateStringToMonthYear(doc.periodEnd),
-        amount: metricValue !== null ? metricValue : doc.totalAmount,
-        documentAmount: doc.totalAmount || null,
+        amount: metricValue !== null ? metricValue : (doc.totalAmountExcludingEmergency ?? doc.totalAmount),
+        documentAmount: (doc.totalAmountExcludingEmergency ?? doc.totalAmount) || null,
         documentId: doc.documentId,
         meterReading: readings.current,
         consumption: readings.current !== null && readings.previous !== null ? 
@@ -640,7 +640,7 @@ export default function TariffAssignmentTab({
       const dataPoint: any = {
         period: formatDateStringToMonthYear(doc.periodEnd),
         amount: calculatedCostsMap[doc.documentId] || null,
-        documentAmount: doc.totalAmount || null,
+        documentAmount: (doc.totalAmountExcludingEmergency ?? doc.totalAmount) || null,
         documentId: doc.documentId,
       };
       
@@ -1136,7 +1136,7 @@ export default function TariffAssignmentTab({
           fixed_charges: result.fixedCharges,
           total_kwh: totalKwh,
           avg_cost_per_kwh: totalKwh ? result.totalCost / totalKwh : 0,
-          document_billed_amount: doc.totalAmount,
+          document_billed_amount: doc.totalAmountExcludingEmergency ?? doc.totalAmount,
           variance_amount: variance,
           variance_percentage: variancePercentage,
           tariff_name: tariff?.name || result.tariffName,
@@ -1703,32 +1703,7 @@ export default function TariffAssignmentTab({
       });
     }
     
-    // Generator Charge (document only typically)
-    if (categories.generator.length > 0) {
-      const genItems = categories.generator;
-      const docConsumption = genItems.reduce((sum, item) => sum + (item.consumption || 0), 0);
-      const docRate = genItems.length > 0 && genItems[0].rate ? genItems[0].rate : null;
-      const docCost = genItems.reduce((sum, item) => sum + (item.amount || 0), 0);
-      
-      rows.push({
-        name: 'Generator Charge',
-        doc: {
-          consumption: docConsumption > 0 ? `${docConsumption.toFixed(2)} kWh` : '—',
-          rate: docRate !== null ? `${currency} ${docRate.toFixed(4)}/kWh` : '—',
-          cost: docCost > 0 ? `${currency} ${docCost.toFixed(2)}` : '—'
-        },
-        calc: {
-          consumption: '—',
-          rate: '—',
-          cost: '—'
-        },
-        variance: {
-          consumption: { value: '—', color: '' },
-          rate: { value: '—', color: '' },
-          cost: calcVariance(docCost > 0 ? docCost : null, null)
-        }
-      });
-    }
+    // Generator Charge (emergency supply) - excluded from reconciliation
     
     // Other charges
     if (categories.other.length > 0) {
