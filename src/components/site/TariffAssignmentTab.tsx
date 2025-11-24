@@ -2921,6 +2921,15 @@ export default function TariffAssignmentTab({
               const updatedChartData = showDocumentCharts ? chartData.map((point: any) => {
                 const doc = selectedChartMeter.docs.find(d => d.documentId === point.documentId);
                 const metricValue = extractMetricValue(doc, selectedChartMetric);
+                console.log('Chart data update:', {
+                  period: point.period,
+                  documentId: point.documentId,
+                  doc: doc ? 'found' : 'not found',
+                  metric: selectedChartMetric,
+                  metricValue,
+                  lineItems: doc?.lineItems?.length || 0,
+                  originalAmount: point.amount
+                });
                 return {
                   ...point,
                   amount: metricValue !== null ? metricValue : point.amount,
