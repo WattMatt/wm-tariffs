@@ -3161,7 +3161,12 @@ export default function TariffAssignmentTab({
                                   : 'Amount (R)', 
                                 angle: -90, 
                                 position: 'insideLeft',
-                                style: { fontSize: 12, textAnchor: 'middle' }
+                                style: { 
+                                  fontSize: 14, 
+                                  fontWeight: 600,
+                                  fill: 'hsl(var(--foreground))',
+                                  textAnchor: 'middle' 
+                                }
                               }}
                               tickFormatter={(value) => {
                                 if (showDocumentCharts && selectedChartMetric.includes('consumption')) {
@@ -3174,7 +3179,17 @@ export default function TariffAssignmentTab({
                               yAxisId="right"
                               orientation="right"
                               tick={{ fontSize: 12 }}
-                              label={{ value: 'Meter Reading (kWh)', angle: 90, position: 'insideRight', style: { fontSize: 12, textAnchor: 'middle' } }}
+                              label={{ 
+                                value: 'Meter Reading (kWh)', 
+                                angle: 90, 
+                                position: 'insideRight', 
+                                style: { 
+                                  fontSize: 14, 
+                                  fontWeight: 600,
+                                  fill: 'hsl(var(--foreground))',
+                                  textAnchor: 'middle' 
+                                } 
+                              }}
                               tickFormatter={(value) => value.toLocaleString()}
                             />
                             <ChartTooltip 
@@ -3215,10 +3230,8 @@ export default function TariffAssignmentTab({
                                 });
                               });
                               
-                              // Render a Line for each segment (only if not hidden)
+                              // Render a Line for each segment
                               return Array.from(segmentKeys).map(key => {
-                                if (hiddenDataKeys.has(key)) return null;
-                                
                                 const isWinter = key.startsWith('winterAvg_');
                                 const color = isWinter ? "hsl(200 100% 40%)" : "hsl(25 100% 50%)";
                                 
@@ -3237,52 +3250,51 @@ export default function TariffAssignmentTab({
                                 );
                               });
                             })()}
-                            {!hiddenDataKeys.has('amount') && (
-                              <Bar 
-                                yAxisId="left"
-                                dataKey="amount" 
-                                fill="hsl(var(--muted-foreground))"
-                                radius={[4, 4, 0, 0]}
-                                name={hideSeasonalAverages ? "Reconciliation Cost" : (showDocumentCharts ? getMetricLabel(selectedChartMetric) : "Calculated Cost")}
-                                opacity={0.5}
-                              />
-                            )}
-                            {hideSeasonalAverages && !hiddenDataKeys.has('documentAmount') && (
+                            <Bar 
+                              yAxisId="left"
+                              dataKey="amount" 
+                              fill="hsl(var(--muted-foreground))"
+                              radius={[4, 4, 0, 0]}
+                              name={hideSeasonalAverages ? "Reconciliation Cost" : (showDocumentCharts ? getMetricLabel(selectedChartMetric) : "Calculated Cost")}
+                              opacity={0.5}
+                              hide={hiddenDataKeys.has('amount')}
+                            />
+                            {hideSeasonalAverages && (
                               <Bar 
                                 yAxisId="left"
                                 dataKey="documentAmount" 
                                 fill="hsl(var(--primary))"
                                 radius={[4, 4, 0, 0]}
                                 name="Document Billed"
+                                hide={hiddenDataKeys.has('documentAmount')}
                               />
                             )}
-                            {!hiddenDataKeys.has('meterReading') && (
-                              <Line
-                                yAxisId="right"
-                                type="monotone"
-                                dataKey="meterReading"
-                                stroke="hsl(var(--chart-3))"
-                                strokeWidth={3}
-                                name="Meter Reading"
-                                connectNulls={false}
-                                dot={(props: any) => {
-                                  const { payload, cx, cy } = props;
-                                  if (payload.isDiscontinuous) {
-                                    return (
-                                      <circle
-                                        cx={cx}
-                                        cy={cy}
-                                        r={6}
-                                        fill="hsl(var(--destructive))"
-                                        stroke="white"
-                                        strokeWidth={2}
-                                      />
-                                    );
-                                  }
-                                  return <circle cx={cx} cy={cy} r={4} fill="hsl(var(--chart-3))" />;
-                                }}
-                              />
-                            )}
+                            <Line
+                              yAxisId="right"
+                              type="monotone"
+                              dataKey="meterReading"
+                              stroke="hsl(var(--chart-3))"
+                              strokeWidth={3}
+                              name="Meter Reading"
+                              connectNulls={false}
+                              hide={hiddenDataKeys.has('meterReading')}
+                              dot={(props: any) => {
+                                const { payload, cx, cy } = props;
+                                if (payload.isDiscontinuous) {
+                                  return (
+                                    <circle
+                                      cx={cx}
+                                      cy={cy}
+                                      r={6}
+                                      fill="hsl(var(--destructive))"
+                                      stroke="white"
+                                      strokeWidth={2}
+                                    />
+                                  );
+                                }
+                                return <circle cx={cx} cy={cy} r={4} fill="hsl(var(--chart-3))" />;
+                              }}
+                            />
                           </ComposedChart>
                         </ResponsiveContainer>
                       </ChartContainer>
