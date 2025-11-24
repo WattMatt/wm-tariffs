@@ -10,7 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { FileCheck2, AlertCircle, CheckCircle2, DollarSign, Eye, FileText, ArrowUpDown, ArrowUp, ArrowDown, Eraser, Scale, Check, X, ChevronDown, Filter } from "lucide-react";
-import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts";
+import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Legend } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -121,6 +121,39 @@ export default function TariffAssignmentTab({
   const [viewingAllDocsCalculations, setViewingAllDocsCalculations] = useState<Record<string, any>>({});
   const [selectedChartMetric, setSelectedChartMetric] = useState<string>('total');
   const [meterDiscontinuities, setMeterDiscontinuities] = useState<any[]>([]);
+  const [hiddenDataKeys, setHiddenDataKeys] = useState<Set<string>>(new Set());
+
+  // Handle legend click to toggle data series
+  const handleLegendClick = (dataKey: string) => {
+    setHiddenDataKeys(prev => {
+      const newSet = new Set(prev);
+      // Handle grouped seasonal averages
+      if (dataKey === 'winterAvg' || dataKey === 'summerAvg') {
+        const isHidden = Array.from(newSet).some(key => key.startsWith(dataKey));
+        if (isHidden) {
+          // Show all segments of this type
+          Array.from(newSet).forEach(key => {
+            if (key.startsWith(dataKey)) newSet.delete(key);
+          });
+        } else {
+          // Hide all segments of this type
+          chartData.forEach((point: any) => {
+            Object.keys(point).forEach(key => {
+              if (key.startsWith(dataKey)) newSet.add(key);
+            });
+          });
+        }
+      } else {
+        // Toggle single data key
+        if (newSet.has(dataKey)) {
+          newSet.delete(dataKey);
+        } else {
+          newSet.add(dataKey);
+        }
+      }
+      return newSet;
+    });
+  };
 
   // Apply date range filter
   const applyDateFilter = () => {
@@ -181,6 +214,19 @@ export default function TariffAssignmentTab({
         lineItems: []
       } as DocumentShopNumber;
     });
+  };
+
+  // Helper to get metric label for display
+  const getMetricLabel = (metric: string): string => {
+    switch(metric) {
+      case 'total': return 'Total Amount';
+      case 'basic': return 'Basic Charge';
+      case 'kva-charge': return 'kVA Charge';
+      case 'kwh-charge': return 'kWh Charge';
+      case 'kva-consumption': return 'kVA Consumption';
+      case 'kwh-consumption': return 'kWh Consumption';
+      default: return 'Total Amount';
+    }
   };
 
   // Helper to extract metric value from document
@@ -3104,10 +3150,19 @@ export default function TariffAssignmentTab({
                               angle={-45}
                               textAnchor="end"
                               height={80}
+                              label={{ value: 'Period', position: 'insideBottom', offset: -5, style: { fontSize: 12 } }}
                             />
                             <YAxis 
                               yAxisId="left"
                               tick={{ fontSize: 12 }}
+                              label={{ 
+                                value: showDocumentCharts && selectedChartMetric.includes('consumption') 
+                                  ? 'kWh Consumption' 
+                                  : 'Amount (R)', 
+                                angle: -90, 
+                                position: 'insideLeft',
+                                style: { fontSize: 12, textAnchor: 'middle' }
+                              }}
                               tickFormatter={(value) => {
                                 if (showDocumentCharts && selectedChartMetric.includes('consumption')) {
                                   return value.toLocaleString();
@@ -3119,11 +3174,35 @@ export default function TariffAssignmentTab({
                               yAxisId="right"
                               orientation="right"
                               tick={{ fontSize: 12 }}
-                              label={{ value: 'Reading', angle: 90, position: 'insideRight', style: { fontSize: 12 } }}
+                              label={{ value: 'Meter Reading (kWh)', angle: 90, position: 'insideRight', style: { fontSize: 12, textAnchor: 'middle' } }}
                               tickFormatter={(value) => value.toLocaleString()}
                             />
                             <ChartTooltip 
                               content={<ChartTooltipContent />}
+                            />
+                            <Legend 
+                              onClick={(e) => handleLegendClick(String(e.dataKey))}
+                              wrapperStyle={{
+                                paddingTop: '20px',
+                                cursor: 'pointer'
+                              }}
+                              formatter={(value, entry: any) => {
+                                const dataKey = entry.dataKey;
+                                const isHidden = hiddenDataKeys.has(dataKey) || 
+                                  (dataKey.startsWith('winterAvg_') && Array.from(hiddenDataKeys).some(k => k.startsWith('winterAvg'))) ||
+                                  (dataKey.startsWith('summerAvg_') && Array.from(hiddenDataKeys).some(k => k.startsWith('summerAvg')));
+                                
+                                // Group seasonal segments
+                                if (dataKey.startsWith('winterAvg_')) {
+                                  return <span style={{ opacity: isHidden ? 0.5 : 1, textDecoration: isHidden ? 'line-through' : 'none' }}>Winter Average</span>;
+                                }
+                                if (dataKey.startsWith('summerAvg_')) {
+                                  return <span style={{ opacity: isHidden ? 0.5 : 1, textDecoration: isHidden ? 'line-through' : 'none' }}>Summer Average</span>;
+                                }
+                                
+                                return <span style={{ opacity: isHidden ? 0.5 : 1, textDecoration: isHidden ? 'line-through' : 'none' }}>{value}</span>;
+                              }}
+                              iconType="line"
                             />
                             {!hideSeasonalAverages && (() => {
                               // Extract all unique seasonal segment keys from the data
@@ -3136,8 +3215,10 @@ export default function TariffAssignmentTab({
                                 });
                               });
                               
-                              // Render a Line for each segment
+                              // Render a Line for each segment (only if not hidden)
                               return Array.from(segmentKeys).map(key => {
+                                if (hiddenDataKeys.has(key)) return null;
+                                
                                 const isWinter = key.startsWith('winterAvg_');
                                 const color = isWinter ? "hsl(200 100% 40%)" : "hsl(25 100% 50%)";
                                 
@@ -3151,19 +3232,22 @@ export default function TariffAssignmentTab({
                                     strokeWidth={4}
                                     dot={{ r: 5, fill: color }}
                                     connectNulls={false}
+                                    hide={hiddenDataKeys.has(key)}
                                   />
                                 );
                               });
                             })()}
-                            <Bar 
-                              yAxisId="left"
-                              dataKey="amount" 
-                              fill="hsl(var(--muted-foreground))"
-                              radius={[4, 4, 0, 0]}
-                              name={hideSeasonalAverages ? "Reconciliation Cost" : (showDocumentCharts ? "Document Amount" : "Calculated Cost")}
-                              opacity={0.5}
-                            />
-                            {hideSeasonalAverages && (
+                            {!hiddenDataKeys.has('amount') && (
+                              <Bar 
+                                yAxisId="left"
+                                dataKey="amount" 
+                                fill="hsl(var(--muted-foreground))"
+                                radius={[4, 4, 0, 0]}
+                                name={hideSeasonalAverages ? "Reconciliation Cost" : (showDocumentCharts ? getMetricLabel(selectedChartMetric) : "Calculated Cost")}
+                                opacity={0.5}
+                              />
+                            )}
+                            {hideSeasonalAverages && !hiddenDataKeys.has('documentAmount') && (
                               <Bar 
                                 yAxisId="left"
                                 dataKey="documentAmount" 
@@ -3172,31 +3256,33 @@ export default function TariffAssignmentTab({
                                 name="Document Billed"
                               />
                             )}
-                            <Line
-                              yAxisId="right"
-                              type="monotone"
-                              dataKey="meterReading"
-                              stroke="hsl(var(--chart-3))"
-                              strokeWidth={3}
-                              name="Meter Reading"
-                              connectNulls={false}
-                              dot={(props: any) => {
-                                const { payload, cx, cy } = props;
-                                if (payload.isDiscontinuous) {
-                                  return (
-                                    <circle
-                                      cx={cx}
-                                      cy={cy}
-                                      r={6}
-                                      fill="hsl(var(--destructive))"
-                                      stroke="white"
-                                      strokeWidth={2}
-                                    />
-                                  );
-                                }
-                                return <circle cx={cx} cy={cy} r={4} fill="hsl(var(--chart-3))" />;
-                              }}
-                            />
+                            {!hiddenDataKeys.has('meterReading') && (
+                              <Line
+                                yAxisId="right"
+                                type="monotone"
+                                dataKey="meterReading"
+                                stroke="hsl(var(--chart-3))"
+                                strokeWidth={3}
+                                name="Meter Reading"
+                                connectNulls={false}
+                                dot={(props: any) => {
+                                  const { payload, cx, cy } = props;
+                                  if (payload.isDiscontinuous) {
+                                    return (
+                                      <circle
+                                        cx={cx}
+                                        cy={cy}
+                                        r={6}
+                                        fill="hsl(var(--destructive))"
+                                        stroke="white"
+                                        strokeWidth={2}
+                                      />
+                                    );
+                                  }
+                                  return <circle cx={cx} cy={cy} r={4} fill="hsl(var(--chart-3))" />;
+                                }}
+                              />
+                            )}
                           </ComposedChart>
                         </ResponsiveContainer>
                       </ChartContainer>
