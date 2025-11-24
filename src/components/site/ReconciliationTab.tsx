@@ -717,6 +717,42 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     fetchMeterDateRange();
   }, [selectedMeterId]);
 
+  // Update date range when bulk documents are selected
+  useEffect(() => {
+    if (selectedDocumentIds.length === 0) {
+      // When cleared, revert to overall date range if available
+      if (totalDateRange.earliest && totalDateRange.latest && !userSetDates) {
+        setDateFrom(totalDateRange.earliest);
+        setDateTo(totalDateRange.latest);
+        setTimeFrom(format(totalDateRange.earliest, "HH:mm"));
+        setTimeTo(format(totalDateRange.latest, "HH:mm"));
+      }
+      return;
+    }
+
+    // Find the earliest period from selected documents
+    const selectedDocs = documentDateRanges.filter(d => selectedDocumentIds.includes(d.id));
+    if (selectedDocs.length === 0) return;
+
+    const earliestDoc = selectedDocs.reduce((earliest, current) => {
+      return new Date(current.period_start) < new Date(earliest.period_start) ? current : earliest;
+    });
+
+    // Update the date range to match the earliest period for preview
+    const startDate = new Date(earliestDoc.period_start);
+    startDate.setHours(0, 0, 0, 0);
+    
+    const endDate = new Date(earliestDoc.period_end);
+    endDate.setDate(endDate.getDate() - 1);
+    endDate.setHours(23, 59, 0, 0);
+
+    setDateFrom(startDate);
+    setDateTo(endDate);
+    setTimeFrom("00:00");
+    setTimeTo("23:59");
+    setUserSetDates(false); // Allow bulk selection to override dates
+  }, [selectedDocumentIds, documentDateRanges, totalDateRange, userSetDates]);
+
   // Toggle expand/collapse for meters
   const toggleMeterExpanded = (meterId: string) => {
     const newExpanded = new Set(expandedMeters);
