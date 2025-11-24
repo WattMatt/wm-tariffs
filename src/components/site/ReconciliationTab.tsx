@@ -3100,26 +3100,6 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                   <Eraser className="w-4 h-4 mr-2" />
                   Clear Results
                 </Button>
-                <div className="grid grid-cols-2 gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setIsSaveDialogOpen(true)}
-                    className="w-full"
-                  >
-                    <Save className="w-4 h-4 mr-2" />
-                    Save Results (Energy & Revenue)
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={downloadAllMetersCSV}
-                    className="w-full"
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    Download All Meters
-                  </Button>
-                </div>
               </div>
             )}
 
