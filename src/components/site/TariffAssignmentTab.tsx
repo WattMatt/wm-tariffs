@@ -72,6 +72,7 @@ interface DocumentShopNumber {
   periodStart: string;
   periodEnd: string;
   totalAmount: number;
+  totalAmountExcludingEmergency?: number;
   currency: string;
   tenantName?: string;
   accountReference?: string;
@@ -543,7 +544,7 @@ export default function TariffAssignmentTab({
       const dataPoint: any = {
         period: formatDateStringToMonthYear(displayDateEnd),
         amount: reconciliationCostsMap[doc.documentId] !== undefined ? reconciliationCostsMap[doc.documentId] : null,
-        documentAmount: doc.totalAmount || null,
+        documentAmount: doc.totalAmountExcludingEmergency ?? doc.totalAmount,
         documentId: doc.documentId,
       };
 
@@ -551,7 +552,7 @@ export default function TariffAssignmentTab({
         documentId: doc.documentId,
         hasReconciliation: reconciliationCostsMap[doc.documentId] !== undefined,
         reconciliationAmount: reconciliationCostsMap[doc.documentId],
-        documentAmount: doc.totalAmount,
+        documentAmount: doc.totalAmountExcludingEmergency ?? doc.totalAmount,
         finalAmount: dataPoint.amount,
         usingReconDate: !!doc.reconciliationDateTo
       });
@@ -1120,8 +1121,9 @@ export default function TariffAssignmentTab({
         );
 
         const tariff = tariffStructures.find(t => t.id === tariffId);
-        const variance = doc.totalAmount ? result.totalCost - doc.totalAmount : null;
-        const variancePercentage = doc.totalAmount ? (variance! / doc.totalAmount) * 100 : null;
+        const documentAmount = doc.totalAmountExcludingEmergency ?? doc.totalAmount;
+        const variance = documentAmount ? result.totalCost - documentAmount : null;
+        const variancePercentage = documentAmount ? (variance! / documentAmount) * 100 : null;
 
         calculations.push({
           document_id: doc.documentId,
@@ -1267,6 +1269,12 @@ export default function TariffAssignmentTab({
                          "Council Invoice";
           }
 
+          // Calculate total excluding emergency/generator charges
+          const lineItems = extractedData.line_items || [];
+          const normalSupplyTotal = lineItems
+            .filter((item: any) => item.supply === "Normal")
+            .reduce((sum: number, item: any) => sum + (item.amount || 0), 0);
+
           shopNumbers.push({
             documentId: doc.id,
             fileName: doc.file_name,
@@ -1274,6 +1282,7 @@ export default function TariffAssignmentTab({
             periodStart: extractedData.period_start || '',
             periodEnd: extractedData.period_end || '',
             totalAmount: extractedData.total_amount || 0,
+            totalAmountExcludingEmergency: normalSupplyTotal,
             currency: extractedData.currency || 'R',
             tenantName: extractedData.tenant_name,
             accountReference: extractedData.account_reference,
@@ -1370,6 +1379,7 @@ export default function TariffAssignmentTab({
               reconciliationDateFrom: reconDateFrom,
               reconciliationDateTo: reconDateTo,
               totalAmount: result?.total_cost || 0,
+              totalAmountExcludingEmergency: result?.total_cost || 0,
               currency: 'R',
               meterId: meter.id,
               lineItems: []
@@ -3569,7 +3579,7 @@ export default function TariffAssignmentTab({
                                         <TableRow className="bg-muted/50 font-semibold">
                                           <TableCell colSpan={2} className="text-xs">TOTAL</TableCell>
                                           <TableCell className="text-xs text-right">
-                                            {doc.currency} {(calc.document_billed_amount?.toFixed(2) || doc.totalAmount.toFixed(2))}
+                                            {doc.currency} {(calc.document_billed_amount?.toFixed(2) || (doc.totalAmountExcludingEmergency ?? doc.totalAmount).toFixed(2))}
                                           </TableCell>
                                           <TableCell className="text-xs text-right">
                                             {doc.currency} {calc.total_cost.toFixed(2)}
@@ -3757,7 +3767,7 @@ export default function TariffAssignmentTab({
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Badge variant="outline">{doc.currency} {doc.totalAmount.toFixed(2)}</Badge>
+                        <Badge variant="outline">{doc.currency} {(doc.totalAmountExcludingEmergency ?? doc.totalAmount).toFixed(2)}</Badge>
                         <ChevronDown className={cn(
                           "h-4 w-4 transition-transform",
                           expandedShopDocs.has(idx) && "rotate-180"
