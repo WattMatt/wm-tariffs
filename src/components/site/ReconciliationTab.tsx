@@ -1891,6 +1891,70 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       
       if (resultsError) throw resultsError;
       
+      // 5. Generate hierarchical CSV files for parent meters
+      const parentMeters = allMeters.filter(meter => {
+        const children = meterConnectionsMap.get(meter.id);
+        return children && children.length > 0;
+      });
+
+      if (parentMeters.length > 0) {
+        console.log(`Generating ${parentMeters.length} hierarchical CSV file(s)...`);
+        toast.info(`Generating ${parentMeters.length} hierarchical profile(s)...`);
+
+        // Helper to get all leaf child meter IDs
+        const getLeafChildren = (meterId: string, visited = new Set<string>()): string[] => {
+          if (visited.has(meterId)) return [];
+          visited.add(meterId);
+          
+          const children = meterConnectionsMap.get(meterId) || [];
+          if (children.length === 0) return [meterId];
+          
+          const leaves: string[] = [];
+          for (const childId of children) {
+            leaves.push(...getLeafChildren(childId, visited));
+          }
+          return leaves;
+        };
+
+        const csvGenerationPromises = parentMeters.map(async (parentMeter) => {
+          try {
+            const leafMeterIds = Array.from(
+              new Set(
+                (meterConnectionsMap.get(parentMeter.id) || [])
+                  .flatMap(childId => getLeafChildren(childId))
+              )
+            );
+
+            const { error: csvError } = await supabase.functions.invoke('generate-hierarchical-csv', {
+              body: {
+                parentMeterId: parentMeter.id,
+                parentMeterNumber: parentMeter.meter_number,
+                siteId,
+                dateFrom: getFullDateTime(dateFrom, timeFrom),
+                dateTo: getFullDateTime(dateTo, timeTo),
+                leafMeterIds,
+                selectedColumns: Array.from(selectedColumns),
+                columnOperations: Object.fromEntries(columnOperations),
+                columnFactors: Object.fromEntries(columnFactors),
+                meterAssignments: Object.fromEntries(meterAssignments)
+              }
+            });
+
+            if (csvError) {
+              console.error(`Failed to generate CSV for ${parentMeter.meter_number}:`, csvError);
+            } else {
+              console.log(`✓ Generated hierarchical CSV for ${parentMeter.meter_number}`);
+            }
+          } catch (error) {
+            console.error(`Error generating CSV for ${parentMeter.meter_number}:`, error);
+          }
+        });
+
+        // Run all CSV generations in parallel
+        await Promise.allSettled(csvGenerationPromises);
+        console.log('Hierarchical CSV generation complete');
+      }
+      
       toast.success(`Reconciliation "${runName}" saved successfully`);
       return run.id;
     } catch (error) {
