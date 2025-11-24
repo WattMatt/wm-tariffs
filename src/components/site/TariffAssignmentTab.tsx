@@ -628,6 +628,7 @@ export default function TariffAssignmentTab({
   const [selectedChartMeter, setSelectedChartMeter] = useState<{ meter: Meter; docs: DocumentShopNumber[] } | null>(null);
   const [calculatedCosts, setCalculatedCosts] = useState<{ [docId: string]: number }>({});
   const [isCalculatingCosts, setIsCalculatingCosts] = useState(false);
+  const [chartData, setChartData] = useState<any[]>([]);
   
   // Reconciliation costs state (for comparison tab)
   const [reconciliationCosts, setReconciliationCosts] = useState<{ 
@@ -739,6 +740,107 @@ export default function TariffAssignmentTab({
         : 'no data'
     });
   }, [reconciliationCosts]);
+
+  // Fetch chart data when dialog opens or metric changes
+  useEffect(() => {
+    if (!selectedChartMeter) {
+      setChartData([]);
+      setMeterDiscontinuities([]);
+      return;
+    }
+
+    // Calculate chart data based on the mode
+    if (hideSeasonalAverages) {
+      const costsMap = getReconciliationCostsMap(selectedChartMeter.meter.id, selectedChartMeter.docs);
+      const data = prepareComparisonData(selectedChartMeter.docs, costsMap);
+      setChartData(data);
+    } else if (showDocumentCharts) {
+      const result = prepareAnalysisData(selectedChartMeter.docs, selectedChartMetric);
+      setChartData(result.chartData);
+      setMeterDiscontinuities(result.discontinuities);
+    } else {
+      const data = prepareAssignmentsData(selectedChartMeter.docs, chartDialogCalculations);
+      setChartData(data);
+    }
+
+    // Fetch calculations when dialog opens
+    if (Object.keys(chartDialogCalculations).length === 0) {
+      const docIds = selectedChartMeter.docs.map(d => d.documentId);
+      
+      if (hideSeasonalAverages) {
+        // Fetch reconciliation data for comparison mode
+        supabase
+          .from("reconciliation_meter_results")
+          .select(`
+            *,
+            reconciliation_runs!inner(date_from, date_to)
+          `)
+          .eq("meter_id", selectedChartMeter.meter.id)
+          .then(({ data, error }) => {
+            if (!error && data) {
+              const calcsByDoc: Record<string, any> = {};
+              
+              // Map reconciliation data to documents by matching periods
+              selectedChartMeter.docs.forEach(doc => {
+                const docEnd = new Date(doc.periodEnd);
+                const docEndTime = docEnd.getTime();
+                
+                // Find matching reconciliation period (2-day tolerance on end date)
+                const matchingResult = data.find(result => {
+                  const runEnd = new Date(result.reconciliation_runs.date_to);
+                  const runEndTime = runEnd.getTime();
+                  return Math.abs(docEndTime - runEndTime) < 86400000 * 2;
+                });
+                
+                if (matchingResult) {
+                  // Calculate variance
+                  const docAmount = doc.totalAmount || 0;
+                  const reconAmount = matchingResult.total_cost || 0;
+                  const variance = reconAmount - docAmount;
+                  const variancePercentage = docAmount > 0 
+                    ? (variance / docAmount) * 100 
+                    : 0;
+                  
+                  calcsByDoc[doc.documentId] = {
+                    document_id: doc.documentId,
+                    total_kwh: matchingResult.total_kwh,
+                    energy_cost: matchingResult.energy_cost,
+                    fixed_charges: matchingResult.fixed_charges,
+                    total_cost: matchingResult.total_cost,
+                    avg_cost_per_kwh: matchingResult.avg_cost_per_kwh,
+                    variance_amount: variance,
+                    variance_percentage: variancePercentage,
+                    tariff_structures: {
+                      name: matchingResult.tariff_name || 'Reconciliation'
+                    }
+                  };
+                }
+              });
+              
+              setChartDialogCalculations(calcsByDoc);
+            }
+          });
+      } else {
+        // Fetch tariff calculations for assignments/analysis tab
+        supabase
+          .from("document_tariff_calculations")
+          .select(`
+            *,
+            tariff_structures!inner(name)
+          `)
+          .in("document_id", docIds)
+          .then(({ data, error }) => {
+            if (!error && data) {
+              const calcsByDoc: Record<string, any> = {};
+              data.forEach(calc => {
+                calcsByDoc[calc.document_id] = calc;
+              });
+              setChartDialogCalculations(calcsByDoc);
+            }
+          });
+      }
+    }
+  }, [selectedChartMeter, selectedChartMetric, hideSeasonalAverages, showDocumentCharts, chartDialogCalculations]);
 
   // Load calculated costs from database
   const calculateAllCosts = async () => {
@@ -2909,104 +3011,9 @@ export default function TariffAssignmentTab({
           </DialogHeader>
           
           <ScrollArea className="max-h-[70vh] pr-4">
-            {selectedChartMeter && (
-              <div key={`${selectedChartMeter.meter.id}-${selectedChartMetric}`}>
-                {(() => {
-              // Comparison tab: use reconciliation costs
-              // Analysis tab: use document extracted values with selected metric
-              // Assignments tab: use dialog calculations
-              let chartData;
-              if (hideSeasonalAverages) {
-                const costsMap = getReconciliationCostsMap(selectedChartMeter.meter.id, selectedChartMeter.docs);
-                chartData = prepareComparisonData(selectedChartMeter.docs, costsMap);
-              } else if (showDocumentCharts) {
-                const result = prepareAnalysisData(selectedChartMeter.docs, selectedChartMetric);
-                chartData = result.chartData;
-                setMeterDiscontinuities(result.discontinuities);
-              } else {
-                chartData = prepareAssignmentsData(selectedChartMeter.docs, chartDialogCalculations);
-              }
-              
+            {selectedChartMeter && (() => {
               const currencies = new Set(selectedChartMeter.docs.map(d => d.currency));
               const hasMixedCurrencies = currencies.size > 1;
-              
-              // Fetch calculations when dialog opens
-              if (Object.keys(chartDialogCalculations).length === 0) {
-                const docIds = selectedChartMeter.docs.map(d => d.documentId);
-                
-                if (hideSeasonalAverages) {
-                  // Fetch reconciliation data for comparison mode
-                  supabase
-                    .from("reconciliation_meter_results")
-                    .select(`
-                      *,
-                      reconciliation_runs!inner(date_from, date_to)
-                    `)
-                    .eq("meter_id", selectedChartMeter.meter.id)
-                    .then(({ data, error }) => {
-                      if (!error && data) {
-                        const calcsByDoc: Record<string, any> = {};
-                        
-                        // Map reconciliation data to documents by matching periods
-                        selectedChartMeter.docs.forEach(doc => {
-                          const docEnd = new Date(doc.periodEnd);
-                          const docEndTime = docEnd.getTime();
-                          
-                          // Find matching reconciliation period (2-day tolerance on end date)
-                          const matchingResult = data.find(result => {
-                            const runEnd = new Date(result.reconciliation_runs.date_to);
-                            const runEndTime = runEnd.getTime();
-                            return Math.abs(docEndTime - runEndTime) < 86400000 * 2;
-                          });
-                          
-                          if (matchingResult) {
-                            // Calculate variance
-                            const docAmount = doc.totalAmount || 0;
-                            const reconAmount = matchingResult.total_cost || 0;
-                            const variance = reconAmount - docAmount;
-                            const variancePercentage = docAmount > 0 
-                              ? (variance / docAmount) * 100 
-                              : 0;
-                            
-                            calcsByDoc[doc.documentId] = {
-                              document_id: doc.documentId,
-                              total_kwh: matchingResult.total_kwh,
-                              energy_cost: matchingResult.energy_cost,
-                              fixed_charges: matchingResult.fixed_charges,
-                              total_cost: matchingResult.total_cost,
-                              avg_cost_per_kwh: matchingResult.avg_cost_per_kwh,
-                              variance_amount: variance,
-                              variance_percentage: variancePercentage,
-                              tariff_structures: {
-                                name: matchingResult.tariff_name || 'Reconciliation'
-                              }
-                            };
-                          }
-                        });
-                        
-                        setChartDialogCalculations(calcsByDoc);
-                      }
-                    });
-                } else {
-                  // Fetch tariff calculations for assignments/analysis tab
-                  supabase
-                    .from("document_tariff_calculations")
-                    .select(`
-                      *,
-                      tariff_structures!inner(name)
-                    `)
-                    .in("document_id", docIds)
-                    .then(({ data, error }) => {
-                      if (!error && data) {
-                        const calcsByDoc: Record<string, any> = {};
-                        data.forEach(calc => {
-                          calcsByDoc[calc.document_id] = calc;
-                        });
-                        setChartDialogCalculations(calcsByDoc);
-                      }
-                    });
-                }
-              }
               
               const getMetricLabel = (metric: string): string => {
                 switch(metric) {
@@ -3021,7 +3028,7 @@ export default function TariffAssignmentTab({
               };
               
               return (
-                <div className="space-y-6">
+                <div key={`${selectedChartMeter.meter.id}-${selectedChartMetric}`} className="space-y-6">
                   {/* Enlarged Chart */}
                   <Card>
                     <CardHeader className="pb-4">
@@ -3378,8 +3385,6 @@ export default function TariffAssignmentTab({
                 </div>
               );
             })()}
-              </div>
-            )}
           </ScrollArea>
         </DialogContent>
       </Dialog>
