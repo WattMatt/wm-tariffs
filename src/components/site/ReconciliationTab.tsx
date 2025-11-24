@@ -3014,7 +3014,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                 </Button>
                 {reconciliationData.revenueData && (
                   <Button
-                    variant="default"
+                    variant="outline"
                     size="sm"
                     onClick={() => setIsSaveDialogOpen(true)}
                     disabled={isLoading || isCalculatingRevenue || selectedDocumentIds.length > 0}
