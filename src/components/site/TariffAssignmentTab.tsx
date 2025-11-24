@@ -471,9 +471,13 @@ export default function TariffAssignmentTab({
   const prepareComparisonData = (docs: DocumentShopNumber[], reconciliationCostsMap: { [docId: string]: number }) => {
     const winterMonths = [6, 7, 8];
     const summerMonths = [1, 2, 3, 4, 5, 9, 10, 11, 12];
-    const sortedDocs = [...docs].sort((a, b) => 
-      new Date(a.periodEnd).getTime() - new Date(b.periodEnd).getTime()
-    );
+    
+    // Sort by reconciliation date if available, otherwise document date
+    const sortedDocs = [...docs].sort((a, b) => {
+      const dateA = a.reconciliationDateTo || a.periodEnd;
+      const dateB = b.reconciliationDateTo || b.periodEnd;
+      return dateA.localeCompare(dateB); // Ascending order
+    });
     
     interface Segment {
       season: 'winter' | 'summer';
@@ -489,7 +493,9 @@ export default function TariffAssignmentTab({
     let currentSegmentDocs: DocumentShopNumber[] = [];
     
     sortedDocs.forEach((doc, index) => {
-      const month = new Date(doc.periodEnd).getMonth() + 1;
+      // Use reconciliation dates if available for accurate month detection
+      const displayDateEnd = doc.reconciliationDateTo || doc.periodEnd;
+      const month = getMonthFromDateString(displayDateEnd);
       const isWinter = winterMonths.includes(month);
       const isSummer = summerMonths.includes(month);
       const currentSeason = isWinter ? 'winter' : isSummer ? 'summer' : null;
@@ -531,8 +537,11 @@ export default function TariffAssignmentTab({
     });
     
     return sortedDocs.map((doc) => {
+      // Use reconciliation dates if available, otherwise fall back to document dates
+      const displayDateEnd = doc.reconciliationDateTo || doc.periodEnd;
+      
       const dataPoint: any = {
-        period: new Date(doc.periodEnd).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }),
+        period: formatDateStringToMonthYear(displayDateEnd),
         amount: reconciliationCostsMap[doc.documentId] !== undefined ? reconciliationCostsMap[doc.documentId] : null,
         documentAmount: doc.totalAmount || null,
         documentId: doc.documentId,
@@ -543,7 +552,8 @@ export default function TariffAssignmentTab({
         hasReconciliation: reconciliationCostsMap[doc.documentId] !== undefined,
         reconciliationAmount: reconciliationCostsMap[doc.documentId],
         documentAmount: doc.totalAmount,
-        finalAmount: dataPoint.amount
+        finalAmount: dataPoint.amount,
+        usingReconDate: !!doc.reconciliationDateTo
       });
       
       const matchingSegment = segments.find(seg => 
