@@ -3141,7 +3141,7 @@ export default function TariffAssignmentTab({
                           <ComposedChart 
                             key={`chart-${selectedChartMetric}`}
                             data={chartData}
-                            margin={{ top: 10, right: 80, left: 60, bottom: 80 }}
+                            margin={{ top: 10, right: 100, left: 60, bottom: 80 }}
                           >
                             <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                             <XAxis 
@@ -3183,7 +3183,7 @@ export default function TariffAssignmentTab({
                                 value: 'Meter Reading (kWh)', 
                                 angle: 90, 
                                 position: 'insideRight',
-                                offset: 10,
+                                offset: -20,
                                 style: { 
                                   fontSize: 14, 
                                   fontWeight: 600,
