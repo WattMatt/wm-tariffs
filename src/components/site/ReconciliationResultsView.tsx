@@ -22,6 +22,7 @@ interface MeterData {
   hasData?: boolean;
   hasError?: boolean;
   errorMessage?: string;
+  hierarchicalTotal?: number;
   // Revenue fields
   tariffName?: string;
   energyCost?: number;
@@ -159,7 +160,10 @@ export default function ReconciliationResultsView({
     const childIds = meterConnections.get(meter.id) || [];
     let hierarchicalTotal = 0;
     
-    if (childIds.length > 0) {
+    // Use saved hierarchical total if available, otherwise calculate on the fly
+    if (meter.hierarchicalTotal !== undefined) {
+      hierarchicalTotal = meter.hierarchicalTotal;
+    } else if (childIds.length > 0) {
       const getLeafMeterSum = (meterId: string): number => {
         const children = meterConnections.get(meterId) || [];
         
