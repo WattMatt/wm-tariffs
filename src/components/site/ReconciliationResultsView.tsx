@@ -79,6 +79,10 @@ interface ReconciliationResultsViewProps {
   revenueProgress?: { current: number; total: number };
   hasPreviewData?: boolean;
   canReconcile?: boolean;
+  isBulkMode?: boolean;
+  bulkSelectedCount?: number;
+  onBulkReconcile?: () => void;
+  isBulkProcessing?: boolean;
 }
 
 export default function ReconciliationResultsView({
@@ -110,6 +114,10 @@ export default function ReconciliationResultsView({
   revenueProgress = { current: 0, total: 0 },
   hasPreviewData = false,
   canReconcile = false,
+  isBulkMode = false,
+  bulkSelectedCount = 0,
+  onBulkReconcile,
+  isBulkProcessing = false,
 }: ReconciliationResultsViewProps) {
   const [expandedMeters, setExpandedMeters] = useState<Set<string>>(new Set());
 
@@ -364,7 +372,27 @@ export default function ReconciliationResultsView({
 
   return (
     <div className="space-y-6">
-      {showSaveButton && (
+      {showSaveButton && isBulkMode && bulkSelectedCount > 0 && (
+        <Button
+          onClick={onBulkReconcile}
+          disabled={isBulkProcessing || bulkSelectedCount === 0}
+          variant="outline"
+          className="w-full h-12 gap-2 bg-muted text-foreground hover:bg-muted/80 font-semibold"
+        >
+          {isBulkProcessing ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Processing...
+            </>
+          ) : (
+            <>
+              <Save className="h-4 w-4" />
+              Run & Save {bulkSelectedCount} Reconciliation{bulkSelectedCount > 1 ? 's' : ''}
+            </>
+          )}
+        </Button>
+      )}
+      {showSaveButton && !isBulkMode && (
         <Button
           onClick={onSave}
           disabled={!revenueData}
