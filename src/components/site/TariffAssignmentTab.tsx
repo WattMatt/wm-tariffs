@@ -20,7 +20,7 @@ import TariffDetailsDialog from "@/components/tariffs/TariffDetailsDialog";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DatePicker } from "@/components/ui/date-picker";
 import { format } from "date-fns";
-import { cn, formatDateString, formatDateStringToLong, formatDateStringToMonthYear, getMonthFromDateString, daysBetweenDateStrings } from "@/lib/utils";
+import { cn, formatDateString, formatDateStringToLong, formatDateStringToMonthYear, getMonthFromDateString, daysBetweenDateStrings, extractDateFromTimestamp } from "@/lib/utils";
 import { calculateMeterCost } from "@/lib/costCalculation";
 
 interface TariffAssignmentTabProps {
@@ -830,7 +830,7 @@ export default function TariffAssignmentTab({
               selectedChartMeter.docs.forEach(doc => {
                 // Find matching reconciliation period (2-day tolerance on end date)
                 const matchingResult = data.find(result => {
-                  const daysDiff = daysBetweenDateStrings(doc.periodEnd, result.reconciliation_runs.date_to);
+                  const daysDiff = daysBetweenDateStrings(doc.periodEnd, extractDateFromTimestamp(result.reconciliation_runs.date_to));
                   return daysDiff < 2;
                 });
                 
@@ -1007,7 +1007,7 @@ export default function TariffAssignmentTab({
       console.log(`  Checking reconciliation period: ${costData.date_from} to ${costData.date_to}, cost: ${costData.total_cost}`);
 
       // Only check end dates (allowing for 5-day variance)
-      const daysDiff = daysBetweenDateStrings(periodEnd, costData.date_to);
+      const daysDiff = daysBetweenDateStrings(periodEnd, extractDateFromTimestamp(costData.date_to));
       
       const endMatches = daysDiff < 5; // Within 5 days
       
