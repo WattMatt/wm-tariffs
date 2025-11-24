@@ -1654,7 +1654,7 @@ export default function TariffAssignmentTab({
       const docCost = energyItems.reduce((sum, item) => sum + (item.amount || 0), 0);
       
       const calcConsumption = calc.total_kwh || 0;
-      const calcRate = calc.avg_cost_per_kwh || null;
+      const calcRate = calc.total_kwh > 0 ? calc.energy_cost / calc.total_kwh : null;
       const calcCost = calc.energy_cost || 0;
       
       rows.push({
