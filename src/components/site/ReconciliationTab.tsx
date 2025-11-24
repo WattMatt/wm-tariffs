@@ -1853,6 +1853,86 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         }
       });
       
+      // Calculate revenue for parent meters using hierarchical totals
+      if (reconciliationData.revenueData) {
+        const { data: siteData } = await supabase
+          .from("sites")
+          .select("supply_authority_id")
+          .eq("id", siteId)
+          .single();
+        
+        if (siteData?.supply_authority_id) {
+          const meterRevenues = new Map(reconciliationData.revenueData.meterRevenues);
+          
+          for (const meter of allMeters) {
+            const hierarchicalTotal = hierarchicalTotals.get(meter.id);
+            
+            // If meter has hierarchical total but no revenue calculated
+            if (hierarchicalTotal && hierarchicalTotal > 0 && !meterRevenues.has(meter.id)) {
+              // Meter must have a tariff assigned
+              if (meter.assigned_tariff_name) {
+                try {
+                  const costResult = await calculateMeterCostAcrossPeriods(
+                    meter.id,
+                    siteData.supply_authority_id,
+                    meter.assigned_tariff_name,
+                    new Date(getFullDateTime(dateFrom, timeFrom)),
+                    new Date(getFullDateTime(dateTo, timeTo)),
+                    hierarchicalTotal  // Use hierarchical total!
+                  );
+                  
+                  // Store the calculated revenue
+                  meterRevenues.set(meter.id, costResult);
+                  
+                  console.log(`Calculated revenue for parent meter ${meter.meter_number} using hierarchical total ${hierarchicalTotal.toFixed(2)} kWh`);
+                } catch (error) {
+                  console.error(`Failed to calculate revenue for parent meter ${meter.meter_number}:`, error);
+                  meterRevenues.set(meter.id, {
+                    hasError: true,
+                    errorMessage: error instanceof Error ? error.message : 'Cost calculation failed',
+                    totalCost: 0,
+                    energyCost: 0,
+                    fixedCharges: 0,
+                    demandCharges: 0,
+                    avgCostPerKwh: 0,
+                    tariffName: meter.assigned_tariff_name
+                  });
+                }
+              } else if (meter.tariff_structure_id) {
+                try {
+                  const costResult = await calculateMeterCost(
+                    meter.id,
+                    meter.tariff_structure_id,
+                    new Date(getFullDateTime(dateFrom, timeFrom)),
+                    new Date(getFullDateTime(dateTo, timeTo)),
+                    hierarchicalTotal  // Use hierarchical total!
+                  );
+                  
+                  meterRevenues.set(meter.id, costResult);
+                  
+                  console.log(`Calculated revenue for parent meter ${meter.meter_number} using hierarchical total ${hierarchicalTotal.toFixed(2)} kWh`);
+                } catch (error) {
+                  console.error(`Failed to calculate revenue for parent meter ${meter.meter_number}:`, error);
+                  meterRevenues.set(meter.id, {
+                    hasError: true,
+                    errorMessage: error instanceof Error ? error.message : 'Cost calculation failed',
+                    totalCost: 0,
+                    energyCost: 0,
+                    fixedCharges: 0,
+                    demandCharges: 0,
+                    avgCostPerKwh: 0,
+                    tariffName: null
+                  });
+                }
+              }
+            }
+          }
+          
+          // Update reconciliation data with new revenue map
+          reconciliationData.revenueData.meterRevenues = meterRevenues;
+        }
+      }
+      
       // 4. Insert all meter results with hierarchical totals and revenue data
       const meterResults = allMeters.map((meter: any) => {
         const revenueInfo = reconciliationData.revenueData?.meterRevenues.get(meter.id);
