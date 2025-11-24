@@ -119,6 +119,7 @@ export default function TariffAssignmentTab({
   const [viewingDocCalculations, setViewingDocCalculations] = useState<any[]>([]);
   const [chartDialogCalculations, setChartDialogCalculations] = useState<Record<string, any>>({});
   const [viewingAllDocsCalculations, setViewingAllDocsCalculations] = useState<Record<string, any>>({});
+  const [selectedChartMetric, setSelectedChartMetric] = useState<string>('total');
 
   // Apply date range filter
   const applyDateFilter = () => {
@@ -181,8 +182,41 @@ export default function TariffAssignmentTab({
     });
   };
 
+  // Helper to extract metric value from document
+  const extractMetricValue = (doc: DocumentShopNumber | undefined, metric: string): number | null => {
+    if (!doc) return null;
+    if (metric === 'total') return doc.totalAmount;
+    
+    const lineItems = doc.lineItems || [];
+    
+    switch(metric) {
+      case 'basic':
+        const basicItem = lineItems.find(item => item.description === 'ELECTRICITY-BASIC');
+        return basicItem?.amount || null;
+      
+      case 'kva-charge':
+        const kvaItem = lineItems.find(item => item.description === 'ELECTRICITY-POWER');
+        return kvaItem?.amount || null;
+      
+      case 'kwh-charge':
+        const kwhItem = lineItems.find(item => item.description === 'ELECTRICITY-ENERGY');
+        return kwhItem?.amount || null;
+      
+      case 'kva-consumption':
+        const kvaConsumption = lineItems.find(item => item.description === 'ELECTRICITY-POWER');
+        return kvaConsumption?.consumption || null;
+      
+      case 'kwh-consumption':
+        const kwhConsumption = lineItems.find(item => item.description === 'ELECTRICITY-ENERGY');
+        return kwhConsumption?.consumption || null;
+      
+      default:
+        return doc.totalAmount;
+    }
+  };
+
   // Helper function to calculate seasonal averages
-  const calculateSeasonalAverages = (docs: DocumentShopNumber[]) => {
+  const calculateSeasonalAverages = (docs: DocumentShopNumber[], metric: string = 'total') => {
     // South African electricity seasons:
     // Winter/High Demand: June, July, August
     // Summer/Low Demand: September through May (all other months)
@@ -199,12 +233,20 @@ export default function TariffAssignmentTab({
       return summerMonths.includes(month);
     });
     
-    const winterAvg = winterDocs.length > 0
-      ? winterDocs.reduce((sum, doc) => sum + doc.totalAmount, 0) / winterDocs.length
+    const winterValues = winterDocs
+      .map(doc => extractMetricValue(doc, metric))
+      .filter(val => val !== null) as number[];
+    
+    const summerValues = summerDocs
+      .map(doc => extractMetricValue(doc, metric))
+      .filter(val => val !== null) as number[];
+    
+    const winterAvg = winterValues.length > 0
+      ? winterValues.reduce((sum, val) => sum + val, 0) / winterValues.length
       : null;
     
-    const summerAvg = summerDocs.length > 0
-      ? summerDocs.reduce((sum, doc) => sum + doc.totalAmount, 0) / summerDocs.length
+    const summerAvg = summerValues.length > 0
+      ? summerValues.reduce((sum, val) => sum + val, 0) / summerValues.length
       : null;
     
     return { winterAvg, summerAvg };
@@ -2767,6 +2809,7 @@ export default function TariffAssignmentTab({
       <Dialog open={!!selectedChartMeter} onOpenChange={() => {
         setSelectedChartMeter(null);
         setChartDialogCalculations({});
+        setSelectedChartMetric('total');
       }}>
         <DialogContent className="max-w-6xl max-h-[90vh]">
           <DialogHeader>
@@ -2872,12 +2915,73 @@ export default function TariffAssignmentTab({
                 }
               }
               
+              // Update chart data with selected metric
+              const updatedChartData = showDocumentCharts ? chartData.map((point: any) => {
+                const doc = selectedChartMeter.docs.find(d => 
+                  new Date(d.periodEnd).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }) === point.period
+                );
+                const metricValue = extractMetricValue(doc, selectedChartMetric);
+                return {
+                  ...point,
+                  amount: metricValue !== null ? metricValue : point.amount,
+                };
+              }) : chartData;
+              
+              // Calculate simple seasonal averages for the metric
+              const { winterAvg: simpleWinterAvg, summerAvg: simpleSummerAvg } = 
+                showDocumentCharts 
+                  ? calculateSeasonalAverages(selectedChartMeter.docs, selectedChartMetric)
+                  : { winterAvg: null, summerAvg: null };
+              
+              // Add seasonal averages to all data points
+              const finalChartData = showDocumentCharts ? updatedChartData.map((point: any) => ({
+                ...point,
+                winterAvg: simpleWinterAvg !== null ? simpleWinterAvg : undefined,
+                summerAvg: simpleSummerAvg !== null ? simpleSummerAvg : undefined,
+              })) : updatedChartData;
+              
+              const getMetricLabel = (metric: string): string => {
+                switch(metric) {
+                  case 'total': return 'Total Amount';
+                  case 'basic': return 'Basic Charge';
+                  case 'kva-charge': return 'kVA Charge';
+                  case 'kwh-charge': return 'kWh Charge';
+                  case 'kva-consumption': return 'kVA Consumption';
+                  case 'kwh-consumption': return 'kWh Consumption';
+                  default: return 'Amount';
+                }
+              };
+              
               return (
                 <div className="space-y-6">
+                  {/* Metric Selection */}
+                  {showDocumentCharts && (
+                    <div className="mb-4">
+                      <Label htmlFor="metric-select" className="text-sm font-medium mb-2 block">
+                        Display Metric
+                      </Label>
+                      <Select value={selectedChartMetric} onValueChange={setSelectedChartMetric}>
+                        <SelectTrigger id="metric-select" className="w-full max-w-md">
+                          <SelectValue placeholder="Select metric to display" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="total">Total Amount (All Charges)</SelectItem>
+                          <SelectItem value="basic">Basic Charge (Fixed Monthly)</SelectItem>
+                          <SelectItem value="kva-charge">kVA Charge (Demand)</SelectItem>
+                          <SelectItem value="kwh-charge">kWh Charge (Energy)</SelectItem>
+                          <SelectItem value="kva-consumption">kVA Consumption</SelectItem>
+                          <SelectItem value="kwh-consumption">kWh Consumption</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  
                   {/* Enlarged Chart */}
                   <Card>
                     <CardHeader className="pb-4">
-                      <CardTitle>Billing Cost Over Time</CardTitle>
+                      <CardTitle>
+                        {showDocumentCharts ? `${getMetricLabel(selectedChartMetric)} Over Time` : 'Billing Cost Over Time'}
+                      </CardTitle>
                       {hasMixedCurrencies && (
                         <Alert variant="destructive" className="mt-2">
                           <AlertCircle className="h-4 w-4" />
@@ -2891,7 +2995,7 @@ export default function TariffAssignmentTab({
                       <ChartContainer
                         config={{
                           amount: {
-                            label: hideSeasonalAverages ? "Reconciliation Cost" : (showDocumentCharts ? "Document Amount" : "Calculated Cost"),
+                            label: hideSeasonalAverages ? "Reconciliation Cost" : (showDocumentCharts ? getMetricLabel(selectedChartMetric) : "Calculated Cost"),
                             color: "hsl(var(--primary))",
                           },
                           documentAmount: {
@@ -2907,10 +3011,10 @@ export default function TariffAssignmentTab({
                             color: "hsl(25 100% 50%)",
                           },
                         }}
-                        className="h-[400px]"
+                        className="h-[500px]"
                       >
                         <ResponsiveContainer width="100%" height="100%">
-                          <ComposedChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 60 }}>
+                          <ComposedChart data={finalChartData} margin={{ top: 10, right: 30, left: 60, bottom: 80 }}>
                             <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                             <XAxis 
                               dataKey="period" 
@@ -2921,7 +3025,12 @@ export default function TariffAssignmentTab({
                             />
                             <YAxis 
                               tick={{ fontSize: 12 }}
-                              tickFormatter={(value) => `R${(value / 1000).toFixed(0)}k`}
+                              tickFormatter={(value) => {
+                                if (showDocumentCharts && selectedChartMetric.includes('consumption')) {
+                                  return value.toLocaleString();
+                                }
+                                return `R${(value / 1000).toFixed(0)}k`;
+                              }}
                             />
                             <ChartTooltip 
                               content={<ChartTooltipContent />}
