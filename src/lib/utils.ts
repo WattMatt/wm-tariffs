@@ -39,6 +39,20 @@ export function getMonthFromDateString(dateString: string): number {
 }
 
 /**
+ * Extracts the date portion (YYYY-MM-DD) from a timestamp string
+ * Handles formats like "2025-10-19 23:59:00+00" or "2025-10-19"
+ */
+export function extractDateFromTimestamp(timestampOrDate: string): string {
+  // If it's already a simple date string, return as-is
+  if (/^\d{4}-\d{2}-\d{2}$/.test(timestampOrDate)) {
+    return timestampOrDate;
+  }
+  // Extract YYYY-MM-DD from timestamp
+  const match = timestampOrDate.match(/^(\d{4}-\d{2}-\d{2})/);
+  return match ? match[1] : timestampOrDate;
+}
+
+/**
  * Calculates the number of days between two date strings (YYYY-MM-DD) without timezone conversion
  * Returns the absolute difference in days
  */
