@@ -83,6 +83,11 @@ interface ReconciliationResultsViewProps {
   bulkSelectedCount?: number;
   onBulkReconcile?: () => void;
   isBulkProcessing?: boolean;
+  bulkProgress?: {
+    currentDocument: string;
+    current: number;
+    total: number;
+  };
 }
 
 export default function ReconciliationResultsView({
@@ -118,6 +123,7 @@ export default function ReconciliationResultsView({
   bulkSelectedCount = 0,
   onBulkReconcile,
   isBulkProcessing = false,
+  bulkProgress = { currentDocument: '', current: 0, total: 0 },
 }: ReconciliationResultsViewProps) {
   const [expandedMeters, setExpandedMeters] = useState<Set<string>>(new Set());
 
@@ -380,10 +386,15 @@ export default function ReconciliationResultsView({
           className="w-full h-12 gap-2 bg-muted text-foreground hover:bg-muted/80 font-semibold"
         >
           {isBulkProcessing ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Processing...
-            </>
+            <div className="flex flex-col items-center gap-1 w-full">
+              <div className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Processing {bulkProgress.current}/{bulkProgress.total}</span>
+              </div>
+              <span className="text-xs text-muted-foreground truncate max-w-full">
+                {bulkProgress.currentDocument}
+              </span>
+            </div>
           ) : (
             <>
               <Save className="h-4 w-4" />
