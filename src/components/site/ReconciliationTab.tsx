@@ -2414,15 +2414,6 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     return orderedMeters;
   }, [reconciliationData, availableMeters.length]);
 
-  // Memoize handlers to prevent them from being recreated on every render
-  const handleReconcileEnergy = useCallback(() => {
-    handleReconcile(false);
-  }, [dateFrom, dateTo, timeFrom, timeTo, previewData, selectedColumns, revenueReconciliationEnabled]);
-
-  const handleReconcileRevenue = useCallback(() => {
-    handleReconcile(true);
-  }, [dateFrom, dateTo, timeFrom, timeTo, previewData, selectedColumns, revenueReconciliationEnabled]);
-
   return (
     <Tabs defaultValue="analysis" className="space-y-6">
       <TabsList className="grid w-full grid-cols-3 lg:w-auto">
@@ -3262,8 +3253,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           showSaveButton={true}
           onSave={() => setIsSaveDialogOpen(true)}
           revenueData={reconciliationData?.revenueData || null}
-          onReconcileEnergy={handleReconcileEnergy}
-          onReconcileRevenue={handleReconcileRevenue}
+          onReconcileEnergy={() => handleReconcile(false)}
+          onReconcileRevenue={() => handleReconcile(true)}
           onCancelReconciliation={cancelReconciliation}
           isCancelling={isCancelling}
           isLoadingEnergy={isLoading && !isCalculatingRevenue}
