@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -2374,6 +2374,35 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     }
   };
 
+  // Memoize the meters array to prevent infinite re-renders
+  const memoizedMeters = useMemo(() => {
+    if (!reconciliationData) return [];
+    
+    // Collect all processed meters
+    const allMeters = [
+      ...(reconciliationData.councilBulk || []),
+      ...(reconciliationData.solarMeters || []),
+      ...(reconciliationData.checkMeters || []),
+      ...(reconciliationData.distribution || []),
+      ...(reconciliationData.otherMeters || [])
+    ].map(m => ({
+      ...m,
+      hasData: m.hasData !== undefined ? m.hasData : true,
+      hasError: m.hasError || failedMeters.has(m.id),
+      errorMessage: m.errorMessage || failedMeters.get(m.id)
+    }));
+
+    // Create a map for quick lookup
+    const meterMap = new Map(allMeters.map(m => [m.id, m]));
+
+    // Order meters according to availableMeters (which has the hierarchy)
+    const orderedMeters = availableMeters
+      .map(availMeter => meterMap.get(availMeter.id))
+      .filter(m => m !== undefined);
+
+    return orderedMeters;
+  }, [reconciliationData, availableMeters, failedMeters]);
+
   return (
     <Tabs defaultValue="analysis" className="space-y-6">
       <TabsList className="grid w-full grid-cols-3 lg:w-auto">
@@ -3202,31 +3231,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           recoveryRate={reconciliationData?.recoveryRate || 0}
           discrepancy={reconciliationData?.discrepancy || 0}
           distributionTotal={reconciliationData?.distributionTotal || 0}
-          meters={reconciliationData ? (() => {
-            // Collect all processed meters
-            const allMeters = [
-              ...(reconciliationData.councilBulk || []),
-              ...(reconciliationData.solarMeters || []),
-              ...(reconciliationData.checkMeters || []),
-              ...(reconciliationData.distribution || []),
-              ...(reconciliationData.otherMeters || [])
-            ].map(m => ({
-              ...m,
-              hasData: m.hasData !== undefined ? m.hasData : true,
-              hasError: m.hasError || failedMeters.has(m.id),
-              errorMessage: m.errorMessage || failedMeters.get(m.id)
-            }));
-
-            // Create a map for quick lookup
-            const meterMap = new Map(allMeters.map(m => [m.id, m]));
-
-            // Order meters according to availableMeters (which has the hierarchy)
-            const orderedMeters = availableMeters
-              .map(availMeter => meterMap.get(availMeter.id))
-              .filter(m => m !== undefined);
-
-            return orderedMeters;
-          })() : []}
+          meters={memoizedMeters}
           meterConnections={meterConnectionsMap}
           meterIndentLevels={meterIndentLevels}
           meterParentInfo={meterParentInfo}
