@@ -76,6 +76,8 @@ interface DocumentShopNumber {
   tenantName?: string;
   accountReference?: string;
   meterId?: string;
+  reconciliationDateFrom?: string; // Reconciliation run start date (for display)
+  reconciliationDateTo?: string; // Reconciliation run end date (for display)
   lineItems?: Array<{
     description: string;
     meter_number?: string;
@@ -827,7 +829,7 @@ export default function TariffAssignmentTab({
               const calcsByDoc: Record<string, any> = {};
               
               // Map reconciliation data to documents by matching periods
-              selectedChartMeter.docs.forEach(doc => {
+              const docsWithReconDates = selectedChartMeter.docs.map(doc => {
                 // Find matching reconciliation period (2-day tolerance on end date)
                 const matchingResult = data.find(result => {
                   const daysDiff = daysBetweenDateStrings(doc.periodEnd, extractDateFromTimestamp(result.reconciliation_runs.date_to));
@@ -856,8 +858,20 @@ export default function TariffAssignmentTab({
                       name: matchingResult.tariff_name || 'Reconciliation'
                     }
                   };
+                  
+                  // Return document with reconciliation dates attached
+                  return {
+                    ...doc,
+                    reconciliationDateFrom: extractDateFromTimestamp(matchingResult.reconciliation_runs.date_from),
+                    reconciliationDateTo: extractDateFromTimestamp(matchingResult.reconciliation_runs.date_to)
+                  };
                 }
+                
+                return doc;
               });
+              
+              // Update selectedChartMeter with enriched documents
+              setSelectedChartMeter(prev => prev ? { ...prev, docs: docsWithReconDates } : null);
               
               setChartDialogCalculations(calcsByDoc);
             }
@@ -3331,7 +3345,11 @@ export default function TariffAssignmentTab({
                               <div className="flex items-center gap-3">
                                 <span className="font-medium">{doc.shopNumber}</span>
                                 <span className="text-sm text-muted-foreground">
-                                  {formatDateString(doc.periodStart)} - {formatDateString(doc.periodEnd)}
+                                  {doc.reconciliationDateFrom && doc.reconciliationDateTo ? (
+                                    <>{formatDateString(doc.reconciliationDateFrom)} - {formatDateString(doc.reconciliationDateTo)}</>
+                                  ) : (
+                                    <>{formatDateString(doc.periodStart)} - {formatDateString(doc.periodEnd)}</>
+                                  )}
                                 </span>
                               </div>
                             </div>
