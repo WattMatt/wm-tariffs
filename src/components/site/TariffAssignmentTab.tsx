@@ -2029,7 +2029,7 @@ export default function TariffAssignmentTab({
                       if (filteredShops.length === 0) return null;
                       
                       // Transform and sort data for chart using appropriate function for each tab
-                      let chartData;
+                      let chartData: any[] = [];
                       if (hideSeasonalAverages) {
                         // Comparison tab: use reconciliation costs (only show blue bars when data exists)
                         console.log(`📊 Rendering chart for meter ${meter.id} in comparison mode`);
@@ -2039,11 +2039,18 @@ export default function TariffAssignmentTab({
                         console.log(`   Mapped ${Object.keys(costsMap).length} documents to costs`);
                         chartData = prepareComparisonData(filteredShops, costsMap);
                       } else if (showDocumentCharts) {
-                        // Analysis tab: always use document amounts
-                        chartData = prepareAnalysisData(filteredShops);
+                        // Analysis tab: always use document amounts (returns object with chartData property)
+                        const analysisResult = prepareAnalysisData(filteredShops);
+                        chartData = Array.isArray(analysisResult) ? analysisResult : (analysisResult?.chartData || []);
                       } else {
                         // Assignments tab: use calculated tariff costs
                         chartData = prepareAssignmentsData(filteredShops, calculatedCosts);
+                      }
+                      
+                      // Ensure chartData is always an array
+                      if (!Array.isArray(chartData)) {
+                        console.warn('chartData is not an array, defaulting to empty array');
+                        chartData = [];
                       }
                       
                       return (
@@ -2101,15 +2108,17 @@ export default function TariffAssignmentTab({
                                   <ChartTooltip 
                                     content={<ChartTooltipContent />}
                                   />
-                                   {!hideSeasonalAverages && (() => {
+                                   {!hideSeasonalAverages && Array.isArray(chartData) && chartData.length > 0 && (() => {
                                     // Extract all unique seasonal segment keys from the data
                                     const segmentKeys = new Set<string>();
                                     chartData.forEach((point: any) => {
-                                      Object.keys(point).forEach(key => {
-                                        if (key.startsWith('winterAvg_') || key.startsWith('summerAvg_')) {
-                                          segmentKeys.add(key);
-                                        }
-                                      });
+                                      if (point && typeof point === 'object') {
+                                        Object.keys(point).forEach(key => {
+                                          if (key.startsWith('winterAvg_') || key.startsWith('summerAvg_')) {
+                                            segmentKeys.add(key);
+                                          }
+                                        });
+                                      }
                                     });
                                     
                                     // Render a Line for each segment
