@@ -1900,32 +1900,21 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       let errorCount = 0;
       const errors: string[] = [];
 
-      // Find the earliest period from selected documents
-      const selectedDocs = documentDateRanges.filter(d => selectedDocumentIds.includes(d.id));
-      const earliestDoc = selectedDocs.reduce((earliest, current) => {
-        return new Date(current.period_start) < new Date(earliest.period_start) ? current : earliest;
-      });
-
-      // Use the earliest period's date range for all reconciliations
-      const startDate = new Date(earliestDoc.period_start);
-      startDate.setHours(0, 0, 0, 0);
-      
-      const endDate = new Date(earliestDoc.period_end);
-      endDate.setDate(endDate.getDate() - 1);
-      endDate.setHours(23, 59, 0, 0);
-
-      // Set dates once for all reconciliations
-      setDateFrom(startDate);
-      setDateTo(endDate);
-      setTimeFrom("00:00");
-      setTimeTo("23:59");
-
+      // Process each document with its own specific date range
       for (const docId of selectedDocumentIds) {
         try {
           const doc = documentDateRanges.find(d => d.id === docId);
           if (!doc) continue;
 
-          // Run reconciliation using the earliest period's date range
+          // Use this document's specific date range
+          const startDate = new Date(doc.period_start);
+          startDate.setHours(0, 0, 0, 0);
+          
+          const endDate = new Date(doc.period_end);
+          endDate.setDate(endDate.getDate() - 1);
+          endDate.setHours(23, 59, 0, 0);
+
+          // Run reconciliation using this document's specific date range
           await handleReconcileForPeriod(startDate, endDate, doc.file_name);
           successCount++;
 
@@ -1939,7 +1928,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
 
       if (successCount > 0) {
         toast.success(
-          `Bulk reconciliation complete! ${successCount} saved using earliest period (${earliestDoc.file_name})${errorCount > 0 ? `, ${errorCount} failed` : ''}.`
+          `Bulk reconciliation complete! ${successCount} reconciliation(s) saved${errorCount > 0 ? `, ${errorCount} failed` : ''}.`
         );
       }
 
