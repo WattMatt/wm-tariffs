@@ -102,6 +102,10 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
   
   // Cancel reconciliation ref
   const cancelReconciliationRef = useRef(false);
+  
+  // Refs for stable access to latest values in callbacks
+  const previewDataRef = useRef<any>(null);
+  const selectedColumnsRef = useRef<Set<string>>(new Set());
 
   // Persistent reconciliation state key
   const reconciliationStateKey = `reconciliation_state_${siteId}`;
@@ -141,6 +145,15 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       console.error("Error clearing indent levels from localStorage:", error);
     }
   };
+
+  // Update refs when state changes
+  useEffect(() => {
+    previewDataRef.current = previewData;
+  }, [previewData]);
+  
+  useEffect(() => {
+    selectedColumnsRef.current = selectedColumns;
+  }, [selectedColumns]);
 
   // Restore persistent state on mount
   useEffect(() => {
@@ -1662,12 +1675,12 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       return;
     }
 
-    if (!previewData) {
+    if (!previewDataRef.current) {
       toast.error("Please preview data first");
       return;
     }
 
-    if (selectedColumns.size === 0) {
+    if (selectedColumnsRef.current.size === 0) {
       toast.error("Please select at least one column to calculate");
       return;
     }
@@ -1737,7 +1750,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       setIsCancelling(false);
       cancelReconciliationRef.current = false;
     }
-  }, [dateFrom, dateTo, previewData, selectedColumns, timeFrom, timeTo, revenueReconciliationEnabled]);
+  }, [dateFrom, dateTo, timeFrom, timeTo, revenueReconciliationEnabled]);
 
   const cancelReconciliation = () => {
     if (!isCancelling) {
