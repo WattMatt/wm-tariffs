@@ -2394,21 +2394,6 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                   >
                     Clear Selection
                   </Button>
-                  <Button
-                    onClick={handleBulkReconcile}
-                    disabled={isBulkProcessing || !previewData || selectedColumns.size === 0}
-                    size="sm"
-                    variant="default"
-                  >
-                    {isBulkProcessing ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Processing...
-                      </>
-                    ) : (
-                      `Run & Save ${selectedDocumentIds.length} Reconciliation(s)`
-                    )}
-                  </Button>
                 </div>
               </div>
             )}
@@ -3181,6 +3166,10 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           revenueProgress={reconciliationProgress}
           hasPreviewData={previewData !== null}
           canReconcile={selectedColumns.size > 0}
+          isBulkMode={selectedDocumentIds.length > 0}
+          bulkSelectedCount={selectedDocumentIds.length}
+          onBulkReconcile={handleBulkReconcile}
+          isBulkProcessing={isBulkProcessing}
         />
       )}
 
