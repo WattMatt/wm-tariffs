@@ -2347,29 +2347,31 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label>Bulk Reconciliation - Select Multiple Periods</Label>
+            <Label>Bulk Reconciliation - Select Multiple Periods (Municipal Bills Only)</Label>
             <div className="border rounded-md p-3 space-y-2 max-h-[300px] overflow-y-auto bg-background">
               {documentDateRanges && documentDateRanges.length > 0 ? (
-                documentDateRanges.map((doc) => (
-                  <div key={doc.id} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={`bulk-${doc.id}`}
-                      checked={selectedDocumentIds.includes(doc.id)}
-                      onCheckedChange={(checked) => {
-                        if (checked) {
-                          setSelectedDocumentIds([...selectedDocumentIds, doc.id]);
-                        } else {
-                          setSelectedDocumentIds(selectedDocumentIds.filter(id => id !== doc.id));
-                        }
-                      }}
-                    />
-                    <label htmlFor={`bulk-${doc.id}`} className="text-sm cursor-pointer flex-1">
-                      {doc.file_name} ({format(new Date(doc.period_start), "MMM d, yyyy")} - {format(new Date(doc.period_end), "MMM d, yyyy")})
-                    </label>
-                  </div>
-                ))
+                documentDateRanges
+                  .filter(doc => doc.document_type === 'municipal_account')
+                  .map((doc) => (
+                    <div key={doc.id} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`bulk-${doc.id}`}
+                        checked={selectedDocumentIds.includes(doc.id)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedDocumentIds([...selectedDocumentIds, doc.id]);
+                          } else {
+                            setSelectedDocumentIds(selectedDocumentIds.filter(id => id !== doc.id));
+                          }
+                        }}
+                      />
+                      <label htmlFor={`bulk-${doc.id}`} className="text-sm cursor-pointer flex-1">
+                        {doc.file_name} ({format(new Date(doc.period_start), "MMM d, yyyy")} - {format(new Date(doc.period_end), "MMM d, yyyy")})
+                      </label>
+                    </div>
+                  ))
               ) : (
-                <p className="text-sm text-muted-foreground">No document periods available</p>
+                <p className="text-sm text-muted-foreground">No municipal bill periods available</p>
               )}
             </div>
             {selectedDocumentIds.length > 0 && (
@@ -2439,11 +2441,31 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                 } />
               </SelectTrigger>
               <SelectContent className="bg-popover z-50">
-                {documentDateRanges.map((doc) => (
-                  <SelectItem key={doc.id} value={doc.id}>
-                    {doc.file_name} ({format(new Date(doc.period_start), "PP")} - {format(new Date(doc.period_end), "PP")})
-                  </SelectItem>
-                ))}
+                {/* Group by document type */}
+                {documentDateRanges.filter(d => d.document_type === 'municipal_account').length > 0 && (
+                  <>
+                    <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Municipal Bills</div>
+                    {documentDateRanges
+                      .filter(d => d.document_type === 'municipal_account')
+                      .map((doc) => (
+                        <SelectItem key={doc.id} value={doc.id}>
+                          {doc.file_name} ({format(new Date(doc.period_start), "PP")} - {format(new Date(doc.period_end), "PP")})
+                        </SelectItem>
+                      ))}
+                  </>
+                )}
+                {documentDateRanges.filter(d => d.document_type === 'tenant_bill').length > 0 && (
+                  <>
+                    <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground mt-2">Tenant Bills</div>
+                    {documentDateRanges
+                      .filter(d => d.document_type === 'tenant_bill')
+                      .map((doc) => (
+                        <SelectItem key={doc.id} value={doc.id}>
+                          {doc.file_name} ({format(new Date(doc.period_start), "PP")} - {format(new Date(doc.period_end), "PP")})
+                        </SelectItem>
+                      ))}
+                  </>
+                )}
               </SelectContent>
             </Select>
           </div>
