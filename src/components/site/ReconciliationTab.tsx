@@ -1961,7 +1961,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
   };
 
   const handleReconcileForPeriod = async (startDate: Date, endDate: Date, fileName: string) => {
-    // Similar logic to handleReconcile, but saves automatically
+    // Use the existing preview structure and re-fetch readings for the specific date range
     if (!previewData) {
       throw new Error("Please preview data first");
     }
@@ -1984,19 +1984,28 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       throw new Error("Site supply authority not configured");
     }
 
-    // Fetch all meters for the site
-    const { data: meters, error: metersError } = await supabase
+    // Use the meters from preview data to maintain order and structure
+    const orderedMeterIds = previewData.meterOrder || availableMeters.map(m => m.id);
+    
+    // Fetch all meters data
+    const { data: metersData, error: metersError } = await supabase
       .from("meters")
       .select("id, meter_number, meter_type, tariff_structure_id, assigned_tariff_name, name, location")
       .eq("site_id", siteId);
 
-    if (metersError || !meters || meters.length === 0) {
-      throw new Error("No meters found for this site");
+    if (metersError || !metersData) {
+      throw new Error("Failed to fetch meters");
     }
 
-    // Process meters (simplified, no batching for bulk)
+    // Create a map for quick lookup
+    const metersMap = new Map(metersData.map(m => [m.id, m]));
+
+    // Process meters in the correct order from preview
     const meterData = await Promise.all(
-      meters.map(async (meter) => {
+      orderedMeterIds.map(async (meterId) => {
+        const meter = metersMap.get(meterId);
+        if (!meter) return null;
+
         const { data: readings } = await supabase
           .from("meter_readings")
           .select("kwh_value, reading_timestamp, metadata")
@@ -2101,25 +2110,71 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       })
     );
 
-    const filteredMeters = meterData.filter((m) => m.readingsCount > 0);
+    const filteredMeters = meterData.filter((m): m is NonNullable<typeof m> => m !== null && m.readingsCount > 0);
 
-    // Get assignment for each meter
-    const metersWithAssignments = filteredMeters.map(meter => ({
+    // Calculate hierarchical totals using the meter connections from preview
+    const hierarchicalTotals = new Map<string, number>();
+    
+    const calculateHierarchicalTotal = (meterId: string): number => {
+      if (hierarchicalTotals.has(meterId)) {
+        return hierarchicalTotals.get(meterId)!;
+      }
+
+      const meter = filteredMeters.find(m => m.id === meterId);
+      if (!meter) return 0;
+
+      const children = meterConnectionsMap.get(meterId) || [];
+      const childrenTotal = children.reduce((sum, childId) => {
+        return sum + calculateHierarchicalTotal(childId);
+      }, 0);
+
+      const columnTotals = meter.columnTotals || {};
+      const meterTotal = Object.values(columnTotals).reduce((sum: number, val: unknown) => {
+        return sum + Number(val);
+      }, 0);
+      const total = Number(meterTotal) - Number(childrenTotal);
+      
+      hierarchicalTotals.set(meterId, total);
+      return total;
+    };
+
+    // Calculate hierarchical totals for all meters
+    filteredMeters.forEach(meter => {
+      calculateHierarchicalTotal(meter.id);
+    });
+
+    // Apply hierarchical totals and assignments
+    const metersWithHierarchy = filteredMeters.map(meter => ({
       ...meter,
+      hierarchicalTotal: hierarchicalTotals.get(meter.id) || 0,
       assignment: meterAssignments.get(meter.id) || 'none'
     }));
 
-    const bulkMeters = metersWithAssignments.filter((m) => 
+    // Calculate category totals using assignments
+    const bulkMeters = metersWithHierarchy.filter((m) => 
       m.meter_type === "Bulk - Council Meter" || m.assignment === "grid_supply"
     );
-    const solarMeters = metersWithAssignments.filter((m) => 
+    const solarMeters = metersWithHierarchy.filter((m) => 
       m.meter_type === "Bulk - Solar" || m.assignment === "solar_energy"
     );
-    const tenantMeters = metersWithAssignments.filter((m) => m.meter_type === "Tenant");
+    const tenantMeters = metersWithHierarchy.filter((m) => m.meter_type === "Tenant");
 
-    const bulkTotal = bulkMeters.reduce((sum, m) => sum + m.totalKwh, 0);
-    const solarTotal = solarMeters.reduce((sum, m) => sum + m.totalKwh, 0);
-    const tenantTotal = tenantMeters.reduce((sum, m) => sum + m.totalKwh, 0);
+    // Use hierarchical totals for calculation
+    const bulkTotal = bulkMeters.reduce((sum, m) => {
+      const total = selectedMetersForSummation.has(m.id) ? m.hierarchicalTotal : 0;
+      return sum + total;
+    }, 0);
+    
+    const solarTotal = solarMeters.reduce((sum, m) => {
+      const total = selectedMetersForSummation.has(m.id) ? m.hierarchicalTotal : 0;
+      return sum + total;
+    }, 0);
+    
+    const tenantTotal = tenantMeters.reduce((sum, m) => {
+      const total = selectedMetersForSummation.has(m.id) ? m.hierarchicalTotal : 0;
+      return sum + total;
+    }, 0);
+
     const totalSupply = bulkTotal + solarTotal;
     const discrepancy = totalSupply - tenantTotal;
     const recoveryRate = totalSupply > 0 ? (tenantTotal / totalSupply) * 100 : 0;
@@ -2156,7 +2211,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         tenant_cost: tenantCost,
         total_revenue: totalRevenue,
         avg_cost_per_kwh: avgCostPerKwh,
-        meter_order: filteredMeters.map((m) => m.id),
+        meter_order: orderedMeterIds,
         created_by: user?.id,
       })
       .select()
@@ -2164,10 +2219,9 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
 
     if (runError) throw runError;
 
-    // Save meter results
-    const meterResults = filteredMeters.map((meter) => {
+    // Save meter results with hierarchical totals
+    const meterResults = metersWithHierarchy.map((meter) => {
       const revenueInfo = meter.revenueInfo;
-      const assignment = meterAssignments.get(meter.id) || 'none';
       return {
         reconciliation_run_id: savedRun.id,
         meter_id: meter.id,
@@ -2175,11 +2229,12 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         meter_type: meter.meter_type,
         meter_name: meter.name,
         location: meter.location,
-        assignment: assignment,
+        assignment: meter.assignment,
         total_kwh: meter.totalKwh,
         total_kwh_positive: meter.totalKwhPositive,
         total_kwh_negative: meter.totalKwhNegative,
         readings_count: meter.readingsCount,
+        hierarchical_total: meter.hierarchicalTotal,
         tariff_structure_id: meter.tariff_structure_id,
         tariff_name: revenueInfo?.tariffName || null,
         energy_cost: revenueInfo?.energyCost || 0,
