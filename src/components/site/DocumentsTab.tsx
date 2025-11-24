@@ -2223,8 +2223,8 @@ export default function DocumentsTab({ siteId, onUploadProgressChange }: Documen
               <p className="text-sm mt-1">Upload your first document to get started</p>
             </div>
           ) : (
-            <div className="border rounded-lg">
-              <Table>
+            <div className="border rounded-lg overflow-x-auto">
+              <Table className="min-w-[1200px]">
                 <TableHeader>
                   <TableRow className="bg-muted/30">
                     <TableHead colSpan={10} className="h-auto py-3">
