@@ -46,29 +46,70 @@ serve(async (req) => {
     const systemPrompt = documentType === 'municipal_account'
       ? `You are an expert at extracting electricity data from South African municipal accounts.
 
+CRITICAL MATCHING LOGIC FOR ACCOUNT DETAILS AND METER READINGS:
+
+The ACCOUNT DETAILS table contains:
+- CODE: Internal reference code
+- DESCRIPTION: Charge description (may just say "ELECTRICITY" for both kVA and kWh)
+- UNITS: The consumption amount for this charge
+- TARIFF: The rate/price per unit (CRITICAL: Extract this as the 'rate' field)
+- VALUE: The total charge amount
+
+The METER READINGS table contains:
+- METER NO.: Meter identifier
+- METER TYPE: "KVA" or "ELECTRICITY" or "kWh"
+- OLD READING: Previous meter value
+- NEW READING: Current meter value
+- CONSUMPTION: Calculated difference (NEW - OLD)
+
+MATCHING PROCESS:
+1. Look at the UNITS column in ACCOUNT DETAILS
+2. Match it to the CONSUMPTION column in METER READINGS
+3. If UNITS ≈ 534 and METER TYPE = "KVA", this is ELECTRICITY-POWER
+4. If UNITS ≈ 100,000+ and METER TYPE = "ELECTRICITY", this is ELECTRICITY-ENERGY
+
+EXAMPLE:
+METER READINGS shows:
+- Row 1: METER TYPE="KVA", CONSUMPTION=534.000
+- Row 2: METER TYPE="ELECTRICITY", CONSUMPTION=101356.000
+
+ACCOUNT DETAILS shows:
+- Row 1: DESCRIPTION="ELECTRICITY", UNITS=534.000, TARIFF=424.970000, VALUE=226933.98
+- Row 2: DESCRIPTION="ELECTRICITY", UNITS=101356.000, TARIFF=1.726500, VALUE=174991.13
+
+Then extract as:
+- ELECTRICITY-POWER: meter_number from KVA row, consumption=534.000 (from METER READINGS), rate=424.970000 (from ACCOUNT DETAILS TARIFF), amount=226933.98
+- ELECTRICITY-ENERGY: meter_number from ELECTRICITY row, consumption=101356.000 (from METER READINGS), rate=1.726500 (from ACCOUNT DETAILS TARIFF), amount=174991.13
+
 CRITICAL: Extract ONLY these three electricity charges from the document:
 
 1. **ELECTRICITY-BASIC** (Basic Charge):
    - Find the line item with description "ELECTRICITY-BASIC" in the ACCOUNT DETAILS table
-   - Extract the amount (e.g., R 17123.48)
+   - Extract the TARIFF as the rate (if available, otherwise use amount)
+   - Extract the VALUE as the amount (e.g., R 17123.48)
    - This is a fixed monthly charge, so there are NO meter readings for this item
    - Set unit to "Monthly"
    - Set supply to "Normal"
 
 2. **ELECTRICITY-POWER** (kVA/Demand Charge):
-   - Find the line item related to demand/power charges in the ACCOUNT DETAILS table
-   - Look for descriptions containing "ELECTRICITY" with kVA-related codes (e.g., CODE "002010") or "ELECTRICITY-POWER"
-   - Extract the amount (e.g., R 232883.56)
-   - From the METER READINGS table, find the meter row where METER TYPE = "KVA" or similar
-   - Extract the METER NO., OLD READING, NEW READING, and calculate CONSUMPTION (new - old)
+   - In ACCOUNT DETAILS, find the ELECTRICITY row where UNITS matches the KVA meter's CONSUMPTION (~534)
+   - Extract TARIFF as the rate (e.g., 424.970000)
+   - Extract VALUE as the amount (e.g., 226933.98)
+   - From METER READINGS, find where METER TYPE = "KVA"
+   - Extract: METER NO. as meter_number, OLD READING as old_reading, NEW READING as new_reading, CONSUMPTION as consumption
+   - CRITICAL: consumption field MUST come from METER READINGS table, NOT from ACCOUNT DETAILS UNITS
+   - Set description to "ELECTRICITY-POWER"
    - Set unit to "kVA"
    - Set supply to "Normal"
 
 3. **ELECTRICITY-ENERGY** (kWh Charge):
-   - Find the line item with description "ELECTRICITY-ENERGY" in the ACCOUNT DETAILS table
-   - Extract the amount (e.g., R 188304.18)
-   - From the METER READINGS table, find the meter row where METER TYPE = "ELECTRICITY" or "kWh" or similar energy indicator
-   - Extract the METER NO., OLD READING, NEW READING, and calculate CONSUMPTION (new - old)
+   - In ACCOUNT DETAILS, find the ELECTRICITY row where UNITS matches the ELECTRICITY meter's CONSUMPTION (~100,000+)
+   - Extract TARIFF as the rate (e.g., 1.726500)
+   - Extract VALUE as the amount (e.g., 174991.13)
+   - From METER READINGS, find where METER TYPE = "ELECTRICITY" or "kWh"
+   - Extract: METER NO. as meter_number, OLD READING as old_reading, NEW READING as new_reading, CONSUMPTION as consumption
+   - CRITICAL: consumption field MUST come from METER READINGS table, NOT from ACCOUNT DETAILS UNITS
+   - Set description to "ELECTRICITY-ENERGY"
    - Set unit to "kWh"
    - Set supply to "Normal"
 
@@ -78,11 +119,7 @@ Also extract:
 - Billing period (start and end dates from the document header)
 - Total amount (sum of the three electricity charges, or from document total)
 - Account reference number
-- Supply authority/municipality name
-
-The METER READINGS section typically has columns: METER NO., METER TYPE, OLD READING, NEW READING.
-The ACCOUNT DETAILS section has the line item charges with CODE, DESCRIPTION, and AMOUNT.
-Correlate these two tables to provide complete information for kVA and kWh charges.`
+- Supply authority/municipality name`
       : `You are an expert at extracting data from tenant electricity bills.
 
 CRITICAL: Extract ALL line items from the billing table in the document. Each row in the table represents a separate charge and should become a line item.
@@ -202,12 +239,14 @@ Return the data in a structured format with all line items in an array.`;
                       consumption: { 
                         type: "number", 
                         description: documentType === 'municipal_account'
-                          ? "Consumption from METER READINGS table (new_reading - old_reading), for kVA and kWh charges only"
+                          ? "CRITICAL: Extract ONLY from METER READINGS table CONSUMPTION column (NOT from ACCOUNT DETAILS UNITS). This is new_reading - old_reading from the meter data."
                           : "Consumption/units used (should equal current - previous)"
                       },
                       rate: { 
                         type: "number", 
-                        description: "Rate/tariff per unit in rands or cents" 
+                        description: documentType === 'municipal_account'
+                          ? "CRITICAL: Extract from TARIFF column in ACCOUNT DETAILS table (e.g., 424.970000 for kVA, 1.726500 for kWh). This is the price per unit."
+                          : "Rate/tariff per unit in rands or cents"
                       },
                       amount: { 
                         type: "number", 
