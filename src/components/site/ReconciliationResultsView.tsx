@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -128,22 +128,21 @@ export default function ReconciliationResultsView({
 }: ReconciliationResultsViewProps) {
   const [expandedMeters, setExpandedMeters] = useState<Set<string>>(new Set());
 
-  // Memoize handlers to prevent re-creation on every render
-  const handleEnergyTabClick = useCallback(() => {
+  const handleEnergyTabClick = () => {
     if (isLoadingEnergy) {
       onCancelReconciliation?.();
     } else if (!meters || meters.length === 0) {
       onReconcileEnergy?.();
     }
-  }, [isLoadingEnergy, meters?.length, onCancelReconciliation, onReconcileEnergy]);
+  };
 
-  const handleRevenueTabClick = useCallback(() => {
+  const handleRevenueTabClick = () => {
     if (isLoadingRevenue) {
       onCancelReconciliation?.();
     } else if (!revenueData) {
       onReconcileRevenue?.();
     }
-  }, [isLoadingRevenue, revenueData, onCancelReconciliation, onReconcileRevenue]);
+  };
 
   const toggleMeterExpanded = (meterId: string) => {
     setExpandedMeters((prev) => {
