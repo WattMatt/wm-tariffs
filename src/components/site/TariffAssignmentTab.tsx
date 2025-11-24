@@ -13,7 +13,7 @@ import { FileCheck2, AlertCircle, CheckCircle2, DollarSign, Eye, FileText, Arrow
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import TariffDetailsDialog from "@/components/tariffs/TariffDetailsDialog";
@@ -120,6 +120,7 @@ export default function TariffAssignmentTab({
   const [chartDialogCalculations, setChartDialogCalculations] = useState<Record<string, any>>({});
   const [viewingAllDocsCalculations, setViewingAllDocsCalculations] = useState<Record<string, any>>({});
   const [selectedChartMetric, setSelectedChartMetric] = useState<string>('total');
+  const [meterDiscontinuities, setMeterDiscontinuities] = useState<any[]>([]);
 
   // Apply date range filter
   const applyDateFilter = () => {
@@ -294,6 +295,26 @@ export default function TariffAssignmentTab({
     return { winterAvg, summerAvg };
   };
 
+  // Helper to detect meter reading discontinuities
+  const detectDiscontinuities = (docs: DocumentShopNumber[], metric: string) => {
+    const issues = [];
+    for (let i = 0; i < docs.length - 1; i++) {
+      const currentReadings = extractMeterReadings(docs[i], metric);
+      const nextReadings = extractMeterReadings(docs[i + 1], metric);
+      
+      if (currentReadings.current !== null && nextReadings.previous !== null && 
+          currentReadings.current !== nextReadings.previous) {
+        issues.push({
+          period: format(new Date(docs[i].periodEnd), 'MMM yyyy'),
+          currentReading: currentReadings.current,
+          nextPreviousReading: nextReadings.previous,
+          difference: nextReadings.previous - currentReadings.current
+        });
+      }
+    }
+    return issues;
+  };
+
   // Helper function for Analysis tab: uses selected metric
   const prepareAnalysisData = (docs: DocumentShopNumber[], metric: string = 'total') => {
     const winterMonths = [6, 7, 8];
@@ -357,16 +378,24 @@ export default function TariffAssignmentTab({
       }
     });
     
-    return sortedDocs.map((doc) => {
+    const chartData = sortedDocs.map((doc, index) => {
       const metricValue = extractMetricValue(doc, metric);
       const readings = extractMeterReadings(doc, metric);
+      
+      // Check if current reading matches next period's previous reading
+      const nextReadings = index < sortedDocs.length - 1 ? extractMeterReadings(sortedDocs[index + 1], metric) : null;
+      const isDiscontinuous = nextReadings && readings.current !== null && nextReadings.previous !== null && 
+                              readings.current !== nextReadings.previous;
+      
       const dataPoint: any = {
         period: new Date(doc.periodEnd).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }),
         amount: metricValue !== null ? metricValue : doc.totalAmount,
         documentAmount: doc.totalAmount || null,
         documentId: doc.documentId,
-        previousReading: readings.previous,
-        currentReading: readings.current,
+        meterReading: readings.current,
+        consumption: readings.current !== null && readings.previous !== null ? 
+                    readings.current - readings.previous : null,
+        isDiscontinuous
       };
       
       const matchingSegment = segments.find(seg => 
@@ -383,6 +412,10 @@ export default function TariffAssignmentTab({
       
       return dataPoint;
     });
+
+    const discontinuities = detectDiscontinuities(sortedDocs, metric);
+    
+    return { chartData, discontinuities };
   };
 
   // Helper function for Comparison tab: shows reconciliation costs only when available
@@ -2856,6 +2889,7 @@ export default function TariffAssignmentTab({
         setSelectedChartMeter(null);
         setChartDialogCalculations({});
         setSelectedChartMetric('total');
+        setMeterDiscontinuities([]);
       }}>
         <DialogContent className="max-w-6xl max-h-[90vh]">
           <DialogHeader>
@@ -2877,7 +2911,9 @@ export default function TariffAssignmentTab({
                 const costsMap = getReconciliationCostsMap(selectedChartMeter.meter.id, selectedChartMeter.docs);
                 chartData = prepareComparisonData(selectedChartMeter.docs, costsMap);
               } else if (showDocumentCharts) {
-                chartData = prepareAnalysisData(selectedChartMeter.docs, selectedChartMetric);
+                const result = prepareAnalysisData(selectedChartMeter.docs, selectedChartMetric);
+                chartData = result.chartData;
+                setMeterDiscontinuities(result.discontinuities);
               } else {
                 chartData = prepareAssignmentsData(selectedChartMeter.docs, chartDialogCalculations);
               }
@@ -3123,24 +3159,50 @@ export default function TariffAssignmentTab({
                             <Line
                               yAxisId="right"
                               type="monotone"
-                              dataKey="previousReading"
+                              dataKey="meterReading"
                               stroke="hsl(var(--chart-3))"
-                              strokeWidth={2}
-                              name="Previous Reading"
-                              connectNulls
-                            />
-                            <Line
-                              yAxisId="right"
-                              type="monotone"
-                              dataKey="currentReading"
-                              stroke="hsl(var(--chart-4))"
-                              strokeWidth={2}
-                              name="Current Reading"
-                              connectNulls
+                              strokeWidth={3}
+                              name="Meter Reading"
+                              connectNulls={false}
+                              dot={(props: any) => {
+                                const { payload, cx, cy } = props;
+                                if (payload.isDiscontinuous) {
+                                  return (
+                                    <circle
+                                      cx={cx}
+                                      cy={cy}
+                                      r={6}
+                                      fill="hsl(var(--destructive))"
+                                      stroke="white"
+                                      strokeWidth={2}
+                                    />
+                                  );
+                                }
+                                return <circle cx={cx} cy={cy} r={4} fill="hsl(var(--chart-3))" />;
+                              }}
                             />
                           </ComposedChart>
                         </ResponsiveContainer>
                       </ChartContainer>
+
+                      {/* Meter Reading Discontinuities Alert */}
+                      {showDocumentCharts && meterDiscontinuities && meterDiscontinuities.length > 0 && (
+                        <Alert variant="destructive" className="mt-4">
+                          <AlertCircle className="h-4 w-4" />
+                          <AlertTitle>Meter Reading Discontinuities Detected</AlertTitle>
+                          <AlertDescription>
+                            <div className="space-y-1 mt-2">
+                              {meterDiscontinuities.map((issue: any, idx: number) => (
+                                <div key={idx} className="text-sm">
+                                  <strong>{issue.period}:</strong> Current reading {issue.currentReading.toLocaleString()} 
+                                  → Next period starts at {issue.nextPreviousReading.toLocaleString()} 
+                                  (Gap: {issue.difference > 0 ? '+' : ''}{issue.difference.toLocaleString()})
+                                </div>
+                              ))}
+                            </div>
+                          </AlertDescription>
+                        </Alert>
+                      )}
                     </CardContent>
                   </Card>
 
