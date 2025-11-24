@@ -92,6 +92,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
   const [revenueReconciliationEnabled, setRevenueReconciliationEnabled] = useState(false);
   const [isCalculatingRevenue, setIsCalculatingRevenue] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
+  const [isBulkProcessing, setIsBulkProcessing] = useState(false);
   
   // Cancel reconciliation ref
   const cancelReconciliationRef = useRef(false);
@@ -264,7 +266,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     loadReconciliationSettings();
   }, [siteId]);
 
-  // Fetch document date ranges
+  // Fetch document date ranges (ONLY municipal bills)
   useEffect(() => {
     const fetchDocumentDateRanges = async () => {
       setIsLoadingDocuments(true);
@@ -280,6 +282,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           )
         `)
         .eq('site_id', siteId)
+        .eq('document_type', 'municipal_account')
         .not('document_extractions.period_start', 'is', null)
         .not('document_extractions.period_end', 'is', null);
 
@@ -300,10 +303,6 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
             period_end: doc.document_extractions[0].period_end,
           }))
           .sort((a, b) => {
-            // Sort by document type first, then by period_start descending
-            if (a.document_type !== b.document_type) {
-              return a.document_type.localeCompare(b.document_type);
-            }
             return new Date(b.period_start).getTime() - new Date(a.period_start).getTime();
           });
 
@@ -1888,6 +1887,308 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     }
   };
 
+  const handleBulkReconcile = async () => {
+    if (selectedDocumentIds.length === 0) {
+      toast.error("Please select at least one period to reconcile");
+      return;
+    }
+
+    setIsBulkProcessing(true);
+
+    try {
+      let successCount = 0;
+      let errorCount = 0;
+      const errors: string[] = [];
+
+      for (const docId of selectedDocumentIds) {
+        try {
+          const doc = documentDateRanges.find(d => d.id === docId);
+          if (!doc) continue;
+
+          const startDate = new Date(doc.period_start);
+          startDate.setHours(0, 0, 0, 0);
+          
+          const endDate = new Date(doc.period_end);
+          endDate.setDate(endDate.getDate() - 1);
+          endDate.setHours(23, 59, 0, 0);
+
+          // Set dates temporarily for this reconciliation
+          setDateFrom(startDate);
+          setDateTo(endDate);
+          setTimeFrom("00:00");
+          setTimeTo("23:59");
+
+          // Run reconciliation for this period
+          await handleReconcileForPeriod(startDate, endDate, doc.file_name);
+          successCount++;
+
+        } catch (error) {
+          console.error(`Error processing ${docId}:`, error);
+          errorCount++;
+          const doc = documentDateRanges.find(d => d.id === docId);
+          errors.push(doc?.file_name || docId);
+        }
+      }
+
+      if (successCount > 0) {
+        toast.success(
+          `Bulk reconciliation complete! ${successCount} saved${errorCount > 0 ? `, ${errorCount} failed` : ''}.`
+        );
+      }
+
+      if (errors.length > 0) {
+        toast.error(`Failed periods: ${errors.join(', ')}`);
+      }
+
+      setSelectedDocumentIds([]);
+    } catch (error) {
+      console.error("Bulk reconciliation error:", error);
+      toast.error("Failed to complete bulk reconciliation");
+    } finally {
+      setIsBulkProcessing(false);
+    }
+  };
+
+  const handleReconcileForPeriod = async (startDate: Date, endDate: Date, fileName: string) => {
+    // Similar logic to handleReconcile, but saves automatically
+    if (!previewData) {
+      throw new Error("Please preview data first");
+    }
+
+    if (selectedColumns.size === 0) {
+      throw new Error("Please select at least one column to calculate");
+    }
+
+    const fullDateTimeFrom = getFullDateTime(startDate, "00:00");
+    const fullDateTimeTo = getFullDateTime(endDate, "23:59");
+
+    // Fetch site details including supply authority
+    const { data: siteData, error: siteError } = await supabase
+      .from("sites")
+      .select("id, name, supply_authority_id")
+      .eq("id", siteId)
+      .single();
+
+    if (siteError || !siteData?.supply_authority_id) {
+      throw new Error("Site supply authority not configured");
+    }
+
+    // Fetch all meters for the site
+    const { data: meters, error: metersError } = await supabase
+      .from("meters")
+      .select("id, meter_number, meter_type, tariff_structure_id, assigned_tariff_name, name, location")
+      .eq("site_id", siteId);
+
+    if (metersError || !meters || meters.length === 0) {
+      throw new Error("No meters found for this site");
+    }
+
+    // Process meters (simplified, no batching for bulk)
+    const meterData = await Promise.all(
+      meters.map(async (meter) => {
+        const { data: readings } = await supabase
+          .from("meter_readings")
+          .select("kwh_value, reading_timestamp, metadata")
+          .eq("meter_id", meter.id)
+          .gte("reading_timestamp", fullDateTimeFrom)
+          .lte("reading_timestamp", fullDateTimeTo)
+          .order("reading_timestamp", { ascending: true });
+
+        const uniqueReadings = readings ? 
+          Array.from(
+            new Map(readings.map(r => [r.reading_timestamp, r])).values()
+          ) : [];
+
+        let totalKwh = 0;
+        let totalKwhPositive = 0;
+        let totalKwhNegative = 0;
+        const columnTotals: Record<string, number> = {};
+        const columnMaxValues: Record<string, number> = {};
+
+        if (uniqueReadings.length > 0) {
+          totalKwh = uniqueReadings.reduce((sum, r) => sum + Number(r.kwh_value), 0);
+
+          const columnValues: Record<string, number[]> = {};
+          uniqueReadings.forEach(reading => {
+            const importedFields = (reading.metadata as any)?.imported_fields || {};
+            Object.entries(importedFields).forEach(([key, value]) => {
+              if (key.toLowerCase().includes('time') || key.toLowerCase().includes('date')) return;
+              if (!selectedColumns.has(key)) return;
+              
+              const numValue = Number(value);
+              if (!isNaN(numValue) && value !== null && value !== '') {
+                if (!columnValues[key]) {
+                  columnValues[key] = [];
+                }
+                columnValues[key].push(numValue);
+              }
+            });
+          });
+
+          Object.entries(columnValues).forEach(([key, values]) => {
+            const operation = columnOperations.get(key) || 'sum';
+            const factor = Number(columnFactors.get(key) || 1);
+            
+            let result = 0;
+            switch (operation) {
+              case 'sum':
+                result = values.reduce((sum, val) => sum + val, 0);
+                break;
+              case 'average':
+                result = values.reduce((sum, val) => sum + val, 0) / values.length;
+                break;
+              case 'max':
+                result = Math.max(...values);
+                break;
+              case 'min':
+                result = Math.min(...values);
+                break;
+            }
+            
+            result = result * factor;
+            
+            if (key.toLowerCase().includes('kva') || key.toLowerCase().includes('s (kva)')) {
+              columnMaxValues[key] = result;
+            } else {
+              columnTotals[key] = result;
+            }
+          });
+
+          Object.values(columnTotals).forEach((colTotal) => {
+            if (colTotal > 0) {
+              totalKwhPositive += colTotal;
+            } else if (colTotal < 0) {
+              totalKwhNegative += colTotal;
+            }
+          });
+        }
+
+        // Calculate revenue if meter has tariff assignment
+        let revenueInfo = null;
+        if (meter.assigned_tariff_name && siteData.supply_authority_id) {
+          const costResult = await calculateMeterCostAcrossPeriods(
+            meter.id,
+            siteData.supply_authority_id,
+            meter.assigned_tariff_name,
+            new Date(fullDateTimeFrom),
+            new Date(fullDateTimeTo),
+            totalKwhPositive
+          );
+          revenueInfo = costResult;
+        }
+
+        return {
+          ...meter,
+          readingsCount: uniqueReadings.length,
+          totalKwh,
+          totalKwhPositive,
+          totalKwhNegative,
+          columnTotals,
+          columnMaxValues,
+          revenueInfo,
+        };
+      })
+    );
+
+    const filteredMeters = meterData.filter((m) => m.readingsCount > 0);
+
+    // Get assignment for each meter
+    const metersWithAssignments = filteredMeters.map(meter => ({
+      ...meter,
+      assignment: meterAssignments.get(meter.id) || 'none'
+    }));
+
+    const bulkMeters = metersWithAssignments.filter((m) => 
+      m.meter_type === "Bulk - Council Meter" || m.assignment === "grid_supply"
+    );
+    const solarMeters = metersWithAssignments.filter((m) => 
+      m.meter_type === "Bulk - Solar" || m.assignment === "solar_energy"
+    );
+    const tenantMeters = metersWithAssignments.filter((m) => m.meter_type === "Tenant");
+
+    const bulkTotal = bulkMeters.reduce((sum, m) => sum + m.totalKwh, 0);
+    const solarTotal = solarMeters.reduce((sum, m) => sum + m.totalKwh, 0);
+    const tenantTotal = tenantMeters.reduce((sum, m) => sum + m.totalKwh, 0);
+    const totalSupply = bulkTotal + solarTotal;
+    const discrepancy = totalSupply - tenantTotal;
+    const recoveryRate = totalSupply > 0 ? (tenantTotal / totalSupply) * 100 : 0;
+
+    const gridSupplyCost = bulkMeters.reduce((sum, m) => sum + (m.revenueInfo?.totalCost || 0), 0);
+    const solarCost = solarMeters.reduce((sum, m) => sum + (m.revenueInfo?.totalCost || 0), 0);
+    const tenantCost = tenantMeters.reduce((sum, m) => sum + (m.revenueInfo?.totalCost || 0), 0);
+    const totalRevenue = tenantCost;
+    const avgCostPerKwh = totalSupply > 0 ? (gridSupplyCost + solarCost) / totalSupply : 0;
+
+    const runName = `${fileName} - ${format(startDate, "MMM yyyy")}`;
+
+    // Get current user
+    const { data: { user } } = await supabase.auth.getUser();
+
+    // Save reconciliation run
+    const { data: savedRun, error: runError } = await supabase
+      .from("reconciliation_runs")
+      .insert({
+        site_id: siteId,
+        run_name: runName,
+        run_date: new Date().toISOString(),
+        date_from: fullDateTimeFrom,
+        date_to: fullDateTimeTo,
+        bulk_total: bulkTotal,
+        solar_total: solarTotal,
+        tenant_total: tenantTotal,
+        total_supply: totalSupply,
+        recovery_rate: recoveryRate,
+        discrepancy: discrepancy,
+        revenue_enabled: true,
+        grid_supply_cost: gridSupplyCost,
+        solar_cost: solarCost,
+        tenant_cost: tenantCost,
+        total_revenue: totalRevenue,
+        avg_cost_per_kwh: avgCostPerKwh,
+        meter_order: filteredMeters.map((m) => m.id),
+        created_by: user?.id,
+      })
+      .select()
+      .single();
+
+    if (runError) throw runError;
+
+    // Save meter results
+    const meterResults = filteredMeters.map((meter) => {
+      const revenueInfo = meter.revenueInfo;
+      const assignment = meterAssignments.get(meter.id) || 'none';
+      return {
+        reconciliation_run_id: savedRun.id,
+        meter_id: meter.id,
+        meter_number: meter.meter_number,
+        meter_type: meter.meter_type,
+        meter_name: meter.name,
+        location: meter.location,
+        assignment: assignment,
+        total_kwh: meter.totalKwh,
+        total_kwh_positive: meter.totalKwhPositive,
+        total_kwh_negative: meter.totalKwhNegative,
+        readings_count: meter.readingsCount,
+        tariff_structure_id: meter.tariff_structure_id,
+        tariff_name: revenueInfo?.tariffName || null,
+        energy_cost: revenueInfo?.energyCost || 0,
+        fixed_charges: revenueInfo?.fixedCharges || 0,
+        demand_charges: revenueInfo?.demandCharges || 0,
+        total_cost: revenueInfo?.totalCost || 0,
+        avg_cost_per_kwh: revenueInfo?.avgCostPerKwh || 0,
+        cost_calculation_error: revenueInfo?.errorMessage || null,
+        column_totals: meter.columnTotals || null,
+        column_max_values: meter.columnMaxValues || null,
+      };
+    });
+
+    const { error: resultsError } = await supabase
+      .from("reconciliation_meter_results")
+      .insert(meterResults);
+
+    if (resultsError) throw resultsError;
+  };
+
   const downloadMeterCSV = async (meter: any) => {
     try {
       if (!dateFrom || !dateTo) {
@@ -2046,7 +2347,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label>Document Period</Label>
+            <Label>Document Period (Municipal Bills Only)</Label>
             <Select
               disabled={isLoadingDateRanges || isLoadingDocuments || documentDateRanges.length === 0 || !totalDateRange.earliest || !totalDateRange.latest}
               onValueChange={(value) => {
@@ -2074,37 +2375,77 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                     : isLoadingDocuments 
                     ? "Loading document periods..." 
                     : documentDateRanges.length === 0 
-                    ? "No document periods available" 
-                    : "Select a document period..."
+                    ? "No municipal bill periods available" 
+                    : "Select a municipal bill period..."
                 } />
               </SelectTrigger>
               <SelectContent className="bg-popover z-50">
-                {Object.entries(
-                  documentDateRanges.reduce((acc, doc) => {
-                    const typeLabel = doc.document_type === 'municipal_account' 
-                      ? 'Municipal Accounts' 
-                      : doc.document_type === 'tenant_bill'
-                      ? 'Tenant Bills'
-                      : doc.document_type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                    
-                    if (!acc[typeLabel]) {
-                      acc[typeLabel] = [];
-                    }
-                    acc[typeLabel].push(doc);
-                    return acc;
-                  }, {} as Record<string, typeof documentDateRanges>)
-                ).map(([type, docs]) => (
-                  <SelectGroup key={type}>
-                    <SelectLabel>{type}</SelectLabel>
-                    {docs.map((doc) => (
-                      <SelectItem key={doc.id} value={doc.id}>
-                        {doc.file_name} ({format(new Date(doc.period_start), "PP")} - {format(new Date(doc.period_end), "PP")})
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
+                {documentDateRanges.map((doc) => (
+                  <SelectItem key={doc.id} value={doc.id}>
+                    {doc.file_name} ({format(new Date(doc.period_start), "PP")} - {format(new Date(doc.period_end), "PP")})
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Bulk Reconciliation - Select Multiple Periods</Label>
+            <div className="border rounded-md p-3 space-y-2 max-h-[300px] overflow-y-auto bg-background">
+              {documentDateRanges && documentDateRanges.length > 0 ? (
+                documentDateRanges.map((doc) => (
+                  <div key={doc.id} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`bulk-${doc.id}`}
+                      checked={selectedDocumentIds.includes(doc.id)}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setSelectedDocumentIds([...selectedDocumentIds, doc.id]);
+                        } else {
+                          setSelectedDocumentIds(selectedDocumentIds.filter(id => id !== doc.id));
+                        }
+                      }}
+                    />
+                    <label htmlFor={`bulk-${doc.id}`} className="text-sm cursor-pointer flex-1">
+                      {doc.file_name} ({format(new Date(doc.period_start), "MMM d, yyyy")} - {format(new Date(doc.period_end), "MMM d, yyyy")})
+                    </label>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-muted-foreground">No municipal bill periods available</p>
+              )}
+            </div>
+            {selectedDocumentIds.length > 0 && (
+              <div className="flex items-center justify-between pt-2">
+                <span className="text-sm text-muted-foreground">
+                  {selectedDocumentIds.length} period(s) selected
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSelectedDocumentIds([])}
+                >
+                  Clear Selection
+                </Button>
+              </div>
+            )}
+            {selectedDocumentIds.length > 0 && (
+              <Button
+                onClick={handleBulkReconcile}
+                disabled={isBulkProcessing || !previewData || selectedColumns.size === 0}
+                className="w-full"
+                variant="default"
+              >
+                {isBulkProcessing ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Processing {selectedDocumentIds.length} Reconciliation(s)...
+                  </>
+                ) : (
+                  `Run & Save ${selectedDocumentIds.length} Reconciliation(s)`
+                )}
+              </Button>
+            )}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
