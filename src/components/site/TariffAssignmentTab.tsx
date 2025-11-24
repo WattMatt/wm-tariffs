@@ -2917,9 +2917,7 @@ export default function TariffAssignmentTab({
               
               // Update chart data with selected metric
               const updatedChartData = showDocumentCharts ? chartData.map((point: any) => {
-                const doc = selectedChartMeter.docs.find(d => 
-                  new Date(d.periodEnd).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }) === point.period
-                );
+                const doc = selectedChartMeter.docs.find(d => d.documentId === point.documentId);
                 const metricValue = extractMetricValue(doc, selectedChartMetric);
                 return {
                   ...point,
@@ -2954,34 +2952,37 @@ export default function TariffAssignmentTab({
               
               return (
                 <div className="space-y-6">
-                  {/* Metric Selection */}
-                  {showDocumentCharts && (
-                    <div className="mb-4">
-                      <Label htmlFor="metric-select" className="text-sm font-medium mb-2 block">
-                        Display Metric
-                      </Label>
-                      <Select value={selectedChartMetric} onValueChange={setSelectedChartMetric}>
-                        <SelectTrigger id="metric-select" className="w-full max-w-md">
-                          <SelectValue placeholder="Select metric to display" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="total">Total Amount (All Charges)</SelectItem>
-                          <SelectItem value="basic">Basic Charge (Fixed Monthly)</SelectItem>
-                          <SelectItem value="kva-charge">kVA Charge (Demand)</SelectItem>
-                          <SelectItem value="kwh-charge">kWh Charge (Energy)</SelectItem>
-                          <SelectItem value="kva-consumption">kVA Consumption</SelectItem>
-                          <SelectItem value="kwh-consumption">kWh Consumption</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-                  
                   {/* Enlarged Chart */}
                   <Card>
                     <CardHeader className="pb-4">
-                      <CardTitle>
-                        {showDocumentCharts ? `${getMetricLabel(selectedChartMetric)} Over Time` : 'Billing Cost Over Time'}
-                      </CardTitle>
+                      <div className="flex justify-between items-start gap-4">
+                        <CardTitle>
+                          {showDocumentCharts ? `${getMetricLabel(selectedChartMetric)} Over Time` : 'Billing Cost Over Time'}
+                        </CardTitle>
+                        
+                        {/* Metric Selection Dropdown - Inside Card */}
+                        {showDocumentCharts && (
+                          <div className="flex items-center gap-2">
+                            <Label htmlFor="metric-select" className="text-sm font-medium whitespace-nowrap">
+                              Metric:
+                            </Label>
+                            <Select value={selectedChartMetric} onValueChange={setSelectedChartMetric}>
+                              <SelectTrigger id="metric-select" className="w-[240px]">
+                                <SelectValue placeholder="Select metric" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="total">Total Amount</SelectItem>
+                                <SelectItem value="basic">Basic Charge</SelectItem>
+                                <SelectItem value="kva-charge">kVA Charge</SelectItem>
+                                <SelectItem value="kwh-charge">kWh Charge</SelectItem>
+                                <SelectItem value="kva-consumption">kVA Consumption</SelectItem>
+                                <SelectItem value="kwh-consumption">kWh Consumption</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+                      </div>
+                      
                       {hasMixedCurrencies && (
                         <Alert variant="destructive" className="mt-2">
                           <AlertCircle className="h-4 w-4" />
