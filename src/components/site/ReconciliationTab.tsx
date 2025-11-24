@@ -266,7 +266,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     loadReconciliationSettings();
   }, [siteId]);
 
-  // Fetch document date ranges (ONLY municipal bills)
+  // Fetch document date ranges (Municipal and Tenant Bills)
   useEffect(() => {
     const fetchDocumentDateRanges = async () => {
       setIsLoadingDocuments(true);
@@ -282,7 +282,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           )
         `)
         .eq('site_id', siteId)
-        .eq('document_type', 'municipal_account')
+        .in('document_type', ['municipal_account', 'tenant_bill'])
         .not('document_extractions.period_start', 'is', null)
         .not('document_extractions.period_end', 'is', null);
 
@@ -2347,7 +2347,66 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label>Document Period (Municipal Bills Only)</Label>
+            <Label>Bulk Reconciliation - Select Multiple Periods</Label>
+            <div className="border rounded-md p-3 space-y-2 max-h-[300px] overflow-y-auto bg-background">
+              {documentDateRanges && documentDateRanges.length > 0 ? (
+                documentDateRanges.map((doc) => (
+                  <div key={doc.id} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`bulk-${doc.id}`}
+                      checked={selectedDocumentIds.includes(doc.id)}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setSelectedDocumentIds([...selectedDocumentIds, doc.id]);
+                        } else {
+                          setSelectedDocumentIds(selectedDocumentIds.filter(id => id !== doc.id));
+                        }
+                      }}
+                    />
+                    <label htmlFor={`bulk-${doc.id}`} className="text-sm cursor-pointer flex-1">
+                      {doc.file_name} ({format(new Date(doc.period_start), "MMM d, yyyy")} - {format(new Date(doc.period_end), "MMM d, yyyy")})
+                    </label>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-muted-foreground">No document periods available</p>
+              )}
+            </div>
+            {selectedDocumentIds.length > 0 && (
+              <div className="flex items-center justify-between pt-2">
+                <span className="text-sm text-muted-foreground">
+                  {selectedDocumentIds.length} period(s) selected
+                </span>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSelectedDocumentIds([])}
+                  >
+                    Clear Selection
+                  </Button>
+                  <Button
+                    onClick={handleBulkReconcile}
+                    disabled={isBulkProcessing || !previewData || selectedColumns.size === 0}
+                    size="sm"
+                    variant="default"
+                  >
+                    {isBulkProcessing ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      `Run & Save ${selectedDocumentIds.length} Reconciliation(s)`
+                    )}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label>Document Period</Label>
             <Select
               disabled={isLoadingDateRanges || isLoadingDocuments || documentDateRanges.length === 0 || !totalDateRange.earliest || !totalDateRange.latest}
               onValueChange={(value) => {
@@ -2375,8 +2434,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                     : isLoadingDocuments 
                     ? "Loading document periods..." 
                     : documentDateRanges.length === 0 
-                    ? "No municipal bill periods available" 
-                    : "Select a municipal bill period..."
+                    ? "No document periods available" 
+                    : "Select a document period..."
                 } />
               </SelectTrigger>
               <SelectContent className="bg-popover z-50">
@@ -2387,65 +2446,6 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                 ))}
               </SelectContent>
             </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Bulk Reconciliation - Select Multiple Periods</Label>
-            <div className="border rounded-md p-3 space-y-2 max-h-[300px] overflow-y-auto bg-background">
-              {documentDateRanges && documentDateRanges.length > 0 ? (
-                documentDateRanges.map((doc) => (
-                  <div key={doc.id} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={`bulk-${doc.id}`}
-                      checked={selectedDocumentIds.includes(doc.id)}
-                      onCheckedChange={(checked) => {
-                        if (checked) {
-                          setSelectedDocumentIds([...selectedDocumentIds, doc.id]);
-                        } else {
-                          setSelectedDocumentIds(selectedDocumentIds.filter(id => id !== doc.id));
-                        }
-                      }}
-                    />
-                    <label htmlFor={`bulk-${doc.id}`} className="text-sm cursor-pointer flex-1">
-                      {doc.file_name} ({format(new Date(doc.period_start), "MMM d, yyyy")} - {format(new Date(doc.period_end), "MMM d, yyyy")})
-                    </label>
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm text-muted-foreground">No municipal bill periods available</p>
-              )}
-            </div>
-            {selectedDocumentIds.length > 0 && (
-              <div className="flex items-center justify-between pt-2">
-                <span className="text-sm text-muted-foreground">
-                  {selectedDocumentIds.length} period(s) selected
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setSelectedDocumentIds([])}
-                >
-                  Clear Selection
-                </Button>
-              </div>
-            )}
-            {selectedDocumentIds.length > 0 && (
-              <Button
-                onClick={handleBulkReconcile}
-                disabled={isBulkProcessing || !previewData || selectedColumns.size === 0}
-                className="w-full"
-                variant="default"
-              >
-                {isBulkProcessing ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Processing {selectedDocumentIds.length} Reconciliation(s)...
-                  </>
-                ) : (
-                  `Run & Save ${selectedDocumentIds.length} Reconciliation(s)`
-                )}
-              </Button>
-            )}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
