@@ -1864,56 +1864,41 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         if (siteData?.supply_authority_id) {
           const meterRevenues = new Map(reconciliationData.revenueData.meterRevenues);
           
-          for (const meter of allMeters) {
-            const hierarchicalTotal = hierarchicalTotals.get(meter.id);
-            
-            // If meter has hierarchical total but no revenue calculated
-            if (hierarchicalTotal && hierarchicalTotal > 0 && !meterRevenues.has(meter.id)) {
-              // Meter must have a tariff assigned
-              if (meter.assigned_tariff_name) {
-                try {
+          // Process all parent meters in parallel
+          const parentMeterPromises = allMeters
+            .filter(meter => {
+              const hierarchicalTotal = hierarchicalTotals.get(meter.id);
+              return hierarchicalTotal && hierarchicalTotal > 0 && !meterRevenues.has(meter.id);
+            })
+            .map(async (meter) => {
+              const hierarchicalTotal = hierarchicalTotals.get(meter.id)!;
+              
+              try {
+                if (meter.assigned_tariff_name) {
                   const costResult = await calculateMeterCostAcrossPeriods(
                     meter.id,
                     siteData.supply_authority_id,
                     meter.assigned_tariff_name,
                     new Date(getFullDateTime(dateFrom, timeFrom)),
                     new Date(getFullDateTime(dateTo, timeTo)),
-                    hierarchicalTotal  // Use hierarchical total!
+                    hierarchicalTotal
                   );
-                  
-                  // Store the calculated revenue
-                  meterRevenues.set(meter.id, costResult);
-                  
-                  console.log(`Calculated revenue for parent meter ${meter.meter_number} using hierarchical total ${hierarchicalTotal.toFixed(2)} kWh`);
-                } catch (error) {
-                  console.error(`Failed to calculate revenue for parent meter ${meter.meter_number}:`, error);
-                  meterRevenues.set(meter.id, {
-                    hasError: true,
-                    errorMessage: error instanceof Error ? error.message : 'Cost calculation failed',
-                    totalCost: 0,
-                    energyCost: 0,
-                    fixedCharges: 0,
-                    demandCharges: 0,
-                    avgCostPerKwh: 0,
-                    tariffName: meter.assigned_tariff_name
-                  });
-                }
-              } else if (meter.tariff_structure_id) {
-                try {
+                  return { meter, costResult };
+                } else if (meter.tariff_structure_id) {
                   const costResult = await calculateMeterCost(
                     meter.id,
                     meter.tariff_structure_id,
                     new Date(getFullDateTime(dateFrom, timeFrom)),
                     new Date(getFullDateTime(dateTo, timeTo)),
-                    hierarchicalTotal  // Use hierarchical total!
+                    hierarchicalTotal
                   );
-                  
-                  meterRevenues.set(meter.id, costResult);
-                  
-                  console.log(`Calculated revenue for parent meter ${meter.meter_number} using hierarchical total ${hierarchicalTotal.toFixed(2)} kWh`);
-                } catch (error) {
-                  console.error(`Failed to calculate revenue for parent meter ${meter.meter_number}:`, error);
-                  meterRevenues.set(meter.id, {
+                  return { meter, costResult };
+                }
+              } catch (error) {
+                console.error(`Failed to calculate revenue for parent meter ${meter.meter_number}:`, error);
+                return {
+                  meter,
+                  costResult: {
                     hasError: true,
                     errorMessage: error instanceof Error ? error.message : 'Cost calculation failed',
                     totalCost: 0,
@@ -1921,12 +1906,26 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                     fixedCharges: 0,
                     demandCharges: 0,
                     avgCostPerKwh: 0,
-                    tariffName: null
-                  });
-                }
+                    tariffName: meter.assigned_tariff_name || null
+                  }
+                };
               }
+              return null;
+            });
+
+          // Wait for all calculations to complete
+          const results = await Promise.allSettled(parentMeterPromises);
+
+          // Process results and update meterRevenues map
+          results.forEach((result) => {
+            if (result.status === 'fulfilled' && result.value) {
+              const { meter, costResult } = result.value;
+              meterRevenues.set(meter.id, costResult);
+              console.log(`Calculated revenue for parent meter ${meter.meter_number} using hierarchical total`);
+            } else if (result.status === 'rejected') {
+              console.error('Parent meter cost calculation failed:', result.reason);
             }
-          }
+          });
           
           // Update reconciliation data with new revenue map
           reconciliationData.revenueData.meterRevenues = meterRevenues;
