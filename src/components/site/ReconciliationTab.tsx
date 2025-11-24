@@ -3012,6 +3012,18 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                   <Eraser className="w-4 h-4 mr-2" />
                   Clear Results
                 </Button>
+                {reconciliationData.revenueData && (
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={() => setIsSaveDialogOpen(true)}
+                    disabled={isLoading || isCalculatingRevenue || selectedDocumentIds.length > 0}
+                    className="w-full"
+                  >
+                    <Save className="w-4 h-4 mr-2" />
+                    Save Reconciliation
+                  </Button>
+                )}
               </div>
             )}
 

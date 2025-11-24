@@ -403,17 +403,6 @@ export default function ReconciliationResultsView({
           )}
         </Button>
       )}
-      {showSaveButton && !isBulkMode && (
-        <Button
-          onClick={onSave}
-          disabled={!revenueData}
-          variant="outline"
-          className="w-full h-12 gap-2 bg-muted text-foreground hover:bg-muted/80 font-semibold"
-        >
-          <Save className="h-4 w-4" />
-          Run & Save Reconciliation
-        </Button>
-      )}
       
       <Tabs defaultValue="energy" className="w-full">
         <TabsList className="grid w-full grid-cols-2 h-auto p-1 gap-2 bg-transparent">
