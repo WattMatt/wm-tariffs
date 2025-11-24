@@ -3181,7 +3181,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           showDownloadButtons={reconciliationData !== null}
           onDownloadMeter={downloadMeterCSV}
           onDownloadAll={downloadAllMetersCSV}
-          showSaveButton={reconciliationData !== null}
+          showSaveButton={true}
           onSave={() => setIsSaveDialogOpen(true)}
           revenueData={reconciliationData?.revenueData || null}
           onReconcileEnergy={() => handleReconcile(false)}
