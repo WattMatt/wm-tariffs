@@ -191,23 +191,39 @@ export default function TariffAssignmentTab({
     
     switch(metric) {
       case 'basic':
-        const basicItem = lineItems.find(item => item.description === 'ELECTRICITY-BASIC');
+        // Match: description contains 'BASIC' OR unit is 'Monthly' (for both municipal and tenant bills)
+        const basicItem = lineItems.find(item => 
+          item.description?.toUpperCase().includes('BASIC') || 
+          (item.unit === 'Monthly' && item.description?.toUpperCase().includes('BASIC'))
+        );
         return basicItem?.amount || null;
       
       case 'kva-charge':
-        const kvaItem = lineItems.find(item => item.description === 'ELECTRICITY-POWER');
+        // Match: description contains 'POWER' OR unit is 'kVA'
+        const kvaItem = lineItems.find(item => 
+          item.description?.toUpperCase().includes('POWER') || 
+          item.unit === 'kVA'
+        );
         return kvaItem?.amount || null;
       
       case 'kwh-charge':
-        const kwhItem = lineItems.find(item => item.description === 'ELECTRICITY-ENERGY');
+        // Match: description contains 'ENERGY' OR (unit is 'kWh' AND supply is 'Normal' AND NOT emergency/generator)
+        const kwhItem = lineItems.find(item => 
+          item.description?.toUpperCase().includes('ENERGY') || 
+          (item.unit === 'kWh' && item.supply === 'Normal' && !item.description?.toUpperCase().includes('GENERATOR'))
+        );
         return kwhItem?.amount || null;
       
       case 'kva-consumption':
-        const kvaConsumption = lineItems.find(item => item.description === 'ELECTRICITY-POWER');
+        // Match: unit is 'kVA'
+        const kvaConsumption = lineItems.find(item => item.unit === 'kVA');
         return kvaConsumption?.consumption || null;
       
       case 'kwh-consumption':
-        const kwhConsumption = lineItems.find(item => item.description === 'ELECTRICITY-ENERGY');
+        // Match: unit is 'kWh' AND supply is 'Normal' (exclude emergency/generator)
+        const kwhConsumption = lineItems.find(item => 
+          item.unit === 'kWh' && item.supply === 'Normal' && !item.description?.toUpperCase().includes('GENERATOR')
+        );
         return kwhConsumption?.consumption || null;
       
       default:
