@@ -226,6 +226,37 @@ export default function TariffAssignmentTab({
     }
   };
 
+  // Helper to extract meter readings from document based on metric
+  const extractMeterReadings = (doc: DocumentShopNumber | undefined, metric: string): { previous: number | null, current: number | null } => {
+    if (!doc) return { previous: null, current: null };
+    
+    const lineItems = doc.lineItems || [];
+    let item = null;
+    
+    switch(metric) {
+      case 'basic':
+        item = lineItems.find(i => i.unit === 'Monthly');
+        break;
+      case 'kva-charge':
+      case 'kva-consumption':
+        item = lineItems.find(i => i.unit === 'kVA');
+        break;
+      case 'kwh-charge':
+      case 'kwh-consumption':
+        item = lineItems.find(i => i.unit === 'kWh' && i.supply === 'Normal');
+        break;
+      case 'total':
+        // For total, try to find the main kWh charge
+        item = lineItems.find(i => i.unit === 'kWh' && i.supply === 'Normal');
+        break;
+    }
+    
+    return {
+      previous: item?.previous_reading || null,
+      current: item?.current_reading || null
+    };
+  };
+
   // Helper function to calculate seasonal averages
   const calculateSeasonalAverages = (docs: DocumentShopNumber[], metric: string = 'total') => {
     // South African electricity seasons:
@@ -328,11 +359,14 @@ export default function TariffAssignmentTab({
     
     return sortedDocs.map((doc) => {
       const metricValue = extractMetricValue(doc, metric);
+      const readings = extractMeterReadings(doc, metric);
       const dataPoint: any = {
         period: new Date(doc.periodEnd).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }),
         amount: metricValue !== null ? metricValue : doc.totalAmount,
         documentAmount: doc.totalAmount || null,
         documentId: doc.documentId,
+        previousReading: readings.previous,
+        currentReading: readings.current,
       };
       
       const matchingSegment = segments.find(seg => 
@@ -3020,6 +3054,7 @@ export default function TariffAssignmentTab({
                               height={80}
                             />
                             <YAxis 
+                              yAxisId="left"
                               tick={{ fontSize: 12 }}
                               tickFormatter={(value) => {
                                 if (showDocumentCharts && selectedChartMetric.includes('consumption')) {
@@ -3027,6 +3062,13 @@ export default function TariffAssignmentTab({
                                 }
                                 return `R${(value / 1000).toFixed(0)}k`;
                               }}
+                            />
+                            <YAxis 
+                              yAxisId="right"
+                              orientation="right"
+                              tick={{ fontSize: 12 }}
+                              label={{ value: 'Reading', angle: 90, position: 'insideRight', style: { fontSize: 12 } }}
+                              tickFormatter={(value) => value.toLocaleString()}
                             />
                             <ChartTooltip 
                               content={<ChartTooltipContent />}
@@ -3050,6 +3092,7 @@ export default function TariffAssignmentTab({
                                 return (
                                   <Line
                                     key={key}
+                                    yAxisId="left"
                                     type="monotone"
                                     dataKey={key}
                                     stroke={color}
@@ -3061,6 +3104,7 @@ export default function TariffAssignmentTab({
                               });
                             })()}
                             <Bar 
+                              yAxisId="left"
                               dataKey="amount" 
                               fill="hsl(var(--muted-foreground))"
                               radius={[4, 4, 0, 0]}
@@ -3069,12 +3113,31 @@ export default function TariffAssignmentTab({
                             />
                             {hideSeasonalAverages && (
                               <Bar 
+                                yAxisId="left"
                                 dataKey="documentAmount" 
                                 fill="hsl(var(--primary))"
                                 radius={[4, 4, 0, 0]}
                                 name="Document Billed"
                               />
                             )}
+                            <Line
+                              yAxisId="right"
+                              type="monotone"
+                              dataKey="previousReading"
+                              stroke="hsl(var(--chart-3))"
+                              strokeWidth={2}
+                              name="Previous Reading"
+                              connectNulls
+                            />
+                            <Line
+                              yAxisId="right"
+                              type="monotone"
+                              dataKey="currentReading"
+                              stroke="hsl(var(--chart-4))"
+                              strokeWidth={2}
+                              name="Current Reading"
+                              connectNulls
+                            />
                           </ComposedChart>
                         </ResponsiveContainer>
                       </ChartContainer>
