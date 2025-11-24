@@ -1576,7 +1576,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
               siteData.supply_authority_id,
               meter.assigned_tariff_name,
               new Date(fullDateTimeFrom),
-              new Date(fullDateTimeTo)
+              new Date(fullDateTimeTo),
+              meter.totalKwhPositive
             );
             
             meterRevenues.set(meter.id, costResult);
@@ -1865,6 +1866,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           tariff_name: revenueInfo?.tariffName || null,
           energy_cost: revenueInfo?.energyCost || 0,
           fixed_charges: revenueInfo?.fixedCharges || 0,
+          demand_charges: revenueInfo?.demandCharges || 0,
           total_cost: revenueInfo?.totalCost || 0,
           avg_cost_per_kwh: revenueInfo?.avgCostPerKwh || 0,
           cost_calculation_error: revenueInfo?.hasError ? revenueInfo.errorMessage : null

@@ -564,6 +564,7 @@ export type Database = {
           column_totals: Json | null
           cost_calculation_error: string | null
           created_at: string | null
+          demand_charges: number | null
           energy_cost: number | null
           error_message: string | null
           fixed_charges: number | null
@@ -591,6 +592,7 @@ export type Database = {
           column_totals?: Json | null
           cost_calculation_error?: string | null
           created_at?: string | null
+          demand_charges?: number | null
           energy_cost?: number | null
           error_message?: string | null
           fixed_charges?: number | null
@@ -618,6 +620,7 @@ export type Database = {
           column_totals?: Json | null
           cost_calculation_error?: string | null
           created_at?: string | null
+          demand_charges?: number | null
           energy_cost?: number | null
           error_message?: string | null
           fixed_charges?: number | null
