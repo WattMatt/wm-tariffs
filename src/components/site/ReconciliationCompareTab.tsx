@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import { formatDateStringToLong } from "@/lib/utils";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -153,7 +154,7 @@ export default function ReconciliationCompareTab({ siteId }: ReconciliationCompa
                   <div className="flex-1">
                     <p className="font-medium">{run.run_name}</p>
                     <p className="text-sm text-muted-foreground">
-                      {format(new Date(run.date_from), "dd MMM yyyy")} - {format(new Date(run.date_to), "dd MMM yyyy")}
+                      {formatDateStringToLong(run.date_from)} - {formatDateStringToLong(run.date_to)}
                     </p>
                   </div>
                   <div className="text-right">

@@ -20,7 +20,7 @@ import TariffDetailsDialog from "@/components/tariffs/TariffDetailsDialog";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DatePicker } from "@/components/ui/date-picker";
 import { format } from "date-fns";
-import { cn } from "@/lib/utils";
+import { cn, formatDateString } from "@/lib/utils";
 import { calculateMeterCost } from "@/lib/costCalculation";
 
 interface TariffAssignmentTabProps {
@@ -3352,7 +3352,7 @@ export default function TariffAssignmentTab({
                               <div className="flex items-center gap-3">
                                 <span className="font-medium">{doc.shopNumber}</span>
                                 <span className="text-sm text-muted-foreground">
-                                  {new Date(doc.periodStart).toLocaleDateString()} - {new Date(doc.periodEnd).toLocaleDateString()}
+                                  {formatDateString(doc.periodStart)} - {formatDateString(doc.periodEnd)}
                                 </span>
                               </div>
                             </div>
