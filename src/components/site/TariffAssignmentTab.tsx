@@ -2970,7 +2970,7 @@ export default function TariffAssignmentTab({
                               <SelectTrigger id="metric-select" className="w-[240px]">
                                 <SelectValue placeholder="Select metric" />
                               </SelectTrigger>
-                              <SelectContent>
+                              <SelectContent className="bg-background z-50">
                                 <SelectItem value="total">Total Amount</SelectItem>
                                 <SelectItem value="basic">Basic Charge</SelectItem>
                                 <SelectItem value="kva-charge">kVA Charge</SelectItem>
@@ -3015,7 +3015,11 @@ export default function TariffAssignmentTab({
                         className="h-[500px]"
                       >
                         <ResponsiveContainer width="100%" height="100%">
-                          <ComposedChart data={finalChartData} margin={{ top: 10, right: 30, left: 60, bottom: 80 }}>
+                          <ComposedChart 
+                            key={`chart-${selectedChartMetric}`}
+                            data={finalChartData} 
+                            margin={{ top: 10, right: 30, left: 60, bottom: 80 }}
+                          >
                             <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                             <XAxis 
                               dataKey="period" 
