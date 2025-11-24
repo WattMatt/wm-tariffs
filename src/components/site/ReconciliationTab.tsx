@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -2414,6 +2414,15 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     return orderedMeters;
   }, [reconciliationData, availableMeters.length]);
 
+  // Memoize handlers to prevent them from being recreated on every render
+  const handleReconcileEnergy = useCallback(() => {
+    handleReconcile(false);
+  }, [dateFrom, dateTo, timeFrom, timeTo, previewData, selectedColumns, revenueReconciliationEnabled]);
+
+  const handleReconcileRevenue = useCallback(() => {
+    handleReconcile(true);
+  }, [dateFrom, dateTo, timeFrom, timeTo, previewData, selectedColumns, revenueReconciliationEnabled]);
+
   return (
     <Tabs defaultValue="analysis" className="space-y-6">
       <TabsList className="grid w-full grid-cols-3 lg:w-auto">
@@ -3253,8 +3262,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           showSaveButton={true}
           onSave={() => setIsSaveDialogOpen(true)}
           revenueData={reconciliationData?.revenueData || null}
-          onReconcileEnergy={() => handleReconcile(false)}
-          onReconcileRevenue={() => handleReconcile(true)}
+          onReconcileEnergy={handleReconcileEnergy}
+          onReconcileRevenue={handleReconcileRevenue}
           onCancelReconciliation={cancelReconciliation}
           isCancelling={isCancelling}
           isLoadingEnergy={isLoading && !isCalculatingRevenue}
