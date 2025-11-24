@@ -44,14 +44,46 @@ serve(async (req) => {
 
     // Define the extraction prompt based on document type
     const systemPrompt = documentType === 'municipal_account'
-      ? `You are an expert at extracting data from South African municipal electricity accounts. Extract the following information:
-- Billing period (start and end dates)
-- Total amount due
-- Any meter readings or consumption data
-- Account reference numbers
+      ? `You are an expert at extracting electricity data from South African municipal accounts.
+
+CRITICAL: Extract ONLY these three electricity charges from the document:
+
+1. **ELECTRICITY-BASIC** (Basic Charge):
+   - Find the line item with description "ELECTRICITY-BASIC" in the ACCOUNT DETAILS table
+   - Extract the amount (e.g., R 17123.48)
+   - This is a fixed monthly charge, so there are NO meter readings for this item
+   - Set unit to "Monthly"
+   - Set supply to "Normal"
+
+2. **ELECTRICITY-POWER** (kVA/Demand Charge):
+   - Find the line item related to demand/power charges in the ACCOUNT DETAILS table
+   - Look for descriptions containing "ELECTRICITY" with kVA-related codes (e.g., CODE "002010") or "ELECTRICITY-POWER"
+   - Extract the amount (e.g., R 232883.56)
+   - From the METER READINGS table, find the meter row where METER TYPE = "KVA" or similar
+   - Extract the METER NO., OLD READING, NEW READING, and calculate CONSUMPTION (new - old)
+   - Set unit to "kVA"
+   - Set supply to "Normal"
+
+3. **ELECTRICITY-ENERGY** (kWh Charge):
+   - Find the line item with description "ELECTRICITY-ENERGY" in the ACCOUNT DETAILS table
+   - Extract the amount (e.g., R 188304.18)
+   - From the METER READINGS table, find the meter row where METER TYPE = "ELECTRICITY" or "kWh" or similar energy indicator
+   - Extract the METER NO., OLD READING, NEW READING, and calculate CONSUMPTION (new - old)
+   - Set unit to "kWh"
+   - Set supply to "Normal"
+
+IGNORE all other charges (water, rates, sewerage, refuse, etc.). Return ONLY these three electricity line items.
+
+Also extract:
+- Billing period (start and end dates from the document header)
+- Total amount (sum of the three electricity charges, or from document total)
+- Account reference number
 - Supply authority/municipality name
-Return the data in a structured format.`
-      : `You are an expert at extracting data from tenant electricity bills. 
+
+The METER READINGS section typically has columns: METER NO., METER TYPE, OLD READING, NEW READING.
+The ACCOUNT DETAILS section has the line item charges with CODE, DESCRIPTION, and AMOUNT.
+Correlate these two tables to provide complete information for kVA and kWh charges.`
+      : `You are an expert at extracting data from tenant electricity bills.
 
 CRITICAL: Extract ALL line items from the billing table in the document. Each row in the table represents a separate charge and should become a line item.
 
@@ -119,13 +151,17 @@ Return the data in a structured format with all line items in an array.`;
                 },
                 line_items: {
                   type: "array",
-                  description: "Array of billing line items from the document table. Extract ALL rows from the billing table.",
+                  description: documentType === 'municipal_account' 
+                    ? "Array of EXACTLY THREE electricity line items: ELECTRICITY-BASIC, ELECTRICITY-POWER (kVA), and ELECTRICITY-ENERGY (kWh). Extract ONLY these three charges."
+                    : "Array of billing line items from the document table. Extract ALL rows from the billing table.",
                   items: {
                     type: "object",
                     properties: {
                       description: { 
                         type: "string", 
-                        description: "Description of the charge (e.g., 'Electrical', 'Water', 'Misc')" 
+                        description: documentType === 'municipal_account'
+                          ? "Description of the electricity charge. Must be one of: 'ELECTRICITY-BASIC', 'ELECTRICITY-POWER', or 'ELECTRICITY-ENERGY'"
+                          : "Description of the charge (e.g., 'Electrical', 'Water', 'Misc')"
                       },
                       supply: {
                         type: "string",
@@ -134,24 +170,40 @@ Return the data in a structured format with all line items in an array.`;
                       },
                       meter_number: { 
                         type: "string", 
-                        description: "Meter number if shown in the table row" 
+                        description: documentType === 'municipal_account'
+                          ? "Meter number from the METER READINGS table (for kVA and kWh line items only, not for BASIC charge)"
+                          : "Meter number if shown in the table row"
                       },
                       unit: {
                         type: "string",
                         description: "Unit type for this line item. Must be one of: 'kWh' (for energy consumption charges), 'kVA' (for demand charges), or 'Monthly' (for fixed monthly charges like basic fees). Determine from the description - look for keywords like 'Conv', 'Consumption', 'kWh' for energy; 'Demand', 'kVA' for demand; 'Basic', 'Fixed', 'Monthly' for monthly charges.",
                         enum: ["kWh", "kVA", "Monthly"]
                       },
+                      old_reading: { 
+                        type: "number", 
+                        description: documentType === 'municipal_account'
+                          ? "Old/previous meter reading from METER READINGS table (for kVA and kWh charges only)"
+                          : "Previous meter reading value"
+                      },
+                      new_reading: { 
+                        type: "number", 
+                        description: documentType === 'municipal_account'
+                          ? "New/current meter reading from METER READINGS table (for kVA and kWh charges only)"
+                          : "Current meter reading value"
+                      },
                       previous_reading: { 
                         type: "number", 
-                        description: "Previous meter reading value" 
+                        description: "Previous meter reading value (alternative field name for backwards compatibility)" 
                       },
                       current_reading: { 
                         type: "number", 
-                        description: "Current meter reading value" 
+                        description: "Current meter reading value (alternative field name for backwards compatibility)" 
                       },
                       consumption: { 
                         type: "number", 
-                        description: "Consumption/units used (should equal current - previous)" 
+                        description: documentType === 'municipal_account'
+                          ? "Consumption from METER READINGS table (new_reading - old_reading), for kVA and kWh charges only"
+                          : "Consumption/units used (should equal current - previous)"
                       },
                       rate: { 
                         type: "number", 
@@ -159,7 +211,7 @@ Return the data in a structured format with all line items in an array.`;
                       },
                       amount: { 
                         type: "number", 
-                        description: "Line item total amount (should equal consumption × rate)" 
+                        description: "Line item total amount from ACCOUNT DETAILS table" 
                       }
                     },
                     required: ["description"]
