@@ -109,6 +109,7 @@ export default function TariffAssignmentTab({
   const [viewingTariffId, setViewingTariffId] = useState<string | null>(null);
   const [viewingTariffName, setViewingTariffName] = useState<string>("");
   const [documentShopNumbers, setDocumentShopNumbers] = useState<DocumentShopNumber[]>([]);
+  const [enrichedDocuments, setEnrichedDocuments] = useState<DocumentShopNumber[]>([]);
   const [viewingShopDoc, setViewingShopDoc] = useState<DocumentShopNumber | null>(null);
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc" | null>(null);
@@ -767,6 +768,15 @@ export default function TariffAssignmentTab({
     }
   }, [documentShopNumbers.length, meters.length]);
 
+  // Enrich documents when in comparison mode
+  useEffect(() => {
+    if (hideSeasonalAverages && documentShopNumbers.length > 0 && meters.length > 0) {
+      enrichDocumentsWithReconciliationDates();
+    } else {
+      setEnrichedDocuments(documentShopNumbers);
+    }
+  }, [hideSeasonalAverages, documentShopNumbers.length, meters.length, siteId]);
+
   // Fetch reconciliation costs when in comparison mode
   useEffect(() => {
     if (hideSeasonalAverages) {
@@ -829,10 +839,11 @@ export default function TariffAssignmentTab({
               const calcsByDoc: Record<string, any> = {};
               
               // Map reconciliation data to documents by matching periods
-              const docsWithReconDates = selectedChartMeter.docs.map(doc => {
+              selectedChartMeter.docs.forEach(doc => {
                 // Find matching reconciliation period (2-day tolerance on end date)
                 const matchingResult = data.find(result => {
-                  const daysDiff = daysBetweenDateStrings(doc.periodEnd, extractDateFromTimestamp(result.reconciliation_runs.date_to));
+                  const docDateTo = doc.reconciliationDateTo || doc.periodEnd;
+                  const daysDiff = daysBetweenDateStrings(docDateTo, extractDateFromTimestamp(result.reconciliation_runs.date_to));
                   return daysDiff < 2;
                 });
                 
@@ -858,20 +869,8 @@ export default function TariffAssignmentTab({
                       name: matchingResult.tariff_name || 'Reconciliation'
                     }
                   };
-                  
-                  // Return document with reconciliation dates attached
-                  return {
-                    ...doc,
-                    reconciliationDateFrom: extractDateFromTimestamp(matchingResult.reconciliation_runs.date_from),
-                    reconciliationDateTo: extractDateFromTimestamp(matchingResult.reconciliation_runs.date_to)
-                  };
                 }
-                
-                return doc;
               });
-              
-              // Update selectedChartMeter with enriched documents
-              setSelectedChartMeter(prev => prev ? { ...prev, docs: docsWithReconDates } : null);
               
               setChartDialogCalculations(calcsByDoc);
             }
@@ -1279,15 +1278,127 @@ export default function TariffAssignmentTab({
       console.error("Error fetching document shop numbers:", error);
     }
   };
+  
+  // Enrich documents with reconciliation dates and create virtual documents for missing periods
+  const enrichDocumentsWithReconciliationDates = async () => {
+    if (!hideSeasonalAverages || documentShopNumbers.length === 0) {
+      setEnrichedDocuments(documentShopNumbers);
+      return;
+    }
+
+    try {
+      // Fetch reconciliation runs
+      const { data: runs, error } = await supabase
+        .from('reconciliation_runs')
+        .select('id, run_name, date_from, date_to')
+        .eq('site_id', siteId)
+        .order('date_from', { ascending: false });
+
+      if (error || !runs || runs.length === 0) {
+        setEnrichedDocuments(documentShopNumbers);
+        return;
+      }
+
+      // Fetch meter results for these runs
+      const { data: meterResults } = await supabase
+        .from('reconciliation_meter_results')
+        .select('reconciliation_run_id, meter_id, total_cost')
+        .in('reconciliation_run_id', runs.map(r => r.id));
+
+      // Group documents by meter
+      const docsByMeter = new Map<string, DocumentShopNumber[]>();
+      documentShopNumbers.forEach(doc => {
+        if (!doc.meterId) return;
+        if (!docsByMeter.has(doc.meterId)) {
+          docsByMeter.set(doc.meterId, []);
+        }
+        docsByMeter.get(doc.meterId)!.push(doc);
+      });
+
+      const enriched: DocumentShopNumber[] = [];
+
+      // Process each meter
+      meters.forEach(meter => {
+        const meterDocs = docsByMeter.get(meter.id) || [];
+        const meterReconRuns = runs.filter(run => 
+          meterResults?.some(mr => mr.meter_id === meter.id && mr.reconciliation_run_id === run.id)
+        );
+
+        // For each reconciliation run, find or create matching document
+        meterReconRuns.forEach(run => {
+          const reconDateFrom = extractDateFromTimestamp(run.date_from);
+          const reconDateTo = extractDateFromTimestamp(run.date_to);
+
+          // Try to find matching extracted document (within 5 days)
+          let matchingDoc = meterDocs.find(doc => {
+            const daysDiff = daysBetweenDateStrings(doc.periodEnd, reconDateTo);
+            return daysDiff < 5;
+          });
+
+          if (matchingDoc) {
+            // Enrich existing document with reconciliation dates
+            enriched.push({
+              ...matchingDoc,
+              reconciliationDateFrom: reconDateFrom,
+              reconciliationDateTo: reconDateTo
+            });
+            // Remove from meterDocs so we don't process it again
+            const index = meterDocs.indexOf(matchingDoc);
+            if (index > -1) meterDocs.splice(index, 1);
+          } else {
+            // Create virtual document for reconciliation period without extracted document
+            const result = meterResults?.find(mr => 
+              mr.meter_id === meter.id && mr.reconciliation_run_id === run.id
+            );
+            
+            enriched.push({
+              documentId: `virtual-${run.id}-${meter.id}`,
+              fileName: run.run_name,
+              shopNumber: meter.meter_number,
+              periodStart: reconDateFrom,
+              periodEnd: reconDateTo,
+              reconciliationDateFrom: reconDateFrom,
+              reconciliationDateTo: reconDateTo,
+              totalAmount: result?.total_cost || 0,
+              currency: 'R',
+              meterId: meter.id,
+              lineItems: []
+            });
+          }
+        });
+
+        // Add any remaining docs that didn't match reconciliation runs
+        meterDocs.forEach(doc => {
+          enriched.push(doc);
+        });
+      });
+
+      // Sort by period end date (descending)
+      enriched.sort((a, b) => {
+        const dateA = a.reconciliationDateTo || a.periodEnd;
+        const dateB = b.reconciliationDateTo || b.periodEnd;
+        return dateB.localeCompare(dateA);
+      });
+
+      setEnrichedDocuments(enriched);
+    } catch (error) {
+      console.error("Error enriching documents:", error);
+      setEnrichedDocuments(documentShopNumbers);
+    }
+  };
 
   const getMatchingShopNumbers = (meter: Meter): DocumentShopNumber[] => {
-    // Only return documents explicitly assigned to this meter via meter_id
-    const matches = documentShopNumbers.filter(doc => doc.meterId === meter.id);
+    // Use enriched documents in comparison mode, regular documents otherwise
+    const docs = hideSeasonalAverages ? enrichedDocuments : documentShopNumbers;
     
-    // Sort by period start date (most recent first) - compare strings directly to avoid timezone issues
+    // Only return documents explicitly assigned to this meter via meter_id
+    const matches = docs.filter(doc => doc.meterId === meter.id);
+    
+    // Sort by period date (most recent first)
     return matches.sort((a, b) => {
-      // Direct string comparison works for ISO date strings (YYYY-MM-DD)
-      return b.periodStart.localeCompare(a.periodStart); // Descending order (newest first)
+      const dateA = a.reconciliationDateTo || a.periodEnd;
+      const dateB = b.reconciliationDateTo || b.periodEnd;
+      return dateB.localeCompare(dateA); // Descending order (newest first)
     });
   };
 
