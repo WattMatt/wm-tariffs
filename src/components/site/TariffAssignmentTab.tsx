@@ -20,7 +20,7 @@ import TariffDetailsDialog from "@/components/tariffs/TariffDetailsDialog";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DatePicker } from "@/components/ui/date-picker";
 import { format } from "date-fns";
-import { cn, formatDateString } from "@/lib/utils";
+import { cn, formatDateString, formatDateStringToLong, formatDateStringToMonthYear, getMonthFromDateString, daysBetweenDateStrings } from "@/lib/utils";
 import { calculateMeterCost } from "@/lib/costCalculation";
 
 interface TariffAssignmentTabProps {
@@ -313,12 +313,12 @@ export default function TariffAssignmentTab({
     const summerMonths = [1, 2, 3, 4, 5, 9, 10, 11, 12];
     
     const winterDocs = docs.filter(doc => {
-      const month = new Date(doc.periodStart).getMonth() + 1;
+      const month = getMonthFromDateString(doc.periodStart);
       return winterMonths.includes(month);
     });
     
     const summerDocs = docs.filter(doc => {
-      const month = new Date(doc.periodStart).getMonth() + 1;
+      const month = getMonthFromDateString(doc.periodStart);
       return summerMonths.includes(month);
     });
     
@@ -366,7 +366,7 @@ export default function TariffAssignmentTab({
     const winterMonths = [6, 7, 8];
     const summerMonths = [1, 2, 3, 4, 5, 9, 10, 11, 12];
     const sortedDocs = [...docs].sort((a, b) => 
-      new Date(a.periodEnd).getTime() - new Date(b.periodEnd).getTime()
+      a.periodEnd.localeCompare(b.periodEnd)
     );
     
     interface Segment {
@@ -383,7 +383,7 @@ export default function TariffAssignmentTab({
     let currentSegmentDocs: DocumentShopNumber[] = [];
     
     sortedDocs.forEach((doc, index) => {
-      const month = new Date(doc.periodEnd).getMonth() + 1;
+      const month = getMonthFromDateString(doc.periodEnd);
       const isWinter = winterMonths.includes(month);
       const isSummer = summerMonths.includes(month);
       const currentSeason = isWinter ? 'winter' : isSummer ? 'summer' : null;
@@ -434,7 +434,7 @@ export default function TariffAssignmentTab({
                               readings.current !== nextReadings.previous;
       
       const dataPoint: any = {
-        period: new Date(doc.periodEnd).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }),
+        period: formatDateStringToMonthYear(doc.periodEnd),
         amount: metricValue !== null ? metricValue : doc.totalAmount,
         documentAmount: doc.totalAmount || null,
         documentId: doc.documentId,
@@ -624,7 +624,7 @@ export default function TariffAssignmentTab({
     
     return sortedDocs.map((doc) => {
       const dataPoint: any = {
-        period: new Date(doc.periodEnd).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }),
+        period: formatDateStringToMonthYear(doc.periodEnd),
         amount: calculatedCostsMap[doc.documentId] || null,
         documentAmount: doc.totalAmount || null,
         documentId: doc.documentId,
@@ -652,12 +652,12 @@ export default function TariffAssignmentTab({
     const summerMonths = [1, 2, 3, 4, 5, 9, 10, 11, 12];
     
     const winterDocs = docs.filter(doc => {
-      const month = new Date(doc.periodEnd).getMonth() + 1;
+      const month = getMonthFromDateString(doc.periodEnd);
       return winterMonths.includes(month);
     });
     
     const summerDocs = docs.filter(doc => {
-      const month = new Date(doc.periodEnd).getMonth() + 1;
+      const month = getMonthFromDateString(doc.periodEnd);
       return summerMonths.includes(month);
     });
     
@@ -828,14 +828,10 @@ export default function TariffAssignmentTab({
               
               // Map reconciliation data to documents by matching periods
               selectedChartMeter.docs.forEach(doc => {
-                const docEnd = new Date(doc.periodEnd);
-                const docEndTime = docEnd.getTime();
-                
                 // Find matching reconciliation period (2-day tolerance on end date)
                 const matchingResult = data.find(result => {
-                  const runEnd = new Date(result.reconciliation_runs.date_to);
-                  const runEndTime = runEnd.getTime();
-                  return Math.abs(docEndTime - runEndTime) < 86400000 * 2;
+                  const daysDiff = daysBetweenDateStrings(doc.periodEnd, result.reconciliation_runs.date_to);
+                  return daysDiff < 2;
                 });
                 
                 if (matchingResult) {
@@ -1004,32 +1000,16 @@ export default function TariffAssignmentTab({
     }
     console.log(`   ✅ Meter found with ${Object.keys(meterCosts).length} periods`);
 
-    // Parse document dates
-    const docStart = new Date(periodStart);
-    const docEnd = new Date(periodEnd);
-    
-    // Normalize to date-only for comparison (ignore time)
-    docStart.setHours(0, 0, 0, 0);
-    docEnd.setHours(23, 59, 59, 999);
-
-    console.log(`Looking for reconciliation cost for meter ${meterId}, document period: ${docStart.toISOString()} to ${docEnd.toISOString()}`);
+    console.log(`Looking for reconciliation cost for meter ${meterId}, document period: ${periodStart} to ${periodEnd}`);
 
     // Find matching reconciliation run by date overlap
     for (const [periodKey, costData] of Object.entries(meterCosts)) {
-      const runStart = new Date(costData.date_from);
-      const runEnd = new Date(costData.date_to);
-      
-      // Normalize reconciliation dates
-      runStart.setHours(0, 0, 0, 0);
-      runEnd.setHours(23, 59, 59, 999);
+      console.log(`  Checking reconciliation period: ${costData.date_from} to ${costData.date_to}, cost: ${costData.total_cost}`);
 
-      console.log(`  Checking reconciliation period: ${runStart.toISOString()} to ${runEnd.toISOString()}, cost: ${costData.total_cost}`);
-
-      // Only check end dates (allowing for 2-day variance)
-      const docEndTime = docEnd.getTime();
-      const runEndTime = runEnd.getTime();
+      // Only check end dates (allowing for 5-day variance)
+      const daysDiff = daysBetweenDateStrings(periodEnd, costData.date_to);
       
-      const endMatches = Math.abs(docEndTime - runEndTime) < 86400000 * 5; // Within 5 days
+      const endMatches = daysDiff < 5; // Within 5 days
       
       if (endMatches) {
         console.log(`  ✓ Match found! Using cost: ${costData.total_cost}`);
@@ -1290,11 +1270,10 @@ export default function TariffAssignmentTab({
     // Only return documents explicitly assigned to this meter via meter_id
     const matches = documentShopNumbers.filter(doc => doc.meterId === meter.id);
     
-    // Sort by period start date (most recent first)
+    // Sort by period start date (most recent first) - compare strings directly to avoid timezone issues
     return matches.sort((a, b) => {
-      const dateA = new Date(a.periodStart).getTime();
-      const dateB = new Date(b.periodStart).getTime();
-      return dateB - dateA; // Descending order (newest first)
+      // Direct string comparison works for ISO date strings (YYYY-MM-DD)
+      return b.periodStart.localeCompare(a.periodStart); // Descending order (newest first)
     });
   };
 
@@ -2076,12 +2055,12 @@ export default function TariffAssignmentTab({
               <div className="flex items-center justify-between text-sm text-muted-foreground">
                 <span>
                   {documentShopNumbers.length > 0 && (
-                    <>Earliest: {new Date(Math.min(...documentShopNumbers.map(d => new Date(d.periodStart).getTime()))).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })} at 00:30</>
+                    <>Earliest: {formatDateStringToLong([...documentShopNumbers].sort((a, b) => a.periodStart.localeCompare(b.periodStart))[0].periodStart)} at 00:30</>
                   )}
                 </span>
                 <span>
                   {documentShopNumbers.length > 0 && (
-                    <>Latest: {new Date(Math.max(...documentShopNumbers.map(d => new Date(d.periodEnd).getTime()))).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })} at 23:30</>
+                    <>Latest: {formatDateStringToLong([...documentShopNumbers].sort((a, b) => b.periodEnd.localeCompare(a.periodEnd))[0].periodEnd)} at 23:30</>
                   )}
                 </span>
               </div>
@@ -2796,7 +2775,7 @@ export default function TariffAssignmentTab({
                             <FileText className="w-4 h-4 text-muted-foreground" />
                             <span className="font-medium">{doc.shopNumber}</span>
                             <span className="text-sm text-muted-foreground">
-                              ({new Date(calc.period_start).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' })} - {new Date(calc.period_end).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' })})
+                              ({formatDateStringToLong(calc.period_start)} - {formatDateStringToLong(calc.period_end)})
                             </span>
                           </div>
                           <Badge 
