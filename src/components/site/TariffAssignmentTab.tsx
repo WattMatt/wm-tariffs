@@ -3048,7 +3048,7 @@ export default function TariffAssignmentTab({
         setSelectedChartMetric('total');
         setMeterDiscontinuities([]);
       }}>
-        <DialogContent className="max-w-6xl max-h-[90vh]">
+        <DialogContent className="max-w-7xl max-h-[90vh]">
           <DialogHeader>
             <DialogTitle>Meter Analysis: {selectedChartMeter?.meter.meter_number}</DialogTitle>
             <DialogDescription>
@@ -3056,7 +3056,7 @@ export default function TariffAssignmentTab({
             </DialogDescription>
           </DialogHeader>
           
-          <ScrollArea className="max-h-[70vh] pr-4">
+          <ScrollArea className="max-h-[75vh] pr-4">
             {selectedChartMeter && (() => {
               const currencies = new Set(selectedChartMeter.docs.map(d => d.currency));
               const hasMixedCurrencies = currencies.size > 1;
@@ -3135,7 +3135,7 @@ export default function TariffAssignmentTab({
                             color: "hsl(25 100% 50%)",
                           },
                         }}
-                        className="h-[500px]"
+                        className="h-[650px]"
                       >
                         <ResponsiveContainer width="100%" height="100%">
                           <ComposedChart 
