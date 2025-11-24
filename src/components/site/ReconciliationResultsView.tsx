@@ -141,10 +141,13 @@ export default function ReconciliationResultsView({
   };
 
   const isMeterVisible = (meterId: string): boolean => {
+    // If no meterConnections, all meters are visible
+    if (!meterConnections) return true;
+    
     // Find all parent IDs
     let parentIds: string[] = [];
     for (const [parentId, childIds] of meterConnections.entries()) {
-      if (childIds.includes(meterId)) {
+      if (Array.isArray(childIds) && childIds.includes(meterId)) {
         parentIds.push(parentId);
       }
     }
@@ -157,7 +160,7 @@ export default function ReconciliationResultsView({
   };
 
   const renderMeterRow = (meter: MeterData, isRevenueView: boolean = false) => {
-    const childIds = meterConnections.get(meter.id) || [];
+    const childIds = meterConnections?.get(meter.id) || [];
     let hierarchicalTotal = 0;
     
     // Use saved hierarchical total if available, otherwise calculate on the fly
@@ -165,7 +168,7 @@ export default function ReconciliationResultsView({
       hierarchicalTotal = meter.hierarchicalTotal;
     } else if (childIds.length > 0) {
       const getLeafMeterSum = (meterId: string): number => {
-        const children = meterConnections.get(meterId) || [];
+        const children = meterConnections?.get(meterId) || [];
         
         if (children.length === 0) {
           const meterData = meters.find((m: any) => m.id === meterId);
