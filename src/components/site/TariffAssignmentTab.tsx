@@ -263,8 +263,8 @@ export default function TariffAssignmentTab({
     return { winterAvg, summerAvg };
   };
 
-  // Helper function for Analysis tab: always uses document amounts
-  const prepareAnalysisData = (docs: DocumentShopNumber[]) => {
+  // Helper function for Analysis tab: uses selected metric
+  const prepareAnalysisData = (docs: DocumentShopNumber[], metric: string = 'total') => {
     const winterMonths = [6, 7, 8];
     const summerMonths = [1, 2, 3, 4, 5, 9, 10, 11, 12];
     const sortedDocs = [...docs].sort((a, b) => 
@@ -296,8 +296,8 @@ export default function TariffAssignmentTab({
         if (lastSeason && currentSegmentDocs.length > 0) {
           const segmentIndex = lastSeason === 'winter' ? winterSegment : summerSegment;
           const values = currentSegmentDocs
-            .map(d => d.totalAmount)
-            .filter(v => v !== undefined && v > 0);
+            .map(d => extractMetricValue(d, metric))
+            .filter(v => v !== null && v > 0) as number[];
           
           if (values.length > 0) {
             const average = values.reduce((sum, val) => sum + val, 0) / values.length;
@@ -316,8 +316,8 @@ export default function TariffAssignmentTab({
       if (index === sortedDocs.length - 1 && currentSegmentDocs.length > 0) {
         const segmentIndex = currentSeason === 'winter' ? winterSegment : summerSegment;
         const values = currentSegmentDocs
-          .map(d => d.totalAmount)
-          .filter(v => v !== undefined && v > 0);
+          .map(d => extractMetricValue(d, metric))
+          .filter(v => v !== null && v > 0) as number[];
         
         if (values.length > 0) {
           const average = values.reduce((sum, val) => sum + val, 0) / values.length;
@@ -327,9 +327,10 @@ export default function TariffAssignmentTab({
     });
     
     return sortedDocs.map((doc) => {
+      const metricValue = extractMetricValue(doc, metric);
       const dataPoint: any = {
         period: new Date(doc.periodEnd).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }),
-        amount: doc.totalAmount || null,
+        amount: metricValue !== null ? metricValue : doc.totalAmount,
         documentAmount: doc.totalAmount || null,
         documentId: doc.documentId,
       };
@@ -2835,14 +2836,14 @@ export default function TariffAssignmentTab({
               <div key={`${selectedChartMeter.meter.id}-${selectedChartMetric}`}>
                 {(() => {
               // Comparison tab: use reconciliation costs
-              // Analysis tab: use document extracted values (no cost map)
+              // Analysis tab: use document extracted values with selected metric
               // Assignments tab: use dialog calculations
               let chartData;
               if (hideSeasonalAverages) {
                 const costsMap = getReconciliationCostsMap(selectedChartMeter.meter.id, selectedChartMeter.docs);
                 chartData = prepareComparisonData(selectedChartMeter.docs, costsMap);
               } else if (showDocumentCharts) {
-                chartData = prepareAnalysisData(selectedChartMeter.docs);
+                chartData = prepareAnalysisData(selectedChartMeter.docs, selectedChartMetric);
               } else {
                 chartData = prepareAssignmentsData(selectedChartMeter.docs, chartDialogCalculations);
               }
@@ -2928,38 +2929,6 @@ export default function TariffAssignmentTab({
                 }
               }
               
-              // Update chart data with selected metric
-              const updatedChartData = showDocumentCharts ? chartData.map((point: any) => {
-                const doc = selectedChartMeter.docs.find(d => d.documentId === point.documentId);
-                const metricValue = extractMetricValue(doc, selectedChartMetric);
-                console.log('Chart data update:', {
-                  period: point.period,
-                  documentId: point.documentId,
-                  doc: doc ? 'found' : 'not found',
-                  metric: selectedChartMetric,
-                  metricValue,
-                  lineItems: doc?.lineItems?.length || 0,
-                  originalAmount: point.amount
-                });
-                return {
-                  ...point,
-                  amount: metricValue !== null ? metricValue : point.amount,
-                };
-              }) : chartData;
-              
-              // Calculate simple seasonal averages for the metric
-              const { winterAvg: simpleWinterAvg, summerAvg: simpleSummerAvg } = 
-                showDocumentCharts 
-                  ? calculateSeasonalAverages(selectedChartMeter.docs, selectedChartMetric)
-                  : { winterAvg: null, summerAvg: null };
-              
-              // Add seasonal averages to all data points
-              const finalChartData = showDocumentCharts ? updatedChartData.map((point: any) => ({
-                ...point,
-                winterAvg: simpleWinterAvg !== null ? simpleWinterAvg : undefined,
-                summerAvg: simpleSummerAvg !== null ? simpleSummerAvg : undefined,
-              })) : updatedChartData;
-              
               const getMetricLabel = (metric: string): string => {
                 switch(metric) {
                   case 'total': return 'Total Amount';
@@ -3039,7 +3008,7 @@ export default function TariffAssignmentTab({
                         <ResponsiveContainer width="100%" height="100%">
                           <ComposedChart 
                             key={`chart-${selectedChartMetric}`}
-                            data={finalChartData} 
+                            data={chartData}
                             margin={{ top: 10, right: 30, left: 60, bottom: 80 }}
                           >
                             <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
