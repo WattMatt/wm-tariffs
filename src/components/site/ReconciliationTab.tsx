@@ -1465,6 +1465,191 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     }
   };
 
+  // Shared reconciliation calculation function used by both single and bulk reconciliation
+  const performReconciliationCalculation = async (
+    startDateTime: string,
+    endDateTime: string,
+    enableRevenue?: boolean
+  ) => {
+    // Fetch site details including supply authority
+    const { data: siteData, error: siteError } = await supabase
+      .from("sites")
+      .select("id, name, supply_authority_id")
+      .eq("id", siteId)
+      .single();
+
+    if (siteError || !siteData?.supply_authority_id) {
+      throw new Error("Site supply authority not configured");
+    }
+
+    // Fetch all meters for the site with tariff assignments
+    const { data: meters, error: metersError } = await supabase
+      .from("meters")
+      .select("id, meter_number, meter_type, tariff_structure_id, assigned_tariff_name, name, location")
+      .eq("site_id", siteId);
+
+    if (metersError) {
+      console.error("Error fetching meters:", metersError);
+      throw new Error("Failed to fetch meters");
+    }
+
+    if (!meters || meters.length === 0) {
+      throw new Error("No meters found for this site");
+    }
+
+    // Process meters in batches of 2 to reduce database load and avoid timeouts
+    const { results: meterData, errors } = await processMeterBatches(
+      meters,
+      2,
+      startDateTime,
+      endDateTime
+    );
+
+    // Filter meters based on user assignments
+    // Fallback: if no assignments exist, use meter types
+    let gridSupplyMeters = meterData.filter((m) => meterAssignments.get(m.id) === "grid_supply");
+    let solarEnergyMeters = meterData.filter((m) => meterAssignments.get(m.id) === "solar_energy");
+    
+    // If no manual assignments, fall back to meter types
+    if (gridSupplyMeters.length === 0 && solarEnergyMeters.length === 0) {
+      gridSupplyMeters = meterData.filter((m) => m.meter_type === "bulk_meter");
+      solarEnergyMeters = [];
+    }
+    
+    const checkMeters = meterData.filter((m) => m.meter_type === "check_meter");
+    const tenantMeters = meterData.filter((m) => m.meter_type === "tenant_meter");
+    
+    const assignedMeterIds = new Set([
+      ...gridSupplyMeters.map(m => m.id),
+      ...solarEnergyMeters.map(m => m.id),
+      ...tenantMeters.map(m => m.id),
+      ...checkMeters.map(m => m.id)
+    ]);
+    const unassignedMeters = meterData.filter(m => !assignedMeterIds.has(m.id));
+
+    // Grid Supply: sum all positive values from all grid supply meters
+    const bulkTotal = gridSupplyMeters.reduce((sum, m) => sum + (m.totalKwhPositive || 0), 0);
+    
+    // Solar Energy: sum all solar meters + sum of all grid negative values
+    const solarMeterTotal = solarEnergyMeters.reduce((sum, m) => sum + Math.max(0, m.totalKwh), 0);
+    const gridNegative = gridSupplyMeters.reduce((sum, m) => sum + (m.totalKwhNegative || 0), 0);
+    const otherTotal = solarMeterTotal + gridNegative;
+    const tenantTotal = tenantMeters.reduce((sum, m) => sum + m.totalKwh, 0);
+    
+    const totalSupply = bulkTotal + otherTotal;
+    const recoveryRate = totalSupply > 0 ? (tenantTotal / totalSupply) * 100 : 0;
+    const discrepancy = totalSupply - tenantTotal;
+
+    // Revenue Reconciliation (if enabled)
+    let revenueData = null;
+    if (enableRevenue) {
+      const metersWithTariffs = meterData.filter(m => (m.tariff_structure_id || m.assigned_tariff_name) && m.totalKwhPositive > 0);
+      setReconciliationProgress({ current: 0, total: metersWithTariffs.length });
+      
+      const meterRevenues = new Map();
+      let gridSupplyCost = 0;
+      let solarCost = 0;
+      let tenantCost = 0;
+      let totalKwhWithTariffs = 0;
+      let totalCostCalculated = 0;
+      
+      for (const meter of meterData) {
+        if (meter.assigned_tariff_name && meter.totalKwhPositive > 0) {
+          const costResult = await calculateMeterCostAcrossPeriods(
+            meter.id,
+            siteData.supply_authority_id,
+            meter.assigned_tariff_name,
+            new Date(startDateTime),
+            new Date(endDateTime),
+            meter.totalKwhPositive
+          );
+          
+          meterRevenues.set(meter.id, costResult);
+          setReconciliationProgress({ 
+            current: meterRevenues.size, 
+            total: metersWithTariffs.length 
+          });
+          
+          const assignment = meterAssignments.get(meter.id);
+          if (assignment === "grid_supply") {
+            gridSupplyCost += costResult.totalCost;
+          } else if (assignment === "solar_energy") {
+            solarCost += costResult.totalCost;
+          } else if (meter.meter_type === "tenant_meter") {
+            tenantCost += costResult.totalCost;
+          }
+          
+          totalKwhWithTariffs += meter.totalKwh;
+          totalCostCalculated += costResult.totalCost;
+        } else if (meter.tariff_structure_id && meter.totalKwhPositive > 0) {
+          const costResult = await calculateMeterCost(
+            meter.id,
+            meter.tariff_structure_id,
+            new Date(startDateTime),
+            new Date(endDateTime),
+            meter.totalKwhPositive
+          );
+          
+          meterRevenues.set(meter.id, costResult);
+          setReconciliationProgress({ 
+            current: meterRevenues.size, 
+            total: metersWithTariffs.length 
+          });
+          
+          const assignment = meterAssignments.get(meter.id);
+          if (assignment === "grid_supply") {
+            gridSupplyCost += costResult.totalCost;
+          } else if (assignment === "solar_energy") {
+            solarCost += costResult.totalCost;
+          } else if (meter.meter_type === "tenant_meter") {
+            tenantCost += costResult.totalCost;
+          }
+          
+          totalKwhWithTariffs += meter.totalKwh;
+          totalCostCalculated += costResult.totalCost;
+        }
+      }
+      
+      const avgCostPerKwh = totalKwhWithTariffs > 0 ? totalCostCalculated / totalKwhWithTariffs : 0;
+      const totalRevenue = gridSupplyCost + solarCost + tenantCost;
+      
+      revenueData = {
+        meterRevenues,
+        gridSupplyCost,
+        solarCost,
+        tenantCost,
+        totalRevenue,
+        avgCostPerKwh
+      };
+    }
+
+    return {
+      meterData,
+      errors,
+      reconciliationData: {
+        bulkMeters: gridSupplyMeters,
+        checkMeters,
+        otherMeters: [...solarEnergyMeters, ...unassignedMeters],
+        tenantMeters,
+        councilBulk: gridSupplyMeters,
+        solarMeters: solarEnergyMeters,
+        distribution: tenantMeters,
+        distributionMeters: tenantMeters,
+        unassignedMeters,
+        bulkTotal,
+        councilTotal: bulkTotal,
+        otherTotal,
+        solarTotal: otherTotal,
+        tenantTotal,
+        distributionTotal: tenantTotal,
+        totalSupply,
+        recoveryRate,
+        discrepancy,
+        revenueData,
+      }
+    };
+  };
+
   const handleReconcile = async (enableRevenue?: boolean) => {
     if (!dateFrom || !dateTo) {
       toast.error("Please select a date range");
@@ -1481,11 +1666,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       return;
     }
 
-    // Collapse the sections when reconciliation starts
     setIsColumnsOpen(false);
     setIsMetersOpen(false);
-
-    // Reset cancel flag
     cancelReconciliationRef.current = false;
     
     setIsLoading(true);
@@ -1493,235 +1675,33 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     setFailedMeters(new Map());
 
     try {
-      // Fetch site details including supply authority
-      const { data: siteData, error: siteError } = await supabase
-        .from("sites")
-        .select("id, name, supply_authority_id")
-        .eq("id", siteId)
-        .single();
-
-      if (siteError || !siteData?.supply_authority_id) {
-        toast.error("Site supply authority not configured");
-        setIsLoading(false);
-        return;
-      }
-
-      // Fetch all meters for the site with tariff assignments
-      const { data: meters, error: metersError } = await supabase
-        .from("meters")
-        .select("id, meter_number, meter_type, tariff_structure_id, assigned_tariff_name, name, location")
-        .eq("site_id", siteId);
-
-      if (metersError) {
-        console.error("Error fetching meters:", metersError);
-        throw new Error("Failed to fetch meters");
-      }
-
-      if (!meters || meters.length === 0) {
-        toast.error("No meters found for this site");
-        setIsLoading(false);
-        return;
-      }
-
-      // Combine date and time for precise filtering
       const fullDateTimeFrom = getFullDateTime(dateFrom, timeFrom);
       const fullDateTimeTo = getFullDateTime(dateTo, timeTo);
 
-      // Process meters in batches of 2 to reduce database load and avoid timeouts
-      const { results: meterData, errors } = await processMeterBatches(
-        meters,
-        2,
-        fullDateTimeFrom,
-        fullDateTimeTo
-      );
-
-      // Store failed meters
-      setFailedMeters(errors);
-
-      // Filter meters based on user assignments
-      // Fallback: if no assignments exist, use meter types
-      let gridSupplyMeters = meterData.filter((m) => meterAssignments.get(m.id) === "grid_supply");
-      let solarEnergyMeters = meterData.filter((m) => meterAssignments.get(m.id) === "solar_energy");
-      
-      // If no manual assignments, fall back to meter types
-      if (gridSupplyMeters.length === 0 && solarEnergyMeters.length === 0) {
-        // Grid Supply: bulk meters (MB-*)
-        gridSupplyMeters = meterData.filter((m) => m.meter_type === "bulk_meter");
-        // Solar: no automatic assignment - user must manually assign
-        solarEnergyMeters = [];
-        
-        console.log("No meter assignments found. Using automatic categorization:");
-        console.log(`  Grid Supply: ${gridSupplyMeters.length} bulk meters`);
-        console.log(`  Solar: 0 (requires manual assignment)`);
-      }
-      
-      // Keep existing meter type filters
-      const checkMeters = meterData.filter((m) => m.meter_type === "check_meter");
-      const tenantMeters = meterData.filter((m) => m.meter_type === "tenant_meter");
-      
-      // Collect all meters that should be displayed but aren't in the above categories
-      const assignedMeterIds = new Set([
-        ...gridSupplyMeters.map(m => m.id),
-        ...solarEnergyMeters.map(m => m.id),
-        ...tenantMeters.map(m => m.id),
-        ...checkMeters.map(m => m.id)
-      ]);
-      const unassignedMeters = meterData.filter(m => !assignedMeterIds.has(m.id));
-      
-      console.log("Reconciliation meter breakdown:");
-      console.log(`  Grid Supply: ${gridSupplyMeters.map(m => m.meter_number).join(', ')}`);
-      console.log(`  Solar Energy: ${solarEnergyMeters.map(m => m.meter_number).join(', ') || 'none'}`);
-      console.log(`  Distribution: ${tenantMeters.map(m => m.meter_number).join(', ')}`);
-      console.log(`  Unassigned: ${unassignedMeters.map(m => m.meter_number).join(', ') || 'none'}`);
-
-      // Grid Supply: sum all positive values from all grid supply meters (consumption FROM grid)
-      const bulkTotal = gridSupplyMeters.reduce((sum, m) => sum + (m.totalKwhPositive || 0), 0);
-      
-      // Solar Energy: sum all solar meters + sum of all grid negative values (export)
-      const solarMeterTotal = solarEnergyMeters.reduce((sum, m) => sum + Math.max(0, m.totalKwh), 0);
-      const gridNegative = gridSupplyMeters.reduce((sum, m) => sum + (m.totalKwhNegative || 0), 0);
-      const otherTotal = solarMeterTotal + gridNegative; // Adding negative value
-      const tenantTotal = tenantMeters.reduce((sum, m) => sum + m.totalKwh, 0);
-      
-      // Total supply = Grid Supply + Solar Energy
-      const totalSupply = bulkTotal + otherTotal;
-      const recoveryRate = totalSupply > 0 ? (tenantTotal / totalSupply) * 100 : 0;
-      const discrepancy = totalSupply - tenantTotal;
-
-      // Revenue Reconciliation (if enabled)
-      // Use the parameter if provided, otherwise use state
       const shouldCalculateRevenue = enableRevenue !== undefined ? enableRevenue : revenueReconciliationEnabled;
-      let revenueData = null;
+      
       if (shouldCalculateRevenue) {
         setIsCalculatingRevenue(true);
         toast.info("Calculating revenue for meters with tariffs...");
-        
-        // Count meters that need revenue calculation and reset progress
-        const metersWithTariffs = meterData.filter(m => m.tariff_structure_id && m.totalKwhPositive > 0);
-        setReconciliationProgress({ current: 0, total: metersWithTariffs.length });
-        
-        const meterRevenues = new Map();
-        let gridSupplyCost = 0;
-        let solarCost = 0;
-        let tenantCost = 0;
-        let totalKwhWithTariffs = 0;
-        let totalCostCalculated = 0;
-        
-        // Process all meters that have tariff assignments
-        for (const meter of meterData) {
-          // Use assigned_tariff_name for multi-period support, fallback to tariff_structure_id
-          if (meter.assigned_tariff_name && meter.totalKwhPositive > 0) {
-            const costResult = await calculateMeterCostAcrossPeriods(
-              meter.id,
-              siteData.supply_authority_id,
-              meter.assigned_tariff_name,
-              new Date(fullDateTimeFrom),
-              new Date(fullDateTimeTo),
-              meter.totalKwhPositive
-            );
-            
-            meterRevenues.set(meter.id, costResult);
-            
-            // Update progress counter
-            const currentIndex = meterRevenues.size;
-            setReconciliationProgress({ 
-              current: currentIndex, 
-              total: metersWithTariffs.length 
-            });
-            
-            // Categorize costs based on meter assignment and type
-            const assignment = meterAssignments.get(meter.id);
-            if (assignment === "grid_supply") {
-              gridSupplyCost += costResult.totalCost;
-            } else if (assignment === "solar_energy") {
-              solarCost += costResult.totalCost;
-            } else if (meter.meter_type === "tenant_meter") {
-              tenantCost += costResult.totalCost;
-            }
-            
-            totalKwhWithTariffs += meter.totalKwh;
-            totalCostCalculated += costResult.totalCost;
-          } else if (meter.tariff_structure_id && meter.totalKwhPositive > 0) {
-            // Fallback to old method for meters without assigned_tariff_name
-            const costResult = await calculateMeterCost(
-              meter.id,
-              meter.tariff_structure_id,
-              new Date(fullDateTimeFrom),
-              new Date(fullDateTimeTo),
-              meter.totalKwhPositive
-            );
-            
-            meterRevenues.set(meter.id, costResult);
-            
-            // Update progress counter
-            const currentIndex = meterRevenues.size;
-            setReconciliationProgress({ 
-              current: currentIndex, 
-              total: metersWithTariffs.length 
-            });
-            
-            // Categorize costs based on meter assignment and type
-            const assignment = meterAssignments.get(meter.id);
-            if (assignment === "grid_supply") {
-              gridSupplyCost += costResult.totalCost;
-            } else if (assignment === "solar_energy") {
-              solarCost += costResult.totalCost;
-            } else if (meter.meter_type === "tenant_meter") {
-              tenantCost += costResult.totalCost;
-            }
-            
-            totalKwhWithTariffs += meter.totalKwh;
-            totalCostCalculated += costResult.totalCost;
-          }
-        }
-        
-        const avgCostPerKwh = totalKwhWithTariffs > 0 ? totalCostCalculated / totalKwhWithTariffs : 0;
-        const totalRevenue = gridSupplyCost + solarCost + tenantCost;
-        
-        revenueData = {
-          meterRevenues,
-          gridSupplyCost,
-          solarCost,
-          tenantCost,
-          totalRevenue,
-          avgCostPerKwh
-        };
-        
+      }
+
+      const { meterData, errors, reconciliationData } = await performReconciliationCalculation(
+        fullDateTimeFrom,
+        fullDateTimeTo,
+        shouldCalculateRevenue
+      );
+
+      setFailedMeters(errors);
+      
+      if (shouldCalculateRevenue) {
         setIsCalculatingRevenue(false);
         toast.success("Revenue calculation complete");
       }
 
-      // Save reconciliation settings for future use
       await saveReconciliationSettings();
+      setReconciliationData(reconciliationData);
 
-      setReconciliationData({
-        // Meter arrays
-        bulkMeters: gridSupplyMeters,
-        checkMeters,
-        otherMeters: [...solarEnergyMeters, ...unassignedMeters],  // Include unassigned meters here
-        tenantMeters,
-        councilBulk: gridSupplyMeters,  // UI expects this name
-        solarMeters: solarEnergyMeters,  // UI expects this name  
-        distribution: tenantMeters,  // UI expects this name
-        distributionMeters: tenantMeters,  // Alternative name
-        unassignedMeters,  // New: for displaying meters that aren't categorized
-        
-        // Totals
-        bulkTotal,
-        councilTotal: bulkTotal,  // Grid supply
-        otherTotal,
-        solarTotal: otherTotal,  // UI expects this name
-        tenantTotal,
-        distributionTotal: tenantTotal,  // UI expects this name
-        totalSupply,
-        recoveryRate,
-        discrepancy,
-        
-        // Revenue data
-        revenueData,
-      });
-
-      // Update availableMeters to reflect which meters have data in this date range
+      // Update availableMeters to reflect which meters have data
       setAvailableMeters(prevMeters => 
         prevMeters.map(meter => {
           const meterReadings = meterData.find(m => m.id === meter.id);
@@ -1732,32 +1712,24 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         })
       );
 
-      // Show completion message with failure count if applicable
       if (errors.size > 0) {
-        toast.warning(`Reconciliation complete with ${errors.size} meter failure${errors.size > 1 ? 's' : ''}. Check console for details.`);
-        console.warn("Failed meters:", Array.from(errors.entries()).map(([id, msg]) => {
-          const meter = meters.find(m => m.id === id);
-          return { meter_number: meter?.meter_number, error: msg };
-        }));
+        toast.warning(`Reconciliation complete with ${errors.size} meter failure${errors.size > 1 ? 's' : ''}`);
       } else {
         toast.success("Reconciliation complete");
       }
     } catch (error: any) {
       console.error("Reconciliation error:", error);
       
-      // Check if error was due to cancellation
       if (error.message === 'Reconciliation cancelled by user') {
-        console.log("Reconciliation cancelled successfully");
         toast.info("Reconciliation cancelled");
       } else {
-        toast.error("Failed to complete reconciliation. Please try again.");
+        toast.error("Failed to complete reconciliation");
       }
     } finally {
       setIsLoading(false);
       setIsCalculatingRevenue(false);
       setIsCancelling(false);
       cancelReconciliationRef.current = false;
-      console.log("Reconciliation cleanup complete");
     }
   };
 
@@ -1997,7 +1969,6 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
   };
 
   const handleReconcileForPeriod = async (startDate: Date, endDate: Date, fileName: string) => {
-    // Use the existing preview structure and re-fetch readings for the specific date range
     if (!previewData) {
       throw new Error("Please preview data first");
     }
@@ -2009,286 +1980,140 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     const fullDateTimeFrom = getFullDateTime(startDate, "00:00");
     const fullDateTimeTo = getFullDateTime(endDate, "23:59");
 
-    // Fetch site details including supply authority
-    const { data: siteData, error: siteError } = await supabase
-      .from("sites")
-      .select("id, name, supply_authority_id")
-      .eq("id", siteId)
-      .single();
-
-    if (siteError || !siteData?.supply_authority_id) {
-      throw new Error("Site supply authority not configured");
-    }
-
-    // Use the meters from preview data to maintain order and structure
-    const orderedMeterIds = previewData.meterOrder || availableMeters.map(m => m.id);
-    
-    // Fetch all meters data
-    const { data: metersData, error: metersError } = await supabase
-      .from("meters")
-      .select("id, meter_number, meter_type, tariff_structure_id, assigned_tariff_name, name, location")
-      .eq("site_id", siteId);
-
-    if (metersError || !metersData) {
-      throw new Error("Failed to fetch meters");
-    }
-
-    // Create a map for quick lookup
-    const metersMap = new Map(metersData.map(m => [m.id, m]));
-
-    // Process meters in the correct order from preview
-    const meterData = await Promise.all(
-      orderedMeterIds.map(async (meterId) => {
-        const meter = metersMap.get(meterId);
-        if (!meter) return null;
-
-        const { data: readings } = await supabase
-          .from("meter_readings")
-          .select("kwh_value, reading_timestamp, metadata")
-          .eq("meter_id", meter.id)
-          .gte("reading_timestamp", fullDateTimeFrom)
-          .lte("reading_timestamp", fullDateTimeTo)
-          .order("reading_timestamp", { ascending: true });
-
-        const uniqueReadings = readings ? 
-          Array.from(
-            new Map(readings.map(r => [r.reading_timestamp, r])).values()
-          ) : [];
-
-        let totalKwh = 0;
-        let totalKwhPositive = 0;
-        let totalKwhNegative = 0;
-        const columnTotals: Record<string, number> = {};
-        const columnMaxValues: Record<string, number> = {};
-
-        if (uniqueReadings.length > 0) {
-          totalKwh = uniqueReadings.reduce((sum, r) => sum + Number(r.kwh_value), 0);
-
-          const columnValues: Record<string, number[]> = {};
-          uniqueReadings.forEach(reading => {
-            const importedFields = (reading.metadata as any)?.imported_fields || {};
-            Object.entries(importedFields).forEach(([key, value]) => {
-              if (key.toLowerCase().includes('time') || key.toLowerCase().includes('date')) return;
-              if (!selectedColumns.has(key)) return;
-              
-              const numValue = Number(value);
-              if (!isNaN(numValue) && value !== null && value !== '') {
-                if (!columnValues[key]) {
-                  columnValues[key] = [];
-                }
-                columnValues[key].push(numValue);
-              }
-            });
-          });
-
-          Object.entries(columnValues).forEach(([key, values]) => {
-            const operation = columnOperations.get(key) || 'sum';
-            const factor = Number(columnFactors.get(key) || 1);
-            
-            let result = 0;
-            switch (operation) {
-              case 'sum':
-                result = values.reduce((sum, val) => sum + val, 0);
-                break;
-              case 'average':
-                result = values.reduce((sum, val) => sum + val, 0) / values.length;
-                break;
-              case 'max':
-                result = Math.max(...values);
-                break;
-              case 'min':
-                result = Math.min(...values);
-                break;
-            }
-            
-            result = result * factor;
-            
-            if (key.toLowerCase().includes('kva') || key.toLowerCase().includes('s (kva)')) {
-              columnMaxValues[key] = result;
-            } else {
-              columnTotals[key] = result;
-            }
-          });
-
-          Object.values(columnTotals).forEach((colTotal) => {
-            if (colTotal > 0) {
-              totalKwhPositive += colTotal;
-            } else if (colTotal < 0) {
-              totalKwhNegative += colTotal;
-            }
-          });
-        }
-
-        // Calculate revenue if meter has tariff assignment
-        let revenueInfo = null;
-        if (meter.assigned_tariff_name && siteData.supply_authority_id) {
-          const costResult = await calculateMeterCostAcrossPeriods(
-            meter.id,
-            siteData.supply_authority_id,
-            meter.assigned_tariff_name,
-            new Date(fullDateTimeFrom),
-            new Date(fullDateTimeTo),
-            totalKwhPositive
-          );
-          revenueInfo = costResult;
-        }
-
-        return {
-          ...meter,
-          readingsCount: uniqueReadings.length,
-          totalKwh,
-          totalKwhPositive,
-          totalKwhNegative,
-          columnTotals,
-          columnMaxValues,
-          revenueInfo,
-        };
-      })
+    // Use the shared reconciliation calculation function with revenue enabled
+    const { reconciliationData } = await performReconciliationCalculation(
+      fullDateTimeFrom,
+      fullDateTimeTo,
+      true // Always enable revenue for bulk reconciliation
     );
 
-    const filteredMeters = meterData.filter((m): m is NonNullable<typeof m> => m !== null && m.readingsCount > 0);
-
-    // Calculate hierarchical totals using the meter connections from preview
-    const hierarchicalTotals = new Map<string, number>();
-    
-    const calculateHierarchicalTotal = (meterId: string): number => {
-      if (hierarchicalTotals.has(meterId)) {
-        return hierarchicalTotals.get(meterId)!;
-      }
-
-      const meter = filteredMeters.find(m => m.id === meterId);
-      if (!meter) return 0;
-
-      const children = meterConnectionsMap.get(meterId) || [];
-      const childrenTotal = children.reduce((sum, childId) => {
-        return sum + calculateHierarchicalTotal(childId);
-      }, 0);
-
-      const columnTotals = meter.columnTotals || {};
-      const meterTotal = Object.values(columnTotals).reduce((sum: number, val: unknown) => {
-        return sum + Number(val);
-      }, 0);
-      const total = Number(meterTotal) - Number(childrenTotal);
-      
-      hierarchicalTotals.set(meterId, total);
-      return total;
-    };
-
-    // Calculate hierarchical totals for all meters
-    filteredMeters.forEach(meter => {
-      calculateHierarchicalTotal(meter.id);
-    });
-
-    // Apply hierarchical totals and assignments
-    const metersWithHierarchy = filteredMeters.map(meter => ({
-      ...meter,
-      hierarchicalTotal: hierarchicalTotals.get(meter.id) || 0,
-      assignment: meterAssignments.get(meter.id) || 'none'
-    }));
-
-    // Calculate category totals using assignments
-    const bulkMeters = metersWithHierarchy.filter((m) => 
-      m.meter_type === "Bulk - Council Meter" || m.assignment === "grid_supply"
-    );
-    const solarMeters = metersWithHierarchy.filter((m) => 
-      m.meter_type === "Bulk - Solar" || m.assignment === "solar_energy"
-    );
-    const tenantMeters = metersWithHierarchy.filter((m) => m.meter_type === "Tenant");
-
-    // Use hierarchical totals for calculation
-    const bulkTotal = bulkMeters.reduce((sum, m) => {
-      const total = selectedMetersForSummation.has(m.id) ? m.hierarchicalTotal : 0;
-      return sum + total;
-    }, 0);
-    
-    const solarTotal = solarMeters.reduce((sum, m) => {
-      const total = selectedMetersForSummation.has(m.id) ? m.hierarchicalTotal : 0;
-      return sum + total;
-    }, 0);
-    
-    const tenantTotal = tenantMeters.reduce((sum, m) => {
-      const total = selectedMetersForSummation.has(m.id) ? m.hierarchicalTotal : 0;
-      return sum + total;
-    }, 0);
-
-    const totalSupply = bulkTotal + solarTotal;
-    const discrepancy = totalSupply - tenantTotal;
-    const recoveryRate = totalSupply > 0 ? (tenantTotal / totalSupply) * 100 : 0;
-
-    const gridSupplyCost = bulkMeters.reduce((sum, m) => sum + (m.revenueInfo?.totalCost || 0), 0);
-    const solarCost = solarMeters.reduce((sum, m) => sum + (m.revenueInfo?.totalCost || 0), 0);
-    const tenantCost = tenantMeters.reduce((sum, m) => sum + (m.revenueInfo?.totalCost || 0), 0);
-    const totalRevenue = tenantCost;
-    const avgCostPerKwh = totalSupply > 0 ? (gridSupplyCost + solarCost) / totalSupply : 0;
-
+    // Save using the SAME pattern as handleSaveReconciliation
     const runName = `${fileName} - ${format(startDate, "MMM yyyy")}`;
-
-    // Get current user
-    const { data: { user } } = await supabase.auth.getUser();
-
-    // Save reconciliation run
-    const { data: savedRun, error: runError } = await supabase
-      .from("reconciliation_runs")
-      .insert({
-        site_id: siteId,
-        run_name: runName,
-        run_date: new Date().toISOString(),
-        date_from: fullDateTimeFrom,
-        date_to: fullDateTimeTo,
-        bulk_total: bulkTotal,
-        solar_total: solarTotal,
-        tenant_total: tenantTotal,
-        total_supply: totalSupply,
-        recovery_rate: recoveryRate,
-        discrepancy: discrepancy,
-        revenue_enabled: true,
-        grid_supply_cost: gridSupplyCost,
-        solar_cost: solarCost,
-        tenant_cost: tenantCost,
-        total_revenue: totalRevenue,
-        avg_cost_per_kwh: avgCostPerKwh,
-        meter_order: orderedMeterIds,
-        created_by: user?.id,
-      })
-      .select()
-      .single();
-
-    if (runError) throw runError;
-
-    // Save meter results with hierarchical totals
-    const meterResults = metersWithHierarchy.map((meter) => {
-      const revenueInfo = meter.revenueInfo;
-      return {
-        reconciliation_run_id: savedRun.id,
-        meter_id: meter.id,
-        meter_number: meter.meter_number,
-        meter_type: meter.meter_type,
-        meter_name: meter.name,
-        location: meter.location,
-        assignment: meter.assignment,
-        total_kwh: meter.totalKwh,
-        total_kwh_positive: meter.totalKwhPositive,
-        total_kwh_negative: meter.totalKwhNegative,
-        readings_count: meter.readingsCount,
-        hierarchical_total: meter.hierarchicalTotal,
-        tariff_structure_id: meter.tariff_structure_id,
-        tariff_name: revenueInfo?.tariffName || null,
-        energy_cost: revenueInfo?.energyCost || 0,
-        fixed_charges: revenueInfo?.fixedCharges || 0,
-        demand_charges: revenueInfo?.demandCharges || 0,
-        total_cost: revenueInfo?.totalCost || 0,
-        avg_cost_per_kwh: revenueInfo?.avgCostPerKwh || 0,
-        cost_calculation_error: revenueInfo?.errorMessage || null,
-        column_totals: meter.columnTotals || null,
-        column_max_values: meter.columnMaxValues || null,
+    
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      // 1. Insert reconciliation run with meter order
+      const meterOrder = availableMeters.map(m => m.id);
+      
+      const { data: run, error: runError } = await supabase
+        .from('reconciliation_runs')
+        .insert({
+          site_id: siteId,
+          run_name: runName,
+          date_from: fullDateTimeFrom,
+          date_to: fullDateTimeTo,
+          bulk_total: reconciliationData.bulkTotal,
+          solar_total: reconciliationData.solarTotal,
+          tenant_total: reconciliationData.tenantTotal || 0,
+          total_supply: reconciliationData.totalSupply,
+          recovery_rate: reconciliationData.recoveryRate,
+          discrepancy: reconciliationData.discrepancy,
+          created_by: user?.id,
+          notes: null,
+          revenue_enabled: reconciliationData.revenueData !== null,
+          grid_supply_cost: reconciliationData.revenueData?.gridSupplyCost || 0,
+          solar_cost: reconciliationData.revenueData?.solarCost || 0,
+          tenant_cost: reconciliationData.revenueData?.tenantCost || 0,
+          total_revenue: reconciliationData.revenueData?.totalRevenue || 0,
+          avg_cost_per_kwh: reconciliationData.revenueData?.avgCostPerKwh || 0,
+          meter_order: meterOrder
+        })
+        .select()
+        .single();
+      
+      if (runError) throw runError;
+      
+      // 2. Prepare all meters with their assignments (same as saveReconciliation)
+      const meterDataMap = new Map<string, any>();
+      
+      [...(reconciliationData.bulkMeters || []).map((m: any) => ({ ...m, assignment: 'grid_supply' })),
+       ...(reconciliationData.solarMeters || []).map((m: any) => ({ ...m, assignment: 'solar' })),
+       ...(reconciliationData.tenantMeters || []).map((m: any) => ({ ...m, assignment: 'tenant' })),
+       ...(reconciliationData.checkMeters || []).map((m: any) => ({ ...m, assignment: 'check' })),
+       ...(reconciliationData.unassignedMeters || []).map((m: any) => ({ ...m, assignment: 'unassigned' }))
+      ].forEach(m => meterDataMap.set(m.id, m));
+      
+      // Use availableMeters to maintain hierarchical order
+      const allMeters = availableMeters
+        .filter(m => meterDataMap.has(m.id))
+        .map(m => meterDataMap.get(m.id));
+      
+      // 3. Calculate hierarchical totals (same logic as saveReconciliation)
+      const meterMap = new Map(allMeters.map(m => [m.id, m]));
+      const hierarchicalTotals = new Map<string, number>();
+      
+      const getLeafMeterSum = (meterId: string, visited = new Set<string>()): number => {
+        if (visited.has(meterId)) return 0;
+        visited.add(meterId);
+        
+        const children = meterConnectionsMap.get(meterId) || [];
+        
+        if (children.length === 0) {
+          const meterData = meterMap.get(meterId);
+          if (!meterData) return 0;
+          
+          const isSolar = meterAssignments.get(meterId) === "solar_energy" || meterData.assignment === 'solar';
+          const value = meterData.totalKwh || 0;
+          return isSolar ? -value : value;
+        }
+        
+        return children.reduce((sum, childId) => {
+          return sum + getLeafMeterSum(childId, visited);
+        }, 0);
       };
-    });
-
-    const { error: resultsError } = await supabase
-      .from("reconciliation_meter_results")
-      .insert(meterResults);
-
-    if (resultsError) throw resultsError;
+      
+      allMeters.forEach(meter => {
+        const childIds = meterConnectionsMap.get(meter.id) || [];
+        if (childIds.length > 0) {
+          const hierarchicalTotal = childIds.reduce((sum, childId) => {
+            return sum + getLeafMeterSum(childId);
+          }, 0);
+          hierarchicalTotals.set(meter.id, hierarchicalTotal);
+        }
+      });
+      
+      // 4. Insert meter results (same as saveReconciliation)
+      const meterResults = allMeters.map((meter: any) => {
+        const revenueInfo = reconciliationData.revenueData?.meterRevenues.get(meter.id);
+        return {
+          reconciliation_run_id: run.id,
+          meter_id: meter.id,
+          meter_number: meter.meter_number,
+          meter_type: meter.meter_type,
+          meter_name: meter.name || null,
+          location: meter.location || null,
+          assignment: meter.assignment,
+          tariff_structure_id: meter.tariff_structure_id,
+          total_kwh: meter.totalKwh || 0,
+          total_kwh_positive: meter.totalKwhPositive || 0,
+          total_kwh_negative: meter.totalKwhNegative || 0,
+          hierarchical_total: hierarchicalTotals.get(meter.id) || 0,
+          readings_count: meter.readingsCount || 0,
+          column_totals: meter.columnTotals || null,
+          column_max_values: meter.columnMaxValues || null,
+          has_error: meter.hasError || false,
+          error_message: meter.errorMessage || null,
+          tariff_name: revenueInfo?.tariffName || null,
+          energy_cost: revenueInfo?.energyCost || 0,
+          fixed_charges: revenueInfo?.fixedCharges || 0,
+          demand_charges: revenueInfo?.demandCharges || 0,
+          total_cost: revenueInfo?.totalCost || 0,
+          avg_cost_per_kwh: revenueInfo?.avgCostPerKwh || 0,
+          cost_calculation_error: revenueInfo?.hasError ? revenueInfo.errorMessage : null
+        };
+      });
+      
+      const { error: resultsError } = await supabase
+        .from('reconciliation_meter_results')
+        .insert(meterResults);
+      
+      if (resultsError) throw resultsError;
+      
+    } catch (error) {
+      console.error('Save bulk reconciliation error:', error);
+      throw error;
+    }
   };
 
   const downloadMeterCSV = async (meter: any) => {
