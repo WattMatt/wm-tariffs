@@ -1511,11 +1511,11 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           ? ((selectedReconciliation.discrepancy / selectedReconciliation.total_supply) * 100).toFixed(2)
           : "0",
         recoveryRate: selectedReconciliation.recovery_rate.toFixed(2),
-        meterCount: selectedReconciliation.reconciliation_meter_results?.length || 0,
-        councilBulkCount: selectedReconciliation.reconciliation_meter_results?.filter((r: any) => r.meter_type === "bulk_meter").length || 0,
-        solarCount: selectedReconciliation.reconciliation_meter_results?.filter((r: any) => r.meter_type === "other").length || 0,
-        distributionCount: selectedReconciliation.reconciliation_meter_results?.filter((r: any) => r.meter_type === "tenant_meter").length || 0,
-        checkMeterCount: selectedReconciliation.reconciliation_meter_results?.filter((r: any) => r.meter_type === "check_meter").length || 0,
+        meterCount: meterData.length,
+        councilBulkCount: meterData.filter((m: any) => m.meter_type === "bulk_meter").length,
+        solarCount: meterData.filter((m: any) => m.meter_type === "other").length,
+        distributionCount: meterData.filter((m: any) => m.meter_type === "tenant_meter").length,
+        checkMeterCount: meterData.filter((m: any) => m.meter_type === "check_meter").length,
         readingsPeriod: `${format(new Date(selectedReconciliation.date_from), "dd MMM yyyy")} - ${format(new Date(selectedReconciliation.date_to), "dd MMM yyyy")}`,
         documentsAnalyzed: documentExtractions.length
       };
