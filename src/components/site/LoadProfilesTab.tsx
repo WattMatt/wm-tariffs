@@ -544,6 +544,39 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
 
   const selectedMeter = meters.find((m) => m.id === selectedMeterId);
 
+  // Calculate range and ticks at top level to avoid conditional hook calls
+  const data = isManipulationApplied ? manipulatedData : loadProfileData;
+  
+  const isShortRange = useMemo(() => {
+    if (!showGraph || selectedQuantities.size === 0 || data.length === 0) return false;
+    const firstDate = new Date(data[0]?.timestampStr);
+    const lastDate = new Date(data[data.length - 1]?.timestampStr);
+    const daysDiff = (lastDate.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24);
+    return daysDiff <= 7;
+  }, [data, showGraph, selectedQuantities.size]);
+  
+  const threeHourTicks = useMemo(() => {
+    if (!showGraph || selectedQuantities.size === 0 || !isShortRange || data.length === 0) return undefined;
+    
+    const ticks: string[] = [];
+    const firstDate = new Date(data[0]?.timestampStr);
+    const lastDate = new Date(data[data.length - 1]?.timestampStr);
+    
+    // Round down to nearest 3-hour interval
+    const startHour = Math.floor(firstDate.getHours() / 3) * 3;
+    const startTime = new Date(firstDate);
+    startTime.setHours(startHour, 0, 0, 0);
+    
+    // Generate ticks every 3 hours
+    let currentTime = startTime;
+    while (currentTime <= lastDate) {
+      ticks.push(currentTime.toISOString());
+      currentTime = new Date(currentTime.getTime() + 3 * 60 * 60 * 1000); // +3 hours
+    }
+    
+    return ticks;
+  }, [data, isShortRange, showGraph, selectedQuantities.size]);
+
   return (
     <div className="space-y-6">
       <Card>
@@ -938,41 +971,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                 </div>
               </div>
 
-              {showGraph && selectedQuantities.size > 0 && (() => {
-                // Calculate date range once for tick formatting
-                const data = isManipulationApplied ? manipulatedData : loadProfileData;
-                
-                const isShortRange = useMemo(() => {
-                  if (data.length === 0) return false;
-                  const firstDate = new Date(data[0]?.timestampStr);
-                  const lastDate = new Date(data[data.length - 1]?.timestampStr);
-                  const daysDiff = (lastDate.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24);
-                  return daysDiff <= 7;
-                }, [data]);
-                
-                const threeHourTicks = useMemo(() => {
-                  if (!isShortRange || data.length === 0) return undefined;
-                  
-                  const ticks: string[] = [];
-                  const firstDate = new Date(data[0]?.timestampStr);
-                  const lastDate = new Date(data[data.length - 1]?.timestampStr);
-                  
-                  // Round down to nearest 3-hour interval
-                  const startHour = Math.floor(firstDate.getHours() / 3) * 3;
-                  const startTime = new Date(firstDate);
-                  startTime.setHours(startHour, 0, 0, 0);
-                  
-                  // Generate ticks every 3 hours
-                  let currentTime = startTime;
-                  while (currentTime <= lastDate) {
-                    ticks.push(currentTime.toISOString());
-                    currentTime = new Date(currentTime.getTime() + 3 * 60 * 60 * 1000); // +3 hours
-                  }
-                  
-                  return ticks;
-                }, [data, isShortRange]);
-                
-                return (
+              {showGraph && selectedQuantities.size > 0 && (
                 <div className="mt-6 space-y-4 relative">
                   {/* Reset View button - positioned absolutely over chart */}
                   {(yAxisMin !== "" || yAxisMax !== "" || zoomState.startIndex !== null) && (
@@ -1280,8 +1279,7 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
                     </ResponsiveContainer>
                   </div>
                 </div>
-                );
-              })()}
+              )}
 
             </div>
           )}
