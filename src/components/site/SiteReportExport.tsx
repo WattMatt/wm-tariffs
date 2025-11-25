@@ -106,35 +106,28 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         setAvailableSchematics(schematics || []);
 
         // Fetch available folders from document paths with document counts
+        // Only include non-folder documents (actual files)
         const { data: documents, error: foldersError } = await supabase
           .from("site_documents")
           .select("folder_path")
-          .eq("site_id", siteId);
+          .eq("site_id", siteId)
+          .eq("is_folder", false);
 
         if (foldersError) throw foldersError;
         
-        // Get unique folder paths with counts
+        // Get unique folder paths with counts - only count actual documents
         const folderCounts = new Map<string, number>();
-        folderCounts.set('', 0); // Add root
         
         documents?.forEach(doc => {
           const docFolder = doc.folder_path || '';
           folderCounts.set(docFolder, (folderCounts.get(docFolder) || 0) + 1);
-          
-          if (doc.folder_path) {
-            // Add parent folders
-            const parts = doc.folder_path.split('/').filter(Boolean);
-            let currentPath = '';
-            parts.forEach(part => {
-              currentPath = currentPath ? `${currentPath}/${part}` : part;
-              if (!folderCounts.has(currentPath)) {
-                folderCounts.set(currentPath, 0);
-              }
-            });
-          }
         });
         
-        const uniqueFolders = Array.from(folderCounts.keys()).sort();
+        // Only include folders that have documents (count > 0)
+        const uniqueFolders = Array.from(folderCounts.keys())
+          .filter(path => (folderCounts.get(path) || 0) > 0)
+          .sort();
+          
         setAvailableFolders(uniqueFolders.map(path => ({ 
           path: path || "/",
           displayPath: path,
