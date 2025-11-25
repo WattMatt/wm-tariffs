@@ -132,6 +132,7 @@ export type Database = {
           avg_cost_per_kwh: number | null
           calculation_error: string | null
           created_at: string
+          demand_charges: number | null
           document_billed_amount: number | null
           document_id: string
           energy_cost: number
@@ -152,6 +153,7 @@ export type Database = {
           avg_cost_per_kwh?: number | null
           calculation_error?: string | null
           created_at?: string
+          demand_charges?: number | null
           document_billed_amount?: number | null
           document_id: string
           energy_cost?: number
@@ -172,6 +174,7 @@ export type Database = {
           avg_cost_per_kwh?: number | null
           calculation_error?: string | null
           created_at?: string
+          demand_charges?: number | null
           document_billed_amount?: number | null
           document_id?: string
           energy_cost?: number

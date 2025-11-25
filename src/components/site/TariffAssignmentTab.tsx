@@ -860,7 +860,7 @@ export default function TariffAssignmentTab({
                 
                 if (matchingResult) {
                   // Calculate variance
-                  const docAmount = doc.totalAmount || 0;
+                  const docAmount = (doc.totalAmountExcludingEmergency ?? doc.totalAmount) || 0;
                   const reconAmount = matchingResult.total_cost || 0;
                   const variance = reconAmount - docAmount;
                   const variancePercentage = docAmount > 0 
@@ -1134,6 +1134,7 @@ export default function TariffAssignmentTab({
           total_cost: result.totalCost,
           energy_cost: result.energyCost,
           fixed_charges: result.fixedCharges,
+          demand_charges: result.demandCharges || 0,
           total_kwh: totalKwh,
           avg_cost_per_kwh: totalKwh ? result.totalCost / totalKwh : 0,
           document_billed_amount: doc.totalAmountExcludingEmergency ?? doc.totalAmount,
@@ -1592,6 +1593,7 @@ export default function TariffAssignmentTab({
     const categories = {
       energy: [] as any[],
       basic: [] as any[],
+      demand: [] as any[],
       generator: [] as any[],
       other: [] as any[]
     };
@@ -1604,6 +1606,8 @@ export default function TariffAssignmentTab({
         categories.energy.push(item);
       } else if (desc.includes('basic') || desc.includes('fixed') || desc.includes('admin')) {
         categories.basic.push(item);
+      } else if (item.unit === 'kVA' || desc.includes('demand') || desc.includes('kva')) {
+        categories.demand.push(item);
       } else if (desc.includes('generator') || desc.includes('gen')) {
         categories.generator.push(item);
       } else {
@@ -1688,6 +1692,34 @@ export default function TariffAssignmentTab({
         doc: {
           consumption: '—',
           rate: '—',
+          cost: docCost > 0 ? `${currency} ${docCost.toFixed(2)}` : '—'
+        },
+        calc: {
+          consumption: '—',
+          rate: '—',
+          cost: calcCost > 0 ? `${currency} ${calcCost.toFixed(2)}` : '—'
+        },
+        variance: {
+          consumption: { value: '—', color: '' },
+          rate: { value: '—', color: '' },
+          cost: calcVariance(docCost > 0 ? docCost : null, calcCost > 0 ? calcCost : null)
+        }
+      });
+    }
+    
+    // Demand Charge (kVA-based)
+    if (categories.demand.length > 0 || calc.demand_charges > 0) {
+      const demandItems = categories.demand;
+      const docConsumption = demandItems.reduce((sum, item) => sum + (item.consumption || 0), 0);
+      const docRate = demandItems.length > 0 && demandItems[0].rate ? demandItems[0].rate : null;
+      const docCost = demandItems.reduce((sum, item) => sum + (item.amount || 0), 0);
+      const calcCost = calc.demand_charges || 0;
+      
+      rows.push({
+        name: 'Demand Charge',
+        doc: {
+          consumption: docConsumption > 0 ? `${docConsumption.toFixed(2)} kVA` : '—',
+          rate: docRate !== null ? `${currency} ${docRate.toFixed(2)}/kVA` : '—',
           cost: docCost > 0 ? `${currency} ${docCost.toFixed(2)}` : '—'
         },
         calc: {
