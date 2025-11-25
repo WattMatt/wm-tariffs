@@ -338,36 +338,165 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
     toast.success("Content updated! You can now generate the PDF.");
   };
 
-  const generatePdfPreview = async (sections: PdfSection[]): Promise<string> => {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        if (!previewData) {
-          resolve('');
-          return;
+  // Render meter hierarchy as HTML and capture with html2canvas
+  const renderMeterHierarchyToImage = async (
+    meters: any[],
+    positions: any[],
+    connections: any[]
+  ): Promise<string | null> => {
+    if (!meters?.length || !positions?.length) {
+      console.log('⚠️ Cannot render hierarchy: missing data', { meters: meters?.length, positions: positions?.length });
+      return null;
+    }
+
+    try {
+      const html2canvas = (await import('html2canvas')).default;
+      
+      // Create hidden container
+      const container = document.createElement('div');
+      container.style.cssText = `
+        position: absolute;
+        left: -9999px;
+        top: 0;
+        width: 1200px;
+        height: 800px;
+        background: white;
+        padding: 20px;
+      `;
+      document.body.appendChild(container);
+
+      // Find bounds for positioning
+      const xCoords = positions.map(p => p.x_position);
+      const yCoords = positions.map(p => p.y_position);
+      const minX = Math.min(...xCoords);
+      const minY = Math.min(...yCoords);
+      const maxX = Math.max(...xCoords);
+      const maxY = Math.max(...yCoords);
+      
+      const scaleX = 1100 / (maxX - minX || 1);
+      const scaleY = 700 / (maxY - minY || 1);
+      const scale = Math.min(scaleX, scaleY, 1);
+
+      // Create SVG for connections
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.style.cssText = 'position: absolute; top: 20px; left: 20px; width: 1160px; height: 760px;';
+      svg.setAttribute('width', '1160');
+      svg.setAttribute('height', '760');
+      
+      // Draw connection lines
+      connections?.forEach((conn: any) => {
+        const parentPos = positions.find(p => p.meter_id === conn.parent_meter_id);
+        const childPos = positions.find(p => p.meter_id === conn.child_meter_id);
+        
+        if (parentPos && childPos) {
+          const x1 = (parentPos.x_position - minX) * scale + 60;
+          const y1 = (parentPos.y_position - minY) * scale + 40;
+          const x2 = (childPos.x_position - minX) * scale + 60;
+          const y2 = (childPos.y_position - minY) * scale + 40;
+          
+          const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          line.setAttribute('x1', x1.toString());
+          line.setAttribute('y1', y1.toString());
+          line.setAttribute('x2', x2.toString());
+          line.setAttribute('y2', y2.toString());
+          line.setAttribute('stroke', '#64748b');
+          line.setAttribute('stroke-width', '2');
+          svg.appendChild(line);
+        }
+      });
+      container.appendChild(svg);
+
+      // Create meter cards
+      positions.forEach((pos: any) => {
+        const meter = meters.find(m => m.meter_id === pos.meter_id);
+        if (!meter) return;
+
+        const x = (pos.x_position - minX) * scale + 20;
+        const y = (pos.y_position - minY) * scale + 20;
+
+        // Determine color based on meter type
+        let borderColor = '#94a3b8';
+        let bgColor = '#f8fafc';
+        if (meter.meter_type?.toLowerCase().includes('bulk')) {
+          borderColor = '#22c55e';
+          bgColor = '#f0fdf4';
+        } else if (meter.meter_type?.toLowerCase().includes('solar')) {
+          borderColor = '#eab308';
+          bgColor = '#fefce8';
+        } else if (meter.meter_type?.toLowerCase().includes('tenant')) {
+          borderColor = '#3b82f6';
+          bgColor = '#eff6ff';
         }
 
-        const pdf = new jsPDF({
-          compress: true // Enable PDF compression
-        });
-        const pageWidth = pdf.internal.pageSize.getWidth();
-        const pageHeight = pdf.internal.pageSize.getHeight();
-        
-        // Extract data from preview
-        const {
-          siteName: previewSiteName,
-          meterData,
-          meterHierarchy,
-          reconciliationData,
-          documentExtractions,
-          anomalies,
-          schematicImageBase64,
-          csvColumnAggregations,
-          meterConnections,
-          meterPositions
-        } = previewData as any;
-        
-        console.log('🔍 PDF Preview - Meter Positions:', meterPositions?.length, meterPositions);
+        const card = document.createElement('div');
+        card.style.cssText = `
+          position: absolute;
+          left: ${x}px;
+          top: ${y}px;
+          width: 120px;
+          min-height: 80px;
+          background: ${bgColor};
+          border: 3px solid ${borderColor};
+          border-radius: 8px;
+          padding: 8px;
+          font-family: Arial, sans-serif;
+          font-size: 10px;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        `;
 
+        card.innerHTML = `
+          <div style="font-weight: bold; font-size: 11px; margin-bottom: 4px; color: #1e293b;">${meter.meter_number || 'N/A'}</div>
+          <div style="color: #64748b; margin-bottom: 2px;">${meter.meter_type || 'Unknown'}</div>
+          ${meter.meter_name ? `<div style="color: #475569; font-size: 9px; margin-bottom: 2px;">${meter.meter_name}</div>` : ''}
+          <div style="font-weight: 600; color: #0f172a; margin-top: 4px;">${meter.total_kwh?.toFixed(0) || '0'} kWh</div>
+        `;
+
+        container.appendChild(card);
+      });
+
+      // Capture with html2canvas
+      const canvas = await html2canvas(container, {
+        scale: 2,
+        backgroundColor: '#ffffff',
+        logging: false
+      });
+      
+      const imageData = canvas.toDataURL('image/png');
+      document.body.removeChild(container);
+      
+      console.log('✅ Successfully rendered meter hierarchy image');
+      return imageData;
+    } catch (error) {
+      console.error('❌ Error rendering meter hierarchy:', error);
+      return null;
+    }
+  };
+
+  const generatePdfPreview = async (sections: PdfSection[]): Promise<string> => {
+    if (!previewData) {
+      return '';
+    }
+
+    const pdf = new jsPDF({
+      compress: true // Enable PDF compression
+    });
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    
+    // Extract data from preview
+    const {
+      siteName: previewSiteName,
+      meterData,
+      meterHierarchy,
+      reconciliationData,
+      documentExtractions,
+      anomalies,
+      schematicImageBase64,
+      csvColumnAggregations,
+      meterConnections,
+      meterPositions
+    } = previewData as any;
+        
         // Template styling constants
         const blueBarWidth = 15;
         const leftMargin = 30;
@@ -1013,22 +1142,40 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         // Section 2: Site Infrastructure
         addSectionHeading("2. SITE INFRASTRUCTURE", 16, true);
         
-        // Add schematic-style layout at the top
-        console.log('🎨 Drawing Schematic - MeterData:', meterData?.length, 'Positions:', meterPositions?.length, 'Connections:', meterConnections?.length);
-        
+        // Add schematic hierarchy as embedded image
         if (meterData && meterData.length > 0 && meterPositions && meterPositions.length > 0) {
           addSubsectionHeading("Metering Hierarchy");
-          drawSchematicLayout(meterData, meterPositions, meterConnections || []);
           
-          pdf.setFontSize(9);
-          pdf.setFont("helvetica", "italic");
-          pdf.text("Figure 1: Site Metering Hierarchy Diagram", pageWidth / 2, yPos, { align: "center" });
-          pdf.setFont("helvetica", "normal");
-          yPos += 10;
-        } else {
-          // Debug message
-          addText(`[DEBUG] Schematic layout not shown - MeterData: ${meterData?.length || 0}, Positions: ${meterPositions?.length || 0}`, 10);
-          yPos += 10;
+          const hierarchyImage = await renderMeterHierarchyToImage(
+            meterData,
+            meterPositions,
+            meterConnections || []
+          );
+          
+          if (hierarchyImage) {
+            // Check if we need a new page
+            if (yPos > pageHeight - bottomMargin - 180) {
+              addFooter();
+              addPageNumber();
+              pdf.addPage();
+              yPos = topMargin;
+            }
+            
+            const imgWidth = 180;
+            const imgHeight = 120;
+            const imgX = (pageWidth - imgWidth) / 2;
+            pdf.addImage(hierarchyImage, 'PNG', imgX, yPos, imgWidth, imgHeight);
+            yPos += imgHeight + 5;
+            
+            pdf.setFontSize(9);
+            pdf.setFont("helvetica", "italic");
+            pdf.text("Figure 1: Site Metering Hierarchy Diagram", pageWidth / 2, yPos, { align: "center" });
+            pdf.setFont("helvetica", "normal");
+            yPos += 10;
+          } else {
+            addText("Meter hierarchy visualization unavailable.", 10);
+            yPos += 5;
+          }
         }
         
         addSpacer(5);
@@ -1298,9 +1445,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         
         const pdfBlob = pdf.output('blob');
         const url = URL.createObjectURL(pdfBlob);
-        resolve(url);
-      }, 100);
-    });
+        return url;
   };
 
   const generateMarkdownPreview = async () => {
@@ -1585,13 +1730,17 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         meterConnections = connections || [];
         
         // Fetch meter positions from the selected schematic
-        console.log('📍 Selected Schematic ID:', selectedSchematicId);
-        const { data: positions } = await supabase
-          .from('meter_positions')
-          .select('*, meters(meter_number, meter_type)')
-          .eq('schematic_id', selectedSchematicId);
-        meterPositions = positions || [];
-        console.log('📍 Fetched Meter Positions:', meterPositions.length, meterPositions);
+        if (selectedSchematicId) {
+          const { data: positions } = await supabase
+            .from('meter_positions')
+            .select('*, meters(meter_number, meter_type)')
+            .eq('schematic_id', selectedSchematicId);
+          meterPositions = positions || [];
+          console.log('✅ Loaded meter positions:', meterPositions.length);
+        } else {
+          console.warn('⚠️ No schematic selected - positions will be empty');
+          meterPositions = [];
+        }
       }
 
       // 5. Use data from selected reconciliation
