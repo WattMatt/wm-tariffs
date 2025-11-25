@@ -352,16 +352,18 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
     try {
       const html2canvas = (await import('html2canvas')).default;
       
-      // Create hidden container
+      // Create hidden container with larger size
+      const containerWidth = 1600;
+      const containerHeight = 1000;
       const container = document.createElement('div');
       container.style.cssText = `
         position: absolute;
-        left: -9999px;
+        left: -99999px;
         top: 0;
-        width: 1200px;
-        height: 800px;
+        width: ${containerWidth}px;
+        height: ${containerHeight}px;
         background: white;
-        padding: 20px;
+        padding: 40px;
       `;
       document.body.appendChild(container);
 
@@ -373,46 +375,25 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       const maxX = Math.max(...xCoords);
       const maxY = Math.max(...yCoords);
       
-      const scaleX = 1100 / (maxX - minX || 1);
-      const scaleY = 700 / (maxY - minY || 1);
-      const scale = Math.min(scaleX, scaleY, 1);
+      // Calculate scale to fit all meters with padding
+      const contentWidth = containerWidth - 80; // Leave padding
+      const contentHeight = containerHeight - 80;
+      const scaleX = contentWidth / ((maxX - minX) || 1);
+      const scaleY = contentHeight / ((maxY - minY) || 1);
+      const scale = Math.min(scaleX, scaleY, 0.8); // Cap scale at 0.8 for readability
 
-      // Create SVG for connections
-      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-      svg.style.cssText = 'position: absolute; top: 20px; left: 20px; width: 1160px; height: 760px;';
-      svg.setAttribute('width', '1160');
-      svg.setAttribute('height', '760');
-      
-      // Draw connection lines
-      connections?.forEach((conn: any) => {
-        const parentPos = positions.find(p => p.meter_id === conn.parent_meter_id);
-        const childPos = positions.find(p => p.meter_id === conn.child_meter_id);
-        
-        if (parentPos && childPos) {
-          const x1 = (parentPos.x_position - minX) * scale + 60;
-          const y1 = (parentPos.y_position - minY) * scale + 40;
-          const x2 = (childPos.x_position - minX) * scale + 60;
-          const y2 = (childPos.y_position - minY) * scale + 40;
-          
-          const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-          line.setAttribute('x1', x1.toString());
-          line.setAttribute('y1', y1.toString());
-          line.setAttribute('x2', x2.toString());
-          line.setAttribute('y2', y2.toString());
-          line.setAttribute('stroke', '#64748b');
-          line.setAttribute('stroke-width', '2');
-          svg.appendChild(line);
-        }
-      });
-      container.appendChild(svg);
+      console.log('📊 Hierarchy rendering - Meters:', meters.length, 'Positions:', positions.length, 'Scale:', scale.toFixed(2));
 
-      // Create meter cards
+      // Create meter cards FIRST (so they appear under connection lines in z-order)
       positions.forEach((pos: any) => {
         const meter = meters.find(m => m.meter_id === pos.meter_id);
-        if (!meter) return;
+        if (!meter) {
+          console.warn('⚠️ No meter found for position:', pos.meter_id);
+          return;
+        }
 
-        const x = (pos.x_position - minX) * scale + 20;
-        const y = (pos.y_position - minY) * scale + 20;
+        const x = (pos.x_position - minX) * scale + 40;
+        const y = (pos.y_position - minY) * scale + 40;
 
         // Determine color based on meter type
         let borderColor = '#94a3b8';
@@ -433,32 +414,67 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           position: absolute;
           left: ${x}px;
           top: ${y}px;
-          width: 120px;
-          min-height: 80px;
+          width: 140px;
+          min-height: 90px;
           background: ${bgColor};
           border: 3px solid ${borderColor};
           border-radius: 8px;
-          padding: 8px;
+          padding: 10px;
           font-family: Arial, sans-serif;
-          font-size: 10px;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+          font-size: 11px;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+          z-index: 10;
         `;
 
         card.innerHTML = `
-          <div style="font-weight: bold; font-size: 11px; margin-bottom: 4px; color: #1e293b;">${meter.meter_number || 'N/A'}</div>
-          <div style="color: #64748b; margin-bottom: 2px;">${meter.meter_type || 'Unknown'}</div>
-          ${meter.meter_name ? `<div style="color: #475569; font-size: 9px; margin-bottom: 2px;">${meter.meter_name}</div>` : ''}
-          <div style="font-weight: 600; color: #0f172a; margin-top: 4px;">${meter.total_kwh?.toFixed(0) || '0'} kWh</div>
+          <div style="font-weight: bold; font-size: 12px; margin-bottom: 5px; color: #1e293b;">${meter.meter_number || 'N/A'}</div>
+          <div style="color: #64748b; margin-bottom: 3px; font-size: 10px;">${meter.meter_type || 'Unknown'}</div>
+          ${meter.meter_name ? `<div style="color: #475569; font-size: 9px; margin-bottom: 3px;">${meter.meter_name}</div>` : ''}
+          <div style="font-weight: 600; color: #0f172a; margin-top: 5px; font-size: 11px;">${meter.total_kwh?.toFixed(0) || '0'} kWh</div>
         `;
 
         container.appendChild(card);
       });
 
+      // Create SVG for connections AFTER cards (so lines appear on top)
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.style.cssText = `position: absolute; top: 0; left: 0; width: ${containerWidth}px; height: ${containerHeight}px; z-index: 5; pointer-events: none;`;
+      svg.setAttribute('width', containerWidth.toString());
+      svg.setAttribute('height', containerHeight.toString());
+      
+      // Draw connection lines
+      connections?.forEach((conn: any) => {
+        const parentPos = positions.find(p => p.meter_id === conn.parent_meter_id);
+        const childPos = positions.find(p => p.meter_id === conn.child_meter_id);
+        
+        if (parentPos && childPos) {
+          const x1 = (parentPos.x_position - minX) * scale + 40 + 70; // Center of card
+          const y1 = (parentPos.y_position - minY) * scale + 40 + 45;
+          const x2 = (childPos.x_position - minX) * scale + 40 + 70;
+          const y2 = (childPos.y_position - minY) * scale + 40 + 45;
+          
+          const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          line.setAttribute('x1', x1.toString());
+          line.setAttribute('y1', y1.toString());
+          line.setAttribute('x2', x2.toString());
+          line.setAttribute('y2', y2.toString());
+          line.setAttribute('stroke', '#64748b');
+          line.setAttribute('stroke-width', '3');
+          line.setAttribute('opacity', '0.6');
+          svg.appendChild(line);
+        }
+      });
+      container.appendChild(svg);
+
+      // Wait a bit for DOM to settle
+      await new Promise(resolve => setTimeout(resolve, 100));
+
       // Capture with html2canvas
       const canvas = await html2canvas(container, {
         scale: 2,
         backgroundColor: '#ffffff',
-        logging: false
+        logging: false,
+        useCORS: true
       });
       
       const imageData = canvas.toDataURL('image/png');
@@ -1153,17 +1169,16 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           );
           
           if (hierarchyImage) {
-            // Check if we need a new page
-            if (yPos > pageHeight - bottomMargin - 180) {
-              addFooter();
-              addPageNumber();
-              pdf.addPage();
-              yPos = topMargin;
-            }
+            // Add new page for larger diagram
+            addFooter();
+            addPageNumber();
+            pdf.addPage();
+            yPos = topMargin;
             
-            const imgWidth = 180;
-            const imgHeight = 120;
-            const imgX = (pageWidth - imgWidth) / 2;
+            // Use full page width for larger, more readable diagram
+            const imgWidth = pageWidth - leftMargin - rightMargin;
+            const imgHeight = (imgWidth * 1000) / 1600; // Maintain aspect ratio
+            const imgX = leftMargin;
             pdf.addImage(hierarchyImage, 'PNG', imgX, yPos, imgWidth, imgHeight);
             yPos += imgHeight + 5;
             
