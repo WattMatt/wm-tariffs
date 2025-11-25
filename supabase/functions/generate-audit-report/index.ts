@@ -13,6 +13,7 @@ serve(async (req) => {
   try {
     const { 
       siteName,
+      siteDetails,
       auditPeriodStart,
       auditPeriodEnd,
       meterHierarchy,
@@ -20,7 +21,11 @@ serve(async (req) => {
       reconciliationData,
       documentExtractions,
       anomalies,
-      selectedCsvColumns 
+      selectedCsvColumns,
+      schematics,
+      tariffStructures,
+      loadProfiles,
+      costAnalysis
     } = await req.json();
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
@@ -28,111 +33,62 @@ serve(async (req) => {
       throw new Error('LOVABLE_API_KEY not configured');
     }
 
-    const systemPrompt = `You are an expert electrical metering auditor specializing in South African municipal billing and sub-metering reconciliation. Generate reports following this exact format with precise tables, status indicators (✓, ⚠, ✗), and one-line statements. Always reference specific meters, consumption values in kWh, and financial impacts in ZAR.`;
+    const systemPrompt = `You are an expert electrical metering auditor specializing in South African municipal billing and sub-metering reconciliation. Generate comprehensive, professional audit reports with precise data, detailed tables, and actionable insights. Always reference specific meters, consumption values in kWh, costs in ZAR, and use clear status indicators (✓ for acceptable, ⚠ for caution, ✗ for critical issues). Ensure all tables are properly formatted in markdown.`;
 
     const sections: any = {};
 
-    // Prepare CSV columns summary
-    let csvColumnsSummary = '';
-    if (selectedCsvColumns && selectedCsvColumns.length > 0) {
-      csvColumnsSummary = `\n\nCSV Columns Selected for Analysis:\n${selectedCsvColumns.map((col: any) => 
-        `- ${col.columnName} (${col.aggregation}, ×${col.multiplier})`
-      ).join('\n')}`;
+    // Helper function to prepare CSV column summary
+    const getCsvColumnsSummary = () => {
+      if (!selectedCsvColumns || selectedCsvColumns.length === 0) return '';
       
-      csvColumnsSummary += '\n\nMeter CSV Data:\n';
+      let summary = `\n\nCSV Columns Selected for Analysis:\n`;
+      selectedCsvColumns.forEach((col: any) => {
+        summary += `- ${col.columnName} (${col.aggregation}, ×${col.multiplier})\n`;
+      });
+      
+      summary += '\n\nMeter CSV Data:\n';
       meterHierarchy.forEach((meter: any) => {
-        csvColumnsSummary += `\n${meter.meterNumber}:\n`;
         if (meter.columnTotals) {
+          summary += `\n${meter.meterNumber}:\n`;
           Object.entries(meter.columnTotals).forEach(([key, value]) => {
-            csvColumnsSummary += `  ${key}: ${value}\n`;
+            summary += `  ${key}: ${value}\n`;
           });
         }
       });
-    }
+      
+      return summary;
+    };
+
+    const csvColumnsSummary = getCsvColumnsSummary();
 
     // 1. EXECUTIVE SUMMARY
-    const executiveSummaryPrompt = `Generate Section 1: Executive Summary for ${siteName}.
+    console.log('Generating Executive Summary...');
+    const execSummaryPrompt = `Generate Section 1: Executive Summary for ${siteName}.
 
-STRUCTURE REQUIRED (match this exactly):
-
-Single-sentence headline:
-[Site Name] [Period] Audit: Critical [X.XX]% Energy Variance and ZAR [Amount] Financial Loss Identified.
-
----
-
-# Energy Flow Summary
-
-| **GRID SUPPLY (Bulk Check)** | **COMBINED SUPPLY (VIRTUAL - TOTAL INJECTION)** | **SOLAR ENERGY (PV Tie In)** |
-|:------------------------------|:------------------------------------------------|:----------------------------|
-| **Total: ${reconciliationData.councilTotal.toFixed(2)} kWh** | **Total: ${reconciliationData.totalSupply.toFixed(2)} kWh** | **Total: ${reconciliationData.solarTotal.toFixed(2)} kWh** |
-| Source: Municipal/Council Supply | Components: Grid + Solar | Source: On-site Generation |
-| **Meter Details:** | **OVER/UNDER: ${reconciliationData.variance.toFixed(2)} kWh** | **Meter Details:** |
-| Type: [Extract meter_type from grid_supply assignment] | **% OF TOTAL: ${reconciliationData.variancePercentage}%** | Type: [Extract meter_type from solar_energy assignment] |
-| Number: [Extract meter_number from grid_supply assignment] | Combined from: | Number: [Extract meter_number from solar_energy assignment] |
-| Serial: [Extract serial_number if available] | - Grid: [Grid meter_number] | Serial: [Extract serial_number if available] |
-| Status: [✓/⚠/✗] | - Solar: [Solar meter_number] | Status: [✓/⚠/✗] |
-| | Status: [✓/⚠/✗] | |
-
-**Meter Assignment Data:**
-${JSON.stringify(meterHierarchy.filter((m: any) => m.assignment === 'grid_supply' || m.assignment === 'solar_energy'), null, 2)}
-
-**Instructions:**
-- Extract the actual meter_number, meter_type, and serial_number from the meters with assignment='grid_supply' for Grid Supply card
-- Extract the actual meter_number, meter_type, and serial_number from the meters with assignment='solar_energy' for Solar Energy card
-- If serial_number is not available, use meter_number
-- Use ✓ for values within acceptable range (<2% variance), ⚠ for caution range (2-5% variance), ✗ for critical issues (>5% variance)
-
----
-
-# Key Points
-
-- Scope: Audit covers ${auditPeriodStart} to ${auditPeriodEnd}, including council billing verification, main check meter validation, and tenant sub-metering reconciliation
-- Finding: [One sentence on primary issue causing financial losses]
-- Metering Variance: ${Math.abs(reconciliationData.variancePercentage)}% variance detected between total supply (${reconciliationData.totalSupply.toFixed(2)} kWh) and distribution (${reconciliationData.distributionTotal.toFixed(2)} kWh)
-- Financial Impact: Variance of ${Math.abs(reconciliationData.variance).toFixed(2)} kWh represents ZAR [calculate amount] in unaccounted energy
-
-# Performance Snapshot
-
-| Metric | Status | Detail |
-|--------|--------|--------|
-| Council Bill Accuracy | [✓/⚠/✗] | Grid supply vs council billing variance: [calculate %] |
-| Metering System Health | [✓/⚠/✗] | Combined supply (${reconciliationData.totalSupply.toFixed(2)} kWh) vs sub-metered consumption shows ${reconciliationData.variancePercentage}% discrepancy |
-| Tenant Billing Accuracy | [✓/⚠/✗] | Recovery rate of ${reconciliationData.recoveryRate.toFixed(2)}% against total supply |
-| Data Integrity | [✓/⚠/✗] | [Assess based on data gaps or missing readings] |
-
-# Top 3 Critical Findings
-
-## Finding 1: Energy Variance in Distribution
-Impact: ${Math.abs(reconciliationData.variance).toFixed(2)} kWh unaccounted between supply and distribution, representing ZAR [calculate @ 3.20/kWh] potential revenue loss.
-Priority: HIGH
-
-## Finding 2: [Title based on recovery rate or specific meter issues]
-Impact: [Specific issue description with ZAR amount]
-Priority: HIGH
-
-## Finding 3: [Title based on data quality or operational issues]
-Impact: [Specific issue description]
-Priority: MEDIUM
-
-# Financial Impact Calculation
-Energy Variance (${Math.abs(reconciliationData.variance).toFixed(2)} kWh @ ZAR 3.20) = ZAR [Total] Total Loss
-
-# Immediate Actions Required
-- Investigate and address ${Math.abs(reconciliationData.variance).toFixed(2)} kWh discrepancy between combined supply and tenant consumption
-- [Action 2 - specific to recovery rate or meter issues]
-
-DATA PROVIDED:
 Period: ${auditPeriodStart} to ${auditPeriodEnd}
-Total Supply (Combined): ${reconciliationData.totalSupply} kWh
-Grid Supply (Bulk): ${reconciliationData.councilTotal} kWh
-Solar Generation: ${reconciliationData.solarTotal} kWh
-Distribution (Consumption): ${reconciliationData.distributionTotal} kWh
-Variance (OVER/UNDER): ${reconciliationData.variance} kWh (${reconciliationData.variancePercentage}%)
-Recovery Rate: ${reconciliationData.recoveryRate}%
 
-Use ✓ for <2% variance, ⚠ for 2-5%, ✗ for >5%. Calculate all financial impacts at ZAR 3.20/kWh.`;
+Key Metrics:
+- Grid Supply: ${reconciliationData.councilTotal} kWh
+- Solar Generation: ${reconciliationData.solarTotal} kWh  
+- Total Supply: ${reconciliationData.totalSupply} kWh
+- Distribution Total: ${reconciliationData.distributionTotal} kWh
+- Variance: ${reconciliationData.variance} kWh (${reconciliationData.variancePercentage}%)
+- Recovery Rate: ${reconciliationData.recoveryRate}%
+- Anomalies: ${anomalies.length}
+${costAnalysis ? `- Total Cost: ZAR ${costAnalysis.totalCost}` : ''}
 
-    const execSummaryResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+Create a professional executive summary with:
+1. One-sentence headline capturing the key finding
+2. Energy flow summary in a table showing Grid/Solar/Combined supply with meter details
+3. Key points (scope, primary finding, financial impact, recovery rate)
+4. Performance snapshot table (Council Bill Accuracy, System Health, Data Integrity, Cost Tracking)
+5. Top 3 critical findings with impact and priority
+6. Immediate actions required
+
+Use status indicators: ✓ (<2% variance), ⚠ (2-5%), ✗ (>5%)
+Calculate financial impact at ZAR 3.20/kWh`;
+
+    const execResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${LOVABLE_API_KEY}`,
@@ -142,100 +98,129 @@ Use ✓ for <2% variance, ⚠ for 2-5%, ✗ for >5%. Calculate all financial imp
         model: 'google/gemini-2.5-flash',
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: executiveSummaryPrompt }
+          { role: 'user', content: execSummaryPrompt }
         ],
       }),
     });
 
-    if (!execSummaryResponse.ok) {
-      throw new Error(`AI Gateway error: ${execSummaryResponse.status}`);
-    }
+    if (!execResponse.ok) throw new Error(`AI Gateway error: ${execResponse.status}`);
+    const execResult = await execResponse.json();
+    sections.executiveSummary = execResult.choices[0].message.content;
 
-    const execSummaryResult = await execSummaryResponse.json();
-    sections.executiveSummary = execSummaryResult.choices[0].message.content;
+    // 2. SITE INFRASTRUCTURE  
+    console.log('Generating Site Infrastructure section...');
+    const infraPrompt = `Generate Section 2: Site Infrastructure for ${siteName}.
 
-    // 2. METERING HIERARCHY OVERVIEW
-    const hierarchyPrompt = `Generate Section 2: Metering Hierarchy Overview for ${siteName}.
+Site Details:
+${JSON.stringify(siteDetails, null, 2)}
 
-STRUCTURE REQUIRED (match this exactly):
+Meters Overview:
+- Total: ${meterHierarchy.length}
+- Bulk/Grid: ${meterHierarchy.filter((m: any) => m.type === 'council_bulk').length}
+- Solar: ${meterHierarchy.filter((m: any) => m.type === 'solar').length}
+- Distribution: ${meterHierarchy.filter((m: any) => m.type === 'distribution').length}
+- Revenue-Critical: ${meterHierarchy.filter((m: any) => m.isRevenueCritical).length}
 
-# Supply and Distribution
-[One sentence describing electricity flow sequence]
+Schematics:
+${schematics && schematics.length > 0 ? JSON.stringify(schematics, null, 2) : 'None uploaded'}
 
-[Supply Authority Name] → [Council Meter] → [M###: Site Check Meter] → Main DB → [Sub-meters: List] → Tenants
+Meter Data:
+${JSON.stringify(meterHierarchy.slice(0, 20), null, 2)}
 
-# Sub-metering Breakdown
+Create section with:
+1. Site details (address, connection point, supply authority)
+2. Meter inventory summary with counts by type
+3. Schematic documentation list
+4. Meter hierarchy showing parent-child relationships
+5. Comprehensive meter inventory table with all details (Meter #, Type, Location, Tariff, CT Ratio, Phase, Rating, Confirmation Status, Revenue-Critical flag)`;
 
-| Category | Key Meter Numbers | Area / Purpose Covered |
-|----------|-------------------|------------------------|
-| [Tenant/Unit Name] | [Meter IDs] | [Description of area] |
-| [Tenant/Unit Name] | [Meter IDs] | [Description of area] |
-| [Other category] | [Meter IDs] | [Description of area] |
+    const infraResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: infraPrompt }
+        ],
+      }),
+    });
 
-DATA PROVIDED:
-${JSON.stringify(meterHierarchy, null, 2)}
+    if (!infraResponse.ok) throw new Error(`AI Gateway error: ${infraResponse.status}`);
+    const infraResult = await infraResponse.json();
+    sections.siteInfrastructure = infraResult.choices[0].message.content;
+
+    // 3. TARIFF CONFIGURATION
+    console.log('Generating Tariff Configuration section...');
+    const tariffPrompt = `Generate Section 3: Tariff Configuration for ${siteName}.
+
+Supply Authority: ${siteDetails?.supplyAuthorityName || 'Not specified'}
+Region: ${siteDetails?.supplyAuthorityRegion || 'Not specified'}
+NERSA Increase: ${siteDetails?.nersaIncrease || 'Not specified'}%
+
+Tariff Structures:
+${tariffStructures && tariffStructures.length > 0 ? JSON.stringify(tariffStructures, null, 2) : 'No tariff data available'}
+
+Meter Tariff Assignments:
+${JSON.stringify(meterHierarchy.filter((m: any) => m.assignedTariffName).map((m: any) => ({
+  meter: m.meterNumber,
+  name: m.name,
+  tariff: m.assignedTariffName
+})), null, 2)}
+
+Create section with:
+1. Supply authority details
+2. Assigned tariffs (site-level and meter-level table)
+3. For each unique tariff, provide complete details:
+   - Tariff name, type, effective dates, voltage level
+   - Block structure table (if block tariff)
+   - Fixed charges table (basic, demand, other charges)
+   - TOU periods table (if TOU tariff) with seasons, day types, periods, hours, rates`;
+
+    const tariffResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: tariffPrompt }
+        ],
+      }),
+    });
+
+    if (!tariffResponse.ok) throw new Error(`AI Gateway error: ${tariffResponse.status}`);
+    const tariffResult = await tariffResponse.json();
+    sections.tariffConfiguration = tariffResult.choices[0].message.content;
+
+    // 4. METERING DATA ANALYSIS
+    console.log('Generating Metering Data Analysis section...');
+    const dataAnalysisPrompt = `Generate Section 4: Metering Data Analysis for ${siteName}.
+
+Period: ${auditPeriodStart} to ${auditPeriodEnd}
+
+Meter Breakdown Data:
 ${JSON.stringify(meterBreakdown, null, 2)}
 
-Create the flow diagram showing the actual meter numbers. Group sub-meters by tenant/purpose in the table.`;
+Load Profiles:
+${loadProfiles ? JSON.stringify(loadProfiles, null, 2) : 'No load profile data available'}
 
-    const hierarchyResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: hierarchyPrompt }
-        ],
-      }),
-    });
-
-    if (!hierarchyResponse.ok) {
-      throw new Error(`AI Gateway error: ${hierarchyResponse.status}`);
-    }
-
-    const hierarchyResult = await hierarchyResponse.json();
-    sections.hierarchyOverview = hierarchyResult.choices[0].message.content;
-
-    // 3. METERING SYSTEM OBSERVATIONS
-    const observationsPrompt = `Generate Section 3: Metering System Observations for ${siteName}.
-
-STRUCTURE REQUIRED (match this exactly):
-
-# Meter Reading Deficiencies
-
-| Meter Number | Deficiency Noted | Impact |
-|--------------|------------------|--------|
-| [Meter ID] | [One sentence describing deficiency] | [One sentence on impact] |
-
-# Variance Analysis (Check Meter vs Sum of Sub-Meters)
-
-The variance between the main check meter and the sum of sub-meters is [X.XX]%. This [exceeds/is within] the acceptable threshold of 2%.
-
-# Analysis Table
-
-| Description | kWh |
-|-------------|-----|
-| Total Consumption (Check Meter [ID]) | [Value] |
-| Total Sub-metered (Sum of [IDs]) | [Value] |
-| **Variance (Unaccounted Energy)** | **[Value]** |
-
-DATA PROVIDED:
-Variance: ${reconciliationData.variance} kWh (${reconciliationData.variancePercentage}%)
-Total Supply: ${reconciliationData.totalSupply} kWh
-Distribution Total: ${reconciliationData.distributionTotal} kWh
-Recovery Rate: ${reconciliationData.recoveryRate}%
-
-Anomalies: ${JSON.stringify(anomalies, null, 2)}
-Meter Breakdown: ${JSON.stringify(meterBreakdown, null, 2)}
 ${csvColumnsSummary}
 
-Identify meters with missing readings. Calculate actual variance percentage. Bold the variance row in the table.`;
+Create section with:
+1. Data coverage (date range per meter, completeness, reading frequency)
+2. Consumption analysis per meter (total kWh, average daily, peak demand if available)
+3. Hierarchical analysis (parent totals vs sum of children, energy balance at each level)
+4. Load profile characteristics if available (peak hours, usage patterns, demand profiles)
+5. CSV column analysis if selected (totals, max values, operations applied)`;
 
-    const observationsResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    const dataAnalysisResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${LOVABLE_API_KEY}`,
@@ -245,110 +230,46 @@ Identify meters with missing readings. Calculate actual variance percentage. Bol
         model: 'google/gemini-2.5-flash',
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: observationsPrompt }
+          { role: 'user', content: dataAnalysisPrompt }
         ],
       }),
     });
 
-    if (!observationsResponse.ok) {
-      throw new Error(`AI Gateway error: ${observationsResponse.status}`);
-    }
+    if (!dataAnalysisResponse.ok) throw new Error(`AI Gateway error: ${dataAnalysisResponse.status}`);
+    const dataAnalysisResult = await dataAnalysisResponse.json();
+    sections.meteringDataAnalysis = dataAnalysisResult.choices[0].message.content;
 
-    const observationsResult = await observationsResponse.json();
-    sections.observations = observationsResult.choices[0].message.content;
+    // 5. DOCUMENT & INVOICE VALIDATION (if documents available)
+    if (documentExtractions && documentExtractions.length > 0) {
+      console.log('Generating Document Validation section...');
+      const docValidationPrompt = `Generate Section 5: Document & Invoice Validation for ${siteName}.
 
-    // 5. RECOMMENDATIONS
-    const recommendationsPrompt = `Generate Section 5: Recommendations for ${siteName}.
+Documents:
+${JSON.stringify(documentExtractions, null, 2)}
 
-STRUCTURE REQUIRED (match this exactly):
-
-# Immediate Actions (HIGH Priority)
-
-| Action | Owner | Timeline |
-|--------|-------|----------|
-| [Specific action 1] | [Facility Manager/Energy Team/etc.] | [24 Hours/7 Days/etc.] |
-| [Specific action 2] | [Owner] | [Timeline] |
-| [Specific action 3] | [Owner] | [Timeline] |
-
-# Process Improvements (MEDIUM Priority)
-
-[Action statement as heading]
-
-Implementation Steps:
-1. [Concrete step 1]
-2. [Concrete step 2]
-3. [Concrete step 3]
-
-DATA PROVIDED:
-Variance: ${reconciliationData.variance} kWh (${reconciliationData.variancePercentage}%)
-Recovery Rate: ${reconciliationData.recoveryRate}%
-Anomalies: ${JSON.stringify(anomalies, null, 2)}
-
-Generate 3-5 immediate actions with specific owners (e.g., "Facility Manager", "Energy Team", "Billing Department") and realistic timelines. For process improvements, provide a clear action statement and 3-5 numbered implementation steps.`;
-
-    const recommendationsResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: recommendationsPrompt }
-        ],
-      }),
-    });
-
-    if (!recommendationsResponse.ok) {
-      throw new Error(`AI Gateway error: ${recommendationsResponse.status}`);
-    }
-
-    const recommendationsResult = await recommendationsResponse.json();
-    sections.recommendations = recommendationsResult.choices[0].message.content;
-
-    // 4. BILLING AND INVOICE VALIDATION
-    if (documentExtractions?.length > 0) {
-      const billingPrompt = `Generate Section 4: Billing and Invoice Validation for ${siteName}.
-
-STRUCTURE REQUIRED (match this exactly):
-
-# A. Council Bill Validation
-
-This check confirms the [Utility Name] utility bill matches our main site meter.
-
-# Consumption Verification
-
-| Description | Council Billed (kWh) | Site Check Meter (kWh) | Difference | Status |
-|-------------|---------------------|----------------------|------------|--------|
-| [Period description] | [Value] | [Value] | [Diff] | [✓/⚠/✗] |
-
-# B. Tenant Invoice Validation
-
-This check confirms our invoices to tenants are accurate.
-
-# Invoice vs Meter Data Check
-
-| Tenant/Meter | Metered (kWh) | Invoiced (kWh) | Difference | Status |
-|--------------|--------------|----------------|------------|--------|
-| [Tenant/Meter ID] | [Value] | [Value] | [Diff] | [✓/⚠/✗] |
-
-# Tenant Tariff Check
-
-| Tenant/Meter | Tariff Applied | Correct Tariff | Financial Impact (ZAR) | Status |
-|--------------|---------------|----------------|----------------------|--------|
-| [Tenant/Meter ID] | [Rate] | [Rate] | [Amount] | [✓/⚠/✗] |
-
-DATA PROVIDED:
-Document Extractions: ${JSON.stringify(documentExtractions, null, 2)}
-Meter Data: ${JSON.stringify(meterBreakdown, null, 2)}
+Reconciliation Data:
 Council Total: ${reconciliationData.councilTotal} kWh
 Total Supply: ${reconciliationData.totalSupply} kWh
 
-Cross-reference council bill with site check meter. Compare tenant invoices with actual metered data. Identify tariff misapplications with financial impact. Use ✓ for matches, ⚠ for <5% variance, ✗ for >5% variance.`;
+Meter Breakdown:
+${JSON.stringify(meterBreakdown.slice(0, 10), null, 2)}
 
-      const billingResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+Create section with:
+1. Council Bill Validation
+   - Consumption verification table (Council Billed vs Site Meter, Difference, Status)
+2. Tenant Invoice Validation  
+   - Invoice vs meter data check table (Tenant/Meter, Metered, Invoiced, Difference, Status)
+   - Tariff application check table (Tenant/Meter, Tariff Applied, Correct Tariff, Financial Impact, Status)
+3. Cost Component Analysis
+   - Energy charges breakdown
+   - Demand charges (kVA-based) if applicable
+   - Fixed charges comparison
+   - Total variance analysis with ZAR amounts
+4. Variance summary with root causes
+
+Use ✓ for matches, ⚠ for <5% variance, ✗ for >5% variance`;
+
+      const docResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${LOVABLE_API_KEY}`,
@@ -358,20 +279,180 @@ Cross-reference council bill with site check meter. Compare tenant invoices with
           model: 'google/gemini-2.5-flash',
           messages: [
             { role: 'system', content: systemPrompt },
-            { role: 'user', content: billingPrompt }
+            { role: 'user', content: docValidationPrompt }
           ],
         }),
       });
 
-      if (!billingResponse.ok) {
-        throw new Error(`AI Gateway error: ${billingResponse.status}`);
-      }
-
-      const billingResult = await billingResponse.json();
-      sections.billingValidation = billingResult.choices[0].message.content;
+      if (!docResponse.ok) throw new Error(`AI Gateway error: ${docResponse.status}`);
+      const docResult = await docResponse.json();
+      sections.documentValidation = docResult.choices[0].message.content;
     }
 
-    console.log('✓ Generated all report sections');
+    // 6. RECONCILIATION RESULTS
+    console.log('Generating Reconciliation Results section...');
+    const reconPrompt = `Generate Section 6: Reconciliation Results for ${siteName}.
+
+Period: ${auditPeriodStart} to ${auditPeriodEnd}
+
+Reconciliation Summary:
+- Grid Supply: ${reconciliationData.councilTotal} kWh
+- Solar: ${reconciliationData.solarTotal} kWh
+- Total Supply: ${reconciliationData.totalSupply} kWh
+- Distribution: ${reconciliationData.distributionTotal} kWh
+- Variance: ${reconciliationData.variance} kWh (${reconciliationData.variancePercentage}%)
+- Recovery Rate: ${reconciliationData.recoveryRate}%
+
+Meter Results:
+${JSON.stringify(meterBreakdown, null, 2)}
+
+${csvColumnsSummary}
+
+Create section with:
+1. Reconciliation summary (run name, date, period)
+2. Energy balance (grid, solar, total supply, distribution, recovery rate, variance)
+3. Financial summary if available (grid cost, solar cost, tenant revenue, net position, avg cost/kWh)
+4. Meter-level results table (Meter #, Name, Type, Location, Total kWh, +/- kWh, Hierarchical Total, Energy Cost, Demand Charges, Fixed Charges, Total Cost, Cost/kWh, Errors)
+5. Custom column analysis (selected columns with operations, totals, max values, factors)`;
+
+    const reconResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: reconPrompt }
+        ],
+      }),
+    });
+
+    if (!reconResponse.ok) throw new Error(`AI Gateway error: ${reconResponse.status}`);
+    const reconResult = await reconResponse.json();
+    sections.reconciliationResults = reconResult.choices[0].message.content;
+
+    // 7. COST ANALYSIS
+    if (costAnalysis) {
+      console.log('Generating Cost Analysis section...');
+      const costPrompt = `Generate Section 7: Cost Analysis for ${siteName}.
+
+Cost Data:
+${JSON.stringify(costAnalysis, null, 2)}
+
+Reconciliation:
+- Total Supply: ${reconciliationData.totalSupply} kWh
+- Recovery Rate: ${reconciliationData.recoveryRate}%
+
+Create section with:
+1. Total cost breakdown (by meter type: bulk/solar/tenant, by component: energy/demand/fixed, by tariff)
+2. Cost trends if historical data available (month-over-month, cost per kWh trends, demand charge trends)
+3. Efficiency metrics (cost per m² if area available, solar offset value, tenant cost recovery %)
+4. Cost optimization opportunities`;
+
+      const costResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'google/gemini-2.5-flash',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: costPrompt }
+          ],
+        }),
+      });
+
+      if (!costResponse.ok) throw new Error(`AI Gateway error: ${costResponse.status}`);
+      const costResult = await costResponse.json();
+      sections.costAnalysis = costResult.choices[0].message.content;
+    }
+
+    // 8. FINDINGS & ANOMALIES
+    console.log('Generating Findings section...');
+    const findingsPrompt = `Generate Section 8: Findings & Anomalies for ${siteName}.
+
+Anomalies:
+${JSON.stringify(anomalies, null, 2)}
+
+Variance: ${reconciliationData.variance} kWh (${reconciliationData.variancePercentage}%)
+Recovery Rate: ${reconciliationData.recoveryRate}%
+
+Meters:
+${JSON.stringify(meterHierarchy.map((m: any) => ({
+  number: m.meterNumber,
+  type: m.type,
+  status: m.confirmationStatus,
+  readingsCount: m.readingsCount
+})), null, 2)}
+
+Create section with:
+1. Data Quality Issues (missing readings, gaps, unconfirmed meters, meters without readings)
+2. Calculation Issues (cost calculation errors, failed tariff applications, low confidence extractions)
+3. Billing Anomalies (significant variances >10%, unexpected charges, period mismatches)
+4. Configuration Issues (meters without tariffs, orphaned meters, duplicate numbers)
+5. Summary table of all anomalies (#, Severity, Meter, Description)`;
+
+    const findingsResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: findingsPrompt }
+        ],
+      }),
+    });
+
+    if (!findingsResponse.ok) throw new Error(`AI Gateway error: ${findingsResponse.status}`);
+    const findingsResult = await findingsResponse.json();
+    sections.findingsAnomalies = findingsResult.choices[0].message.content;
+
+    // 9. RECOMMENDATIONS
+    console.log('Generating Recommendations section...');
+    const recoPrompt = `Generate Section 9: Recommendations for ${siteName}.
+
+Variance: ${reconciliationData.variance} kWh (${reconciliationData.variancePercentage}%)
+Recovery Rate: ${reconciliationData.recoveryRate}%
+Anomalies: ${anomalies.length}
+Critical/High Issues: ${anomalies.filter((a: any) => a.severity === 'CRITICAL' || a.severity === 'HIGH').length}
+
+Create section with:
+1. Immediate Actions (HIGH Priority) - table with Action, Owner, Timeline for 3-5 urgent items
+2. Metering Improvements (MEDIUM Priority) - specific recommendations for additional sub-metering, meter upgrades, data collection
+3. Cost Optimization - tariff optimization opportunities, load shifting potential based on TOU, solar utilization improvements
+4. Documentation - schematic updates, meter verification needs, tariff review schedule
+
+Make all recommendations specific, actionable, and tied to findings with clear priorities and timelines.`;
+
+    const recoResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: recoPrompt }
+        ],
+      }),
+    });
+
+    if (!recoResponse.ok) throw new Error(`AI Gateway error: ${recoResponse.status}`);
+    const recoResult = await recoResponse.json();
+    sections.recommendations = recoResult.choices[0].message.content;
+
+    console.log('✓ Generated all 9 report sections');
 
     return new Response(
       JSON.stringify({
