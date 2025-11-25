@@ -1164,6 +1164,11 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         // Section 2: Site Infrastructure
         addSectionHeading("2. SITE INFRASTRUCTURE", 16, true);
         
+        console.log('📄 PDF Section 2: schematicImageBase64 exists?', !!schematicImageBase64);
+        if (schematicImageBase64) {
+          console.log('📄 PDF Section 2: base64 length:', schematicImageBase64.length);
+        }
+        
         // Add schematic snapshot image (meter cards and connections on white background)
         if (schematicImageBase64) {
           addSubsectionHeading("Metering Hierarchy");
@@ -1932,13 +1937,20 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             .single();
           
           if (siteData) {
-            const clientName = (siteData.clients as any).name.trim().replace(/[^a-zA-Z0-9\s-_]/g, '').replace(/\s+/g, ' ');
-            const siteName = siteData.name.trim().replace(/[^a-zA-Z0-9\s-_]/g, '').replace(/\s+/g, ' ');
+            const clientName = (siteData.clients as any).name.replace(/[^a-zA-Z0-9\s-_]/g, '').replace(/\s+/g, ' ');
+            const siteName = siteData.name.replace(/[^a-zA-Z0-9\s-_]/g, '').replace(/\s+/g, ' ');
             // Match the same sanitization used when creating the snapshot (spaces to underscores)
             const sanitizedSchematicName = selectedSchematic.name.replace(/[^a-zA-Z0-9\s-_]/g, '').replace(/\s+/g, '_');
             const snapshotPath = `${clientName}/${siteName}/Metering/Schematics/${sanitizedSchematicName}_snapshot.png`;
             
-            console.log('🖼️ Attempting to load snapshot from:', snapshotPath);
+            console.log('🖼️ SNAPSHOT DEBUG:');
+            console.log('  - Client Name (raw):', (siteData.clients as any).name);
+            console.log('  - Client Name (sanitized):', clientName);
+            console.log('  - Site Name (raw):', siteData.name);
+            console.log('  - Site Name (sanitized):', siteName);
+            console.log('  - Schematic Name (raw):', selectedSchematic.name);
+            console.log('  - Schematic Name (sanitized):', sanitizedSchematicName);
+            console.log('  - Full snapshot path:', snapshotPath);
             
             const { data: snapshotData, error: snapshotError } = await supabase.storage
               .from("client-files")
@@ -1946,11 +1958,12 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
 
             if (snapshotError) {
               console.error('❌ Snapshot load error:', snapshotError);
-              toast.error(`Snapshot not found. Please generate snapshot in Schematic Editor first.`);
+              console.log('❌ Error details:', JSON.stringify(snapshotError, null, 2));
+              toast.error(`Snapshot not found at: ${snapshotPath}. Please generate snapshot in Schematic Editor first.`);
             }
 
             if (snapshotData && !snapshotError) {
-              console.log('✅ Snapshot found, using it for PDF');
+              console.log('✅ Snapshot found! Blob size:', snapshotData.size, 'bytes');
               toast.success('Snapshot loaded successfully');
               // Create an image element to compress
               const img = new Image();
@@ -1983,10 +1996,15 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
                   ctx?.drawImage(img, 0, 0, width, height);
                   schematicImageBase64 = canvas.toDataURL('image/png', 0.9);
                   
+                  console.log('✅ Snapshot compressed to base64, length:', schematicImageBase64.length);
+                  
                   URL.revokeObjectURL(url);
                   resolve(null);
                 };
-                img.onerror = reject;
+                img.onerror = (err) => {
+                  console.error('❌ Image load error:', err);
+                  reject(err);
+                };
                 img.src = url;
               });
             } else {
