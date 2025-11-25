@@ -126,7 +126,12 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         // Only include folders that have documents (count > 0)
         const uniqueFolders = Array.from(folderCounts.keys())
           .filter(path => (folderCounts.get(path) || 0) > 0)
-          .sort();
+          .sort((a, b) => {
+            // Sort alphabetically
+            const aName = a || "Root";
+            const bName = b || "Root";
+            return aName.localeCompare(bName);
+          });
           
         setAvailableFolders(uniqueFolders.map(path => ({ 
           path: path || "/",
