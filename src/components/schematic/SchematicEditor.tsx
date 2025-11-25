@@ -3907,6 +3907,11 @@ export default function SchematicEditor({
     const originalWidth = (fabricCanvas as any).originalImageWidth || 1920;
     const originalHeight = (fabricCanvas as any).originalImageHeight || 1080;
 
+    console.log('🖼️ Starting snapshot generation...');
+    console.log('📐 Canvas dimensions:', originalWidth, 'x', originalHeight);
+    console.log('📊 schematicLines count:', schematicLines.length);
+    console.log('📍 meterPositions count:', meterPositions.length);
+
     // Create a hidden canvas with original image dimensions
     const snapshotCanvas = document.createElement('canvas');
     snapshotCanvas.width = originalWidth;
@@ -3917,11 +3922,13 @@ export default function SchematicEditor({
       throw new Error('Could not get canvas context');
     }
 
-    // Fill with white background (no schematic image)
+    // Fill with white background ONLY - NO schematic image
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, originalWidth, originalHeight);
+    console.log('✅ White background drawn');
 
-    // Draw connection lines from schematic_lines data
+    // Draw connection lines from schematic_lines data (solid black, NOT dashed blue)
+    console.log('🔗 Drawing connection lines from schematic_lines...');
     const linesByConnection = new Map<string, any[]>();
     schematicLines.forEach((line: any) => {
       const connectionKey = line.metadata?.connectionKey || 'unknown';
@@ -3931,21 +3938,26 @@ export default function SchematicEditor({
       linesByConnection.get(connectionKey)!.push(line);
     });
 
+    console.log('🔗 Total connections:', linesByConnection.size);
+    let lineCount = 0;
+    let nodeCount = 0;
+
     linesByConnection.forEach((lines) => {
-      // Draw line segments
+      // Draw line segments - SOLID BLACK
       lines.forEach((line: any) => {
         const x1 = (line.from_x / 100) * originalWidth;
         const y1 = (line.from_y / 100) * originalHeight;
         const x2 = (line.to_x / 100) * originalWidth;
         const y2 = (line.to_y / 100) * originalHeight;
         
-        ctx.strokeStyle = line.color || '#000000';
-        ctx.lineWidth = line.stroke_width || 6;
-        ctx.setLineDash([]);
+        ctx.strokeStyle = '#000000'; // Always black
+        ctx.lineWidth = 6; // Always 6px
+        ctx.setLineDash([]); // Always solid, NOT dashed
         ctx.beginPath();
         ctx.moveTo(x1, y1);
         ctx.lineTo(x2, y2);
         ctx.stroke();
+        lineCount++;
       });
 
       // Draw connection nodes at vertices
@@ -3959,14 +3971,21 @@ export default function SchematicEditor({
         ctx.beginPath();
         ctx.arc(x1, y1, 4, 0, 2 * Math.PI);
         ctx.fill();
+        nodeCount++;
         
         ctx.beginPath();
         ctx.arc(x2, y2, 4, 0, 2 * Math.PI);
         ctx.fill();
+        nodeCount++;
       });
     });
 
-    // Draw meter cards using createMeterCardImage
+    console.log('✅ Drew', lineCount, 'lines and', nodeCount, 'nodes');
+
+    // Draw meter cards using createMeterCardImage (table-style, NOT simple rectangles)
+    console.log('🎴 Drawing meter cards using createMeterCardImage...');
+    let meterCardCount = 0;
+    
     for (const pos of meterPositions) {
       const meter = meters.find((m: any) => m.id === pos.meter_id);
       if (!meter) continue;
@@ -3976,7 +3995,7 @@ export default function SchematicEditor({
       const cardWidth = 200;
       const cardHeight = 140;
 
-      // Create fields for meter card
+      // Create fields for meter card - table style
       const fields = [
         { label: 'NO', value: meter.meter_number || 'N/A' },
         { label: 'NAME', value: meter.name || 'N/A' },
@@ -3993,12 +4012,15 @@ export default function SchematicEditor({
         const img = new Image();
         img.onload = () => {
           ctx.drawImage(img, x - cardWidth / 2, y - cardHeight / 2, cardWidth, cardHeight);
+          meterCardCount++;
           resolve();
         };
         img.onerror = reject;
         img.src = meterCardDataUrl;
       });
     }
+
+    console.log('✅ Drew', meterCardCount, 'meter cards');
 
     // Convert canvas to blob
     const blob = await new Promise<Blob>((resolve, reject) => {
@@ -4033,35 +4055,37 @@ export default function SchematicEditor({
     const fileName = `${schematicName.replace(/[^a-zA-Z0-9\s-_]/g, '').replace(/\s+/g, '_')}_snapshot.png`;
     const filePath = `${clientName}/${siteName}/Metering/Schematics/${fileName}`;
 
-    // Check if file exists and delete it
-    const { data: existingFiles } = await supabase
+    // Force delete existing file to ensure overwrite
+    console.log('🗑️ Deleting existing snapshot:', filePath);
+    const { error: deleteError } = await supabase
       .storage
       .from('client-files')
-      .list(`${clientName}/${siteName}/Metering/Schematics`, {
-        search: fileName
-      });
-
-    if (existingFiles && existingFiles.length > 0) {
-      await supabase
-        .storage
-        .from('client-files')
-        .remove([filePath]);
+      .remove([filePath]);
+    
+    if (deleteError) {
+      console.log('⚠️ Delete error (file may not exist):', deleteError.message);
+    } else {
+      console.log('✅ Old snapshot deleted');
     }
 
-    // Upload new snapshot
+    // Upload new snapshot with cache-busting
+    console.log('⬆️ Uploading new snapshot...');
     const { error: uploadError } = await supabase
       .storage
       .from('client-files')
       .upload(filePath, blob, {
         contentType: 'image/png',
+        cacheControl: '0', // Disable caching
         upsert: true
       });
 
     if (uploadError) {
+      console.error('❌ Upload error:', uploadError);
       throw uploadError;
     }
 
-    console.log('✅ Schematic snapshot saved:', filePath);
+    console.log('✅ Schematic snapshot saved successfully:', filePath);
+    console.log('📦 Blob size:', blob.size, 'bytes');
   };
 
 
