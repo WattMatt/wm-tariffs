@@ -1666,18 +1666,39 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         }
       }
 
-      // 8. Prepare meter breakdown from reconciliation data
-      const sortMetersByType = (meters: any[]) => {
-        return meters.sort((a, b) => {
-          const typeOrder = { bulk_meter: 1, other: 2, check_meter: 3, tenant_meter: 4 };
-          const aOrder = typeOrder[a.meter_type as keyof typeof typeOrder] || 5;
-          const bOrder = typeOrder[b.meter_type as keyof typeof typeOrder] || 5;
-          if (aOrder !== bOrder) return aOrder - bOrder;
-          return (a.meter_number || "").localeCompare(b.meter_number || "");
+      // 8. Prepare meter breakdown from reconciliation data using saved schematic order
+      const sortMetersBySchematicOrder = (meters: any[]) => {
+        if (!selectedReconciliation.meter_order || selectedReconciliation.meter_order.length === 0) {
+          // Fallback to type-based sorting if no meter_order is saved
+          return meters.sort((a, b) => {
+            const typeOrder = { bulk_meter: 1, council_meter: 2, other: 3, check_meter: 4, tenant_meter: 5 };
+            const aOrder = typeOrder[a.meter_type as keyof typeof typeOrder] || 99;
+            const bOrder = typeOrder[b.meter_type as keyof typeof typeOrder] || 99;
+            if (aOrder !== bOrder) return aOrder - bOrder;
+            return (a.meter_number || "").localeCompare(b.meter_number || "");
+          });
+        }
+
+        // Create a map for quick lookup
+        const meterMap = new Map(meters.map(m => [m.meter_id, m]));
+        const orderedMeters: any[] = [];
+        
+        // Add meters in the saved order
+        selectedReconciliation.meter_order.forEach(meterId => {
+          const meter = meterMap.get(meterId);
+          if (meter) {
+            orderedMeters.push(meter);
+            meterMap.delete(meterId);
+          }
         });
+        
+        // Add any remaining meters not in the saved order (safety fallback)
+        meterMap.forEach(meter => orderedMeters.push(meter));
+        
+        return orderedMeters;
       };
 
-      const meterBreakdown = sortMetersByType(meterData).map(m => ({
+      const meterBreakdown = sortMetersBySchematicOrder(meterData).map(m => ({
         meterNumber: m.meter_number,
         name: m.name,
         type: m.meter_type,
@@ -1687,8 +1708,8 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         assignment: m.assignment
       }));
 
-      // 9. Prepare meter hierarchy from reconciliation data
-      const meterHierarchy = meterData.map(m => ({
+      // 9. Prepare meter hierarchy from reconciliation data using saved schematic order
+      const meterHierarchy = sortMetersBySchematicOrder(meterData).map(m => ({
         meterNumber: m.meter_number,
         name: m.name,
         type: m.meter_type,
