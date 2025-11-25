@@ -549,10 +549,7 @@ export function SplitViewReportEditor({
   useEffect(() => {
     const updateCanvasSize = () => {
       if (!pdfContainerRef.current || !canvasRef.current) {
-        console.log('[AI Workshop] Missing refs for canvas sizing:', {
-          hasContainer: !!pdfContainerRef.current,
-          hasCanvas: !!canvasRef.current
-        });
+        console.log('[AI Workshop] Missing refs for canvas sizing');
         return;
       }
       
@@ -565,23 +562,12 @@ export function SplitViewReportEditor({
         // Match both logical and rendered dimensions
         canvas.width = pageElement.width;
         canvas.height = pageElement.height;
-        
-        // Position canvas to exactly overlay the PDF page
         canvas.style.width = `${rect.width}px`;
         canvas.style.height = `${rect.height}px`;
-        canvas.style.position = 'absolute';
-        canvas.style.top = `${rect.top - pdfContainerRef.current.getBoundingClientRect().top}px`;
-        canvas.style.left = `${rect.left - pdfContainerRef.current.getBoundingClientRect().left}px`;
-        canvas.style.pointerEvents = 'auto';
-        canvas.style.cursor = 'crosshair';
         
-        console.log('[AI Workshop] Canvas sized and positioned:', {
+        console.log('[AI Workshop] Canvas sized:', {
           logicalSize: { width: canvas.width, height: canvas.height },
-          displaySize: { width: rect.width, height: rect.height },
-          position: { 
-            top: canvas.style.top, 
-            left: canvas.style.left 
-          }
+          displaySize: { width: rect.width, height: rect.height }
         });
       } else {
         console.log('[AI Workshop] PDF page element not found yet');
