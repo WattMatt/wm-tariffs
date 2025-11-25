@@ -640,7 +640,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         
         // Helper to add text with wrapping
         const addText = (text: string, fontSize: number = 9, isBold: boolean = false) => {
-          const cleanedText = text.replace(/\*\*(.*?)\*\*/g, '$1').replace(/^#{1,6}\s+/gm, '').trim();
+          const cleanedText = text.replace(/\*\*(.*?)\*\*/g, '$1').replace(/^#{1,6}\s+.*$/gm, '').trim();
           pdf.setFontSize(fontSize);
           pdf.setFont("helvetica", isBold ? "bold" : "normal");
           const maxWidth = pageWidth - leftMargin - rightMargin;
