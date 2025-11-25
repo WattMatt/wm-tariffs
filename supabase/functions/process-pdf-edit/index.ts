@@ -21,6 +21,15 @@ serve(async (req) => {
   try {
     const { prompt, sections, selectionArea } = await req.json();
     
+    // Log request details for debugging
+    const totalContentSize = sections?.reduce((acc: number, s: PdfSection) => acc + s.content.length, 0) || 0;
+    console.log('[process-pdf-edit] Request received:', { 
+      promptLength: prompt?.length || 0, 
+      sectionsCount: sections?.length || 0,
+      totalContentSize,
+      selectionArea
+    });
+    
     if (!prompt || !sections) {
       return new Response(
         JSON.stringify({ error: 'Missing required parameters' }),
@@ -33,56 +42,32 @@ serve(async (req) => {
       throw new Error('LOVABLE_API_KEY not configured');
     }
 
-    // Build context about the current sections for the AI
+    // Build truncated context about the current sections for the AI (max 500 chars per section)
     const sectionsContext = sections
-      .map((s: PdfSection, idx: number) => `Section ${idx + 1} (${s.type}): ${s.title}\n${s.content.substring(0, 200)}...`)
+      .map((s: PdfSection, idx: number) => {
+        const truncatedContent = s.content.length > 500 
+          ? s.content.substring(0, 500) + '...[truncated]' 
+          : s.content;
+        return `Section ${idx + 1} (${s.type}): ${s.title}\n${truncatedContent}`;
+      })
       .join('\n\n');
 
-    const systemPrompt = `You are an AI assistant helping to edit PDF report sections. The user has selected an area on the PDF and wants to make changes.
+    const systemPrompt = `You are an AI assistant helping to edit PDF report sections.
 
-Current sections in the report:
+CONTEXT (sections have been truncated for brevity - you'll receive full sections in the user message):
 ${sectionsContext}
 
-When the user asks for changes:
-1. If they want page breaks, insert page-break sections between appropriate sections
-2. If they want to modify text, update the content of relevant sections
-3. If they want to ADD charts (pie, bar), you should EMBED the chart JSON within the content of an existing or new text section
+INSTRUCTIONS:
+1. The user will provide their edit request and the full section data
+2. Make ONLY the changes they request - don't modify unrelated sections
+3. For page breaks: insert page-break sections between appropriate sections
+4. For text edits: update the content of relevant sections only
+5. Return the complete modified sections array as valid JSON
 
-CHART EMBEDDING FORMAT:
-When adding charts, embed them within text content like this:
-
-For a PIE chart showing supply breakdown:
-\`\`\`json
-{
-  "type": "pie",
-  "data": {
-    "labels": ["Council Bulk Supply", "Solar Generation"],
-    "datasets": [{
-      "data": [113187.07, 82759.01]
-    }]
-  }
-}
-\`\`\`
-
-For a BAR chart:
-\`\`\`json
-{
-  "type": "bar",
-  "data": {
-    "labels": ["Meter 1", "Meter 2", "Meter 3"],
-    "datasets": [{
-      "data": [1000, 1500, 2000]
-    }]
-  }
-}
-\`\`\`
-
-IMPORTANT RULES:
-- Charts must be embedded WITHIN the "content" field of a text section, surrounded by markdown code fences
-- Do NOT create separate sections with type: "chart"
-- Use accurate data from the report (e.g., for supply pie chart, only include supply sources, NOT distribution or variance)
-- Return ONLY a valid JSON array of sections, no additional text
-- Each section must have: id, title, content, type ('text', 'page-break', or 'chart'), and editable (boolean)`;
+OUTPUT FORMAT:
+- Return ONLY a valid JSON array of sections
+- Each section must have: id, title, content, type, editable
+- Keep ALL sections unless the user asks to remove specific ones`;
 
     const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -94,10 +79,15 @@ IMPORTANT RULES:
         model: 'google/gemini-2.5-flash',
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: `User's request: "${prompt}"\n\nSelection area: ${JSON.stringify(selectionArea)}\n\nCurrent sections (JSON):\n${JSON.stringify(sections, null, 2)}\n\nPlease return the modified sections array.` }
+          { role: 'user', content: `User's request: "${prompt}"\n\nFull sections:\n${JSON.stringify(sections, null, 2)}\n\nReturn the modified sections array as JSON.` }
         ],
         temperature: 0.7,
       }),
+    });
+    
+    console.log('[process-pdf-edit] AI response received:', { 
+      status: aiResponse.status,
+      ok: aiResponse.ok 
     });
 
     if (!aiResponse.ok) {
