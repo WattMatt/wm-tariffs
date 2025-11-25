@@ -3862,7 +3862,16 @@ export default function SchematicEditor({
       });
 
     await Promise.all(updates);
-    toast.success("Schematic saved successfully");
+    
+    // Generate and upload PNG snapshot
+    try {
+      await generateAndUploadSchematicSnapshot();
+      toast.success("Schematic saved successfully with snapshot");
+    } catch (error) {
+      console.error('Failed to generate snapshot:', error);
+      toast.success("Schematic saved (snapshot failed)");
+    }
+    
     setIsSaving(false);
     
     // Reset edit mode and all selection states
@@ -3877,6 +3886,173 @@ export default function SchematicEditor({
     setSelectedMeterIds([]);
     setSelectedRegionIndices([]);
     setSelectedConnectionKeys([]);
+  };
+
+  // Helper function to get meter type color
+  const getMeterTypeColor = (type: string): string => {
+    switch (type) {
+      case "council_bulk": return "#22c55e"; // green
+      case "tenant": return "#3b82f6"; // blue
+      case "solar": return "#eab308"; // yellow
+      case "check_meter": return "#f97316"; // orange
+      case "distribution": return "#a855f7"; // purple
+      default: return "#64748b"; // gray
+    }
+  };
+
+  // Generate PNG snapshot of schematic with meter cards and connections
+  const generateAndUploadSchematicSnapshot = async () => {
+    if (!fabricCanvas) return;
+
+    const originalWidth = (fabricCanvas as any).originalImageWidth || 1920;
+    const originalHeight = (fabricCanvas as any).originalImageHeight || 1080;
+
+    // Create a hidden canvas with original image dimensions
+    const snapshotCanvas = document.createElement('canvas');
+    snapshotCanvas.width = originalWidth;
+    snapshotCanvas.height = originalHeight;
+    const ctx = snapshotCanvas.getContext('2d');
+    
+    if (!ctx) {
+      throw new Error('Could not get canvas context');
+    }
+
+    // Load and draw background image
+    await new Promise<void>((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        ctx.drawImage(img, 0, 0, originalWidth, originalHeight);
+        resolve();
+      };
+      img.onerror = reject;
+      img.src = schematicUrl;
+    });
+
+    // Draw connection lines
+    meterConnections.forEach((conn: any) => {
+      const parentPos = meterPositions.find((p: any) => p.meter_id === conn.parent_meter_id);
+      const childPos = meterPositions.find((p: any) => p.meter_id === conn.child_meter_id);
+      
+      if (parentPos && childPos) {
+        const x1 = (parentPos.x_position / 100) * originalWidth;
+        const y1 = (parentPos.y_position / 100) * originalHeight;
+        const x2 = (childPos.x_position / 100) * originalWidth;
+        const y2 = (childPos.y_position / 100) * originalHeight;
+        
+        ctx.strokeStyle = '#3b82f6';
+        ctx.lineWidth = 3;
+        ctx.setLineDash([10, 5]);
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    });
+
+    // Draw meter cards
+    meterPositions.forEach((pos: any) => {
+      const meter = meters.find((m: any) => m.id === pos.meter_id);
+      if (!meter) return;
+
+      const x = (pos.x_position / 100) * originalWidth;
+      const y = (pos.y_position / 100) * originalHeight;
+      const cardWidth = 140;
+      const cardHeight = 90;
+
+      // Card background
+      const color = getMeterTypeColor(meter.meter_type);
+      ctx.fillStyle = color;
+      ctx.fillRect(x - cardWidth / 2, y - cardHeight / 2, cardWidth, cardHeight);
+
+      // Card border
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x - cardWidth / 2, y - cardHeight / 2, cardWidth, cardHeight);
+
+      // Text styling
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      
+      // Meter number (larger)
+      ctx.font = 'bold 14px Arial';
+      ctx.fillText(meter.meter_number || 'N/A', x, y - 25);
+      
+      // Meter type
+      ctx.font = '10px Arial';
+      ctx.fillText(meter.meter_type || 'N/A', x, y);
+      
+      // Meter name
+      ctx.font = '9px Arial';
+      const name = meter.name || 'N/A';
+      const truncatedName = name.length > 15 ? name.substring(0, 15) + '...' : name;
+      ctx.fillText(truncatedName, x, y + 20);
+    });
+
+    // Convert canvas to blob
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      snapshotCanvas.toBlob((b) => {
+        if (b) resolve(b);
+        else reject(new Error('Failed to create blob'));
+      }, 'image/png');
+    });
+
+    // Fetch site and client info for path
+    const { data: siteData } = await supabase
+      .from('sites')
+      .select('name, clients(name)')
+      .eq('id', siteId)
+      .single();
+
+    if (!siteData) {
+      throw new Error('Site not found');
+    }
+
+    const clientName = (siteData.clients as any).name.replace(/[^a-zA-Z0-9\s-_]/g, '').replace(/\s+/g, ' ');
+    const siteName = siteData.name.replace(/[^a-zA-Z0-9\s-_]/g, '').replace(/\s+/g, ' ');
+    
+    // Get schematic name
+    const { data: schematicData } = await supabase
+      .from('schematics')
+      .select('name')
+      .eq('id', schematicId)
+      .single();
+
+    const schematicName = schematicData?.name || 'schematic';
+    const fileName = `${schematicName.replace(/[^a-zA-Z0-9\s-_]/g, '').replace(/\s+/g, '_')}_snapshot.png`;
+    const filePath = `${clientName}/${siteName}/Audit Report/Archive/${fileName}`;
+
+    // Check if file exists and delete it
+    const { data: existingFiles } = await supabase
+      .storage
+      .from('client-files')
+      .list(`${clientName}/${siteName}/Audit Report/Archive`, {
+        search: fileName
+      });
+
+    if (existingFiles && existingFiles.length > 0) {
+      await supabase
+        .storage
+        .from('client-files')
+        .remove([filePath]);
+    }
+
+    // Upload new snapshot
+    const { error: uploadError } = await supabase
+      .storage
+      .from('client-files')
+      .upload(filePath, blob, {
+        contentType: 'image/png',
+        upsert: true
+      });
+
+    if (uploadError) {
+      throw uploadError;
+    }
+
+    console.log('✅ Schematic snapshot saved:', filePath);
   };
 
 
