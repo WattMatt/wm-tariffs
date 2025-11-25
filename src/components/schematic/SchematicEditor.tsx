@@ -4022,13 +4022,13 @@ export default function SchematicEditor({
 
     const schematicName = schematicData?.name || 'schematic';
     const fileName = `${schematicName.replace(/[^a-zA-Z0-9\s-_]/g, '').replace(/\s+/g, '_')}_snapshot.png`;
-    const filePath = `${clientName}/${siteName}/Audit Report/Archive/${fileName}`;
+    const filePath = `${clientName}/${siteName}/Metering/Schematics/${fileName}`;
 
     // Check if file exists and delete it
     const { data: existingFiles } = await supabase
       .storage
       .from('client-files')
-      .list(`${clientName}/${siteName}/Audit Report/Archive`, {
+      .list(`${clientName}/${siteName}/Metering/Schematics`, {
         search: fileName
       });
 
