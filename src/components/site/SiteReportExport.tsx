@@ -899,57 +899,28 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         // Section 2: Site Infrastructure
         addSectionHeading("2. SITE INFRASTRUCTURE", 16, true);
         
-        // Add schematic image on landscape page if available
+        // Add schematic image as full page first item if available
         if (schematicImageBase64) {
           try {
-            // Add footer and page number to current portrait page
-            addFooter();
-            addPageNumber();
+            // Calculate dimensions for full-page image
+            const imgWidth = pageWidth - leftMargin - rightMargin;
+            // Leave space for heading (already added), caption, and margins
+            const imgHeight = pageHeight - yPos - bottomMargin - 20; // 20 for caption space
             
-            // Add a new landscape page for the schematic
-            pdf.addPage('a4', 'landscape');
-            
-            // Get landscape page dimensions
-            const landscapeWidth = pdf.internal.pageSize.getWidth();
-            const landscapeHeight = pdf.internal.pageSize.getHeight();
-            
-            // Add blue sidebar on landscape page
-            pdf.setFillColor(templateBlue[0], templateBlue[1], templateBlue[2]);
-            pdf.rect(0, 0, blueBarWidth, landscapeHeight, "F");
-            
-            // Calculate dimensions for full landscape image
-            const imgWidth = landscapeWidth - leftMargin - rightMargin;
-            const imgHeight = landscapeHeight - topMargin - bottomMargin - 20; // 20 for caption
-            
-            // Center the image vertically
-            const landscapeYPos = topMargin;
-            
-            pdf.addImage(schematicImageBase64, 'JPEG', leftMargin, landscapeYPos, imgWidth, imgHeight);
+            pdf.addImage(schematicImageBase64, 'JPEG', leftMargin, yPos, imgWidth, imgHeight);
+            yPos += imgHeight + 5;
             
             // Add caption at bottom
             pdf.setFontSize(9);
             pdf.setFont("helvetica", "italic");
-            pdf.text("Figure 1: Site Metering Schematic Diagram", landscapeWidth / 2, landscapeHeight - 10, { align: "center" });
+            pdf.text("Figure 1: Site Metering Schematic Diagram", pageWidth / 2, yPos, { align: "center" });
             pdf.setFont("helvetica", "normal");
             
-            // Add footer and page number to landscape page
-            pdf.setFontSize(8);
-            pdf.setFont("helvetica", "normal");
-            pdf.setTextColor(100, 100, 100);
-            const docNumber = `Document Number: AUD-${format(new Date(), "yyyyMMdd-HHmmss")}`;
-            const printDate = `Print date: ${format(new Date(), "dd/MM/yyyy HH:mm")}`;
-            pdf.text(docNumber, leftMargin, landscapeHeight - 10);
-            pdf.text(printDate, landscapeWidth - rightMargin, landscapeHeight - 10, { align: "right" });
-            pdf.text(`Page ${pageNumber}`, landscapeWidth / 2, landscapeHeight - 5, { align: "center" });
-            pdf.setTextColor(0, 0, 0);
-            pageNumber++;
-            
-            // Start new portrait page for remaining content
-            pdf.addPage('a4', 'portrait');
+            // Start new page for remaining content
+            addFooter();
+            addPageNumber();
+            pdf.addPage();
             yPos = topMargin;
-            
-            // Add blue sidebar on new portrait page
-            addBlueSidebar();
           } catch (err) {
             console.error("Error adding schematic to preview:", err);
           }
