@@ -378,6 +378,26 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         const formatNumber = (value: number, decimals: number = 2): string => {
           return value.toFixed(decimals).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
         };
+
+        // Text sanitization for PDF rendering (jsPDF doesn't support all Unicode chars)
+        const sanitizeForPdf = (text: string): string => {
+          return text
+            .replace(/≤/g, '<=')
+            .replace(/≥/g, '>=')
+            .replace(/°/g, ' deg')
+            .replace(/²/g, '2')
+            .replace(/³/g, '3')
+            .replace(/×/g, 'x')
+            .replace(/÷/g, '/')
+            .replace(/±/g, '+/-')
+            .replace(/•/g, '-')
+            .replace(/–/g, '-')
+            .replace(/—/g, '-')
+            .replace(/'/g, "'")
+            .replace(/'/g, "'")
+            .replace(/"/g, '"')
+            .replace(/"/g, '"');
+        };
         
         // Helper to add blue sidebar
         const addBlueSidebar = () => {
@@ -640,7 +660,8 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         
         // Helper to add text with wrapping
         const addText = (text: string, fontSize: number = 9, isBold: boolean = false) => {
-          const cleanedText = text.replace(/\*\*(.*?)\*\*/g, '$1').replace(/^#{1,6}\s+.*$/gm, '').trim();
+          const sanitizedText = sanitizeForPdf(text);
+          const cleanedText = sanitizedText.replace(/\*\*(.*?)\*\*/g, '$1').replace(/^#{1,6}\s+.*$/gm, '').trim();
           pdf.setFontSize(fontSize);
           pdf.setFont("helvetica", isBold ? "bold" : "normal");
           const maxWidth = pageWidth - leftMargin - rightMargin;
@@ -718,7 +739,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           pdf.setTextColor(255, 255, 255);
           let xPos = leftMargin + 3;
           headers.forEach((header, i) => {
-            pdf.text(header, xPos, yPos + 6.5);
+            pdf.text(sanitizeForPdf(header), xPos, yPos + 6.5);
             xPos += colWidths[i];
           });
           pdf.setTextColor(0, 0, 0);
@@ -742,7 +763,8 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             
             xPos = leftMargin + 3;
             row.forEach((cell, i) => {
-              const cellLines = pdf.splitTextToSize(cell, colWidths[i] - 6);
+              const sanitizedCell = sanitizeForPdf(cell);
+              const cellLines = pdf.splitTextToSize(sanitizedCell, colWidths[i] - 6);
               pdf.text(cellLines[0] || "", xPos, yPos + 6.5);
               xPos += colWidths[i];
             });
