@@ -1179,6 +1179,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           const imgHeight = (imgWidth * 3) / 4; // Maintain typical aspect ratio
           const imgX = leftMargin;
           
+          console.log('📄 Adding schematic snapshot to PDF');
           pdf.addImage(schematicImageBase64, 'PNG', imgX, yPos, imgWidth, imgHeight);
           yPos += imgHeight + 5;
           
@@ -1188,7 +1189,10 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           pdf.setFont("helvetica", "normal");
           yPos += 10;
         } else {
-          addText("Schematic snapshot unavailable. Please generate a snapshot in the Schematic Editor.", 10);
+          console.warn('⚠️ No schematic snapshot available for PDF');
+          addSubsectionHeading("Metering Hierarchy");
+          addText("⚠️ Schematic snapshot unavailable.", 10);
+          addText("Please open the Schematic Editor and click 'Generate Snapshot' to create the diagram.", 9);
           yPos += 5;
         }
         
@@ -1896,8 +1900,14 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
               .from("client-files")
               .download(snapshotPath);
 
+            if (snapshotError) {
+              console.error('❌ Snapshot load error:', snapshotError);
+              toast.error(`Snapshot not found. Please generate snapshot in Schematic Editor first.`);
+            }
+
             if (snapshotData && !snapshotError) {
               console.log('✅ Snapshot found, using it for PDF');
+              toast.success('Snapshot loaded successfully');
               // Create an image element to compress
               const img = new Image();
               const blob = snapshotData;
