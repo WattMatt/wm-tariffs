@@ -366,7 +366,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
 
         // Template styling constants
         const blueBarWidth = 15;
-        const leftMargin = 15;
+        const leftMargin = 30;
         const rightMargin = 20;
         const topMargin = 15;
         const bottomMargin = 15;
@@ -2207,7 +2207,7 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
       
       // Template styling constants
       const blueBarWidth = 15; // Width of left blue bar
-      const leftMargin = 15; // Left margin (accounting for blue bar)
+      const leftMargin = 30; // Left margin (accounting for blue bar)
       const rightMargin = 20;
       const topMargin = 15;
       const bottomMargin = 15;
