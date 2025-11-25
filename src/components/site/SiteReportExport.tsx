@@ -365,6 +365,8 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           meterConnections,
           meterPositions
         } = previewData as any;
+        
+        console.log('🔍 PDF Preview - Meter Positions:', meterPositions?.length, meterPositions);
 
         // Template styling constants
         const blueBarWidth = 15;
@@ -1012,6 +1014,8 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         addSectionHeading("2. SITE INFRASTRUCTURE", 16, true);
         
         // Add schematic-style layout at the top
+        console.log('🎨 Drawing Schematic - MeterData:', meterData?.length, 'Positions:', meterPositions?.length, 'Connections:', meterConnections?.length);
+        
         if (meterData && meterData.length > 0 && meterPositions && meterPositions.length > 0) {
           addSubsectionHeading("Metering Hierarchy");
           drawSchematicLayout(meterData, meterPositions, meterConnections || []);
@@ -1020,6 +1024,10 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           pdf.setFont("helvetica", "italic");
           pdf.text("Figure 1: Site Metering Hierarchy Diagram", pageWidth / 2, yPos, { align: "center" });
           pdf.setFont("helvetica", "normal");
+          yPos += 10;
+        } else {
+          // Debug message
+          addText(`[DEBUG] Schematic layout not shown - MeterData: ${meterData?.length || 0}, Positions: ${meterPositions?.length || 0}`, 10);
           yPos += 10;
         }
         
@@ -1577,11 +1585,13 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         meterConnections = connections || [];
         
         // Fetch meter positions from the selected schematic
+        console.log('📍 Selected Schematic ID:', selectedSchematicId);
         const { data: positions } = await supabase
           .from('meter_positions')
           .select('*, meters(meter_number, meter_type)')
           .eq('schematic_id', selectedSchematicId);
         meterPositions = positions || [];
+        console.log('📍 Fetched Meter Positions:', meterPositions.length, meterPositions);
       }
 
       // 5. Use data from selected reconciliation
