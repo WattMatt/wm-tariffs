@@ -37,6 +37,57 @@ serve(async (req) => {
 
     const sections: any = {};
 
+    // Helper function to call AI with timeout and retry logic
+    const callAIWithRetry = async (sectionName: string, prompt: string, maxRetries = 2, timeoutMs = 45000): Promise<string> => {
+      let lastError: Error | null = null;
+      
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+          const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: 'google/gemini-2.5-flash',
+              messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: prompt }
+              ],
+            }),
+            signal: controller.signal,
+          });
+
+          clearTimeout(timeoutId);
+
+          if (!response.ok) {
+            if (response.status === 429) {
+              throw new Error(`Rate limited for ${sectionName}`);
+            }
+            throw new Error(`AI Gateway error ${response.status} for ${sectionName}`);
+          }
+          
+          const result = await response.json();
+          return result.choices[0].message.content;
+        } catch (error: any) {
+          lastError = error;
+          console.error(`Attempt ${attempt + 1} failed for ${sectionName}:`, error.message);
+          
+          if (attempt < maxRetries && error.name !== 'AbortError') {
+            // Exponential backoff: 2s, 4s
+            const delay = Math.pow(2, attempt) * 2000;
+            await new Promise(resolve => setTimeout(resolve, delay));
+          }
+        }
+      }
+      
+      throw lastError || new Error(`Failed to generate ${sectionName}`);
+    };
+
     // Helper function to prepare CSV column summary
     const getCsvColumnsSummary = () => {
       if (!selectedCsvColumns || selectedCsvColumns.length === 0) return '';
@@ -61,9 +112,15 @@ serve(async (req) => {
 
     const csvColumnsSummary = getCsvColumnsSummary();
 
-    // 1. EXECUTIVE SUMMARY
-    console.log('Generating Executive Summary...');
-    const execSummaryPrompt = `Generate Section 1: Executive Summary for ${siteName}.
+    // Track section generation status
+    const sectionStatus: Record<string, 'pending' | 'success' | 'failed'> = {};
+
+    // BATCH 1: Generate independent sections in parallel
+    console.log('Starting Batch 1: Executive Summary, Site Infrastructure, Tariff Configuration, Metering Data Analysis...');
+    
+    const batch1Promises = [
+      // 1. EXECUTIVE SUMMARY
+      callAIWithRetry('Executive Summary', `Generate Section 1: Executive Summary for ${siteName}.
 
 Period: ${auditPeriodStart} to ${auditPeriodEnd}
 
@@ -86,30 +143,18 @@ Create a professional executive summary with:
 6. Immediate actions required
 
 Use status indicators: ✓ (<2% variance), ⚠ (2-5%), ✗ (>5%)
-Calculate financial impact at ZAR 3.20/kWh`;
-
-    const execResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: execSummaryPrompt }
-        ],
+Calculate financial impact at ZAR 3.20/kWh`).then(content => {
+        sections.executiveSummary = content;
+        sectionStatus['executiveSummary'] = 'success';
+        console.log('✓ Executive Summary completed');
+      }).catch(err => {
+        sectionStatus['executiveSummary'] = 'failed';
+        sections.executiveSummary = `# Executive Summary\n\n*This section could not be generated due to an error: ${err.message}*`;
+        console.error('✗ Executive Summary failed:', err);
       }),
-    });
 
-    if (!execResponse.ok) throw new Error(`AI Gateway error: ${execResponse.status}`);
-    const execResult = await execResponse.json();
-    sections.executiveSummary = execResult.choices[0].message.content;
-
-    // 2. SITE INFRASTRUCTURE  
-    console.log('Generating Site Infrastructure section...');
-    const infraPrompt = `Generate Section 2: Site Infrastructure for ${siteName}.
+      // 2. SITE INFRASTRUCTURE
+      callAIWithRetry('Site Infrastructure', `Generate Section 2: Site Infrastructure for ${siteName}.
 
 Site Details:
 ${JSON.stringify(siteDetails, null, 2)}
@@ -132,30 +177,18 @@ Create section with:
 2. Meter inventory summary with counts by type
 3. Schematic documentation list
 4. Meter hierarchy showing parent-child relationships
-5. Comprehensive meter inventory table with all details (Meter #, Type, Location, Tariff, CT Ratio, Phase, Rating, Confirmation Status, Revenue-Critical flag)`;
-
-    const infraResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: infraPrompt }
-        ],
+5. Comprehensive meter inventory table with all details (Meter #, Type, Location, Tariff, CT Ratio, Phase, Rating, Confirmation Status, Revenue-Critical flag)`).then(content => {
+        sections.siteInfrastructure = content;
+        sectionStatus['siteInfrastructure'] = 'success';
+        console.log('✓ Site Infrastructure completed');
+      }).catch(err => {
+        sectionStatus['siteInfrastructure'] = 'failed';
+        sections.siteInfrastructure = `# Site Infrastructure\n\n*This section could not be generated due to an error: ${err.message}*`;
+        console.error('✗ Site Infrastructure failed:', err);
       }),
-    });
 
-    if (!infraResponse.ok) throw new Error(`AI Gateway error: ${infraResponse.status}`);
-    const infraResult = await infraResponse.json();
-    sections.siteInfrastructure = infraResult.choices[0].message.content;
-
-    // 3. TARIFF CONFIGURATION
-    console.log('Generating Tariff Configuration section...');
-    const tariffPrompt = `Generate Section 3: Tariff Configuration for ${siteName}.
+      // 3. TARIFF CONFIGURATION
+      callAIWithRetry('Tariff Configuration', `Generate Section 3: Tariff Configuration for ${siteName}.
 
 Supply Authority: ${siteDetails?.supplyAuthorityName || 'Not specified'}
 Region: ${siteDetails?.supplyAuthorityRegion || 'Not specified'}
@@ -178,30 +211,18 @@ Create section with:
    - Tariff name, type, effective dates, voltage level
    - Block structure table (if block tariff)
    - Fixed charges table (basic, demand, other charges)
-   - TOU periods table (if TOU tariff) with seasons, day types, periods, hours, rates`;
-
-    const tariffResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: tariffPrompt }
-        ],
+   - TOU periods table (if TOU tariff) with seasons, day types, periods, hours, rates`).then(content => {
+        sections.tariffConfiguration = content;
+        sectionStatus['tariffConfiguration'] = 'success';
+        console.log('✓ Tariff Configuration completed');
+      }).catch(err => {
+        sectionStatus['tariffConfiguration'] = 'failed';
+        sections.tariffConfiguration = `# Tariff Configuration\n\n*This section could not be generated due to an error: ${err.message}*`;
+        console.error('✗ Tariff Configuration failed:', err);
       }),
-    });
 
-    if (!tariffResponse.ok) throw new Error(`AI Gateway error: ${tariffResponse.status}`);
-    const tariffResult = await tariffResponse.json();
-    sections.tariffConfiguration = tariffResult.choices[0].message.content;
-
-    // 4. METERING DATA ANALYSIS
-    console.log('Generating Metering Data Analysis section...');
-    const dataAnalysisPrompt = `Generate Section 4: Metering Data Analysis for ${siteName}.
+      // 4. METERING DATA ANALYSIS
+      callAIWithRetry('Metering Data Analysis', `Generate Section 4: Metering Data Analysis for ${siteName}.
 
 Period: ${auditPeriodStart} to ${auditPeriodEnd}
 
@@ -218,31 +239,30 @@ Create section with:
 2. Consumption analysis per meter (total kWh, average daily, peak demand if available)
 3. Hierarchical analysis (parent totals vs sum of children, energy balance at each level)
 4. Load profile characteristics if available (peak hours, usage patterns, demand profiles)
-5. CSV column analysis if selected (totals, max values, operations applied)`;
+5. CSV column analysis if selected (totals, max values, operations applied)`).then(content => {
+        sections.meteringDataAnalysis = content;
+        sectionStatus['meteringDataAnalysis'] = 'success';
+        console.log('✓ Metering Data Analysis completed');
+      }).catch(err => {
+        sectionStatus['meteringDataAnalysis'] = 'failed';
+        sections.meteringDataAnalysis = `# Metering Data Analysis\n\n*This section could not be generated due to an error: ${err.message}*`;
+        console.error('✗ Metering Data Analysis failed:', err);
+      })
+    ];
 
-    const dataAnalysisResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: dataAnalysisPrompt }
-        ],
-      }),
-    });
+    // Wait for all batch 1 sections to complete
+    await Promise.all(batch1Promises);
+    console.log('Batch 1 completed');
 
-    if (!dataAnalysisResponse.ok) throw new Error(`AI Gateway error: ${dataAnalysisResponse.status}`);
-    const dataAnalysisResult = await dataAnalysisResponse.json();
-    sections.meteringDataAnalysis = dataAnalysisResult.choices[0].message.content;
+    // BATCH 2: Generate sections that can run in parallel after batch 1
+    console.log('Starting Batch 2: Document Validation, Reconciliation Results, Cost Analysis...');
+    
+    const batch2Promises = [];
 
     // 5. DOCUMENT & INVOICE VALIDATION (if documents available)
     if (documentExtractions && documentExtractions.length > 0) {
-      console.log('Generating Document Validation section...');
-      const docValidationPrompt = `Generate Section 5: Document & Invoice Validation for ${siteName}.
+      batch2Promises.push(
+        callAIWithRetry('Document Validation', `Generate Section 5: Document & Invoice Validation for ${siteName}.
 
 Documents:
 ${JSON.stringify(documentExtractions, null, 2)}
@@ -267,31 +287,21 @@ Create section with:
    - Total variance analysis with ZAR amounts
 4. Variance summary with root causes
 
-Use ✓ for matches, ⚠ for <5% variance, ✗ for >5% variance`;
-
-      const docResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'google/gemini-2.5-flash',
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: docValidationPrompt }
-          ],
-        }),
-      });
-
-      if (!docResponse.ok) throw new Error(`AI Gateway error: ${docResponse.status}`);
-      const docResult = await docResponse.json();
-      sections.documentValidation = docResult.choices[0].message.content;
+Use ✓ for matches, ⚠ for <5% variance, ✗ for >5% variance`).then(content => {
+          sections.documentValidation = content;
+          sectionStatus['documentValidation'] = 'success';
+          console.log('✓ Document Validation completed');
+        }).catch(err => {
+          sectionStatus['documentValidation'] = 'failed';
+          sections.documentValidation = `# Document & Invoice Validation\n\n*This section could not be generated due to an error: ${err.message}*`;
+          console.error('✗ Document Validation failed:', err);
+        })
+      );
     }
 
     // 6. RECONCILIATION RESULTS
-    console.log('Generating Reconciliation Results section...');
-    const reconPrompt = `Generate Section 6: Reconciliation Results for ${siteName}.
+    batch2Promises.push(
+      callAIWithRetry('Reconciliation Results', `Generate Section 6: Reconciliation Results for ${siteName}.
 
 Period: ${auditPeriodStart} to ${auditPeriodEnd}
 
@@ -313,31 +323,21 @@ Create section with:
 2. Energy balance (grid, solar, total supply, distribution, recovery rate, variance)
 3. Financial summary if available (grid cost, solar cost, tenant revenue, net position, avg cost/kWh)
 4. Meter-level results table (Meter #, Name, Type, Location, Total kWh, +/- kWh, Hierarchical Total, Energy Cost, Demand Charges, Fixed Charges, Total Cost, Cost/kWh, Errors)
-5. Custom column analysis (selected columns with operations, totals, max values, factors)`;
-
-    const reconResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: reconPrompt }
-        ],
-      }),
-    });
-
-    if (!reconResponse.ok) throw new Error(`AI Gateway error: ${reconResponse.status}`);
-    const reconResult = await reconResponse.json();
-    sections.reconciliationResults = reconResult.choices[0].message.content;
+5. Custom column analysis (selected columns with operations, totals, max values, factors)`).then(content => {
+        sections.reconciliationResults = content;
+        sectionStatus['reconciliationResults'] = 'success';
+        console.log('✓ Reconciliation Results completed');
+      }).catch(err => {
+        sectionStatus['reconciliationResults'] = 'failed';
+        sections.reconciliationResults = `# Reconciliation Results\n\n*This section could not be generated due to an error: ${err.message}*`;
+        console.error('✗ Reconciliation Results failed:', err);
+      })
+    );
 
     // 7. COST ANALYSIS
     if (costAnalysis) {
-      console.log('Generating Cost Analysis section...');
-      const costPrompt = `Generate Section 7: Cost Analysis for ${siteName}.
+      batch2Promises.push(
+        callAIWithRetry('Cost Analysis', `Generate Section 7: Cost Analysis for ${siteName}.
 
 Cost Data:
 ${JSON.stringify(costAnalysis, null, 2)}
@@ -350,31 +350,28 @@ Create section with:
 1. Total cost breakdown (by meter type: bulk/solar/tenant, by component: energy/demand/fixed, by tariff)
 2. Cost trends if historical data available (month-over-month, cost per kWh trends, demand charge trends)
 3. Efficiency metrics (cost per m² if area available, solar offset value, tenant cost recovery %)
-4. Cost optimization opportunities`;
-
-      const costResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'google/gemini-2.5-flash',
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: costPrompt }
-          ],
-        }),
-      });
-
-      if (!costResponse.ok) throw new Error(`AI Gateway error: ${costResponse.status}`);
-      const costResult = await costResponse.json();
-      sections.costAnalysis = costResult.choices[0].message.content;
+4. Cost optimization opportunities`).then(content => {
+          sections.costAnalysis = content;
+          sectionStatus['costAnalysis'] = 'success';
+          console.log('✓ Cost Analysis completed');
+        }).catch(err => {
+          sectionStatus['costAnalysis'] = 'failed';
+          sections.costAnalysis = `# Cost Analysis\n\n*This section could not be generated due to an error: ${err.message}*`;
+          console.error('✗ Cost Analysis failed:', err);
+        })
+      );
     }
 
-    // 8. FINDINGS & ANOMALIES
-    console.log('Generating Findings section...');
-    const findingsPrompt = `Generate Section 8: Findings & Anomalies for ${siteName}.
+    // Wait for all batch 2 sections to complete
+    await Promise.all(batch2Promises);
+    console.log('Batch 2 completed');
+
+    // BATCH 3: Generate final sections in parallel
+    console.log('Starting Batch 3: Findings & Anomalies, Recommendations...');
+    
+    const batch3Promises = [
+      // 8. FINDINGS & ANOMALIES
+      callAIWithRetry('Findings & Anomalies', `Generate Section 8: Findings & Anomalies for ${siteName}.
 
 Anomalies:
 ${JSON.stringify(anomalies, null, 2)}
@@ -395,30 +392,18 @@ Create section with:
 2. Calculation Issues (cost calculation errors, failed tariff applications, low confidence extractions)
 3. Billing Anomalies (significant variances >10%, unexpected charges, period mismatches)
 4. Configuration Issues (meters without tariffs, orphaned meters, duplicate numbers)
-5. Summary table of all anomalies (#, Severity, Meter, Description)`;
-
-    const findingsResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: findingsPrompt }
-        ],
+5. Summary table of all anomalies (#, Severity, Meter, Description)`).then(content => {
+        sections.findingsAnomalies = content;
+        sectionStatus['findingsAnomalies'] = 'success';
+        console.log('✓ Findings & Anomalies completed');
+      }).catch(err => {
+        sectionStatus['findingsAnomalies'] = 'failed';
+        sections.findingsAnomalies = `# Findings & Anomalies\n\n*This section could not be generated due to an error: ${err.message}*`;
+        console.error('✗ Findings & Anomalies failed:', err);
       }),
-    });
 
-    if (!findingsResponse.ok) throw new Error(`AI Gateway error: ${findingsResponse.status}`);
-    const findingsResult = await findingsResponse.json();
-    sections.findingsAnomalies = findingsResult.choices[0].message.content;
-
-    // 9. RECOMMENDATIONS
-    console.log('Generating Recommendations section...');
-    const recoPrompt = `Generate Section 9: Recommendations for ${siteName}.
+      // 9. RECOMMENDATIONS
+      callAIWithRetry('Recommendations', `Generate Section 9: Recommendations for ${siteName}.
 
 Variance: ${reconciliationData.variance} kWh (${reconciliationData.variancePercentage}%)
 Recovery Rate: ${reconciliationData.recoveryRate}%
@@ -431,26 +416,25 @@ Create section with:
 3. Cost Optimization - tariff optimization opportunities, load shifting potential based on TOU, solar utilization improvements
 4. Documentation - schematic updates, meter verification needs, tariff review schedule
 
-Make all recommendations specific, actionable, and tied to findings with clear priorities and timelines.`;
+Make all recommendations specific, actionable, and tied to findings with clear priorities and timelines.`).then(content => {
+        sections.recommendations = content;
+        sectionStatus['recommendations'] = 'success';
+        console.log('✓ Recommendations completed');
+      }).catch(err => {
+        sectionStatus['recommendations'] = 'failed';
+        sections.recommendations = `# Recommendations\n\n*This section could not be generated due to an error: ${err.message}*`;
+        console.error('✗ Recommendations failed:', err);
+      })
+    ];
 
-    const recoResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: recoPrompt }
-        ],
-      }),
-    });
+    // Wait for all batch 3 sections to complete
+    await Promise.all(batch3Promises);
+    console.log('Batch 3 completed');
 
-    if (!recoResponse.ok) throw new Error(`AI Gateway error: ${recoResponse.status}`);
-    const recoResult = await recoResponse.json();
-    sections.recommendations = recoResult.choices[0].message.content;
+    // Log completion status
+    const successCount = Object.values(sectionStatus).filter(s => s === 'success').length;
+    const failedCount = Object.values(sectionStatus).filter(s => s === 'failed').length;
+    console.log(`Report generation complete: ${successCount} sections succeeded, ${failedCount} sections failed`);
 
     console.log('✓ Generated all 9 report sections');
 
