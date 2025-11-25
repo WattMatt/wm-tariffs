@@ -495,14 +495,9 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
   };
 
   const generatePdfPreview = async (sections: PdfSection[]): Promise<string> => {
-    console.log('🔍 generatePdfPreview called');
     if (!previewData) {
-      console.warn('⚠️ No previewData available');
       return '';
     }
-
-    console.log('🔍 Preview data keys:', Object.keys(previewData));
-    console.log('🔍 schematicImageBase64 exists?', !!(previewData as any).schematicImageBase64);
 
     const pdf = new jsPDF({
       compress: true // Enable PDF compression
@@ -1167,8 +1162,6 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         addSpacer(8);
         
         // Section 2: Site Infrastructure
-        console.log('🔍 At Section 2: Site Infrastructure');
-        console.log('🔍 schematicImageBase64 value:', schematicImageBase64 ? 'EXISTS (length: ' + schematicImageBase64.length + ')' : 'NULL');
         addSectionHeading("2. SITE INFRASTRUCTURE", 16, true);
         
         // Add schematic snapshot image (meter cards and connections on white background)
@@ -1553,7 +1546,49 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         throw new Error("No reconciliation runs found");
       }
 
-      // Aggregate reconciliation data
+      // Aggregate reconciliation data and deduplicate meter results
+      const allMeterResults = allReconciliations.flatMap(r => r.reconciliation_meter_results || []);
+      
+      // Deduplicate meters by meter_id and aggregate their values
+      const meterResultsMap = new Map<string, any>();
+      allMeterResults.forEach((result: any) => {
+        const existing = meterResultsMap.get(result.meter_id);
+        if (existing) {
+          // Aggregate values from multiple reconciliation periods
+          existing.total_kwh += result.total_kwh || 0;
+          existing.total_kwh_positive += result.total_kwh_positive || 0;
+          existing.total_kwh_negative += result.total_kwh_negative || 0;
+          existing.readings_count += result.readings_count || 0;
+          existing.total_cost = (existing.total_cost || 0) + (result.total_cost || 0);
+          existing.energy_cost = (existing.energy_cost || 0) + (result.energy_cost || 0);
+          existing.demand_charges = (existing.demand_charges || 0) + (result.demand_charges || 0);
+          existing.fixed_charges = (existing.fixed_charges || 0) + (result.fixed_charges || 0);
+          
+          // Merge column totals
+          if (result.column_totals) {
+            existing.column_totals = existing.column_totals || {};
+            Object.entries(result.column_totals).forEach(([key, value]: [string, any]) => {
+              existing.column_totals[key] = (existing.column_totals[key] || 0) + (value || 0);
+            });
+          }
+          
+          // Keep max values for column_max_values
+          if (result.column_max_values) {
+            existing.column_max_values = existing.column_max_values || {};
+            Object.entries(result.column_max_values).forEach(([key, value]: [string, any]) => {
+              existing.column_max_values[key] = Math.max(existing.column_max_values[key] || 0, value || 0);
+            });
+          }
+        } else {
+          // First occurrence of this meter
+          meterResultsMap.set(result.meter_id, {
+            ...result,
+            column_totals: result.column_totals ? { ...result.column_totals } : {},
+            column_max_values: result.column_max_values ? { ...result.column_max_values } : {}
+          });
+        }
+      });
+      
       const selectedReconciliation = {
         ...allReconciliations[0],
         runs: allReconciliations,
@@ -1564,7 +1599,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         total_supply: allReconciliations.reduce((sum, r) => sum + (r.total_supply || 0), 0),
         date_from: allReconciliations[0]?.date_from,
         date_to: allReconciliations[allReconciliations.length - 1]?.date_to,
-        reconciliation_meter_results: allReconciliations.flatMap(r => r.reconciliation_meter_results || [])
+        reconciliation_meter_results: Array.from(meterResultsMap.values())
       };
 
       // Store reconciliation date range for KPI filtering
