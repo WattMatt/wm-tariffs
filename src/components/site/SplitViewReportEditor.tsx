@@ -325,11 +325,16 @@ export function SplitViewReportEditor({
 
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas) {
+      console.log('[AI Workshop] Canvas not found on mouse down');
+      return;
+    }
     
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
+    
+    console.log('[AI Workshop] Mouse down at:', { x, y, canvasSize: { width: canvas.width, height: canvas.height } });
     
     setIsSelecting(true);
     setStartPoint({ x, y });
@@ -350,7 +355,10 @@ export function SplitViewReportEditor({
     
     // Draw selection rectangle
     const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (!ctx) {
+      console.log('[AI Workshop] Canvas context not available');
+      return;
+    }
     
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.strokeStyle = 'rgba(59, 130, 246, 0.8)';
@@ -374,12 +382,16 @@ export function SplitViewReportEditor({
     const height = y - startPoint.y;
     
     if (Math.abs(width) > 10 && Math.abs(height) > 10) {
-      setSelectionArea({
+      const area = {
         x: Math.min(startPoint.x, x),
         y: Math.min(startPoint.y, y),
         width: Math.abs(width),
         height: Math.abs(height)
-      });
+      };
+      console.log('[AI Workshop] Selection area set:', area);
+      setSelectionArea(area);
+    } else {
+      console.log('[AI Workshop] Selection too small, ignoring');
     }
     
     setIsSelecting(false);
@@ -387,45 +399,73 @@ export function SplitViewReportEditor({
   };
 
   const handleApplyChanges = async () => {
-    if (!prompt.trim() || !selectionArea) return;
+    if (!prompt.trim() || !selectionArea) {
+      console.log('[AI Workshop] Cannot apply changes - missing prompt or selection:', { 
+        hasPrompt: !!prompt.trim(), 
+        hasSelection: !!selectionArea 
+      });
+      return;
+    }
+    
+    console.log('[AI Workshop] Applying changes with:', { 
+      prompt, 
+      selectionArea, 
+      sectionsCount: localSections.length 
+    });
     
     setIsGenerating(true);
     const loadingToast = toast.loading("Processing your request with AI...");
     
     try {
-      console.log('Applying changes:', { prompt, selectionArea });
+      const requestBody = {
+        prompt: prompt,
+        sections: localSections,
+        selectionArea: selectionArea
+      };
+      
+      console.log('[AI Workshop] Calling edge function with:', requestBody);
       
       const { data, error } = await supabase.functions.invoke('process-pdf-edit', {
-        body: {
-          prompt: prompt,
-          sections: localSections,
-          selectionArea: selectionArea
-        }
+        body: requestBody
       });
 
+      console.log('[AI Workshop] Edge function response:', { data, error });
+
       if (error) {
-        console.error('Edge function error:', error);
+        console.error('[AI Workshop] Edge function error:', error);
         
         if (error.message?.includes('429') || error.message?.includes('rate limit')) {
           toast.error("Rate limit exceeded. Please try again in a moment.", { id: loadingToast });
         } else if (error.message?.includes('402') || error.message?.includes('credits')) {
           toast.error("AI credits exhausted. Please add credits to your workspace.", { id: loadingToast });
         } else {
-          toast.error("Failed to process changes. Please try again.", { id: loadingToast });
+          toast.error(`Failed to process changes: ${error.message}`, { id: loadingToast });
         }
         return;
       }
 
-      if (!data?.sections) {
-        toast.error("Invalid response from AI service", { id: loadingToast });
+      if (!data) {
+        console.error('[AI Workshop] No data returned from edge function');
+        toast.error("Invalid response from AI service - no data", { id: loadingToast });
         return;
       }
+
+      if (!data.sections || !Array.isArray(data.sections)) {
+        console.error('[AI Workshop] Invalid sections format:', data);
+        toast.error("Invalid response from AI service - sections missing or malformed", { id: loadingToast });
+        return;
+      }
+
+      console.log('[AI Workshop] Received valid sections:', data.sections.length);
 
       // Update local sections with the AI-modified sections
       setLocalSections(data.sections);
       
+      console.log('[AI Workshop] Regenerating PDF with updated sections...');
       // Regenerate PDF with new sections
       const newUrl = await generatePdfPreview(data.sections);
+      console.log('[AI Workshop] New PDF URL generated:', newUrl);
+      
       if (pdfUrl) {
         URL.revokeObjectURL(pdfUrl);
       }
@@ -437,8 +477,8 @@ export function SplitViewReportEditor({
       toast.success("Changes applied successfully!", { id: loadingToast });
       
     } catch (err) {
-      console.error('Error applying changes:', err);
-      toast.error("An unexpected error occurred", { id: loadingToast });
+      console.error('[AI Workshop] Error applying changes:', err);
+      toast.error(`An unexpected error occurred: ${err instanceof Error ? err.message : 'Unknown error'}`, { id: loadingToast });
     } finally {
       setIsGenerating(false);
     }
@@ -508,28 +548,57 @@ export function SplitViewReportEditor({
   // Update canvas size to match PDF page dimensions
   useEffect(() => {
     const updateCanvasSize = () => {
-      if (!pdfContainerRef.current || !canvasRef.current) return;
+      if (!pdfContainerRef.current || !canvasRef.current) {
+        console.log('[AI Workshop] Missing refs for canvas sizing:', {
+          hasContainer: !!pdfContainerRef.current,
+          hasCanvas: !!canvasRef.current
+        });
+        return;
+      }
       
       // Find the actual PDF page element
-      const pageElement = pdfContainerRef.current.querySelector('.react-pdf__Page__canvas');
+      const pageElement = pdfContainerRef.current.querySelector('.react-pdf__Page__canvas') as HTMLCanvasElement;
       if (pageElement) {
         const rect = pageElement.getBoundingClientRect();
         const canvas = canvasRef.current;
-        canvas.width = rect.width;
-        canvas.height = rect.height;
         
-        // Position canvas to match the PDF page
+        // Match both logical and rendered dimensions
+        canvas.width = pageElement.width;
+        canvas.height = pageElement.height;
+        
+        // Position canvas to exactly overlay the PDF page
         canvas.style.width = `${rect.width}px`;
         canvas.style.height = `${rect.height}px`;
+        canvas.style.position = 'absolute';
+        canvas.style.top = `${rect.top - pdfContainerRef.current.getBoundingClientRect().top}px`;
+        canvas.style.left = `${rect.left - pdfContainerRef.current.getBoundingClientRect().left}px`;
+        canvas.style.pointerEvents = 'auto';
+        canvas.style.cursor = 'crosshair';
+        
+        console.log('[AI Workshop] Canvas sized and positioned:', {
+          logicalSize: { width: canvas.width, height: canvas.height },
+          displaySize: { width: rect.width, height: rect.height },
+          position: { 
+            top: canvas.style.top, 
+            left: canvas.style.left 
+          }
+        });
+      } else {
+        console.log('[AI Workshop] PDF page element not found yet');
       }
     };
     
-    // Use a slight delay to ensure PDF is rendered
-    const timer = setTimeout(updateCanvasSize, 100);
+    // Multiple attempts to ensure PDF is rendered
+    const timers = [
+      setTimeout(updateCanvasSize, 100),
+      setTimeout(updateCanvasSize, 300),
+      setTimeout(updateCanvasSize, 500)
+    ];
+    
     window.addEventListener('resize', updateCanvasSize);
     
     return () => {
-      clearTimeout(timer);
+      timers.forEach(timer => clearTimeout(timer));
       window.removeEventListener('resize', updateCanvasSize);
     };
   }, [zoom, pdfUrl, pageNumber]);
