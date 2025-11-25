@@ -1450,22 +1450,50 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         }
       };
 
-      // 7. Use meter data from reconciliation results
+      // 7. Use meter data from reconciliation results - deduplicate meters
       setGenerationProgress(40);
       setGenerationStatus("Processing meter data...");
       
-      const meterData = selectedReconciliation.reconciliation_meter_results?.map((result: any) => ({
-        id: result.meter_id,
-        meter_number: result.meter_number,
-        name: result.meter_name,
-        meter_type: result.meter_type,
-        location: result.location,
-        totalKwh: result.total_kwh,
-        columnTotals: result.column_totals || {},
-        columnMaxValues: result.column_max_values || {},
-        readingsCount: result.readings_count,
-        assignment: result.assignment
-      })) || [];
+      // Group meter results by meter_id and aggregate their data
+      const meterDataMap = new Map();
+      selectedReconciliation.reconciliation_meter_results?.forEach((result: any) => {
+        const meterId = result.meter_id;
+        if (!meterDataMap.has(meterId)) {
+          meterDataMap.set(meterId, {
+            id: result.meter_id,
+            meter_number: result.meter_number,
+            name: result.meter_name,
+            meter_type: result.meter_type,
+            location: result.location,
+            totalKwh: 0,
+            columnTotals: {},
+            columnMaxValues: {},
+            readingsCount: 0,
+            assignment: result.assignment
+          });
+        }
+        
+        const meterEntry = meterDataMap.get(meterId);
+        // Aggregate totals across multiple reconciliation runs
+        meterEntry.totalKwh += result.total_kwh || 0;
+        meterEntry.readingsCount += result.readings_count || 0;
+        
+        // Aggregate column totals
+        if (result.column_totals) {
+          Object.entries(result.column_totals).forEach(([key, value]) => {
+            meterEntry.columnTotals[key] = (meterEntry.columnTotals[key] || 0) + (value as number);
+          });
+        }
+        
+        // Keep max values for column max values
+        if (result.column_max_values) {
+          Object.entries(result.column_max_values).forEach(([key, value]) => {
+            meterEntry.columnMaxValues[key] = Math.max(meterEntry.columnMaxValues[key] || 0, value as number);
+          });
+        }
+      });
+      
+      const meterData = Array.from(meterDataMap.values());
 
       // 5. Use data from selected reconciliation
       const reconciliationData = {
