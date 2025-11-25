@@ -437,7 +437,6 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             addFooter();
             addPageNumber();
             pdf.addPage();
-            addBlueSidebar();
             yPos = topMargin;
           }
 
@@ -509,14 +508,13 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           
           if (data.length === 0) return;
 
-          // Check if we need a new page
-          if (yPos > pageHeight - bottomMargin - 100) {
-            addFooter();
-            addPageNumber();
-            pdf.addPage();
-            addBlueSidebar();
-            yPos = topMargin;
-          }
+            // Check if we need a new page
+            if (yPos > pageHeight - bottomMargin - 100) {
+              addFooter();
+              addPageNumber();
+              pdf.addPage();
+              yPos = topMargin;
+            }
 
           const chartWidth = pageWidth - leftMargin - rightMargin - 20;
           const chartHeight = 60;
@@ -654,7 +652,6 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
               addFooter();
               addPageNumber();
               pdf.addPage();
-              addBlueSidebar();
               yPos = topMargin;
             }
             pdf.text(line, leftMargin, yPos);
@@ -670,7 +667,6 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             addFooter();
             addPageNumber();
             pdf.addPage();
-            addBlueSidebar();
             yPos = topMargin;
           }
           
@@ -690,7 +686,6 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             addFooter();
             addPageNumber();
             pdf.addPage();
-            addBlueSidebar();
             yPos = topMargin;
           }
           pdf.setFontSize(9);
@@ -711,7 +706,6 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             addFooter();
             addPageNumber();
             pdf.addPage();
-            addBlueSidebar();
             yPos = topMargin;
           }
           
@@ -737,7 +731,6 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
               addFooter();
               addPageNumber();
               pdf.addPage();
-              addBlueSidebar();
               yPos = topMargin + 15;
             }
             
@@ -824,7 +817,6 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         // Start main content
         addPageNumber();
         pdf.addPage();
-        addBlueSidebar();
         yPos = topMargin;
         
         // Get section content helper
@@ -852,7 +844,6 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
                 addFooter();
                 addPageNumber();
                 pdf.addPage();
-                addBlueSidebar();
                 yPos = topMargin;
               }
               
@@ -910,7 +901,6 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             addFooter();
             addPageNumber();
             pdf.addPage();
-            addBlueSidebar();
             yPos = topMargin;
           }
           
@@ -955,7 +945,6 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           addFooter();
           addPageNumber();
           pdf.addPage();
-          addBlueSidebar();
           yPos = topMargin;
         }
         
@@ -2140,7 +2129,6 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
               addFooter();
               addPageNumber();
               pdf.addPage();
-              addBlueSidebar();
               yPos = topMargin;
             }
             
@@ -2289,11 +2277,9 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
 
         // Check if we need a new page
         if (yPos > pageHeight - bottomMargin - 100) {
-          addBlueSidebar();
           addFooter();
           addPageNumber();
           pdf.addPage();
-          addBlueSidebar();
           yPos = topMargin;
         }
 
@@ -2367,11 +2353,9 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
 
         // Check if we need a new page
         if (yPos > pageHeight - bottomMargin - 100) {
-          addBlueSidebar();
           addFooter();
           addPageNumber();
           pdf.addPage();
-          addBlueSidebar();
           yPos = topMargin;
         }
 
@@ -2505,11 +2489,9 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
         
         lines.forEach((line: string) => {
           if (yPos > pageHeight - bottomMargin - 15) {
-            addBlueSidebar();
             addFooter();
             addPageNumber();
             pdf.addPage();
-            addBlueSidebar();
             yPos = topMargin;
           }
           pdf.text(line, leftMargin + indent, yPos);
@@ -2524,11 +2506,9 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
         const bullet = level === 0 ? "•" : "◦";
         
         if (yPos > pageHeight - bottomMargin - 15) {
-          addBlueSidebar();
           addFooter();
           addPageNumber();
           pdf.addPage();
-          addBlueSidebar();
           yPos = topMargin;
         }
         
@@ -2540,11 +2520,9 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
         const lines = pdf.splitTextToSize(text, maxWidth);
         lines.forEach((line: string, index: number) => {
           if (index > 0 && yPos > pageHeight - bottomMargin - 15) {
-            addBlueSidebar();
             addFooter();
             addPageNumber();
             pdf.addPage();
-            addBlueSidebar();
             yPos = topMargin;
           }
           pdf.text(line, leftMargin + indent + 5, yPos);
@@ -2561,11 +2539,9 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
         
         // Check if we need a new page
         if (yPos > pageHeight - bottomMargin - 40) {
-          addBlueSidebar();
           addFooter();
           addPageNumber();
           pdf.addPage();
-          addBlueSidebar();
           yPos = topMargin;
         }
         
@@ -2593,11 +2569,9 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
         pdf.setFont("helvetica", "normal");
         rows.forEach((row) => {
           if (yPos > pageHeight - bottomMargin - 15) {
-            addBlueSidebar();
             addFooter();
             addPageNumber();
             pdf.addPage();
-            addBlueSidebar();
             yPos = topMargin + 15;
           }
           
@@ -2621,11 +2595,9 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
       const addSectionHeading = (text: string, fontSize: number = 12, forceNewPage: boolean = false) => {
         // Force new page for major sections
         if (forceNewPage) {
-          addBlueSidebar();
           addFooter();
           addPageNumber();
           pdf.addPage();
-          addBlueSidebar();
           yPos = topMargin;
         }
         
@@ -2650,11 +2622,9 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
       const addSubsectionHeading = (text: string) => {
         yPos += 5;
         if (yPos > pageHeight - bottomMargin - 20) {
-          addBlueSidebar();
           addFooter();
           addPageNumber();
           pdf.addPage();
-          addBlueSidebar();
           yPos = topMargin;
         }
         
@@ -2743,11 +2713,9 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
       
       tocEntries.forEach((entry, index) => {
         if (yPos > pageHeight - bottomMargin - 10) {
-          addBlueSidebar();
           addFooter();
           addPageNumber();
           pdf.addPage();
-          addBlueSidebar();
           yPos = topMargin;
         }
         
@@ -2775,7 +2743,6 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
       // Start main content
       addPageNumber();
       pdf.addPage();
-      addBlueSidebar();
       yPos = topMargin;
 
       // Section 1: Executive Summary
@@ -2791,11 +2758,9 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
       // Add schematic if available
       if (schematicImageBase64) {
         if (yPos > pageHeight - 150) {
-          addBlueSidebar();
           addFooter();
           addPageNumber();
           pdf.addPage();
-          addBlueSidebar();
           yPos = topMargin;
         }
         
@@ -2830,11 +2795,9 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
       
       // Check if we need a new page for KPI cards
       if (yPos > pageHeight - bottomMargin - 80) {
-        addBlueSidebar();
         addFooter();
         addPageNumber();
         pdf.addPage();
-        addBlueSidebar();
         yPos = topMargin;
       }
       
