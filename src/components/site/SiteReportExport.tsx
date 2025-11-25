@@ -1164,39 +1164,32 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         // Section 2: Site Infrastructure
         addSectionHeading("2. SITE INFRASTRUCTURE", 16, true);
         
-        // Add schematic hierarchy as embedded image
-        if (meterData && meterData.length > 0 && meterPositions && meterPositions.length > 0) {
+        // Add schematic snapshot image (meter cards and connections on white background)
+        if (schematicImageBase64) {
           addSubsectionHeading("Metering Hierarchy");
           
-          const hierarchyImage = await renderMeterHierarchyToImage(
-            meterData,
-            meterPositions,
-            meterConnections || []
-          );
+          // Add new page for larger diagram
+          addFooter();
+          addPageNumber();
+          pdf.addPage();
+          yPos = topMargin;
           
-          if (hierarchyImage) {
-            // Add new page for larger diagram
-            addFooter();
-            addPageNumber();
-            pdf.addPage();
-            yPos = topMargin;
-            
-            // Use full page width for larger, more readable diagram
-            const imgWidth = pageWidth - leftMargin - rightMargin;
-            const imgHeight = (imgWidth * 1000) / 1600; // Maintain aspect ratio
-            const imgX = leftMargin;
-            pdf.addImage(hierarchyImage, 'PNG', imgX, yPos, imgWidth, imgHeight);
-            yPos += imgHeight + 5;
-            
-            pdf.setFontSize(9);
-            pdf.setFont("helvetica", "italic");
-            pdf.text("Figure 1: Site Metering Hierarchy Diagram", pageWidth / 2, yPos, { align: "center" });
-            pdf.setFont("helvetica", "normal");
-            yPos += 10;
-          } else {
-            addText("Meter hierarchy visualization unavailable.", 10);
-            yPos += 5;
-          }
+          // Use full page width for larger, more readable diagram
+          const imgWidth = pageWidth - leftMargin - rightMargin;
+          const imgHeight = (imgWidth * 3) / 4; // Maintain typical aspect ratio
+          const imgX = leftMargin;
+          
+          pdf.addImage(schematicImageBase64, 'PNG', imgX, yPos, imgWidth, imgHeight);
+          yPos += imgHeight + 5;
+          
+          pdf.setFontSize(9);
+          pdf.setFont("helvetica", "italic");
+          pdf.text("Figure 1: Site Metering Hierarchy Diagram", pageWidth / 2, yPos, { align: "center" });
+          pdf.setFont("helvetica", "normal");
+          yPos += 10;
+        } else {
+          addText("Schematic snapshot unavailable. Please generate a snapshot in the Schematic Editor.", 10);
+          yPos += 5;
         }
         
         addSpacer(5);
@@ -1877,56 +1870,114 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         });
       }
 
-      // 7. Load and compress schematic image
+      // 7. Load and compress schematic snapshot image
       setGenerationProgress(60);
-      setGenerationStatus("Loading schematic image...");
+      setGenerationStatus("Loading schematic snapshot...");
       
       let schematicImageBase64 = null;
 
-      if (selectedSchematic?.converted_image_path) {
+      if (selectedSchematic) {
         try {
-          const { data: imageData } = await supabase.storage
-            .from("client-files")
-            .download(selectedSchematic.converted_image_path);
-
-          if (imageData) {
-            // Create an image element to compress
-            const img = new Image();
-            const blob = imageData;
-            const url = URL.createObjectURL(blob);
+          // First try to load the snapshot image (meter cards only, white background)
+          const { data: siteData } = await supabase
+            .from('sites')
+            .select('name, clients(name)')
+            .eq('id', siteId)
+            .single();
+          
+          if (siteData) {
+            const clientName = (siteData.clients as any).name.trim().replace(/[^a-zA-Z0-9\s-_]/g, '').replace(/\s+/g, ' ');
+            const siteName = siteData.name.trim().replace(/[^a-zA-Z0-9\s-_]/g, '').replace(/\s+/g, ' ');
+            const snapshotPath = `${clientName}/${siteName}/Metering/Schematics/${selectedSchematic.name}_snapshot.png`;
             
-            await new Promise((resolve, reject) => {
-              img.onload = () => {
-                // Create canvas for compression
-                const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d');
-                
-                // Set max dimensions (reduce resolution significantly for PDF)
-                const maxWidth = 1200;
-                const maxHeight = 800;
-                let width = img.width;
-                let height = img.height;
-                
-                // Calculate new dimensions maintaining aspect ratio
-                if (width > maxWidth || height > maxHeight) {
-                  const ratio = Math.min(maxWidth / width, maxHeight / height);
-                  width = width * ratio;
-                  height = height * ratio;
+            console.log('🖼️ Attempting to load snapshot from:', snapshotPath);
+            
+            const { data: snapshotData, error: snapshotError } = await supabase.storage
+              .from("client-files")
+              .download(snapshotPath);
+
+            if (snapshotData && !snapshotError) {
+              console.log('✅ Snapshot found, using it for PDF');
+              // Create an image element to compress
+              const img = new Image();
+              const blob = snapshotData;
+              const url = URL.createObjectURL(blob);
+              
+              await new Promise((resolve, reject) => {
+                img.onload = () => {
+                  // Create canvas for compression
+                  const canvas = document.createElement('canvas');
+                  const ctx = canvas.getContext('2d');
+                  
+                  // Set max dimensions (reduce resolution for PDF)
+                  const maxWidth = 1600;
+                  const maxHeight = 1200;
+                  let width = img.width;
+                  let height = img.height;
+                  
+                  // Calculate new dimensions maintaining aspect ratio
+                  if (width > maxWidth || height > maxHeight) {
+                    const ratio = Math.min(maxWidth / width, maxHeight / height);
+                    width = width * ratio;
+                    height = height * ratio;
+                  }
+                  
+                  canvas.width = width;
+                  canvas.height = height;
+                  
+                  // Draw and compress image as PNG with quality 0.9 (better for diagrams)
+                  ctx?.drawImage(img, 0, 0, width, height);
+                  schematicImageBase64 = canvas.toDataURL('image/png', 0.9);
+                  
+                  URL.revokeObjectURL(url);
+                  resolve(null);
+                };
+                img.onerror = reject;
+                img.src = url;
+              });
+            } else {
+              console.log('⚠️ Snapshot not found, falling back to converted image');
+              // Fallback to converted_image_path if snapshot doesn't exist
+              if (selectedSchematic.converted_image_path) {
+                const { data: imageData } = await supabase.storage
+                  .from("client-files")
+                  .download(selectedSchematic.converted_image_path);
+
+                if (imageData) {
+                  const img = new Image();
+                  const blob = imageData;
+                  const url = URL.createObjectURL(blob);
+                  
+                  await new Promise((resolve, reject) => {
+                    img.onload = () => {
+                      const canvas = document.createElement('canvas');
+                      const ctx = canvas.getContext('2d');
+                      
+                      const maxWidth = 1200;
+                      const maxHeight = 800;
+                      let width = img.width;
+                      let height = img.height;
+                      
+                      if (width > maxWidth || height > maxHeight) {
+                        const ratio = Math.min(maxWidth / width, maxHeight / height);
+                        width = width * ratio;
+                        height = height * ratio;
+                      }
+                      
+                      canvas.width = width;
+                      canvas.height = height;
+                      ctx?.drawImage(img, 0, 0, width, height);
+                      schematicImageBase64 = canvas.toDataURL('image/jpeg', 0.6);
+                      
+                      URL.revokeObjectURL(url);
+                      resolve(null);
+                    };
+                    img.onerror = reject;
+                    img.src = url;
+                  });
                 }
-                
-                canvas.width = width;
-                canvas.height = height;
-                
-                // Draw and compress image as JPEG with quality 0.6
-                ctx?.drawImage(img, 0, 0, width, height);
-                schematicImageBase64 = canvas.toDataURL('image/jpeg', 0.6);
-                
-                URL.revokeObjectURL(url);
-                resolve(null);
-              };
-              img.onerror = reject;
-              img.src = url;
-            });
+              }
+            }
           }
         } catch (err) {
           console.error("Error loading schematic image:", err);
