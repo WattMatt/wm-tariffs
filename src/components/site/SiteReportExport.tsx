@@ -383,12 +383,18 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       const scale = Math.min(scaleX, scaleY, 0.8); // Cap scale at 0.8 for readability
 
       console.log('📊 Hierarchy rendering - Meters:', meters.length, 'Positions:', positions.length, 'Scale:', scale.toFixed(2));
+      console.log('📊 Sample meter data:', meters[0]);
+      console.log('📊 Sample position data:', positions[0]);
 
       // Create meter cards FIRST (so they appear under connection lines in z-order)
       positions.forEach((pos: any) => {
-        const meter = meters.find(m => m.meter_id === pos.meter_id);
+        // Match meter by ID - handle both id and meter_id fields
+        const meter = meters.find(m => 
+          m.id === pos.meter_id || 
+          m.meter_id === pos.meter_id
+        );
         if (!meter) {
-          console.warn('⚠️ No meter found for position:', pos.meter_id);
+          console.warn('⚠️ No meter found for position:', pos.meter_id, 'Available meter IDs:', meters.slice(0, 3).map(m => m.id || m.meter_id));
           return;
         }
 
