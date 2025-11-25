@@ -1711,72 +1711,162 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           multiplier: config.multiplier
         }));
 
-      // 10. Generate AI narrative sections
+      // 10. Generate data-only sections (AI DISABLED)
       setGenerationProgress(70);
-      setGenerationStatus("Generating AI report sections (Batch 1/3)...");
-      setCurrentBatch(1);
+      setGenerationStatus("Formatting report data...");
       
-      // Mark batch 1 as processing
-      setBatchStatuses(prev => prev.map(b => 
-        b.batchNumber === 1 ? { ...b, status: 'processing' } : b
-      ));
+      // Mark all batches as complete immediately
+      setBatchStatuses(prev => prev.map(b => ({
+        ...b,
+        status: 'complete' as const,
+        sections: b.sections.map(s => ({ ...s, status: 'success' as const }))
+      })));
 
-      const { data: reportData, error: aiError } = await supabase.functions.invoke(
-        "generate-audit-report",
-        {
-          body: {
-            siteName,
-            siteDetails,
-            auditPeriodStart: format(new Date(selectedReconciliation.date_from), "dd MMM yyyy"),
-            auditPeriodEnd: format(new Date(selectedReconciliation.date_to), "dd MMM yyyy"),
-            meterHierarchy,
-            meterBreakdown,
-            reconciliationData,
-            documentExtractions,
-            anomalies,
-            selectedCsvColumns,
-            schematics,
-            tariffStructures,
-            loadProfiles,
-            costAnalysis,
-            selectedFolderPaths,
-            selectedReconciliationIds,
-            documentFolders: selectedFolderPaths,
-            isMultiPeriod: selectedReconciliationIds.length > 1 || (allReconciliations && allReconciliations.length > 1)
-          }
+      // Generate sections from real data without AI interpretation
+      const formatNumber = (value: number, decimals: number = 2): string => {
+        return value.toFixed(decimals).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+      };
+
+      const reportData = {
+        clientName: siteDetails.clientName,
+        sections: {
+          executiveSummary: `### Report Summary
+
+| Metric | Value |
+|--------|-------|
+| Site | ${siteName} |
+| Client | ${siteDetails.clientName || 'N/A'} |
+| Audit Period | ${format(new Date(selectedReconciliation.date_from), "dd MMM yyyy")} - ${format(new Date(selectedReconciliation.date_to), "dd MMM yyyy")} |
+| Grid Supply | ${formatNumber(selectedReconciliation.bulk_total)} kWh |
+| Solar Generation | ${formatNumber(selectedReconciliation.solar_total)} kWh |
+| Total Supply | ${formatNumber(selectedReconciliation.total_supply)} kWh |
+| Distribution | ${formatNumber(selectedReconciliation.tenant_total)} kWh |
+| Variance | ${formatNumber(selectedReconciliation.discrepancy)} kWh (${formatNumber((selectedReconciliation.discrepancy / selectedReconciliation.total_supply) * 100)}%) |
+| Recovery Rate | ${formatNumber(selectedReconciliation.recovery_rate)}% |`,
+
+          siteInfrastructure: `### Meter Summary
+
+| Meter Type | Count |
+|------------|-------|
+| Bulk Meters | ${reconciliationData.councilBulkCount} |
+| Solar Meters | ${reconciliationData.solarCount} |
+| Tenant Meters | ${reconciliationData.distributionCount} |
+| Check Meters | ${reconciliationData.checkMeterCount} |
+| **Total** | **${reconciliationData.meterCount}** |
+
+### All Meters
+
+| Meter Number | Name | Type | Location | Consumption (kWh) | Readings |
+|--------------|------|------|----------|-------------------|----------|
+${meterBreakdown.map(m => `| ${m.meterNumber} | ${m.name || 'N/A'} | ${m.type} | ${m.location || 'N/A'} | ${formatNumber(parseFloat(m.consumption))} | ${m.readingsCount} |`).join('\n')}`,
+
+          tariffConfiguration: `### Tariff Structures
+
+${tariffStructures.length > 0 ? tariffStructures.map(tariff => `
+**${tariff.name}**
+- Type: ${tariff.tariff_type}
+- Voltage Level: ${tariff.voltage_level || 'N/A'}
+- Effective From: ${format(new Date(tariff.effective_from), "dd MMM yyyy")}
+- Effective To: ${tariff.effective_to ? format(new Date(tariff.effective_to), "dd MMM yyyy") : 'Current'}
+- Uses TOU: ${tariff.uses_tou ? 'Yes' : 'No'}
+
+${tariff.tariff_blocks?.length > 0 ? `**Energy Blocks:**
+| Block | From (kWh) | To (kWh) | Rate (c/kWh) |
+|-------|------------|----------|--------------|
+${tariff.tariff_blocks.map(block => `| ${block.block_number} | ${formatNumber(block.kwh_from, 0)} | ${block.kwh_to ? formatNumber(block.kwh_to, 0) : 'Unlimited'} | ${formatNumber(block.energy_charge_cents / 100, 4)} |`).join('\n')}` : ''}
+
+${tariff.tariff_charges?.length > 0 ? `**Other Charges:**
+| Type | Description | Amount | Unit |
+|------|-------------|--------|------|
+${tariff.tariff_charges.map(charge => `| ${charge.charge_type} | ${charge.description || 'N/A'} | ${formatNumber(charge.charge_amount)} | ${charge.unit} |`).join('\n')}` : ''}
+`).join('\n') : 'No tariff structures configured.'}`,
+
+          meteringDataAnalysis: `### Consumption Analysis
+
+| Meter Number | Name | Type | Total kWh | Readings |
+|--------------|------|------|-----------|----------|
+${meterData.slice(0, 20).map(m => `| ${m.meter_number} | ${m.name || 'N/A'} | ${m.meter_type} | ${formatNumber(m.totalKwh)} | ${m.readingsCount} |`).join('\n')}
+${meterData.length > 20 ? `\n*... and ${meterData.length - 20} more meters*` : ''}
+
+${Object.keys(csvColumnAggregations).length > 0 ? `### Additional Metrics
+
+| Metric | Aggregation | Value |
+|--------|-------------|-------|
+${Object.entries(csvColumnAggregations).map(([col, data]) => `| ${col} | ${data.aggregation.toUpperCase()} | ${formatNumber(data.value)}${data.multiplier !== 1 ? ` (×${data.multiplier})` : ''} |`).join('\n')}` : ''}`,
+
+          documentValidation: documentExtractions.length > 0 ? `### Documents Analyzed
+
+| Document | Type | Period | Amount | Confidence |
+|----------|------|--------|--------|------------|
+${documentExtractions.map(doc => `| ${doc.fileName} | ${doc.documentType} | ${doc.extraction?.period_start ? format(new Date(doc.extraction.period_start), "MMM yyyy") : 'N/A'} | ${doc.extraction?.total_amount ? 'R ' + formatNumber(doc.extraction.total_amount) : 'N/A'} | ${doc.extraction?.confidence_score ? (doc.extraction.confidence_score * 100).toFixed(0) + '%' : 'N/A'} |`).join('\n')}
+
+**Total Documents Analyzed:** ${documentExtractions.length}` : 'No documents with extractions found.',
+
+          reconciliationResults: `### Supply vs Distribution
+
+| Category | Value (kWh) |
+|----------|-------------|
+| Grid Supply (Bulk) | ${formatNumber(selectedReconciliation.bulk_total)} |
+| Solar Generation | ${formatNumber(selectedReconciliation.solar_total)} |
+| **Total Supply** | **${formatNumber(selectedReconciliation.total_supply)}** |
+| Distribution Total | ${formatNumber(selectedReconciliation.tenant_total)} |
+| **Variance** | **${formatNumber(selectedReconciliation.discrepancy)} (${formatNumber((selectedReconciliation.discrepancy / selectedReconciliation.total_supply) * 100)}%)** |
+| **Recovery Rate** | **${formatNumber(selectedReconciliation.recovery_rate)}%** |
+
+### Meter Results
+
+| Meter | Type | Consumption (kWh) | Cost |
+|-------|------|-------------------|------|
+${selectedReconciliation.reconciliation_meter_results?.slice(0, 30).map((r: any) => `| ${r.meter_number} | ${r.meter_type} | ${formatNumber(r.total_kwh)} | ${r.total_cost ? 'R ' + formatNumber(r.total_cost) : 'N/A'} |`).join('\n')}
+${selectedReconciliation.reconciliation_meter_results?.length > 30 ? `\n*... and ${selectedReconciliation.reconciliation_meter_results.length - 30} more meters*` : ''}`,
+
+          costAnalysis: costAnalysis.revenueEnabled ? `### Cost Breakdown by Type
+
+| Type | Cost (R) |
+|------|----------|
+| Bulk Supply | ${formatNumber(costAnalysis.costByType.bulk)} |
+| Solar | ${formatNumber(costAnalysis.costByType.solar)} |
+| Tenant | ${formatNumber(costAnalysis.costByType.tenant)} |
+
+### Cost Breakdown by Component
+
+| Component | Cost (R) |
+|-----------|----------|
+| Energy Charges | ${formatNumber(costAnalysis.costByComponent.energy)} |
+| Demand Charges | ${formatNumber(costAnalysis.costByComponent.demand)} |
+| Fixed Charges | ${formatNumber(costAnalysis.costByComponent.fixed)} |
+| **Total Cost** | **${formatNumber(costAnalysis.totalCost)}** |
+
+### Financial Summary
+
+| Item | Amount (R) |
+|------|------------|
+| Total Supply Cost | ${formatNumber(costAnalysis.totalCost)} |
+| Tenant Revenue | ${formatNumber(costAnalysis.tenantRevenue)} |
+| **Net Position** | **${formatNumber(costAnalysis.netPosition)}** |
+| Avg Cost per kWh | ${formatNumber(costAnalysis.avgCostPerKwh, 4)} |` : `Cost analysis requires revenue to be enabled in reconciliation settings.`,
+
+          findingsAnomalies: anomalies.length > 0 ? `### Anomalies Detected
+
+| Severity | Meter | Description |
+|----------|-------|-------------|
+${anomalies.map(a => `| ${a.severity} | ${a.meter || 'Site-wide'} | ${a.description} |`).join('\n')}
+
+**Total Anomalies:** ${anomalies.length}
+- Critical: ${anomalies.filter(a => a.severity === 'CRITICAL').length}
+- High: ${anomalies.filter(a => a.severity === 'HIGH').length}
+- Medium: ${anomalies.filter(a => a.severity === 'MEDIUM').length}
+- Low: ${anomalies.filter(a => a.severity === 'LOW').length}` : 'No anomalies detected.',
+
+          recommendations: `### Key Observations
+
+${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ? 'y' : 'ies'} detected requiring attention` : '- No critical issues detected'}
+- Recovery rate: ${formatNumber(selectedReconciliation.recovery_rate)}%
+- Variance: ${formatNumber((selectedReconciliation.discrepancy / selectedReconciliation.total_supply) * 100)}%
+- Total meters monitored: ${reconciliationData.meterCount}
+- Documents analyzed: ${documentExtractions.length}`
         }
-      );
-
-      if (aiError) throw aiError;
-      
-      // Update section statuses based on what was generated
-      if (reportData?.sections) {
-        setBatchStatuses(prev => prev.map(batch => {
-          const updatedSections = batch.sections.map(section => {
-            const sectionKey = section.id.replace(/-/g, '');
-            const capitalizedKey = sectionKey.charAt(0).toLowerCase() + 
-              sectionKey.slice(1).replace(/(?:^|-)([a-z])/g, (_, char) => char.toUpperCase());
-            
-            const sectionExists = reportData.sections[capitalizedKey];
-            return {
-              ...section,
-              status: (sectionExists ? 'success' : 'failed') as 'success' | 'failed',
-              error: sectionExists ? undefined : 'Section not generated by AI'
-            };
-          });
-          
-          const allSuccess = updatedSections.every(s => s.status === 'success');
-          const anyFailed = updatedSections.some(s => s.status === 'failed');
-          
-          return {
-            ...batch,
-            sections: updatedSections,
-            status: (allSuccess ? 'complete' : anyFailed ? 'failed' : batch.status) as 'complete' | 'failed' | 'pending' | 'processing'
-          };
-        }));
-      }
-      
-      setCurrentBatch(undefined);
+      };
 
       // Generate chart images for preview
       setGenerationProgress(85);
