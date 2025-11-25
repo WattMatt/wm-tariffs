@@ -1671,7 +1671,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         if (!selectedReconciliation.meter_order || selectedReconciliation.meter_order.length === 0) {
           // Fallback to type-based sorting if no meter_order is saved
           return meters.sort((a, b) => {
-            const typeOrder = { bulk_meter: 1, council_meter: 2, other: 3, check_meter: 4, tenant_meter: 5 };
+            const typeOrder = { council_meter: 1, bulk_meter: 2, check_meter: 3, tenant_meter: 4, other: 5 };
             const aOrder = typeOrder[a.meter_type as keyof typeof typeOrder] || 99;
             const bOrder = typeOrder[b.meter_type as keyof typeof typeOrder] || 99;
             if (aOrder !== bOrder) return aOrder - bOrder;
@@ -1680,7 +1680,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         }
 
         // Create a map for quick lookup
-        const meterMap = new Map(meters.map(m => [m.meter_id, m]));
+        const meterMap = new Map(meters.map(m => [m.id, m]));
         const orderedMeters: any[] = [];
         
         // Add meters in the saved order
@@ -1792,11 +1792,11 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
 
 | Meter Type | Count |
 |------------|-------|
-| Bulk Meters | ${reconciliationData.councilBulkCount} |
 | Council Meters | ${reconciliationData.councilMeterCount} |
-| Other Meters | ${reconciliationData.otherCount} |
-| Tenant Meters | ${reconciliationData.distributionCount} |
+| Bulk Meters | ${reconciliationData.councilBulkCount} |
 | Check Meters | ${reconciliationData.checkMeterCount} |
+| Tenant Meters | ${reconciliationData.distributionCount} |
+| Other Meters | ${reconciliationData.otherCount} |
 | **Total** | **${reconciliationData.meterCount}** |
 
 ### All Meters
