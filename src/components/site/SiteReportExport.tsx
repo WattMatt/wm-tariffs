@@ -898,33 +898,35 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         
         // Section 2: Site Infrastructure
         addSectionHeading("2. SITE INFRASTRUCTURE", 16, true);
-        renderSection('site-infrastructure');
-        addSpacer(5);
         
-        // Add schematic if available
+        // Add schematic image as full page first item if available
         if (schematicImageBase64) {
-          if (yPos > pageHeight - 150) {
-            addFooter();
-            addPageNumber();
-            pdf.addPage();
-            yPos = topMargin;
-          }
-          
           try {
+            // Calculate dimensions for full-page image
             const imgWidth = pageWidth - leftMargin - rightMargin;
-            const imgHeight = 120;
+            // Leave space for heading (already added), caption, and margins
+            const imgHeight = pageHeight - yPos - bottomMargin - 20; // 20 for caption space
+            
             pdf.addImage(schematicImageBase64, 'JPEG', leftMargin, yPos, imgWidth, imgHeight);
             yPos += imgHeight + 5;
             
+            // Add caption at bottom
             pdf.setFontSize(9);
             pdf.setFont("helvetica", "italic");
             pdf.text("Figure 1: Site Metering Schematic Diagram", pageWidth / 2, yPos, { align: "center" });
             pdf.setFont("helvetica", "normal");
-            yPos += 10;
+            
+            // Start new page for remaining content
+            addFooter();
+            addPageNumber();
+            pdf.addPage();
+            yPos = topMargin;
           } catch (err) {
             console.error("Error adding schematic to preview:", err);
           }
         }
+        
+        renderSection('site-infrastructure');
         addSpacer(8);
         
         // Section 3: Tariff Configuration
