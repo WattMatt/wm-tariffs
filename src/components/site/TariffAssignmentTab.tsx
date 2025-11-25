@@ -191,10 +191,10 @@ export default function TariffAssignmentTab({
       const monthStart = new Date(current.getFullYear(), current.getMonth(), 1);
       const monthEnd = new Date(current.getFullYear(), current.getMonth() + 1, 0, 23, 59, 59);
       
-      // Find matching document for this month
+      // Find matching document for this month (based on period end date)
       const matchingDoc = shops.find(shop => {
-        const periodStart = new Date(shop.periodStart);
-        return periodStart >= monthStart && periodStart <= monthEnd;
+        const periodEnd = new Date(shop.periodEnd);
+        return periodEnd >= monthStart && periodEnd <= monthEnd;
       });
       
       allMonths.push({
