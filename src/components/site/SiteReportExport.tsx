@@ -814,9 +814,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         
         addFooter();
         
-        // Start main content
-        addPageNumber();
-        pdf.addPage();
+        // Start main content (continue on next page when needed)
         yPos = topMargin;
         
         // Get section content helper
@@ -2740,9 +2738,7 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
       
       addFooter();
 
-      // Start main content
-      addPageNumber();
-      pdf.addPage();
+      // Start main content (continue on next page when needed)
       yPos = topMargin;
 
       // Section 1: Executive Summary
