@@ -234,7 +234,7 @@ export default function SavedReportsList({ siteId, onRefresh, onRegenerate }: Sa
           }}
           open={!!previewReport}
           onOpenChange={(open) => !open && setPreviewReport(null)}
-          storageBucket="site-documents"
+          storageBucket="client-files"
         />
       )}
     </>
