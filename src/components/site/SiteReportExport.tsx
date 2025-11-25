@@ -495,9 +495,14 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
   };
 
   const generatePdfPreview = async (sections: PdfSection[]): Promise<string> => {
+    console.log('🔍 generatePdfPreview called');
     if (!previewData) {
+      console.warn('⚠️ No previewData available');
       return '';
     }
+
+    console.log('🔍 Preview data keys:', Object.keys(previewData));
+    console.log('🔍 schematicImageBase64 exists?', !!(previewData as any).schematicImageBase64);
 
     const pdf = new jsPDF({
       compress: true // Enable PDF compression
@@ -1162,6 +1167,8 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         addSpacer(8);
         
         // Section 2: Site Infrastructure
+        console.log('🔍 At Section 2: Site Infrastructure');
+        console.log('🔍 schematicImageBase64 value:', schematicImageBase64 ? 'EXISTS (length: ' + schematicImageBase64.length + ')' : 'NULL');
         addSectionHeading("2. SITE INFRASTRUCTURE", 16, true);
         
         // Add schematic snapshot image (meter cards and connections on white background)
