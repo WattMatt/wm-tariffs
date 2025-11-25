@@ -18,7 +18,6 @@ import { Separator } from "@/components/ui/separator";
 import { SplitViewReportEditor } from "./SplitViewReportEditor";
 import SaveReportDialog from "./SaveReportDialog";
 import SavedReportsList from "./SavedReportsList";
-import html2canvas from "html2canvas";
 
 export interface PdfSection {
   id: string;
