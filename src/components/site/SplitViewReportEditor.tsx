@@ -331,10 +331,21 @@ export function SplitViewReportEditor({
     }
     
     const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    // Calculate position relative to canvas, accounting for actual canvas dimensions vs display size
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
     
-    console.log('[AI Workshop] Mouse down at:', { x, y, canvasSize: { width: canvas.width, height: canvas.height } });
+    console.log('[AI Workshop] Mouse down at:', { 
+      x, 
+      y, 
+      clientPos: { x: e.clientX, y: e.clientY },
+      rectPos: { left: rect.left, top: rect.top },
+      scale: { x: scaleX, y: scaleY },
+      canvasSize: { width: canvas.width, height: canvas.height },
+      displaySize: { width: rect.width, height: rect.height }
+    });
     
     setIsSelecting(true);
     setStartPoint({ x, y });
@@ -347,8 +358,11 @@ export function SplitViewReportEditor({
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
     
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    // Calculate position relative to canvas, accounting for scale
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
     
     const width = x - startPoint.x;
     const height = y - startPoint.y;
@@ -375,8 +389,11 @@ export function SplitViewReportEditor({
     if (!canvas) return;
     
     const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    // Calculate position relative to canvas, accounting for scale
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
     
     const width = x - startPoint.x;
     const height = y - startPoint.y;
