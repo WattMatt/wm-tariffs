@@ -3862,16 +3862,7 @@ export default function SchematicEditor({
       });
 
     await Promise.all(updates);
-    
-    // Generate and upload PNG snapshot
-    try {
-      await generateAndUploadSchematicSnapshot();
-      toast.success("Schematic saved successfully with snapshot");
-    } catch (error) {
-      console.error('Failed to generate snapshot:', error);
-      toast.success("Schematic saved (snapshot failed)");
-    }
-    
+    toast.success("Schematic saved successfully");
     setIsSaving(false);
     
     // Reset edit mode and all selection states
@@ -3886,122 +3877,6 @@ export default function SchematicEditor({
     setSelectedMeterIds([]);
     setSelectedRegionIndices([]);
     setSelectedConnectionKeys([]);
-  };
-
-  // Helper function to get meter type color
-  const getMeterTypeColor = (type: string): string => {
-    switch (type) {
-      case "council_bulk": return "#22c55e"; // green
-      case "tenant": return "#3b82f6"; // blue
-      case "solar": return "#eab308"; // yellow
-      case "check_meter": return "#f97316"; // orange
-      case "distribution": return "#a855f7"; // purple
-      default: return "#64748b"; // gray
-    }
-  };
-
-  // Generate PNG snapshot of schematic with meter cards and connections
-  const generateAndUploadSchematicSnapshot = async () => {
-    if (!fabricCanvas) return;
-
-    console.log('🖼️ Starting snapshot generation using Fabric.js native export...');
-    console.log('📐 Canvas display size:', fabricCanvas.getWidth(), 'x', fabricCanvas.getHeight());
-
-    // Store original image dimensions for proper scaling
-    const originalWidth = (fabricCanvas as any).originalImageWidth || fabricCanvas.getWidth();
-    const originalHeight = (fabricCanvas as any).originalImageHeight || fabricCanvas.getHeight();
-    console.log('📐 Original dimensions:', originalWidth, 'x', originalHeight);
-
-    // Calculate multiplier to export at original resolution
-    const multiplier = originalWidth / fabricCanvas.getWidth();
-    console.log('🔢 Export multiplier:', multiplier);
-
-    // Store current background image and settings
-    const currentBackgroundImage = fabricCanvas.backgroundImage;
-    const currentBackgroundColor = fabricCanvas.backgroundColor;
-    
-    console.log('🎨 Temporarily hiding background image...');
-    
-    // Temporarily remove background image and set white background
-    fabricCanvas.backgroundImage = undefined;
-    fabricCanvas.backgroundColor = '#ffffff';
-    fabricCanvas.renderAll();
-
-    // Export canvas to data URL using Fabric.js native method
-    console.log('📸 Capturing canvas with toDataURL()...');
-    const dataUrl = fabricCanvas.toDataURL({
-      format: 'png',
-      multiplier: multiplier,
-      quality: 1.0
-    });
-
-    // Restore background image immediately
-    console.log('🔄 Restoring background image...');
-    fabricCanvas.backgroundImage = currentBackgroundImage;
-    fabricCanvas.backgroundColor = currentBackgroundColor;
-    fabricCanvas.renderAll();
-
-    console.log('✅ Canvas captured, converting to blob...');
-
-    // Convert data URL to blob
-    const blob = await fetch(dataUrl).then(r => r.blob());
-    console.log('📦 Blob size:', blob.size, 'bytes');
-
-    // Fetch site and client info for path
-    const { data: siteData } = await supabase
-      .from('sites')
-      .select('name, clients(name)')
-      .eq('id', siteId)
-      .single();
-
-    if (!siteData) {
-      throw new Error('Site not found');
-    }
-
-    const clientName = (siteData.clients as any).name.replace(/[^a-zA-Z0-9\s-_]/g, '').replace(/\s+/g, ' ');
-    const siteName = siteData.name.replace(/[^a-zA-Z0-9\s-_]/g, '').replace(/\s+/g, ' ');
-    
-    // Get schematic name
-    const { data: schematicData } = await supabase
-      .from('schematics')
-      .select('name')
-      .eq('id', schematicId)
-      .single();
-
-    const schematicName = schematicData?.name || 'schematic';
-    const fileName = `${schematicName.replace(/[^a-zA-Z0-9\s-_]/g, '').replace(/\s+/g, '_')}_snapshot.png`;
-    const filePath = `${clientName}/${siteName}/Metering/Schematics/${fileName}`;
-
-    // Force delete existing file to ensure overwrite
-    console.log('🗑️ Deleting existing snapshot:', filePath);
-    const { error: deleteError } = await supabase
-      .storage
-      .from('client-files')
-      .remove([filePath]);
-    
-    if (deleteError) {
-      console.log('⚠️ Delete error (file may not exist):', deleteError.message);
-    } else {
-      console.log('✅ Old snapshot deleted');
-    }
-
-    // Upload new snapshot with cache-busting
-    console.log('⬆️ Uploading new snapshot...');
-    const { error: uploadError } = await supabase
-      .storage
-      .from('client-files')
-      .upload(filePath, blob, {
-        contentType: 'image/png',
-        cacheControl: '0', // Disable caching
-        upsert: true
-      });
-
-    if (uploadError) {
-      console.error('❌ Upload error:', uploadError);
-      throw uploadError;
-    }
-
-    console.log('✅ Schematic snapshot saved successfully:', filePath);
   };
 
 
