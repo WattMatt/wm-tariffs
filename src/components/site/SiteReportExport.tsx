@@ -640,7 +640,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         
         // Helper to add text with wrapping
         const addText = (text: string, fontSize: number = 9, isBold: boolean = false) => {
-          const cleanedText = text.replace(/\*\*(.*?)\*\*/g, '$1').replace(/^#{1,6}\s+.+$/gm, '').trim();
+          const cleanedText = text.replace(/\*\*(.*?)\*\*/g, '$1').replace(/^##\s+.+$/gm, '').trim();
           pdf.setFontSize(fontSize);
           pdf.setFont("helvetica", isBold ? "bold" : "normal");
           const maxWidth = pageWidth - leftMargin - rightMargin;
@@ -2251,7 +2251,7 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
       const cleanMarkdown = (text: string): string => {
         if (!text) return '';
         return text
-          .replace(/^#{1,6}\s+.+$/gm, '') // Remove all markdown headers (##, ###, etc.)
+          .replace(/^##\s+.+$/gm, '') // Remove markdown headers
           .replace(/\*\*(.*?)\*\*/g, '$1') // Remove ** bold
           .replace(/^\d+\.\d+\s+/gm, '') // Remove numbered subsections like 3.1, 4.2
           .trim();
