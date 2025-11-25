@@ -362,7 +362,8 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           anomalies,
           schematicImageBase64,
           csvColumnAggregations,
-          meterConnections
+          meterConnections,
+          meterPositions
         } = previewData as any;
 
         // Template styling constants
@@ -759,125 +760,113 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           yPos += 5;
         };
 
-        // Helper to draw meter hierarchy tree
-        const drawMeterHierarchyTree = (meters: any[], connections: any[]) => {
-          if (!meters || meters.length === 0) return;
+        // Helper to draw schematic-style meter layout with positions
+        const drawSchematicLayout = (meters: any[], meterPositions: any[], connections: any[]) => {
+          if (!meters || meters.length === 0 || !meterPositions || meterPositions.length === 0) return;
           
-          // Build hierarchy structure
-          const meterMap = new Map(meters.map(m => [m.id, { ...m, children: [] }]));
-          const rootMeters: any[] = [];
+          // Define canvas dimensions (scaled for PDF)
+          const canvasWidth = pageWidth - leftMargin - rightMargin;
+          const canvasHeight = 180; // Fixed height for schematic area
           
-          connections?.forEach((conn: any) => {
-            const parent = meterMap.get(conn.parent_meter_id);
-            const child = meterMap.get(conn.child_meter_id);
-            if (parent && child) {
-              parent.children.push(child);
-            }
-          });
-          
-          // Find root meters (those without parents)
-          const childIds = new Set(connections?.map((c: any) => c.child_meter_id) || []);
-          meters.forEach(m => {
-            if (!childIds.has(m.id)) {
-              const node = meterMap.get(m.id);
-              if (node) rootMeters.push(node);
-            }
-          });
-          
-          if (rootMeters.length === 0 && meters.length > 0) {
-            const firstMeter = meterMap.get(meters[0].id);
-            if (firstMeter) rootMeters.push(firstMeter);
+          // Check if we need a new page
+          if (yPos + canvasHeight > pageHeight - bottomMargin - 20) {
+            addFooter();
+            addPageNumber();
+            pdf.addPage();
+            yPos = topMargin;
           }
           
-          // Draw the tree
-          const cardWidth = 120;
-          const cardHeight = 24;
-          const horizontalSpacing = 130;
-          const verticalSpacing = 35;
-          const startX = leftMargin + 10;
+          const canvasStartY = yPos;
           
-          const drawNode = (node: any, x: number, y: number, level: number): number => {
-            if (y + cardHeight > pageHeight - bottomMargin - 20) {
-              addFooter();
-              addPageNumber();
-              pdf.addPage();
-              y = topMargin;
-            }
+          // Draw canvas border
+          pdf.setDrawColor(200, 200, 200);
+          pdf.setLineWidth(0.5);
+          pdf.rect(leftMargin, canvasStartY, canvasWidth, canvasHeight);
+          
+          // Helper to convert percentage position to PDF coordinates
+          const convertPos = (percentage: number, dimension: number) => {
+            return (percentage / 100) * dimension;
+          };
+          
+          // Draw connection lines first (so they appear behind meters)
+          connections?.forEach((conn: any) => {
+            const childPos = meterPositions.find((p: any) => p.meter_id === conn.child_meter_id);
+            const parentPos = meterPositions.find((p: any) => p.meter_id === conn.parent_meter_id);
             
-            // Draw card background based on meter type
+            if (childPos && parentPos) {
+              const x1 = leftMargin + convertPos(childPos.x_position, canvasWidth);
+              const y1 = canvasStartY + convertPos(childPos.y_position, canvasHeight);
+              const x2 = leftMargin + convertPos(parentPos.x_position, canvasWidth);
+              const y2 = canvasStartY + convertPos(parentPos.y_position, canvasHeight);
+              
+              pdf.setDrawColor(59, 130, 246); // Blue connection lines
+              pdf.setLineWidth(1.5);
+              pdf.line(x1, y1, x2, y2);
+            }
+          });
+          
+          // Draw meter cards at their actual positions
+          meterPositions.forEach((position: any) => {
+            const meter = meters.find((m: any) => m.id === position.meter_id);
+            if (!meter) return;
+            
+            const centerX = leftMargin + convertPos(position.x_position, canvasWidth);
+            const centerY = canvasStartY + convertPos(position.y_position, canvasHeight);
+            
+            // Card dimensions
+            const cardWidth = 45;
+            const cardHeight = 18;
+            const cardX = centerX - cardWidth / 2;
+            const cardY = centerY - cardHeight / 2;
+            
+            // Color based on meter type
             const typeColors: any = {
               'bulk_meter': [59, 130, 246],
               'council_meter': [59, 130, 246],
               'solar': [34, 197, 94],
               'distribution': [249, 115, 22],
               'check_meter': [168, 85, 247],
+              'tenant_meter': [168, 85, 247],
               'other': [107, 114, 128]
             };
             
-            const color = typeColors[node.meter_type] || [107, 114, 128];
-            pdf.setFillColor(color[0], color[1], color[2], 0.1);
-            pdf.roundedRect(x, y, cardWidth, cardHeight, 2, 2, 'F');
+            const color = typeColors[meter.meter_type] || [107, 114, 128];
             
+            // Draw card background
+            pdf.setFillColor(color[0], color[1], color[2], 0.15);
+            pdf.roundedRect(cardX, cardY, cardWidth, cardHeight, 1, 1, 'F');
+            
+            // Draw card border
             pdf.setDrawColor(color[0], color[1], color[2]);
-            pdf.setLineWidth(0.5);
-            pdf.roundedRect(x, y, cardWidth, cardHeight, 2, 2);
+            pdf.setLineWidth(0.8);
+            pdf.roundedRect(cardX, cardY, cardWidth, cardHeight, 1, 1);
             
             // Draw meter number
-            pdf.setFontSize(8);
+            pdf.setFontSize(6);
             pdf.setFont("helvetica", "bold");
             pdf.setTextColor(0, 0, 0);
-            const meterText = pdf.splitTextToSize(node.meter_number || "Unknown", cardWidth - 8);
-            pdf.text(meterText[0], x + 4, y + 8);
+            const meterNum = meter.meter_number || "Unknown";
+            const truncatedNum = meterNum.length > 15 ? meterNum.substring(0, 15) + '...' : meterNum;
+            pdf.text(truncatedNum, cardX + 2, cardY + 5, { maxWidth: cardWidth - 4 });
             
             // Draw meter type
-            pdf.setFontSize(6);
+            pdf.setFontSize(5);
             pdf.setFont("helvetica", "normal");
-            pdf.setTextColor(100, 100, 100);
-            const typeText = node.meter_type?.replace('_', ' ') || 'N/A';
-            pdf.text(typeText, x + 4, y + 14);
+            pdf.setTextColor(80, 80, 80);
+            const typeText = meter.meter_type?.replace('_', ' ') || 'N/A';
+            pdf.text(typeText, cardX + 2, cardY + 10);
             
-            // Draw consumption
-            pdf.setFontSize(7);
-            pdf.setFont("helvetica", "bold");
-            pdf.setTextColor(color[0], color[1], color[2]);
-            const consumption = `${parseFloat(node.totalKwh || 0).toFixed(0)} kWh`;
-            pdf.text(consumption, x + 4, y + 20);
-            
-            let maxChildY = y;
-            
-            // Draw children
-            if (node.children && node.children.length > 0) {
-              let childY = y + verticalSpacing;
-              node.children.forEach((child: any) => {
-                // Draw connection line
-                const childX = x + horizontalSpacing;
-                const parentConnectX = x + cardWidth;
-                const parentConnectY = y + cardHeight / 2;
-                const childConnectX = childX;
-                const childConnectY = childY + cardHeight / 2;
-                
-                pdf.setDrawColor(200, 200, 200);
-                pdf.setLineWidth(0.3);
-                pdf.line(parentConnectX, parentConnectY, parentConnectX + 10, parentConnectY);
-                pdf.line(parentConnectX + 10, parentConnectY, parentConnectX + 10, childConnectY);
-                pdf.line(parentConnectX + 10, childConnectY, childConnectX, childConnectY);
-                
-                const endChildY = drawNode(child, childX, childY, level + 1);
-                maxChildY = Math.max(maxChildY, endChildY);
-                childY = endChildY + 10;
-              });
+            // Draw consumption if available
+            if (meter.totalKwh) {
+              pdf.setFontSize(5.5);
+              pdf.setFont("helvetica", "bold");
+              pdf.setTextColor(color[0], color[1], color[2]);
+              const consumption = `${parseFloat(meter.totalKwh).toFixed(0)} kWh`;
+              pdf.text(consumption, cardX + 2, cardY + 15);
             }
-            
-            return Math.max(y + cardHeight, maxChildY);
-          };
-          
-          let currentY = yPos;
-          rootMeters.forEach((root, index) => {
-            if (index > 0) currentY += 15;
-            currentY = drawNode(root, startX, currentY, 0);
           });
           
-          yPos = currentY + 10;
+          yPos = canvasStartY + canvasHeight + 10;
         };
 
         const addSpacer = (height: number = 5) => {
@@ -1022,10 +1011,10 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         // Section 2: Site Infrastructure
         addSectionHeading("2. SITE INFRASTRUCTURE", 16, true);
         
-        // Add meter hierarchy tree at the top
-        if (meterData && meterData.length > 0) {
+        // Add schematic-style layout at the top
+        if (meterData && meterData.length > 0 && meterPositions && meterPositions.length > 0) {
           addSubsectionHeading("Metering Hierarchy");
-          drawMeterHierarchyTree(meterData, meterConnections || []);
+          drawSchematicLayout(meterData, meterPositions, meterConnections || []);
           
           pdf.setFontSize(9);
           pdf.setFont("helvetica", "italic");
@@ -1579,12 +1568,20 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       // Fetch meter connections for hierarchy
       const meterIds = meterData.map((m: any) => m.id);
       let meterConnections: any[] = [];
+      let meterPositions: any[] = [];
       if (meterIds.length > 0) {
         const { data: connections } = await supabase
           .from('meter_connections')
           .select('*')
           .or(`child_meter_id.in.(${meterIds.join(',')}),parent_meter_id.in.(${meterIds.join(',')})`)
         meterConnections = connections || [];
+        
+        // Fetch meter positions from the selected schematic
+        const { data: positions } = await supabase
+          .from('meter_positions')
+          .select('*, meters(meter_number, meter_type)')
+          .eq('schematic_id', selectedSchematicId);
+        meterPositions = positions || [];
       }
 
       // 5. Use data from selected reconciliation
@@ -2005,6 +2002,7 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
         schematicImageBase64,
         csvColumnAggregations,
         meterConnections,
+        meterPositions,
         chartImages: {
           meterTypeChart,
           consumptionChart
