@@ -778,7 +778,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         pdf.setFontSize(9);
         pdf.text("Audit Period", pageWidth / 2, 155, { align: "center" });
         pdf.setFont("helvetica", "bold");
-        pdf.text("All Available Readings", pageWidth / 2, 165, { align: "center" });
+        pdf.text(reconciliationData?.readingsPeriod || "All Available Readings", pageWidth / 2, 165, { align: "center" });
         
         pdf.setFontSize(10);
         pdf.setFont("helvetica", "italic");
@@ -2700,7 +2700,7 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
       pdf.text("Audit Period", pageWidth / 2, 155, { align: "center" });
       pdf.setFont("helvetica", "bold");
       pdf.text(
-        "All Available Readings",
+        reconciliationData?.readingsPeriod || "All Available Readings",
         pageWidth / 2,
         165,
         { align: "center" }
@@ -2959,7 +2959,7 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
       
       addSpacer(5);
       addSubsectionHeading("Audit Period");
-      addText("All Available Readings");
+      addText(reconciliationData?.readingsPeriod || "All Available Readings");
       addSpacer(5);
       
       addSubsectionHeading("Council Bulk Supply Meters");
