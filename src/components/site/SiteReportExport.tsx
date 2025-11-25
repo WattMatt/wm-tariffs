@@ -1111,22 +1111,6 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         addSectionHeading("8. FINDINGS & ANOMALIES", 16, true);
         renderSection('findings-anomalies');
         addSpacer(5);
-          addSubsectionHeading("4.3 CSV Column Aggregations");
-          const csvMetricsRows = csvColumnAggregations.map((data: any) => [
-            data.column,
-            formatNumber(data.value),
-            data.unit || 'kWh',
-            data.aggregation.toUpperCase(),
-            data.multiplier !== 1 ? `×${data.multiplier}` : '-'
-          ]);
-          
-          addTable(
-            ["Column", "Value", "Unit", "Aggregation", "Multiplier"],
-            csvMetricsRows,
-            [50, 35, 25, 30, 30]
-          );
-          addSpacer(8);
-        }
         
         // Anomalies detail (if any)
         if (anomalies.length > 0) {
