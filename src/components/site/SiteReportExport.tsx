@@ -641,7 +641,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         
         // Helper to add text with wrapping
         const addText = (text: string, fontSize: number = 9, isBold: boolean = false) => {
-          const cleanedText = text.replace(/\*\*(.*?)\*\*/g, '$1').replace(/^##\s+.+$/gm, '').trim();
+          const cleanedText = text.replace(/\*\*(.*?)\*\*/g, '$1').replace(/^#{1,6}\s+.+$/gm, '').trim();
           pdf.setFontSize(fontSize);
           pdf.setFont("helvetica", isBold ? "bold" : "normal");
           const maxWidth = pageWidth - leftMargin - rightMargin;
@@ -709,24 +709,25 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             yPos = topMargin;
           }
           
-          // Draw header
+          // Draw header with blue background
+          const rowHeight = 10;
           pdf.setFillColor(templateBlue[0], templateBlue[1], templateBlue[2]);
-          pdf.rect(leftMargin, yPos - 5, tableWidth, 10, "F");
+          pdf.rect(leftMargin, yPos, tableWidth, rowHeight, "F");
           
           pdf.setFontSize(9);
           pdf.setFont("helvetica", "bold");
           pdf.setTextColor(255, 255, 255);
-          let xPos = leftMargin + 2;
+          let xPos = leftMargin + 3;
           headers.forEach((header, i) => {
-            pdf.text(header, xPos, yPos);
+            pdf.text(header, xPos, yPos + 6.5);
             xPos += colWidths[i];
           });
           pdf.setTextColor(0, 0, 0);
-          yPos += 7;
+          yPos += rowHeight;
           
-          // Draw rows
+          // Draw rows with alternating colors
           pdf.setFont("helvetica", "normal");
-          rows.forEach((row) => {
+          rows.forEach((row, rowIndex) => {
             if (yPos > pageHeight - bottomMargin - 15) {
               addFooter();
               addPageNumber();
@@ -734,16 +735,24 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
               yPos = topMargin + 15;
             }
             
-            xPos = leftMargin + 2;
+            // Alternating row background
+            if (rowIndex % 2 === 0) {
+              pdf.setFillColor(248, 250, 252); // Light gray
+              pdf.rect(leftMargin, yPos, tableWidth, rowHeight, "F");
+            }
+            
+            xPos = leftMargin + 3;
             row.forEach((cell, i) => {
-              const cellLines = pdf.splitTextToSize(cell, colWidths[i] - 4);
-              pdf.text(cellLines[0] || "", xPos, yPos);
+              const cellLines = pdf.splitTextToSize(cell, colWidths[i] - 6);
+              pdf.text(cellLines[0] || "", xPos, yPos + 6.5);
               xPos += colWidths[i];
             });
             
-            pdf.setDrawColor(220, 220, 220);
-            pdf.rect(leftMargin, yPos - 5, tableWidth, 8);
-            yPos += 8;
+            // Draw cell borders
+            pdf.setDrawColor(226, 232, 240); // Light border
+            pdf.setLineWidth(0.3);
+            pdf.rect(leftMargin, yPos, tableWidth, rowHeight);
+            yPos += rowHeight;
           });
           
           yPos += 5;
@@ -2243,7 +2252,7 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
       const cleanMarkdown = (text: string): string => {
         if (!text) return '';
         return text
-          .replace(/^##\s+.+$/gm, '') // Remove ## headers
+          .replace(/^#{1,6}\s+.+$/gm, '') // Remove all markdown headers (##, ###, etc.)
           .replace(/\*\*(.*?)\*\*/g, '$1') // Remove ** bold
           .replace(/^\d+\.\d+\s+/gm, '') // Remove numbered subsections like 3.1, 4.2
           .trim();
@@ -2543,29 +2552,25 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
           yPos = topMargin;
         }
         
-        // Draw header with template blue color
+        // Draw header with blue background
+        const rowHeight = 10;
         pdf.setFillColor(templateBlue[0], templateBlue[1], templateBlue[2]);
-        pdf.rect(leftMargin, yPos - 5, tableWidth, 10, "F");
+        pdf.rect(leftMargin, yPos, tableWidth, rowHeight, "F");
         
         pdf.setFontSize(9);
         pdf.setFont("helvetica", "bold");
         pdf.setTextColor(255, 255, 255); // White text on blue header
-        let xPos = leftMargin + 2;
+        let xPos = leftMargin + 3;
         headers.forEach((header, i) => {
-          pdf.text(header, xPos, yPos);
+          pdf.text(header, xPos, yPos + 6.5);
           xPos += colWidths[i];
         });
         pdf.setTextColor(0, 0, 0); // Reset to black
-        yPos += 7;
+        yPos += rowHeight;
         
-        // Draw border around header
-        pdf.setDrawColor(templateBlue[0], templateBlue[1], templateBlue[2]);
-        pdf.setLineWidth(0.5);
-        pdf.rect(leftMargin, yPos - 12, tableWidth, 10);
-        
-        // Draw rows
+        // Draw rows with alternating colors
         pdf.setFont("helvetica", "normal");
-        rows.forEach((row) => {
+        rows.forEach((row, rowIndex) => {
           if (yPos > pageHeight - bottomMargin - 15) {
             addFooter();
             addPageNumber();
@@ -2573,18 +2578,24 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
             yPos = topMargin + 15;
           }
           
-          xPos = leftMargin + 2;
+          // Alternating row background
+          if (rowIndex % 2 === 0) {
+            pdf.setFillColor(248, 250, 252); // Light gray
+            pdf.rect(leftMargin, yPos, tableWidth, rowHeight, "F");
+          }
+          
+          xPos = leftMargin + 3;
           row.forEach((cell, i) => {
-            const cellLines = pdf.splitTextToSize(cell, colWidths[i] - 4);
-            pdf.text(cellLines[0] || "", xPos, yPos);
+            const cellLines = pdf.splitTextToSize(cell, colWidths[i] - 6);
+            pdf.text(cellLines[0] || "", xPos, yPos + 6.5);
             xPos += colWidths[i];
           });
           
-          // Draw row border
-          pdf.setDrawColor(220, 220, 220);
-          pdf.rect(leftMargin, yPos - 5, tableWidth, 8);
-          
-          yPos += 8;
+          // Draw cell borders
+          pdf.setDrawColor(226, 232, 240); // Light border
+          pdf.setLineWidth(0.3);
+          pdf.rect(leftMargin, yPos, tableWidth, rowHeight);
+          yPos += rowHeight;
         });
         
         yPos += 5;
