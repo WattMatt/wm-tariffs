@@ -361,7 +361,8 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           documentExtractions,
           anomalies,
           schematicImageBase64,
-          csvColumnAggregations
+          csvColumnAggregations,
+          meterConnections
         } = previewData as any;
 
         // Template styling constants
@@ -758,6 +759,127 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           yPos += 5;
         };
 
+        // Helper to draw meter hierarchy tree
+        const drawMeterHierarchyTree = (meters: any[], connections: any[]) => {
+          if (!meters || meters.length === 0) return;
+          
+          // Build hierarchy structure
+          const meterMap = new Map(meters.map(m => [m.id, { ...m, children: [] }]));
+          const rootMeters: any[] = [];
+          
+          connections?.forEach((conn: any) => {
+            const parent = meterMap.get(conn.parent_meter_id);
+            const child = meterMap.get(conn.child_meter_id);
+            if (parent && child) {
+              parent.children.push(child);
+            }
+          });
+          
+          // Find root meters (those without parents)
+          const childIds = new Set(connections?.map((c: any) => c.child_meter_id) || []);
+          meters.forEach(m => {
+            if (!childIds.has(m.id)) {
+              const node = meterMap.get(m.id);
+              if (node) rootMeters.push(node);
+            }
+          });
+          
+          if (rootMeters.length === 0 && meters.length > 0) {
+            const firstMeter = meterMap.get(meters[0].id);
+            if (firstMeter) rootMeters.push(firstMeter);
+          }
+          
+          // Draw the tree
+          const cardWidth = 120;
+          const cardHeight = 24;
+          const horizontalSpacing = 130;
+          const verticalSpacing = 35;
+          const startX = leftMargin + 10;
+          
+          const drawNode = (node: any, x: number, y: number, level: number): number => {
+            if (y + cardHeight > pageHeight - bottomMargin - 20) {
+              addFooter();
+              addPageNumber();
+              pdf.addPage();
+              y = topMargin;
+            }
+            
+            // Draw card background based on meter type
+            const typeColors: any = {
+              'bulk_meter': [59, 130, 246],
+              'council_meter': [59, 130, 246],
+              'solar': [34, 197, 94],
+              'distribution': [249, 115, 22],
+              'check_meter': [168, 85, 247],
+              'other': [107, 114, 128]
+            };
+            
+            const color = typeColors[node.meter_type] || [107, 114, 128];
+            pdf.setFillColor(color[0], color[1], color[2], 0.1);
+            pdf.roundedRect(x, y, cardWidth, cardHeight, 2, 2, 'F');
+            
+            pdf.setDrawColor(color[0], color[1], color[2]);
+            pdf.setLineWidth(0.5);
+            pdf.roundedRect(x, y, cardWidth, cardHeight, 2, 2);
+            
+            // Draw meter number
+            pdf.setFontSize(8);
+            pdf.setFont("helvetica", "bold");
+            pdf.setTextColor(0, 0, 0);
+            const meterText = pdf.splitTextToSize(node.meter_number || "Unknown", cardWidth - 8);
+            pdf.text(meterText[0], x + 4, y + 8);
+            
+            // Draw meter type
+            pdf.setFontSize(6);
+            pdf.setFont("helvetica", "normal");
+            pdf.setTextColor(100, 100, 100);
+            const typeText = node.meter_type?.replace('_', ' ') || 'N/A';
+            pdf.text(typeText, x + 4, y + 14);
+            
+            // Draw consumption
+            pdf.setFontSize(7);
+            pdf.setFont("helvetica", "bold");
+            pdf.setTextColor(color[0], color[1], color[2]);
+            const consumption = `${parseFloat(node.totalKwh || 0).toFixed(0)} kWh`;
+            pdf.text(consumption, x + 4, y + 20);
+            
+            let maxChildY = y;
+            
+            // Draw children
+            if (node.children && node.children.length > 0) {
+              let childY = y + verticalSpacing;
+              node.children.forEach((child: any) => {
+                // Draw connection line
+                const childX = x + horizontalSpacing;
+                const parentConnectX = x + cardWidth;
+                const parentConnectY = y + cardHeight / 2;
+                const childConnectX = childX;
+                const childConnectY = childY + cardHeight / 2;
+                
+                pdf.setDrawColor(200, 200, 200);
+                pdf.setLineWidth(0.3);
+                pdf.line(parentConnectX, parentConnectY, parentConnectX + 10, parentConnectY);
+                pdf.line(parentConnectX + 10, parentConnectY, parentConnectX + 10, childConnectY);
+                pdf.line(parentConnectX + 10, childConnectY, childConnectX, childConnectY);
+                
+                const endChildY = drawNode(child, childX, childY, level + 1);
+                maxChildY = Math.max(maxChildY, endChildY);
+                childY = endChildY + 10;
+              });
+            }
+            
+            return Math.max(y + cardHeight, maxChildY);
+          };
+          
+          let currentY = yPos;
+          rootMeters.forEach((root, index) => {
+            if (index > 0) currentY += 15;
+            currentY = drawNode(root, startX, currentY, 0);
+          });
+          
+          yPos = currentY + 10;
+        };
+
         const addSpacer = (height: number = 5) => {
           yPos += height;
         };
@@ -899,33 +1021,21 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         
         // Section 2: Site Infrastructure
         addSectionHeading("2. SITE INFRASTRUCTURE", 16, true);
-        renderSection('site-infrastructure');
-        addSpacer(5);
         
-        // Add schematic if available
-        if (schematicImageBase64) {
-          if (yPos > pageHeight - 150) {
-            addFooter();
-            addPageNumber();
-            pdf.addPage();
-            yPos = topMargin;
-          }
+        // Add meter hierarchy tree at the top
+        if (meterData && meterData.length > 0) {
+          addSubsectionHeading("Metering Hierarchy");
+          drawMeterHierarchyTree(meterData, meterConnections || []);
           
-          try {
-            const imgWidth = pageWidth - leftMargin - rightMargin;
-            const imgHeight = 120;
-            pdf.addImage(schematicImageBase64, 'JPEG', leftMargin, yPos, imgWidth, imgHeight);
-            yPos += imgHeight + 5;
-            
-            pdf.setFontSize(9);
-            pdf.setFont("helvetica", "italic");
-            pdf.text("Figure 1: Site Metering Schematic Diagram", pageWidth / 2, yPos, { align: "center" });
-            pdf.setFont("helvetica", "normal");
-            yPos += 10;
-          } catch (err) {
-            console.error("Error adding schematic to preview:", err);
-          }
+          pdf.setFontSize(9);
+          pdf.setFont("helvetica", "italic");
+          pdf.text("Figure 1: Site Metering Hierarchy Diagram", pageWidth / 2, yPos, { align: "center" });
+          pdf.setFont("helvetica", "normal");
+          yPos += 10;
         }
+        
+        addSpacer(5);
+        renderSection('site-infrastructure');
         addSpacer(8);
         
         // Section 3: Tariff Configuration
@@ -1466,6 +1576,17 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         assignment: result.assignment
       })) || [];
 
+      // Fetch meter connections for hierarchy
+      const meterIds = meterData.map((m: any) => m.id);
+      let meterConnections: any[] = [];
+      if (meterIds.length > 0) {
+        const { data: connections } = await supabase
+          .from('meter_connections')
+          .select('*')
+          .or(`child_meter_id.in.(${meterIds.join(',')}),parent_meter_id.in.(${meterIds.join(',')})`)
+        meterConnections = connections || [];
+      }
+
       // 5. Use data from selected reconciliation
       const reconciliationData = {
         councilBulkMeters: selectedReconciliation.reconciliation_meter_results
@@ -1883,6 +2004,7 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
         reportData,
         schematicImageBase64,
         csvColumnAggregations,
+        meterConnections,
         chartImages: {
           meterTypeChart,
           consumptionChart
@@ -2094,7 +2216,8 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
         anomalies,
         reportData,
         schematicImageBase64,
-        csvColumnAggregations
+        csvColumnAggregations,
+        meterConnections
       } = previewData as any;
 
       // Helper function to get section content (edited or original)
@@ -2601,6 +2724,61 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
         yPos += 5;
       };
 
+      // Helper to draw meter hierarchy tree
+      const drawMeterHierarchyTree = (meters: any[], connections: any[]) => {
+        if (!meters || meters.length === 0) return;
+        const meterMap = new Map(meters.map(m => [m.id, { ...m, children: [] }]));
+        const rootMeters: any[] = [];
+        connections?.forEach((conn: any) => {
+          const parent = meterMap.get(conn.parent_meter_id);
+          const child = meterMap.get(conn.child_meter_id);
+          if (parent && child) parent.children.push(child);
+        });
+        const childIds = new Set(connections?.map((c: any) => c.child_meter_id) || []);
+        meters.forEach(m => {
+          if (!childIds.has(m.id)) {
+            const node = meterMap.get(m.id);
+            if (node) rootMeters.push(node);
+          }
+        });
+        if (rootMeters.length === 0 && meters.length > 0) {
+          const firstMeter = meterMap.get(meters[0].id);
+          if (firstMeter) rootMeters.push(firstMeter);
+        }
+        const cardWidth = 120, cardHeight = 24, horizontalSpacing = 130, verticalSpacing = 35, startX = leftMargin + 10;
+        const drawNode = (node: any, x: number, y: number, level: number): number => {
+          if (y + cardHeight > pageHeight - bottomMargin - 20) { addFooter(); addPageNumber(); pdf.addPage(); y = topMargin; }
+          const typeColors: any = { 'bulk_meter': [59, 130, 246], 'council_meter': [59, 130, 246], 'solar': [34, 197, 94], 'distribution': [249, 115, 22], 'check_meter': [168, 85, 247], 'other': [107, 114, 128] };
+          const color = typeColors[node.meter_type] || [107, 114, 128];
+          pdf.setFillColor(color[0], color[1], color[2], 0.1); pdf.roundedRect(x, y, cardWidth, cardHeight, 2, 2, 'F');
+          pdf.setDrawColor(color[0], color[1], color[2]); pdf.setLineWidth(0.5); pdf.roundedRect(x, y, cardWidth, cardHeight, 2, 2);
+          pdf.setFontSize(8); pdf.setFont("helvetica", "bold"); pdf.setTextColor(0, 0, 0);
+          const meterText = pdf.splitTextToSize(node.meter_number || "Unknown", cardWidth - 8); pdf.text(meterText[0], x + 4, y + 8);
+          pdf.setFontSize(6); pdf.setFont("helvetica", "normal"); pdf.setTextColor(100, 100, 100);
+          pdf.text(node.meter_type?.replace('_', ' ') || 'N/A', x + 4, y + 14);
+          pdf.setFontSize(7); pdf.setFont("helvetica", "bold"); pdf.setTextColor(color[0], color[1], color[2]);
+          pdf.text(`${parseFloat(node.totalKwh || 0).toFixed(0)} kWh`, x + 4, y + 20);
+          let maxChildY = y;
+          if (node.children && node.children.length > 0) {
+            let childY = y + verticalSpacing;
+            node.children.forEach((child: any) => {
+              const childX = x + horizontalSpacing, parentConnectX = x + cardWidth, parentConnectY = y + cardHeight / 2;
+              const childConnectX = childX, childConnectY = childY + cardHeight / 2;
+              pdf.setDrawColor(200, 200, 200); pdf.setLineWidth(0.3);
+              pdf.line(parentConnectX, parentConnectY, parentConnectX + 10, parentConnectY);
+              pdf.line(parentConnectX + 10, parentConnectY, parentConnectX + 10, childConnectY);
+              pdf.line(parentConnectX + 10, childConnectY, childConnectX, childConnectY);
+              const endChildY = drawNode(child, childX, childY, level + 1);
+              maxChildY = Math.max(maxChildY, endChildY); childY = endChildY + 10;
+            });
+          }
+          return Math.max(y + cardHeight, maxChildY);
+        };
+        let currentY = yPos;
+        rootMeters.forEach((root, index) => { if (index > 0) currentY += 15; currentY = drawNode(root, startX, currentY, 0); });
+        yPos = currentY + 10;
+      };
+
       const addSectionHeading = (text: string, fontSize: number = 12, forceNewPage: boolean = false) => {
         // Force new page for major sections
         if (forceNewPage) {
@@ -2759,33 +2937,21 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
 
       // Section 2: Metering Hierarchy Overview
       addSectionHeading("2. METERING HIERARCHY OVERVIEW", 16, true);
-      renderSection('hierarchy-overview');
-      addSpacer(5);
       
-      // Add schematic if available
-      if (schematicImageBase64) {
-        if (yPos > pageHeight - 150) {
-          addFooter();
-          addPageNumber();
-          pdf.addPage();
-          yPos = topMargin;
-        }
+      // Add meter hierarchy tree at the top
+      if (meterData && meterData.length > 0) {
+        addSubsectionHeading("Metering Hierarchy");
+        drawMeterHierarchyTree(meterData, meterConnections || []);
         
-        try {
-          const imgWidth = pageWidth - leftMargin - rightMargin;
-          const imgHeight = 120;
-          pdf.addImage(schematicImageBase64, 'JPEG', leftMargin, yPos, imgWidth, imgHeight);
-          yPos += imgHeight + 5;
-          
-          pdf.setFontSize(9);
-          pdf.setFont("helvetica", "italic");
-          pdf.text("Figure 1: Site Metering Schematic Diagram", pageWidth / 2, yPos, { align: "center" });
-          pdf.setFont("helvetica", "normal");
-          yPos += 10;
-        } catch (err) {
-          console.error("Error adding schematic to PDF:", err);
-        }
+        pdf.setFontSize(9);
+        pdf.setFont("helvetica", "italic");
+        pdf.text("Figure 1: Site Metering Hierarchy Diagram", pageWidth / 2, yPos, { align: "center" });
+        pdf.setFont("helvetica", "normal");
+        yPos += 10;
       }
+      
+      addSpacer(5);
+      renderSection('hierarchy-overview');
       addSpacer(8);
 
       // Section 3: Data Sources and Audit Period
