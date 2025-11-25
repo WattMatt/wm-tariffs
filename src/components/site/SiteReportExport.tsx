@@ -81,8 +81,8 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
   
   // New states for required selections
   const [selectedSchematicId, setSelectedSchematicId] = useState<string>("");
-  const [selectedFolderPath, setSelectedFolderPath] = useState<string>("");
-  const [selectedReconciliationId, setSelectedReconciliationId] = useState<string>("");
+  const [selectedFolderPaths, setSelectedFolderPaths] = useState<string[]>([]);
+  const [selectedReconciliationIds, setSelectedReconciliationIds] = useState<string[]>([]);
   const [availableSchematics, setAvailableSchematics] = useState<any[]>([]);
   const [availableFolders, setAvailableFolders] = useState<any[]>([]);
   const [availableReconciliations, setAvailableReconciliations] = useState<any[]>([]);
@@ -105,7 +105,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         if (schematicsError) throw schematicsError;
         setAvailableSchematics(schematics || []);
 
-        // Fetch available folders from document paths
+        // Fetch available folders from document paths with document counts
         const { data: documents, error: foldersError } = await supabase
           .from("site_documents")
           .select("folder_path")
@@ -113,27 +113,33 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
 
         if (foldersError) throw foldersError;
         
-        // Get unique folder paths (including nested folders)
-        const folderSet = new Set<string>();
-        folderSet.add(''); // Add root
+        // Get unique folder paths with counts
+        const folderCounts = new Map<string, number>();
+        folderCounts.set('', 0); // Add root
         
         documents?.forEach(doc => {
+          const docFolder = doc.folder_path || '';
+          folderCounts.set(docFolder, (folderCounts.get(docFolder) || 0) + 1);
+          
           if (doc.folder_path) {
-            // Add this folder and all parent folders
+            // Add parent folders
             const parts = doc.folder_path.split('/').filter(Boolean);
             let currentPath = '';
             parts.forEach(part => {
               currentPath = currentPath ? `${currentPath}/${part}` : part;
-              folderSet.add(currentPath);
+              if (!folderCounts.has(currentPath)) {
+                folderCounts.set(currentPath, 0);
+              }
             });
           }
         });
         
-        const uniqueFolders = Array.from(folderSet).sort();
+        const uniqueFolders = Array.from(folderCounts.keys()).sort();
         setAvailableFolders(uniqueFolders.map(path => ({ 
-          path: path || "/", // Use "/" instead of empty string for root
-          displayPath: path, // Keep original for filtering
-          name: path || "Root" 
+          path: path || "/",
+          displayPath: path,
+          name: path || "Root",
+          count: folderCounts.get(path) || 0
         })));
 
         // Fetch reconciliation runs
@@ -1142,17 +1148,19 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
   };
 
   const generateMarkdownPreview = async () => {
-    // If reconciliationRun is provided, use it directly
-    if (reconciliationRun) {
-      if (!selectedSchematicId || !selectedFolderPath) {
-        toast.error("Please select a schematic and folder");
-        return;
-      }
-    } else {
-      if (!selectedSchematicId || !selectedFolderPath || !selectedReconciliationId) {
-        toast.error("Please select a schematic, folder, and reconciliation run");
-        return;
-      }
+    if (selectedFolderPaths.length === 0) {
+      toast.error("Please select at least one document folder");
+      return;
+    }
+
+    if (!reconciliationRun && selectedReconciliationIds.length === 0) {
+      toast.error("Please select at least one reconciliation run");
+      return;
+    }
+
+    if (!selectedSchematicId) {
+      toast.error("Please select a schematic");
+      return;
     }
 
     setIsGeneratingPreview(true);
@@ -1161,26 +1169,44 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
 
     try {
 
-      // 1. Use provided reconciliation or fetch selected one
+      // 1. Fetch reconciliation run data
       setGenerationProgress(10);
       setGenerationStatus("Loading reconciliation data...");
       
-      let selectedReconciliation = reconciliationRun;
-      
-      if (!selectedReconciliation) {
-        const { data: fetchedRecon, error: reconError } = await supabase
+      let allReconciliations: any[] = [];
+      if (reconciliationRun) {
+        allReconciliations = [reconciliationRun];
+      } else if (selectedReconciliationIds.length > 0) {
+        const { data: runData, error: runError } = await supabase
           .from("reconciliation_runs")
           .select(`
             *,
             reconciliation_meter_results(*)
           `)
-          .eq("id", selectedReconciliationId)
-          .single();
+          .in("id", selectedReconciliationIds)
+          .order("date_from", { ascending: true });
 
-        if (reconError) throw reconError;
-        if (!fetchedRecon) throw new Error("Selected reconciliation not found");
-        selectedReconciliation = fetchedRecon;
+        if (runError) throw runError;
+        allReconciliations = runData || [];
       }
+
+      if (allReconciliations.length === 0) {
+        throw new Error("No reconciliation runs found");
+      }
+
+      // Aggregate reconciliation data
+      const selectedReconciliation = {
+        ...allReconciliations[0],
+        runs: allReconciliations,
+        isMultiPeriod: allReconciliations.length > 1,
+        bulk_total: allReconciliations.reduce((sum, r) => sum + (r.bulk_total || 0), 0),
+        solar_total: allReconciliations.reduce((sum, r) => sum + (r.solar_total || 0), 0),
+        tenant_total: allReconciliations.reduce((sum, r) => sum + (r.tenant_total || 0), 0),
+        total_supply: allReconciliations.reduce((sum, r) => sum + (r.total_supply || 0), 0),
+        date_from: allReconciliations[0]?.date_from,
+        date_to: allReconciliations[allReconciliations.length - 1]?.date_to,
+        reconciliation_meter_results: allReconciliations.flatMap(r => r.reconciliation_meter_results || [])
+      };
 
       // Store reconciliation date range for KPI filtering
       setReconciliationDateFrom(selectedReconciliation.date_from);
@@ -1237,22 +1263,29 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       if (!selectedSchematic) throw new Error("Selected schematic not found");
 
 
-      // 3. Fetch documents from selected folder
+      // 3. Fetch documents from ALL selected folders
       setGenerationProgress(30);
       setGenerationStatus("Loading document extractions...");
       
-      const folderPath = selectedFolderPath === "/" ? "" : selectedFolderPath;
-      const { data: documents, error: docsError } = await supabase
-        .from("site_documents")
-        .select(`
-          *,
-          document_extractions(*)
-        `)
-        .eq("site_id", siteId)
-        .eq("folder_path", folderPath)
-        .eq("extraction_status", "completed");
+      const allDocuments: any[] = [];
+      for (const selectedPath of selectedFolderPaths) {
+        const folderPath = selectedPath === "/" ? "" : selectedPath;
+        const { data: docs, error: docsError } = await supabase
+          .from("site_documents")
+          .select(`
+            *,
+            document_extractions(*)
+          `)
+          .eq("site_id", siteId)
+          .eq("folder_path", folderPath)
+          .eq("extraction_status", "completed");
 
-      if (docsError) throw docsError;
+        if (docsError) throw docsError;
+        if (docs) allDocuments.push(...docs);
+      }
+
+      // Deduplicate by document ID
+      const documents = [...new Map(allDocuments.map(d => [d.id, d])).values()];
 
       const documentExtractions = documents?.map(doc => ({
         fileName: doc.file_name,
@@ -1609,7 +1642,11 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             schematics,
             tariffStructures,
             loadProfiles,
-            costAnalysis
+            costAnalysis,
+            selectedFolderPaths,
+            selectedReconciliationIds,
+            documentFolders: selectedFolderPaths,
+            isMultiPeriod: selectedReconciliationIds.length > 1 || (allReconciliations && allReconciliations.length > 1)
           }
         }
       );
@@ -3038,8 +3075,8 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       const generationParameters = {
         selectedMeterIds: Array.from(selectedMeterIds),
         selectedSchematicId,
-        selectedFolderPath,
-        selectedReconciliationId,
+        selectedFolderPaths,
+        selectedReconciliationIds,
         columnConfigs,
         timestamp: Date.now()
       };
@@ -3083,8 +3120,8 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       // Restore parameters
       setSelectedMeterIds(new Set(params.selectedMeterIds || []));
       setSelectedSchematicId(params.selectedSchematicId || "");
-      setSelectedFolderPath(params.selectedFolderPath || "");
-      setSelectedReconciliationId(params.selectedReconciliationId || "");
+      setSelectedFolderPaths(params.selectedFolderPaths || (params.selectedFolderPath ? [params.selectedFolderPath] : []));
+      setSelectedReconciliationIds(params.selectedReconciliationIds || (params.selectedReconciliationId ? [params.selectedReconciliationId] : []));
       setColumnConfigs(params.columnConfigs || {});
 
       toast.info("Parameters loaded. Regenerating report...");
@@ -3138,52 +3175,104 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="folder-select">Select Document Folder *</Label>
-            <Select 
-              value={selectedFolderPath} 
-              onValueChange={setSelectedFolderPath}
-              disabled={isLoadingOptions}
-            >
-              <SelectTrigger id="folder-select">
-                <SelectValue placeholder="Choose a folder containing relevant documents" />
-              </SelectTrigger>
-              <SelectContent>
-                {availableFolders.length === 0 ? (
-                  <SelectItem value="no-folders" disabled>No folders available</SelectItem>
-                ) : (
-                  availableFolders.map((folder: any) => (
-                    <SelectItem key={folder.path} value={folder.path}>
+            <Label>Select Document Folders *</Label>
+            <div className="border rounded-lg p-3 max-h-64 overflow-y-auto bg-background">
+              <div className="flex justify-between items-center mb-3 pb-2 border-b">
+                <span className="text-sm text-muted-foreground font-medium">
+                  {selectedFolderPaths.length} of {availableFolders.length} selected
+                </span>
+                <div className="space-x-2">
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => setSelectedFolderPaths(availableFolders.map((f: any) => f.path))}
+                  >
+                    Select All
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => setSelectedFolderPaths([])}
+                  >
+                    Clear
+                  </Button>
+                </div>
+              </div>
+              <div className="space-y-2">
+                {availableFolders.map((folder: any) => (
+                  <div key={folder.path} className="flex items-center space-x-2 p-2 rounded hover:bg-accent">
+                    <Checkbox 
+                      id={`folder-${folder.path}`}
+                      checked={selectedFolderPaths.includes(folder.path)}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setSelectedFolderPaths([...selectedFolderPaths, folder.path]);
+                        } else {
+                          setSelectedFolderPaths(selectedFolderPaths.filter(p => p !== folder.path));
+                        }
+                      }}
+                    />
+                    <Label htmlFor={`folder-${folder.path}`} className="flex-1 cursor-pointer">
                       {folder.name}
-                    </SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        ({folder.count} {folder.count === 1 ? 'doc' : 'docs'})
+                      </span>
+                    </Label>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
 
           {!reconciliationRun && (
             <div className="space-y-2">
-              <Label htmlFor="reconciliation-select">Select Reconciliation History *</Label>
-              <Select 
-                value={selectedReconciliationId} 
-                onValueChange={setSelectedReconciliationId}
-                disabled={isLoadingOptions}
-              >
-                <SelectTrigger id="reconciliation-select">
-                  <SelectValue placeholder="Choose a saved reconciliation run" />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableReconciliations.length === 0 ? (
-                    <SelectItem value="no-reconciliations" disabled>No reconciliation history available</SelectItem>
-                  ) : (
-                    availableReconciliations.map((run) => (
-                      <SelectItem key={run.id} value={run.id}>
-                        {run.run_name} - {format(new Date(run.run_date), "dd MMM yyyy")}
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
+              <Label>Select Reconciliation Runs *</Label>
+              <div className="border rounded-lg p-3 max-h-64 overflow-y-auto bg-background">
+                <div className="flex justify-between items-center mb-3 pb-2 border-b">
+                  <span className="text-sm text-muted-foreground font-medium">
+                    {selectedReconciliationIds.length} of {availableReconciliations.length} selected
+                  </span>
+                  <div className="space-x-2">
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => setSelectedReconciliationIds(availableReconciliations.map(r => r.id))}
+                    >
+                      Select All
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => setSelectedReconciliationIds([])}
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  {availableReconciliations.map((run) => (
+                    <div key={run.id} className="flex items-center space-x-2 p-2 rounded hover:bg-accent">
+                      <Checkbox 
+                        id={`run-${run.id}`}
+                        checked={selectedReconciliationIds.includes(run.id)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedReconciliationIds([...selectedReconciliationIds, run.id]);
+                          } else {
+                            setSelectedReconciliationIds(selectedReconciliationIds.filter(id => id !== run.id));
+                          }
+                        }}
+                      />
+                      <Label htmlFor={`run-${run.id}`} className="flex-1 cursor-pointer">
+                        <div className="font-medium">{run.run_name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {format(new Date(run.date_from), 'PP')} to {format(new Date(run.date_to), 'PP')}
+                        </div>
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
 
@@ -3211,9 +3300,9 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             isGeneratingPreview || 
             isLoadingMeters || 
             isLoadingOptions ||
-            !selectedSchematicId || 
-            !selectedFolderPath || 
-            (!reconciliationRun && !selectedReconciliationId)
+            selectedFolderPaths.length === 0 ||
+            (selectedReconciliationIds.length === 0 && !reconciliationRun) ||
+            !selectedSchematicId
           }
           className="w-full relative overflow-hidden"
           size="lg"
