@@ -1454,12 +1454,13 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       setGenerationProgress(40);
       setGenerationStatus("Processing meter data...");
       
-      // Group meter results by meter_id and aggregate their data
+      // Group meter results by meter_number (not meter_id) to ensure proper deduplication
+      // Use meter_number as the unique key since it's what identifies the meter in reports
       const meterDataMap = new Map();
       selectedReconciliation.reconciliation_meter_results?.forEach((result: any) => {
-        const meterId = result.meter_id;
-        if (!meterDataMap.has(meterId)) {
-          meterDataMap.set(meterId, {
+        const meterKey = result.meter_number; // Use meter_number as unique key
+        if (!meterDataMap.has(meterKey)) {
+          meterDataMap.set(meterKey, {
             id: result.meter_id,
             meter_number: result.meter_number,
             name: result.meter_name,
@@ -1473,7 +1474,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           });
         }
         
-        const meterEntry = meterDataMap.get(meterId);
+        const meterEntry = meterDataMap.get(meterKey);
         // Aggregate totals across multiple reconciliation runs
         meterEntry.totalKwh += result.total_kwh || 0;
         meterEntry.readingsCount += result.readings_count || 0;
