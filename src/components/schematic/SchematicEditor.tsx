@@ -3904,131 +3904,48 @@ export default function SchematicEditor({
   const generateAndUploadSchematicSnapshot = async () => {
     if (!fabricCanvas) return;
 
-    const originalWidth = (fabricCanvas as any).originalImageWidth || 1920;
-    const originalHeight = (fabricCanvas as any).originalImageHeight || 1080;
+    console.log('🖼️ Starting snapshot generation using Fabric.js native export...');
+    console.log('📐 Canvas display size:', fabricCanvas.getWidth(), 'x', fabricCanvas.getHeight());
 
-    console.log('🖼️ Starting snapshot generation...');
-    console.log('📐 Canvas dimensions:', originalWidth, 'x', originalHeight);
-    console.log('📊 schematicLines count:', schematicLines.length);
-    console.log('📍 meterPositions count:', meterPositions.length);
+    // Store original image dimensions for proper scaling
+    const originalWidth = (fabricCanvas as any).originalImageWidth || fabricCanvas.getWidth();
+    const originalHeight = (fabricCanvas as any).originalImageHeight || fabricCanvas.getHeight();
+    console.log('📐 Original dimensions:', originalWidth, 'x', originalHeight);
 
-    // Create a hidden canvas with original image dimensions
-    const snapshotCanvas = document.createElement('canvas');
-    snapshotCanvas.width = originalWidth;
-    snapshotCanvas.height = originalHeight;
-    const ctx = snapshotCanvas.getContext('2d');
+    // Calculate multiplier to export at original resolution
+    const multiplier = originalWidth / fabricCanvas.getWidth();
+    console.log('🔢 Export multiplier:', multiplier);
+
+    // Store current background image and settings
+    const currentBackgroundImage = fabricCanvas.backgroundImage;
+    const currentBackgroundColor = fabricCanvas.backgroundColor;
     
-    if (!ctx) {
-      throw new Error('Could not get canvas context');
-    }
-
-    // Fill with white background ONLY - NO schematic image
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, originalWidth, originalHeight);
-    console.log('✅ White background drawn');
-
-    // Draw connection lines from schematic_lines data (solid black, NOT dashed blue)
-    console.log('🔗 Drawing connection lines from schematic_lines...');
-    const linesByConnection = new Map<string, any[]>();
-    schematicLines.forEach((line: any) => {
-      const connectionKey = line.metadata?.connectionKey || 'unknown';
-      if (!linesByConnection.has(connectionKey)) {
-        linesByConnection.set(connectionKey, []);
-      }
-      linesByConnection.get(connectionKey)!.push(line);
-    });
-
-    console.log('🔗 Total connections:', linesByConnection.size);
-    let lineCount = 0;
-    let nodeCount = 0;
-
-    linesByConnection.forEach((lines) => {
-      // Draw line segments - SOLID BLACK
-      lines.forEach((line: any) => {
-        const x1 = (line.from_x / 100) * originalWidth;
-        const y1 = (line.from_y / 100) * originalHeight;
-        const x2 = (line.to_x / 100) * originalWidth;
-        const y2 = (line.to_y / 100) * originalHeight;
-        
-        ctx.strokeStyle = '#000000'; // Always black
-        ctx.lineWidth = 6; // Always 6px
-        ctx.setLineDash([]); // Always solid, NOT dashed
-        ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        ctx.lineTo(x2, y2);
-        ctx.stroke();
-        lineCount++;
-      });
-
-      // Draw connection nodes at vertices
-      lines.forEach((line: any) => {
-        const x1 = (line.from_x / 100) * originalWidth;
-        const y1 = (line.from_y / 100) * originalHeight;
-        const x2 = (line.to_x / 100) * originalWidth;
-        const y2 = (line.to_y / 100) * originalHeight;
-        
-        ctx.fillStyle = '#000000';
-        ctx.beginPath();
-        ctx.arc(x1, y1, 4, 0, 2 * Math.PI);
-        ctx.fill();
-        nodeCount++;
-        
-        ctx.beginPath();
-        ctx.arc(x2, y2, 4, 0, 2 * Math.PI);
-        ctx.fill();
-        nodeCount++;
-      });
-    });
-
-    console.log('✅ Drew', lineCount, 'lines and', nodeCount, 'nodes');
-
-    // Draw meter cards using createMeterCardImage (table-style, NOT simple rectangles)
-    console.log('🎴 Drawing meter cards using createMeterCardImage...');
-    let meterCardCount = 0;
+    console.log('🎨 Temporarily hiding background image...');
     
-    for (const pos of meterPositions) {
-      const meter = meters.find((m: any) => m.id === pos.meter_id);
-      if (!meter) continue;
+    // Temporarily remove background image and set white background
+    fabricCanvas.backgroundImage = undefined;
+    fabricCanvas.backgroundColor = '#ffffff';
+    fabricCanvas.renderAll();
 
-      const x = (pos.x_position / 100) * originalWidth;
-      const y = (pos.y_position / 100) * originalHeight;
-      const cardWidth = 200;
-      const cardHeight = 140;
-
-      // Create fields for meter card - table style
-      const fields = [
-        { label: 'NO', value: meter.meter_number || 'N/A' },
-        { label: 'NAME', value: meter.name || 'N/A' },
-        { label: 'AREA', value: meter.area?.toString() || 'N/A' },
-        { label: 'RATING', value: meter.rating || 'N/A' },
-        { label: 'SERIAL', value: meter.serial_number || 'N/A' },
-      ];
-
-      const borderColor = getMeterTypeColor(meter.meter_type);
-      const meterCardDataUrl = await createMeterCardImage(fields, borderColor, cardWidth, cardHeight);
-
-      // Load and draw meter card image
-      await new Promise<void>((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => {
-          ctx.drawImage(img, x - cardWidth / 2, y - cardHeight / 2, cardWidth, cardHeight);
-          meterCardCount++;
-          resolve();
-        };
-        img.onerror = reject;
-        img.src = meterCardDataUrl;
-      });
-    }
-
-    console.log('✅ Drew', meterCardCount, 'meter cards');
-
-    // Convert canvas to blob
-    const blob = await new Promise<Blob>((resolve, reject) => {
-      snapshotCanvas.toBlob((b) => {
-        if (b) resolve(b);
-        else reject(new Error('Failed to create blob'));
-      }, 'image/png');
+    // Export canvas to data URL using Fabric.js native method
+    console.log('📸 Capturing canvas with toDataURL()...');
+    const dataUrl = fabricCanvas.toDataURL({
+      format: 'png',
+      multiplier: multiplier,
+      quality: 1.0
     });
+
+    // Restore background image immediately
+    console.log('🔄 Restoring background image...');
+    fabricCanvas.backgroundImage = currentBackgroundImage;
+    fabricCanvas.backgroundColor = currentBackgroundColor;
+    fabricCanvas.renderAll();
+
+    console.log('✅ Canvas captured, converting to blob...');
+
+    // Convert data URL to blob
+    const blob = await fetch(dataUrl).then(r => r.blob());
+    console.log('📦 Blob size:', blob.size, 'bytes');
 
     // Fetch site and client info for path
     const { data: siteData } = await supabase
@@ -4085,7 +4002,6 @@ export default function SchematicEditor({
     }
 
     console.log('✅ Schematic snapshot saved successfully:', filePath);
-    console.log('📦 Blob size:', blob.size, 'bytes');
   };
 
 
