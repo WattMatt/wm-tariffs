@@ -780,13 +780,15 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         
         const tocEntries = [
           "1. EXECUTIVE SUMMARY",
-          "2. METERING HIERARCHY OVERVIEW",
-          "3. DATA SOURCES AND AUDIT PERIOD",
-          "4. KEY METRICS",
-          "5. METERING RECONCILIATION",
-          "6. OBSERVATIONS AND ANOMALIES",
-          "7. RECOMMENDATIONS",
-          "8. APPENDICES"
+          "2. SITE INFRASTRUCTURE",
+          "3. TARIFF CONFIGURATION",
+          "4. METERING DATA ANALYSIS",
+          "5. DOCUMENT & INVOICE VALIDATION",
+          "6. RECONCILIATION RESULTS",
+          "7. COST ANALYSIS",
+          "8. FINDINGS & ANOMALIES",
+          "9. RECOMMENDATIONS",
+          "10. APPENDICES"
         ];
         
         pdf.setFontSize(9);
@@ -843,9 +845,9 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         renderSection('executive-summary');
         addSpacer(8);
         
-        // Section 2: Metering Hierarchy Overview
-        addSectionHeading("2. METERING HIERARCHY OVERVIEW", 16, true);
-        renderSection('hierarchy-overview');
+        // Section 2: Site Infrastructure
+        addSectionHeading("2. SITE INFRASTRUCTURE", 16, true);
+        renderSection('site-infrastructure');
         addSpacer(5);
         
         // Add schematic if available
@@ -875,10 +877,17 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         }
         addSpacer(8);
         
-        // Section 3: Data Sources
-        addSectionHeading("3. DATA SOURCES AND AUDIT PERIOD", 16, true);
+        // Section 3: Tariff Configuration
+        addSectionHeading("3. TARIFF CONFIGURATION", 16, true);
+        renderSection('tariff-configuration');
+        addSpacer(8);
         
-        // Add KPI Cards Section
+        // Section 4: Metering Data Analysis
+        addSectionHeading("4. METERING DATA ANALYSIS", 16, true);
+        renderSection('metering-data-analysis');
+        addSpacer(5);
+        
+        // Add KPI Cards Section for data collection
         addSubsectionHeading("Data Collection Overview");
         
         // Calculate KPIs
@@ -1018,29 +1027,40 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         
         addSpacer(5);
         addSubsectionHeading("Audit Period");
-        addText("All Available Readings");
+        addText(`${format(new Date(reconciliationData.readingsPeriod.split(' - ')[0]), 'dd MMM yyyy')} - ${format(new Date(reconciliationData.readingsPeriod.split(' - ')[1]), 'dd MMM yyyy')}`);
         addSpacer(5);
         
         addSubsectionHeading("Metering Infrastructure");
         addText(`Total Meters Analyzed: ${reconciliationData.meterCount}`);
         addSpacer(8);
         
-        // Section 4: Key Metrics
-        addSectionHeading("4. KEY METRICS", 16, true);
-        addSubsectionHeading("4.1 Basic Reconciliation Metrics");
+        // Section 5: Document & Invoice Validation (if documents available)
+        const docValidationContent = getSectionContent('document-validation');
+        if (docValidationContent) {
+          addSectionHeading("5. DOCUMENT & INVOICE VALIDATION", 16, true);
+          renderSection('document-validation');
+          addSpacer(8);
+        }
+        
+        // Section 6: Reconciliation Results
+        addSectionHeading("6. RECONCILIATION RESULTS", 16, true);
+        renderSection('reconciliation-results');
+        addSpacer(5);
+        
+        addSubsectionHeading("Basic Reconciliation Metrics");
         
         const basicMetricsRows = [
           ["Total Supply", `${formatNumber(parseFloat(reconciliationData.totalSupply))} kWh`],
           ["Distribution Total", `${formatNumber(parseFloat(reconciliationData.distributionTotal))} kWh`],
           ["Recovery Rate", `${formatNumber(parseFloat(reconciliationData.recoveryRate))}%`],
-          ["Discrepancy", `${formatNumber(parseFloat(reconciliationData.variance))} kWh`]
+          ["Variance", `${parseFloat(reconciliationData.variancePercentage) > 0 ? "+" : ""}${formatNumber(parseFloat(reconciliationData.variance))} kWh (${parseFloat(reconciliationData.variancePercentage) > 0 ? "+" : ""}${reconciliationData.variancePercentage}%)`]
         ];
         
         addTable(["Metric", "Value"], basicMetricsRows, [100, 70]);
         addSpacer(5);
         
-        // KPI Indicators Section
-        addSubsectionHeading("4.2 Data Collection KPIs");
+        // KPI Indicators
+        addSubsectionHeading("Data Collection KPIs");
         
         // Calculate KPI stats from meter data
         const totalReadingsCount = meterData.reduce((sum: number, meter: any) => sum + (meter.readingsCount || 0), 0);
@@ -1055,10 +1075,42 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         ];
         
         addTable(["KPI Indicator", "Value"], kpiRows, [100, 70]);
-        addSpacer(5);
+        addSpacer(8);
         
-        // CSV Column Aggregations
-        if (csvColumnAggregations && csvColumnAggregations.length > 0) {
+        // CSV Column Aggregations (if available)
+        if (csvColumnAggregations && Object.keys(csvColumnAggregations).length > 0) {
+          addSubsectionHeading("CSV Column Aggregations");
+          addText("Site-wide aggregated values for selected CSV columns:");
+          addSpacer(3);
+          
+          const csvMetricsRows = Object.entries(csvColumnAggregations).map(([columnName, data]: [string, any]) => [
+            columnName,
+            formatNumber(data.value),
+            data.aggregation === 'sum' ? 'kWh' : 'kVA',
+            data.aggregation.toUpperCase(),
+            data.multiplier !== 1 ? `×${data.multiplier}` : '-'
+          ]);
+          
+          addTable(
+            ["Column", "Value", "Unit", "Aggregation", "Multiplier"],
+            csvMetricsRows,
+            [50, 35, 25, 30, 30]
+          );
+          addSpacer(8);
+        }
+        
+        // Section 7: Cost Analysis (if available)
+        const costAnalysisContent = getSectionContent('cost-analysis');
+        if (costAnalysisContent) {
+          addSectionHeading("7. COST ANALYSIS", 16, true);
+          renderSection('cost-analysis');
+          addSpacer(8);
+        }
+        
+        // Section 8: Findings & Anomalies
+        addSectionHeading("8. FINDINGS & ANOMALIES", 16, true);
+        renderSection('findings-anomalies');
+        addSpacer(5);
           addSubsectionHeading("4.3 CSV Column Aggregations");
           const csvMetricsRows = csvColumnAggregations.map((data: any) => [
             data.column,
@@ -1076,34 +1128,21 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           addSpacer(8);
         }
         
-        // Section 5: Metering Reconciliation
-        addSectionHeading("5. METERING RECONCILIATION", 16, true);
-        addSubsectionHeading("5.1 Supply Summary");
+        // Anomalies detail (if any)
+        if (anomalies.length > 0) {
+          addSubsectionHeading("Detected Anomalies");
+          const anomalySummaryRows = anomalies.slice(0, 10).map((a: any, idx: number) => [
+            `${idx + 1}`,
+            a.severity,
+            a.meter || "General",
+            a.description.substring(0, 60) + (a.description.length > 60 ? "..." : "")
+          ]);
+          addTable(["#", "Severity", "Meter", "Description"], anomalySummaryRows, [10, 25, 35, 100]);
+          addSpacer(8);
+        }
         
-        const supplyRows = [
-          ["Council Bulk Supply", `${formatNumber(parseFloat(reconciliationData.councilTotal))} kWh`],
-          ["Total Supply", `${formatNumber(parseFloat(reconciliationData.totalSupply))} kWh`]
-        ];
-        
-        addTable(["Supply Source", "Energy (kWh)"], supplyRows, [120, 50]);
-        addSpacer(5);
-        
-        addSubsectionHeading("5.2 Distribution Summary");
-        const distributionRows = [
-          ["Total Distribution", `${formatNumber(parseFloat(reconciliationData.distributionTotal))} kWh`],
-          ["Recovery Rate", `${formatNumber(parseFloat(reconciliationData.recoveryRate))}%`]
-        ];
-        
-        addTable(["Metric", "Value"], distributionRows, [120, 50]);
-        addSpacer(8);
-        
-        // Section 6: Observations
-        addSectionHeading("6. OBSERVATIONS AND ANOMALIES", 16, true);
-        renderSection('observations');
-        addSpacer(8);
-        
-        // Section 7: Recommendations
-        addSectionHeading("7. RECOMMENDATIONS", 16, true);
+        // Section 9: Recommendations
+        addSectionHeading("9. RECOMMENDATIONS", 16, true);
         renderSection('recommendations');
         addSpacer(8);
         
@@ -1163,10 +1202,47 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       setReconciliationDateFrom(selectedReconciliation.date_from);
       setReconciliationDateTo(selectedReconciliation.date_to);
 
-      // 2. Fetch selected schematic
-      setGenerationProgress(20);
-      setGenerationStatus("Loading schematic data...");
+      // 2. Fetch site details with supply authority
+      setGenerationProgress(15);
+      setGenerationStatus("Loading site details...");
       
+      const { data: siteData, error: siteError } = await supabase
+        .from("sites")
+        .select(`
+          *,
+          supply_authorities(*),
+          clients(name)
+        `)
+        .eq("id", siteId)
+        .single();
+
+      if (siteError) throw siteError;
+      if (!siteData) throw new Error("Site not found");
+
+      const siteDetails = {
+        address: siteData.address,
+        councilConnectionPoint: siteData.council_connection_point,
+        supplyAuthorityName: siteData.supply_authorities?.name,
+        supplyAuthorityRegion: siteData.supply_authorities?.region,
+        nersaIncrease: siteData.supply_authorities?.nersa_increase_percentage,
+        clientName: siteData.clients?.name
+      };
+
+      // 3. Fetch all schematics for the site
+      setGenerationProgress(18);
+      setGenerationStatus("Loading schematics...");
+      
+      const { data: allSchematics, error: schematicsError } = await supabase
+        .from("schematics")
+        .select("id, name, description, page_number, total_pages, file_type")
+        .eq("site_id", siteId)
+        .order("name", { ascending: true });
+
+      if (schematicsError) throw schematicsError;
+
+      const schematics = allSchematics || [];
+
+      // 4. Fetch selected schematic for image
       const { data: selectedSchematic, error: schematicError } = await supabase
         .from("schematics")
         .select("*")
@@ -1175,6 +1251,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
 
       if (schematicError) throw schematicError;
       if (!selectedSchematic) throw new Error("Selected schematic not found");
+
 
       // 3. Fetch documents from selected folder
       setGenerationProgress(30);
@@ -1199,7 +1276,81 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         extraction: doc.document_extractions?.[0]
       })).filter(d => d.extraction) || [];
 
-      // 4. Use meter data from reconciliation results instead of fetching
+      // 4. Fetch tariff structures for all meters
+      setGenerationProgress(35);
+      setGenerationStatus("Loading tariff data...");
+      
+      // Get unique tariff structure IDs from meters
+      const tariffIds = [...new Set(
+        selectedReconciliation.reconciliation_meter_results
+          ?.map((r: any) => r.tariff_structure_id)
+          .filter((id): id is string => Boolean(id))
+      )] as string[];
+
+      let tariffStructures: any[] = [];
+      if (tariffIds.length > 0) {
+        const { data: tariffs, error: tariffsError } = await supabase
+          .from("tariff_structures")
+          .select(`
+            *,
+            tariff_blocks(*),
+            tariff_charges(*),
+            tariff_time_periods(*),
+            supply_authorities(name, region, nersa_increase_percentage)
+          `)
+          .in("id", tariffIds);
+
+        if (!tariffsError && tariffs) {
+          tariffStructures = tariffs;
+        }
+      }
+
+      // 5. Prepare load profile summary from reconciliation meter results
+      setGenerationProgress(38);
+      setGenerationStatus("Analyzing load profiles...");
+      
+      const loadProfiles = selectedReconciliation.reconciliation_meter_results?.map((result: any) => ({
+        meterId: result.meter_id,
+        meterNumber: result.meter_number,
+        meterName: result.meter_name,
+        totalKwh: result.total_kwh,
+        positiveKwh: result.total_kwh_positive,
+        negativeKwh: result.total_kwh_negative,
+        readingsCount: result.readings_count,
+        avgConsumption: result.readings_count > 0 ? (result.total_kwh / result.readings_count) : 0
+      })).filter((lp: any) => lp.readingsCount > 0) || [];
+
+      // 6. Prepare cost analysis from reconciliation data
+      const costAnalysis = {
+        totalCost: selectedReconciliation.grid_supply_cost + selectedReconciliation.solar_cost,
+        gridSupplyCost: selectedReconciliation.grid_supply_cost,
+        solarCost: selectedReconciliation.solar_cost,
+        tenantRevenue: selectedReconciliation.total_revenue,
+        netPosition: selectedReconciliation.total_revenue - (selectedReconciliation.grid_supply_cost + selectedReconciliation.solar_cost),
+        avgCostPerKwh: selectedReconciliation.avg_cost_per_kwh,
+        revenueEnabled: selectedReconciliation.revenue_enabled,
+        costByType: {
+          bulk: selectedReconciliation.reconciliation_meter_results
+            ?.filter((r: any) => r.meter_type === 'bulk_meter')
+            .reduce((sum: number, r: any) => sum + (r.total_cost || 0), 0) || 0,
+          solar: selectedReconciliation.reconciliation_meter_results
+            ?.filter((r: any) => r.meter_type === 'solar')
+            .reduce((sum: number, r: any) => sum + (r.total_cost || 0), 0) || 0,
+          tenant: selectedReconciliation.reconciliation_meter_results
+            ?.filter((r: any) => r.meter_type === 'tenant_meter')
+            .reduce((sum: number, r: any) => sum + (r.total_cost || 0), 0) || 0
+        },
+        costByComponent: {
+          energy: selectedReconciliation.reconciliation_meter_results
+            ?.reduce((sum: number, r: any) => sum + (r.energy_cost || 0), 0) || 0,
+          demand: selectedReconciliation.reconciliation_meter_results
+            ?.reduce((sum: number, r: any) => sum + (r.demand_charges || 0), 0) || 0,
+          fixed: selectedReconciliation.reconciliation_meter_results
+            ?.reduce((sum: number, r: any) => sum + (r.fixed_charges || 0), 0) || 0
+        }
+      };
+
+      // 7. Use meter data from reconciliation results
       setGenerationProgress(40);
       setGenerationStatus("Processing meter data...");
       
@@ -1462,6 +1613,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         {
           body: {
             siteName,
+            siteDetails,
             auditPeriodStart: format(new Date(selectedReconciliation.date_from), "dd MMM yyyy"),
             auditPeriodEnd: format(new Date(selectedReconciliation.date_to), "dd MMM yyyy"),
             meterHierarchy,
@@ -1470,9 +1622,10 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             documentExtractions,
             anomalies,
             selectedCsvColumns,
-            selectedSchematicName: selectedSchematic.name,
-            selectedFolderPath,
-            selectedReconciliationName: selectedReconciliation.run_name
+            schematics,
+            tariffStructures,
+            loadProfiles,
+            costAnalysis
           }
         }
       );
@@ -1515,21 +1668,23 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       });
       
       if (reportData?.sections) {
+        // Section 1: Executive Summary
         if (reportData.sections.executiveSummary) {
           sections.push({
             id: 'executive-summary',
-            title: 'Executive Summary',
-            content: `## Executive Summary\n\n${reportData.sections.executiveSummary}`,
+            title: '1. Executive Summary',
+            content: `## 1. Executive Summary\n\n${reportData.sections.executiveSummary}`,
             type: 'text',
             editable: true
           });
         }
         
-        if (reportData.sections.hierarchyOverview) {
+        // Section 2: Site Infrastructure
+        if (reportData.sections.siteInfrastructure) {
           sections.push({
-            id: 'hierarchy-overview',
-            title: 'Metering Hierarchy Overview',
-            content: `## Metering Hierarchy Overview\n\n${reportData.sections.hierarchyOverview}`,
+            id: 'site-infrastructure',
+            title: '2. Site Infrastructure',
+            content: `## 2. Site Infrastructure\n\n${reportData.sections.siteInfrastructure}`,
             type: 'text',
             editable: true
           });
@@ -1538,84 +1693,85 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         if (schematicImageBase64) {
           sections.push({
             id: 'schematic-image',
-            title: 'Site Schematic',
-            content: `## Site Schematic\n\n*Schematic diagram will be included in the final PDF*`,
+            title: 'Site Schematic Diagram',
+            content: `### Site Schematic Diagram\n\n*Schematic diagram will be included in the final PDF*`,
             type: 'text',
             editable: false
           });
         }
         
-        // Add reconciliation data section
-        sections.push({
-          id: 'reconciliation-data',
-          title: 'Consumption Reconciliation',
-          content: `## Consumption Reconciliation
-
-**Reading Period:** ${reconciliationData.readingsPeriod}
-
-### Summary
-- **Total Supply:** ${reconciliationData.totalSupply} kWh
-- **Council Bulk Total:** ${reconciliationData.councilTotal} kWh
-- **Solar Generation:** ${reconciliationData.solarTotal} kWh
-- **Distribution Total:** ${reconciliationData.distributionTotal} kWh
-- **Variance:** ${reconciliationData.variance} kWh (${reconciliationData.variancePercentage}%)
-- **Recovery Rate:** ${reconciliationData.recoveryRate}%
-
-### Meter Counts
-- **Council Bulk Meters:** ${reconciliationData.councilBulkCount}
-- **Distribution Meters:** ${reconciliationData.distributionCount}
-- **Solar Meters:** ${reconciliationData.solarCount}
-- **Check Meters:** ${reconciliationData.checkMeterCount}`,
-          type: 'text',
-          editable: true
-        });
-        
-        // Add KPI section
-        const totalReadingsCount = meterData.reduce((sum: number, meter: any) => sum + (meter.readingsCount || 0), 0);
-        const totalMetersCount = meterData.length;
-        const totalConsumption = meterData.reduce((sum: number, meter: any) => sum + (parseFloat(meter.totalKwh) || 0), 0);
-        const avgReadingsPerMeter = totalMetersCount > 0 ? Math.round(totalReadingsCount / totalMetersCount) : 0;
-        
-        sections.push({
-          id: 'kpi-indicators',
-          title: 'Data Collection KPIs',
-          content: `## Data Collection KPIs
-
-| KPI Indicator | Value |
-|--------------|-------|
-| Total Data Points Reviewed | ${totalReadingsCount.toLocaleString()} |
-| Active Meters Analyzed | ${totalMetersCount} |
-| Total Consumption | ${totalConsumption.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')} kWh |
-| Average Readings per Meter | ${avgReadingsPerMeter} |`,
-          type: 'text',
-          editable: true
-        });
-        
-        if (reportData.sections.observations) {
+        // Section 3: Tariff Configuration
+        if (reportData.sections.tariffConfiguration) {
           sections.push({
-            id: 'observations',
-            title: 'Observations and Anomalies',
-            content: `## Observations and Anomalies\n\n${reportData.sections.observations}`,
+            id: 'tariff-configuration',
+            title: '3. Tariff Configuration',
+            content: `## 3. Tariff Configuration\n\n${reportData.sections.tariffConfiguration}`,
             type: 'text',
             editable: true
           });
         }
         
+        // Section 4: Metering Data Analysis
+        if (reportData.sections.meteringDataAnalysis) {
+          sections.push({
+            id: 'metering-data-analysis',
+            title: '4. Metering Data Analysis',
+            content: `## 4. Metering Data Analysis\n\n${reportData.sections.meteringDataAnalysis}`,
+            type: 'text',
+            editable: true
+          });
+        }
+        
+        // Section 5: Document & Invoice Validation (if available)
+        if (reportData.sections.documentValidation) {
+          sections.push({
+            id: 'document-validation',
+            title: '5. Document & Invoice Validation',
+            content: `## 5. Document & Invoice Validation\n\n${reportData.sections.documentValidation}`,
+            type: 'text',
+            editable: true
+          });
+        }
+        
+        // Section 6: Reconciliation Results
+        if (reportData.sections.reconciliationResults) {
+          sections.push({
+            id: 'reconciliation-results',
+            title: '6. Reconciliation Results',
+            content: `## 6. Reconciliation Results\n\n${reportData.sections.reconciliationResults}`,
+            type: 'text',
+            editable: true
+          });
+        }
+        
+        // Section 7: Cost Analysis (if available)
+        if (reportData.sections.costAnalysis) {
+          sections.push({
+            id: 'cost-analysis',
+            title: '7. Cost Analysis',
+            content: `## 7. Cost Analysis\n\n${reportData.sections.costAnalysis}`,
+            type: 'text',
+            editable: true
+          });
+        }
+        
+        // Section 8: Findings & Anomalies
+        if (reportData.sections.findingsAnomalies) {
+          sections.push({
+            id: 'findings-anomalies',
+            title: '8. Findings & Anomalies',
+            content: `## 8. Findings & Anomalies\n\n${reportData.sections.findingsAnomalies}`,
+            type: 'text',
+            editable: true
+          });
+        }
+        
+        // Section 9: Recommendations
         if (reportData.sections.recommendations) {
           sections.push({
             id: 'recommendations',
-            title: 'Recommendations',
-            content: `## Recommendations\n\n${reportData.sections.recommendations}`,
-            type: 'text',
-            editable: true
-          });
-        }
-        
-        if (reportData.sections.billingValidation) {
-          sections.push({
-            id: 'billing-validation',
-            title: 'Billing Validation',
-            content: `## Billing Validation\n\n${reportData.sections.billingValidation}`,
+            title: '9. Recommendations',
+            content: `## 9. Recommendations\n\n${reportData.sections.recommendations}`,
             type: 'text',
             editable: true
           });
@@ -1672,10 +1828,14 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         // Fallback to original content
         const sectionMap: Record<string, string> = {
           'executive-summary': reportData.sections.executiveSummary,
-          'hierarchy-overview': reportData.sections.hierarchyOverview,
-          'observations': reportData.sections.observations,
-          'recommendations': reportData.sections.recommendations,
-          'billing-validation': reportData.sections.billingValidation
+          'site-infrastructure': reportData.sections.siteInfrastructure,
+          'tariff-configuration': reportData.sections.tariffConfiguration,
+          'metering-data-analysis': reportData.sections.meteringDataAnalysis,
+          'document-validation': reportData.sections.documentValidation,
+          'reconciliation-results': reportData.sections.reconciliationResults,
+          'cost-analysis': reportData.sections.costAnalysis,
+          'findings-anomalies': reportData.sections.findingsAnomalies,
+          'recommendations': reportData.sections.recommendations
         };
         return sectionMap[sectionId] || '';
       };
