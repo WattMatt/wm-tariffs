@@ -19,6 +19,7 @@ import { SplitViewReportEditor } from "./SplitViewReportEditor";
 import SaveReportDialog from "./SaveReportDialog";
 import SavedReportsList from "./SavedReportsList";
 import { ReportGenerationProgress } from "./ReportGenerationProgress";
+import { generateMeterTypeChart, generateConsumptionChart } from "./ChartGenerator";
 
 interface BatchStatus {
   batchNumber: number;
@@ -70,6 +71,10 @@ interface PreviewData {
   anomalies: any[];
   selectedCsvColumns: any[];
   reportData: any;
+  chartImages?: {
+    meterTypeChart?: string;
+    consumptionChart?: string;
+  };
 }
 
 export default function SiteReportExport({ siteId, siteName, reconciliationRun }: SiteReportExportProps) {
@@ -837,8 +842,43 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           const section = sections.find(s => s.id === sectionId);
           if (!section) return;
           
-          if (section.type === 'chart') {
-            // For chart sections, parse and render the chart directly
+          // Check if content is a markdown image
+          const imageRegex = /!\[([^\]]*)\]\(([^)]+)\)/;
+          const imageMatch = section.content.match(imageRegex);
+          
+          if (imageMatch && section.type === 'chart') {
+            // This is a chart image - render it
+            const [_, altText, imageUrl] = imageMatch;
+            
+            try {
+              // Check if we need a new page
+              if (yPos > pageHeight - 150) {
+                addFooter();
+                addPageNumber();
+                pdf.addPage();
+                addBlueSidebar();
+                yPos = topMargin;
+              }
+              
+              const imgWidth = pageWidth - leftMargin - rightMargin;
+              const imgHeight = 120;
+              pdf.addImage(imageUrl, 'PNG', leftMargin, yPos, imgWidth, imgHeight);
+              yPos += imgHeight + 5;
+              
+              // Add caption if available
+              if (altText) {
+                pdf.setFontSize(9);
+                pdf.setFont("helvetica", "italic");
+                pdf.text(altText, pageWidth / 2, yPos, { align: "center" });
+                pdf.setFont("helvetica", "normal");
+                yPos += 10;
+              }
+            } catch (err) {
+              console.error(`Error adding chart image for ${sectionId}:`, err);
+              addText(`[Chart image rendering error: ${err instanceof Error ? err.message : 'Unknown error'}]`, 10, false);
+            }
+          } else if (section.type === 'chart') {
+            // Legacy: For chart sections with JSON content, parse and render the chart
             try {
               const chartData = JSON.parse(section.content);
               console.log(`Rendering chart section ${sectionId}:`, chartData);
@@ -1044,6 +1084,11 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         pdf.setTextColor(0, 0, 0);
         
         addSpacer(5);
+        
+        // Render chart sections (if available)
+        renderSection('meter-type-chart');
+        renderSection('consumption-chart');
+        
         addSubsectionHeading("Audit Period");
         addText(`${format(new Date(reconciliationData.readingsPeriod.split(' - ')[0]), 'dd MMM yyyy')} - ${format(new Date(reconciliationData.readingsPeriod.split(' - ')[1]), 'dd MMM yyyy')}`);
         addSpacer(5);
@@ -1733,6 +1778,13 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       
       setCurrentBatch(undefined);
 
+      // Generate chart images for preview
+      setGenerationProgress(85);
+      setGenerationStatus("Generating chart visualizations...");
+      
+      const meterTypeChart = generateMeterTypeChart(meterData);
+      const consumptionChart = generateConsumptionChart(meterData);
+
       // Store preview data with schematic and CSV aggregations
       setGenerationProgress(90);
       setGenerationStatus("Finalizing report...");
@@ -1748,7 +1800,11 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         selectedCsvColumns,
         reportData,
         schematicImageBase64,
-        csvColumnAggregations
+        csvColumnAggregations,
+        chartImages: {
+          meterTypeChart,
+          consumptionChart
+        }
       } as any);
       
       // Convert report data to editable markdown sections
@@ -1820,6 +1876,27 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             content: `## 4. Metering Data Analysis\n\n${reportData.sections.meteringDataAnalysis}`,
             type: 'text',
             editable: true
+          });
+        }
+        
+        // Add chart images
+        if (meterTypeChart) {
+          sections.push({
+            id: 'meter-type-chart',
+            title: 'Meter Type Distribution',
+            content: `![Meter Type Distribution](${meterTypeChart})`,
+            type: 'chart',
+            editable: false
+          });
+        }
+        
+        if (consumptionChart) {
+          sections.push({
+            id: 'consumption-chart',
+            title: 'Top 10 Meters by Consumption',
+            content: `![Top 10 Meters by Consumption](${consumptionChart})`,
+            type: 'chart',
+            editable: false
           });
         }
         
@@ -1963,8 +2040,43 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       const renderSection = (sectionId: string) => {
         const editedSection = editableSections.find(s => s.id === sectionId);
         
-        if (editedSection && editedSection.type === 'chart') {
-          // For chart sections, parse and render the chart directly
+        // Check if content is a markdown image
+        const imageRegex = /!\[([^\]]*)\]\(([^)]+)\)/;
+        const imageMatch = editedSection?.content.match(imageRegex);
+        
+        if (imageMatch && editedSection?.type === 'chart') {
+          // This is a chart image - render it
+          const [_, altText, imageUrl] = imageMatch;
+          
+          try {
+            // Check if we need a new page
+            if (yPos > pageHeight - 150) {
+              addFooter();
+              addPageNumber();
+              pdf.addPage();
+              addBlueSidebar();
+              yPos = topMargin;
+            }
+            
+            const imgWidth = pageWidth - leftMargin - rightMargin;
+            const imgHeight = 120;
+            pdf.addImage(imageUrl, 'PNG', leftMargin, yPos, imgWidth, imgHeight);
+            yPos += imgHeight + 5;
+            
+            // Add caption if available
+            if (altText) {
+              pdf.setFontSize(9);
+              pdf.setFont("helvetica", "italic");
+              pdf.text(altText, pageWidth / 2, yPos, { align: "center" });
+              pdf.setFont("helvetica", "normal");
+              yPos += 10;
+            }
+          } catch (err) {
+            console.error(`Error adding chart image for ${sectionId}:`, err);
+            addText(`[Chart image rendering error: ${err instanceof Error ? err.message : 'Unknown error'}]`, 10, false, 0);
+          }
+        } else if (editedSection && editedSection.type === 'chart') {
+          // Legacy: For chart sections with JSON content, parse and render the chart
           try {
             const chartData = JSON.parse(editedSection.content);
             console.log(`Rendering chart section ${sectionId}:`, chartData);
@@ -2832,6 +2944,10 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         );
         addSpacer(8);
       }
+
+      // Render chart visualizations
+      renderSection('meter-type-chart');
+      renderSection('consumption-chart');
 
       // Section 5: Metering Reconciliation
       addSectionHeading("5. METERING RECONCILIATION", 16, true);
