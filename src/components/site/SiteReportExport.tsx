@@ -1513,7 +1513,8 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         recoveryRate: selectedReconciliation.recovery_rate.toFixed(2),
         meterCount: meterData.length,
         councilBulkCount: meterData.filter((m: any) => m.meter_type === "bulk_meter").length,
-        solarCount: meterData.filter((m: any) => m.meter_type === "other").length,
+        councilMeterCount: meterData.filter((m: any) => m.meter_type === "council_meter").length,
+        otherCount: meterData.filter((m: any) => m.meter_type === "other").length,
         distributionCount: meterData.filter((m: any) => m.meter_type === "tenant_meter").length,
         checkMeterCount: meterData.filter((m: any) => m.meter_type === "check_meter").length,
         readingsPeriod: `${format(new Date(selectedReconciliation.date_from), "dd MMM yyyy")} - ${format(new Date(selectedReconciliation.date_to), "dd MMM yyyy")}`,
@@ -1771,7 +1772,8 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
 | Meter Type | Count |
 |------------|-------|
 | Bulk Meters | ${reconciliationData.councilBulkCount} |
-| Solar Meters | ${reconciliationData.solarCount} |
+| Council Meters | ${reconciliationData.councilMeterCount} |
+| Other Meters | ${reconciliationData.otherCount} |
 | Tenant Meters | ${reconciliationData.distributionCount} |
 | Check Meters | ${reconciliationData.checkMeterCount} |
 | **Total** | **${reconciliationData.meterCount}** |
