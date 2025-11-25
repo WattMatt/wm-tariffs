@@ -3917,79 +3917,88 @@ export default function SchematicEditor({
       throw new Error('Could not get canvas context');
     }
 
-    // Load and draw background image
-    await new Promise<void>((resolve, reject) => {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = () => {
-        ctx.drawImage(img, 0, 0, originalWidth, originalHeight);
-        resolve();
-      };
-      img.onerror = reject;
-      img.src = schematicUrl;
+    // Fill with white background (no schematic image)
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, originalWidth, originalHeight);
+
+    // Draw connection lines from schematic_lines data
+    const linesByConnection = new Map<string, any[]>();
+    schematicLines.forEach((line: any) => {
+      const connectionKey = line.metadata?.connectionKey || 'unknown';
+      if (!linesByConnection.has(connectionKey)) {
+        linesByConnection.set(connectionKey, []);
+      }
+      linesByConnection.get(connectionKey)!.push(line);
     });
 
-    // Draw connection lines
-    meterConnections.forEach((conn: any) => {
-      const parentPos = meterPositions.find((p: any) => p.meter_id === conn.parent_meter_id);
-      const childPos = meterPositions.find((p: any) => p.meter_id === conn.child_meter_id);
-      
-      if (parentPos && childPos) {
-        const x1 = (parentPos.x_position / 100) * originalWidth;
-        const y1 = (parentPos.y_position / 100) * originalHeight;
-        const x2 = (childPos.x_position / 100) * originalWidth;
-        const y2 = (childPos.y_position / 100) * originalHeight;
+    linesByConnection.forEach((lines) => {
+      // Draw line segments
+      lines.forEach((line: any) => {
+        const x1 = (line.from_x / 100) * originalWidth;
+        const y1 = (line.from_y / 100) * originalHeight;
+        const x2 = (line.to_x / 100) * originalWidth;
+        const y2 = (line.to_y / 100) * originalHeight;
         
-        ctx.strokeStyle = '#3b82f6';
-        ctx.lineWidth = 3;
-        ctx.setLineDash([10, 5]);
+        ctx.strokeStyle = line.color || '#000000';
+        ctx.lineWidth = line.stroke_width || 6;
+        ctx.setLineDash([]);
         ctx.beginPath();
         ctx.moveTo(x1, y1);
         ctx.lineTo(x2, y2);
         ctx.stroke();
-        ctx.setLineDash([]);
-      }
+      });
+
+      // Draw connection nodes at vertices
+      lines.forEach((line: any) => {
+        const x1 = (line.from_x / 100) * originalWidth;
+        const y1 = (line.from_y / 100) * originalHeight;
+        const x2 = (line.to_x / 100) * originalWidth;
+        const y2 = (line.to_y / 100) * originalHeight;
+        
+        ctx.fillStyle = '#000000';
+        ctx.beginPath();
+        ctx.arc(x1, y1, 4, 0, 2 * Math.PI);
+        ctx.fill();
+        
+        ctx.beginPath();
+        ctx.arc(x2, y2, 4, 0, 2 * Math.PI);
+        ctx.fill();
+      });
     });
 
-    // Draw meter cards
-    meterPositions.forEach((pos: any) => {
+    // Draw meter cards using createMeterCardImage
+    for (const pos of meterPositions) {
       const meter = meters.find((m: any) => m.id === pos.meter_id);
-      if (!meter) return;
+      if (!meter) continue;
 
       const x = (pos.x_position / 100) * originalWidth;
       const y = (pos.y_position / 100) * originalHeight;
-      const cardWidth = 140;
-      const cardHeight = 90;
+      const cardWidth = 200;
+      const cardHeight = 140;
 
-      // Card background
-      const color = getMeterTypeColor(meter.meter_type);
-      ctx.fillStyle = color;
-      ctx.fillRect(x - cardWidth / 2, y - cardHeight / 2, cardWidth, cardHeight);
+      // Create fields for meter card
+      const fields = [
+        { label: 'NO', value: meter.meter_number || 'N/A' },
+        { label: 'NAME', value: meter.name || 'N/A' },
+        { label: 'AREA', value: meter.area?.toString() || 'N/A' },
+        { label: 'RATING', value: meter.rating || 'N/A' },
+        { label: 'SERIAL', value: meter.serial_number || 'N/A' },
+      ];
 
-      // Card border
-      ctx.strokeStyle = '#000000';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(x - cardWidth / 2, y - cardHeight / 2, cardWidth, cardHeight);
+      const borderColor = getMeterTypeColor(meter.meter_type);
+      const meterCardDataUrl = await createMeterCardImage(fields, borderColor, cardWidth, cardHeight);
 
-      // Text styling
-      ctx.fillStyle = '#ffffff';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      
-      // Meter number (larger)
-      ctx.font = 'bold 14px Arial';
-      ctx.fillText(meter.meter_number || 'N/A', x, y - 25);
-      
-      // Meter type
-      ctx.font = '10px Arial';
-      ctx.fillText(meter.meter_type || 'N/A', x, y);
-      
-      // Meter name
-      ctx.font = '9px Arial';
-      const name = meter.name || 'N/A';
-      const truncatedName = name.length > 15 ? name.substring(0, 15) + '...' : name;
-      ctx.fillText(truncatedName, x, y + 20);
-    });
+      // Load and draw meter card image
+      await new Promise<void>((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+          ctx.drawImage(img, x - cardWidth / 2, y - cardHeight / 2, cardWidth, cardHeight);
+          resolve();
+        };
+        img.onerror = reject;
+        img.src = meterCardDataUrl;
+      });
+    }
 
     // Convert canvas to blob
     const blob = await new Promise<Blob>((resolve, reject) => {
