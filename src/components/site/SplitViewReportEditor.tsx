@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Save, X, RefreshCw, Loader2, ZoomIn, ZoomOut, ChevronLeft, ChevronRight, Activity, FileBarChart, Bolt, ChevronDown, ChevronUp, TrendingUp, BarChart3, Gauge, CalendarDays } from "lucide-react";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
 import { Document, Page, pdfjs } from 'react-pdf';
 import { toast } from "sonner";
@@ -563,112 +562,110 @@ export function SplitViewReportEditor({
       </div>
 
       {/* PDF Viewer */}
-      <div className="h-[800px]">
-        <div className="h-full flex flex-col">
-          <div className="h-10 border-b flex items-center justify-between px-4 bg-muted/30">
-            <span className="text-sm font-medium">PDF Preview</span>
-            <div className="flex items-center gap-2">
-              {numPages > 0 && (
-                <>
-                  <Button 
-                    onClick={goToPrevPage} 
-                    variant="ghost" 
-                    size="icon"
-                    className="h-7 w-7"
-                    disabled={pageNumber <= 1}
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </Button>
-                  <span className="text-xs font-medium min-w-[4rem] text-center">
-                    {pageNumber} / {numPages}
-                  </span>
-                  <Button 
-                    onClick={goToNextPage} 
-                    variant="ghost" 
-                    size="icon"
-                    className="h-7 w-7"
-                    disabled={pageNumber >= numPages}
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </Button>
-                  <div className="w-px h-5 bg-border mx-1" />
-                </>
-              )}
-              <Button 
-                onClick={handleZoomOut} 
-                variant="ghost" 
-                size="icon"
-                className="h-7 w-7"
-              >
-                <ZoomOut className="w-4 h-4" />
-              </Button>
-              <span className="text-xs font-medium min-w-[3rem] text-center">
-                {zoom}%
-              </span>
-              <Button 
-                onClick={handleZoomIn} 
-                variant="ghost" 
-                size="icon"
-                className="h-7 w-7"
-              >
-                <ZoomIn className="w-4 h-4" />
-              </Button>
-              <div className="w-px h-5 bg-border mx-1" />
-              <Button onClick={handleRefresh} variant="ghost" size="icon" className="h-7 w-7">
-                <RefreshCw className="w-4 h-4" />
-              </Button>
-            </div>
+      <div className="flex-1 flex flex-col min-h-0">
+        <div className="h-10 border-b flex items-center justify-between px-4 bg-muted/30">
+          <span className="text-sm font-medium">PDF Preview</span>
+          <div className="flex items-center gap-2">
+            {numPages > 0 && (
+              <>
+                <Button 
+                  onClick={goToPrevPage} 
+                  variant="ghost" 
+                  size="icon"
+                  className="h-7 w-7"
+                  disabled={pageNumber <= 1}
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                <span className="text-xs font-medium min-w-[4rem] text-center">
+                  {pageNumber} / {numPages}
+                </span>
+                <Button 
+                  onClick={goToNextPage} 
+                  variant="ghost" 
+                  size="icon"
+                  className="h-7 w-7"
+                  disabled={pageNumber >= numPages}
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+                <div className="w-px h-5 bg-border mx-1" />
+              </>
+            )}
+            <Button 
+              onClick={handleZoomOut} 
+              variant="ghost" 
+              size="icon"
+              className="h-7 w-7"
+            >
+              <ZoomOut className="w-4 h-4" />
+            </Button>
+            <span className="text-xs font-medium min-w-[3rem] text-center">
+              {zoom}%
+            </span>
+            <Button 
+              onClick={handleZoomIn} 
+              variant="ghost" 
+              size="icon"
+              className="h-7 w-7"
+            >
+              <ZoomIn className="w-4 h-4" />
+            </Button>
+            <div className="w-px h-5 bg-border mx-1" />
+            <Button onClick={handleRefresh} variant="ghost" size="icon" className="h-7 w-7">
+              <RefreshCw className="w-4 h-4" />
+            </Button>
           </div>
-          <ScrollArea className="flex-1 bg-muted/20">
-            {pdfUrl ? (
-              <div className="p-4">
-                <div className="relative mx-auto">
-                  <Document
-                    file={pdfUrl}
-                    onLoadSuccess={onDocumentLoadSuccess}
-                    onLoadError={(error) => {
-                      console.error('PDF load error:', error);
-                    }}
+        </div>
+        <div className="flex-1 bg-muted/20 overflow-auto">
+          {pdfUrl ? (
+            <div className="h-full flex items-center justify-center p-4">
+              <div className="relative">
+                <Document
+                  file={pdfUrl}
+                  onLoadSuccess={onDocumentLoadSuccess}
+                  onLoadError={(error) => {
+                    console.error('PDF load error:', error);
+                  }}
+                  loading={
+                    <div className="flex items-center justify-center py-20">
+                      <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+                    </div>
+                  }
+                  error={
+                    <div className="flex items-center justify-center py-20">
+                      <div className="text-center space-y-4">
+                        <p className="text-sm text-destructive">Failed to load PDF</p>
+                        <Button onClick={handleRefresh} variant="outline" size="sm">
+                          <RefreshCw className="w-4 h-4 mr-2" />
+                          Try Again
+                        </Button>
+                      </div>
+                    </div>
+                  }
+                >
+                  <Page
+                    pageNumber={pageNumber}
+                    scale={zoom / 100}
+                    renderTextLayer={false}
+                    renderAnnotationLayer={false}
                     loading={
                       <div className="flex items-center justify-center py-20">
-                        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+                        <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
                       </div>
                     }
-                    error={
-                      <div className="flex items-center justify-center py-20">
-                        <div className="text-center space-y-4">
-                          <p className="text-sm text-destructive">Failed to load PDF</p>
-                          <Button onClick={handleRefresh} variant="outline" size="sm">
-                            <RefreshCw className="w-4 h-4 mr-2" />
-                            Try Again
-                          </Button>
-                        </div>
-                      </div>
-                    }
-                  >
-                    <Page
-                      pageNumber={pageNumber}
-                      scale={zoom / 100}
-                      renderTextLayer={false}
-                      renderAnnotationLayer={false}
-                      loading={
-                        <div className="flex items-center justify-center py-20">
-                          <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-                        </div>
-                      }
-                    />
-                  </Document>
-                </div>
+                  />
+                </Document>
               </div>
-            ) : (
-              <div className="flex items-center justify-center h-full">
-                <div className="text-center space-y-2">
-                  <Loader2 className="w-8 h-8 animate-spin mx-auto text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground">Loading PDF...</p>
-                </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center space-y-2">
+                <Loader2 className="w-8 h-8 animate-spin mx-auto text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">Loading PDF...</p>
               </div>
-            )}
-          </ScrollArea>
+            </div>
+          )}
         </div>
       </div>
     </div>
