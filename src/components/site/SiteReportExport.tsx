@@ -768,12 +768,12 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         pdf.text(previewSiteName.toUpperCase(), pageWidth / 2, 80, { align: "center" });
         
         pdf.setFontSize(14);
-        pdf.text("METERING AUDIT REPORT", pageWidth / 2, 100, { align: "center" });
+        pdf.text("METERING", pageWidth / 2, 100, { align: "center" });
         
         pdf.setTextColor(0, 0, 0);
         pdf.setFontSize(12);
         pdf.setFont("helvetica", "normal");
-        pdf.text("Financial Analysis", pageWidth / 2, 115, { align: "center" });
+        pdf.text("Metering Audit", pageWidth / 2, 115, { align: "center" });
         
         pdf.setFontSize(9);
         pdf.text("Audit Period", pageWidth / 2, 155, { align: "center" });
@@ -781,10 +781,6 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         pdf.text(reconciliationData?.readingsPeriod || "All Available Readings", pageWidth / 2, 165, { align: "center" });
         
         pdf.setFontSize(10);
-        pdf.setFont("helvetica", "italic");
-        pdf.setTextColor(150, 0, 0);
-        pdf.text("PREVIEW - This is an editable preview", pageWidth / 2, 200, { align: "center" });
-        pdf.setTextColor(0, 0, 0);
 
         addFooter();
         
@@ -2687,12 +2683,12 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
       pdf.text(previewSiteName.toUpperCase(), pageWidth / 2, 80, { align: "center" });
       
       pdf.setFontSize(14);
-      pdf.text("METERING AUDIT REPORT", pageWidth / 2, 100, { align: "center" });
+      pdf.text("METERING", pageWidth / 2, 100, { align: "center" });
       
       pdf.setTextColor(0, 0, 0);
       pdf.setFontSize(12);
       pdf.setFont("helvetica", "normal");
-      pdf.text("Financial Analysis", pageWidth / 2, 115, { align: "center" });
+      pdf.text("Metering Audit", pageWidth / 2, 115, { align: "center" });
       
       // Audit Period section
       pdf.setFontSize(9);
