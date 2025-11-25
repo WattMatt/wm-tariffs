@@ -1892,7 +1892,9 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           if (siteData) {
             const clientName = (siteData.clients as any).name.trim().replace(/[^a-zA-Z0-9\s-_]/g, '').replace(/\s+/g, ' ');
             const siteName = siteData.name.trim().replace(/[^a-zA-Z0-9\s-_]/g, '').replace(/\s+/g, ' ');
-            const snapshotPath = `${clientName}/${siteName}/Metering/Schematics/${selectedSchematic.name}_snapshot.png`;
+            // Match the same sanitization used when creating the snapshot (spaces to underscores)
+            const sanitizedSchematicName = selectedSchematic.name.replace(/[^a-zA-Z0-9\s-_]/g, '').replace(/\s+/g, '_');
+            const snapshotPath = `${clientName}/${siteName}/Metering/Schematics/${sanitizedSchematicName}_snapshot.png`;
             
             console.log('🖼️ Attempting to load snapshot from:', snapshotPath);
             
