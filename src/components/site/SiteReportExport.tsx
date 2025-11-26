@@ -793,83 +793,16 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           }
           
           // Draw header with blue background
-          const rowHeight = 10;
+          const rowHeight = 7; // Compact row height
           pdf.setFillColor(templateBlue[0], templateBlue[1], templateBlue[2]);
           pdf.rect(leftMargin, yPos, tableWidth, rowHeight, "F");
           
-          pdf.setFontSize(9);
-          pdf.setFont("helvetica", "bold");
-          pdf.setTextColor(255, 255, 255);
-          let xPos = leftMargin + 3;
-          headers.forEach((header, i) => {
-            pdf.text(sanitizeForPdf(header), xPos, yPos + 6.5);
-            xPos += colWidths[i];
-          });
-          pdf.setTextColor(0, 0, 0);
-          yPos += rowHeight;
-          
-          // Draw rows with alternating colors
-          pdf.setFont("helvetica", "normal");
-          rows.forEach((row, rowIndex) => {
-            if (yPos > pageHeight - bottomMargin - 15) {
-              addFooter();
-              addPageNumber();
-              pdf.addPage();
-              yPos = topMargin + 15;
-            }
-            
-            // Alternating row background
-            if (rowIndex % 2 === 0) {
-              pdf.setFillColor(248, 250, 252); // Light gray
-              pdf.rect(leftMargin, yPos, tableWidth, rowHeight, "F");
-            }
-            
-            xPos = leftMargin + 3;
-            row.forEach((cell, i) => {
-              const sanitizedCell = sanitizeForPdf(cell);
-              const cellLines = pdf.splitTextToSize(sanitizedCell, colWidths[i] - 6);
-              pdf.text(cellLines[0] || "", xPos, yPos + 6.5);
-              xPos += colWidths[i];
-            });
-            
-            // Draw cell borders
-            pdf.setDrawColor(226, 232, 240); // Light border
-            pdf.setLineWidth(0.3);
-            pdf.rect(leftMargin, yPos, tableWidth, rowHeight);
-            yPos += rowHeight;
-          });
-          
-          yPos += 5;
-          
-          // Add caption if title provided
-          if (tableTitle) {
-            addTableCaption(tableTitle);
-          }
-        };
-
-        const addCompactTable = (headers: string[], rows: string[][], columnWidths?: number[], tableTitle?: string) => {
-          const tableWidth = pageWidth - leftMargin - rightMargin;
-          const defaultColWidth = tableWidth / headers.length;
-          const colWidths = columnWidths || headers.map(() => defaultColWidth);
-          
-          if (yPos > pageHeight - bottomMargin - 40) {
-            addFooter();
-            addPageNumber();
-            pdf.addPage();
-            yPos = topMargin;
-          }
-          
-          // Draw header with blue background
-          const rowHeight = 7;
-          pdf.setFillColor(templateBlue[0], templateBlue[1], templateBlue[2]);
-          pdf.rect(leftMargin, yPos, tableWidth, rowHeight, "F");
-          
-          pdf.setFontSize(8);
+          pdf.setFontSize(8); // Compact font size
           pdf.setFont("helvetica", "bold");
           pdf.setTextColor(255, 255, 255);
           let xPos = leftMargin + 2;
           headers.forEach((header, i) => {
-            pdf.text(sanitizeForPdf(header), xPos, yPos + 5);
+            pdf.text(sanitizeForPdf(header), xPos, yPos + 5); // Adjusted vertical position
             xPos += colWidths[i];
           });
           pdf.setTextColor(0, 0, 0);
@@ -887,7 +820,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             
             // Alternating row background
             if (rowIndex % 2 === 0) {
-              pdf.setFillColor(248, 250, 252);
+              pdf.setFillColor(248, 250, 252); // Light gray
               pdf.rect(leftMargin, yPos, tableWidth, rowHeight, "F");
             }
             
@@ -895,30 +828,25 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             row.forEach((cell, i) => {
               const sanitizedCell = sanitizeForPdf(cell);
               const cellLines = pdf.splitTextToSize(sanitizedCell, colWidths[i] - 4);
-              pdf.text(cellLines[0] || "", xPos, yPos + 5);
+              pdf.text(cellLines[0] || "", xPos, yPos + 5); // Adjusted vertical position
               xPos += colWidths[i];
             });
             
             // Draw cell borders
-            pdf.setDrawColor(226, 232, 240);
+            pdf.setDrawColor(226, 232, 240); // Light border
             pdf.setLineWidth(0.3);
             pdf.rect(leftMargin, yPos, tableWidth, rowHeight);
             yPos += rowHeight;
           });
           
-          yPos += 3;
+          yPos += 3; // Reduced spacing after table
           
           // Add caption if title provided
           if (tableTitle) {
-            pdf.setFontSize(7);
-            pdf.setFont("helvetica", "italic");
-            pdf.setTextColor(0, 0, 0);
-            pdf.text(`Table ${tableCounter}: ${tableTitle}`, pageWidth / 2, yPos, { align: "center" });
-            pdf.setFont("helvetica", "normal");
-            tableCounter++;
-            yPos += 6;
+            addTableCaption(tableTitle);
           }
         };
+
 
         const addSpacer = (height: number = 5) => {
           yPos += height;
@@ -1118,7 +1046,9 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         const tariffsByName = (previewData as any).tariffsByName || {};
         
         if (tariffChartImages && Object.keys(tariffChartImages).length > 0) {
-          const chartWidth = (pageWidth - leftMargin - rightMargin - 20) / 3;
+          const contentWidth = pageWidth - leftMargin - rightMargin;
+          const chartGap = 8;
+          const chartWidth = (contentWidth - (chartGap * 2)) / 3; // True one-third widths
           const chartHeight = chartWidth * 0.79;
           
           for (const tariffName of Object.keys(tariffChartImages)) {
@@ -1131,7 +1061,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             // Add tariff subheading
             addSubsectionHeading(tariffName);
             
-            // Render 3 charts horizontally
+            // Render 3 charts horizontally with equal spacing
             if (charts) {
               // Check if we need a new page for charts
               if (yPos > pageHeight - bottomMargin - chartHeight - 10) {
@@ -1141,29 +1071,29 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
                 yPos = topMargin;
               }
               
-              let chartX = leftMargin;
+              const chart1X = leftMargin;
+              const chart2X = leftMargin + chartWidth + chartGap;
+              const chart3X = leftMargin + (2 * chartWidth) + (2 * chartGap);
               
               if (charts.basic) {
                 try {
-                  pdf.addImage(charts.basic, 'PNG', chartX, yPos, chartWidth, chartHeight);
+                  pdf.addImage(charts.basic, 'PNG', chart1X, yPos, chartWidth, chartHeight);
                 } catch (err) {
                   console.error("Error adding basic charge chart:", err);
                 }
-                chartX += chartWidth + 10;
               }
               
               if (charts.energy) {
                 try {
-                  pdf.addImage(charts.energy, 'PNG', chartX, yPos, chartWidth, chartHeight);
+                  pdf.addImage(charts.energy, 'PNG', chart2X, yPos, chartWidth, chartHeight);
                 } catch (err) {
                   console.error("Error adding energy charge chart:", err);
                 }
-                chartX += chartWidth + 10;
               }
               
               if (charts.demand) {
                 try {
-                  pdf.addImage(charts.demand, 'PNG', chartX, yPos, chartWidth, chartHeight);
+                  pdf.addImage(charts.demand, 'PNG', chart3X, yPos, chartWidth, chartHeight);
                 } catch (err) {
                   console.error("Error adding demand charge chart:", err);
                 }
@@ -1174,7 +1104,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             
             // Render tariff details tables
             if (latestPeriod) {
-              addCompactTable(
+              addTable(
                 ["Attribute", "Value"],
                 [
                   ["Type / Config", `${formatTariffType(latestPeriod.tariff_type || 'N/A')} / ${latestPeriod.meter_configuration || 'N/A'}`],
@@ -1191,7 +1121,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
               // Render charges table
               const charges = latestPeriod.tariff_charges || [];
               if (charges.length > 0) {
-                addCompactTable(
+                addTable(
                   ["Type", "Description", "Amount", "Unit"],
                   charges.map((charge: any) => [
                     formatChargeType(charge.charge_type),
