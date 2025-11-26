@@ -89,7 +89,7 @@ import { Canvas as FabricCanvas, Circle, Line, Text, FabricImage, Rect, Polygon,
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Save, Zap, Link2, Trash2, Upload, Plus, ZoomIn, ZoomOut, Maximize2, Pencil, Scan, Check, Edit, ChevronLeft, ChevronRight, Loader2, ImageIcon } from "lucide-react";
+import { Save, Zap, Link2, Trash2, Upload, Plus, ZoomIn, ZoomOut, Maximize2, Pencil, Scan, Check, Edit, ChevronLeft, ChevronRight, Loader2, ImageIcon, Crop } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -101,6 +101,7 @@ import { MeterDataExtractor } from "./MeterDataExtractor";
 import { MeterFormFields } from "./MeterFormFields";
 import { MeterConnectionsManager } from "./MeterConnectionsManager";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
+import { generateStoragePath, sanitizeName } from "@/lib/storagePaths";
 
 
 interface SchematicEditorProps {
@@ -449,9 +450,14 @@ export default function SchematicEditor({
   
   // FABRIC.JS EVENT HANDLER PATTERN: State + Ref for tool selection
   // State drives UI, ref provides current value to canvas event handlers
-  const [activeTool, setActiveTool] = useState<"select" | "meter" | "connection" | "draw">("select");
-  const activeToolRef = useRef<"select" | "meter" | "connection" | "draw">("select");
+  const [activeTool, setActiveTool] = useState<"select" | "meter" | "connection" | "draw" | "snippet">("select");
+  const activeToolRef = useRef<"select" | "meter" | "connection" | "draw" | "snippet">("select");
   const [isDrawingMode, setIsDrawingMode] = useState(false);
+  
+  // Snippet capture mode state
+  const [snippetRect, setSnippetRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const [isCapturingSnippet, setIsCapturingSnippet] = useState(false);
+  const snippetRectRef = useRef<Rect | null>(null);
   const [drawnRegions, setDrawnRegions] = useState<Array<{
     id: string;
     x: number;
@@ -1507,6 +1513,14 @@ export default function SchematicEditor({
         }
       }
       
+      // Handle snippet mode - draw selection rectangle
+      if (currentTool === 'snippet') {
+        const pointer = canvas.getPointer(opt.e);
+        isDrawing = true;
+        startPoint = { x: pointer.x, y: pointer.y };
+        return;
+      }
+      
       // Only handle drawing if in draw mode
       if (currentTool !== 'draw') return;
       
@@ -1538,6 +1552,7 @@ export default function SchematicEditor({
     });
     
     canvas.on('mouse:move', (opt) => {
+      const currentTool = activeToolRef.current;
       const evt = opt.e as MouseEvent;
       let pointer = canvas.getPointer(opt.e);
       
@@ -1665,6 +1680,37 @@ export default function SchematicEditor({
         
         selectionBoxRef.current = selectionBox;
         canvas.add(selectionBox);
+        canvas.renderAll();
+        return;
+      }
+      
+      // Handle snippet rectangle drawing
+      if (isDrawing && startPoint && currentTool === 'snippet') {
+        // Remove previous snippet rectangle
+        if (snippetRectRef.current) {
+          canvas.remove(snippetRectRef.current);
+        }
+        
+        const left = Math.min(startPoint.x, pointer.x);
+        const top = Math.min(startPoint.y, pointer.y);
+        const width = Math.abs(pointer.x - startPoint.x);
+        const height = Math.abs(pointer.y - startPoint.y);
+        
+        const rect = new Rect({
+          left,
+          top,
+          width,
+          height,
+          fill: 'rgba(16, 185, 129, 0.1)',
+          stroke: '#10b981',
+          strokeWidth: 3,
+          strokeDashArray: [10, 5],
+          selectable: false,
+          evented: false,
+        });
+        
+        snippetRectRef.current = rect;
+        canvas.add(rect);
         canvas.renderAll();
         return;
       }
@@ -1954,6 +2000,31 @@ export default function SchematicEditor({
       
       // Clear click target if we get here
       clickTarget = null;
+      
+      // Handle snippet rectangle completion
+      if (isDrawing && startPoint && activeToolRef.current === 'snippet') {
+        const pointer = canvas.getPointer(opt.e);
+        
+        const left = Math.min(startPoint.x, pointer.x);
+        const top = Math.min(startPoint.y, pointer.y);
+        const width = Math.abs(pointer.x - startPoint.x);
+        const height = Math.abs(pointer.y - startPoint.y);
+        
+        if (width > 20 && height > 20) {
+          setSnippetRect({ x: left, y: top, width, height });
+          toast.success('Snippet area selected. Click "Save Snippet" to capture.');
+        } else {
+          if (snippetRectRef.current) {
+            canvas.remove(snippetRectRef.current);
+            snippetRectRef.current = null;
+          }
+          toast.error('Snippet area too small');
+        }
+        
+        isDrawing = false;
+        startPoint = null;
+        return;
+      }
       
       // Handle rectangle drawing completion
       if (isDrawing && startPoint && activeToolRef.current === 'draw') {
@@ -2717,7 +2788,7 @@ export default function SchematicEditor({
     };
   }, [fabricCanvas, isEditMode]);
 
-  // ESCAPE KEY: Cancel connection drawing
+  // ESCAPE KEY: Cancel connection drawing or snippet mode
   useEffect(() => {
     if (!fabricCanvas) return;
 
@@ -2732,27 +2803,42 @@ export default function SchematicEditor({
         return;
       }
       
-      if (e.key === 'Escape' && activeTool === 'connection' && (connectionPoints.length > 0 || connectionStart)) {
-        // Clean up preview nodes and lines
-        connectionNodesRef.current.forEach(node => fabricCanvas.remove(node));
-        connectionNodesRef.current = [];
-        
-        if (connectionLineRef.current) {
-          fabricCanvas.remove(connectionLineRef.current);
-          connectionLineRef.current = null;
+      if (e.key === 'Escape') {
+        // Cancel snippet mode
+        if (activeTool === 'snippet' && snippetRect) {
+          if (snippetRectRef.current) {
+            fabricCanvas.remove(snippetRectRef.current);
+            snippetRectRef.current = null;
+          }
+          setSnippetRect(null);
+          setActiveTool("select");
+          toast.info('Snippet mode cancelled');
+          return;
         }
         
-        if (connectionStartNodeRef.current) {
-          fabricCanvas.remove(connectionStartNodeRef.current);
-          connectionStartNodeRef.current = null;
+        // Cancel connection drawing
+        if (activeTool === 'connection' && (connectionPoints.length > 0 || connectionStart)) {
+          // Clean up preview nodes and lines
+          connectionNodesRef.current.forEach(node => fabricCanvas.remove(node));
+          connectionNodesRef.current = [];
+          
+          if (connectionLineRef.current) {
+            fabricCanvas.remove(connectionLineRef.current);
+            connectionLineRef.current = null;
+          }
+          
+          if (connectionStartNodeRef.current) {
+            fabricCanvas.remove(connectionStartNodeRef.current);
+            connectionStartNodeRef.current = null;
+          }
+          
+          // Reset state
+          setConnectionPoints([]);
+          setConnectionStart(null);
+          fabricCanvas.renderAll();
+          
+          toast.info('Connection cancelled');
         }
-        
-        // Reset state
-        setConnectionPoints([]);
-        setConnectionStart(null);
-        fabricCanvas.renderAll();
-        
-        toast.info('Connection cancelled');
       }
     };
 
@@ -2760,14 +2846,15 @@ export default function SchematicEditor({
     return () => {
       window.removeEventListener('keydown', handleEscapeKey);
     };
-  }, [fabricCanvas, activeTool, connectionPoints, connectionStart]);
+  }, [fabricCanvas, activeTool, connectionPoints, connectionStart, snippetRect]);
 
 
   // Update cursor when tool changes
   useEffect(() => {
     if (fabricCanvas) {
-      fabricCanvas.defaultCursor = activeTool === 'draw' ? 'crosshair' : 'grab';
-      fabricCanvas.hoverCursor = activeTool === 'draw' ? 'crosshair' : 'grab';
+      const cursorStyle = activeTool === 'draw' || activeTool === 'snippet' ? 'crosshair' : 'grab';
+      fabricCanvas.defaultCursor = cursorStyle;
+      fabricCanvas.hoverCursor = cursorStyle;
       fabricCanvas.renderAll();
     }
   }, [activeTool, fabricCanvas]);
@@ -3872,11 +3959,109 @@ export default function SchematicEditor({
     setIsSelectionMode(false);
     setIsDrawingMode(false);
     
+    // Clear snippet mode if active
+    if (snippetRectRef.current && fabricCanvas) {
+      fabricCanvas.remove(snippetRectRef.current);
+      snippetRectRef.current = null;
+    }
+    setSnippetRect(null);
+    
     // Clear all selections
     setSelectedExtractedMeterIds([]);
     setSelectedMeterIds([]);
     setSelectedRegionIndices([]);
     setSelectedConnectionKeys([]);
+  };
+
+  const captureSnippet = async () => {
+    if (!snippetRect || !fabricCanvas) return;
+    
+    setIsCapturingSnippet(true);
+    
+    try {
+      // 1. Store current visibility state of background
+      const backgroundObj = fabricCanvas.getObjects().find((obj: any) => obj.isBackgroundImage);
+      const originalBackgroundVisible = backgroundObj ? backgroundObj.visible : true;
+      
+      // 2. Hide background image temporarily
+      if (backgroundObj) {
+        backgroundObj.visible = false;
+      }
+      
+      // 3. Render canvas to get current state
+      fabricCanvas.renderAll();
+      
+      // 4. Use fabric.js toDataURL with multiplier for high quality
+      //    Crop to the snippet rectangle bounds
+      const dataUrl = fabricCanvas.toDataURL({
+        format: 'png',
+        quality: 1,
+        multiplier: 2, // 2x for high quality
+        left: snippetRect.x,
+        top: snippetRect.y,
+        width: snippetRect.width,
+        height: snippetRect.height,
+      });
+      
+      // 5. Restore background visibility
+      if (backgroundObj) {
+        backgroundObj.visible = originalBackgroundVisible;
+      }
+      fabricCanvas.renderAll();
+      
+      // 6. Convert data URL to blob
+      const response = await fetch(dataUrl);
+      const blob = await response.blob();
+      
+      // 7. Generate storage path
+      const timestamp = Date.now();
+      const { data: schematicData } = await supabase
+        .from('schematics')
+        .select('name')
+        .eq('id', schematicId)
+        .single();
+      
+      const schematicName = sanitizeName(schematicData?.name || 'schematic');
+      const fileName = `${schematicName}_snippet_${timestamp}.png`;
+      
+      const storagePath = await generateStoragePath(
+        siteId,
+        'Metering',
+        'Schematics/Snippets',
+        fileName
+      );
+      
+      // 8. Upload to storage
+      const { error: uploadError } = await supabase.storage
+        .from(storagePath.bucket)
+        .upload(storagePath.path, blob, {
+          contentType: 'image/png',
+          upsert: false
+        });
+      
+      if (uploadError) throw uploadError;
+      
+      // 9. Get public URL
+      const { data: urlData } = supabase.storage
+        .from(storagePath.bucket)
+        .getPublicUrl(storagePath.path);
+      
+      toast.success('Snippet saved successfully!');
+      
+      // 10. Clear snippet mode
+      setActiveTool("select");
+      if (snippetRectRef.current) {
+        fabricCanvas.remove(snippetRectRef.current);
+        snippetRectRef.current = null;
+      }
+      setSnippetRect(null);
+      
+    } catch (error) {
+      console.error('Snippet capture error:', error);
+      toast.error('Failed to capture snippet');
+    } finally {
+      setIsCapturingSnippet(false);
+    }
   };
 
 
@@ -4703,6 +4888,31 @@ export default function SchematicEditor({
             <Link2 className="w-4 h-4" />
             Connections
           </Button>
+          <Button
+            variant={activeTool === "snippet" ? "default" : "outline"}
+            onClick={() => {
+              if (activeTool === "snippet") {
+                setActiveTool("select");
+                // Clear any existing snippet rectangle
+                if (snippetRectRef.current && fabricCanvas) {
+                  fabricCanvas.remove(snippetRectRef.current);
+                  snippetRectRef.current = null;
+                }
+                setSnippetRect(null);
+                toast.info("Snippet mode disabled");
+              } else {
+                setActiveTool("snippet");
+                setIsSelectionMode(false);
+                toast.info("Draw a rectangle to capture meter cards and connections as a snippet", { duration: 4000 });
+              }
+            }}
+            disabled={!isEditMode}
+            size="sm"
+            className="gap-2"
+          >
+            <Crop className="w-4 h-4" />
+            Snippet
+          </Button>
           <MeterDataExtractor
             siteId={siteId}
             schematicId={schematicId}
@@ -5142,6 +5352,39 @@ export default function SchematicEditor({
             >
               <Trash2 className="w-4 h-4" />
               {selectedConnectionKeys.length > 0 ? 'Delete' : 'Clear'}
+            </Button>
+          </>
+        )}
+        {activeTool === "snippet" && snippetRect && (
+          <>
+            <Button
+              variant="default"
+              onClick={captureSnippet}
+              disabled={isCapturingSnippet}
+              size="sm"
+              className="gap-2"
+            >
+              {isCapturingSnippet ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Save className="w-4 h-4" />
+              )}
+              {isCapturingSnippet ? 'Capturing...' : 'Save Snippet'}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (snippetRectRef.current && fabricCanvas) {
+                  fabricCanvas.remove(snippetRectRef.current);
+                  snippetRectRef.current = null;
+                }
+                setSnippetRect(null);
+              }}
+              size="sm"
+              className="gap-2"
+            >
+              <Trash2 className="w-4 h-4" />
+              Clear Selection
             </Button>
           </>
         )}
