@@ -1155,8 +1155,13 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         
         addSpacer(8);
         
-        // Section 4: Metering Data Analysis
-        addSectionHeading("4. METERING DATA ANALYSIS", 16, true);
+        // Section 4: Tariff Comparison
+        addSectionHeading("4. TARIFF COMPARISON", 16, true);
+        renderSection('tariff-comparison');
+        addSpacer(8);
+        
+        // Section 5: Metering Data Analysis (renumbered from 4)
+        addSectionHeading("5. METERING DATA ANALYSIS", 16, true);
         renderSection('metering-data-analysis');
         addSpacer(5);
         
@@ -1311,16 +1316,16 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         addText(`Total Meters Analyzed: ${reconciliationData.meterCount}`);
         addSpacer(8);
         
-        // Section 5: Document & Invoice Validation (if documents available)
+        // Section 6: Document & Invoice Validation (if documents available)
         const docValidationContent = getSectionContent('document-validation');
         if (docValidationContent) {
-          addSectionHeading("5. DOCUMENT & INVOICE VALIDATION", 16, true);
+          addSectionHeading("6. DOCUMENT & INVOICE VALIDATION", 16, true);
           renderSection('document-validation');
           addSpacer(8);
         }
         
-        // Section 6: Reconciliation Results
-        addSectionHeading("6. RECONCILIATION RESULTS", 16, true);
+        // Section 7: Reconciliation Results
+        addSectionHeading("7. RECONCILIATION RESULTS", 16, true);
         renderSection('reconciliation-results');
         addSpacer(5);
         
@@ -1377,16 +1382,16 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           addSpacer(8);
         }
         
-        // Section 7: Cost Analysis (if available)
+        // Section 8: Cost Analysis (if available)
         const costAnalysisContent = getSectionContent('cost-analysis');
         if (costAnalysisContent) {
-          addSectionHeading("7. COST ANALYSIS", 16, true);
+          addSectionHeading("8. COST ANALYSIS", 16, true);
           renderSection('cost-analysis');
           addSpacer(8);
         }
         
-        // Section 8: Findings & Anomalies
-        addSectionHeading("8. FINDINGS & ANOMALIES", 16, true);
+        // Section 9: Findings & Anomalies
+        addSectionHeading("9. FINDINGS & ANOMALIES", 16, true);
         renderSection('findings-anomalies');
         addSpacer(5);
         
@@ -1403,8 +1408,8 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           addSpacer(8);
         }
         
-        // Section 9: Recommendations
-        addSectionHeading("9. RECOMMENDATIONS", 16, true);
+        // Section 10: Recommendations
+        addSectionHeading("10. RECOMMENDATIONS", 16, true);
         renderSection('recommendations');
         addSpacer(8);
         
@@ -2368,12 +2373,21 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
           });
         }
         
-        // Section 4: Metering Data Analysis
+        // Section 4: Tariff Comparison (new section)
+        sections.push({
+          id: 'tariff-comparison',
+          title: '4. Tariff Comparison',
+          content: `## 4. Tariff Comparison\n\n(Content to be added)`,
+          type: 'text',
+          editable: true
+        });
+        
+        // Section 5: Metering Data Analysis (renumbered from 4)
         if (reportData.sections.meteringDataAnalysis) {
           sections.push({
             id: 'metering-data-analysis',
-            title: '4. Metering Data Analysis',
-            content: `## 4. Metering Data Analysis\n\n${reportData.sections.meteringDataAnalysis}`,
+            title: '5. Metering Data Analysis',
+            content: `## 5. Metering Data Analysis\n\n${reportData.sections.meteringDataAnalysis}`,
             type: 'text',
             editable: true
           });
@@ -2400,56 +2414,56 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
           });
         }
         
-        // Section 5: Document & Invoice Validation (if available)
+        // Section 6: Document & Invoice Validation (if available)
         if (reportData.sections.documentValidation) {
           sections.push({
             id: 'document-validation',
-            title: '5. Document & Invoice Validation',
-            content: `## 5. Document & Invoice Validation\n\n${reportData.sections.documentValidation}`,
+            title: '6. Document & Invoice Validation',
+            content: `## 6. Document & Invoice Validation\n\n${reportData.sections.documentValidation}`,
             type: 'text',
             editable: true
           });
         }
         
-        // Section 6: Reconciliation Results
+        // Section 7: Reconciliation Results
         if (reportData.sections.reconciliationResults) {
           sections.push({
             id: 'reconciliation-results',
-            title: '6. Reconciliation Results',
-            content: `## 6. Reconciliation Results\n\n${reportData.sections.reconciliationResults}`,
+            title: '7. Reconciliation Results',
+            content: `## 7. Reconciliation Results\n\n${reportData.sections.reconciliationResults}`,
             type: 'text',
             editable: true
           });
         }
         
-        // Section 7: Cost Analysis (if available)
+        // Section 8: Cost Analysis (if available)
         if (reportData.sections.costAnalysis) {
           sections.push({
             id: 'cost-analysis',
-            title: '7. Cost Analysis',
-            content: `## 7. Cost Analysis\n\n${reportData.sections.costAnalysis}`,
+            title: '8. Cost Analysis',
+            content: `## 8. Cost Analysis\n\n${reportData.sections.costAnalysis}`,
             type: 'text',
             editable: true
           });
         }
         
-        // Section 8: Findings & Anomalies
+        // Section 9: Findings & Anomalies
         if (reportData.sections.findingsAnomalies) {
           sections.push({
             id: 'findings-anomalies',
-            title: '8. Findings & Anomalies',
-            content: `## 8. Findings & Anomalies\n\n${reportData.sections.findingsAnomalies}`,
+            title: '9. Findings & Anomalies',
+            content: `## 9. Findings & Anomalies\n\n${reportData.sections.findingsAnomalies}`,
             type: 'text',
             editable: true
           });
         }
         
-        // Section 9: Recommendations
+        // Section 10: Recommendations
         if (reportData.sections.recommendations) {
           sections.push({
             id: 'recommendations',
-            title: '9. Recommendations',
-            content: `## 9. Recommendations\n\n${reportData.sections.recommendations}`,
+            title: '10. Recommendations',
+            content: `## 10. Recommendations\n\n${reportData.sections.recommendations}`,
             type: 'text',
             editable: true
           });
