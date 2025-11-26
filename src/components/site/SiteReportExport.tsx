@@ -18,7 +18,7 @@ import { SplitViewReportEditor } from "./SplitViewReportEditor";
 import SaveReportDialog from "./SaveReportDialog";
 import SavedReportsList from "./SavedReportsList";
 import { ReportGenerationProgress } from "./ReportGenerationProgress";
-import { generateMeterTypeChart, generateConsumptionChart, generateTariffComparisonChart, generateClusteredTariffChart } from "./ChartGenerator";
+import { generateMeterTypeChart, generateConsumptionChart, generateTariffComparisonChart, generateClusteredTariffChart, generateDocumentVsAssignedChart } from "./ChartGenerator";
 
 interface BatchStatus {
   batchNumber: number;
@@ -667,6 +667,53 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             // Render text after chart (recursively)
             if (afterChart.trim()) {
               renderContent(afterChart, fontSize);
+            }
+            return;
+          }
+          
+          // Check for markdown image (chart images)
+          const imageMatch = text.match(/!\[([^\]]*)\]\(([^)]+)\)/);
+          if (imageMatch) {
+            const [fullMatch, altText, imageUrl] = imageMatch;
+            const beforeImage = text.substring(0, imageMatch.index);
+            const afterImage = text.substring((imageMatch.index || 0) + fullMatch.length);
+            
+            // Render text before image
+            if (beforeImage.trim()) {
+              renderContent(beforeImage, fontSize);
+            }
+            
+            // Render the image
+            try {
+              // Check if we need a new page
+              if (yPos > pageHeight - bottomMargin - 100) {
+                addFooter();
+                addPageNumber();
+                pdf.addPage();
+                yPos = topMargin;
+              }
+              
+              const imgWidth = pageWidth - leftMargin - rightMargin;
+              const imgHeight = 90;
+              pdf.addImage(imageUrl, 'PNG', leftMargin, yPos, imgWidth, imgHeight);
+              yPos += imgHeight + 5;
+              
+              // Add caption if available
+              if (altText) {
+                pdf.setFontSize(8);
+                pdf.setFont("helvetica", "italic");
+                pdf.text(altText, pageWidth / 2, yPos, { align: "center" });
+                pdf.setFont("helvetica", "normal");
+                yPos += 8;
+              }
+            } catch (err) {
+              console.error(`Error adding image:`, err);
+              addText(`[Image rendering error: ${err instanceof Error ? err.message : 'Unknown error'}]`, fontSize, false);
+            }
+            
+            // Render text after image (recursively)
+            if (afterImage.trim()) {
+              renderContent(afterImage, fontSize);
             }
             return;
           }
@@ -2456,6 +2503,9 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           content += '| Period | Item | Document | Assigned | Variance |\n';
           content += '|--------|------|----------|----------|----------|\n';
           
+          // Collect chart data by charge type as we build the table
+          const chartDataByType: Record<string, Array<{period: string; documentValue: number; assignedValue: number | null}>> = {};
+          
           for (const doc of meterComparisonData.documents) {
             const periodStart = doc.periodStart ? format(new Date(doc.periodStart), "MMM yyyy") : 'N/A';
             const periodEnd = doc.periodEnd ? format(new Date(doc.periodEnd), "MMM yyyy") : 'N/A';
@@ -2463,15 +2513,49 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             
             if (doc.lineItems && Array.isArray(doc.lineItems)) {
               for (const item of doc.lineItems) {
+                // Skip Emergency supply items - they have no assigned tariff
+                if (item.supply === 'Emergency') continue;
+                
                 const docVal = item.documentValue ? formatNumber(item.documentValue, 4) : '—';
                 const assignedVal = item.assignedValue ? formatNumber(item.assignedValue, 4) : '—';
                 const varPercent = item.variancePercent != null ? formatNumber(item.variancePercent, 1) + '%' : '—';
                 
                 content += `| ${period} | ${item.chargeType} (${item.unit}) | ${docVal} | ${assignedVal} | ${varPercent} |\n`;
+                
+                // Collect data for charts (only if both values exist)
+                if (item.documentValue != null && item.assignedValue != null) {
+                  const chartKey = `${item.chargeType} (${item.unit})`;
+                  if (!chartDataByType[chartKey]) {
+                    chartDataByType[chartKey] = [];
+                  }
+                  chartDataByType[chartKey].push({
+                    period,
+                    documentValue: item.documentValue,
+                    assignedValue: item.assignedValue
+                  });
+                }
               }
             }
           }
           content += '\n';
+          
+          // Generate charts for each charge type
+          for (const [chargeType, chartData] of Object.entries(chartDataByType)) {
+            if (chartData.length > 0) {
+              try {
+                const chartImage = generateDocumentVsAssignedChart(
+                  chargeType,
+                  '',  // Unit is already in the title
+                  chartData,
+                  500,
+                  320
+                );
+                content += `![${chargeType} Comparison Chart](${chartImage})\n\n`;
+              } catch (err) {
+                console.error(`Error generating chart for ${chargeType}:`, err);
+              }
+            }
+          }
           
           comparisonSections.push(content);
         }
