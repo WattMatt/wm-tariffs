@@ -3006,8 +3006,10 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
                 tariffAnalysisContent += `![${metric.name} chart](${chartImage})\n`;
                 tariffAnalysisContent += `*${metric.name} trends with seasonal averages*\n\n`;
               }
+              console.log(`Completed processing meter ${meter.meter_number}`);
             }
           }
+          console.log('=== FINISHED PROCESSING ALL METERS ===');
         }
 
         console.log('Tariff Analysis content length:', tariffAnalysisContent.length);
