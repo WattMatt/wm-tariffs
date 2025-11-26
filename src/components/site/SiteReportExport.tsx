@@ -122,17 +122,15 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
 
         if (schematicsError) throw schematicsError;
         
-        // List ALL snippet files for this site from client-files bucket
+        // List ALL snippet files and match them to schematics
         const snippetsWithUrls: any[] = [];
         
-        // Get the site path from the first schematic
         if (schematics && schematics.length > 0) {
           const firstSchematicPath = schematics[0].file_path;
           const pathParts = firstSchematicPath.split('/');
-          // Get the base site directory (e.g., "Client Name/Site Name/Metering/Schematics")
           const siteDirectory = pathParts.slice(0, -1).join('/');
           
-          // List all files in the site directory from client-files bucket
+          // List all files in the directory
           const { data: fileList, error: listError } = await supabase.storage
             .from('client-files')
             .list(siteDirectory, {
@@ -143,27 +141,34 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           console.log('Storage list result:', { fileList, listError, siteDirectory });
           
           if (fileList) {
-            // Filter for snippet files
             const snippetFiles = fileList.filter(file => file.name.endsWith('_snippet.png'));
-            
             console.log('Snippet files found:', snippetFiles);
             
-            // Create entries for each snippet
+            // Match snippets to schematics
             snippetFiles.forEach(file => {
-              const snippetPath = `${siteDirectory}/${file.name}`;
-              const { data: urlData } = supabase.storage
-                .from('client-files')
-                .getPublicUrl(snippetPath);
-              
-              // Extract display name from filename (remove _snippet.png)
-              const displayName = file.name.replace('_snippet.png', '');
-              
-              snippetsWithUrls.push({
-                id: file.name, // Use filename as ID
-                name: displayName,
-                snippetUrl: urlData.publicUrl,
-                snippetPath: snippetPath
+              // Find matching schematic by comparing filename
+              const matchingSchematic = schematics.find(s => {
+                const schematicFileName = s.file_path.split('/').pop();
+                const baseName = schematicFileName?.replace(/\.[^/.]+$/, '');
+                const snippetBaseName = file.name.replace('_snippet.png', '');
+                return baseName === snippetBaseName;
               });
+              
+              if (matchingSchematic) {
+                const snippetPath = `${siteDirectory}/${file.name}`;
+                const { data: urlData } = supabase.storage
+                  .from('client-files')
+                  .getPublicUrl(snippetPath);
+                
+                snippetsWithUrls.push({
+                  id: matchingSchematic.id, // Use schematic UUID as ID
+                  name: matchingSchematic.name,
+                  snippetUrl: urlData.publicUrl,
+                  snippetPath: snippetPath,
+                  page_number: matchingSchematic.page_number,
+                  total_pages: matchingSchematic.total_pages
+                });
+              }
             });
           }
         }
