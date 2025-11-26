@@ -1515,6 +1515,13 @@ export default function SchematicEditor({
       
       // Handle snippet mode - draw selection rectangle
       if (currentTool === 'snippet') {
+        // Check if clicking on the existing snippet rectangle or its controls
+        // If so, let Fabric.js handle the resize/move instead of starting a new draw
+        if (target && (target as any).isSnippetRect) {
+          // User is interacting with existing snippet rectangle, don't start drawing
+          return;
+        }
+        
         const pointer = canvas.getPointer(opt.e);
         isDrawing = true;
         startPoint = { x: pointer.x, y: pointer.y };
