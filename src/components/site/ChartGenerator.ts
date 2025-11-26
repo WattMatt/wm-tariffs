@@ -282,6 +282,157 @@ const abbreviateNumber = (value: number): string => {
   return value.toFixed(1);
 };
 
+export const generateTariffAnalysisChart = (
+  title: string,
+  unit: string,
+  data: { period: string; value: number; winterAvg?: number; summerAvg?: number }[],
+  width: number = 500,
+  height: number = 320
+): string => {
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  
+  if (!ctx) return '';
+  
+  // Clear canvas with white background
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, width, height);
+  
+  // Colors
+  const barColor = '#9ca3af';  // Gray bars
+  const winterLineColor = '#3b82f6';  // Blue line
+  const summerLineColor = '#f97316';  // Orange line
+  
+  // Draw title
+  ctx.fillStyle = '#000000';
+  ctx.font = 'bold 14px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(title, width / 2, 25);
+  
+  // Draw unit
+  if (unit && unit.trim()) {
+    ctx.font = '11px sans-serif';
+    ctx.fillText(`(${unit})`, width / 2, 42);
+  }
+  
+  // Draw legend
+  const legendY = 55;
+  const legendSpacing = 110;
+  let legendX = width / 2 - legendSpacing;
+  
+  ctx.fillStyle = barColor;
+  ctx.fillRect(legendX, legendY, 12, 12);
+  ctx.fillStyle = '#000000';
+  ctx.font = '10px sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText('Amount', legendX + 16, legendY + 10);
+  
+  legendX += legendSpacing;
+  ctx.strokeStyle = winterLineColor;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(legendX, legendY + 6);
+  ctx.lineTo(legendX + 12, legendY + 6);
+  ctx.stroke();
+  ctx.fillText('Winter Avg', legendX + 16, legendY + 10);
+  
+  legendX += legendSpacing;
+  ctx.strokeStyle = summerLineColor;
+  ctx.beginPath();
+  ctx.moveTo(legendX, legendY + 6);
+  ctx.lineTo(legendX + 12, legendY + 6);
+  ctx.stroke();
+  ctx.fillText('Summer Avg', legendX + 16, legendY + 10);
+  
+  // Chart area
+  const padding = 50;
+  const bottomPadding = 100;
+  const topPadding = 80;
+  const chartWidth = width - padding * 2;
+  const chartHeight = height - topPadding - bottomPadding;
+  const barWidth = Math.max((chartWidth / data.length) * 0.6, 20);
+  const barSpacing = chartWidth / data.length;
+  
+  // Find max value for scaling
+  const maxValue = Math.max(...data.map(d => d.value), 1);
+  const scale = chartHeight / maxValue;
+  
+  // Draw bars
+  data.forEach((item, index) => {
+    const barHeight = item.value * scale;
+    const x = padding + index * barSpacing + (barSpacing - barWidth) / 2;
+    const y = topPadding + chartHeight - barHeight;
+    
+    ctx.fillStyle = barColor;
+    ctx.fillRect(x, y, barWidth, barHeight);
+    
+    // Draw value on top
+    ctx.fillStyle = '#000000';
+    ctx.font = 'bold 9px sans-serif';
+    ctx.textAlign = 'center';
+    if (item.value > 0) {
+      ctx.fillText(abbreviateNumber(item.value), x + barWidth / 2, y - 3);
+    }
+  });
+  
+  // Draw average lines
+  if (data.some(d => d.winterAvg !== undefined)) {
+    ctx.strokeStyle = winterLineColor;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    data.forEach((item, index) => {
+      if (item.winterAvg !== undefined) {
+        const x = padding + index * barSpacing + barSpacing / 2;
+        const y = topPadding + chartHeight - (item.winterAvg * scale);
+        if (index === 0) {
+          ctx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
+        }
+      }
+    });
+    ctx.stroke();
+  }
+  
+  if (data.some(d => d.summerAvg !== undefined)) {
+    ctx.strokeStyle = summerLineColor;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    data.forEach((item, index) => {
+      if (item.summerAvg !== undefined) {
+        const x = padding + index * barSpacing + barSpacing / 2;
+        const y = topPadding + chartHeight - (item.summerAvg * scale);
+        if (index === 0) {
+          ctx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
+        }
+      }
+    });
+    ctx.stroke();
+  }
+  
+  // Draw x-axis labels (rotated)
+  ctx.save();
+  ctx.fillStyle = '#000000';
+  ctx.font = '9px sans-serif';
+  ctx.textAlign = 'right';
+  data.forEach((item, index) => {
+    const x = padding + index * barSpacing + barSpacing / 2;
+    const y = topPadding + chartHeight + 10;
+    ctx.translate(x, y);
+    ctx.rotate(-Math.PI / 4);
+    ctx.fillText(item.period, 0, 0);
+    ctx.rotate(Math.PI / 4);
+    ctx.translate(-x, -y);
+  });
+  ctx.restore();
+  
+  return canvas.toDataURL('image/png');
+};
+
 export const generateDocumentVsAssignedChart = (
   title: string,
   unit: string,
