@@ -693,74 +693,51 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             return;
           }
           
-          // Check for markdown image (chart images) - handle very long base64 URLs
-          if (text.includes('![') && text.includes('](')) {
-            const startBracket = text.indexOf('![');
-            const endBracket = text.indexOf('](', startBracket);
+          // Check for markdown image (chart images)
+          const imageRegex = /!\[([^\]]*)\]\(([^)]+)\)/;
+          const imageMatch = text.match(imageRegex);
+
+          if (imageMatch) {
+            const [fullMatch, altText, imageUrl] = imageMatch;
+            const beforeImage = text.substring(0, imageMatch.index);
+            const afterImage = text.substring((imageMatch.index || 0) + fullMatch.length);
             
-            if (endBracket > startBracket) {
-              const altText = text.substring(startBracket + 2, endBracket);
-              
-              // Find the closing ) by searching from the end of ]( 
-              let urlEnd = text.indexOf(')\n', endBracket + 2);
-              if (urlEnd === -1) {
-                // If no )\n found, look for ) at the end of the string or before another markdown element
-                const nextImageStart = text.indexOf('![', endBracket + 2);
-                const nextHeaderStart = text.indexOf('\n#', endBracket + 2);
-                const possibleEnds = [
-                  text.indexOf(')', endBracket + 2),
-                  nextImageStart !== -1 ? nextImageStart - 1 : -1,
-                  nextHeaderStart !== -1 ? nextHeaderStart - 1 : -1,
-                  text.length
-                ].filter(pos => pos !== -1);
-                urlEnd = Math.min(...possibleEnds);
-              }
-              
-              if (urlEnd > endBracket) {
-                const imageUrl = text.substring(endBracket + 2, urlEnd);
-                const beforeImage = text.substring(0, startBracket);
-                const afterImage = text.substring(urlEnd + 1);
-                
-                // Render text before image
-                if (beforeImage.trim()) {
-                  renderContent(beforeImage, fontSize);
-                }
-                
-                // Render the image
-                try {
-                  // Check if we need a new page
-                  if (yPos > pageHeight - bottomMargin - 100) {
-                    addFooter();
-                    addPageNumber();
-                    pdf.addPage();
-                    yPos = topMargin;
-                  }
-                  
-                  const imgWidth = pageWidth - leftMargin - rightMargin;
-                  const imgHeight = 90;
-                  pdf.addImage(imageUrl, 'PNG', leftMargin, yPos, imgWidth, imgHeight);
-                  yPos += imgHeight + 5;
-                  
-                  // Add caption if available
-                  if (altText) {
-                    pdf.setFontSize(8);
-                    pdf.setFont("helvetica", "italic");
-                    pdf.text(altText, pageWidth / 2, yPos, { align: "center" });
-                    pdf.setFont("helvetica", "normal");
-                    yPos += 8;
-                  }
-                } catch (err) {
-                  console.error(`Error adding image:`, err);
-                  addText(`[Image rendering error: ${err instanceof Error ? err.message : 'Unknown error'}]`, fontSize, false);
-                }
-                
-                // Render text after image (recursively)
-                if (afterImage.trim()) {
-                  renderContent(afterImage, fontSize);
-                }
-                return;
-              }
+            // Render text before image
+            if (beforeImage.trim()) {
+              renderContent(beforeImage, fontSize);
             }
+            
+            // Render the image
+            try {
+              if (yPos > pageHeight - bottomMargin - 100) {
+                addFooter();
+                addPageNumber();
+                pdf.addPage();
+                yPos = topMargin;
+              }
+              
+              const imgWidth = pageWidth - leftMargin - rightMargin;
+              const imgHeight = 90;
+              pdf.addImage(imageUrl, 'PNG', leftMargin, yPos, imgWidth, imgHeight);
+              yPos += imgHeight + 5;
+              
+              if (altText) {
+                pdf.setFontSize(8);
+                pdf.setFont("helvetica", "italic");
+                pdf.text(altText, pageWidth / 2, yPos, { align: "center" });
+                pdf.setFont("helvetica", "normal");
+                yPos += 8;
+              }
+            } catch (err) {
+              console.error(`Error adding image:`, err);
+              addText(`[Image rendering error]`, fontSize, false);
+            }
+            
+            // Render text after image
+            if (afterImage.trim()) {
+              renderContent(afterImage, fontSize);
+            }
+            return;
           }
           
           // Check for markdown table
