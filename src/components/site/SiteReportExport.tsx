@@ -1410,16 +1410,6 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
 
       const schematics = allSchematics || [];
 
-      // 4. Fetch selected schematic for image
-      const { data: selectedSchematic, error: schematicError } = await supabase
-        .from("schematics")
-        .select("*")
-        .eq("id", selectedSchematicId)
-        .single();
-
-      if (schematicError) throw schematicError;
-      if (!selectedSchematic) throw new Error("Selected schematic not found");
-
 
       // 3. Fetch documents from ALL selected folders
       setGenerationProgress(30);
@@ -1685,59 +1675,59 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         });
       }
 
-      // 7. Load and compress schematic image
+      // 7. Load and compress snippet image
       setGenerationProgress(60);
-      setGenerationStatus("Loading schematic image...");
+      setGenerationStatus("Loading snippet image...");
       
       let schematicImageBase64 = null;
 
-      if (selectedSchematic?.converted_image_path) {
-        try {
-          const { data: imageData } = await supabase.storage
-            .from("client-files")
-            .download(selectedSchematic.converted_image_path);
+      // Find the selected snippet from availableSnippets
+      const selectedSnippet = availableSnippets.find(s => s.id === selectedSchematicId);
 
-          if (imageData) {
-            // Create an image element to compress
-            const img = new Image();
-            const blob = imageData;
-            const url = URL.createObjectURL(blob);
-            
-            await new Promise((resolve, reject) => {
-              img.onload = () => {
-                // Create canvas for compression
-                const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d');
-                
-                // Set max dimensions (reduce resolution significantly for PDF)
-                const maxWidth = 1200;
-                const maxHeight = 800;
-                let width = img.width;
-                let height = img.height;
-                
-                // Calculate new dimensions maintaining aspect ratio
-                if (width > maxWidth || height > maxHeight) {
-                  const ratio = Math.min(maxWidth / width, maxHeight / height);
-                  width = width * ratio;
-                  height = height * ratio;
-                }
-                
-                canvas.width = width;
-                canvas.height = height;
-                
-                // Draw and compress image as JPEG with quality 0.6
-                ctx?.drawImage(img, 0, 0, width, height);
-                schematicImageBase64 = canvas.toDataURL('image/jpeg', 0.6);
-                
-                URL.revokeObjectURL(url);
-                resolve(null);
-              };
-              img.onerror = reject;
-              img.src = url;
-            });
-          }
+      if (selectedSnippet?.snippetUrl) {
+        try {
+          // Fetch the snippet image directly from the public URL
+          const response = await fetch(selectedSnippet.snippetUrl);
+          const blob = await response.blob();
+          
+          // Create an image element to compress
+          const img = new Image();
+          const url = URL.createObjectURL(blob);
+          
+          await new Promise((resolve, reject) => {
+            img.onload = () => {
+              // Create canvas for compression
+              const canvas = document.createElement('canvas');
+              const ctx = canvas.getContext('2d');
+              
+              // Set max dimensions (reduce resolution significantly for PDF)
+              const maxWidth = 1200;
+              const maxHeight = 800;
+              let width = img.width;
+              let height = img.height;
+              
+              // Calculate new dimensions maintaining aspect ratio
+              if (width > maxWidth || height > maxHeight) {
+                const ratio = Math.min(maxWidth / width, maxHeight / height);
+                width = width * ratio;
+                height = height * ratio;
+              }
+              
+              canvas.width = width;
+              canvas.height = height;
+              
+              // Draw and compress image as JPEG with quality 0.6
+              ctx?.drawImage(img, 0, 0, width, height);
+              schematicImageBase64 = canvas.toDataURL('image/jpeg', 0.6);
+              
+              URL.revokeObjectURL(url);
+              resolve(null);
+            };
+            img.onerror = reject;
+            img.src = url;
+          });
         } catch (err) {
-          console.error("Error loading schematic image:", err);
+          console.error("Error loading snippet image:", err);
         }
       }
 
