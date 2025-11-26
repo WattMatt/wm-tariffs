@@ -2445,7 +2445,7 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
 - Total meters monitored: ${reconciliationData.meterCount}
 - Documents analyzed: ${documentExtractions.length}`,
 
-          tariffComparison: Object.keys(rateComparisonData).length > 0 ? 
+          tariffComparison: rateComparisonData && Object.keys(rateComparisonData).length > 0 ? 
             Object.entries(rateComparisonData).map(([meterId, meterComparisonData]: [string, any]) => {
               let content = `### Meter: ${meterComparisonData.meterNumber}${meterComparisonData.meterName ? ` (${meterComparisonData.meterName})` : ''}\n\n`;
               
@@ -2462,12 +2462,15 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
                 content += '| Item | Document | Assigned | Variance |\n';
                 content += '|------|----------|----------|----------|\n';
                 
-                for (const item of doc.lineItems) {
-                  const docVal = item.documentValue ? formatNumber(item.documentValue, 4) : '—';
-                  const assignedVal = item.assignedValue ? formatNumber(item.assignedValue, 4) : '—';
-                  const varPercent = item.variancePercent !== null ? formatNumber(item.variancePercent, 1) + '%' : '—';
-                  
-                  content += `| ${item.chargeType} (${item.unit}) | ${docVal} | ${assignedVal} | ${varPercent} |\n`;
+                // Safety check for lineItems
+                if (doc.lineItems && Array.isArray(doc.lineItems)) {
+                  for (const item of doc.lineItems) {
+                    const docVal = item.documentValue ? formatNumber(item.documentValue, 4) : '—';
+                    const assignedVal = item.assignedValue ? formatNumber(item.assignedValue, 4) : '—';
+                    const varPercent = item.variancePercent !== null ? formatNumber(item.variancePercent, 1) + '%' : '—';
+                    
+                    content += `| ${item.chargeType} (${item.unit}) | ${docVal} | ${assignedVal} | ${varPercent} |\n`;
+                  }
                 }
                 content += '\n';
               }
