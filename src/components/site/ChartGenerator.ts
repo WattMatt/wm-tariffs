@@ -166,8 +166,8 @@ export const generateTariffComparisonChart = (
   ctx.font = '11px sans-serif';
   ctx.fillText(`(${unit})`, width / 2, 35);
   
-  const padding = 50;
-  const topPadding = 50;
+  const padding = 15;
+  const topPadding = 35;
   const chartWidth = width - padding * 2;
   const chartHeight = height - topPadding - padding;
   const barWidth = chartWidth / periods.length;
@@ -198,7 +198,7 @@ export const generateTariffComparisonChart = (
     const x = padding + index * barWidth + barWidth / 2;
     const words = period.label.split(' ');
     words.forEach((word, wordIndex) => {
-      ctx.fillText(word, x, height - padding + 15 + wordIndex * 11);
+      ctx.fillText(word, x, height - padding + 12 + wordIndex * 10);
     });
   });
   
