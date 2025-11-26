@@ -749,7 +749,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             
             // Render text before table
             if (beforeTable.trim()) {
-              addText(beforeTable, fontSize, false);
+              renderContent(beforeTable, fontSize);
               yPos += 3;
             }
             
