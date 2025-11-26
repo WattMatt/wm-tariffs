@@ -122,59 +122,44 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
 
         if (schematicsError) throw schematicsError;
         
-        // List all snippet files in the schematics directory
+        // List ALL snippet files for this site
         const snippetsWithUrls: any[] = [];
         
-        // Get unique directories from schematics
-        const directories = new Set<string>();
-        (schematics || []).forEach(s => {
-          const pathParts = s.file_path.split('/');
-          const directory = pathParts.slice(0, -1).join('/');
-          directories.add(directory);
-        });
-        
-        // List all files in each directory
-        const allSnippetFiles: { name: string; directory: string }[] = [];
-        for (const directory of directories) {
+        // Get the site path from the first schematic
+        if (schematics && schematics.length > 0) {
+          const firstSchematicPath = schematics[0].file_path;
+          const pathParts = firstSchematicPath.split('/');
+          // Get the base site directory (e.g., "Client Name/Site Name/Metering/Schematics")
+          const siteDirectory = pathParts.slice(0, -1).join('/');
+          
+          // List all files recursively in the site directory
           const { data: fileList } = await supabase.storage
             .from('site-files')
-            .list(directory);
+            .list(siteDirectory, {
+              limit: 1000,
+              sortBy: { column: 'name', order: 'asc' }
+            });
           
           if (fileList) {
-            fileList
-              .filter(file => file.name.endsWith('_snippet.png'))
-              .forEach(file => {
-                allSnippetFiles.push({ name: file.name, directory });
-              });
-          }
-        }
-        
-        // Match snippets to schematics
-        for (const schematic of schematics || []) {
-          const pathParts = schematic.file_path.split('/');
-          const fileName = pathParts[pathParts.length - 1];
-          const directory = pathParts.slice(0, -1).join('/');
-          const baseName = fileName.replace(/\.[^/.]+$/, '');
-          const snippetFileName = `${baseName}_snippet.png`;
-          
-          // Check if this snippet exists in our list
-          const snippetExists = allSnippetFiles.some(
-            f => f.name === snippetFileName && f.directory === directory
-          );
-          
-          if (snippetExists) {
-            const snippetPath = `${directory}/${snippetFileName}`;
-            const { data: urlData } = supabase.storage
-              .from('site-files')
-              .getPublicUrl(snippetPath);
+            // Filter for snippet files
+            const snippetFiles = fileList.filter(file => file.name.endsWith('_snippet.png'));
             
-            snippetsWithUrls.push({
-              id: schematic.id,
-              name: schematic.name,
-              snippetUrl: urlData.publicUrl,
-              snippetPath: snippetPath,
-              page_number: schematic.page_number,
-              total_pages: schematic.total_pages
+            // Create entries for each snippet
+            snippetFiles.forEach(file => {
+              const snippetPath = `${siteDirectory}/${file.name}`;
+              const { data: urlData } = supabase.storage
+                .from('site-files')
+                .getPublicUrl(snippetPath);
+              
+              // Extract display name from filename (remove _snippet.png)
+              const displayName = file.name.replace('_snippet.png', '');
+              
+              snippetsWithUrls.push({
+                id: file.name, // Use filename as ID
+                name: displayName,
+                snippetUrl: urlData.publicUrl,
+                snippetPath: snippetPath
+              });
             });
           }
         }
