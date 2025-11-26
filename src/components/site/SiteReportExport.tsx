@@ -1889,7 +1889,8 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
               if (!isEmergency) {
                 const isDemandCharge = itemUnit.toLowerCase() === 'kva';
                 const isEnergyCharge = itemUnit.toLowerCase() === 'kwh';
-                const isBasicCharge = itemUnit === 'Monthly' || description.includes('basic');
+                // Only treat as basic charge if unit is explicitly Monthly
+                const isBasicCharge = itemUnit === 'Monthly';
                 
                 if (isBasicCharge || (item.amount && !item.rate)) {
                   // Basic/fixed charge
