@@ -718,9 +718,10 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
               }
               
               const imgWidth = pageWidth - leftMargin - rightMargin;
-              const imgHeight = 90;
+              // Calculate proportional height based on original chart dimensions (500x320 for tariff charts)
+              const imgHeight = (320 / 500) * imgWidth;
               pdf.addImage(imageUrl, 'PNG', leftMargin, yPos, imgWidth, imgHeight);
-              yPos += imgHeight + 5;
+              yPos += imgHeight + 3;
               
               // Add caption if available
               if (altText) {
@@ -728,7 +729,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
                 pdf.setFont("helvetica", "italic");
                 pdf.text(altText, pageWidth / 2, yPos, { align: "center" });
                 pdf.setFont("helvetica", "normal");
-                yPos += 8;
+                yPos += 6;
               }
             } catch (err) {
               console.error(`Error adding image:`, err);
@@ -2840,7 +2841,7 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
           sections.push({
             id: 'tariff-comparison',
             title: '4. Tariff Comparison',
-            content: `## 4. Tariff Comparison\n\n${reportData.sections.tariffComparison}`,
+            content: reportData.sections.tariffComparison,
             type: 'text',
             editable: true
           });
