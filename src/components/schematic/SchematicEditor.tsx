@@ -4087,8 +4087,7 @@ export default function SchematicEditor({
       const response = await fetch(dataUrl);
       const blob = await response.blob();
       
-      // 7. Generate storage path
-      const timestamp = Date.now();
+      // 7. Generate storage path (without timestamp so it replaces previous snippet)
       const { data: schematicData } = await supabase
         .from('schematics')
         .select('name')
@@ -4096,7 +4095,7 @@ export default function SchematicEditor({
         .single();
       
       const schematicName = sanitizeName(schematicData?.name || 'schematic');
-      const fileName = `${schematicName}_snippet_${timestamp}.png`;
+      const fileName = `${schematicName}_snippet.png`;
       
       const storagePath = await generateStoragePath(
         siteId,
@@ -4105,12 +4104,12 @@ export default function SchematicEditor({
         fileName
       );
       
-      // 8. Upload to storage
+      // 8. Upload to storage (upsert: true to replace existing snippet)
       const { error: uploadError } = await supabase.storage
         .from(storagePath.bucket)
         .upload(storagePath.path, blob, {
           contentType: 'image/png',
-          upsert: false
+          upsert: true
         });
       
       if (uploadError) throw uploadError;
