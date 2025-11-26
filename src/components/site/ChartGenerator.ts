@@ -272,6 +272,122 @@ export const generateClusteredTariffChart = (
   return canvas.toDataURL('image/png');
 };
 
+export const generateDocumentVsAssignedChart = (
+  title: string,
+  unit: string,
+  data: { period: string; documentValue: number; assignedValue: number | null }[],
+  width: number = 400,
+  height: number = 300
+): string => {
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  
+  if (!ctx || data.length === 0) return '';
+  
+  // Clear canvas with white background
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, width, height);
+  
+  // Colors matching the reference image
+  const documentColor = '#3b82f6';  // Blue for Document
+  const assignedColor = '#f59e0b';  // Orange for Assigned
+  
+  // Draw title
+  ctx.fillStyle = '#000000';
+  ctx.font = 'bold 12px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(title, width / 2, 20);
+  
+  // Draw unit
+  ctx.font = '10px sans-serif';
+  ctx.fillText(`(${unit})`, width / 2, 35);
+  
+  // Draw legend
+  const legendY = 48;
+  const legendX = width / 2 - 50;
+  
+  ctx.fillStyle = documentColor;
+  ctx.fillRect(legendX, legendY, 12, 12);
+  ctx.fillStyle = '#000000';
+  ctx.font = '10px sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText('Document', legendX + 16, legendY + 10);
+  
+  ctx.fillStyle = assignedColor;
+  ctx.fillRect(legendX + 80, legendY, 12, 12);
+  ctx.fillStyle = '#000000';
+  ctx.fillText('Assigned', legendX + 96, legendY + 10);
+  
+  const padding = 40;
+  const bottomPadding = 80;
+  const topPadding = 70;
+  const chartWidth = width - padding * 2;
+  const chartHeight = height - topPadding - bottomPadding;
+  const clusterWidth = chartWidth / data.length;
+  const barWidth = Math.max((clusterWidth - 8) / 2, 15);  // Two bars with gap
+  
+  const maxValue = Math.max(
+    ...data.map(d => d.documentValue),
+    ...data.map(d => d.assignedValue || 0)
+  );
+  
+  // Draw clustered bars
+  data.forEach((item, index) => {
+    const clusterX = padding + index * clusterWidth;
+    
+    // Document bar (left)
+    const docBarHeight = maxValue > 0 ? (item.documentValue / maxValue) * chartHeight : 0;
+    const docY = height - bottomPadding - docBarHeight;
+    ctx.fillStyle = documentColor;
+    ctx.fillRect(clusterX + 4, docY, barWidth, docBarHeight);
+    
+    // Assigned bar (right)
+    const assignedValue = item.assignedValue || 0;
+    const assignedBarHeight = maxValue > 0 ? (assignedValue / maxValue) * chartHeight : 0;
+    const assignedY = height - bottomPadding - assignedBarHeight;
+    ctx.fillStyle = assignedColor;
+    ctx.fillRect(clusterX + barWidth + 8, assignedY, barWidth, assignedBarHeight);
+    
+    // Draw values on top of bars
+    ctx.fillStyle = '#000000';
+    ctx.font = 'bold 9px sans-serif';
+    ctx.textAlign = 'center';
+    
+    if (item.documentValue > 0) {
+      ctx.fillText(item.documentValue.toFixed(2), clusterX + barWidth / 2 + 4, docY - 3);
+    }
+    if (assignedValue > 0) {
+      ctx.fillText(assignedValue.toFixed(2), clusterX + barWidth * 1.5 + 8, assignedY - 3);
+    }
+  });
+  
+  // Draw X-axis labels (period labels - split into two lines if needed)
+  ctx.fillStyle = '#000000';
+  ctx.font = '9px sans-serif';
+  ctx.textAlign = 'center';
+  data.forEach((item, index) => {
+    const x = padding + index * clusterWidth + clusterWidth / 2;
+    const periodParts = item.period.split(' - ');
+    ctx.fillText(periodParts[0], x, height - bottomPadding + 15);
+    if (periodParts[1]) {
+      ctx.fillText(periodParts[1], x, height - bottomPadding + 27);
+    }
+  });
+  
+  // Draw Y-axis
+  ctx.strokeStyle = '#cccccc';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(padding, topPadding);
+  ctx.lineTo(padding, height - bottomPadding);
+  ctx.lineTo(width - padding, height - bottomPadding);
+  ctx.stroke();
+  
+  return canvas.toDataURL('image/png');
+};
+
 export const generateTariffComparisonChart = (
   title: string,
   unit: string,
