@@ -1535,18 +1535,34 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       setGenerationProgress(40);
       setGenerationStatus("Processing meter data...");
       
+      // Fetch additional meter details (area, rating, serial_number)
+      const meterIds = [...new Set(
+        selectedReconciliation.reconciliation_meter_results?.map((r: any) => r.meter_id).filter(Boolean)
+      )] as string[];
+
+      const { data: meterDetails } = await supabase
+        .from("meters")
+        .select("id, area, rating, serial_number")
+        .in("id", meterIds);
+
+      const meterDetailsMap = new Map(meterDetails?.map(m => [m.id, m]) || []);
+
       // Group meter results by meter_number (not meter_id) to ensure proper deduplication
       // Use meter_number as the unique key since it's what identifies the meter in reports
       const meterDataMap = new Map();
       selectedReconciliation.reconciliation_meter_results?.forEach((result: any) => {
         const meterKey = result.meter_number; // Use meter_number as unique key
         if (!meterDataMap.has(meterKey)) {
+          const meterDetail = meterDetailsMap.get(result.meter_id);
           meterDataMap.set(meterKey, {
             id: result.meter_id,
             meter_number: result.meter_number,
             name: result.meter_name,
             meter_type: result.meter_type,
             location: result.location,
+            area: meterDetail?.area || null,
+            rating: meterDetail?.rating || null,
+            serial_number: meterDetail?.serial_number || null,
             totalKwh: 0,
             columnTotals: {},
             columnMaxValues: {},
@@ -1785,14 +1801,25 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         return orderedMeters;
       };
 
+      // Helper to format meter type
+      const formatMeterType = (type: string) => {
+        const labels: Record<string, string> = {
+          council_meter: "Council Meter",
+          bulk_meter: "Bulk Meter",
+          check_meter: "Check Meter",
+          tenant_meter: "Tenant Meter",
+          other: "Other"
+        };
+        return labels[type] || type;
+      };
+
       const meterBreakdown = sortMetersBySchematicOrder(meterData).map(m => ({
         meterNumber: m.meter_number,
         name: m.name,
         type: m.meter_type,
-        location: m.location,
-        consumption: m.totalKwh.toFixed(2),
-        readingsCount: m.readingsCount,
-        assignment: m.assignment
+        area: m.area,
+        rating: m.rating,
+        serialNumber: m.serial_number
       }));
 
       // 9. Prepare meter hierarchy from reconciliation data using saved schematic order
@@ -1888,9 +1915,9 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
 
 ### All Meters
 
-| Meter Number | Name | Type | Location | Consumption (kWh) | Readings |
-|--------------|------|------|----------|-------------------|----------|
-${meterBreakdown.map(m => `| ${m.meterNumber} | ${m.name || 'N/A'} | ${m.type} | ${m.location || 'N/A'} | ${formatNumber(parseFloat(m.consumption))} | ${m.readingsCount} |`).join('\n')}`,
+| NO | Name | Type | Area | Rating | Serial |
+|----|------|------|------|--------|--------|
+${meterBreakdown.map(m => `| ${m.meterNumber} | ${m.name || '—'} | ${formatMeterType(m.type)} | ${m.area ? `${m.area}m²` : '—'} | ${m.rating || '—'} | ${m.serialNumber || '—'} |`).join('\n')}`,
 
           tariffConfiguration: `### Tariff Structures
 
