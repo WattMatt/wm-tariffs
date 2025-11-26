@@ -2499,12 +2499,12 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             continue;
           }
           
-          // Consolidate all documents into ONE table per meter
-          content += '| Period | Item | Document | Assigned | Variance |\n';
-          content += '|--------|------|----------|----------|----------|\n';
-          
           // Collect chart data by charge type as we build the table
           const chartDataByType: Record<string, Array<{period: string; documentValue: number; assignedValue: number | null}>> = {};
+          
+          // Build table content separately
+          let tableContent = '| Period | Item | Document | Assigned | Variance |\n';
+          tableContent += '|--------|------|----------|----------|----------|\n';
           
           for (const doc of meterComparisonData.documents) {
             const periodStart = doc.periodStart ? format(new Date(doc.periodStart), "MMM yyyy") : 'N/A';
@@ -2520,7 +2520,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
                 const assignedVal = item.assignedValue ? formatNumber(item.assignedValue, 4) : '—';
                 const varPercent = item.variancePercent != null ? formatNumber(item.variancePercent, 1) + '%' : '—';
                 
-                content += `| ${period} | ${item.chargeType} (${item.unit}) | ${docVal} | ${assignedVal} | ${varPercent} |\n`;
+                tableContent += `| ${period} | ${item.chargeType} (${item.unit}) | ${docVal} | ${assignedVal} | ${varPercent} |\n`;
                 
                 // Collect data for charts (only if both values exist)
                 if (item.documentValue != null && item.assignedValue != null) {
@@ -2537,9 +2537,10 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
               }
             }
           }
-          content += '\n';
+          tableContent += '\n';
           
-          // Generate charts for each charge type
+          // Generate charts content separately
+          let chartsContent = '';
           for (const [chargeType, chartData] of Object.entries(chartDataByType)) {
             if (chartData.length > 0) {
               try {
@@ -2550,12 +2551,16 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
                   500,
                   320
                 );
-                content += `![${chargeType} Comparison Chart](${chartImage})\n\n`;
+                chartsContent += `![${chargeType} Comparison Chart](${chartImage})\n\n`;
               } catch (err) {
                 console.error(`Error generating chart for ${chargeType}:`, err);
               }
             }
           }
+          
+          // Combine in correct order: charts FIRST, then table
+          content += chartsContent;
+          content += tableContent;
           
           comparisonSections.push(content);
         }
