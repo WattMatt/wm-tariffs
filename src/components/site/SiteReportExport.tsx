@@ -2885,24 +2885,36 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
 
               tariffAnalysisContent += `### Meter: ${meter.meter_number}${meter.name ? ` (${meter.name})` : ''}\n\n`;
 
-              // Helper to extract metric value
+              // Helper to extract metric value from line_items
               const extractMetricValue = (extraction: any, metric: string): number => {
                 const data = extraction.extracted_data;
                 if (!data) return 0;
+                
+                const lineItems = data.line_items || [];
 
                 switch (metric) {
                   case 'Total Amount':
-                    return extraction.total_amount || 0;
+                    return extraction.total_amount || data.total_amount || 0;
                   case 'Basic Charge':
-                    return data.basic_charge || data.basicCharge || 0;
+                    // Basic charge: unit is 'Monthly'
+                    const basicItem = lineItems.find((item: any) => item.unit === 'Monthly');
+                    return basicItem?.amount || 0;
                   case 'kVA Charge':
-                    return data.kva_charge || data.kvaCharge || 0;
+                    // Demand charge: unit is 'kVA', supply is 'Normal'
+                    const kvaItem = lineItems.find((item: any) => item.unit === 'kVA' && item.supply === 'Normal');
+                    return kvaItem?.amount || 0;
                   case 'kWh Charge':
-                    return data.kwh_charge || data.kwhCharge || data.energy_charge || data.energyCharge || 0;
+                    // Energy charge: unit is 'kWh', supply is 'Normal'
+                    const kwhItem = lineItems.find((item: any) => item.unit === 'kWh' && item.supply === 'Normal');
+                    return kwhItem?.amount || 0;
                   case 'kVA Consumption':
-                    return data.max_kva || data.maxKva || data.kva_consumption || data.kvaConsumption || 0;
+                    // Demand consumption: unit is 'kVA'
+                    const kvaConsItem = lineItems.find((item: any) => item.unit === 'kVA');
+                    return kvaConsItem?.consumption || 0;
                   case 'kWh Consumption':
-                    return data.kwh_consumed || data.kwhConsumed || data.total_kwh || data.totalKwh || 0;
+                    // Energy consumption: unit is 'kWh', supply is 'Normal'
+                    const kwhConsItem = lineItems.find((item: any) => item.unit === 'kWh' && item.supply === 'Normal');
+                    return kwhConsItem?.consumption || 0;
                   default:
                     return 0;
                 }
