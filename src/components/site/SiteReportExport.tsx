@@ -122,26 +122,48 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
 
         if (schematicsError) throw schematicsError;
         
-        // Check which schematics have snippet files that actually exist
+        // List all snippet files in the schematics directory
         const snippetsWithUrls: any[] = [];
         
+        // Get unique directories from schematics
+        const directories = new Set<string>();
+        (schematics || []).forEach(s => {
+          const pathParts = s.file_path.split('/');
+          const directory = pathParts.slice(0, -1).join('/');
+          directories.add(directory);
+        });
+        
+        // List all files in each directory
+        const allSnippetFiles: { name: string; directory: string }[] = [];
+        for (const directory of directories) {
+          const { data: fileList } = await supabase.storage
+            .from('site-files')
+            .list(directory);
+          
+          if (fileList) {
+            fileList
+              .filter(file => file.name.endsWith('_snippet.png'))
+              .forEach(file => {
+                allSnippetFiles.push({ name: file.name, directory });
+              });
+          }
+        }
+        
+        // Match snippets to schematics
         for (const schematic of schematics || []) {
           const pathParts = schematic.file_path.split('/');
           const fileName = pathParts[pathParts.length - 1];
           const directory = pathParts.slice(0, -1).join('/');
           const baseName = fileName.replace(/\.[^/.]+$/, '');
           const snippetFileName = `${baseName}_snippet.png`;
-          const snippetPath = `${directory}/${snippetFileName}`;
           
-          // Check if snippet file exists by trying to get file info
-          const { data: fileList, error: listError } = await supabase.storage
-            .from('site-files')
-            .list(directory, {
-              search: snippetFileName
-            });
+          // Check if this snippet exists in our list
+          const snippetExists = allSnippetFiles.some(
+            f => f.name === snippetFileName && f.directory === directory
+          );
           
-          // Only add if the snippet file exists
-          if (!listError && fileList && fileList.length > 0) {
+          if (snippetExists) {
+            const snippetPath = `${directory}/${snippetFileName}`;
             const { data: urlData } = supabase.storage
               .from('site-files')
               .getPublicUrl(snippetPath);
