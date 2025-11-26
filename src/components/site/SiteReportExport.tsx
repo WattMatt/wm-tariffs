@@ -2288,6 +2288,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
 
       // Generate sections from real data without AI interpretation
       const formatNumber = (value: number, decimals: number = 2): string => {
+        if (value == null || isNaN(value)) return '0.00';
         return value.toFixed(decimals).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
       };
 
@@ -2309,7 +2310,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           for (const doc of meterComparisonData.documents) {
             const periodStart = doc.periodStart ? format(new Date(doc.periodStart), "MMM yyyy") : 'N/A';
             const periodEnd = doc.periodEnd ? format(new Date(doc.periodEnd), "MMM yyyy") : 'N/A';
-            const variance = doc.overallVariance !== null ? formatNumber(doc.overallVariance, 1) : 'N/A';
+            const variance = doc.overallVariance != null ? formatNumber(doc.overallVariance, 1) : 'N/A';
             
             content += `#### Document: ${periodStart} - ${periodEnd} | Overall Variance: ${variance}%\n\n`;
             content += '| Item | Document | Assigned | Variance |\n';
@@ -2319,7 +2320,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
               for (const item of doc.lineItems) {
                 const docVal = item.documentValue ? formatNumber(item.documentValue, 4) : '—';
                 const assignedVal = item.assignedValue ? formatNumber(item.assignedValue, 4) : '—';
-                const varPercent = item.variancePercent !== null ? formatNumber(item.variancePercent, 1) + '%' : '—';
+                const varPercent = item.variancePercent != null ? formatNumber(item.variancePercent, 1) + '%' : '—';
                 
                 content += `| ${item.chargeType} (${item.unit}) | ${docVal} | ${assignedVal} | ${varPercent} |\n`;
               }
