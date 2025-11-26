@@ -18,7 +18,7 @@ import { SplitViewReportEditor } from "./SplitViewReportEditor";
 import SaveReportDialog from "./SaveReportDialog";
 import SavedReportsList from "./SavedReportsList";
 import { ReportGenerationProgress } from "./ReportGenerationProgress";
-import { generateMeterTypeChart, generateConsumptionChart } from "./ChartGenerator";
+import { generateMeterTypeChart, generateConsumptionChart, generateTariffComparisonChart } from "./ChartGenerator";
 
 interface BatchStatus {
   batchNumber: number;
@@ -1021,6 +1021,54 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         
         // Section 3: Tariff Configuration
         addSectionHeading("3. TARIFF CONFIGURATION", 16, true);
+        
+        // Add tariff comparison charts if available (3 charts horizontally)
+        const tariffChartImages = (previewData as any).tariffChartImages;
+        const firstTariffName = tariffChartImages ? Object.keys(tariffChartImages)[0] : null;
+        if (firstTariffName && tariffChartImages[firstTariffName]) {
+          // Check if we need a new page
+          if (yPos > pageHeight - bottomMargin - 120) {
+            addFooter();
+            addPageNumber();
+            pdf.addPage();
+            yPos = topMargin;
+          }
+          
+          const charts = tariffChartImages[firstTariffName];
+          const chartWidth = (pageWidth - leftMargin - rightMargin - 20) / 3; // 3 charts with spacing
+          const chartHeight = chartWidth * 0.79; // Maintain aspect ratio from chart generation
+          
+          let chartX = leftMargin;
+          
+          if (charts.basic) {
+            try {
+              pdf.addImage(charts.basic, 'PNG', chartX, yPos, chartWidth, chartHeight);
+            } catch (err) {
+              console.error("Error adding basic charge chart:", err);
+            }
+            chartX += chartWidth + 10;
+          }
+          
+          if (charts.energy) {
+            try {
+              pdf.addImage(charts.energy, 'PNG', chartX, yPos, chartWidth, chartHeight);
+            } catch (err) {
+              console.error("Error adding energy charge chart:", err);
+            }
+            chartX += chartWidth + 10;
+          }
+          
+          if (charts.demand) {
+            try {
+              pdf.addImage(charts.demand, 'PNG', chartX, yPos, chartWidth, chartHeight);
+            } catch (err) {
+              console.error("Error adding demand charge chart:", err);
+            }
+          }
+          
+          yPos += chartHeight + 15;
+        }
+        
         renderSection('tariff-configuration');
         addSpacer(8);
         
@@ -1457,20 +1505,22 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         extraction: doc.document_extractions?.[0]
       })).filter(d => d.extraction) || [];
 
-      // 4. Fetch tariff structures for all meters
+      // 4. Fetch ALL tariff periods for assigned tariff names
       setGenerationProgress(35);
       setGenerationStatus("Loading tariff data...");
       
-      // Get unique tariff structure IDs from meters
-      const tariffIds = [...new Set(
+      // Get unique assigned tariff names from meters
+      const uniqueTariffNames = [...new Set(
         selectedReconciliation.reconciliation_meter_results
-          ?.map((r: any) => r.tariff_structure_id)
-          .filter((id): id is string => Boolean(id))
+          ?.map((r: any) => r.tariff_name)
+          .filter(Boolean)
       )] as string[];
 
       let tariffStructures: any[] = [];
-      if (tariffIds.length > 0) {
-        const { data: tariffs, error: tariffsError } = await supabase
+      let tariffsByName: Record<string, any[]> = {};
+      
+      if (uniqueTariffNames.length > 0 && siteData.supply_authority_id) {
+        const { data: allTariffPeriods } = await supabase
           .from("tariff_structures")
           .select(`
             *,
@@ -1479,11 +1529,18 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             tariff_time_periods(*),
             supply_authorities(name, region, nersa_increase_percentage)
           `)
-          .in("id", tariffIds);
-
-        if (!tariffsError && tariffs) {
-          tariffStructures = tariffs;
-        }
+          .in("name", uniqueTariffNames)
+          .eq("supply_authority_id", siteData.supply_authority_id)
+          .order("effective_from");
+        
+        tariffStructures = allTariffPeriods || [];
+        
+        // Group by tariff name
+        tariffsByName = (allTariffPeriods || []).reduce((acc, tariff) => {
+          if (!acc[tariff.name]) acc[tariff.name] = [];
+          acc[tariff.name].push(tariff);
+          return acc;
+        }, {} as Record<string, any[]>);
       }
 
       // 5. Prepare load profile summary from reconciliation meter results
@@ -1813,6 +1870,32 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         return labels[type] || type;
       };
 
+      // Helper to format charge type
+      const formatChargeType = (type: string): string => {
+        const labels: Record<string, string> = {
+          basic_charge: "Basic Charge",
+          energy_high_season: "Energy (High Season)",
+          energy_low_season: "Energy (Low Season)",
+          demand_high_season: "Demand (High Season)",
+          demand_low_season: "Demand (Low Season)",
+          network_capacity: "Network Capacity",
+          network_demand: "Network Demand"
+        };
+        return labels[type] || type.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+      };
+
+      // Helper to format tariff type
+      const formatTariffType = (type: string): string => {
+        return type.charAt(0).toUpperCase() + type.slice(1);
+      };
+
+      // Helper to format period
+      const formatPeriod = (from: string, to: string | null): string => {
+        const fromDate = new Date(from);
+        const toDate = to ? new Date(to) : null;
+        return `${format(fromDate, "MMM yyyy")} - ${toDate ? format(toDate, "MMM yyyy") : 'Present'}`;
+      };
+
       const meterBreakdown = sortMetersBySchematicOrder(meterData).map(m => ({
         meterNumber: m.meter_number,
         name: m.name,
@@ -1821,6 +1904,45 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         rating: m.rating,
         serialNumber: m.serial_number
       }));
+
+      // Generate tariff comparison chart images
+      const tariffChartImages: Record<string, { basic?: string; energy?: string; demand?: string }> = {};
+      
+      for (const tariffName of uniqueTariffNames) {
+        const periods = tariffsByName[tariffName] || [];
+        if (periods.length >= 2) {
+          const basicChargeData = periods.map(p => ({
+            label: formatPeriod(p.effective_from, p.effective_to),
+            value: Math.round(p.tariff_charges?.find((c: any) => c.charge_type === 'basic_charge')?.charge_amount || 0)
+          }));
+
+          const energyChargeData = periods.map(p => {
+            const charges = p.tariff_charges || [];
+            const highSeason = charges.find((c: any) => c.charge_type === 'energy_high_season')?.charge_amount || 0;
+            const lowSeason = charges.find((c: any) => c.charge_type === 'energy_low_season')?.charge_amount || 0;
+            return {
+              label: formatPeriod(p.effective_from, p.effective_to),
+              value: Math.round((highSeason + lowSeason) / 2)
+            };
+          });
+
+          const demandChargeData = periods.map(p => {
+            const charges = p.tariff_charges || [];
+            const highSeason = charges.find((c: any) => c.charge_type === 'demand_high_season')?.charge_amount || 0;
+            const lowSeason = charges.find((c: any) => c.charge_type === 'demand_low_season')?.charge_amount || 0;
+            return {
+              label: formatPeriod(p.effective_from, p.effective_to),
+              value: Math.round((highSeason + lowSeason) / 2)
+            };
+          });
+
+          tariffChartImages[tariffName] = {
+            basic: generateTariffComparisonChart("Basic Charge", "R/month", basicChargeData),
+            energy: generateTariffComparisonChart("Energy Charge", "c/kWh", energyChargeData),
+            demand: generateTariffComparisonChart("Demand Charge", "R/kVA", demandChargeData)
+          };
+        }
+      }
 
       // 9. Prepare meter hierarchy from reconciliation data using saved schematic order
       const meterHierarchy = sortMetersBySchematicOrder(meterData).map(m => ({
@@ -1921,24 +2043,38 @@ ${meterBreakdown.map(m => `| ${m.meterNumber} | ${m.name || '—'} | ${formatMet
 
           tariffConfiguration: `### Tariff Structures
 
-${tariffStructures.length > 0 ? tariffStructures.map(tariff => `
-**${tariff.name}**
-- Type: ${tariff.tariff_type}
-- Voltage Level: ${tariff.voltage_level || 'N/A'}
-- Effective From: ${format(new Date(tariff.effective_from), "dd MMM yyyy")}
-- Effective To: ${tariff.effective_to ? format(new Date(tariff.effective_to), "dd MMM yyyy") : 'Current'}
-- Uses TOU: ${tariff.uses_tou ? 'Yes' : 'No'}
+${Object.keys(tariffsByName).length > 0 ? Object.entries(tariffsByName).map(([tariffName, periods]) => {
+  const latestPeriod = periods[periods.length - 1];
+  const charges = latestPeriod?.tariff_charges || [];
+  const blocks = latestPeriod?.tariff_blocks || [];
+  
+  return `#### ${tariffName}
 
-${tariff.tariff_blocks?.length > 0 ? `**Energy Blocks:**
+**Tariff Overview**
+
+| Attribute | Value |
+|-----------|-------|
+| Type | ${formatTariffType(latestPeriod?.tariff_type || 'N/A')} |
+| Voltage Level | ${latestPeriod?.voltage_level || 'N/A'} |
+| Meter Configuration | ${latestPeriod?.meter_configuration || 'N/A'} |
+| Transmission Zone | ${latestPeriod?.transmission_zone || 'N/A'} |
+| Effective From | ${format(new Date(latestPeriod.effective_from), "dd MMM yyyy")} |
+| Effective To | ${latestPeriod.effective_to ? format(new Date(latestPeriod.effective_to), "dd MMM yyyy") : 'Current'} |
+| Uses TOU | ${latestPeriod?.uses_tou ? 'Yes' : 'No'} |
+
+${blocks.length > 0 ? `**Energy Blocks:**
+
 | Block | From (kWh) | To (kWh) | Rate (c/kWh) |
 |-------|------------|----------|--------------|
-${tariff.tariff_blocks.map(block => `| ${block.block_number} | ${formatNumber(block.kwh_from, 0)} | ${block.kwh_to ? formatNumber(block.kwh_to, 0) : 'Unlimited'} | ${formatNumber(block.energy_charge_cents / 100, 4)} |`).join('\n')}` : ''}
+${blocks.map((block: any) => `| ${block.block_number} | ${formatNumber(block.kwh_from, 0)} | ${block.kwh_to ? formatNumber(block.kwh_to, 0) : 'Unlimited'} | ${formatNumber(block.energy_charge_cents / 100, 4)} |`).join('\n')}` : ''}
 
-${tariff.tariff_charges?.length > 0 ? `**Other Charges:**
+${charges.length > 0 ? `**Charges (Current Period):**
+
 | Type | Description | Amount | Unit |
 |------|-------------|--------|------|
-${tariff.tariff_charges.map(charge => `| ${charge.charge_type} | ${charge.description || 'N/A'} | ${formatNumber(charge.charge_amount)} | ${charge.unit} |`).join('\n')}` : ''}
-`).join('\n') : 'No tariff structures configured.'}`,
+${charges.map((charge: any) => `| ${formatChargeType(charge.charge_type)} | ${charge.description || '—'} | ${formatNumber(charge.charge_amount)} | ${charge.unit} |`).join('\n')}` : ''}
+`;
+}).join('\n---\n') : 'No tariff structures configured for this site.'}`,
 
           meteringDataAnalysis: `### Consumption Analysis
 
@@ -2050,6 +2186,7 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
         reportData,
         schematicImageBase64,
         csvColumnAggregations,
+        tariffChartImages, // Add tariff comparison charts
         chartImages: {
           meterTypeChart,
           consumptionChart
