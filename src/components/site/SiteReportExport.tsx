@@ -18,7 +18,7 @@ import { SplitViewReportEditor } from "./SplitViewReportEditor";
 import SaveReportDialog from "./SaveReportDialog";
 import SavedReportsList from "./SavedReportsList";
 import { ReportGenerationProgress } from "./ReportGenerationProgress";
-import { generateMeterTypeChart, generateConsumptionChart, generateTariffComparisonChart, generateClusteredTariffChart, generateDocumentVsAssignedChart } from "./ChartGenerator";
+import { generateMeterTypeChart, generateConsumptionChart, generateTariffComparisonChart, generateClusteredTariffChart, generateDocumentVsAssignedChart, generateTariffAnalysisChart } from "./ChartGenerator";
 
 interface BatchStatus {
   batchNumber: number;
@@ -2846,13 +2846,161 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
             editable: true
           });
         }
+
+        // Section 5: Tariff Analysis
+        let tariffAnalysisContent = '## 5. Tariff Analysis\n\n';
+        tariffAnalysisContent += 'Analysis of billing trends and cost breakdowns for each meter.\n\n';
         
-        // Section 5: Metering Data Analysis (renumbered from 4)
+        // Fetch documents with extractions for tariff analysis
+        const { data: docsWithExtractions } = await supabase
+          .from('site_documents')
+          .select('*, document_extractions(*)')
+          .eq('site_id', siteId)
+          .eq('is_folder', false)
+          .order('upload_date', { ascending: true });
+
+        if (docsWithExtractions && docsWithExtractions.length > 0) {
+          // Group documents by meter
+          const meterDocsMap = new Map<string, any[]>();
+          docsWithExtractions.forEach(doc => {
+            if (doc.meter_id && doc.document_extractions?.length > 0) {
+              if (!meterDocsMap.has(doc.meter_id)) {
+                meterDocsMap.set(doc.meter_id, []);
+              }
+              meterDocsMap.get(doc.meter_id)!.push(doc);
+            }
+          });
+
+          // Get meter details
+          const meterIds = Array.from(meterDocsMap.keys());
+          const { data: analysisMeters } = await supabase
+            .from('meters')
+            .select('*')
+            .in('id', meterIds);
+
+          if (analysisMeters && analysisMeters.length > 0) {
+            for (const meter of analysisMeters) {
+              const meterDocs = meterDocsMap.get(meter.id) || [];
+              if (meterDocs.length === 0) continue;
+
+              tariffAnalysisContent += `### Meter: ${meter.meter_number}${meter.name ? ` (${meter.name})` : ''}\n\n`;
+
+              // Helper to extract metric value
+              const extractMetricValue = (extraction: any, metric: string): number => {
+                const data = extraction.extracted_data;
+                if (!data) return 0;
+
+                switch (metric) {
+                  case 'Total Amount':
+                    return extraction.total_amount || 0;
+                  case 'Basic Charge':
+                    return data.basic_charge || data.basicCharge || 0;
+                  case 'kVA Charge':
+                    return data.kva_charge || data.kvaCharge || 0;
+                  case 'kWh Charge':
+                    return data.kwh_charge || data.kwhCharge || data.energy_charge || data.energyCharge || 0;
+                  case 'kVA Consumption':
+                    return data.max_kva || data.maxKva || data.kva_consumption || data.kvaConsumption || 0;
+                  case 'kWh Consumption':
+                    return data.kwh_consumed || data.kwhConsumed || data.total_kwh || data.totalKwh || 0;
+                  default:
+                    return 0;
+                }
+              };
+
+              // Helper to determine season
+              const getSeason = (date: Date): 'winter' | 'summer' => {
+                const month = date.getMonth();
+                return (month >= 5 && month <= 7) ? 'winter' : 'summer';
+              };
+
+              // Generate charts for each metric
+              const metrics = [
+                { name: 'Total Amount', unit: 'R' },
+                { name: 'Basic Charge', unit: 'R' },
+                { name: 'kVA Charge', unit: 'R' },
+                { name: 'kWh Charge', unit: 'R' },
+                { name: 'kVA Consumption', unit: 'kVA' },
+                { name: 'kWh Consumption', unit: 'kWh' }
+              ];
+
+              for (const metric of metrics) {
+                // Prepare data for this metric
+                const chartData: { period: string; value: number; winterAvg?: number; summerAvg?: number }[] = [];
+                let winterSum = 0, winterCount = 0;
+                let summerSum = 0, summerCount = 0;
+
+                for (const doc of meterDocs) {
+                  const extraction = doc.document_extractions[0];
+                  if (!extraction) continue;
+
+                  const value = extractMetricValue(extraction, metric.name);
+                  if (value === 0) continue;
+
+                  const periodStart = extraction.period_start ? new Date(extraction.period_start) : null;
+                  const periodEnd = extraction.period_end ? new Date(extraction.period_end) : null;
+                  
+                  let periodLabel = 'Unknown';
+                  if (periodStart && periodEnd) {
+                    periodLabel = `${periodStart.toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' })}`;
+                    const season = getSeason(periodStart);
+                    if (season === 'winter') {
+                      winterSum += value;
+                      winterCount++;
+                    } else {
+                      summerSum += value;
+                      summerCount++;
+                    }
+                  }
+
+                  chartData.push({
+                    period: periodLabel,
+                    value: value
+                  });
+                }
+
+                // Skip if no data
+                if (chartData.length === 0) continue;
+
+                // Calculate averages
+                const winterAvg = winterCount > 0 ? winterSum / winterCount : undefined;
+                const summerAvg = summerCount > 0 ? summerSum / summerCount : undefined;
+
+                // Add averages to all data points
+                chartData.forEach(d => {
+                  d.winterAvg = winterAvg;
+                  d.summerAvg = summerAvg;
+                });
+
+                // Generate chart
+                const chartImage = generateTariffAnalysisChart(
+                  `${metric.name} Over Time`,
+                  metric.unit,
+                  chartData
+                );
+
+                tariffAnalysisContent += `#### ${metric.name}\n\n`;
+                tariffAnalysisContent += `![${metric.name} chart](${chartImage})\n`;
+                tariffAnalysisContent += `*${metric.name} trends with seasonal averages*\n\n`;
+              }
+            }
+          }
+        }
+
+        sections.push({
+          id: 'tariff-analysis',
+          title: '5. Tariff Analysis',
+          content: tariffAnalysisContent,
+          type: 'text',
+          editable: true
+        });
+        
+        // Section 6: Metering Data Analysis (renumbered from 5)
         if (reportData.sections.meteringDataAnalysis) {
           sections.push({
             id: 'metering-data-analysis',
-            title: '5. Metering Data Analysis',
-            content: `## 5. Metering Data Analysis\n\n${reportData.sections.meteringDataAnalysis}`,
+            title: '6. Metering Data Analysis',
+            content: `## 6. Metering Data Analysis\n\n${reportData.sections.meteringDataAnalysis}`,
             type: 'text',
             editable: true
           });
@@ -2879,56 +3027,56 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
           });
         }
         
-        // Section 6: Document & Invoice Validation (if available)
+        // Section 7: Document & Invoice Validation (renumbered from 6)
         if (reportData.sections.documentValidation) {
           sections.push({
             id: 'document-validation',
-            title: '6. Document & Invoice Validation',
-            content: `## 6. Document & Invoice Validation\n\n${reportData.sections.documentValidation}`,
+            title: '7. Document & Invoice Validation',
+            content: `## 7. Document & Invoice Validation\n\n${reportData.sections.documentValidation}`,
             type: 'text',
             editable: true
           });
         }
         
-        // Section 7: Reconciliation Results
+        // Section 8: Reconciliation Results
         if (reportData.sections.reconciliationResults) {
           sections.push({
             id: 'reconciliation-results',
-            title: '7. Reconciliation Results',
-            content: `## 7. Reconciliation Results\n\n${reportData.sections.reconciliationResults}`,
+            title: '8. Reconciliation Results',
+            content: `## 8. Reconciliation Results\n\n${reportData.sections.reconciliationResults}`,
             type: 'text',
             editable: true
           });
         }
         
-        // Section 8: Cost Analysis (if available)
+        // Section 9: Cost Analysis (renumbered from 8)
         if (reportData.sections.costAnalysis) {
           sections.push({
             id: 'cost-analysis',
-            title: '8. Cost Analysis',
-            content: `## 8. Cost Analysis\n\n${reportData.sections.costAnalysis}`,
+            title: '9. Cost Analysis',
+            content: `## 9. Cost Analysis\n\n${reportData.sections.costAnalysis}`,
             type: 'text',
             editable: true
           });
         }
         
-        // Section 9: Findings & Anomalies
+        // Section 10: Findings & Anomalies
         if (reportData.sections.findingsAnomalies) {
           sections.push({
             id: 'findings-anomalies',
-            title: '9. Findings & Anomalies',
-            content: `## 9. Findings & Anomalies\n\n${reportData.sections.findingsAnomalies}`,
+            title: '10. Findings & Anomalies',
+            content: `## 10. Findings & Anomalies\n\n${reportData.sections.findingsAnomalies}`,
             type: 'text',
             editable: true
           });
         }
         
-        // Section 10: Recommendations
+        // Section 11: Recommendations
         if (reportData.sections.recommendations) {
           sections.push({
             id: 'recommendations',
-            title: '10. Recommendations',
-            content: `## 10. Recommendations\n\n${reportData.sections.recommendations}`,
+            title: '11. Recommendations',
+            content: `## 11. Recommendations\n\n${reportData.sections.recommendations}`,
             type: 'text',
             editable: true
           });
