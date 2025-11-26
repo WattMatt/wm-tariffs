@@ -113,7 +113,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
     const fetchOptions = async () => {
       setIsLoadingOptions(true);
       try {
-        // Fetch schematics and their snippet URLs
+        // Fetch schematics
         const { data: schematics, error: schematicsError } = await supabase
           .from("schematics")
           .select("id, name, description, page_number, total_pages, file_path, site_id")
@@ -122,35 +122,42 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
 
         if (schematicsError) throw schematicsError;
         
-        // For each schematic, construct the snippet path and URL
-        const snippetsWithUrls = (schematics || []).map(schematic => {
-          // Extract the directory and base name from the schematic file_path
+        // Check which schematics have snippet files that actually exist
+        const snippetsWithUrls: any[] = [];
+        
+        for (const schematic of schematics || []) {
           const pathParts = schematic.file_path.split('/');
           const fileName = pathParts[pathParts.length - 1];
           const directory = pathParts.slice(0, -1).join('/');
-          
-          // Remove file extension to get base name
           const baseName = fileName.replace(/\.[^/.]+$/, '');
+          const snippetFileName = `${baseName}_snippet.png`;
+          const snippetPath = `${directory}/${snippetFileName}`;
           
-          // Construct snippet path: {directory}/{baseName}_snippet.png
-          const snippetPath = `${directory}/${baseName}_snippet.png`;
-          
-          // Get public URL for the snippet
-          const { data: urlData } = supabase.storage
+          // Check if snippet file exists by trying to get file info
+          const { data: fileList, error: listError } = await supabase.storage
             .from('site-files')
-            .getPublicUrl(snippetPath);
+            .list(directory, {
+              search: snippetFileName
+            });
           
-          return {
-            id: schematic.id,
-            name: schematic.name,
-            snippetUrl: urlData.publicUrl,
-            snippetPath: snippetPath,
-            page_number: schematic.page_number,
-            total_pages: schematic.total_pages
-          };
-        });
+          // Only add if the snippet file exists
+          if (!listError && fileList && fileList.length > 0) {
+            const { data: urlData } = supabase.storage
+              .from('site-files')
+              .getPublicUrl(snippetPath);
+            
+            snippetsWithUrls.push({
+              id: schematic.id,
+              name: schematic.name,
+              snippetUrl: urlData.publicUrl,
+              snippetPath: snippetPath,
+              page_number: schematic.page_number,
+              total_pages: schematic.total_pages
+            });
+          }
+        }
         
-        console.log('Loaded snippets:', snippetsWithUrls);
+        console.log('Found snippets:', snippetsWithUrls);
         setAvailableSnippets(snippetsWithUrls);
 
         // Fetch available folders from document paths with document counts
