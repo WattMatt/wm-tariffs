@@ -2291,6 +2291,48 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         return value.toFixed(decimals).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
       };
 
+      // Build tariff comparison content separately to avoid scoping issues
+      let tariffComparisonContent = 'No rate comparison data available. Ensure meters have assigned tariffs and associated documents with line items.';
+      
+      if (rateComparisonData && Object.keys(rateComparisonData).length > 0) {
+        const comparisonSections = [];
+        
+        for (const [meterId, meterComparisonData] of Object.entries(rateComparisonData) as [string, any][]) {
+          let content = `### Meter: ${meterComparisonData.meterNumber}${meterComparisonData.meterName ? ` (${meterComparisonData.meterName})` : ''}\n\n`;
+          
+          if (!meterComparisonData.documents || !Array.isArray(meterComparisonData.documents)) {
+            content += 'No document comparisons available.\n\n';
+            comparisonSections.push(content);
+            continue;
+          }
+          
+          for (const doc of meterComparisonData.documents) {
+            const periodStart = doc.periodStart ? format(new Date(doc.periodStart), "MMM yyyy") : 'N/A';
+            const periodEnd = doc.periodEnd ? format(new Date(doc.periodEnd), "MMM yyyy") : 'N/A';
+            const variance = doc.overallVariance !== null ? formatNumber(doc.overallVariance, 1) : 'N/A';
+            
+            content += `#### Document: ${periodStart} - ${periodEnd} | Overall Variance: ${variance}%\n\n`;
+            content += '| Item | Document | Assigned | Variance |\n';
+            content += '|------|----------|----------|----------|\n';
+            
+            if (doc.lineItems && Array.isArray(doc.lineItems)) {
+              for (const item of doc.lineItems) {
+                const docVal = item.documentValue ? formatNumber(item.documentValue, 4) : '—';
+                const assignedVal = item.assignedValue ? formatNumber(item.assignedValue, 4) : '—';
+                const varPercent = item.variancePercent !== null ? formatNumber(item.variancePercent, 1) + '%' : '—';
+                
+                content += `| ${item.chargeType} (${item.unit}) | ${docVal} | ${assignedVal} | ${varPercent} |\n`;
+              }
+            }
+            content += '\n';
+          }
+          
+          comparisonSections.push(content);
+        }
+        
+        tariffComparisonContent = comparisonSections.join('\n---\n\n');
+      }
+
       const reportData = {
         clientName: siteDetails.clientName,
         sections: {
@@ -2445,39 +2487,7 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
 - Total meters monitored: ${reconciliationData.meterCount}
 - Documents analyzed: ${documentExtractions.length}`,
 
-          tariffComparison: rateComparisonData && Object.keys(rateComparisonData).length > 0 ? 
-            Object.entries(rateComparisonData).map(([meterId, meterComparisonData]: [string, any]) => {
-              let content = `### Meter: ${meterComparisonData.meterNumber}${meterComparisonData.meterName ? ` (${meterComparisonData.meterName})` : ''}\n\n`;
-              
-              if (!meterComparisonData.documents || !Array.isArray(meterComparisonData.documents)) {
-                return content + 'No document comparisons available.\n\n';
-              }
-              
-              for (const doc of meterComparisonData.documents) {
-                const periodStart = doc.periodStart ? format(new Date(doc.periodStart), "MMM yyyy") : 'N/A';
-                const periodEnd = doc.periodEnd ? format(new Date(doc.periodEnd), "MMM yyyy") : 'N/A';
-                const variance = doc.overallVariance !== null ? formatNumber(doc.overallVariance, 1) : 'N/A';
-                
-                content += `#### Document: ${periodStart} - ${periodEnd} | Overall Variance: ${variance}%\n\n`;
-                content += '| Item | Document | Assigned | Variance |\n';
-                content += '|------|----------|----------|----------|\n';
-                
-                // Safety check for lineItems
-                if (doc.lineItems && Array.isArray(doc.lineItems)) {
-                  for (const item of doc.lineItems) {
-                    const docVal = item.documentValue ? formatNumber(item.documentValue, 4) : '—';
-                    const assignedVal = item.assignedValue ? formatNumber(item.assignedValue, 4) : '—';
-                    const varPercent = item.variancePercent !== null ? formatNumber(item.variancePercent, 1) + '%' : '—';
-                    
-                    content += `| ${item.chargeType} (${item.unit}) | ${docVal} | ${assignedVal} | ${varPercent} |\n`;
-                  }
-                }
-                content += '\n';
-              }
-              
-              return content;
-            }).join('\n---\n\n') 
-            : 'No rate comparison data available. Ensure meters have assigned tariffs and associated documents with line items.'
+          tariffComparison: tariffComparisonContent
         }
       };
 
