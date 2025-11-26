@@ -1707,7 +1707,13 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
               canvas.width = width;
               canvas.height = height;
               
-              // Draw and compress image as JPEG with quality 0.6
+              // Fill canvas with white background (JPEG doesn't support transparency)
+              if (ctx) {
+                ctx.fillStyle = 'white';
+                ctx.fillRect(0, 0, width, height);
+              }
+              
+              // Draw image on top of white background and compress as JPEG
               ctx?.drawImage(img, 0, 0, width, height);
               schematicImageBase64 = canvas.toDataURL('image/jpeg', 0.6);
               
