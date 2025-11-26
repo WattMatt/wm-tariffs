@@ -272,6 +272,16 @@ export const generateClusteredTariffChart = (
   return canvas.toDataURL('image/png');
 };
 
+// Helper function to abbreviate large numbers
+const abbreviateNumber = (value: number): string => {
+  if (value >= 1000000) {
+    return (value / 1000000).toFixed(1) + 'M';
+  } else if (value >= 1000) {
+    return (value / 1000).toFixed(1) + 'K';
+  }
+  return value.toFixed(1);
+};
+
 export const generateDocumentVsAssignedChart = (
   title: string,
   unit: string,
@@ -279,8 +289,11 @@ export const generateDocumentVsAssignedChart = (
   width: number = 400,
   height: number = 300
 ): string => {
+  // Dynamically adjust width based on number of data points
+  const adjustedWidth = Math.max(width, 500 + (data.length - 5) * 50);
+  
   const canvas = document.createElement('canvas');
-  canvas.width = width;
+  canvas.width = adjustedWidth;
   canvas.height = height;
   const ctx = canvas.getContext('2d');
   
@@ -288,7 +301,7 @@ export const generateDocumentVsAssignedChart = (
   
   // Clear canvas with white background
   ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, width, height);
+  ctx.fillRect(0, 0, adjustedWidth, height);
   
   // Colors matching the reference image
   const documentColor = '#3b82f6';  // Blue for Document
@@ -298,17 +311,17 @@ export const generateDocumentVsAssignedChart = (
   ctx.fillStyle = '#000000';
   ctx.font = 'bold 12px sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText(title, width / 2, 20);
+  ctx.fillText(title, adjustedWidth / 2, 20);
   
   // Draw unit (only if provided)
   if (unit && unit.trim()) {
     ctx.font = '10px sans-serif';
-    ctx.fillText(`(${unit})`, width / 2, 35);
+    ctx.fillText(`(${unit})`, adjustedWidth / 2, 35);
   }
   
   // Draw legend
   const legendY = 48;
-  const legendX = width / 2 - 50;
+  const legendX = adjustedWidth / 2 - 50;
   
   ctx.fillStyle = documentColor;
   ctx.fillRect(legendX, legendY, 12, 12);
@@ -325,7 +338,7 @@ export const generateDocumentVsAssignedChart = (
   const padding = 40;
   const bottomPadding = 80;
   const topPadding = 70;
-  const chartWidth = width - padding * 2;
+  const chartWidth = adjustedWidth - padding * 2;
   const chartHeight = height - topPadding - bottomPadding;
   const clusterWidth = chartWidth / data.length;
   const barWidth = Math.max((clusterWidth - 8) / 2, 15);  // Two bars with gap
@@ -352,16 +365,16 @@ export const generateDocumentVsAssignedChart = (
     ctx.fillStyle = assignedColor;
     ctx.fillRect(clusterX + barWidth + 8, assignedY, barWidth, assignedBarHeight);
     
-    // Draw values on top of bars (centered on each bar)
+    // Draw abbreviated values on top of bars (centered on each bar)
     ctx.fillStyle = '#000000';
-    ctx.font = 'bold 9px sans-serif';
+    ctx.font = 'bold 10px sans-serif';
     ctx.textAlign = 'center';
     
     if (item.documentValue > 0) {
-      ctx.fillText(item.documentValue.toFixed(2), clusterX + 4 + barWidth / 2, docY - 3);
+      ctx.fillText(abbreviateNumber(item.documentValue), clusterX + 4 + barWidth / 2, docY - 4);
     }
     if (assignedValue > 0) {
-      ctx.fillText(assignedValue.toFixed(2), clusterX + barWidth + 8 + barWidth / 2, assignedY - 3);
+      ctx.fillText(abbreviateNumber(assignedValue), clusterX + barWidth + 8 + barWidth / 2, assignedY - 4);
     }
   });
   
