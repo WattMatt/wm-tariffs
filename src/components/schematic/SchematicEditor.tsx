@@ -4041,17 +4041,33 @@ export default function SchematicEditor({
         };
       }
       
-      // 6. Use fabric.js toDataURL with multiplier for high quality
-      //    Crop to the snippet rectangle bounds
-      const dataUrl = fabricCanvas.toDataURL({
-        format: 'png',
-        quality: 1,
-        multiplier: 2, // 2x for high quality
-        left: captureRect.x,
-        top: captureRect.y,
-        width: captureRect.width,
-        height: captureRect.height,
-      });
+      // 6. Use native canvas cropping for reliable results
+      //    First get the full canvas as a canvas element
+      const multiplier = 2; // 2x for high quality
+      const fullCanvas = fabricCanvas.toCanvasElement(multiplier);
+      
+      // Create a temporary canvas for the cropped region
+      const croppedCanvas = document.createElement('canvas');
+      croppedCanvas.width = captureRect.width * multiplier;
+      croppedCanvas.height = captureRect.height * multiplier;
+      const ctx = croppedCanvas.getContext('2d');
+      
+      if (ctx) {
+        // Draw only the snippet region from the full canvas
+        ctx.drawImage(
+          fullCanvas,
+          captureRect.x * multiplier, // Source x (with multiplier)
+          captureRect.y * multiplier, // Source y (with multiplier)
+          captureRect.width * multiplier, // Source width (with multiplier)
+          captureRect.height * multiplier, // Source height (with multiplier)
+          0, // Destination x
+          0, // Destination y
+          captureRect.width * multiplier, // Destination width
+          captureRect.height * multiplier  // Destination height
+        );
+      }
+      
+      const dataUrl = croppedCanvas.toDataURL('image/png', 1.0);
       
       // 7. Restore snippet rectangle visibility
       if (snippetRectRef.current) {
