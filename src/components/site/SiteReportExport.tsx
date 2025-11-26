@@ -687,11 +687,25 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             // Parse and render table with auto-generated title
             const parsed = parseMarkdownTable(tableText);
             if (parsed) {
-              // Extract potential title from the section context or use generic title
-              const contextTitle = beforeTable.trim().split('\n').pop()?.replace(/[#*_]/g, '').trim();
-              const tableTitle = contextTitle && contextTitle.length < 50 && contextTitle.length > 3
-                ? contextTitle
-                : "Data Summary";
+              // Extract meter and document info for table title
+              const meterMatch = beforeTable.match(/###?\s*Meter[:\s]+(.+?)(?:\n|$)/i);
+              const docMatch = beforeTable.match(/####?\s*Document[:\s]+(.+?)(?:\n|$)/i);
+              
+              let tableTitle = "Data Summary";
+              if (meterMatch) {
+                const meterInfo = meterMatch[1].replace(/[#*_]/g, '').trim();
+                if (docMatch) {
+                  const docInfo = docMatch[1].split('|')[0].replace(/[#*_]/g, '').trim();
+                  tableTitle = `${meterInfo} - ${docInfo}`;
+                } else {
+                  tableTitle = meterInfo;
+                }
+              } else {
+                const contextTitle = beforeTable.trim().split('\n').pop()?.replace(/[#*_]/g, '').trim();
+                if (contextTitle && contextTitle.length < 50 && contextTitle.length > 3) {
+                  tableTitle = contextTitle;
+                }
+              }
               addTable(parsed.headers, parsed.rows, undefined, tableTitle);
               yPos += 5;
             }
@@ -1766,7 +1780,11 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       // Build rate comparison data structure (moved here after meterData is defined)
       const rateComparisonData: Record<string, any> = {};
       
+      console.log('Meter data loaded:', meterData.length, 'meters');
+      
       if (documentCalculations && documentCalculations.length > 0) {
+        console.log('Document calculations found:', documentCalculations.length);
+        
         // Group by meter
         const meterGroups = documentCalculations.reduce((acc: any, calc: any) => {
           if (!acc[calc.meter_id]) {
@@ -1902,6 +1920,12 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             documents
           };
         }
+      }
+      
+      // Debug logging for rate comparison data
+      console.log('Rate comparison data meters:', Object.keys(rateComparisonData));
+      for (const [meterId, data] of Object.entries(rateComparisonData)) {
+        console.log(`Meter ${meterId}: ${(data as any).meterNumber} - ${(data as any).documents?.length} documents`);
       }
 
       // 5. Use data from selected reconciliation
@@ -2289,7 +2313,11 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       // Generate sections from real data without AI interpretation
       const formatNumber = (value: number, decimals: number = 2): string => {
         if (value == null || isNaN(value)) return '0.00';
-        return value.toFixed(decimals).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        // Split on decimal, format integer part, then rejoin
+        const fixed = value.toFixed(decimals);
+        const [intPart, decPart] = fixed.split('.');
+        const formattedInt = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        return decPart ? `${formattedInt}.${decPart}` : formattedInt;
       };
 
       // Build tariff comparison content separately to avoid scoping issues
