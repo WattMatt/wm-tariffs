@@ -202,8 +202,24 @@ export const generateClusteredTariffChart = (
     }
   }
   
+  // Draw legend below percentage text
+  const legendY = 48;
+  const legendX = 10;
+  
+  ctx.fillStyle = winterColor;
+  ctx.fillRect(legendX, legendY, 10, 10);
+  ctx.fillStyle = '#000000';
+  ctx.font = '9px sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText('Winter', legendX + 13, legendY + 8);
+  
+  ctx.fillStyle = summerColor;
+  ctx.fillRect(legendX + 50, legendY, 10, 10);
+  ctx.fillStyle = '#000000';
+  ctx.fillText('Summer', legendX + 63, legendY + 8);
+  
   const padding = 5;
-  const topPadding = 70;  // More space for percentage text
+  const topPadding = 70;
   const chartWidth = width - padding * 2;
   const chartHeight = height - topPadding - padding;
   const clusterWidth = chartWidth / winterData.length;
@@ -243,33 +259,14 @@ export const generateClusteredTariffChart = (
     }
   });
   
-  // Draw X-axis labels (period labels)
+  // Draw X-axis labels (period labels - just the year)
   ctx.fillStyle = '#000000';
   ctx.font = '9px sans-serif';
   ctx.textAlign = 'center';
   winterData.forEach((period, index) => {
     const x = padding + index * clusterWidth + clusterWidth / 2;
-    const words = period.label.split(' ');
-    words.forEach((word, wordIndex) => {
-      ctx.fillText(word, x, height - padding + 10 + wordIndex * 9);
-    });
+    ctx.fillText(period.label, x, height - padding + 10);
   });
-  
-  // Draw legend (Winter = Blue, Summer = Orange)
-  const legendY = 48;
-  const legendX = 10;
-  
-  ctx.fillStyle = winterColor;
-  ctx.fillRect(legendX, legendY, 10, 10);
-  ctx.fillStyle = '#000000';
-  ctx.font = '9px sans-serif';
-  ctx.textAlign = 'left';
-  ctx.fillText('Winter', legendX + 13, legendY + 8);
-  
-  ctx.fillStyle = summerColor;
-  ctx.fillRect(legendX + 50, legendY, 10, 10);
-  ctx.fillStyle = '#000000';
-  ctx.fillText('Summer', legendX + 63, legendY + 8);
   
   return canvas.toDataURL('image/png');
 };
@@ -279,7 +276,7 @@ export const generateTariffComparisonChart = (
   unit: string,
   periods: { label: string; value: number }[],
   width: number = 280,
-  height: number = 220
+  height: number = 260
 ): string => {
   const canvas = document.createElement('canvas');
   canvas.width = width;
@@ -302,8 +299,36 @@ export const generateTariffComparisonChart = (
   ctx.font = '11px sans-serif';
   ctx.fillText(`(${unit})`, width / 2, 35);
   
+  // Calculate and display percentage increases
+  if (periods.length >= 2) {
+    const firstValue = periods[0].value;
+    const lastValue = periods[periods.length - 1].value;
+    
+    if (firstValue > 0) {
+      const overallIncrease = ((lastValue - firstValue) / firstValue * 100).toFixed(1);
+      
+      // Calculate YoY average
+      let totalYoY = 0;
+      let validTransitions = 0;
+      for (let i = 1; i < periods.length; i++) {
+        if (periods[i - 1].value > 0) {
+          totalYoY += (periods[i].value - periods[i - 1].value) / periods[i - 1].value * 100;
+          validTransitions++;
+        }
+      }
+      const avgYoY = validTransitions > 0 ? (totalYoY / validTransitions).toFixed(1) : '0.0';
+      
+      // Draw percentage text at top right
+      ctx.fillStyle = '#666666';
+      ctx.font = '10px sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillText(`Overall: +${overallIncrease}%`, width - 10, 50);
+      ctx.fillText(`Avg YoY: +${avgYoY}%`, width - 10, 62);
+    }
+  }
+  
   const padding = 15;
-  const topPadding = 35;
+  const topPadding = 70;
   const chartWidth = width - padding * 2;
   const chartHeight = height - topPadding - padding;
   const barWidth = chartWidth / periods.length;
@@ -326,16 +351,13 @@ export const generateTariffComparisonChart = (
     ctx.fillText(period.value.toLocaleString(), x + barWidth / 2, y - 5);
   });
   
-  // Draw X-axis labels (period labels)
+  // Draw X-axis labels (just the year)
   ctx.fillStyle = '#000000';
   ctx.font = '9px sans-serif';
   ctx.textAlign = 'center';
   periods.forEach((period, index) => {
     const x = padding + index * barWidth + barWidth / 2;
-    const words = period.label.split(' ');
-    words.forEach((word, wordIndex) => {
-      ctx.fillText(word, x, height - padding + 12 + wordIndex * 10);
-    });
+    ctx.fillText(period.label, x, height - padding + 12);
   });
   
   // Draw Y-axis
