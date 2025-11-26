@@ -18,7 +18,7 @@ import { SplitViewReportEditor } from "./SplitViewReportEditor";
 import SaveReportDialog from "./SaveReportDialog";
 import SavedReportsList from "./SavedReportsList";
 import { ReportGenerationProgress } from "./ReportGenerationProgress";
-import { generateMeterTypeChart, generateConsumptionChart, generateTariffComparisonChart } from "./ChartGenerator";
+import { generateMeterTypeChart, generateConsumptionChart, generateTariffComparisonChart, generateClusteredTariffChart } from "./ChartGenerator";
 
 interface BatchStatus {
   batchNumber: number;
@@ -1999,44 +1999,56 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             value: Math.round(p.tariff_charges?.find((c: any) => c.charge_type === 'basic_charge')?.charge_amount || 0)
           }));
 
-            const energyChargeData = periods.map(p => {
-              const charges = p.tariff_charges || [];
-              // Check for both_seasons first (common for non-TOU tariffs)
-              const bothSeasons = charges.find((c: any) => c.charge_type === 'energy_both_seasons')?.charge_amount;
-              if (bothSeasons !== undefined) {
-                return { label: formatPeriod(p.effective_from, p.effective_to), value: Math.round(bothSeasons) };
-              }
-              // Fall back to average of high/low season
-              const highSeason = charges.find((c: any) => c.charge_type === 'energy_high_season')?.charge_amount || 0;
-              const lowSeason = charges.find((c: any) => c.charge_type === 'energy_low_season')?.charge_amount || 0;
-              return {
-                label: formatPeriod(p.effective_from, p.effective_to),
-                value: Math.round((highSeason + lowSeason) / 2)
-              };
-            });
+          // For Energy Chart - extract winter and summer separately
+          const energyWinterData = periods.map(p => {
+            const charges = p.tariff_charges || [];
+            const highSeason = charges.find((c: any) => c.charge_type === 'energy_high_season')?.charge_amount;
+            const bothSeasons = charges.find((c: any) => c.charge_type === 'energy_both_seasons')?.charge_amount;
+            return {
+              label: formatPeriod(p.effective_from, p.effective_to),
+              value: Math.round(highSeason ?? bothSeasons ?? 0)
+            };
+          });
 
-            const demandChargeData = periods.map(p => {
-              const charges = p.tariff_charges || [];
-              // Check for both_seasons or general demand charge first
-              const bothSeasons = charges.find((c: any) => 
-                c.charge_type === 'demand_both_seasons' || c.charge_type === 'demand_charge'
-              )?.charge_amount;
-              if (bothSeasons !== undefined) {
-                return { label: formatPeriod(p.effective_from, p.effective_to), value: Math.round(bothSeasons) };
-              }
-              // Fall back to average of high/low season
-              const highSeason = charges.find((c: any) => c.charge_type === 'demand_high_season')?.charge_amount || 0;
-              const lowSeason = charges.find((c: any) => c.charge_type === 'demand_low_season')?.charge_amount || 0;
-              return {
-                label: formatPeriod(p.effective_from, p.effective_to),
-                value: Math.round((highSeason + lowSeason) / 2)
-              };
-            });
+          const energySummerData = periods.map(p => {
+            const charges = p.tariff_charges || [];
+            const lowSeason = charges.find((c: any) => c.charge_type === 'energy_low_season')?.charge_amount;
+            const bothSeasons = charges.find((c: any) => c.charge_type === 'energy_both_seasons')?.charge_amount;
+            return {
+              label: formatPeriod(p.effective_from, p.effective_to),
+              value: Math.round(lowSeason ?? bothSeasons ?? 0)
+            };
+          });
+
+          // For Demand Chart - extract winter and summer separately
+          const demandWinterData = periods.map(p => {
+            const charges = p.tariff_charges || [];
+            const highSeason = charges.find((c: any) => c.charge_type === 'demand_high_season')?.charge_amount;
+            const bothSeasons = charges.find((c: any) => 
+              c.charge_type === 'demand_both_seasons' || c.charge_type === 'demand_charge'
+            )?.charge_amount;
+            return {
+              label: formatPeriod(p.effective_from, p.effective_to),
+              value: Math.round(highSeason ?? bothSeasons ?? 0)
+            };
+          });
+
+          const demandSummerData = periods.map(p => {
+            const charges = p.tariff_charges || [];
+            const lowSeason = charges.find((c: any) => c.charge_type === 'demand_low_season')?.charge_amount;
+            const bothSeasons = charges.find((c: any) => 
+              c.charge_type === 'demand_both_seasons' || c.charge_type === 'demand_charge'
+            )?.charge_amount;
+            return {
+              label: formatPeriod(p.effective_from, p.effective_to),
+              value: Math.round(lowSeason ?? bothSeasons ?? 0)
+            };
+          });
 
           tariffChartImages[tariffName] = {
             basic: generateTariffComparisonChart("Basic Charge", "R/month", basicChargeData),
-            energy: generateTariffComparisonChart("Energy Charge", "c/kWh", energyChargeData),
-            demand: generateTariffComparisonChart("Demand Charge", "R/kVA", demandChargeData)
+            energy: generateClusteredTariffChart("Energy Charge", "c/kWh", energyWinterData, energySummerData),
+            demand: generateClusteredTariffChart("Demand Charge", "R/kVA", demandWinterData, demandSummerData)
           };
         }
       }

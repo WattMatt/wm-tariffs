@@ -138,6 +138,142 @@ export const generateConsumptionChart = (meterData: any[]): string => {
   return generateChartImage('bar', data, labels, 600, 400);
 };
 
+export const generateClusteredTariffChart = (
+  title: string,
+  unit: string,
+  winterData: { label: string; value: number }[],
+  summerData: { label: string; value: number }[],
+  width: number = 280,
+  height: number = 260
+): string => {
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  
+  if (!ctx || winterData.length === 0) return '';
+  
+  // Clear canvas with white background
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, width, height);
+  
+  // Colors
+  const winterColor = '#3b82f6';  // Blue for Winter
+  const summerColor = '#f59e0b';  // Orange for Summer
+  
+  // Draw title
+  ctx.fillStyle = '#000000';
+  ctx.font = 'bold 13px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(title, width / 2, 20);
+  
+  // Draw unit
+  ctx.font = '11px sans-serif';
+  ctx.fillText(`(${unit})`, width / 2, 35);
+  
+  // Calculate and display percentage increases (if enough data)
+  if (winterData.length >= 2) {
+    const firstWinter = winterData[0].value;
+    const lastWinter = winterData[winterData.length - 1].value;
+    
+    if (firstWinter > 0) {
+      const overallIncrease = ((lastWinter - firstWinter) / firstWinter * 100).toFixed(1);
+      
+      // Calculate YoY average increase
+      let totalYoY = 0;
+      let validTransitions = 0;
+      for (let i = 1; i < winterData.length; i++) {
+        if (winterData[i - 1].value > 0) {
+          totalYoY += (winterData[i].value - winterData[i - 1].value) / winterData[i - 1].value * 100;
+          validTransitions++;
+        }
+      }
+      
+      if (validTransitions > 0) {
+        const avgYoY = (totalYoY / validTransitions).toFixed(1);
+        
+        // Draw percentage text at top right
+        ctx.fillStyle = '#666666';
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText(`Overall: +${overallIncrease}%`, width - 10, 50);
+        ctx.fillText(`Avg YoY: +${avgYoY}%`, width - 10, 62);
+      }
+    }
+  }
+  
+  const padding = 5;
+  const topPadding = 70;  // More space for percentage text
+  const chartWidth = width - padding * 2;
+  const chartHeight = height - topPadding - padding;
+  const clusterWidth = chartWidth / winterData.length;
+  const barWidth = (clusterWidth - 6) / 2;  // Two bars with small gap
+  
+  const maxValue = Math.max(
+    ...winterData.map(d => d.value),
+    ...summerData.map(d => d.value)
+  );
+  
+  // Draw clustered bars
+  winterData.forEach((winter, index) => {
+    const summer = summerData[index];
+    const clusterX = padding + index * clusterWidth;
+    
+    // Winter bar (left)
+    const winterBarHeight = maxValue > 0 ? (winter.value / maxValue) * chartHeight : 0;
+    const winterY = height - padding - winterBarHeight;
+    ctx.fillStyle = winterColor;
+    ctx.fillRect(clusterX + 2, winterY, barWidth, winterBarHeight);
+    
+    // Summer bar (right)
+    const summerBarHeight = maxValue > 0 ? (summer.value / maxValue) * chartHeight : 0;
+    const summerY = height - padding - summerBarHeight;
+    ctx.fillStyle = summerColor;
+    ctx.fillRect(clusterX + barWidth + 4, summerY, barWidth, summerBarHeight);
+    
+    // Draw values on top of bars
+    ctx.fillStyle = '#000000';
+    ctx.font = 'bold 9px sans-serif';
+    ctx.textAlign = 'center';
+    if (winter.value > 0) {
+      ctx.fillText(winter.value.toLocaleString(), clusterX + barWidth / 2 + 2, winterY - 3);
+    }
+    if (summer.value > 0) {
+      ctx.fillText(summer.value.toLocaleString(), clusterX + barWidth * 1.5 + 4, summerY - 3);
+    }
+  });
+  
+  // Draw X-axis labels (period labels)
+  ctx.fillStyle = '#000000';
+  ctx.font = '9px sans-serif';
+  ctx.textAlign = 'center';
+  winterData.forEach((period, index) => {
+    const x = padding + index * clusterWidth + clusterWidth / 2;
+    const words = period.label.split(' ');
+    words.forEach((word, wordIndex) => {
+      ctx.fillText(word, x, height - padding + 10 + wordIndex * 9);
+    });
+  });
+  
+  // Draw legend (Winter = Blue, Summer = Orange)
+  const legendY = 48;
+  const legendX = 10;
+  
+  ctx.fillStyle = winterColor;
+  ctx.fillRect(legendX, legendY, 10, 10);
+  ctx.fillStyle = '#000000';
+  ctx.font = '9px sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText('Winter', legendX + 13, legendY + 8);
+  
+  ctx.fillStyle = summerColor;
+  ctx.fillRect(legendX + 50, legendY, 10, 10);
+  ctx.fillStyle = '#000000';
+  ctx.fillText('Summer', legendX + 63, legendY + 8);
+  
+  return canvas.toDataURL('image/png');
+};
+
 export const generateTariffComparisonChart = (
   title: string,
   unit: string,
