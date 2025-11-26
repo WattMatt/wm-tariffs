@@ -2848,6 +2848,7 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
         }
 
         // Section 5: Tariff Analysis
+        console.log('=== GENERATING SECTION 5: TARIFF ANALYSIS ===');
         let tariffAnalysisContent = '## 5. Tariff Analysis\n\n';
         tariffAnalysisContent += 'Analysis of billing trends and cost breakdowns for each meter.\n\n';
         
@@ -2858,6 +2859,8 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
           .eq('site_id', siteId)
           .eq('is_folder', false)
           .order('upload_date', { ascending: true });
+
+        console.log('Documents with extractions:', docsWithExtractions?.length || 0);
 
         if (docsWithExtractions && docsWithExtractions.length > 0) {
           // Group documents by meter
@@ -2873,16 +2876,20 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
 
           // Get meter details
           const meterIds = Array.from(meterDocsMap.keys());
+          console.log('Meter IDs with documents:', meterIds.length);
           const { data: analysisMeters } = await supabase
             .from('meters')
             .select('*')
             .in('id', meterIds);
+
+          console.log('Analysis meters:', analysisMeters?.length || 0);
 
           if (analysisMeters && analysisMeters.length > 0) {
             for (const meter of analysisMeters) {
               const meterDocs = meterDocsMap.get(meter.id) || [];
               if (meterDocs.length === 0) continue;
 
+              console.log(`Processing meter ${meter.meter_number}, docs: ${meterDocs.length}`);
               tariffAnalysisContent += `### Meter: ${meter.meter_number}${meter.name ? ` (${meter.name})` : ''}\n\n`;
 
               // Helper to extract metric value from line_items
@@ -2972,7 +2979,11 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
                 }
 
                 // Skip if no data
-                if (chartData.length === 0) continue;
+                console.log(`    Chart data points: ${chartData.length}`);
+                if (chartData.length === 0) {
+                  console.log(`    Skipping ${metric.name} - no data`);
+                  continue;
+                }
 
                 // Calculate averages
                 const winterAvg = winterCount > 0 ? winterSum / winterCount : undefined;
@@ -2999,6 +3010,8 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
           }
         }
 
+        console.log('Tariff Analysis content length:', tariffAnalysisContent.length);
+        console.log('Tariff Analysis preview:', tariffAnalysisContent.substring(0, 200));
         sections.push({
           id: 'tariff-analysis',
           title: '5. Tariff Analysis',
@@ -3006,6 +3019,7 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
           type: 'text',
           editable: true
         });
+        console.log('=== SECTION 5 PUSHED TO SECTIONS ARRAY ===');
         
         // Section 6: Metering Data Analysis (renumbered from 5)
         if (reportData.sections.meteringDataAnalysis) {
