@@ -2423,7 +2423,20 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       if (rateComparisonData && Object.keys(rateComparisonData).length > 0) {
         const comparisonSections = [];
         
-        for (const [meterId, meterComparisonData] of Object.entries(rateComparisonData) as [string, any][]) {
+        // Sort meters according to hierarchy order
+        const meterOrder = selectedReconciliation?.meter_order || [];
+        const sortedMeterEntries = Object.entries(rateComparisonData)
+          .sort(([meterIdA], [meterIdB]) => {
+            const indexA = meterOrder.indexOf(meterIdA);
+            const indexB = meterOrder.indexOf(meterIdB);
+            // If meter not in order array, put at end
+            if (indexA === -1 && indexB === -1) return 0;
+            if (indexA === -1) return 1;
+            if (indexB === -1) return -1;
+            return indexA - indexB;
+          });
+        
+        for (const [meterId, meterComparisonData] of sortedMeterEntries as [string, any][]) {
           const meterTitle = `Meter: ${meterComparisonData.meterNumber}${meterComparisonData.meterName ? ` (${meterComparisonData.meterName})` : ''}`;
           let content = `### ${meterTitle}\n\n`;
           
