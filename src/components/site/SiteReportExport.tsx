@@ -1713,9 +1713,9 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
                 ctx.fillRect(0, 0, width, height);
               }
               
-              // Draw image on top of white background and compress as JPEG
+              // Draw image on top of white background and compress as JPEG with higher quality
               ctx?.drawImage(img, 0, 0, width, height);
-              schematicImageBase64 = canvas.toDataURL('image/jpeg', 0.6);
+              schematicImageBase64 = canvas.toDataURL('image/jpeg', 0.85);
               
               URL.revokeObjectURL(url);
               resolve(null);
