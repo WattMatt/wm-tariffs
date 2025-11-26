@@ -300,11 +300,9 @@ export const generateDocumentVsAssignedChart = (
   ctx.textAlign = 'center';
   ctx.fillText(title, width / 2, 20);
   
-  // Draw unit (only if unit is provided)
-  if (unit && unit.trim()) {
-    ctx.font = '10px sans-serif';
-    ctx.fillText(`(${unit})`, width / 2, 35);
-  }
+  // Draw unit
+  ctx.font = '10px sans-serif';
+  ctx.fillText(`(${unit})`, width / 2, 35);
   
   // Draw legend
   const legendY = 48;

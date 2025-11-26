@@ -694,9 +694,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           }
           
           // Check for markdown image (chart images)
-          const imageRegex = /!\[([^\]]*)\]\(([^)]+)\)/;
-          const imageMatch = text.match(imageRegex);
-
+          const imageMatch = text.match(/!\[([^\]]*)\]\(([^)]+)\)/);
           if (imageMatch) {
             const [fullMatch, altText, imageUrl] = imageMatch;
             const beforeImage = text.substring(0, imageMatch.index);
@@ -709,6 +707,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             
             // Render the image
             try {
+              // Check if we need a new page
               if (yPos > pageHeight - bottomMargin - 100) {
                 addFooter();
                 addPageNumber();
@@ -721,6 +720,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
               pdf.addImage(imageUrl, 'PNG', leftMargin, yPos, imgWidth, imgHeight);
               yPos += imgHeight + 5;
               
+              // Add caption if available
               if (altText) {
                 pdf.setFontSize(8);
                 pdf.setFont("helvetica", "italic");
@@ -730,10 +730,10 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
               }
             } catch (err) {
               console.error(`Error adding image:`, err);
-              addText(`[Image rendering error]`, fontSize, false);
+              addText(`[Image rendering error: ${err instanceof Error ? err.message : 'Unknown error'}]`, fontSize, false);
             }
             
-            // Render text after image
+            // Render text after image (recursively)
             if (afterImage.trim()) {
               renderContent(afterImage, fontSize);
             }
