@@ -749,21 +749,21 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         };
 
         // Helper to add subsection heading
-        const addSubsectionHeading = (text: string) => {
-          yPos += 5;
-          if (yPos > pageHeight - bottomMargin - 20) {
-            addFooter();
-            addPageNumber();
-            pdf.addPage();
-            yPos = topMargin;
-          }
-          pdf.setFontSize(9);
-          pdf.setFont("helvetica", "bold");
-          pdf.setTextColor(templateBlue[0], templateBlue[1], templateBlue[2]);
-          pdf.text(text, leftMargin, yPos);
-          pdf.setTextColor(0, 0, 0);
-          yPos += 8;
-        };
+    const addSubsectionHeading = (text: string) => {
+      yPos += 5;
+      if (yPos > pageHeight - bottomMargin - 20) {
+        addFooter();
+        addPageNumber();
+        pdf.addPage();
+        yPos = topMargin;
+      }
+      pdf.setFontSize(9);
+      pdf.setFont("helvetica", "bold");
+      pdf.setTextColor(templateBlue[0], templateBlue[1], templateBlue[2]);
+      pdf.text(sanitizeForPdf(text), leftMargin, yPos);
+      pdf.setTextColor(0, 0, 0);
+      yPos += 8;
+    };
 
         // Table counter for labeling
         let tableCounter = 1;
@@ -844,6 +844,79 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           // Add caption if title provided
           if (tableTitle) {
             addTableCaption(tableTitle);
+          }
+        };
+
+        const addCompactTable = (headers: string[], rows: string[][], columnWidths?: number[], tableTitle?: string) => {
+          const tableWidth = pageWidth - leftMargin - rightMargin;
+          const defaultColWidth = tableWidth / headers.length;
+          const colWidths = columnWidths || headers.map(() => defaultColWidth);
+          
+          if (yPos > pageHeight - bottomMargin - 40) {
+            addFooter();
+            addPageNumber();
+            pdf.addPage();
+            yPos = topMargin;
+          }
+          
+          // Draw header with blue background
+          const rowHeight = 7;
+          pdf.setFillColor(templateBlue[0], templateBlue[1], templateBlue[2]);
+          pdf.rect(leftMargin, yPos, tableWidth, rowHeight, "F");
+          
+          pdf.setFontSize(8);
+          pdf.setFont("helvetica", "bold");
+          pdf.setTextColor(255, 255, 255);
+          let xPos = leftMargin + 2;
+          headers.forEach((header, i) => {
+            pdf.text(sanitizeForPdf(header), xPos, yPos + 5);
+            xPos += colWidths[i];
+          });
+          pdf.setTextColor(0, 0, 0);
+          yPos += rowHeight;
+          
+          // Draw rows with alternating colors
+          pdf.setFont("helvetica", "normal");
+          rows.forEach((row, rowIndex) => {
+            if (yPos > pageHeight - bottomMargin - 10) {
+              addFooter();
+              addPageNumber();
+              pdf.addPage();
+              yPos = topMargin + 10;
+            }
+            
+            // Alternating row background
+            if (rowIndex % 2 === 0) {
+              pdf.setFillColor(248, 250, 252);
+              pdf.rect(leftMargin, yPos, tableWidth, rowHeight, "F");
+            }
+            
+            xPos = leftMargin + 2;
+            row.forEach((cell, i) => {
+              const sanitizedCell = sanitizeForPdf(cell);
+              const cellLines = pdf.splitTextToSize(sanitizedCell, colWidths[i] - 4);
+              pdf.text(cellLines[0] || "", xPos, yPos + 5);
+              xPos += colWidths[i];
+            });
+            
+            // Draw cell borders
+            pdf.setDrawColor(226, 232, 240);
+            pdf.setLineWidth(0.3);
+            pdf.rect(leftMargin, yPos, tableWidth, rowHeight);
+            yPos += rowHeight;
+          });
+          
+          yPos += 3;
+          
+          // Add caption if title provided
+          if (tableTitle) {
+            pdf.setFontSize(7);
+            pdf.setFont("helvetica", "italic");
+            pdf.setTextColor(0, 0, 0);
+            pdf.text(`Table ${tableCounter}: ${tableTitle}`, pageWidth / 2, yPos, { align: "center" });
+            pdf.setFont("helvetica", "normal");
+            tableCounter++;
+            yPos += 6;
           }
         };
 
@@ -1101,27 +1174,24 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             
             // Render tariff details tables
             if (latestPeriod) {
-              addTable(
+              addCompactTable(
                 ["Attribute", "Value"],
                 [
-                  ["Type", formatTariffType(latestPeriod.tariff_type || 'N/A')],
-                  ["Voltage Level", latestPeriod.voltage_level || 'N/A'],
-                  ["Meter Configuration", latestPeriod.meter_configuration || 'N/A'],
-                  ["Transmission Zone", latestPeriod.transmission_zone || 'N/A'],
-                  ["Effective From", format(new Date(latestPeriod.effective_from), "dd MMM yyyy")],
-                  ["Effective To", latestPeriod.effective_to ? format(new Date(latestPeriod.effective_to), "dd MMM yyyy") : 'Current'],
+                  ["Type / Config", `${formatTariffType(latestPeriod.tariff_type || 'N/A')} / ${latestPeriod.meter_configuration || 'N/A'}`],
+                  ["Voltage / Zone", `${latestPeriod.voltage_level || 'N/A'} / ${latestPeriod.transmission_zone || 'N/A'}`],
+                  ["Effective Period", `${format(new Date(latestPeriod.effective_from), "dd MMM yyyy")} - ${latestPeriod.effective_to ? format(new Date(latestPeriod.effective_to), "dd MMM yyyy") : 'Current'}`],
                   ["Uses TOU", latestPeriod.uses_tou ? 'Yes' : 'No']
                 ],
-                [80, 90],
+                [55, 85],
                 "Tariff Overview"
               );
               
-              addSpacer(5);
+              addSpacer(4);
               
               // Render charges table
               const charges = latestPeriod.tariff_charges || [];
               if (charges.length > 0) {
-                addTable(
+                addCompactTable(
                   ["Type", "Description", "Amount", "Unit"],
                   charges.map((charge: any) => [
                     formatChargeType(charge.charge_type),
@@ -1129,7 +1199,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
                     formatNumber(charge.charge_amount),
                     charge.unit
                   ]),
-                  [45, 60, 35, 30],
+                  [38, 52, 28, 22],
                   "Charges (Current Period)"
                 );
               }
@@ -1988,25 +2058,39 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             value: Math.round(p.tariff_charges?.find((c: any) => c.charge_type === 'basic_charge')?.charge_amount || 0)
           }));
 
-          const energyChargeData = periods.map(p => {
-            const charges = p.tariff_charges || [];
-            const highSeason = charges.find((c: any) => c.charge_type === 'energy_high_season')?.charge_amount || 0;
-            const lowSeason = charges.find((c: any) => c.charge_type === 'energy_low_season')?.charge_amount || 0;
-            return {
-              label: formatPeriod(p.effective_from, p.effective_to),
-              value: Math.round((highSeason + lowSeason) / 2)
-            };
-          });
+            const energyChargeData = periods.map(p => {
+              const charges = p.tariff_charges || [];
+              // Check for both_seasons first (common for non-TOU tariffs)
+              const bothSeasons = charges.find((c: any) => c.charge_type === 'energy_both_seasons')?.charge_amount;
+              if (bothSeasons !== undefined) {
+                return { label: formatPeriod(p.effective_from, p.effective_to), value: Math.round(bothSeasons) };
+              }
+              // Fall back to average of high/low season
+              const highSeason = charges.find((c: any) => c.charge_type === 'energy_high_season')?.charge_amount || 0;
+              const lowSeason = charges.find((c: any) => c.charge_type === 'energy_low_season')?.charge_amount || 0;
+              return {
+                label: formatPeriod(p.effective_from, p.effective_to),
+                value: Math.round((highSeason + lowSeason) / 2)
+              };
+            });
 
-          const demandChargeData = periods.map(p => {
-            const charges = p.tariff_charges || [];
-            const highSeason = charges.find((c: any) => c.charge_type === 'demand_high_season')?.charge_amount || 0;
-            const lowSeason = charges.find((c: any) => c.charge_type === 'demand_low_season')?.charge_amount || 0;
-            return {
-              label: formatPeriod(p.effective_from, p.effective_to),
-              value: Math.round((highSeason + lowSeason) / 2)
-            };
-          });
+            const demandChargeData = periods.map(p => {
+              const charges = p.tariff_charges || [];
+              // Check for both_seasons or general demand charge first
+              const bothSeasons = charges.find((c: any) => 
+                c.charge_type === 'demand_both_seasons' || c.charge_type === 'demand_charge'
+              )?.charge_amount;
+              if (bothSeasons !== undefined) {
+                return { label: formatPeriod(p.effective_from, p.effective_to), value: Math.round(bothSeasons) };
+              }
+              // Fall back to average of high/low season
+              const highSeason = charges.find((c: any) => c.charge_type === 'demand_high_season')?.charge_amount || 0;
+              const lowSeason = charges.find((c: any) => c.charge_type === 'demand_low_season')?.charge_amount || 0;
+              return {
+                label: formatPeriod(p.effective_from, p.effective_to),
+                value: Math.round((highSeason + lowSeason) / 2)
+              };
+            });
 
           tariffChartImages[tariffName] = {
             basic: generateTariffComparisonChart("Basic Charge", "R/month", basicChargeData),
