@@ -1022,65 +1022,126 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         // Section 3: Tariff Configuration
         addSectionHeading("3. TARIFF CONFIGURATION", 16, true);
         
-        // Add tariff comparison charts for ALL tariffs (3 charts per row, one row per tariff)
+        // Helper functions for formatting
+        const formatChargeType = (type: string): string => {
+          const labels: Record<string, string> = {
+            basic_charge: "Basic Charge",
+            energy_high_season: "Energy (High Season)",
+            energy_low_season: "Energy (Low Season)",
+            demand_high_season: "Demand (High Season)",
+            demand_low_season: "Demand (Low Season)",
+            network_capacity: "Network Capacity",
+            network_demand: "Network Demand"
+          };
+          return labels[type] || type.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        };
+
+        const formatTariffType = (type: string): string => {
+          return type.charAt(0).toUpperCase() + type.slice(1);
+        };
+        
+        // Render tariff charts and tables interleaved
         const tariffChartImages = (previewData as any).tariffChartImages;
+        const tariffsByName = (previewData as any).tariffsByName || {};
+        
         if (tariffChartImages && Object.keys(tariffChartImages).length > 0) {
           const chartWidth = (pageWidth - leftMargin - rightMargin - 20) / 3;
           const chartHeight = chartWidth * 0.79;
           
           for (const tariffName of Object.keys(tariffChartImages)) {
             const charts = tariffChartImages[tariffName];
-            if (!charts) continue;
+            const tariffPeriods = tariffsByName[tariffName] || [];
+            const latestPeriod = tariffPeriods[tariffPeriods.length - 1];
             
-            // Check if we need a new page (space for label + charts)
-            if (yPos > pageHeight - bottomMargin - chartHeight - 25) {
-              addFooter();
-              addPageNumber();
-              pdf.addPage();
-              yPos = topMargin;
-            }
+            if (!charts && !latestPeriod) continue;
             
-            // Add tariff name label above charts
-            pdf.setFontSize(10);
-            pdf.setFont("helvetica", "bold");
-            pdf.setTextColor(0, 0, 0);
-            pdf.text(tariffName, leftMargin, yPos);
-            yPos += 8;
+            // Add tariff subheading
+            addSubsectionHeading(tariffName);
             
-            // Draw 3 charts horizontally
-            let chartX = leftMargin;
-            
-            if (charts.basic) {
-              try {
-                pdf.addImage(charts.basic, 'PNG', chartX, yPos, chartWidth, chartHeight);
-              } catch (err) {
-                console.error("Error adding basic charge chart:", err);
+            // Render 3 charts horizontally
+            if (charts) {
+              // Check if we need a new page for charts
+              if (yPos > pageHeight - bottomMargin - chartHeight - 10) {
+                addFooter();
+                addPageNumber();
+                pdf.addPage();
+                yPos = topMargin;
               }
-              chartX += chartWidth + 10;
-            }
-            
-            if (charts.energy) {
-              try {
-                pdf.addImage(charts.energy, 'PNG', chartX, yPos, chartWidth, chartHeight);
-              } catch (err) {
-                console.error("Error adding energy charge chart:", err);
+              
+              let chartX = leftMargin;
+              
+              if (charts.basic) {
+                try {
+                  pdf.addImage(charts.basic, 'PNG', chartX, yPos, chartWidth, chartHeight);
+                } catch (err) {
+                  console.error("Error adding basic charge chart:", err);
+                }
+                chartX += chartWidth + 10;
               }
-              chartX += chartWidth + 10;
+              
+              if (charts.energy) {
+                try {
+                  pdf.addImage(charts.energy, 'PNG', chartX, yPos, chartWidth, chartHeight);
+                } catch (err) {
+                  console.error("Error adding energy charge chart:", err);
+                }
+                chartX += chartWidth + 10;
+              }
+              
+              if (charts.demand) {
+                try {
+                  pdf.addImage(charts.demand, 'PNG', chartX, yPos, chartWidth, chartHeight);
+                } catch (err) {
+                  console.error("Error adding demand charge chart:", err);
+                }
+              }
+              
+              yPos += chartHeight + 10;
             }
             
-            if (charts.demand) {
-              try {
-                pdf.addImage(charts.demand, 'PNG', chartX, yPos, chartWidth, chartHeight);
-              } catch (err) {
-                console.error("Error adding demand charge chart:", err);
+            // Render tariff details tables
+            if (latestPeriod) {
+              addTable(
+                ["Attribute", "Value"],
+                [
+                  ["Type", formatTariffType(latestPeriod.tariff_type || 'N/A')],
+                  ["Voltage Level", latestPeriod.voltage_level || 'N/A'],
+                  ["Meter Configuration", latestPeriod.meter_configuration || 'N/A'],
+                  ["Transmission Zone", latestPeriod.transmission_zone || 'N/A'],
+                  ["Effective From", format(new Date(latestPeriod.effective_from), "dd MMM yyyy")],
+                  ["Effective To", latestPeriod.effective_to ? format(new Date(latestPeriod.effective_to), "dd MMM yyyy") : 'Current'],
+                  ["Uses TOU", latestPeriod.uses_tou ? 'Yes' : 'No']
+                ],
+                [80, 90],
+                "Tariff Overview"
+              );
+              
+              addSpacer(5);
+              
+              // Render charges table
+              const charges = latestPeriod.tariff_charges || [];
+              if (charges.length > 0) {
+                addTable(
+                  ["Type", "Description", "Amount", "Unit"],
+                  charges.map((charge: any) => [
+                    formatChargeType(charge.charge_type),
+                    charge.description || '—',
+                    formatNumber(charge.charge_amount),
+                    charge.unit
+                  ]),
+                  [45, 60, 35, 30],
+                  "Charges (Current Period)"
+                );
               }
             }
             
-            yPos += chartHeight + 15; // Move down for next tariff row
+            addSpacer(10); // Space before next tariff
           }
+        } else {
+          // Fallback if no charts - render the markdown section
+          renderSection('tariff-configuration');
         }
         
-        renderSection('tariff-configuration');
         addSpacer(8);
         
         // Section 4: Metering Data Analysis
@@ -2198,6 +2259,7 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
         schematicImageBase64,
         csvColumnAggregations,
         tariffChartImages, // Add tariff comparison charts
+        tariffsByName, // Add tariff details
         chartImages: {
           meterTypeChart,
           consumptionChart
