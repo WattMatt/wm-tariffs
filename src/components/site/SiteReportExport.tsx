@@ -122,7 +122,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
 
         if (schematicsError) throw schematicsError;
         
-        // List ALL snippet files and match them to schematics
+        // List ALL snippet files directly without matching to schematics
         const snippetsWithUrls: any[] = [];
         
         if (schematics && schematics.length > 0) {
@@ -144,31 +144,22 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             const snippetFiles = fileList.filter(file => file.name.endsWith('_snippet.png'));
             console.log('Snippet files found:', snippetFiles);
             
-            // Match snippets to schematics
+            // Create entries for EACH snippet file
             snippetFiles.forEach(file => {
-              // Find matching schematic by comparing filename
-              const matchingSchematic = schematics.find(s => {
-                const schematicFileName = s.file_path.split('/').pop();
-                const baseName = schematicFileName?.replace(/\.[^/.]+$/, '');
-                const snippetBaseName = file.name.replace('_snippet.png', '');
-                return baseName === snippetBaseName;
-              });
+              const snippetPath = `${siteDirectory}/${file.name}`;
+              const { data: urlData } = supabase.storage
+                .from('client-files')
+                .getPublicUrl(snippetPath);
               
-              if (matchingSchematic) {
-                const snippetPath = `${siteDirectory}/${file.name}`;
-                const { data: urlData } = supabase.storage
-                  .from('client-files')
-                  .getPublicUrl(snippetPath);
-                
-                snippetsWithUrls.push({
-                  id: matchingSchematic.id, // Use schematic UUID as ID
-                  name: matchingSchematic.name,
-                  snippetUrl: urlData.publicUrl,
-                  snippetPath: snippetPath,
-                  page_number: matchingSchematic.page_number,
-                  total_pages: matchingSchematic.total_pages
-                });
-              }
+              // Use filename without extension as display name
+              const displayName = file.name.replace('_snippet.png', '');
+              
+              snippetsWithUrls.push({
+                id: file.name, // Use filename as unique ID
+                name: displayName,
+                snippetUrl: urlData.publicUrl,
+                snippetPath: snippetPath
+              });
             });
           }
         }
