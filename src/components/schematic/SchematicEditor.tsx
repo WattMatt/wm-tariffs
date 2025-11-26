@@ -4027,7 +4027,7 @@ export default function SchematicEditor({
       const storagePath = await generateStoragePath(
         siteId,
         'Metering',
-        'Schematics/Snippets',
+        'Schematics',
         fileName
       );
       
