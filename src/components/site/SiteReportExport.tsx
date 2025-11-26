@@ -2548,10 +2548,18 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           for (const [chargeType, chartData] of Object.entries(chartDataByType)) {
             if (chartData.length > 0) {
               try {
+                // Sort chart data chronologically (oldest to newest / left to right)
+                const sortedChartData = [...chartData].sort((a, b) => {
+                  // Extract start date from period string "MMM yyyy - MMM yyyy"
+                  const dateA = new Date(a.period.split(' - ')[0]);
+                  const dateB = new Date(b.period.split(' - ')[0]);
+                  return dateA.getTime() - dateB.getTime();
+                });
+                
                 const chartImage = generateDocumentVsAssignedChart(
                   chargeType,
                   '',  // Unit is already in the title
-                  chartData,
+                  sortedChartData,
                   500,
                   320
                 );
