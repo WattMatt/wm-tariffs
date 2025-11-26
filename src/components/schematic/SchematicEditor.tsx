@@ -4035,17 +4035,13 @@ export default function SchematicEditor({
         // Get the bounding rect which gives us the actual rendered position and size
         const bounds = rect.getBoundingRect();
         
-        // Reduce width slightly on the right side for tighter boundary
-        const widthReduction = bounds.width * 0.05; // Reduce by 5%
-        
         captureRect = {
           x: bounds.left,
           y: bounds.top,
-          width: bounds.width - widthReduction,
+          width: bounds.width,
           height: bounds.height,
         };
-        console.log('Capture rect:', captureRect);
-        console.log('Canvas dimensions:', fabricCanvas.getWidth(), fabricCanvas.getHeight());
+        console.log('Initial capture rect:', captureRect);
       }
       
       // 6. Use native canvas cropping for reliable results
@@ -4058,6 +4054,8 @@ export default function SchematicEditor({
       croppedCanvas.width = captureRect.width * multiplier;
       croppedCanvas.height = captureRect.height * multiplier;
       const ctx = croppedCanvas.getContext('2d');
+      
+      let blob: Blob | null = null;
       
       if (ctx) {
         // Draw only the snippet region from the full canvas
@@ -4072,26 +4070,137 @@ export default function SchematicEditor({
           captureRect.width * multiplier, // Destination width
           captureRect.height * multiplier  // Destination height
         );
+        
+        // 7. Auto-trim: detect and remove background padding
+        const imageData = ctx.getImageData(0, 0, croppedCanvas.width, croppedCanvas.height);
+        const data = imageData.data;
+        
+        // Helper: Get background color from corners
+        const getBackgroundColor = (data: Uint8ClampedArray, width: number, height: number) => {
+          const corners = [
+            0, // top-left
+            width - 1, // top-right
+            (height - 1) * width, // bottom-left
+            (height - 1) * width + (width - 1) // bottom-right
+          ];
+          
+          const colors = corners.map(idx => ({
+            r: data[idx * 4],
+            g: data[idx * 4 + 1],
+            b: data[idx * 4 + 2],
+            a: data[idx * 4 + 3]
+          }));
+          
+          // Return average color
+          return {
+            r: Math.round(colors.reduce((sum, c) => sum + c.r, 0) / 4),
+            g: Math.round(colors.reduce((sum, c) => sum + c.g, 0) / 4),
+            b: Math.round(colors.reduce((sum, c) => sum + c.b, 0) / 4),
+            a: Math.round(colors.reduce((sum, c) => sum + c.a, 0) / 4)
+          };
+        };
+        
+        // Helper: Check if pixel matches background (with tolerance)
+        const isBackground = (r: number, g: number, b: number, a: number, bg: any, tolerance = 20) => {
+          return Math.abs(r - bg.r) <= tolerance &&
+                 Math.abs(g - bg.g) <= tolerance &&
+                 Math.abs(b - bg.b) <= tolerance &&
+                 Math.abs(a - bg.a) <= tolerance;
+        };
+        
+        const bgColor = getBackgroundColor(data, croppedCanvas.width, croppedCanvas.height);
+        console.log('Detected background color:', bgColor);
+        
+        // Find content bounds by scanning from edges
+        let top = 0, bottom = croppedCanvas.height - 1, left = 0, right = croppedCanvas.width - 1;
+        
+        // Scan from top
+        topLoop: for (let y = 0; y < croppedCanvas.height; y++) {
+          for (let x = 0; x < croppedCanvas.width; x++) {
+            const idx = (y * croppedCanvas.width + x) * 4;
+            if (!isBackground(data[idx], data[idx + 1], data[idx + 2], data[idx + 3], bgColor)) {
+              top = y;
+              break topLoop;
+            }
+          }
+        }
+        
+        // Scan from bottom
+        bottomLoop: for (let y = croppedCanvas.height - 1; y >= 0; y--) {
+          for (let x = 0; x < croppedCanvas.width; x++) {
+            const idx = (y * croppedCanvas.width + x) * 4;
+            if (!isBackground(data[idx], data[idx + 1], data[idx + 2], data[idx + 3], bgColor)) {
+              bottom = y;
+              break bottomLoop;
+            }
+          }
+        }
+        
+        // Scan from left
+        leftLoop: for (let x = 0; x < croppedCanvas.width; x++) {
+          for (let y = 0; y < croppedCanvas.height; y++) {
+            const idx = (y * croppedCanvas.width + x) * 4;
+            if (!isBackground(data[idx], data[idx + 1], data[idx + 2], data[idx + 3], bgColor)) {
+              left = x;
+              break leftLoop;
+            }
+          }
+        }
+        
+        // Scan from right
+        rightLoop: for (let x = croppedCanvas.width - 1; x >= 0; x--) {
+          for (let y = 0; y < croppedCanvas.height; y++) {
+            const idx = (y * croppedCanvas.width + x) * 4;
+            if (!isBackground(data[idx], data[idx + 1], data[idx + 2], data[idx + 3], bgColor)) {
+              right = x;
+              break rightLoop;
+            }
+          }
+        }
+        
+        console.log('Content bounds:', { top, bottom, left, right });
+        
+        // 8. Create final canvas with exact content bounds
+        const contentWidth = right - left + 1;
+        const contentHeight = bottom - top + 1;
+        
+        const finalCanvas = document.createElement('canvas');
+        finalCanvas.width = contentWidth;
+        finalCanvas.height = contentHeight;
+        const finalCtx = finalCanvas.getContext('2d');
+        
+        if (finalCtx) {
+          finalCtx.drawImage(
+            croppedCanvas,
+            left, top, contentWidth, contentHeight, // Source
+            0, 0, contentWidth, contentHeight // Destination
+          );
+        }
+        
+        const dataUrl = finalCanvas.toDataURL('image/png', 1.0);
+        console.log('Final trimmed dimensions:', contentWidth, contentHeight);
+        
+        // Continue with the rest of the upload process using finalCanvas instead
+        const response = await fetch(dataUrl);
+        blob = await response.blob();
       }
       
-      const dataUrl = croppedCanvas.toDataURL('image/png', 1.0);
-      
-      // 7. Restore snippet rectangle visibility
+      // 9. Restore snippet rectangle visibility
       if (snippetRectRef.current) {
         snippetRectRef.current.visible = true;
       }
       
-      // 8. Restore background visibility
+      // 10. Restore background visibility
       if (backgroundObj) {
         backgroundObj.visible = originalBackgroundVisible;
       }
       fabricCanvas.renderAll();
       
-      // 6. Convert data URL to blob
-      const response = await fetch(dataUrl);
-      const blob = await response.blob();
+      if (!blob) {
+        throw new Error('Failed to generate snippet blob');
+      }
       
-      // 7. Generate storage path (without timestamp so it replaces previous snippet)
+      // 11. Generate storage path (without timestamp so it replaces previous snippet)
       const { data: schematicData } = await supabase
         .from('schematics')
         .select('name')
@@ -4108,7 +4217,7 @@ export default function SchematicEditor({
         fileName
       );
       
-      // 8. Upload to storage (upsert: true to replace existing snippet)
+      // 12. Upload to storage (upsert: true to replace existing snippet)
       const { error: uploadError } = await supabase.storage
         .from(storagePath.bucket)
         .upload(storagePath.path, blob, {
@@ -4118,14 +4227,14 @@ export default function SchematicEditor({
       
       if (uploadError) throw uploadError;
       
-      // 9. Get public URL
+      // 13. Get public URL
       const { data: urlData } = supabase.storage
         .from(storagePath.bucket)
         .getPublicUrl(storagePath.path);
       
       toast.success('Snippet saved successfully!');
       
-      // 10. Clear snippet mode
+      // 14. Clear snippet mode
       setActiveTool("select");
       if (snippetRectRef.current) {
         fabricCanvas.remove(snippetRectRef.current);
