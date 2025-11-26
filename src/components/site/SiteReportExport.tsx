@@ -706,7 +706,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
                   tableTitle = contextTitle;
                 }
               }
-              addTable(parsed.headers, parsed.rows, undefined, tableTitle);
+              addTable(parsed.headers, parsed.rows, undefined, tableTitle, tableTitle);
               yPos += 5;
             }
             
@@ -794,7 +794,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         };
         
         // Helper to add table
-        const addTable = (headers: string[], rows: string[][], columnWidths?: number[], tableTitle?: string) => {
+        const addTable = (headers: string[], rows: string[][], columnWidths?: number[], tableCaption?: string, tableHeader?: string) => {
           const tableWidth = pageWidth - leftMargin - rightMargin;
           const defaultColWidth = tableWidth / headers.length;
           const colWidths = columnWidths || headers.map(() => defaultColWidth);
@@ -804,6 +804,16 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             addPageNumber();
             pdf.addPage();
             yPos = topMargin;
+          }
+          
+          // Add title ABOVE table if provided
+          if (tableHeader) {
+            pdf.setFontSize(11);
+            pdf.setFont("helvetica", "bold");
+            pdf.setTextColor(templateBlue[0], templateBlue[1], templateBlue[2]);
+            pdf.text(tableHeader, leftMargin, yPos);
+            pdf.setTextColor(0, 0, 0);
+            yPos += 8;
           }
           
           // Draw header with blue background
@@ -855,9 +865,9 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           
           yPos += 3; // Reduced spacing after table
           
-          // Add caption if title provided
-          if (tableTitle) {
-            addTableCaption(tableTitle);
+          // Add caption at bottom if provided
+          if (tableCaption) {
+            addTableCaption(tableCaption);
           }
         };
 
@@ -2327,7 +2337,8 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         const comparisonSections = [];
         
         for (const [meterId, meterComparisonData] of Object.entries(rateComparisonData) as [string, any][]) {
-          let content = `### Meter: ${meterComparisonData.meterNumber}${meterComparisonData.meterName ? ` (${meterComparisonData.meterName})` : ''}\n\n`;
+          const meterTitle = `Meter: ${meterComparisonData.meterNumber}${meterComparisonData.meterName ? ` (${meterComparisonData.meterName})` : ''}`;
+          let content = `### ${meterTitle}\n\n`;
           
           if (!meterComparisonData.documents || !Array.isArray(meterComparisonData.documents)) {
             content += 'No document comparisons available.\n\n';
@@ -2335,14 +2346,14 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             continue;
           }
           
+          // Consolidate all documents into ONE table per meter
+          content += '| Period | Item | Document | Assigned | Variance |\n';
+          content += '|--------|------|----------|----------|----------|\n';
+          
           for (const doc of meterComparisonData.documents) {
             const periodStart = doc.periodStart ? format(new Date(doc.periodStart), "MMM yyyy") : 'N/A';
             const periodEnd = doc.periodEnd ? format(new Date(doc.periodEnd), "MMM yyyy") : 'N/A';
-            const variance = doc.overallVariance != null ? formatNumber(doc.overallVariance, 1) : 'N/A';
-            
-            content += `#### Document: ${periodStart} - ${periodEnd} | Overall Variance: ${variance}%\n\n`;
-            content += '| Item | Document | Assigned | Variance |\n';
-            content += '|------|----------|----------|----------|\n';
+            const period = `${periodStart} - ${periodEnd}`;
             
             if (doc.lineItems && Array.isArray(doc.lineItems)) {
               for (const item of doc.lineItems) {
@@ -2350,11 +2361,11 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
                 const assignedVal = item.assignedValue ? formatNumber(item.assignedValue, 4) : '—';
                 const varPercent = item.variancePercent != null ? formatNumber(item.variancePercent, 1) + '%' : '—';
                 
-                content += `| ${item.chargeType} (${item.unit}) | ${docVal} | ${assignedVal} | ${varPercent} |\n`;
+                content += `| ${period} | ${item.chargeType} (${item.unit}) | ${docVal} | ${assignedVal} | ${varPercent} |\n`;
               }
             }
-            content += '\n';
           }
+          content += '\n';
           
           comparisonSections.push(content);
         }
