@@ -4034,10 +4034,14 @@ export default function SchematicEditor({
         const rect = snippetRectRef.current;
         // Get the bounding rect which gives us the actual rendered position and size
         const bounds = rect.getBoundingRect();
+        
+        // Reduce width slightly on the right side for tighter boundary
+        const widthReduction = bounds.width * 0.05; // Reduce by 5%
+        
         captureRect = {
           x: bounds.left,
           y: bounds.top,
-          width: bounds.width,
+          width: bounds.width - widthReduction,
           height: bounds.height,
         };
         console.log('Capture rect:', captureRect);
