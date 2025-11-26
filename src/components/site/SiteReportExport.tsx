@@ -1022,51 +1022,62 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         // Section 3: Tariff Configuration
         addSectionHeading("3. TARIFF CONFIGURATION", 16, true);
         
-        // Add tariff comparison charts if available (3 charts horizontally)
+        // Add tariff comparison charts for ALL tariffs (3 charts per row, one row per tariff)
         const tariffChartImages = (previewData as any).tariffChartImages;
-        const firstTariffName = tariffChartImages ? Object.keys(tariffChartImages)[0] : null;
-        if (firstTariffName && tariffChartImages[firstTariffName]) {
-          // Check if we need a new page
-          if (yPos > pageHeight - bottomMargin - 120) {
-            addFooter();
-            addPageNumber();
-            pdf.addPage();
-            yPos = topMargin;
-          }
+        if (tariffChartImages && Object.keys(tariffChartImages).length > 0) {
+          const chartWidth = (pageWidth - leftMargin - rightMargin - 20) / 3;
+          const chartHeight = chartWidth * 0.79;
           
-          const charts = tariffChartImages[firstTariffName];
-          const chartWidth = (pageWidth - leftMargin - rightMargin - 20) / 3; // 3 charts with spacing
-          const chartHeight = chartWidth * 0.79; // Maintain aspect ratio from chart generation
-          
-          let chartX = leftMargin;
-          
-          if (charts.basic) {
-            try {
-              pdf.addImage(charts.basic, 'PNG', chartX, yPos, chartWidth, chartHeight);
-            } catch (err) {
-              console.error("Error adding basic charge chart:", err);
+          for (const tariffName of Object.keys(tariffChartImages)) {
+            const charts = tariffChartImages[tariffName];
+            if (!charts) continue;
+            
+            // Check if we need a new page (space for label + charts)
+            if (yPos > pageHeight - bottomMargin - chartHeight - 25) {
+              addFooter();
+              addPageNumber();
+              pdf.addPage();
+              yPos = topMargin;
             }
-            chartX += chartWidth + 10;
-          }
-          
-          if (charts.energy) {
-            try {
-              pdf.addImage(charts.energy, 'PNG', chartX, yPos, chartWidth, chartHeight);
-            } catch (err) {
-              console.error("Error adding energy charge chart:", err);
+            
+            // Add tariff name label above charts
+            pdf.setFontSize(10);
+            pdf.setFont("helvetica", "bold");
+            pdf.setTextColor(0, 0, 0);
+            pdf.text(tariffName, leftMargin, yPos);
+            yPos += 8;
+            
+            // Draw 3 charts horizontally
+            let chartX = leftMargin;
+            
+            if (charts.basic) {
+              try {
+                pdf.addImage(charts.basic, 'PNG', chartX, yPos, chartWidth, chartHeight);
+              } catch (err) {
+                console.error("Error adding basic charge chart:", err);
+              }
+              chartX += chartWidth + 10;
             }
-            chartX += chartWidth + 10;
-          }
-          
-          if (charts.demand) {
-            try {
-              pdf.addImage(charts.demand, 'PNG', chartX, yPos, chartWidth, chartHeight);
-            } catch (err) {
-              console.error("Error adding demand charge chart:", err);
+            
+            if (charts.energy) {
+              try {
+                pdf.addImage(charts.energy, 'PNG', chartX, yPos, chartWidth, chartHeight);
+              } catch (err) {
+                console.error("Error adding energy charge chart:", err);
+              }
+              chartX += chartWidth + 10;
             }
+            
+            if (charts.demand) {
+              try {
+                pdf.addImage(charts.demand, 'PNG', chartX, yPos, chartWidth, chartHeight);
+              } catch (err) {
+                console.error("Error adding demand charge chart:", err);
+              }
+            }
+            
+            yPos += chartHeight + 15; // Move down for next tariff row
           }
-          
-          yPos += chartHeight + 15;
         }
         
         renderSection('tariff-configuration');
@@ -1910,7 +1921,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       
       for (const tariffName of uniqueTariffNames) {
         const periods = tariffsByName[tariffName] || [];
-        if (periods.length >= 2) {
+        if (periods.length >= 1) {
           const basicChargeData = periods.map(p => ({
             label: formatPeriod(p.effective_from, p.effective_to),
             value: Math.round(p.tariff_charges?.find((c: any) => c.charge_type === 'basic_charge')?.charge_amount || 0)
