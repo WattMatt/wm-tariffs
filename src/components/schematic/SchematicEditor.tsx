@@ -4028,17 +4028,20 @@ export default function SchematicEditor({
       // 4. Render canvas to apply visibility changes
       fabricCanvas.renderAll();
       
-      // 5. Get current bounds using object properties (canvas coordinates, not screen coordinates)
+      // 5. Get current bounds using the rectangle's actual canvas coordinates
       let captureRect = snippetRect;
       if (snippetRectRef.current) {
         const rect = snippetRectRef.current;
-        // Use object properties directly - these are in canvas space
+        // Get the bounding rect which gives us the actual rendered position and size
+        const bounds = rect.getBoundingRect();
         captureRect = {
-          x: rect.left!,
-          y: rect.top!,
-          width: rect.width! * (rect.scaleX || 1),
-          height: rect.height! * (rect.scaleY || 1),
+          x: bounds.left,
+          y: bounds.top,
+          width: bounds.width,
+          height: bounds.height,
         };
+        console.log('Capture rect:', captureRect);
+        console.log('Canvas dimensions:', fabricCanvas.getWidth(), fabricCanvas.getHeight());
       }
       
       // 6. Use native canvas cropping for reliable results
