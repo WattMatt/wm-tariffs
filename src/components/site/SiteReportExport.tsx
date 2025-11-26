@@ -122,7 +122,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
 
         if (schematicsError) throw schematicsError;
         
-        // List ALL snippet files for this site
+        // List ALL snippet files for this site from client-files bucket
         const snippetsWithUrls: any[] = [];
         
         // Get the site path from the first schematic
@@ -132,23 +132,27 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           // Get the base site directory (e.g., "Client Name/Site Name/Metering/Schematics")
           const siteDirectory = pathParts.slice(0, -1).join('/');
           
-          // List all files recursively in the site directory
-          const { data: fileList } = await supabase.storage
-            .from('site-files')
+          // List all files in the site directory from client-files bucket
+          const { data: fileList, error: listError } = await supabase.storage
+            .from('client-files')
             .list(siteDirectory, {
               limit: 1000,
               sortBy: { column: 'name', order: 'asc' }
             });
           
+          console.log('Storage list result:', { fileList, listError, siteDirectory });
+          
           if (fileList) {
             // Filter for snippet files
             const snippetFiles = fileList.filter(file => file.name.endsWith('_snippet.png'));
+            
+            console.log('Snippet files found:', snippetFiles);
             
             // Create entries for each snippet
             snippetFiles.forEach(file => {
               const snippetPath = `${siteDirectory}/${file.name}`;
               const { data: urlData } = supabase.storage
-                .from('site-files')
+                .from('client-files')
                 .getPublicUrl(snippetPath);
               
               // Extract display name from filename (remove _snippet.png)
@@ -164,7 +168,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           }
         }
         
-        console.log('Found snippets:', snippetsWithUrls);
+        console.log('Final snippets:', snippetsWithUrls);
         setAvailableSnippets(snippetsWithUrls);
 
         // Fetch available folders from document paths with document counts
