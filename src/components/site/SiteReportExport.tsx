@@ -1809,6 +1809,38 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           return acc;
         }, {});
 
+        // Collect all unique tariff_structure_ids to batch fetch
+        const uniqueTariffIds = new Set<string>();
+        for (const calc of documentCalculations) {
+          if (calc.tariff_structure_id) {
+            uniqueTariffIds.add(calc.tariff_structure_id);
+          }
+        }
+        const tariffIdArray = Array.from(uniqueTariffIds);
+        console.log('Batch fetching tariff details for', tariffIdArray.length, 'unique tariffs');
+        
+        // Batch fetch ALL tariff details upfront in 3 parallel queries
+        const [
+          { data: allBlocks },
+          { data: allPeriods },
+          { data: allCharges }
+        ] = await Promise.all([
+          supabase.from("tariff_blocks").select("*").in("tariff_structure_id", tariffIdArray).order("block_number"),
+          supabase.from("tariff_time_periods").select("*").in("tariff_structure_id", tariffIdArray),
+          supabase.from("tariff_charges").select("*").in("tariff_structure_id", tariffIdArray)
+        ]);
+        
+        // Build lookup cache for instant access
+        const tariffCache = new Map<string, { blocks: any[], periods: any[], charges: any[] }>();
+        tariffIdArray.forEach(id => {
+          tariffCache.set(id, {
+            blocks: (allBlocks || []).filter(b => b.tariff_structure_id === id),
+            periods: (allPeriods || []).filter(p => p.tariff_structure_id === id),
+            charges: (allCharges || []).filter(c => c.tariff_structure_id === id)
+          });
+        });
+        console.log('Tariff cache built with', tariffCache.size, 'tariffs');
+
         // Process each meter's calculations using TariffAssignmentTab approach
         for (const [meterId, meterInfo] of Object.entries(meterGroups) as any) {
           const documents = [];
@@ -1821,31 +1853,11 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             
             if (lineItems.length === 0) continue;
             
-            // Use RPC to find applicable tariff for this period (supports multi-period tariffs)
-            const { data: applicableTariffs } = await supabase.rpc('get_applicable_tariff_periods', {
-              p_supply_authority_id: siteData?.supply_authority_id || '',
-              p_tariff_name: calc.tariff_name || '',
-              p_date_from: calc.period_start,
-              p_date_to: calc.period_end
-            });
-            
-            const periodTariffId = applicableTariffs?.[0]?.tariff_id || calc.tariff_structure_id;
-            
-            // Fetch period-specific tariff details (blocks, periods, charges)
-            const [
-              { data: tariffBlocks },
-              { data: tariffPeriods },
-              { data: tariffCharges }
-            ] = await Promise.all([
-              supabase.from("tariff_blocks").select("*").eq("tariff_structure_id", periodTariffId).order("block_number"),
-              supabase.from("tariff_time_periods").select("*").eq("tariff_structure_id", periodTariffId),
-              supabase.from("tariff_charges").select("*").eq("tariff_structure_id", periodTariffId)
-            ]);
-            
-            const tariffDetails = {
-              blocks: tariffBlocks || [],
-              periods: tariffPeriods || [],
-              charges: tariffCharges || []
+            // Use cached tariff details - NO database calls
+            const tariffDetails = tariffCache.get(calc.tariff_structure_id) || {
+              blocks: [],
+              periods: [],
+              charges: []
             };
             
             // Determine season based on billing period
