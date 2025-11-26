@@ -99,7 +99,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
   const [selectedSchematicId, setSelectedSchematicId] = useState<string>("");
   const [selectedFolderPaths, setSelectedFolderPaths] = useState<string[]>([]);
   const [selectedReconciliationIds, setSelectedReconciliationIds] = useState<string[]>([]);
-  const [availableSchematics, setAvailableSchematics] = useState<any[]>([]);
+  const [availableSnippets, setAvailableSnippets] = useState<any[]>([]);
   const [availableFolders, setAvailableFolders] = useState<any[]>([]);
   const [availableReconciliations, setAvailableReconciliations] = useState<any[]>([]);
   const [isLoadingOptions, setIsLoadingOptions] = useState(true);
@@ -113,15 +113,52 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
     const fetchOptions = async () => {
       setIsLoadingOptions(true);
       try {
-        // Fetch schematics
+        // Fetch schematics and check for snippet images
         const { data: schematics, error: schematicsError } = await supabase
           .from("schematics")
-          .select("id, name, description, page_number, total_pages")
+          .select("id, name, description, page_number, total_pages, file_path, site_id")
           .eq("site_id", siteId)
           .order("name", { ascending: true });
 
         if (schematicsError) throw schematicsError;
-        setAvailableSchematics(schematics || []);
+        
+        // Check storage for snippet files
+        const snippetsWithUrls: any[] = [];
+        
+        for (const schematic of schematics || []) {
+          // Extract the directory path from the schematic file_path
+          const pathParts = schematic.file_path.split('/');
+          const directory = pathParts.slice(0, -1).join('/'); // Remove filename
+          const schematicBaseName = pathParts[pathParts.length - 1].split('.')[0]; // Get filename without extension
+          
+          // Look for snippet file (typically named: {schematic_name}_snippet.png)
+          const snippetPath = `${directory}/${schematicBaseName}_snippet.png`;
+          
+          // Check if snippet exists and get URL
+          const { data: fileList } = await supabase.storage
+            .from('site-files')
+            .list(directory, {
+              search: `${schematicBaseName}_snippet`
+            });
+          
+          if (fileList && fileList.length > 0) {
+            // Snippet exists, get public URL
+            const { data: urlData } = supabase.storage
+              .from('site-files')
+              .getPublicUrl(snippetPath);
+            
+            snippetsWithUrls.push({
+              id: schematic.id,
+              name: schematic.name,
+              snippetUrl: urlData.publicUrl,
+              snippetPath: snippetPath,
+              page_number: schematic.page_number,
+              total_pages: schematic.total_pages
+            });
+          }
+        }
+        
+        setAvailableSnippets(snippetsWithUrls);
 
         // Fetch available folders from document paths with document counts
         // Only include non-folder documents (actual files)
@@ -2283,27 +2320,36 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
         {/* Required Selections */}
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="schematic-select">Select Schematic *</Label>
+            <Label htmlFor="snippet-select">Select Schematic Snippet *</Label>
             <Select 
               value={selectedSchematicId} 
               onValueChange={setSelectedSchematicId}
               disabled={isLoadingOptions}
             >
-              <SelectTrigger id="schematic-select">
-                <SelectValue placeholder="Choose a schematic for the report" />
+              <SelectTrigger id="snippet-select">
+                <SelectValue placeholder="Choose a schematic snippet for the report" />
               </SelectTrigger>
-              <SelectContent>
-                {availableSchematics.length === 0 ? (
-                  <SelectItem value="no-schematics" disabled>No schematics available</SelectItem>
+              <SelectContent className="bg-background">
+                {availableSnippets.length === 0 ? (
+                  <SelectItem value="no-snippets" disabled>No schematic snippets available</SelectItem>
                 ) : (
-                  availableSchematics.map((schematic) => (
-                    <SelectItem key={schematic.id} value={schematic.id}>
-                      {schematic.name} {schematic.total_pages > 1 ? `(Page ${schematic.page_number}/${schematic.total_pages})` : ''}
+                  availableSnippets.map((snippet) => (
+                    <SelectItem key={snippet.id} value={snippet.id}>
+                      {snippet.name} {snippet.total_pages > 1 ? `(Page ${snippet.page_number}/${snippet.total_pages})` : ''}
                     </SelectItem>
                   ))
                 )}
               </SelectContent>
             </Select>
+            {selectedSchematicId && availableSnippets.find(s => s.id === selectedSchematicId) && (
+              <div className="mt-2 border rounded-lg p-2 bg-muted/30">
+                <img 
+                  src={availableSnippets.find(s => s.id === selectedSchematicId)?.snippetUrl}
+                  alt="Schematic snippet preview"
+                  className="w-full h-auto max-h-48 object-contain"
+                />
+              </div>
+            )}
           </div>
 
           <div className="space-y-2">
