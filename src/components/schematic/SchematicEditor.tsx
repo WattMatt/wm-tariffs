@@ -4011,31 +4011,37 @@ export default function SchematicEditor({
     setIsCapturingSnippet(true);
     
     try {
-      // 1. Store current visibility state of background
+      // 1. Store current visibility state of background and snippet rectangle
       const backgroundObj = fabricCanvas.getObjects().find((obj: any) => obj.isBackgroundImage);
       const originalBackgroundVisible = backgroundObj ? backgroundObj.visible : true;
       
-      // 2. Hide background image temporarily
+      // 2. Hide snippet rectangle before capture
+      if (snippetRectRef.current) {
+        snippetRectRef.current.visible = false;
+      }
+      
+      // 3. Hide background image temporarily
       if (backgroundObj) {
         backgroundObj.visible = false;
       }
       
-      // 3. Render canvas to get current state
+      // 4. Render canvas to apply visibility changes
       fabricCanvas.renderAll();
       
-      // 4. Get current bounds from the actual rectangle object in case it was resized
+      // 5. Get current bounds using object properties (canvas coordinates, not screen coordinates)
       let captureRect = snippetRect;
       if (snippetRectRef.current) {
-        const boundingRect = snippetRectRef.current.getBoundingRect();
+        const rect = snippetRectRef.current;
+        // Use object properties directly - these are in canvas space
         captureRect = {
-          x: boundingRect.left,
-          y: boundingRect.top,
-          width: boundingRect.width,
-          height: boundingRect.height,
+          x: rect.left!,
+          y: rect.top!,
+          width: rect.width! * (rect.scaleX || 1),
+          height: rect.height! * (rect.scaleY || 1),
         };
       }
       
-      // 5. Use fabric.js toDataURL with multiplier for high quality
+      // 6. Use fabric.js toDataURL with multiplier for high quality
       //    Crop to the snippet rectangle bounds
       const dataUrl = fabricCanvas.toDataURL({
         format: 'png',
@@ -4047,7 +4053,12 @@ export default function SchematicEditor({
         height: captureRect.height,
       });
       
-      // 5. Restore background visibility
+      // 7. Restore snippet rectangle visibility
+      if (snippetRectRef.current) {
+        snippetRectRef.current.visible = true;
+      }
+      
+      // 8. Restore background visibility
       if (backgroundObj) {
         backgroundObj.visible = originalBackgroundVisible;
       }
