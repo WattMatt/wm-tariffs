@@ -25,7 +25,8 @@ serve(async (req) => {
       schematics,
       tariffStructures,
       loadProfiles,
-      costAnalysis
+      costAnalysis,
+      rateComparisonData
     } = await req.json();
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
@@ -221,8 +222,79 @@ Create section with:
         console.error('✗ Tariff Configuration failed:', err);
       }),
 
-      // 4. METERING DATA ANALYSIS
-      callAIWithRetry('Metering Data Analysis', `Generate Section 4: Metering Data Analysis for ${siteName}.
+      // 4. TARIFF COMPARISON
+      Promise.resolve().then(() => {
+        if (!rateComparisonData || Object.keys(rateComparisonData).length === 0) {
+          sections.tariffComparison = `# Tariff Comparison\n\nNo rate comparison data available. Please ensure tariff assignments have been saved and cost calculations have been performed.`;
+          sectionStatus['tariffComparison'] = 'success';
+          console.log('✓ Tariff Comparison completed (no data)');
+          return;
+        }
+
+        let content = `# Tariff Comparison\n\n`;
+        content += `This section compares document-billed rates with assigned tariff rates for each meter.\n\n`;
+
+        for (const [meterId, meterData] of Object.entries(rateComparisonData) as [string, any][]) {
+          content += `## Meter: ${meterData.meterNumber}`;
+          if (meterData.meterName) {
+            content += ` (${meterData.meterName})`;
+          }
+          content += `\n\n`;
+
+          if (!meterData.documents || meterData.documents.length === 0) {
+            content += `*No document comparisons available for this meter.*\n\n`;
+            continue;
+          }
+
+          for (const doc of meterData.documents) {
+            const periodStart = new Date(doc.periodStart).toLocaleDateString('en-ZA', { year: 'numeric', month: 'short' });
+            const periodEnd = new Date(doc.periodEnd).toLocaleDateString('en-ZA', { year: 'numeric', month: 'short' });
+            
+            const varianceBadge = doc.overallVariance !== null 
+              ? `**${doc.overallVariance.toFixed(1)}%**`
+              : '—';
+            
+            content += `### Period: ${periodStart} - ${periodEnd} | Overall Variance: ${varianceBadge}\n\n`;
+
+            if (!doc.lineItems || doc.lineItems.length === 0) {
+              content += `*No rate comparison data available for this period.*\n\n`;
+              continue;
+            }
+
+            content += `| Item | Document | Assigned | Variance |\n`;
+            content += `|------|----------|----------|----------|\n`;
+
+            for (const item of doc.lineItems) {
+              const docValue = item.documentValue !== null 
+                ? `R ${item.documentValue.toFixed(4)}${item.unit ? ' ' + item.unit.replace('R/', '') : ''}`
+                : '—';
+              
+              const assignedValue = item.assignedValue !== null 
+                ? `R ${item.assignedValue.toFixed(4)}${item.unit ? ' ' + item.unit.replace('R/', '') : ''}`
+                : '—';
+              
+              const variance = item.variancePercent !== null 
+                ? `${item.variancePercent > 0 ? '+' : ''}${item.variancePercent.toFixed(1)}%`
+                : '—';
+              
+              content += `| ${item.chargeType} | ${docValue} | ${assignedValue} | ${variance} |\n`;
+            }
+
+            content += `\n`;
+          }
+        }
+
+        sections.tariffComparison = content;
+        sectionStatus['tariffComparison'] = 'success';
+        console.log('✓ Tariff Comparison completed');
+      }).catch(err => {
+        sectionStatus['tariffComparison'] = 'failed';
+        sections.tariffComparison = `# Tariff Comparison\n\n*This section could not be generated due to an error: ${err.message}*`;
+        console.error('✗ Tariff Comparison failed:', err);
+      }),
+
+      // 5. METERING DATA ANALYSIS
+      callAIWithRetry('Metering Data Analysis', `Generate Section 5: Metering Data Analysis for ${siteName}.
 
 Period: ${auditPeriodStart} to ${auditPeriodEnd}
 
@@ -259,10 +331,10 @@ Create section with:
     
     const batch2Promises = [];
 
-    // 5. DOCUMENT & INVOICE VALIDATION (if documents available)
+    // 6. DOCUMENT & INVOICE VALIDATION (if documents available)
     if (documentExtractions && documentExtractions.length > 0) {
       batch2Promises.push(
-        callAIWithRetry('Document Validation', `Generate Section 5: Document & Invoice Validation for ${siteName}.
+        callAIWithRetry('Document Validation', `Generate Section 6: Document & Invoice Validation for ${siteName}.
 
 Documents:
 ${JSON.stringify(documentExtractions, null, 2)}
@@ -299,9 +371,9 @@ Use ✓ for matches, ⚠ for <5% variance, ✗ for >5% variance`).then(content =
       );
     }
 
-    // 6. RECONCILIATION RESULTS
+    // 7. RECONCILIATION RESULTS
     batch2Promises.push(
-      callAIWithRetry('Reconciliation Results', `Generate Section 6: Reconciliation Results for ${siteName}.
+      callAIWithRetry('Reconciliation Results', `Generate Section 7: Reconciliation Results for ${siteName}.
 
 Period: ${auditPeriodStart} to ${auditPeriodEnd}
 
@@ -337,7 +409,7 @@ Create section with:
     // 7. COST ANALYSIS
     if (costAnalysis) {
       batch2Promises.push(
-        callAIWithRetry('Cost Analysis', `Generate Section 7: Cost Analysis for ${siteName}.
+        callAIWithRetry('Cost Analysis', `Generate Section 8: Cost Analysis for ${siteName}.
 
 Cost Data:
 ${JSON.stringify(costAnalysis, null, 2)}
@@ -371,7 +443,7 @@ Create section with:
     
     const batch3Promises = [
       // 8. FINDINGS & ANOMALIES
-      callAIWithRetry('Findings & Anomalies', `Generate Section 8: Findings & Anomalies for ${siteName}.
+      callAIWithRetry('Findings & Anomalies', `Generate Section 9: Findings & Anomalies for ${siteName}.
 
 Anomalies:
 ${JSON.stringify(anomalies, null, 2)}
@@ -402,8 +474,8 @@ Create section with:
         console.error('✗ Findings & Anomalies failed:', err);
       }),
 
-      // 9. RECOMMENDATIONS
-      callAIWithRetry('Recommendations', `Generate Section 9: Recommendations for ${siteName}.
+      // 10. RECOMMENDATIONS
+      callAIWithRetry('Recommendations', `Generate Section 10: Recommendations for ${siteName}.
 
 Variance: ${reconciliationData.variance} kWh (${reconciliationData.variancePercentage}%)
 Recovery Rate: ${reconciliationData.recoveryRate}%
