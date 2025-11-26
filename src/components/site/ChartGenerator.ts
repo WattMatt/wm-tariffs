@@ -137,3 +137,79 @@ export const generateConsumptionChart = (meterData: any[]): string => {
   
   return generateChartImage('bar', data, labels, 600, 400);
 };
+
+export const generateTariffComparisonChart = (
+  title: string,
+  unit: string,
+  periods: { label: string; value: number }[],
+  width: number = 280,
+  height: number = 220
+): string => {
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  
+  if (!ctx || periods.length === 0) return '';
+  
+  // Clear canvas with white background
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, width, height);
+  
+  // Draw title
+  ctx.fillStyle = '#000000';
+  ctx.font = 'bold 13px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(title, width / 2, 20);
+  
+  // Draw unit
+  ctx.font = '11px sans-serif';
+  ctx.fillText(`(${unit})`, width / 2, 35);
+  
+  const padding = 50;
+  const topPadding = 50;
+  const chartWidth = width - padding * 2;
+  const chartHeight = height - topPadding - padding;
+  const barWidth = chartWidth / periods.length;
+  const maxValue = Math.max(...periods.map(p => p.value));
+  
+  // Draw bars
+  periods.forEach((period, index) => {
+    const barHeight = maxValue > 0 ? (period.value / maxValue) * chartHeight : 0;
+    const x = padding + index * barWidth;
+    const y = height - padding - barHeight;
+    
+    // Grey bars like TariffPeriodComparisonDialog
+    ctx.fillStyle = '#9ca3af';
+    ctx.fillRect(x + 5, y, barWidth - 10, barHeight);
+    
+    // Draw value on top
+    ctx.fillStyle = '#000000';
+    ctx.font = 'bold 10px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(period.value.toLocaleString(), x + barWidth / 2, y - 5);
+  });
+  
+  // Draw X-axis labels (period labels)
+  ctx.fillStyle = '#000000';
+  ctx.font = '9px sans-serif';
+  ctx.textAlign = 'center';
+  periods.forEach((period, index) => {
+    const x = padding + index * barWidth + barWidth / 2;
+    const words = period.label.split(' ');
+    words.forEach((word, wordIndex) => {
+      ctx.fillText(word, x, height - padding + 15 + wordIndex * 11);
+    });
+  });
+  
+  // Draw Y-axis
+  ctx.strokeStyle = '#cccccc';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(padding, topPadding);
+  ctx.lineTo(padding, height - padding);
+  ctx.lineTo(width - padding, height - padding);
+  ctx.stroke();
+  
+  return canvas.toDataURL('image/png');
+};
