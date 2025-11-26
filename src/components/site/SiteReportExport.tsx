@@ -2446,12 +2446,16 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
 - Documents analyzed: ${documentExtractions.length}`,
 
           tariffComparison: Object.keys(rateComparisonData).length > 0 ? 
-            Object.entries(rateComparisonData).map(([meterId, meterData]: [string, any]) => {
-              let content = `### Meter: ${meterData.meterNumber}${meterData.meterName ? ` (${meterData.meterName})` : ''}\n\n`;
+            Object.entries(rateComparisonData).map(([meterId, meterComparisonData]: [string, any]) => {
+              let content = `### Meter: ${meterComparisonData.meterNumber}${meterComparisonData.meterName ? ` (${meterComparisonData.meterName})` : ''}\n\n`;
               
-              for (const doc of meterData.documents) {
-                const periodStart = format(new Date(doc.periodStart), "MMM yyyy");
-                const periodEnd = format(new Date(doc.periodEnd), "MMM yyyy");
+              if (!meterComparisonData.documents || !Array.isArray(meterComparisonData.documents)) {
+                return content + 'No document comparisons available.\n\n';
+              }
+              
+              for (const doc of meterComparisonData.documents) {
+                const periodStart = doc.periodStart ? format(new Date(doc.periodStart), "MMM yyyy") : 'N/A';
+                const periodEnd = doc.periodEnd ? format(new Date(doc.periodEnd), "MMM yyyy") : 'N/A';
                 const variance = doc.overallVariance !== null ? formatNumber(doc.overallVariance, 1) : 'N/A';
                 
                 content += `#### Document: ${periodStart} - ${periodEnd} | Overall Variance: ${variance}%\n\n`;
