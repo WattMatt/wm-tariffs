@@ -300,9 +300,11 @@ export const generateDocumentVsAssignedChart = (
   ctx.textAlign = 'center';
   ctx.fillText(title, width / 2, 20);
   
-  // Draw unit
-  ctx.font = '10px sans-serif';
-  ctx.fillText(`(${unit})`, width / 2, 35);
+  // Draw unit (only if provided)
+  if (unit && unit.trim()) {
+    ctx.font = '10px sans-serif';
+    ctx.fillText(`(${unit})`, width / 2, 35);
+  }
   
   // Draw legend
   const legendY = 48;
@@ -350,16 +352,16 @@ export const generateDocumentVsAssignedChart = (
     ctx.fillStyle = assignedColor;
     ctx.fillRect(clusterX + barWidth + 8, assignedY, barWidth, assignedBarHeight);
     
-    // Draw values on top of bars
+    // Draw values on top of bars (centered on each bar)
     ctx.fillStyle = '#000000';
     ctx.font = 'bold 9px sans-serif';
     ctx.textAlign = 'center';
     
     if (item.documentValue > 0) {
-      ctx.fillText(item.documentValue.toFixed(2), clusterX + barWidth / 2 + 4, docY - 3);
+      ctx.fillText(item.documentValue.toFixed(2), clusterX + 4 + barWidth / 2, docY - 3);
     }
     if (assignedValue > 0) {
-      ctx.fillText(assignedValue.toFixed(2), clusterX + barWidth * 1.5 + 8, assignedY - 3);
+      ctx.fillText(assignedValue.toFixed(2), clusterX + barWidth + 8 + barWidth / 2, assignedY - 3);
     }
   });
   
