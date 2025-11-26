@@ -2341,15 +2341,6 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
                 )}
               </SelectContent>
             </Select>
-            {selectedSchematicId && availableSnippets.find(s => s.id === selectedSchematicId) && (
-              <div className="mt-2 border rounded-lg p-2 bg-muted/30">
-                <img 
-                  src={availableSnippets.find(s => s.id === selectedSchematicId)?.snippetUrl}
-                  alt="Schematic snippet preview"
-                  className="w-full h-auto max-h-48 object-contain"
-                />
-              </div>
-            )}
           </div>
 
           <div className="space-y-2">
