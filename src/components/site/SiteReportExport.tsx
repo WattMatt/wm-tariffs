@@ -1973,11 +1973,15 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       };
 
       // Helper to format period
-      const formatPeriod = (from: string, to: string | null): string => {
-        const fromDate = new Date(from);
-        const toDate = to ? new Date(to) : null;
-        return `${format(fromDate, "MMM yyyy")} - ${toDate ? format(toDate, "MMM yyyy") : 'Present'}`;
-      };
+          const formatPeriod = (from: string, to: string | null): string => {
+            const fromDate = new Date(from);
+            const toDate = to ? new Date(to) : null;
+            return `${format(fromDate, "MMM yyyy")} - ${toDate ? format(toDate, "MMM yyyy") : 'Present'}`;
+          };
+
+          const formatPeriodLabel = (from: string): string => {
+            return format(new Date(from), "yyyy");
+          };
 
       const meterBreakdown = sortMetersBySchematicOrder(meterData).map(m => ({
         meterNumber: m.meter_number,
@@ -1995,30 +1999,30 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         const periods = tariffsByName[tariffName] || [];
         if (periods.length >= 1) {
           const basicChargeData = periods.map(p => ({
-            label: formatPeriod(p.effective_from, p.effective_to),
+            label: formatPeriodLabel(p.effective_from),
             value: Math.round(p.tariff_charges?.find((c: any) => c.charge_type === 'basic_charge')?.charge_amount || 0)
           }));
 
           // For Energy Chart - extract winter and summer separately
-          const energyWinterData = periods.map(p => {
-            const charges = p.tariff_charges || [];
-            const highSeason = charges.find((c: any) => c.charge_type === 'energy_high_season')?.charge_amount;
-            const bothSeasons = charges.find((c: any) => c.charge_type === 'energy_both_seasons')?.charge_amount;
-            return {
-              label: formatPeriod(p.effective_from, p.effective_to),
-              value: Math.round(highSeason ?? bothSeasons ?? 0)
-            };
-          });
+            const energyWinterData = periods.map(p => {
+              const charges = p.tariff_charges || [];
+              const highSeason = charges.find((c: any) => c.charge_type === 'energy_high_season')?.charge_amount;
+              const bothSeasons = charges.find((c: any) => c.charge_type === 'energy_both_seasons')?.charge_amount;
+              return {
+                label: formatPeriodLabel(p.effective_from),
+                value: Math.round(highSeason ?? bothSeasons ?? 0)
+              };
+            });
 
-          const energySummerData = periods.map(p => {
-            const charges = p.tariff_charges || [];
-            const lowSeason = charges.find((c: any) => c.charge_type === 'energy_low_season')?.charge_amount;
-            const bothSeasons = charges.find((c: any) => c.charge_type === 'energy_both_seasons')?.charge_amount;
-            return {
-              label: formatPeriod(p.effective_from, p.effective_to),
-              value: Math.round(lowSeason ?? bothSeasons ?? 0)
-            };
-          });
+            const energySummerData = periods.map(p => {
+              const charges = p.tariff_charges || [];
+              const lowSeason = charges.find((c: any) => c.charge_type === 'energy_low_season')?.charge_amount;
+              const bothSeasons = charges.find((c: any) => c.charge_type === 'energy_both_seasons')?.charge_amount;
+              return {
+                label: formatPeriodLabel(p.effective_from),
+                value: Math.round(lowSeason ?? bothSeasons ?? 0)
+              };
+            });
 
           // For Demand Chart - extract winter and summer separately
           const demandWinterData = periods.map(p => {
@@ -2028,7 +2032,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
               c.charge_type === 'demand_both_seasons' || c.charge_type === 'demand_charge'
             )?.charge_amount;
             return {
-              label: formatPeriod(p.effective_from, p.effective_to),
+              label: formatPeriodLabel(p.effective_from),
               value: Math.round(highSeason ?? bothSeasons ?? 0)
             };
           });
@@ -2040,7 +2044,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
               c.charge_type === 'demand_both_seasons' || c.charge_type === 'demand_charge'
             )?.charge_amount;
             return {
-              label: formatPeriod(p.effective_from, p.effective_to),
+              label: formatPeriodLabel(p.effective_from),
               value: Math.round(lowSeason ?? bothSeasons ?? 0)
             };
           });
