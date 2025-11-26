@@ -695,7 +695,9 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           
           // Check for markdown image (chart images)
           const imageMatch = text.match(/!\[([^\]]*)\]\(([^)]+)\)/);
+          console.log('🔍 Checking for image in text:', text.substring(0, 200), 'Match:', !!imageMatch);
           if (imageMatch) {
+            console.log('✅ Image matched:', imageMatch[1]);
             const [fullMatch, altText, imageUrl] = imageMatch;
             const beforeImage = text.substring(0, imageMatch.index);
             const afterImage = text.substring((imageMatch.index || 0) + fullMatch.length);
@@ -742,10 +744,13 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           
           // Check for markdown table
           const tableMatch = text.match(/\|[^\n]+\|\n\|[-:\s|]+\|\n(\|[^\n]+\|\n?)+/);
+          console.log('🔍 Checking for table. Text length:', text.length, 'Has table:', !!tableMatch);
           if (tableMatch) {
             const tableText = tableMatch[0];
             const beforeTable = text.substring(0, tableMatch.index);
             const afterTable = text.substring((tableMatch.index || 0) + tableText.length);
+            
+            console.log('📊 Table found. Before table length:', beforeTable.length, 'Content:', beforeTable.substring(0, 300));
             
             // Render text before table
             if (beforeTable.trim()) {
