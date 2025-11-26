@@ -1711,7 +1711,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
 
       const { data: meterDetails } = await supabase
         .from("meters")
-        .select("id, area, rating, serial_number")
+        .select("id, area, rating, serial_number, tariff_structure_id")
         .in("id", meterIds);
 
       const meterDetailsMap = new Map(meterDetails?.map(m => [m.id, m]) || []);
@@ -1757,6 +1757,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             area: meterDetail?.area || null,
             rating: meterDetail?.rating || null,
             serial_number: meterDetail?.serial_number || null,
+            tariff_structure_id: result.tariff_structure_id || meterDetail?.tariff_structure_id || null,
             totalKwh: 0,
             columnTotals: {},
             columnMaxValues: {},
@@ -1795,10 +1796,17 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       if (documentCalculations && documentCalculations.length > 0) {
         console.log('Document calculations found:', documentCalculations.length);
         
-        // Group by meter
+        // Group by meter and filter by assigned tariff to avoid duplicates
         const meterGroups = documentCalculations.reduce((acc: any, calc: any) => {
+          const meter = meterData.find(m => m.id === calc.meter_id);
+          const assignedTariffId = meter?.tariff_structure_id;
+          
+          // Only include calculations for the currently assigned tariff
+          if (assignedTariffId && calc.tariff_structure_id !== assignedTariffId) {
+            return acc; // Skip calculations for non-assigned tariffs
+          }
+          
           if (!acc[calc.meter_id]) {
-            const meter = meterData.find(m => m.id === calc.meter_id);
             acc[calc.meter_id] = {
               meterNumber: meter?.meter_number || 'Unknown',
               meterName: meter?.name || '',
