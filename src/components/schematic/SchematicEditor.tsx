@@ -1521,6 +1521,22 @@ export default function SchematicEditor({
         return;
       }
       
+      // Handle snippet rectangle resize/move
+      canvas.on('object:modified', (opt) => {
+        const target = opt.target;
+        
+        if (target && (target as any).isSnippetRect) {
+          const boundingRect = target.getBoundingRect();
+          
+          setSnippetRect({
+            x: boundingRect.left,
+            y: boundingRect.top,
+            width: boundingRect.width,
+            height: boundingRect.height,
+          });
+        }
+      });
+      
       // Only handle drawing if in draw mode
       if (currentTool !== 'draw') return;
       
@@ -1705,10 +1721,13 @@ export default function SchematicEditor({
           stroke: '#10b981',
           strokeWidth: 3,
           strokeDashArray: [10, 5],
-          selectable: false,
-          evented: false,
+          selectable: true,
+          evented: true,
+          lockRotation: true,
+          hasRotatingPoint: false,
         });
         
+        (rect as any).isSnippetRect = true;
         snippetRectRef.current = rect;
         canvas.add(rect);
         canvas.renderAll();
@@ -2012,7 +2031,13 @@ export default function SchematicEditor({
         
         if (width > 20 && height > 20) {
           setSnippetRect({ x: left, y: top, width, height });
-          toast.success('Snippet area selected. Click "Save Snippet" to capture.');
+          
+          if (snippetRectRef.current) {
+            canvas.setActiveObject(snippetRectRef.current);
+            canvas.renderAll();
+          }
+          
+          toast.success('Snippet area selected. Resize if needed, then click "Save Snippet" to capture.');
         } else {
           if (snippetRectRef.current) {
             canvas.remove(snippetRectRef.current);
@@ -3991,16 +4016,28 @@ export default function SchematicEditor({
       // 3. Render canvas to get current state
       fabricCanvas.renderAll();
       
-      // 4. Use fabric.js toDataURL with multiplier for high quality
+      // 4. Get current bounds from the actual rectangle object in case it was resized
+      let captureRect = snippetRect;
+      if (snippetRectRef.current) {
+        const boundingRect = snippetRectRef.current.getBoundingRect();
+        captureRect = {
+          x: boundingRect.left,
+          y: boundingRect.top,
+          width: boundingRect.width,
+          height: boundingRect.height,
+        };
+      }
+      
+      // 5. Use fabric.js toDataURL with multiplier for high quality
       //    Crop to the snippet rectangle bounds
       const dataUrl = fabricCanvas.toDataURL({
         format: 'png',
         quality: 1,
         multiplier: 2, // 2x for high quality
-        left: snippetRect.x,
-        top: snippetRect.y,
-        width: snippetRect.width,
-        height: snippetRect.height,
+        left: captureRect.x,
+        top: captureRect.y,
+        width: captureRect.width,
+        height: captureRect.height,
       });
       
       // 5. Restore background visibility
