@@ -2443,7 +2443,34 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
 - Recovery rate: ${formatNumber(selectedReconciliation.recovery_rate)}%
 - Variance: ${formatNumber((selectedReconciliation.discrepancy / selectedReconciliation.total_supply) * 100)}%
 - Total meters monitored: ${reconciliationData.meterCount}
-- Documents analyzed: ${documentExtractions.length}`
+- Documents analyzed: ${documentExtractions.length}`,
+
+          tariffComparison: Object.keys(rateComparisonData).length > 0 ? 
+            Object.entries(rateComparisonData).map(([meterId, meterData]: [string, any]) => {
+              let content = `### Meter: ${meterData.meterNumber}${meterData.meterName ? ` (${meterData.meterName})` : ''}\n\n`;
+              
+              for (const doc of meterData.documents) {
+                const periodStart = format(new Date(doc.periodStart), "MMM yyyy");
+                const periodEnd = format(new Date(doc.periodEnd), "MMM yyyy");
+                const variance = doc.overallVariance !== null ? formatNumber(doc.overallVariance, 1) : 'N/A';
+                
+                content += `#### Document: ${periodStart} - ${periodEnd} | Overall Variance: ${variance}%\n\n`;
+                content += '| Item | Document | Assigned | Variance |\n';
+                content += '|------|----------|----------|----------|\n';
+                
+                for (const item of doc.lineItems) {
+                  const docVal = item.documentValue ? formatNumber(item.documentValue, 4) : '—';
+                  const assignedVal = item.assignedValue ? formatNumber(item.assignedValue, 4) : '—';
+                  const varPercent = item.variancePercent !== null ? formatNumber(item.variancePercent, 1) + '%' : '—';
+                  
+                  content += `| ${item.chargeType} (${item.unit}) | ${docVal} | ${assignedVal} | ${varPercent} |\n`;
+                }
+                content += '\n';
+              }
+              
+              return content;
+            }).join('\n---\n\n') 
+            : 'No rate comparison data available. Ensure meters have assigned tariffs and associated documents with line items.'
         }
       };
 
@@ -2539,14 +2566,16 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
           });
         }
         
-        // Section 4: Tariff Comparison (new section)
-        sections.push({
-          id: 'tariff-comparison',
-          title: '4. Tariff Comparison',
-          content: `## 4. Tariff Comparison\n\n(Content to be added)`,
-          type: 'text',
-          editable: true
-        });
+        // Section 4: Tariff Comparison
+        if (reportData.sections.tariffComparison) {
+          sections.push({
+            id: 'tariff-comparison',
+            title: '4. Tariff Comparison',
+            content: `## 4. Tariff Comparison\n\n${reportData.sections.tariffComparison}`,
+            type: 'text',
+            editable: true
+          });
+        }
         
         // Section 5: Metering Data Analysis (renumbered from 4)
         if (reportData.sections.meteringDataAnalysis) {
