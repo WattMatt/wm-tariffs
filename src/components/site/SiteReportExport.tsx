@@ -709,6 +709,8 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             
             // Render the image
             try {
+              console.log('🖼️ Attempting to render image. Alt:', altText, 'URL length:', imageUrl.length, 'URL prefix:', imageUrl.substring(0, 50));
+              
               // Check if we need a new page
               if (yPos > pageHeight - bottomMargin - 100) {
                 addFooter();
@@ -719,7 +721,9 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
               
               const imgWidth = pageWidth - leftMargin - rightMargin;
               const imgHeight = 90;
+              console.log('📐 Adding image at position:', yPos, 'Size:', imgWidth, 'x', imgHeight);
               pdf.addImage(imageUrl, 'PNG', leftMargin, yPos, imgWidth, imgHeight);
+              console.log('✅ Image added successfully');
               yPos += imgHeight + 5;
               
               // Add caption if available
@@ -731,13 +735,17 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
                 yPos += 8;
               }
             } catch (err) {
-              console.error(`Error adding image:`, err);
+              console.error(`❌ Error adding image:`, err);
+              console.error('Image URL that failed:', imageUrl.substring(0, 100));
               addText(`[Image rendering error: ${err instanceof Error ? err.message : 'Unknown error'}]`, fontSize, false);
             }
             
             // Render text after image (recursively)
             if (afterImage.trim()) {
+              console.log('🔄 Recursively rendering content after image. Length:', afterImage.length, 'Preview:', afterImage.substring(0, 100));
               renderContent(afterImage, fontSize);
+            } else {
+              console.log('✓ No content after image');
             }
             return;
           }
@@ -774,6 +782,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           }
           
           // No table or chart found, render as text
+          console.log('⚠️ No match found, rendering as text. Length:', text.length, 'Content:', text.substring(0, 200));
           addText(text, fontSize, false);
         };
         
