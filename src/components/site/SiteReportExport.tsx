@@ -113,7 +113,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
     const fetchOptions = async () => {
       setIsLoadingOptions(true);
       try {
-        // Fetch schematics and check for snippet images
+        // Fetch schematics and their snippet URLs
         const { data: schematics, error: schematicsError } = await supabase
           .from("schematics")
           .select("id, name, description, page_number, total_pages, file_path, site_id")
@@ -122,42 +122,35 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
 
         if (schematicsError) throw schematicsError;
         
-        // Check storage for snippet files
-        const snippetsWithUrls: any[] = [];
-        
-        for (const schematic of schematics || []) {
-          // Extract the directory path from the schematic file_path
+        // For each schematic, construct the snippet path and URL
+        const snippetsWithUrls = (schematics || []).map(schematic => {
+          // Extract the directory and base name from the schematic file_path
           const pathParts = schematic.file_path.split('/');
-          const directory = pathParts.slice(0, -1).join('/'); // Remove filename
-          const schematicBaseName = pathParts[pathParts.length - 1].split('.')[0]; // Get filename without extension
+          const fileName = pathParts[pathParts.length - 1];
+          const directory = pathParts.slice(0, -1).join('/');
           
-          // Look for snippet file (typically named: {schematic_name}_snippet.png)
-          const snippetPath = `${directory}/${schematicBaseName}_snippet.png`;
+          // Remove file extension to get base name
+          const baseName = fileName.replace(/\.[^/.]+$/, '');
           
-          // Check if snippet exists and get URL
-          const { data: fileList } = await supabase.storage
+          // Construct snippet path: {directory}/{baseName}_snippet.png
+          const snippetPath = `${directory}/${baseName}_snippet.png`;
+          
+          // Get public URL for the snippet
+          const { data: urlData } = supabase.storage
             .from('site-files')
-            .list(directory, {
-              search: `${schematicBaseName}_snippet`
-            });
+            .getPublicUrl(snippetPath);
           
-          if (fileList && fileList.length > 0) {
-            // Snippet exists, get public URL
-            const { data: urlData } = supabase.storage
-              .from('site-files')
-              .getPublicUrl(snippetPath);
-            
-            snippetsWithUrls.push({
-              id: schematic.id,
-              name: schematic.name,
-              snippetUrl: urlData.publicUrl,
-              snippetPath: snippetPath,
-              page_number: schematic.page_number,
-              total_pages: schematic.total_pages
-            });
-          }
-        }
+          return {
+            id: schematic.id,
+            name: schematic.name,
+            snippetUrl: urlData.publicUrl,
+            snippetPath: snippetPath,
+            page_number: schematic.page_number,
+            total_pages: schematic.total_pages
+          };
+        });
         
+        console.log('Loaded snippets:', snippetsWithUrls);
         setAvailableSnippets(snippetsWithUrls);
 
         // Fetch available folders from document paths with document counts
