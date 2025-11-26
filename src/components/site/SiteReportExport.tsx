@@ -684,10 +684,15 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
               yPos += 3;
             }
             
-            // Parse and render table
+            // Parse and render table with auto-generated title
             const parsed = parseMarkdownTable(tableText);
             if (parsed) {
-              addTable(parsed.headers, parsed.rows);
+              // Extract potential title from the section context or use generic title
+              const contextTitle = beforeTable.trim().split('\n').pop()?.replace(/[#*_]/g, '').trim();
+              const tableTitle = contextTitle && contextTitle.length < 50 && contextTitle.length > 3
+                ? contextTitle
+                : "Data Summary";
+              addTable(parsed.headers, parsed.rows, undefined, tableTitle);
               yPos += 5;
             }
             
@@ -760,8 +765,22 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           yPos += 8;
         };
 
+        // Table counter for labeling
+        let tableCounter = 1;
+        
+        // Helper to add table caption
+        const addTableCaption = (title: string) => {
+          pdf.setFontSize(9);
+          pdf.setFont("helvetica", "italic");
+          pdf.setTextColor(0, 0, 0);
+          pdf.text(`Table ${tableCounter}: ${title}`, pageWidth / 2, yPos, { align: "center" });
+          pdf.setFont("helvetica", "normal");
+          tableCounter++;
+          yPos += 8;
+        };
+        
         // Helper to add table
-        const addTable = (headers: string[], rows: string[][], columnWidths?: number[]) => {
+        const addTable = (headers: string[], rows: string[][], columnWidths?: number[], tableTitle?: string) => {
           const tableWidth = pageWidth - leftMargin - rightMargin;
           const defaultColWidth = tableWidth / headers.length;
           const colWidths = columnWidths || headers.map(() => defaultColWidth);
@@ -821,6 +840,11 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           });
           
           yPos += 5;
+          
+          // Add caption if title provided
+          if (tableTitle) {
+            addTableCaption(tableTitle);
+          }
         };
 
         const addSpacer = (height: number = 5) => {
@@ -1178,7 +1202,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           ["Variance", `${parseFloat(reconciliationData.variancePercentage) > 0 ? "+" : ""}${formatNumber(parseFloat(reconciliationData.variance))} kWh (${parseFloat(reconciliationData.variancePercentage) > 0 ? "+" : ""}${reconciliationData.variancePercentage}%)`]
         ];
         
-        addTable(["Metric", "Value"], basicMetricsRows, [100, 70]);
+        addTable(["Metric", "Value"], basicMetricsRows, [100, 70], "Basic Reconciliation Metrics");
         addSpacer(5);
         
         // KPI Indicators
@@ -1196,7 +1220,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           ["Average Readings per Meter", totalMetersCount > 0 ? Math.round(totalReadingsCount / totalMetersCount).toString() : "0"]
         ];
         
-        addTable(["KPI Indicator", "Value"], kpiRows, [100, 70]);
+        addTable(["KPI Indicator", "Value"], kpiRows, [100, 70], "Data Collection KPIs");
         addSpacer(8);
         
         // CSV Column Aggregations (if available)
@@ -1216,7 +1240,8 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           addTable(
             ["Column", "Value", "Unit", "Aggregation", "Multiplier"],
             csvMetricsRows,
-            [50, 35, 25, 30, 30]
+            [50, 35, 25, 30, 30],
+            "CSV Column Aggregations"
           );
           addSpacer(8);
         }
@@ -1243,7 +1268,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             a.meter || "General",
             a.description.substring(0, 60) + (a.description.length > 60 ? "..." : "")
           ]);
-          addTable(["#", "Severity", "Meter", "Description"], anomalySummaryRows, [10, 25, 35, 100]);
+          addTable(["#", "Severity", "Meter", "Description"], anomalySummaryRows, [10, 25, 35, 100], "Detected Anomalies");
           addSpacer(8);
         }
         
