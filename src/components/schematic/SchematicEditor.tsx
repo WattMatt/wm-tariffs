@@ -4075,41 +4075,14 @@ export default function SchematicEditor({
         const imageData = ctx.getImageData(0, 0, croppedCanvas.width, croppedCanvas.height);
         const data = imageData.data;
         
-        // Helper: Get background color from corners
-        const getBackgroundColor = (data: Uint8ClampedArray, width: number, height: number) => {
-          const corners = [
-            0, // top-left
-            width - 1, // top-right
-            (height - 1) * width, // bottom-left
-            (height - 1) * width + (width - 1) // bottom-right
-          ];
-          
-          const colors = corners.map(idx => ({
-            r: data[idx * 4],
-            g: data[idx * 4 + 1],
-            b: data[idx * 4 + 2],
-            a: data[idx * 4 + 3]
-          }));
-          
-          // Return average color
-          return {
-            r: Math.round(colors.reduce((sum, c) => sum + c.r, 0) / 4),
-            g: Math.round(colors.reduce((sum, c) => sum + c.g, 0) / 4),
-            b: Math.round(colors.reduce((sum, c) => sum + c.b, 0) / 4),
-            a: Math.round(colors.reduce((sum, c) => sum + c.a, 0) / 4)
-          };
+        // Helper: Check if pixel is light background (white or light gray)
+        // Most schematic backgrounds are white or very light gray
+        const isLightBackground = (r: number, g: number, b: number, threshold = 240) => {
+          // Consider it background if all RGB values are above threshold
+          return r >= threshold && g >= threshold && b >= threshold;
         };
         
-        // Helper: Check if pixel matches background (with tolerance)
-        const isBackground = (r: number, g: number, b: number, a: number, bg: any, tolerance = 20) => {
-          return Math.abs(r - bg.r) <= tolerance &&
-                 Math.abs(g - bg.g) <= tolerance &&
-                 Math.abs(b - bg.b) <= tolerance &&
-                 Math.abs(a - bg.a) <= tolerance;
-        };
-        
-        const bgColor = getBackgroundColor(data, croppedCanvas.width, croppedCanvas.height);
-        console.log('Detected background color:', bgColor);
+        console.log('Starting auto-trim scan...');
         
         // Find content bounds by scanning from edges
         let top = 0, bottom = croppedCanvas.height - 1, left = 0, right = croppedCanvas.width - 1;
@@ -4118,8 +4091,12 @@ export default function SchematicEditor({
         topLoop: for (let y = 0; y < croppedCanvas.height; y++) {
           for (let x = 0; x < croppedCanvas.width; x++) {
             const idx = (y * croppedCanvas.width + x) * 4;
-            if (!isBackground(data[idx], data[idx + 1], data[idx + 2], data[idx + 3], bgColor)) {
+            const r = data[idx];
+            const g = data[idx + 1];
+            const b = data[idx + 2];
+            if (!isLightBackground(r, g, b)) {
               top = y;
+              console.log('Found top content at y:', y, 'color:', { r, g, b });
               break topLoop;
             }
           }
@@ -4129,8 +4106,12 @@ export default function SchematicEditor({
         bottomLoop: for (let y = croppedCanvas.height - 1; y >= 0; y--) {
           for (let x = 0; x < croppedCanvas.width; x++) {
             const idx = (y * croppedCanvas.width + x) * 4;
-            if (!isBackground(data[idx], data[idx + 1], data[idx + 2], data[idx + 3], bgColor)) {
+            const r = data[idx];
+            const g = data[idx + 1];
+            const b = data[idx + 2];
+            if (!isLightBackground(r, g, b)) {
               bottom = y;
+              console.log('Found bottom content at y:', y, 'color:', { r, g, b });
               break bottomLoop;
             }
           }
@@ -4140,8 +4121,12 @@ export default function SchematicEditor({
         leftLoop: for (let x = 0; x < croppedCanvas.width; x++) {
           for (let y = 0; y < croppedCanvas.height; y++) {
             const idx = (y * croppedCanvas.width + x) * 4;
-            if (!isBackground(data[idx], data[idx + 1], data[idx + 2], data[idx + 3], bgColor)) {
+            const r = data[idx];
+            const g = data[idx + 1];
+            const b = data[idx + 2];
+            if (!isLightBackground(r, g, b)) {
               left = x;
+              console.log('Found left content at x:', x, 'color:', { r, g, b });
               break leftLoop;
             }
           }
@@ -4151,38 +4136,55 @@ export default function SchematicEditor({
         rightLoop: for (let x = croppedCanvas.width - 1; x >= 0; x--) {
           for (let y = 0; y < croppedCanvas.height; y++) {
             const idx = (y * croppedCanvas.width + x) * 4;
-            if (!isBackground(data[idx], data[idx + 1], data[idx + 2], data[idx + 3], bgColor)) {
+            const r = data[idx];
+            const g = data[idx + 1];
+            const b = data[idx + 2];
+            if (!isLightBackground(r, g, b)) {
               right = x;
+              console.log('Found right content at x:', x, 'color:', { r, g, b });
               break rightLoop;
             }
           }
         }
         
         console.log('Content bounds:', { top, bottom, left, right });
+        console.log('Original dimensions:', croppedCanvas.width, 'x', croppedCanvas.height);
         
         // 8. Create final canvas with exact content bounds
         const contentWidth = right - left + 1;
         const contentHeight = bottom - top + 1;
         
-        const finalCanvas = document.createElement('canvas');
-        finalCanvas.width = contentWidth;
-        finalCanvas.height = contentHeight;
-        const finalCtx = finalCanvas.getContext('2d');
+        console.log('Trimming to content:', contentWidth, 'x', contentHeight);
         
-        if (finalCtx) {
-          finalCtx.drawImage(
-            croppedCanvas,
-            left, top, contentWidth, contentHeight, // Source
-            0, 0, contentWidth, contentHeight // Destination
-          );
+        // Only trim if we found actual content bounds
+        if (contentWidth > 0 && contentHeight > 0 && 
+            (top > 0 || bottom < croppedCanvas.height - 1 || left > 0 || right < croppedCanvas.width - 1)) {
+          
+          const finalCanvas = document.createElement('canvas');
+          finalCanvas.width = contentWidth;
+          finalCanvas.height = contentHeight;
+          const finalCtx = finalCanvas.getContext('2d');
+          
+          if (finalCtx) {
+            finalCtx.drawImage(
+              croppedCanvas,
+              left, top, contentWidth, contentHeight, // Source
+              0, 0, contentWidth, contentHeight // Destination
+            );
+            
+            const dataUrl = finalCanvas.toDataURL('image/png', 1.0);
+            console.log('✓ Auto-trimmed successfully! Final dimensions:', contentWidth, 'x', contentHeight);
+            
+            const response = await fetch(dataUrl);
+            blob = await response.blob();
+          }
+        } else {
+          // No trimming needed or detection failed, use original
+          console.log('⚠ No trimming applied - using original crop');
+          const dataUrl = croppedCanvas.toDataURL('image/png', 1.0);
+          const response = await fetch(dataUrl);
+          blob = await response.blob();
         }
-        
-        const dataUrl = finalCanvas.toDataURL('image/png', 1.0);
-        console.log('Final trimmed dimensions:', contentWidth, contentHeight);
-        
-        // Continue with the rest of the upload process using finalCanvas instead
-        const response = await fetch(dataUrl);
-        blob = await response.blob();
       }
       
       // 9. Restore snippet rectangle visibility
