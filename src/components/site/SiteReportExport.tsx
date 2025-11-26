@@ -739,18 +739,18 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             yPos = topMargin;
           }
           
-          yPos += 8;
+          yPos += 4;
           pdf.setFontSize(fontSize);
           pdf.setFont("helvetica", "bold");
           pdf.setTextColor(templateBlue[0], templateBlue[1], templateBlue[2]);
           pdf.text(text, leftMargin, yPos);
           pdf.setTextColor(0, 0, 0);
-          yPos += fontSize + 5;
+          yPos += fontSize * 0.6;
         };
 
         // Helper to add subsection heading
     const addSubsectionHeading = (text: string) => {
-      yPos += 5;
+      yPos += 3;
       if (yPos > pageHeight - bottomMargin - 20) {
         addFooter();
         addPageNumber();
@@ -762,7 +762,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       pdf.setTextColor(templateBlue[0], templateBlue[1], templateBlue[2]);
       pdf.text(sanitizeForPdf(text), leftMargin, yPos);
       pdf.setTextColor(0, 0, 0);
-      yPos += 8;
+      yPos += 5;
     };
 
         // Table counter for labeling
@@ -1047,9 +1047,11 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         
         if (tariffChartImages && Object.keys(tariffChartImages).length > 0) {
           const contentWidth = pageWidth - leftMargin - rightMargin;
-          const chartGap = 8;
-          const chartWidth = (contentWidth - (chartGap * 2)) / 3; // True one-third widths
-          const chartHeight = chartWidth * 0.79;
+          const chartGap = 0;
+          const chartWidth = contentWidth / 3; // True one-third widths
+          const chartHeight = chartWidth * 0.75;
+          
+          let isFirstTariff = true;
           
           for (const tariffName of Object.keys(tariffChartImages)) {
             const charts = tariffChartImages[tariffName];
@@ -1057,6 +1059,15 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             const latestPeriod = tariffPeriods[tariffPeriods.length - 1];
             
             if (!charts && !latestPeriod) continue;
+            
+            // Force new page for each tariff (except the first one)
+            if (!isFirstTariff) {
+              addFooter();
+              addPageNumber();
+              pdf.addPage();
+              yPos = topMargin;
+            }
+            isFirstTariff = false;
             
             // Add tariff subheading
             addSubsectionHeading(tariffName);
@@ -1072,8 +1083,8 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
               }
               
               const chart1X = leftMargin;
-              const chart2X = leftMargin + chartWidth + chartGap;
-              const chart3X = leftMargin + (2 * chartWidth) + (2 * chartGap);
+              const chart2X = leftMargin + chartWidth;
+              const chart3X = leftMargin + (2 * chartWidth);
               
               if (charts.basic) {
                 try {
