@@ -671,6 +671,28 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             return;
           }
           
+          // Check for markdown headers (### Meter: ...)
+          const headerMatch = text.match(/^(#{1,3})\s+(.+?)(?:\n|$)/m);
+          if (headerMatch) {
+            const [fullMatch, hashes, headerText] = headerMatch;
+            const beforeHeader = text.substring(0, headerMatch.index);
+            const afterHeader = text.substring((headerMatch.index || 0) + fullMatch.length);
+            
+            // Render any text before header
+            if (beforeHeader.trim()) {
+              addText(beforeHeader, fontSize, false);
+            }
+            
+            // Render header as subheading
+            addSubsectionHeading(headerText.replace(/[#*_]/g, '').trim());
+            
+            // Continue with text after header
+            if (afterHeader.trim()) {
+              renderContent(afterHeader, fontSize);
+            }
+            return;
+          }
+          
           // Check for markdown image (chart images)
           const imageMatch = text.match(/!\[([^\]]*)\]\(([^)]+)\)/);
           if (imageMatch) {
@@ -731,29 +753,11 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
               yPos += 3;
             }
             
-            // Parse and render table with auto-generated title
+            // Parse and render table without auto-generated title
             const parsed = parseMarkdownTable(tableText);
             if (parsed) {
-              // Extract meter and document info for table title
-              const meterMatch = beforeTable.match(/###?\s*Meter[:\s]+(.+?)(?:\n|$)/i);
-              const docMatch = beforeTable.match(/####?\s*Document[:\s]+(.+?)(?:\n|$)/i);
-              
-              let tableTitle = "Data Summary";
-              if (meterMatch) {
-                const meterInfo = meterMatch[1].replace(/[#*_]/g, '').trim();
-                if (docMatch) {
-                  const docInfo = docMatch[1].split('|')[0].replace(/[#*_]/g, '').trim();
-                  tableTitle = `${meterInfo} - ${docInfo}`;
-                } else {
-                  tableTitle = meterInfo;
-                }
-              } else {
-                const contextTitle = beforeTable.trim().split('\n').pop()?.replace(/[#*_]/g, '').trim();
-                if (contextTitle && contextTitle.length < 50 && contextTitle.length > 3) {
-                  tableTitle = contextTitle;
-                }
-              }
-              addTable(parsed.headers, parsed.rows, undefined, tableTitle, tableTitle);
+              // Don't add any title - the meter title is handled as a header above
+              addTable(parsed.headers, parsed.rows);
               yPos += 5;
             }
             
