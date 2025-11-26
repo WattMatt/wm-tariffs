@@ -144,7 +144,7 @@ export const generateClusteredTariffChart = (
   winterData: { label: string; value: number }[],
   summerData: { label: string; value: number }[],
   width: number = 280,
-  height: number = 300
+  height: number = 340
 ): string => {
   const canvas = document.createElement('canvas');
   canvas.width = width;
@@ -188,9 +188,10 @@ export const generateClusteredTariffChart = (
   ctx.fillText('Summer', legendX + 63, legendY + 8);
   
   const padding = 25;
+  const bottomPadding = 60;
   const topPadding = 70;
   const chartWidth = width - padding * 2;
-  const chartHeight = height - topPadding - padding;
+  const chartHeight = height - topPadding - bottomPadding;
   const clusterWidth = chartWidth / winterData.length;
   const barWidth = (clusterWidth - 6) / 2;  // Two bars with small gap
   
@@ -206,13 +207,13 @@ export const generateClusteredTariffChart = (
     
     // Winter bar (left)
     const winterBarHeight = maxValue > 0 ? (winter.value / maxValue) * chartHeight : 0;
-    const winterY = height - padding - winterBarHeight;
+    const winterY = height - bottomPadding - winterBarHeight;
     ctx.fillStyle = winterColor;
     ctx.fillRect(clusterX + 2, winterY, barWidth, winterBarHeight);
     
     // Summer bar (right)
     const summerBarHeight = maxValue > 0 ? (summer.value / maxValue) * chartHeight : 0;
-    const summerY = height - padding - summerBarHeight;
+    const summerY = height - bottomPadding - summerBarHeight;
     ctx.fillStyle = summerColor;
     ctx.fillRect(clusterX + barWidth + 4, summerY, barWidth, summerBarHeight);
     
@@ -234,7 +235,7 @@ export const generateClusteredTariffChart = (
   ctx.textAlign = 'center';
   winterData.forEach((period, index) => {
     const x = padding + index * clusterWidth + clusterWidth / 2;
-    ctx.fillText(period.label, x, height - padding + 15);
+    ctx.fillText(period.label, x, height - bottomPadding + 15);
   });
   
   // Calculate and display percentage increases at BOTTOM (if enough data)
@@ -258,12 +259,12 @@ export const generateClusteredTariffChart = (
       if (validTransitions > 0) {
         const avgYoY = (totalYoY / validTransitions).toFixed(1);
         
-        // Draw percentage text at bottom right
+        // Draw percentage text at bottom right (below X-axis labels)
         ctx.fillStyle = '#666666';
         ctx.font = '10px sans-serif';
         ctx.textAlign = 'right';
-        ctx.fillText(`Overall: +${overallIncrease}%`, width - 10, height - 18);
-        ctx.fillText(`Avg YoY: +${avgYoY}%`, width - 10, height - 8);
+        ctx.fillText(`Overall: +${overallIncrease}%`, width - 10, height - 30);
+        ctx.fillText(`Avg YoY: +${avgYoY}%`, width - 10, height - 18);
       }
     }
   }
@@ -276,7 +277,7 @@ export const generateTariffComparisonChart = (
   unit: string,
   periods: { label: string; value: number }[],
   width: number = 280,
-  height: number = 300
+  height: number = 340
 ): string => {
   const canvas = document.createElement('canvas');
   canvas.width = width;
@@ -300,9 +301,10 @@ export const generateTariffComparisonChart = (
   ctx.fillText(`(${unit})`, width / 2, 35);
   
   const padding = 25;
+  const bottomPadding = 60;
   const topPadding = 70;
   const chartWidth = width - padding * 2;
-  const chartHeight = height - topPadding - padding;
+  const chartHeight = height - topPadding - bottomPadding;
   const barWidth = chartWidth / periods.length;
   const maxValue = Math.max(...periods.map(p => p.value));
   
@@ -310,7 +312,7 @@ export const generateTariffComparisonChart = (
   periods.forEach((period, index) => {
     const barHeight = maxValue > 0 ? (period.value / maxValue) * chartHeight : 0;
     const x = padding + index * barWidth;
-    const y = height - padding - barHeight;
+    const y = height - bottomPadding - barHeight;
     
     // Grey bars like TariffPeriodComparisonDialog
     ctx.fillStyle = '#9ca3af';
@@ -329,7 +331,7 @@ export const generateTariffComparisonChart = (
   ctx.textAlign = 'center';
   periods.forEach((period, index) => {
     const x = padding + index * barWidth + barWidth / 2;
-    ctx.fillText(period.label, x, height - padding + 15);
+    ctx.fillText(period.label, x, height - bottomPadding + 15);
   });
   
   // Draw Y-axis
@@ -337,8 +339,8 @@ export const generateTariffComparisonChart = (
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(padding, topPadding);
-  ctx.lineTo(padding, height - padding);
-  ctx.lineTo(width - padding, height - padding);
+  ctx.lineTo(padding, height - bottomPadding);
+  ctx.lineTo(width - padding, height - bottomPadding);
   ctx.stroke();
   
   // Calculate and display percentage increases at BOTTOM
@@ -360,12 +362,12 @@ export const generateTariffComparisonChart = (
       }
       const avgYoY = validTransitions > 0 ? (totalYoY / validTransitions).toFixed(1) : '0.0';
       
-      // Draw percentage text at bottom right
+      // Draw percentage text at bottom right (below X-axis labels)
       ctx.fillStyle = '#666666';
       ctx.font = '10px sans-serif';
       ctx.textAlign = 'right';
-      ctx.fillText(`Overall: +${overallIncrease}%`, width - 10, height - 18);
-      ctx.fillText(`Avg YoY: +${avgYoY}%`, width - 10, height - 8);
+      ctx.fillText(`Overall: +${overallIncrease}%`, width - 10, height - 30);
+      ctx.fillText(`Avg YoY: +${avgYoY}%`, width - 10, height - 18);
     }
   }
   
