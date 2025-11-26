@@ -724,7 +724,13 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         // Helper to add text with wrapping
         const addText = (text: string, fontSize: number = 9, isBold: boolean = false) => {
           const sanitizedText = sanitizeForPdf(text);
-          const cleanedText = sanitizedText.replace(/\*\*(.*?)\*\*/g, '$1').replace(/^#{1,6}\s+.*$/gm, '').trim();
+          const cleanedText = sanitizedText
+            .replace(/\*\*(.*?)\*\*/g, '$1')      // Remove bold markers
+            .replace(/\*(.*?)\*/g, '$1')           // Remove italic markers
+            .replace(/^#{1,6}\s+.*$/gm, '')        // Remove header lines
+            .replace(/^---+$/gm, '')               // Remove horizontal rules
+            .replace(/^\s*\n/gm, '\n')             // Collapse multiple newlines
+            .trim();
           pdf.setFontSize(fontSize);
           pdf.setFont("helvetica", isBold ? "bold" : "normal");
           const maxWidth = pageWidth - leftMargin - rightMargin;
@@ -2470,7 +2476,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           comparisonSections.push(content);
         }
         
-        tariffComparisonContent = comparisonSections.join('\n---\n\n');
+        tariffComparisonContent = comparisonSections.join('\n\n');
       }
 
       const reportData = {
@@ -2540,7 +2546,7 @@ ${charges.length > 0 ? `**Charges (Current Period):**
 |------|-------------|--------|------|
 ${charges.map((charge: any) => `| ${formatChargeType(charge.charge_type)} | ${charge.description || '—'} | ${formatNumber(charge.charge_amount)} | ${charge.unit} |`).join('\n')}` : ''}
 `;
-}).join('\n---\n') : 'No tariff structures configured for this site.'}`,
+}).join('\n\n') : 'No tariff structures configured for this site.'}`,
 
           meteringDataAnalysis: `### Consumption Analysis
 
