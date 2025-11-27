@@ -351,7 +351,7 @@ export default function ReconciliationResultsView({
         </div>
 
         {isRevenueView && meterRevenue && !meterRevenue.hasError && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 pt-2 border-t border-border/50">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-2 pt-2 border-t border-border/50">
             <div className="text-xs">
               <span className="text-muted-foreground">Tariff: </span>
               <span className="font-medium">{meterRevenue.tariffName}</span>
@@ -363,6 +363,10 @@ export default function ReconciliationResultsView({
             <div className="text-xs">
               <span className="text-muted-foreground">Fixed Charges: </span>
               <span className="font-medium">R {meterRevenue.fixedCharges.toFixed(2)}</span>
+            </div>
+            <div className="text-xs">
+              <span className="text-muted-foreground">Demand Charges: </span>
+              <span className="font-medium">R {meterRevenue.demandCharges.toFixed(2)}</span>
             </div>
             <div className="text-xs">
               <span className="text-muted-foreground">Avg Cost/kWh: </span>
