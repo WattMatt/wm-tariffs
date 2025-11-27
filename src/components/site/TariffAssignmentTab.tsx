@@ -439,7 +439,7 @@ export default function TariffAssignmentTab({
       
       const dataPoint: any = {
         period: formatDateStringToMonthYear(doc.periodEnd),
-        amount: metricValue !== null ? metricValue : (doc.totalAmountExcludingEmergency ?? doc.totalAmount),
+        amount: metricValue,
         documentAmount: metricValue || null,
         documentId: doc.documentId,
         meterReading: readings.current,
