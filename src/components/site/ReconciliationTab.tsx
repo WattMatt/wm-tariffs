@@ -23,7 +23,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Switch } from "@/components/ui/switch";
 import { calculateMeterCost, calculateMeterCostAcrossPeriods } from "@/lib/costCalculation";
-import type { CorrectedReading } from "@/lib/dataValidation";
+import { isValueCorrupt, type CorrectedReading } from "@/lib/dataValidation";
 
 interface ReconciliationTabProps {
   siteId: string;
@@ -1253,6 +1253,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
   };
 
   // Helper function to process meters in batches
+  // Now also collects corruption corrections detected during processing
   const processMeterBatches = async (
     meters: any[], 
     batchSize: number,
@@ -1262,6 +1263,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     const results: any[] = [];
     const errors = new Map<string, string>();
     const retryingMeters = new Set<string>();
+    const allCorrections: CorrectedReading[] = [];
     
     for (let i = 0; i < meters.length; i += batchSize) {
       // Check if reconciliation was cancelled
@@ -1281,7 +1283,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       
       const batchResults = await Promise.all(
         batch.map(async (meter) => {
-          const result = await processSingleMeter(meter, fullDateTimeFrom, fullDateTimeTo, errors, 0, retryingMeters);
+          const result = await processSingleMeter(meter, fullDateTimeFrom, fullDateTimeTo, errors, 0, retryingMeters, allCorrections);
           retryingMeters.delete(meter.meter_number);
           return result;
         })
@@ -1296,17 +1298,19 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       });
     }
     
-    return { results, errors };
+    return { results, errors, corrections: allCorrections };
   };
 
   // Helper function to process a single meter with retry logic
+  // Now also detects corrupt values and tracks corrections
   const processSingleMeter = async (
     meter: any,
     fullDateTimeFrom: string,
     fullDateTimeTo: string,
     errors: Map<string, string>,
     retryCount = 0,
-    retryingMeters?: Set<string>
+    retryingMeters?: Set<string>,
+    correctionsCollector?: CorrectedReading[]
   ): Promise<any> => {
     // Check for cancellation at the start
     if (cancelReconciliationRef.current) {
@@ -1453,8 +1457,10 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         // Sum all interval consumption values
         totalKwh = uniqueReadings.reduce((sum, r) => sum + Number(r.kwh_value), 0);
         
-        // Process all numeric columns from metadata
+        // Process all numeric columns from metadata with corruption detection
         const columnValues: Record<string, number[]> = {};
+        const localCorrections: CorrectedReading[] = [];
+        
         uniqueReadings.forEach(reading => {
           const importedFields = (reading.metadata as any)?.imported_fields || {};
           Object.entries(importedFields).forEach(([key, value]) => {
@@ -1469,10 +1475,36 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
               if (!columnValues[key]) {
                 columnValues[key] = [];
               }
-              columnValues[key].push(numValue);
+              
+              // Check for corruption using validation function
+              const validation = isValueCorrupt(numValue, key);
+              if (validation.isCorrupt) {
+                // Track the correction
+                localCorrections.push({
+                  timestamp: reading.reading_timestamp,
+                  meterId: meter.id,
+                  meterNumber: meter.meter_number,
+                  originalValue: numValue,
+                  correctedValue: 0,
+                  fieldName: key,
+                  reason: validation.reason || 'Exceeds threshold',
+                  originalSourceMeterId: meter.id,
+                  originalSourceMeterNumber: meter.meter_number
+                });
+                // Use corrected value (0) instead of corrupt value
+                columnValues[key].push(0);
+              } else {
+                columnValues[key].push(numValue);
+              }
             }
           });
         });
+        
+        // Add local corrections to the collector if provided
+        if (correctionsCollector && localCorrections.length > 0) {
+          correctionsCollector.push(...localCorrections);
+          console.log(`Meter ${meter.meter_number}: Detected ${localCorrections.length} corrupt values, corrected to 0`);
+        }
         
         // Apply operations and scaling to each column
         Object.entries(columnValues).forEach(([key, values]) => {
@@ -1597,12 +1629,27 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     }
 
     // Process meters in batches of 2 to reduce database load and avoid timeouts
-    const { results: meterData, errors } = await processMeterBatches(
+    // Corruption detection now happens DURING processing, corrections are collected
+    const { results: meterData, errors, corrections: leafMeterCorrections } = await processMeterBatches(
       meters,
       2,
       startDateTime,
       endDateTime
     );
+    
+    // Group leaf meter corrections by meter ID for lookup
+    const leafCorrectionsByMeter = new Map<string, CorrectedReading[]>();
+    for (const correction of leafMeterCorrections) {
+      const meterId = correction.originalSourceMeterId || correction.meterId;
+      if (!leafCorrectionsByMeter.has(meterId)) {
+        leafCorrectionsByMeter.set(meterId, []);
+      }
+      leafCorrectionsByMeter.get(meterId)!.push(correction);
+    }
+    
+    if (leafMeterCorrections.length > 0) {
+      console.log(`Corruption detection complete: ${leafMeterCorrections.length} values corrected across ${leafCorrectionsByMeter.size} meters`);
+    }
 
     // Ensure meterData is an array
     const safeMeters = Array.isArray(meterData) ? meterData : [];
@@ -1765,7 +1812,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         recoveryRate,
         discrepancy,
         revenueData,
-      }
+      },
+      leafCorrectionsByMeter
     };
   };
 
@@ -1950,7 +1998,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
 
       const shouldCalculateRevenue = enableRevenue !== undefined ? enableRevenue : revenueReconciliationEnabled;
       
-      const { meterData, errors, reconciliationData } = await performReconciliationCalculation(
+      const { meterData, errors, reconciliationData, leafCorrectionsByMeter } = await performReconciliationCalculation(
         fullDateTimeFrom,
         fullDateTimeTo,
         shouldCalculateRevenue
@@ -2018,31 +2066,26 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           setCsvGenerationProgress({ current: i + 1, total: sortedParentMeters.length });
         }
         
-        // Update corrections state
+        // Merge leaf meter corrections (from processSingleMeter) with hierarchical corrections
+        // Leaf corrections are already applied during processing, but we need them for display
+        for (const [meterId, corrections] of leafCorrectionsByMeter.entries()) {
+          if (allCorrections.has(meterId)) {
+            allCorrections.get(meterId)!.push(...corrections);
+          } else {
+            allCorrections.set(meterId, corrections);
+          }
+        }
+        
+        // Update corrections state with both leaf and hierarchical corrections
         setMeterCorrections(allCorrections);
         console.log('Hierarchical CSV generation complete at run time');
         setIsGeneratingCsvs(false);
 
-        // Group corrections by originalSourceMeterId to apply to leaf meters
-        const leafMeterCorrections = new Map<string, Map<string, number>>();
-        for (const corrections of allCorrections.values()) {
-          for (const correction of corrections) {
-            const sourceMeterId = correction.originalSourceMeterId || correction.meterId;
-            if (!leafMeterCorrections.has(sourceMeterId)) {
-              leafMeterCorrections.set(sourceMeterId, new Map());
-            }
-            const fieldCorrections = leafMeterCorrections.get(sourceMeterId)!;
-            // Accumulate correction delta: correctedValue - originalValue
-            const currentDelta = fieldCorrections.get(correction.fieldName) || 0;
-            fieldCorrections.set(correction.fieldName, currentDelta + (correction.correctedValue - correction.originalValue));
-          }
-        }
-        console.log(`Leaf meter corrections grouped for ${leafMeterCorrections.size} meters`);
-
         // Update parent meters in reconciliationData with CSV-calculated values
         // BUT only if the meter does NOT have an uploaded CSV
         // Apply the same column selection, operations, and factors as uploaded CSVs
-        if (csvResults.size > 0 || leafMeterCorrections.size > 0) {
+        // Note: Leaf meter corrections are already applied during processSingleMeter
+        if (csvResults.size > 0) {
           // Update each meter category that might contain parent meters
           const updateMeterCategory = (meters: any[]) => {
             return meters.map(meter => {
@@ -2061,33 +2104,6 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                   totalKwh: totalKwh,
                   totalKwhPositive,
                   totalKwhNegative
-                };
-              }
-              
-              // Apply corrections to leaf meters (meters with corrections but no CSV data)
-              const meterCorrections = leafMeterCorrections.get(meter.id);
-              if (meterCorrections && !csvData) {
-                console.log(`Applying ${meterCorrections.size} correction fields to leaf meter ${meter.meter_number}`);
-                const updatedColumnTotals = { ...meter.columnTotals };
-                let totalKwhDelta = 0;
-                
-                for (const [fieldName, delta] of meterCorrections.entries()) {
-                  // Apply delta to column totals
-                  if (fieldName === 'kwh_value' || fieldName === 'Total kWh') {
-                    totalKwhDelta += delta;
-                  } else if (updatedColumnTotals[fieldName] !== undefined) {
-                    updatedColumnTotals[fieldName] = (updatedColumnTotals[fieldName] || 0) + delta;
-                    console.log(`  ${fieldName}: ${meter.columnTotals?.[fieldName]?.toLocaleString()} → ${updatedColumnTotals[fieldName].toLocaleString()}`);
-                  }
-                }
-                
-                const newTotalKwh = (meter.totalKwh || 0) + totalKwhDelta;
-                return {
-                  ...meter,
-                  columnTotals: updatedColumnTotals,
-                  totalKwh: newTotalKwh,
-                  totalKwhPositive: newTotalKwh > 0 ? newTotalKwh : 0,
-                  totalKwhNegative: newTotalKwh < 0 ? newTotalKwh : 0
                 };
               }
               
