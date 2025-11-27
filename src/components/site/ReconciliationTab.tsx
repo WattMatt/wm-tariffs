@@ -1577,6 +1577,9 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     // Revenue Reconciliation (if enabled)
     let revenueData = null;
     if (enableRevenue) {
+      setIsCalculatingRevenue(true);
+      toast.info("Calculating revenue for meters with tariffs...");
+      
       const metersWithTariffs = meterData.filter(m => (m.tariff_structure_id || m.assigned_tariff_name) && m.totalKwhPositive > 0);
       setRevenueProgress({ current: 0, total: metersWithTariffs.length });
       
@@ -1718,11 +1721,6 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
 
       const shouldCalculateRevenue = enableRevenue !== undefined ? enableRevenue : revenueReconciliationEnabled;
       
-      if (shouldCalculateRevenue) {
-        setIsCalculatingRevenue(true);
-        toast.info("Calculating revenue for meters with tariffs...");
-      }
-
       const { meterData, errors, reconciliationData } = await performReconciliationCalculation(
         fullDateTimeFrom,
         fullDateTimeTo,
