@@ -655,3 +655,142 @@ export const generateTariffComparisonChart = (
   
   return canvas.toDataURL('image/png');
 };
+
+export const generateReconciliationVsDocumentChart = (
+  title: string,
+  data: { period: string; reconciliationValue: number; documentValue: number }[],
+  width: number = 400,
+  height: number = 300
+): string => {
+  // Dynamically adjust width based on number of data points
+  const adjustedWidth = Math.max(width, 500 + (data.length - 5) * 50);
+  
+  const canvas = document.createElement('canvas');
+  canvas.width = adjustedWidth;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  
+  if (!ctx || data.length === 0) return '';
+  
+  // Clear canvas with white background
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, adjustedWidth, height);
+  
+  // Colors - Grey for Reconciliation Cost, Blue for Document Billed
+  const reconciliationColor = '#9ca3af';  // Grey for Reconciliation Cost
+  const documentColor = '#3b82f6';  // Blue for Document Billed
+  
+  // Draw title
+  ctx.fillStyle = '#000000';
+  ctx.font = 'bold 12px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(title, adjustedWidth / 2, 20);
+  
+  // Draw legend
+  const legendY = 40;
+  const legendX = adjustedWidth / 2 - 70;
+  
+  ctx.fillStyle = reconciliationColor;
+  ctx.fillRect(legendX, legendY, 12, 12);
+  ctx.fillStyle = '#000000';
+  ctx.font = '10px sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText('Reconciliation Cost', legendX + 16, legendY + 10);
+  
+  ctx.fillStyle = documentColor;
+  ctx.fillRect(legendX + 110, legendY, 12, 12);
+  ctx.fillStyle = '#000000';
+  ctx.fillText('Document Billed', legendX + 126, legendY + 10);
+  
+  const padding = 40;
+  const bottomPadding = 80;
+  const topPadding = 65;
+  const chartWidth = adjustedWidth - padding * 2;
+  const chartHeight = height - topPadding - bottomPadding;
+  const clusterWidth = chartWidth / data.length;
+  const barWidth = Math.max((clusterWidth - 8) / 2, 15);  // Two bars with gap
+  
+  const maxValue = Math.max(
+    ...data.map(d => d.reconciliationValue),
+    ...data.map(d => d.documentValue)
+  );
+  
+  // Draw clustered bars
+  data.forEach((item, index) => {
+    const clusterX = padding + index * clusterWidth;
+    
+    // Reconciliation bar (left)
+    const reconciliationBarHeight = maxValue > 0 ? (item.reconciliationValue / maxValue) * chartHeight : 0;
+    const reconciliationY = height - bottomPadding - reconciliationBarHeight;
+    ctx.fillStyle = reconciliationColor;
+    ctx.fillRect(clusterX + 2, reconciliationY, barWidth, reconciliationBarHeight);
+    
+    // Document bar (right)
+    const documentBarHeight = maxValue > 0 ? (item.documentValue / maxValue) * chartHeight : 0;
+    const documentY = height - bottomPadding - documentBarHeight;
+    ctx.fillStyle = documentColor;
+    ctx.fillRect(clusterX + barWidth + 4, documentY, barWidth, documentBarHeight);
+    
+    // Draw values on top of bars
+    ctx.fillStyle = '#000000';
+    ctx.font = 'bold 9px sans-serif';
+    ctx.textAlign = 'center';
+    if (item.reconciliationValue > 0) {
+      ctx.fillText(abbreviateNumber(item.reconciliationValue), clusterX + barWidth / 2 + 2, reconciliationY - 3);
+    }
+    if (item.documentValue > 0) {
+      ctx.fillText(abbreviateNumber(item.documentValue), clusterX + barWidth * 1.5 + 4, documentY - 3);
+    }
+  });
+  
+  // Draw X-axis labels (rotated)
+  ctx.save();
+  ctx.fillStyle = '#000000';
+  ctx.font = '9px sans-serif';
+  ctx.textAlign = 'right';
+  data.forEach((item, index) => {
+    const x = padding + index * clusterWidth + clusterWidth / 2;
+    const y = height - bottomPadding + 10;
+    ctx.translate(x, y);
+    ctx.rotate(-Math.PI / 4);
+    ctx.fillText(item.period, 0, 0);
+    ctx.rotate(Math.PI / 4);
+    ctx.translate(-x, -y);
+  });
+  ctx.restore();
+  
+  // Calculate and display overall and YoY percentage increases (bottom right)
+  if (data.length >= 2) {
+    const firstValue = data[0].reconciliationValue;
+    const lastValue = data[data.length - 1].reconciliationValue;
+    
+    if (firstValue > 0) {
+      const overallIncreaseNum = ((lastValue - firstValue) / firstValue * 100);
+      const overallIncrease = overallIncreaseNum.toFixed(1);
+      
+      // Calculate YoY average increase
+      let totalYoY = 0;
+      let validTransitions = 0;
+      for (let i = 1; i < data.length; i++) {
+        if (data[i - 1].reconciliationValue > 0) {
+          totalYoY += (data[i].reconciliationValue - data[i - 1].reconciliationValue) / data[i - 1].reconciliationValue * 100;
+          validTransitions++;
+        }
+      }
+      
+      if (validTransitions > 0) {
+        const avgYoYNum = (totalYoY / validTransitions);
+        const avgYoY = avgYoYNum.toFixed(1);
+        
+        // Draw percentage text at bottom right
+        ctx.fillStyle = '#666666';
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText(`Overall: ${overallIncreaseNum >= 0 ? '+' : ''}${overallIncrease}%`, adjustedWidth - 10, height - 30);
+        ctx.fillText(`Avg YoY: ${avgYoYNum >= 0 ? '+' : ''}${avgYoY}%`, adjustedWidth - 10, height - 18);
+      }
+    }
+  }
+  
+  return canvas.toDataURL('image/png');
+};
