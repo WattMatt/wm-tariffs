@@ -71,7 +71,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
   const [dragOverMeterId, setDragOverMeterId] = useState<string | null>(null);
   const [selectedMetersForSummation, setSelectedMetersForSummation] = useState<Set<string>>(new Set());
   const [meterConnectionsMap, setMeterConnectionsMap] = useState<Map<string, string[]>>(new Map()); // parent_id -> child_ids
-  const [reconciliationProgress, setReconciliationProgress] = useState<{current: number, total: number}>({current: 0, total: 0});
+  // Removed reconciliationProgress - now using separate energyProgress and revenueProgress states
   const [meterAssignments, setMeterAssignments] = useState<Map<string, string>>(new Map()); // meter_id -> "grid_supply" | "solar_energy" | "none"
   const [expandedMeters, setExpandedMeters] = useState<Set<string>>(new Set()); // Set of meter IDs that are expanded
   const [userSetDates, setUserSetDates] = useState(false); // Track if user manually set dates
@@ -99,6 +99,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     current: number;
     total: number;
   }>({ currentDocument: '', current: 0, total: 0 });
+  const [energyProgress, setEnergyProgress] = useState({ current: 0, total: 0 });
+  const [revenueProgress, setRevenueProgress] = useState({ current: 0, total: 0 });
   
   // Cancel reconciliation ref
   const cancelReconciliationRef = useRef(false);
@@ -174,7 +176,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         if (parsed.isLoading || parsed.isCalculatingRevenue) {
           setIsLoading(parsed.isLoading || false);
           setIsCalculatingRevenue(parsed.isCalculatingRevenue || false);
-          setReconciliationProgress(parsed.reconciliationProgress || { current: 0, total: 0 });
+          setEnergyProgress(parsed.energyProgress || { current: 0, total: 0 });
+          setRevenueProgress(parsed.revenueProgress || { current: 0, total: 0 });
           if (parsed.reconciliationData) {
             setReconciliationData(parsed.reconciliationData);
           }
@@ -192,7 +195,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       const stateToSave = {
         isLoading,
         isCalculatingRevenue,
-        reconciliationProgress,
+        energyProgress,
+        revenueProgress,
         reconciliationData,
         timestamp: Date.now()
       };
@@ -201,7 +205,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       // Clear state when reconciliation completes
       localStorage.removeItem(reconciliationStateKey);
     }
-  }, [isLoading, isCalculatingRevenue, reconciliationProgress, reconciliationData, reconciliationStateKey]);
+  }, [isLoading, isCalculatingRevenue, energyProgress, revenueProgress, reconciliationData, reconciliationStateKey]);
 
   // Save reconciliation settings
   const saveReconciliationSettings = async () => {
@@ -1214,7 +1218,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       results.push(...batchResults);
       
       // Update progress after each batch
-      setReconciliationProgress({
+      setEnergyProgress({
         current: Math.min(i + batchSize, meters.length),
         total: meters.length
       });
@@ -1574,7 +1578,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     let revenueData = null;
     if (enableRevenue) {
       const metersWithTariffs = meterData.filter(m => (m.tariff_structure_id || m.assigned_tariff_name) && m.totalKwhPositive > 0);
-      setReconciliationProgress({ current: 0, total: metersWithTariffs.length });
+      setRevenueProgress({ current: 0, total: metersWithTariffs.length });
       
       const meterRevenues = new Map();
       let gridSupplyCost = 0;
@@ -1595,7 +1599,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           );
           
           meterRevenues.set(meter.id, costResult);
-          setReconciliationProgress({ 
+          setRevenueProgress({ 
             current: meterRevenues.size, 
             total: metersWithTariffs.length 
           });
@@ -1621,7 +1625,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           );
           
           meterRevenues.set(meter.id, costResult);
-          setReconciliationProgress({ 
+          setRevenueProgress({ 
             current: meterRevenues.size, 
             total: metersWithTariffs.length 
           });
@@ -1704,7 +1708,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     cancelReconciliationRef.current = false;
     
     setIsLoading(true);
-    setReconciliationProgress({current: 0, total: 0});
+    setEnergyProgress({ current: 0, total: 0 });
+    setRevenueProgress({ current: 0, total: 0 });
     setFailedMeters(new Map());
 
     try {
@@ -1775,7 +1780,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       // Force cleanup immediately
       setIsLoading(false);
       setIsCalculatingRevenue(false);
-      setReconciliationProgress({ current: 0, total: 0 });
+      setEnergyProgress({ current: 0, total: 0 });
+      setRevenueProgress({ current: 0, total: 0 });
       
       toast.info("Reconciliation cancelled");
       
@@ -3291,8 +3297,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           isCancelling={isCancelling}
           isLoadingEnergy={isLoading && !isCalculatingRevenue}
           isLoadingRevenue={isCalculatingRevenue}
-          energyProgress={reconciliationProgress}
-          revenueProgress={reconciliationProgress}
+          energyProgress={energyProgress}
+          revenueProgress={revenueProgress}
           hasPreviewData={previewData !== null}
           canReconcile={selectedColumns.size > 0}
           isBulkMode={selectedDocumentIds.length > 0}
