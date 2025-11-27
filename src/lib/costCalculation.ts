@@ -89,7 +89,8 @@ export async function calculateMeterCost(
   tariffId: string,
   dateFrom: Date,
   dateTo: Date,
-  totalKwh?: number
+  totalKwh?: number,
+  maxKva?: number
 ): Promise<CostCalculationResult> {
   try {
     // Fetch tariff structure details
@@ -305,20 +306,27 @@ export async function calculateMeterCost(
     // Add demand charges (kVA-based)
     let demandCharges = 0;
     if (tariff.tariff_charges) {
-      // Fetch max kVA for the period
-      const { data: kvaData } = await supabase
-        .from("meter_readings")
-        .select("kva_value")
-        .eq("meter_id", meterId)
-        .gte("reading_timestamp", dateFrom.toISOString())
-        .lte("reading_timestamp", dateTo.toISOString())
-        .order("kva_value", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      // Use provided maxKva, or fallback to database query
+      let maxKvaValue = maxKva || 0;
+      
+      if (!maxKvaValue) {
+        // Fallback: Try to fetch from meter_readings.kva_value column
+        const { data: kvaData } = await supabase
+          .from("meter_readings")
+          .select("kva_value")
+          .eq("meter_id", meterId)
+          .gte("reading_timestamp", dateFrom.toISOString())
+          .lte("reading_timestamp", dateTo.toISOString())
+          .order("kva_value", { ascending: false })
+          .limit(1)
+          .maybeSingle();
 
-      const maxKva = kvaData?.kva_value || 0;
+        maxKvaValue = kvaData?.kva_value || 0;
+      }
+      
+      console.log('🔍 [Cost Calculation Debug] Max kVA value:', maxKvaValue, '(provided:', maxKva, ')');
 
-      if (maxKva > 0) {
+      if (maxKvaValue > 0) {
         // Determine season for demand charge
         const startMonth = dateFrom.getMonth() + 1;
         const endMonth = dateTo.getMonth() + 1;
@@ -330,7 +338,8 @@ export async function calculateMeterCost(
         );
 
         if (demandCharge) {
-          demandCharges = maxKva * Number(demandCharge.charge_amount);
+          demandCharges = maxKvaValue * Number(demandCharge.charge_amount);
+          console.log('🔍 [Cost Calculation Debug] Demand charge calculated:', demandCharges, '= kVA:', maxKvaValue, '× rate:', demandCharge.charge_amount);
         }
       }
     }
@@ -377,7 +386,8 @@ export async function calculateMeterCostAcrossPeriods(
   tariffName: string,
   dateFrom: Date,
   dateTo: Date,
-  totalKwh?: number
+  totalKwh?: number,
+  maxKva?: number
 ): Promise<CostCalculationResult> {
   try {
     // Fetch all applicable tariff periods for this date range
@@ -411,7 +421,8 @@ export async function calculateMeterCostAcrossPeriods(
         tariffPeriods[0].tariff_id,
         dateFrom,
         dateTo,
-        totalKwh
+        totalKwh,
+        maxKva
       );
       return {
         ...result,
@@ -469,13 +480,14 @@ export async function calculateMeterCostAcrossPeriods(
 
       const segmentKwh = (readingsData || []).reduce((sum, r) => sum + Number(r.kwh_value), 0);
 
-      // Calculate cost for this segment
+      // Calculate cost for this segment - pass maxKva for demand charges
       const segmentResult = await calculateMeterCost(
         meterId,
         period.tariff_id,
         segmentStart,
         segmentEnd,
-        segmentKwh
+        segmentKwh,
+        maxKva
       );
 
       if (!segmentResult.hasError) {
