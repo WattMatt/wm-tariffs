@@ -146,11 +146,16 @@ Extract the following information:
   * Supply (CRITICAL: If the description contains the word "Generator", set this to "Emergency", otherwise set it to "Normal")
   * Meter number (if shown in the table)
   * Unit (CRITICAL: Determine the unit type from the description or table headers. The ONLY valid options are: "kWh" (kilowatt-hours for energy consumption), "kVA" (kilovolt-amperes for demand charges), or "Monthly" (for fixed monthly charges like basic fees). Look for indicators like "(kWh)", "(kVA)", "Conv", "Demand", "Basic", or "Monthly" in the description.)
-  * Previous reading (the starting meter value, only applicable for kWh and kVA)
-  * Current reading (the ending meter value, only applicable for kWh and kVA)
-  * Consumption (units used, should be current - previous for kWh and kVA)
-  * Rate (price per unit in cents or rands)
-  * Amount (line item total, should be consumption × rate)
+  * Rate (CRITICAL - ALWAYS EXTRACT):
+    - For kWh/kVA charges: Extract the rate/tariff per unit (e.g., 2.7358)
+    - For Basic/Monthly charges: The rate IS the amount (e.g., if basic charge is R1282.72, set rate to 1282.72)
+  * Previous reading (ONLY for kWh/kVA - the starting meter value)
+  * Current reading (ONLY for kWh/kVA - the ending meter value)
+  * DO NOT extract consumption or amount - these will be calculated by the system
+
+IMPORTANT CALCULATION RULES (system will handle):
+- For kWh/kVA: Consumption = Current Reading - Previous Reading; Amount = Consumption × Rate
+- For Basic/Monthly: Consumption is irrelevant (0), Amount = Rate (fixed fee)
 
 Return the data in a structured format with all line items in an array.`;
 
@@ -251,17 +256,19 @@ Return the data in a structured format with all line items in an array.`;
                         type: "number", 
                         description: documentType === 'municipal_account'
                           ? "CRITICAL: Extract ONLY from METER READINGS table CONSUMPTION column (NOT from ACCOUNT DETAILS UNITS). This is new_reading - old_reading from the meter data."
-                          : "Consumption/units used (should equal current - previous)"
+                          : "DO NOT extract - system will calculate as (current_reading - previous_reading)"
                       },
                       rate: { 
                         type: "number", 
                         description: documentType === 'municipal_account'
                           ? "CRITICAL: Extract from TARIFF column in ACCOUNT DETAILS table (e.g., 424.970000 for kVA, 1.726500 for kWh). This is the price per unit."
-                          : "Rate/tariff per unit in rands or cents"
+                          : "CRITICAL - ALWAYS EXTRACT: For kWh/kVA charges, the price per unit. For Basic/Monthly charges, the rate equals the total amount (fixed fee)."
                       },
                       amount: { 
                         type: "number", 
-                        description: "Line item total amount from ACCOUNT DETAILS table" 
+                        description: documentType === 'municipal_account'
+                          ? "Line item total amount from ACCOUNT DETAILS table"
+                          : "DO NOT extract - system will calculate as (consumption × rate) for metered charges, or equals rate for basic charges"
                       }
                     },
                     required: ["description"]
@@ -387,25 +394,53 @@ Return the data in a structured format with all line items in an array.`;
       extractedData.currency = 'R';
     }
     
-    // Normalize line items - ensure consistent consumption calculation
+    // Normalize line items - ALWAYS calculate consumption and amount
     if (extractedData.line_items && Array.isArray(extractedData.line_items)) {
       extractedData.line_items = extractedData.line_items.map((item: any) => {
-        // Handle both field naming conventions (old_reading/previous_reading)
-        const prevReading = item.previous_reading ?? item.old_reading ?? 0;
-        const currReading = item.current_reading ?? item.new_reading ?? null;
+        const unit = item.unit?.toLowerCase() || '';
+        const isBasicCharge = unit === 'monthly' || 
+                              item.description?.toLowerCase().includes('basic');
         
-        // Normalize previous_reading: always default to 0 if null/undefined
-        item.previous_reading = prevReading;
-        item.old_reading = prevReading;
-        
-        // If we have a current reading but consumption is 0 or missing, recalculate
-        if (currReading !== null && currReading !== undefined) {
-          const calculatedConsumption = currReading - prevReading;
+        if (isBasicCharge) {
+          // BASIC CHARGES: Rate = Amount, Consumption = 0
+          item.previous_reading = null;
+          item.current_reading = null;
+          item.old_reading = null;
+          item.new_reading = null;
+          item.consumption = 0;
           
-          // Only override if consumption is missing, 0, or doesn't make sense
-          if (item.consumption === null || item.consumption === undefined || item.consumption === 0) {
-            item.consumption = calculatedConsumption;
-            console.log(`Recalculated consumption for ${item.description}: ${currReading} - ${prevReading} = ${calculatedConsumption}`);
+          // For basic charges, if rate is missing but amount exists, use amount as rate
+          if (!item.rate && item.amount) {
+            item.rate = item.amount;
+            console.log(`Set rate from amount for basic charge ${item.description}: ${item.rate}`);
+          }
+          // If rate exists but amount is missing, set amount = rate
+          if (item.rate && !item.amount) {
+            item.amount = item.rate;
+          }
+          
+          console.log(`Basic charge ${item.description}: Rate=${item.rate}, Amount=${item.amount}`);
+        } else {
+          // METERED CHARGES (kWh/kVA): Calculate consumption and amount
+          const prevReading = item.previous_reading ?? item.old_reading ?? 0;
+          const currReading = item.current_reading ?? item.new_reading ?? null;
+          
+          // Normalize reading fields
+          item.previous_reading = prevReading;
+          item.old_reading = prevReading;
+          item.current_reading = currReading;
+          item.new_reading = currReading;
+          
+          // ALWAYS calculate consumption from readings
+          if (currReading !== null && currReading !== undefined) {
+            item.consumption = currReading - prevReading;
+            console.log(`Calculated consumption for ${item.description}: ${currReading} - ${prevReading} = ${item.consumption}`);
+          }
+          
+          // ALWAYS calculate amount from consumption × rate
+          if (item.consumption !== null && item.consumption !== undefined && item.rate) {
+            item.amount = Math.round(item.consumption * item.rate * 100) / 100;
+            console.log(`Calculated amount for ${item.description}: ${item.consumption} × ${item.rate} = ${item.amount}`);
           }
         }
         
