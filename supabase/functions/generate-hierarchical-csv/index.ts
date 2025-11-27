@@ -96,59 +96,39 @@ Deno.serve(async (req) => {
     }
     console.log(`Found ${solarMeterIds.size} solar meters to invert`);
 
-    // ===== LAYERED APPROACH: Check which immediate children have generated CSVs =====
+    // ===== LAYERED APPROACH: Check which immediate children have CSVs =====
+    // PRIORITY: Generated hierarchical CSVs > Uploaded CSVs > Raw readings (from immediate child only)
     const { data: childCsvFiles } = await supabase
       .from('meter_csv_files')
-      .select('meter_id, file_path, file_name')
+      .select('meter_id, file_path, file_name, parse_status')
       .in('meter_id', childMeterIds)
-      .eq('parse_status', 'generated');
+      .in('parse_status', ['generated', 'parsed']);  // Get both types
 
-    const childrenWithCsv = new Map<string, string>();
-    childCsvFiles?.forEach(f => childrenWithCsv.set(f.meter_id, f.file_path));
+    // Build map prioritizing generated CSVs over uploaded CSVs
+    const childrenWithCsv = new Map<string, { path: string; isGenerated: boolean }>();
+    childCsvFiles?.forEach(f => {
+      const isHierarchical = f.file_name.toLowerCase().includes('hierarchical');
+      const existing = childrenWithCsv.get(f.meter_id);
+      
+      if (f.parse_status === 'generated' && isHierarchical) {
+        // Generated hierarchical CSV - highest priority
+        childrenWithCsv.set(f.meter_id, { path: f.file_path, isGenerated: true });
+        console.log(`✓ Using GENERATED hierarchical CSV for ${meterNumberMap.get(f.meter_id) || f.meter_id}: ${f.file_name}`);
+      } else if (f.parse_status === 'parsed' && !isHierarchical && !existing?.isGenerated) {
+        // Uploaded CSV - use only if no generated CSV exists
+        childrenWithCsv.set(f.meter_id, { path: f.file_path, isGenerated: false });
+        console.log(`Using UPLOADED CSV for ${meterNumberMap.get(f.meter_id) || f.meter_id}: ${f.file_name}`);
+      }
+    });
     
+    // Children without any CSV - will fetch raw readings from these meters directly (NOT their children)
     const childrenWithoutCsv = childMeterIds.filter(id => !childrenWithCsv.has(id));
     
-    console.log(`Children with generated CSV: ${childrenWithCsv.size}`);
-    console.log(`Children without CSV (will find leaf meters): ${childrenWithoutCsv.length}`);
-
-    // Helper function to recursively get all leaf meter IDs (only for children without CSVs)
-    const getLeafMeterIds = async (meterIds: string[]): Promise<string[]> => {
-      if (meterIds.length === 0) return [];
-      
-      const { data: connections } = await supabase
-        .from('meter_connections')
-        .select('parent_meter_id, child_meter_id')
-        .in('parent_meter_id', meterIds);
-      
-      if (!connections || connections.length === 0) {
-        return meterIds;
-      }
-      
-      const parentIdsWithChildren = new Set(connections.map(c => c.parent_meter_id));
-      const directLeaves = meterIds.filter(id => !parentIdsWithChildren.has(id));
-      const childIds = connections.map(c => c.child_meter_id);
-      const childLeaves = await getLeafMeterIds(childIds);
-      
-      return [...new Set([...directLeaves, ...childLeaves])];
-    };
-
-    // Get leaf meter IDs only for children that don't have generated CSVs
-    let leafMeterIds: string[] = [];
-    if (childrenWithoutCsv.length > 0) {
-      leafMeterIds = await getLeafMeterIds(childrenWithoutCsv);
-      
-      // Get meter numbers for leaf meters too (for correction logging)
-      if (leafMeterIds.length > 0) {
-        const { data: leafMeterInfo } = await supabase
-          .from('meters')
-          .select('id, meter_number')
-          .in('id', leafMeterIds);
-        
-        leafMeterInfo?.forEach(m => meterNumberMap.set(m.id, m.meter_number));
-      }
-    }
+    // For children without CSV, we use their raw readings DIRECTLY (no recursive leaf meter lookup)
+    const metersForRawReadings = childrenWithoutCsv;
     
-    console.log(`Found ${leafMeterIds.length} leaf meters from ${childrenWithoutCsv.length} children without CSVs`);
+    console.log(`Children with CSV: ${childrenWithCsv.size}`);
+    console.log(`Children without CSV (will use raw readings from immediate child): ${metersForRawReadings.length}`);
 
     // Helper to round timestamp to nearest 30-min slot
     const roundToSlot = (timestamp: string): string => {
@@ -202,9 +182,10 @@ Deno.serve(async (req) => {
     // Discover all columns
     const allColumns = new Set<string>();
 
-    // ===== PART 1: Read from existing generated CSVs =====
-    for (const [childMeterId, filePath] of childrenWithCsv.entries()) {
-      console.log(`Reading generated CSV for child ${meterNumberMap.get(childMeterId) || childMeterId}: ${filePath}`);
+    // ===== PART 1: Read from existing CSVs (generated hierarchical or uploaded) =====
+    for (const [childMeterId, csvInfo] of childrenWithCsv.entries()) {
+      const { path: filePath, isGenerated } = csvInfo;
+      console.log(`Reading ${isGenerated ? 'GENERATED' : 'UPLOADED'} CSV for child ${meterNumberMap.get(childMeterId) || childMeterId}: ${filePath}`);
       
       try {
         const { data: csvData, error: downloadError } = await supabase.storage
@@ -281,20 +262,21 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ===== PART 2: Fetch readings from meter_readings for leaf meters =====
-    if (leafMeterIds.length > 0) {
+    // ===== PART 2: Fetch readings from meter_readings for IMMEDIATE CHILDREN without CSVs =====
+    // NOTE: We only go ONE level deep - no recursive leaf meter lookup
+    if (metersForRawReadings.length > 0) {
       const PAGE_SIZE = 1000;
       let allReadings: ReadingRow[] = [];
       let offset = 0;
       let hasMore = true;
 
-      console.log('Fetching readings from meter_readings for leaf meters...');
+      console.log(`Fetching readings from meter_readings for ${metersForRawReadings.length} immediate children without CSVs...`);
       
       while (hasMore) {
         const { data: pageData, error: readingsError } = await supabase
           .from('meter_readings')
           .select('reading_timestamp, kwh_value, metadata, meter_id')
-          .in('meter_id', leafMeterIds)
+          .in('meter_id', metersForRawReadings)
           .gte('reading_timestamp', dateFrom)
           .lte('reading_timestamp', dateTo)
           .order('reading_timestamp', { ascending: true })
@@ -314,7 +296,7 @@ Deno.serve(async (req) => {
         }
       }
 
-      console.log(`Fetched ${allReadings.length} total readings from ${leafMeterIds.length} leaf meters`);
+      console.log(`Fetched ${allReadings.length} total readings from ${metersForRawReadings.length} immediate children`);
 
       // Discover columns from readings
       allReadings?.forEach((reading: ReadingRow) => {
