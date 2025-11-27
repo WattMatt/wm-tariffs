@@ -2136,7 +2136,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       
       if (resultsError) throw resultsError;
       
-      // 5. Generate hierarchical CSV files for parent meters
+      // 5. Generate hierarchical CSV files for parent meters and update their results with CSV values
       const parentMeters = allMeters.filter(meter => {
         const children = meterConnectionsMap.get(meter.id);
         return children && children.length > 0;
@@ -2146,49 +2146,41 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         console.log(`Generating ${parentMeters.length} hierarchical CSV file(s)...`);
         toast.info(`Generating ${parentMeters.length} hierarchical profile(s)...`);
 
-        // Helper to get all leaf child meter IDs
-        const getLeafChildren = (meterId: string, visited = new Set<string>()): string[] => {
-          if (visited.has(meterId)) return [];
-          visited.add(meterId);
-          
-          const children = meterConnectionsMap.get(meterId) || [];
-          if (children.length === 0) return [meterId];
-          
-          const leaves: string[] = [];
-          for (const childId of children) {
-            leaves.push(...getLeafChildren(childId, visited));
-          }
-          return leaves;
-        };
+        // Map to store CSV results for updating meter results
+        const hierarchicalCsvResults = new Map<string, {
+          totalKwh: number;
+          columnTotals: Record<string, number>;
+        }>();
 
         const csvGenerationPromises = parentMeters.map(async (parentMeter) => {
           try {
-            const leafMeterIds = Array.from(
-              new Set(
-                (meterConnectionsMap.get(parentMeter.id) || [])
-                  .flatMap(childId => getLeafChildren(childId))
-              )
-            );
+            // Pass immediate children - edge function will find all leaf meters
+            const childMeterIds = meterConnectionsMap.get(parentMeter.id) || [];
 
-            const { error: csvError } = await supabase.functions.invoke('generate-hierarchical-csv', {
+            const { data, error: csvError } = await supabase.functions.invoke('generate-hierarchical-csv', {
               body: {
                 parentMeterId: parentMeter.id,
                 parentMeterNumber: parentMeter.meter_number,
                 siteId,
                 dateFrom: getFullDateTime(dateFrom, timeFrom),
                 dateTo: getFullDateTime(dateTo, timeTo),
-                leafMeterIds,
-                selectedColumns: Array.from(selectedColumns),
-                columnOperations: Object.fromEntries(columnOperations),
-                columnFactors: Object.fromEntries(columnFactors),
-                meterAssignments: Object.fromEntries(meterAssignments)
+                childMeterIds
               }
             });
 
             if (csvError) {
               console.error(`Failed to generate CSV for ${parentMeter.meter_number}:`, csvError);
-            } else {
-              console.log(`✓ Generated hierarchical CSV for ${parentMeter.meter_number}`);
+            } else if (data) {
+              console.log(`✓ Generated hierarchical CSV for ${parentMeter.meter_number}`, {
+                totalKwh: data.totalKwh,
+                columns: data.columns,
+                rowCount: data.rowCount
+              });
+              // Store the returned values for database update
+              hierarchicalCsvResults.set(parentMeter.id, {
+                totalKwh: data.totalKwh,
+                columnTotals: data.columnTotals || {}
+              });
             }
           } catch (error) {
             console.error(`Error generating CSV for ${parentMeter.meter_number}:`, error);
@@ -2198,6 +2190,22 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         // Run all CSV generations in parallel
         await Promise.allSettled(csvGenerationPromises);
         console.log('Hierarchical CSV generation complete');
+
+        // Update parent meter results with the CSV-calculated values (raw sums)
+        for (const [meterId, csvData] of hierarchicalCsvResults) {
+          const { error: updateError } = await supabase
+            .from('reconciliation_meter_results')
+            .update({
+              column_totals: csvData.columnTotals,
+              hierarchical_total: csvData.totalKwh
+            })
+            .eq('reconciliation_run_id', run.id)
+            .eq('meter_id', meterId);
+
+          if (updateError) {
+            console.error(`Failed to update meter result for ${meterId}:`, updateError);
+          }
+        }
       }
       
       toast.success(`Reconciliation "${runName}" saved successfully`);
@@ -2596,7 +2604,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       errorMessage: m.errorMessage || null
     }]));
     
-    // Helper to aggregate columnTotals from leaf meters for display
+    // Helper to aggregate columnTotals from leaf meters for display (fallback if not from CSV)
     const getLeafColumnTotalsForDisplay = (meterId: string, visited = new Set<string>()): Record<string, number> => {
       if (visited.has(meterId)) return {};
       visited.add(meterId);
@@ -2608,6 +2616,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         return meterData?.columnTotals || {};
       }
       
+      // For parent meters, sum children's raw values (operations/factors applied at display time)
       const aggregated: Record<string, number> = {};
       children.forEach(childId => {
         const childTotals = getLeafColumnTotalsForDisplay(childId, new Set(visited));
@@ -2650,10 +2659,12 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         const children = meterConnectionsMap.get(availMeter.id) || [];
         const isParentMeter = children.length > 0;
         
-        // For parent meters, aggregate column values from children
+        // For parent meters, use columnTotals from the data (which contains raw sums from CSV)
+        // The display component will apply operations/factors as needed
         let columnTotals = meterData.columnTotals;
         let columnMaxValues = meterData.columnMaxValues;
         
+        // Fallback: if parent meter doesn't have columnTotals, aggregate from children
         if (isParentMeter && (!columnTotals || Object.keys(columnTotals).length === 0)) {
           columnTotals = getLeafColumnTotalsForDisplay(availMeter.id);
         }
@@ -2673,7 +2684,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       .filter(m => m !== undefined);
 
     return orderedMeters;
-  }, [reconciliationData, availableMeters.length, meterConnectionsMap]);
+  }, [reconciliationData, availableMeters.length, meterConnectionsMap, failedMeters]);
 
   return (
     <Tabs defaultValue="analysis" className="space-y-6">
