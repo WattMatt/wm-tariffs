@@ -1305,12 +1305,16 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             addSubsectionHeading(`Meter: ${meter.meter_number}${meter.name ? ` (${meter.name})` : ''}`);
             addSpacer(3);
             
-            // Render 6 charts (3 rows of 2)
+            // Render charts (filter first to avoid white space)
             const metrics = ['Total Amount', 'Basic Charge', 'kVA Charge', 'kWh Charge', 'kVA Consumption', 'kWh Consumption'];
+            const availableCharts = metrics
+              .filter(metric => meterCharts[metric])
+              .map(metric => ({ metric, chartImage: meterCharts[metric] }));
+            
             const chartWidth = (pageWidth - leftMargin - rightMargin - 5) / 2; // 5 = 1 gap
             const chartHeight = chartWidth * 0.75;
             
-            for (let i = 0; i < metrics.length; i += 2) {
+            for (let i = 0; i < availableCharts.length; i += 2) {
               // Check for page break
               if (yPos > pageHeight - bottomMargin - chartHeight - 20) {
                 addFooter();
@@ -1320,13 +1324,10 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
               }
               
               // Render up to 2 charts in a row
-              for (let j = 0; j < 2 && (i + j) < metrics.length; j++) {
-                const metric = metrics[i + j];
-                const chartImage = meterCharts[metric];
-                if (chartImage) {
-                  const chartX = leftMargin + (j * (chartWidth + 5));
-                  pdf.addImage(chartImage, 'PNG', chartX, yPos, chartWidth - 2, chartHeight);
-                }
+              for (let j = 0; j < 2 && (i + j) < availableCharts.length; j++) {
+                const { chartImage } = availableCharts[i + j];
+                const chartX = leftMargin + (j * (chartWidth + 5));
+                pdf.addImage(chartImage, 'PNG', chartX, yPos, chartWidth - 2, chartHeight);
               }
               yPos += chartHeight + 5;
             }
