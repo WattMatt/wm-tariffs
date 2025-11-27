@@ -11,11 +11,7 @@ interface HierarchicalCSVRequest {
   siteId: string;
   dateFrom: string;
   dateTo: string;
-  leafMeterIds: string[];
-  selectedColumns: string[];
-  columnOperations: Record<string, string>;
-  columnFactors: Record<string, number>;
-  meterAssignments: Record<string, string>;
+  childMeterIds: string[]; // Immediate children - function will find all leaf meters
 }
 
 interface ReadingRow {
@@ -41,16 +37,51 @@ Deno.serve(async (req) => {
       siteId,
       dateFrom,
       dateTo,
-      leafMeterIds,
-      selectedColumns,
-      columnOperations,
-      columnFactors,
-      meterAssignments
+      childMeterIds
     } = await req.json() as HierarchicalCSVRequest;
 
     console.log('Generating hierarchical CSV for parent meter:', parentMeterNumber);
-    console.log('Leaf meter IDs:', leafMeterIds);
+    console.log('Immediate child meter IDs:', childMeterIds);
     console.log('Date range:', dateFrom, 'to', dateTo);
+
+    // Helper function to recursively get all leaf meter IDs
+    const getLeafMeterIds = async (meterIds: string[]): Promise<string[]> => {
+      if (meterIds.length === 0) return [];
+      
+      const { data: connections } = await supabase
+        .from('meter_connections')
+        .select('parent_meter_id, child_meter_id')
+        .in('parent_meter_id', meterIds);
+      
+      if (!connections || connections.length === 0) {
+        // No children found - these are all leaf meters
+        return meterIds;
+      }
+      
+      // Find which meters have children and which don't
+      const parentIdsWithChildren = new Set(connections.map(c => c.parent_meter_id));
+      const directLeaves = meterIds.filter(id => !parentIdsWithChildren.has(id));
+      
+      // Get leaf meters for children
+      const childIds = connections.map(c => c.child_meter_id);
+      const childLeaves = await getLeafMeterIds(childIds);
+      
+      return [...new Set([...directLeaves, ...childLeaves])];
+    };
+
+    // Get all leaf meter IDs from immediate children
+    const leafMeterIds = await getLeafMeterIds(childMeterIds);
+    console.log(`Found ${leafMeterIds.length} leaf meters from ${childMeterIds.length} immediate children`);
+
+    if (leafMeterIds.length === 0) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'No leaf meters found for this parent meter'
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // 1. Fetch all readings from leaf meters in the date range
     const { data: readings, error: readingsError } = await supabase
@@ -67,55 +98,57 @@ Deno.serve(async (req) => {
 
     console.log(`Fetched ${readings?.length || 0} readings from ${leafMeterIds.length} leaf meters`);
 
-    // 2. Group readings by timestamp and sum values
+    // 2. Discover all unique numeric columns from the readings metadata
+    const allColumns = new Set<string>();
+    readings?.forEach((reading: ReadingRow) => {
+      if (reading.metadata?.imported_fields) {
+        Object.entries(reading.metadata.imported_fields).forEach(([key, value]) => {
+          // Only include numeric fields
+          if (typeof value === 'number' || (typeof value === 'string' && !isNaN(Number(value)))) {
+            allColumns.add(key);
+          }
+        });
+      }
+    });
+    const columns = Array.from(allColumns).sort();
+    console.log(`Discovered ${columns.length} numeric columns:`, columns);
+
+    // 3. Group readings by timestamp and SUM all values (raw summation, no operations/factors)
     const groupedData = new Map<string, {
       totalKwh: number;
-      metadataSums: Record<string, number>;
-      metadataMaxes: Record<string, number>;
-      metadataCounts: Record<string, number>;
+      columnSums: Record<string, number>;
     }>();
 
     readings?.forEach((reading: ReadingRow) => {
       const timestamp = reading.reading_timestamp;
-      const isSolar = meterAssignments[reading.meter_id] === 'solar_energy';
-      const kwhValue = isSolar ? -reading.kwh_value : reading.kwh_value;
 
       if (!groupedData.has(timestamp)) {
         groupedData.set(timestamp, {
           totalKwh: 0,
-          metadataSums: {},
-          metadataMaxes: {},
-          metadataCounts: {}
+          columnSums: {}
         });
       }
 
       const group = groupedData.get(timestamp)!;
-      group.totalKwh += kwhValue;
+      group.totalKwh += reading.kwh_value; // Always sum kWh
 
-      // Process metadata columns
-      if (reading.metadata) {
-        selectedColumns.forEach(col => {
-          const value = reading.metadata?.[col];
-          if (value !== null && value !== undefined && !isNaN(Number(value))) {
-            const numValue = Number(value) * (columnFactors[col] || 1);
-            const operation = columnOperations[col] || 'sum';
-
-            if (operation === 'sum' || operation === 'average') {
-              group.metadataSums[col] = (group.metadataSums[col] || 0) + numValue;
-              group.metadataCounts[col] = (group.metadataCounts[col] || 0) + 1;
-            } else if (operation === 'max') {
-              group.metadataMaxes[col] = Math.max(group.metadataMaxes[col] || numValue, numValue);
-            } else if (operation === 'min') {
-              group.metadataMaxes[col] = Math.min(group.metadataMaxes[col] || numValue, numValue);
+      // Sum all metadata columns (raw values, no factors applied)
+      if (reading.metadata?.imported_fields) {
+        columns.forEach(col => {
+          const value = reading.metadata?.imported_fields?.[col];
+          if (value !== null && value !== undefined) {
+            const numValue = Number(value);
+            if (!isNaN(numValue)) {
+              group.columnSums[col] = (group.columnSums[col] || 0) + numValue;
             }
           }
         });
       }
     });
 
-    // 3. Generate CSV rows
+    // 4. Generate CSV rows
     const csvRows: string[] = [];
-    const headerColumns = ['Timestamp', 'Total kWh', ...selectedColumns];
+    const headerColumns = ['Timestamp', 'Total kWh', ...columns];
     csvRows.push(headerColumns.join(','));
 
     Array.from(groupedData.entries())
@@ -124,22 +157,7 @@ Deno.serve(async (req) => {
         const row = [
           timestamp,
           data.totalKwh.toFixed(4),
-          ...selectedColumns.map(col => {
-            const operation = columnOperations[col] || 'sum';
-            let value: number;
-
-            if (operation === 'average') {
-              value = data.metadataCounts[col] > 0
-                ? data.metadataSums[col] / data.metadataCounts[col]
-                : 0;
-            } else if (operation === 'max' || operation === 'min') {
-              value = data.metadataMaxes[col] || 0;
-            } else {
-              value = data.metadataSums[col] || 0;
-            }
-
-            return value.toFixed(4);
-          })
+          ...columns.map(col => (data.columnSums[col] || 0).toFixed(4))
         ];
         csvRows.push(row.join(','));
       });
@@ -147,7 +165,20 @@ Deno.serve(async (req) => {
     const newCsvContent = csvRows.join('\n');
     console.log(`Generated ${csvRows.length - 1} CSV rows`);
 
-    // 4. Get site and client info for storage path
+    // 5. Calculate final totals for response (raw sums)
+    const totalKwh = Array.from(groupedData.values())
+      .reduce((sum, d) => sum + d.totalKwh, 0);
+
+    const columnTotals: Record<string, number> = {};
+    columns.forEach(col => {
+      columnTotals[col] = Array.from(groupedData.values())
+        .reduce((sum, d) => sum + (d.columnSums[col] || 0), 0);
+    });
+
+    console.log('Total kWh:', totalKwh);
+    console.log('Column totals:', columnTotals);
+
+    // 6. Get site and client info for storage path
     const { data: siteData, error: siteError } = await supabase
       .from('sites')
       .select('name, clients(name)')
@@ -168,7 +199,7 @@ Deno.serve(async (req) => {
     const fileName = `${sanitizedMeterNumber}_Hierarchical_Energy_Profile.csv`;
     const filePath = `${clientName}/${siteName}/Metering/Reconciliations/${fileName}`;
 
-    // 5. Check if CSV already exists
+    // 7. Check if CSV already exists
     const { data: existingFiles } = await supabase.storage
       .from('client-files')
       .list(`${clientName}/${siteName}/Metering/Reconciliations`, {
@@ -212,7 +243,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 6. Upload CSV
+    // 8. Upload CSV
     const { error: uploadError } = await supabase.storage
       .from('client-files')
       .upload(filePath, finalCsvContent, {
@@ -226,7 +257,7 @@ Deno.serve(async (req) => {
 
     console.log('CSV uploaded successfully to:', filePath);
 
-    // 7. Update meter_csv_files table
+    // 9. Update meter_csv_files table
     const rowCount = finalCsvContent.split('\n').length - 1;
     const contentHash = await crypto.subtle.digest(
       'SHA-256',
@@ -285,6 +316,9 @@ Deno.serve(async (req) => {
         success: true,
         filePath,
         rowCount,
+        totalKwh,
+        columnTotals,
+        columns,
         message: fileExists ? 'CSV updated with new data' : 'CSV created successfully'
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
