@@ -401,13 +401,27 @@ Deno.serve(async (req) => {
       .reduce((sum, d) => sum + d.totalKwh, 0);
 
     const columnTotals: Record<string, number> = {};
+    const columnMaxValues: Record<string, number> = {};
+    
     columns.forEach(col => {
-      columnTotals[col] = Array.from(groupedData.values())
-        .reduce((sum, d) => sum + (d.columnSums[col] || 0), 0);
+      const colLower = col.toLowerCase();
+      // kVA columns should use MAX (peak demand), not SUM
+      const isKvaColumn = colLower.includes('kva') || colLower === 's';
+      
+      if (isKvaColumn) {
+        // For kVA columns: find the MAXIMUM of the per-interval sums
+        const values = Array.from(groupedData.values()).map(d => d.columnSums[col] || 0);
+        columnMaxValues[col] = values.length > 0 ? Math.max(...values) : 0;
+      } else {
+        // For kWh columns: SUM across all timestamps
+        columnTotals[col] = Array.from(groupedData.values())
+          .reduce((sum, d) => sum + (d.columnSums[col] || 0), 0);
+      }
     });
 
     console.log('Total kWh:', totalKwh);
-    console.log('Column totals:', columnTotals);
+    console.log('Column totals (sums):', columnTotals);
+    console.log('Column max values (kVA):', columnMaxValues);
 
     // Get site and client info for storage path
     const { data: siteData, error: siteError } = await supabase
@@ -548,7 +562,8 @@ Deno.serve(async (req) => {
         filePath,
         rowCount,
         totalKwh,
-        columnTotals,
+        columnTotals,      // P1, P2, etc. (sums for kWh columns)
+        columnMaxValues,   // S kVA (maximum for kVA columns)
         columns,
         corrections, // Return all corrections made
         message: corrections.length > 0 
