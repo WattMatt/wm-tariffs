@@ -287,6 +287,15 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         if (data.meters_for_summation && data.meters_for_summation.length > 0) {
           setSelectedMetersForSummation(new Set(data.meters_for_summation));
         }
+        
+        // Store column settings for restoration after preview loads
+        if (data.selected_columns && data.selected_columns.length > 0) {
+          (window as any).__savedColumnSettings = {
+            selected_columns: data.selected_columns,
+            column_operations: data.column_operations,
+            column_factors: data.column_factors
+          };
+        }
       }
     } catch (error) {
       console.error('Error loading reconciliation settings:', error);
@@ -296,6 +305,12 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
   // Load settings on component mount
   useEffect(() => {
     loadReconciliationSettings();
+    
+    // Cleanup on unmount
+    return () => {
+      delete (window as any).__savedColumnSettings;
+      delete (window as any).__savedMeterOrder;
+    };
   }, [siteId]);
 
   // Fetch document date ranges (Municipal and Tenant Bills)
@@ -1134,18 +1149,14 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         columnValues
       });
 
-      // Restore saved settings if available
+      // Restore saved settings if available - check pre-loaded settings first
       try {
-        const { data: savedSettings } = await supabase
-          .from('site_reconciliation_settings')
-          .select('*')
-          .eq('site_id', siteId)
-          .maybeSingle();
-
-        if (savedSettings) {
-          // Restore selected columns (only if they exist in current available columns)
-          if (savedSettings.selected_columns && savedSettings.selected_columns.length > 0) {
-            const validSelectedColumns = savedSettings.selected_columns.filter((col: string) => 
+        const preLoadedSettings = (window as any).__savedColumnSettings;
+        
+        if (preLoadedSettings) {
+          // Use pre-loaded settings from mount
+          if (preLoadedSettings.selected_columns && preLoadedSettings.selected_columns.length > 0) {
+            const validSelectedColumns = preLoadedSettings.selected_columns.filter((col: string) => 
               availableColumns.has(col)
             );
             if (validSelectedColumns.length > 0) {
@@ -1153,19 +1164,49 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
             }
           }
 
-          // Restore column operations
-          if (savedSettings.column_operations) {
-            const operations = new Map(Object.entries(savedSettings.column_operations || {}));
+          if (preLoadedSettings.column_operations) {
+            const operations = new Map(Object.entries(preLoadedSettings.column_operations || {}) as [string, string][]);
             setColumnOperations(operations);
           }
 
-          // Restore column factors
-          if (savedSettings.column_factors) {
-            const factors = new Map(Object.entries(savedSettings.column_factors || {}));
+          if (preLoadedSettings.column_factors) {
+            const factors = new Map(Object.entries(preLoadedSettings.column_factors || {}) as [string, string][]);
             setColumnFactors(factors);
           }
 
-          toast.success("Restored previous settings");
+          // Clear after use
+          delete (window as any).__savedColumnSettings;
+          toast.success("Restored previous column settings");
+        } else {
+          // Fall back to database call if no pre-loaded settings
+          const { data: savedSettings } = await supabase
+            .from('site_reconciliation_settings')
+            .select('*')
+            .eq('site_id', siteId)
+            .maybeSingle();
+
+          if (savedSettings) {
+            if (savedSettings.selected_columns && savedSettings.selected_columns.length > 0) {
+              const validSelectedColumns = savedSettings.selected_columns.filter((col: string) => 
+                availableColumns.has(col)
+              );
+              if (validSelectedColumns.length > 0) {
+                setSelectedColumns(new Set(validSelectedColumns));
+              }
+            }
+
+            if (savedSettings.column_operations) {
+              const operations = new Map(Object.entries(savedSettings.column_operations || {}) as [string, string][]);
+              setColumnOperations(operations);
+            }
+
+            if (savedSettings.column_factors) {
+              const factors = new Map(Object.entries(savedSettings.column_factors || {}) as [string, string][]);
+              setColumnFactors(factors);
+            }
+
+            toast.success("Restored previous settings");
+          }
         }
       } catch (error) {
         console.error("Error restoring settings:", error);
