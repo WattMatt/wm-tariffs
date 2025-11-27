@@ -2,9 +2,11 @@ import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { FileDown, Download, ChevronRight, Save, Loader2, Zap, Calculator, DollarSign, X } from "lucide-react";
+import { FileDown, Download, ChevronRight, Save, Loader2, Zap, Calculator, DollarSign, X, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import CorrectionsDialog from "./CorrectionsDialog";
+import type { CorrectedReading } from "@/lib/dataValidation";
 
 interface MeterData {
   id: string;
@@ -91,6 +93,7 @@ interface ReconciliationResultsViewProps {
     current: number;
     total: number;
   };
+  meterCorrections?: Map<string, CorrectedReading[]>;
 }
 
 export default function ReconciliationResultsView({
@@ -129,8 +132,21 @@ export default function ReconciliationResultsView({
   onBulkReconcile,
   isBulkProcessing = false,
   bulkProgress = { currentDocument: '', current: 0, total: 0 },
+  meterCorrections = new Map(),
 }: ReconciliationResultsViewProps) {
   const [expandedMeters, setExpandedMeters] = useState<Set<string>>(new Set());
+  const [correctionsDialogOpen, setCorrectionsDialogOpen] = useState(false);
+  const [selectedMeterForCorrections, setSelectedMeterForCorrections] = useState<{
+    meterId: string;
+    meterNumber: string;
+    corrections: CorrectedReading[];
+  } | null>(null);
+
+  const handleShowCorrections = (meterId: string, meterNumber: string) => {
+    const corrections = meterCorrections.get(meterId) || [];
+    setSelectedMeterForCorrections({ meterId, meterNumber, corrections });
+    setCorrectionsDialogOpen(true);
+  };
 
   const handleEnergyTabClick = () => {
     if (isLoadingEnergy) {
@@ -181,6 +197,7 @@ export default function ReconciliationResultsView({
 
   const renderMeterRow = (meter: MeterData, isRevenueView: boolean = false) => {
     const childIds = meterConnections?.get(meter.id) || [];
+    const corrections = meterCorrections.get(meter.id) || [];
     let hierarchicalTotal = 0;
     
     // Use saved hierarchical total if available, otherwise calculate on the fly
@@ -265,6 +282,17 @@ export default function ReconciliationResultsView({
               )}
               {meter.hasError && (
                 <Badge variant="destructive" className="text-xs">Error: {meter.errorMessage || 'Failed to load'}</Badge>
+              )}
+              {corrections.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1 h-5 px-2 bg-amber-500/20 border-amber-500/50 text-amber-700 dark:text-amber-400 hover:bg-amber-500/30"
+                  onClick={() => handleShowCorrections(meter.id, meter.meter_number)}
+                >
+                  <AlertTriangle className="h-3 w-3" />
+                  <span className="text-xs">{corrections.length} corrected</span>
+                </Button>
               )}
               {parentInfo && (
                 <span className="text-xs text-muted-foreground">
@@ -745,6 +773,19 @@ export default function ReconciliationResultsView({
           )}
         </TabsContent>
       </Tabs>
+      
+      {/* Corrections Dialog */}
+      {selectedMeterForCorrections && (
+        <CorrectionsDialog
+          isOpen={correctionsDialogOpen}
+          onClose={() => {
+            setCorrectionsDialogOpen(false);
+            setSelectedMeterForCorrections(null);
+          }}
+          meterNumber={selectedMeterForCorrections.meterNumber}
+          corrections={selectedMeterForCorrections.corrections}
+        />
+      )}
     </div>
   );
 }
