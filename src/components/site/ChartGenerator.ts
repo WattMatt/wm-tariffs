@@ -438,21 +438,26 @@ export const generateDocumentVsAssignedChart = (
   unit: string,
   data: { period: string; documentValue: number; assignedValue: number | null }[],
   width: number = 400,
-  height: number = 300
+  height: number = 300,
+  scaleFactor: number = 3
 ): string => {
   // Dynamically adjust width based on number of data points
   const adjustedWidth = Math.max(width, 500 + (data.length - 5) * 50);
   
+  // Scale all dimensions for high-resolution output
+  const scaledWidth = adjustedWidth * scaleFactor;
+  const scaledHeight = height * scaleFactor;
+  
   const canvas = document.createElement('canvas');
-  canvas.width = adjustedWidth;
-  canvas.height = height;
+  canvas.width = scaledWidth;
+  canvas.height = scaledHeight;
   const ctx = canvas.getContext('2d');
   
   if (!ctx || data.length === 0) return '';
   
   // Clear canvas with white background
   ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, adjustedWidth, height);
+  ctx.fillRect(0, 0, scaledWidth, scaledHeight);
   
   // Colors matching the reference image
   const documentColor = '#3b82f6';  // Blue for Document
@@ -460,39 +465,39 @@ export const generateDocumentVsAssignedChart = (
   
   // Draw title
   ctx.fillStyle = '#000000';
-  ctx.font = 'bold 12px sans-serif';
+  ctx.font = `bold ${12 * scaleFactor}px sans-serif`;
   ctx.textAlign = 'center';
-  ctx.fillText(title, adjustedWidth / 2, 20);
+  ctx.fillText(title, scaledWidth / 2, 20 * scaleFactor);
   
   // Draw unit (only if provided)
   if (unit && unit.trim()) {
-    ctx.font = '10px sans-serif';
-    ctx.fillText(`(${unit})`, adjustedWidth / 2, 35);
+    ctx.font = `${10 * scaleFactor}px sans-serif`;
+    ctx.fillText(`(${unit})`, scaledWidth / 2, 35 * scaleFactor);
   }
   
   // Draw legend
-  const legendY = 48;
-  const legendX = adjustedWidth / 2 - 50;
+  const legendY = 48 * scaleFactor;
+  const legendX = scaledWidth / 2 - 50 * scaleFactor;
   
   ctx.fillStyle = documentColor;
-  ctx.fillRect(legendX, legendY, 12, 12);
+  ctx.fillRect(legendX, legendY, 12 * scaleFactor, 12 * scaleFactor);
   ctx.fillStyle = '#000000';
-  ctx.font = '10px sans-serif';
+  ctx.font = `${10 * scaleFactor}px sans-serif`;
   ctx.textAlign = 'left';
-  ctx.fillText('Document', legendX + 16, legendY + 10);
+  ctx.fillText('Document', legendX + 16 * scaleFactor, legendY + 10 * scaleFactor);
   
   ctx.fillStyle = assignedColor;
-  ctx.fillRect(legendX + 80, legendY, 12, 12);
+  ctx.fillRect(legendX + 80 * scaleFactor, legendY, 12 * scaleFactor, 12 * scaleFactor);
   ctx.fillStyle = '#000000';
-  ctx.fillText('Assigned', legendX + 96, legendY + 10);
+  ctx.fillText('Assigned', legendX + 96 * scaleFactor, legendY + 10 * scaleFactor);
   
-  const padding = 40;
-  const bottomPadding = 80;
-  const topPadding = 70;
-  const chartWidth = adjustedWidth - padding * 2;
-  const chartHeight = height - topPadding - bottomPadding;
+  const padding = 40 * scaleFactor;
+  const bottomPadding = 80 * scaleFactor;
+  const topPadding = 70 * scaleFactor;
+  const chartWidth = scaledWidth - padding * 2;
+  const chartHeight = scaledHeight - topPadding - bottomPadding;
   const clusterWidth = chartWidth / data.length;
-  const barWidth = Math.max((clusterWidth - 8) / 2, 15);  // Two bars with gap
+  const barWidth = Math.max((clusterWidth - 8 * scaleFactor) / 2, 15 * scaleFactor);
   
   const maxValue = Math.max(
     ...data.map(d => d.documentValue),
@@ -505,50 +510,50 @@ export const generateDocumentVsAssignedChart = (
     
     // Document bar (left)
     const docBarHeight = maxValue > 0 ? (item.documentValue / maxValue) * chartHeight : 0;
-    const docY = height - bottomPadding - docBarHeight;
+    const docY = scaledHeight - bottomPadding - docBarHeight;
     ctx.fillStyle = documentColor;
-    ctx.fillRect(clusterX + 4, docY, barWidth, docBarHeight);
+    ctx.fillRect(clusterX + 4 * scaleFactor, docY, barWidth, docBarHeight);
     
     // Assigned bar (right)
     const assignedValue = item.assignedValue || 0;
     const assignedBarHeight = maxValue > 0 ? (assignedValue / maxValue) * chartHeight : 0;
-    const assignedY = height - bottomPadding - assignedBarHeight;
+    const assignedY = scaledHeight - bottomPadding - assignedBarHeight;
     ctx.fillStyle = assignedColor;
-    ctx.fillRect(clusterX + barWidth + 8, assignedY, barWidth, assignedBarHeight);
+    ctx.fillRect(clusterX + barWidth + 8 * scaleFactor, assignedY, barWidth, assignedBarHeight);
     
     // Draw abbreviated values on top of bars (centered on each bar)
     ctx.fillStyle = '#000000';
-    ctx.font = 'bold 10px sans-serif';
+    ctx.font = `bold ${10 * scaleFactor}px sans-serif`;
     ctx.textAlign = 'center';
     
     if (item.documentValue > 0) {
-      ctx.fillText(abbreviateNumber(item.documentValue), clusterX + 4 + barWidth / 2, docY - 4);
+      ctx.fillText(abbreviateNumber(item.documentValue), clusterX + 4 * scaleFactor + barWidth / 2, docY - 4 * scaleFactor);
     }
     if (assignedValue > 0) {
-      ctx.fillText(abbreviateNumber(assignedValue), clusterX + barWidth + 8 + barWidth / 2, assignedY - 4);
+      ctx.fillText(abbreviateNumber(assignedValue), clusterX + barWidth + 8 * scaleFactor + barWidth / 2, assignedY - 4 * scaleFactor);
     }
   });
   
   // Draw X-axis labels (period labels - split into two lines if needed)
   ctx.fillStyle = '#000000';
-  ctx.font = '9px sans-serif';
+  ctx.font = `${9 * scaleFactor}px sans-serif`;
   ctx.textAlign = 'center';
   data.forEach((item, index) => {
     const x = padding + index * clusterWidth + clusterWidth / 2;
     const periodParts = item.period.split(' - ');
-    ctx.fillText(periodParts[0], x, height - bottomPadding + 15);
+    ctx.fillText(periodParts[0], x, scaledHeight - bottomPadding + 15 * scaleFactor);
     if (periodParts[1]) {
-      ctx.fillText(periodParts[1], x, height - bottomPadding + 27);
+      ctx.fillText(periodParts[1], x, scaledHeight - bottomPadding + 27 * scaleFactor);
     }
   });
   
   // Draw Y-axis
   ctx.strokeStyle = '#cccccc';
-  ctx.lineWidth = 1;
+  ctx.lineWidth = 1 * scaleFactor;
   ctx.beginPath();
   ctx.moveTo(padding, topPadding);
-  ctx.lineTo(padding, height - bottomPadding);
-  ctx.lineTo(width - padding, height - bottomPadding);
+  ctx.lineTo(padding, scaledHeight - bottomPadding);
+  ctx.lineTo(scaledWidth - padding, scaledHeight - bottomPadding);
   ctx.stroke();
   
   return canvas.toDataURL('image/png');
