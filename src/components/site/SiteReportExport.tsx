@@ -1297,8 +1297,54 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         }
         addSpacer(8);
         
-        // Section 6: Metering Data Analysis (renumbered from 5)
-        addSectionHeading("6. METERING DATA ANALYSIS", 16, true);
+        // Section 6: Rate Comparison Charts
+        addSectionHeading("6. RATE COMPARISON CHARTS", 16, true);
+        addText("Document values compared against assigned tariff rates for each meter.");
+        addSpacer(5);
+        
+        const rateComparisonCharts = (previewData as any).rateComparisonCharts;
+        if (rateComparisonCharts && Object.keys(rateComparisonCharts).length > 0) {
+          for (const meterId of Object.keys(rateComparisonCharts)) {
+            const meterChartData = rateComparisonCharts[meterId];
+            
+            // Add meter subheading
+            addSubsectionHeading(`Meter: ${meterChartData.meterNumber}${meterChartData.meterName ? ` (${meterChartData.meterName})` : ''}`);
+            addSpacer(3);
+            
+            // Render charts in rows of 3
+            const chartEntries = Object.entries(meterChartData.charts || {});
+            const chartWidth = (pageWidth - leftMargin - rightMargin - 10) / 3;
+            const chartHeight = chartWidth * 0.75;
+            
+            for (let i = 0; i < chartEntries.length; i += 3) {
+              // Check for page break
+              if (yPos > pageHeight - bottomMargin - chartHeight - 20) {
+                addFooter();
+                addPageNumber();
+                pdf.addPage();
+                yPos = topMargin;
+              }
+              
+              // Render up to 3 charts per row
+              for (let j = 0; j < 3 && (i + j) < chartEntries.length; j++) {
+                const [chargeType, chartImage] = chartEntries[i + j];
+                if (chartImage) {
+                  const chartX = leftMargin + (j * (chartWidth + 5));
+                  pdf.addImage(chartImage as string, 'PNG', chartX, yPos, chartWidth - 2, chartHeight);
+                }
+              }
+              yPos += chartHeight + 5;
+            }
+            
+            addSpacer(8);
+          }
+        } else {
+          addText("No rate comparison charts available.");
+        }
+        addSpacer(8);
+        
+        // Section 7: Metering Data Analysis (renumbered from 6)
+        addSectionHeading("7. METERING DATA ANALYSIS", 16, true);
         renderSection('metering-data-analysis');
         addSpacer(5);
         
@@ -1453,16 +1499,16 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         addText(`Total Meters Analyzed: ${reconciliationData.meterCount}`);
         addSpacer(8);
         
-        // Section 7: Document & Invoice Validation (if documents available)
+        // Section 8: Document & Invoice Validation (if documents available) (renumbered from 7)
         const docValidationContent = getSectionContent('document-validation');
         if (docValidationContent) {
-          addSectionHeading("7. DOCUMENT & INVOICE VALIDATION", 16, true);
+          addSectionHeading("8. DOCUMENT & INVOICE VALIDATION", 16, true);
           renderSection('document-validation');
           addSpacer(8);
         }
         
-        // Section 8: Reconciliation Results
-        addSectionHeading("8. RECONCILIATION RESULTS", 16, true);
+        // Section 9: Reconciliation Results (renumbered from 8)
+        addSectionHeading("9. RECONCILIATION RESULTS", 16, true);
         renderSection('reconciliation-results');
         addSpacer(5);
         
@@ -1519,16 +1565,16 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           addSpacer(8);
         }
         
-        // Section 9: Cost Analysis (if available)
+        // Section 10: Cost Analysis (if available) (renumbered from 9)
         const costAnalysisContent = getSectionContent('cost-analysis');
         if (costAnalysisContent) {
-          addSectionHeading("9. COST ANALYSIS", 16, true);
+          addSectionHeading("10. COST ANALYSIS", 16, true);
           renderSection('cost-analysis');
           addSpacer(8);
         }
         
-        // Section 10: Findings & Anomalies
-        addSectionHeading("10. FINDINGS & ANOMALIES", 16, true);
+        // Section 11: Findings & Anomalies (renumbered from 10)
+        addSectionHeading("11. FINDINGS & ANOMALIES", 16, true);
         renderSection('findings-anomalies');
         addSpacer(5);
         
@@ -1545,8 +1591,8 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           addSpacer(8);
         }
         
-        // Section 11: Recommendations
-        addSectionHeading("11. RECOMMENDATIONS", 16, true);
+        // Section 12: Recommendations (renumbered from 11)
+        addSectionHeading("12. RECOMMENDATIONS", 16, true);
         renderSection('recommendations');
         addSpacer(8);
         
@@ -2533,6 +2579,13 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
       // Build tariff comparison content separately to avoid scoping issues
       let tariffComparisonContent = 'No rate comparison data available. Ensure meters have assigned tariffs and associated documents with line items.';
       
+      // Initialize structure to store comparison charts for Section 6
+      const rateComparisonCharts: Record<string, {
+        meterNumber: string;
+        meterName?: string;
+        charts: Record<string, string>;
+      }> = {};
+      
       if (rateComparisonData && Object.keys(rateComparisonData).length > 0) {
         const comparisonSections = [];
         
@@ -2599,8 +2652,16 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           }
           tableContent += '\n';
           
-          // Generate charts content separately
-          let chartsContent = '';
+          // Store charts in rateComparisonCharts for PDF rendering (Section 6)
+          if (!rateComparisonCharts[meterId]) {
+            rateComparisonCharts[meterId] = {
+              meterNumber: meterComparisonData.meterNumber,
+              meterName: meterComparisonData.meterName,
+              charts: {}
+            };
+          }
+          
+          // Generate and store charts
           for (const [chargeType, chartData] of Object.entries(chartDataByType)) {
             if (chartData.length > 0) {
               try {
@@ -2619,15 +2680,16 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
                   500,
                   320
                 );
-                chartsContent += `![${chargeType} Comparison Chart](${chartImage})\n\n`;
+                
+                // Store in rateComparisonCharts for Section 6 PDF rendering
+                rateComparisonCharts[meterId].charts[chargeType] = chartImage;
               } catch (err) {
                 console.error(`Error generating chart for ${chargeType}:`, err);
               }
             }
           }
           
-          // Combine in correct order: charts FIRST, then table
-          content += chartsContent;
+          // Only include table in Section 4 (charts moved to Section 6)
           content += tableContent;
           
           comparisonSections.push(content);
@@ -2965,6 +3027,7 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
         tariffChartImages,
         tariffsByName,
         tariffAnalysisCharts, // Add tariff analysis charts for PDF rendering
+        rateComparisonCharts, // Add rate comparison charts for Section 6 PDF rendering
         chartImages: {
           meterTypeChart,
           consumptionChart
@@ -3075,12 +3138,36 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
           editable: true
         });
         
-        // Section 6: Metering Data Analysis (renumbered from 5)
+        // Section 6: Rate Comparison Charts (Document vs Assigned)
+        let rateComparisonChartsContent = '## 6. Rate Comparison Charts\n\n';
+        rateComparisonChartsContent += 'Document values compared against assigned tariff rates for each meter.\n\n';
+        
+        if (rateComparisonCharts && Object.keys(rateComparisonCharts).length > 0) {
+          for (const meterId of Object.keys(rateComparisonCharts)) {
+            const meterChartData = rateComparisonCharts[meterId];
+            rateComparisonChartsContent += `### Meter: ${meterChartData.meterNumber}${meterChartData.meterName ? ` (${meterChartData.meterName})` : ''}\n\n`;
+            
+            for (const [chargeType, chartImage] of Object.entries(meterChartData.charts)) {
+              rateComparisonChartsContent += `#### ${chargeType}\n`;
+              rateComparisonChartsContent += `![${chargeType} Comparison](${chartImage})\n\n`;
+            }
+          }
+        }
+        
+        sections.push({
+          id: 'rate-comparison-charts',
+          title: '6. Rate Comparison Charts',
+          content: rateComparisonChartsContent,
+          type: 'text',
+          editable: true
+        });
+        
+        // Section 7: Metering Data Analysis (renumbered from 6)
         if (reportData.sections.meteringDataAnalysis) {
           sections.push({
             id: 'metering-data-analysis',
-            title: '6. Metering Data Analysis',
-            content: `## 6. Metering Data Analysis\n\n${reportData.sections.meteringDataAnalysis}`,
+            title: '7. Metering Data Analysis',
+            content: `## 7. Metering Data Analysis\n\n${reportData.sections.meteringDataAnalysis}`,
             type: 'text',
             editable: true
           });
@@ -3107,56 +3194,56 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
           });
         }
         
-        // Section 7: Document & Invoice Validation (renumbered from 6)
+        // Section 8: Document & Invoice Validation (renumbered from 7)
         if (reportData.sections.documentValidation) {
           sections.push({
             id: 'document-validation',
-            title: '7. Document & Invoice Validation',
-            content: `## 7. Document & Invoice Validation\n\n${reportData.sections.documentValidation}`,
+            title: '8. Document & Invoice Validation',
+            content: `## 8. Document & Invoice Validation\n\n${reportData.sections.documentValidation}`,
             type: 'text',
             editable: true
           });
         }
         
-        // Section 8: Reconciliation Results
+        // Section 9: Reconciliation Results (renumbered from 8)
         if (reportData.sections.reconciliationResults) {
           sections.push({
             id: 'reconciliation-results',
-            title: '8. Reconciliation Results',
-            content: `## 8. Reconciliation Results\n\n${reportData.sections.reconciliationResults}`,
+            title: '9. Reconciliation Results',
+            content: `## 9. Reconciliation Results\n\n${reportData.sections.reconciliationResults}`,
             type: 'text',
             editable: true
           });
         }
         
-        // Section 9: Cost Analysis (renumbered from 8)
+        // Section 10: Cost Analysis (renumbered from 9)
         if (reportData.sections.costAnalysis) {
           sections.push({
             id: 'cost-analysis',
-            title: '9. Cost Analysis',
-            content: `## 9. Cost Analysis\n\n${reportData.sections.costAnalysis}`,
+            title: '10. Cost Analysis',
+            content: `## 10. Cost Analysis\n\n${reportData.sections.costAnalysis}`,
             type: 'text',
             editable: true
           });
         }
         
-        // Section 10: Findings & Anomalies
+        // Section 11: Findings & Anomalies (renumbered from 10)
         if (reportData.sections.findingsAnomalies) {
           sections.push({
             id: 'findings-anomalies',
-            title: '10. Findings & Anomalies',
-            content: `## 10. Findings & Anomalies\n\n${reportData.sections.findingsAnomalies}`,
+            title: '11. Findings & Anomalies',
+            content: `## 11. Findings & Anomalies\n\n${reportData.sections.findingsAnomalies}`,
             type: 'text',
             editable: true
           });
         }
         
-        // Section 11: Recommendations
+        // Section 12: Recommendations (renumbered from 11)
         if (reportData.sections.recommendations) {
           sections.push({
             id: 'recommendations',
-            title: '11. Recommendations',
-            content: `## 11. Recommendations\n\n${reportData.sections.recommendations}`,
+            title: '12. Recommendations',
+            content: `## 12. Recommendations\n\n${reportData.sections.recommendations}`,
             type: 'text',
             editable: true
           });
