@@ -2037,6 +2037,19 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         const csvResults = new Map<string, { totalKwh: number; columnTotals: Record<string, number>; rowCount: number }>();
         const allCorrections = new Map<string, Array<any>>();
         
+        // Delete old generated CSVs before reconciliation to ensure fresh corruption-checked data
+        const { error: deleteError } = await supabase
+          .from('meter_csv_files')
+          .delete()
+          .eq('site_id', siteId)
+          .eq('parse_status', 'generated');
+        
+        if (deleteError) {
+          console.warn('Failed to delete old generated CSVs:', deleteError);
+        } else {
+          console.log('Deleted old generated CSVs to ensure fresh data');
+        }
+        
         // Process CSVs sequentially in bottom-up order (deepest children first)
         // This ensures child CSVs are available when parent CSVs need them
         for (let i = 0; i < sortedParentMeters.length; i++) {
@@ -2073,6 +2086,50 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
             allCorrections.get(meterId)!.push(...corrections);
           } else {
             allCorrections.set(meterId, corrections);
+          }
+        }
+        
+        // Propagate corrections from children to parents recursively
+        // This ensures parent meters show the "corrected" badge when their children have corrections
+        const getAllDescendantCorrections = (meterId: string): CorrectedReading[] => {
+          const childIds = meterConnectionsMap.get(meterId) || [];
+          let descendantCorrections: CorrectedReading[] = [];
+          
+          for (const childId of childIds) {
+            // Get this child's own corrections
+            const childCorrections = allCorrections.get(childId) || [];
+            const leafCorrections = leafCorrectionsByMeter.get(childId) || [];
+            
+            // Get corrections from child's descendants (recursive)
+            const grandchildCorrections = getAllDescendantCorrections(childId);
+            
+            descendantCorrections.push(...childCorrections, ...leafCorrections, ...grandchildCorrections);
+          }
+          
+          return descendantCorrections;
+        };
+        
+        // Update allCorrections for each parent meter with accumulated corrections
+        for (const parentMeter of sortedParentMeters) {
+          const existingCorrections = allCorrections.get(parentMeter.id) || [];
+          const descendantCorrections = getAllDescendantCorrections(parentMeter.id);
+          
+          // Deduplicate by timestamp + originalSourceMeterId + fieldName
+          const uniqueCorrections = [...existingCorrections];
+          for (const correction of descendantCorrections) {
+            const isDuplicate = uniqueCorrections.some(c =>
+              c.timestamp === correction.timestamp &&
+              c.originalSourceMeterId === correction.originalSourceMeterId &&
+              c.fieldName === correction.fieldName
+            );
+            if (!isDuplicate) {
+              uniqueCorrections.push(correction);
+            }
+          }
+          
+          if (uniqueCorrections.length > 0) {
+            allCorrections.set(parentMeter.id, uniqueCorrections);
+            console.log(`📊 ${parentMeter.meter_number} now has ${uniqueCorrections.length} corrections (propagated from children)`);
           }
         }
         
