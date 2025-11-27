@@ -236,7 +236,15 @@ export default function TariffAssignmentTab({
   // Helper to extract metric value from document
   const extractMetricValue = (doc: DocumentShopNumber | undefined, metric: string): number | null => {
     if (!doc) return null;
-    if (metric === 'total') return doc.totalAmount;
+    if (metric === 'total') {
+      // Calculate total excluding generator/emergency charges
+      const lineItems = doc.lineItems || [];
+      const normalTotal = lineItems
+        .filter(item => item.supply !== 'Emergency')
+        .reduce((sum, item) => sum + (item.amount || 0), 0);
+      // Return calculated normal total, or 0 if no line items
+      return normalTotal;
+    }
     
     const lineItems = doc.lineItems || [];
     
