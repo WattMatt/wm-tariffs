@@ -105,6 +105,12 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
   // Cancel reconciliation ref
   const cancelReconciliationRef = useRef(false);
   
+  // State for hierarchical CSV results (used to update parent meter values at run time)
+  const [hierarchicalCsvResults, setHierarchicalCsvResults] = useState<Map<string, {
+    totalKwh: number;
+    columnTotals: Record<string, number>;
+  }>>(new Map());
+  
   // Refs for stable access to latest values in callbacks
   const previewDataRef = useRef<any>(null);
   const selectedColumnsRef = useRef<Set<string>>(new Set());
@@ -1757,6 +1763,47 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     };
   };
 
+  // Helper function to generate hierarchical CSV for a parent meter at run time
+  const generateHierarchicalCsvForMeter = async (
+    parentMeter: { id: string; meter_number: string },
+    fullDateTimeFrom: string,
+    fullDateTimeTo: string
+  ): Promise<{ totalKwh: number; columnTotals: Record<string, number> } | null> => {
+    const childMeterIds = meterConnectionsMap.get(parentMeter.id) || [];
+    if (childMeterIds.length === 0) return null;
+
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-hierarchical-csv', {
+        body: {
+          parentMeterId: parentMeter.id,
+          parentMeterNumber: parentMeter.meter_number,
+          siteId,
+          dateFrom: fullDateTimeFrom,
+          dateTo: fullDateTimeTo,
+          childMeterIds
+        }
+      });
+
+      if (error) {
+        console.error(`Failed to generate CSV for ${parentMeter.meter_number}:`, error);
+        return null;
+      }
+
+      if (data) {
+        console.log(`✓ Generated hierarchical CSV for ${parentMeter.meter_number}`, {
+          totalKwh: data.totalKwh,
+          columns: data.columns,
+          rowCount: data.rowCount
+        });
+        return { totalKwh: data.totalKwh, columnTotals: data.columnTotals || {} };
+      }
+      return null;
+    } catch (error) {
+      console.error(`Error generating CSV for ${parentMeter.meter_number}:`, error);
+      return null;
+    }
+  };
+
   const handleReconcile = useCallback(async (enableRevenue?: boolean) => {
     if (!dateFrom || !dateTo) {
       toast.error("Please select a date range");
@@ -1781,6 +1828,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     setEnergyProgress({ current: 0, total: 0 });
     setRevenueProgress({ current: 0, total: 0 });
     setFailedMeters(new Map());
+    setHierarchicalCsvResults(new Map());
 
     try {
       const fullDateTimeFrom = getFullDateTime(dateFrom, timeFrom);
@@ -1799,6 +1847,64 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       if (shouldCalculateRevenue) {
         setIsCalculatingRevenue(false);
         toast.success("Revenue calculation complete");
+      }
+
+      // Generate hierarchical CSVs for parent meters at run time
+      const parentMeters = meterData.filter(meter => {
+        const children = meterConnectionsMap.get(meter.id);
+        return children && children.length > 0;
+      });
+
+      if (parentMeters.length > 0) {
+        console.log(`Generating ${parentMeters.length} hierarchical CSV file(s) at run time...`);
+        toast.info(`Generating ${parentMeters.length} hierarchical profile(s)...`);
+
+        const csvResults = new Map<string, { totalKwh: number; columnTotals: Record<string, number> }>();
+
+        // Generate CSVs in parallel
+        const csvPromises = parentMeters.map(async (parentMeter) => {
+          const result = await generateHierarchicalCsvForMeter(
+            parentMeter,
+            fullDateTimeFrom,
+            fullDateTimeTo
+          );
+          if (result) {
+            csvResults.set(parentMeter.id, result);
+          }
+        });
+
+        await Promise.allSettled(csvPromises);
+        console.log('Hierarchical CSV generation complete at run time');
+
+        // Update parent meters in reconciliationData with CSV-calculated values
+        if (csvResults.size > 0) {
+          // Update each meter category that might contain parent meters
+          const updateMeterCategory = (meters: any[]) => {
+            return meters.map(meter => {
+              const csvData = csvResults.get(meter.id);
+              if (csvData) {
+                return {
+                  ...meter,
+                  columnTotals: csvData.columnTotals,
+                  totalKwh: csvData.totalKwh
+                };
+              }
+              return meter;
+            });
+          };
+
+          reconciliationData.councilBulk = updateMeterCategory(reconciliationData.councilBulk || []);
+          reconciliationData.bulkMeters = updateMeterCategory(reconciliationData.bulkMeters || []);
+          reconciliationData.solarMeters = updateMeterCategory(reconciliationData.solarMeters || []);
+          reconciliationData.checkMeters = updateMeterCategory(reconciliationData.checkMeters || []);
+          reconciliationData.tenantMeters = updateMeterCategory(reconciliationData.tenantMeters || []);
+          reconciliationData.distribution = updateMeterCategory(reconciliationData.distribution || []);
+          reconciliationData.distributionMeters = updateMeterCategory(reconciliationData.distributionMeters || []);
+          reconciliationData.otherMeters = updateMeterCategory(reconciliationData.otherMeters || []);
+          reconciliationData.unassignedMeters = updateMeterCategory(reconciliationData.unassignedMeters || []);
+        }
+
+        setHierarchicalCsvResults(csvResults);
       }
 
       await saveReconciliationSettings();
@@ -1834,7 +1940,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       setIsCancelling(false);
       cancelReconciliationRef.current = false;
     }
-  }, [dateFrom, dateTo, timeFrom, timeTo, revenueReconciliationEnabled]);
+  }, [dateFrom, dateTo, timeFrom, timeTo, revenueReconciliationEnabled, meterConnectionsMap, siteId]);
 
   const cancelReconciliation = () => {
     if (!isCancelling) {
@@ -2136,62 +2242,11 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       
       if (resultsError) throw resultsError;
       
-      // 5. Generate hierarchical CSV files for parent meters and update their results with CSV values
-      const parentMeters = allMeters.filter(meter => {
-        const children = meterConnectionsMap.get(meter.id);
-        return children && children.length > 0;
-      });
-
-      if (parentMeters.length > 0) {
-        console.log(`Generating ${parentMeters.length} hierarchical CSV file(s)...`);
-        toast.info(`Generating ${parentMeters.length} hierarchical profile(s)...`);
-
-        // Map to store CSV results for updating meter results
-        const hierarchicalCsvResults = new Map<string, {
-          totalKwh: number;
-          columnTotals: Record<string, number>;
-        }>();
-
-        const csvGenerationPromises = parentMeters.map(async (parentMeter) => {
-          try {
-            // Pass immediate children - edge function will find all leaf meters
-            const childMeterIds = meterConnectionsMap.get(parentMeter.id) || [];
-
-            const { data, error: csvError } = await supabase.functions.invoke('generate-hierarchical-csv', {
-              body: {
-                parentMeterId: parentMeter.id,
-                parentMeterNumber: parentMeter.meter_number,
-                siteId,
-                dateFrom: getFullDateTime(dateFrom, timeFrom),
-                dateTo: getFullDateTime(dateTo, timeTo),
-                childMeterIds
-              }
-            });
-
-            if (csvError) {
-              console.error(`Failed to generate CSV for ${parentMeter.meter_number}:`, csvError);
-            } else if (data) {
-              console.log(`✓ Generated hierarchical CSV for ${parentMeter.meter_number}`, {
-                totalKwh: data.totalKwh,
-                columns: data.columns,
-                rowCount: data.rowCount
-              });
-              // Store the returned values for database update
-              hierarchicalCsvResults.set(parentMeter.id, {
-                totalKwh: data.totalKwh,
-                columnTotals: data.columnTotals || {}
-              });
-            }
-          } catch (error) {
-            console.error(`Error generating CSV for ${parentMeter.meter_number}:`, error);
-          }
-        });
-
-        // Run all CSV generations in parallel
-        await Promise.allSettled(csvGenerationPromises);
-        console.log('Hierarchical CSV generation complete');
-
-        // Update parent meter results with the CSV-calculated values (raw sums)
+      // 5. Update parent meter results with CSV-calculated values (CSVs already generated at run time)
+      // Use the hierarchicalCsvResults state which was populated during handleReconcile
+      if (hierarchicalCsvResults.size > 0) {
+        console.log(`Updating ${hierarchicalCsvResults.size} parent meter(s) with CSV values...`);
+        
         for (const [meterId, csvData] of hierarchicalCsvResults) {
           const { error: updateError } = await supabase
             .from('reconciliation_meter_results')
@@ -2303,6 +2358,41 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       fullDateTimeTo,
       true // Always enable revenue for bulk reconciliation
     );
+
+    // Generate hierarchical CSVs for parent meters (needed for correct values)
+    const bulkCsvResults = new Map<string, { totalKwh: number; columnTotals: Record<string, number> }>();
+    const parentMetersForCsv = [...(reconciliationData.bulkMeters || []), ...(reconciliationData.solarMeters || []), ...(reconciliationData.tenantMeters || []), ...(reconciliationData.checkMeters || []), ...(reconciliationData.unassignedMeters || [])].filter(meter => {
+      const children = meterConnectionsMap.get(meter.id);
+      return children && children.length > 0;
+    });
+
+    if (parentMetersForCsv.length > 0) {
+      const csvPromises = parentMetersForCsv.map(async (parentMeter) => {
+        const result = await generateHierarchicalCsvForMeter(parentMeter, fullDateTimeFrom, fullDateTimeTo);
+        if (result) {
+          bulkCsvResults.set(parentMeter.id, result);
+        }
+      });
+      await Promise.allSettled(csvPromises);
+
+      // Update parent meters with CSV values
+      const updateMeterCategory = (meters: any[]) => {
+        return meters.map(meter => {
+          const csvData = bulkCsvResults.get(meter.id);
+          if (csvData) {
+            return { ...meter, columnTotals: csvData.columnTotals, totalKwh: csvData.totalKwh };
+          }
+          return meter;
+        });
+      };
+
+      reconciliationData.bulkMeters = updateMeterCategory(reconciliationData.bulkMeters || []);
+      reconciliationData.councilBulk = updateMeterCategory(reconciliationData.councilBulk || []);
+      reconciliationData.solarMeters = updateMeterCategory(reconciliationData.solarMeters || []);
+      reconciliationData.tenantMeters = updateMeterCategory(reconciliationData.tenantMeters || []);
+      reconciliationData.checkMeters = updateMeterCategory(reconciliationData.checkMeters || []);
+      reconciliationData.unassignedMeters = updateMeterCategory(reconciliationData.unassignedMeters || []);
+    }
 
     // Save using the SAME pattern as handleSaveReconciliation
     const runName = `${fileName} - ${format(startDate, "MMM yyyy")}`;
@@ -2466,6 +2556,20 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         .insert(meterResults);
       
       if (resultsError) throw resultsError;
+      
+      // Update parent meter results with CSV-calculated values
+      if (bulkCsvResults.size > 0) {
+        for (const [meterId, csvData] of bulkCsvResults) {
+          await supabase
+            .from('reconciliation_meter_results')
+            .update({
+              column_totals: csvData.columnTotals,
+              hierarchical_total: csvData.totalKwh
+            })
+            .eq('reconciliation_run_id', run.id)
+            .eq('meter_id', meterId);
+        }
+      }
       
     } catch (error) {
       console.error('Save bulk reconciliation error:', error);
