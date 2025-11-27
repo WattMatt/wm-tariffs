@@ -1788,7 +1788,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     parentMeter: { id: string; meter_number: string },
     fullDateTimeFrom: string,
     fullDateTimeTo: string
-  ): Promise<{ totalKwh: number; columnTotals: Record<string, number> } | null> => {
+  ): Promise<{ totalKwh: number; columnTotals: Record<string, number>; rowCount: number } | null> => {
     const childMeterIds = meterConnectionsMap.get(parentMeter.id) || [];
     if (childMeterIds.length === 0) return null;
 
@@ -1815,13 +1815,73 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           columns: data.columns,
           rowCount: data.rowCount
         });
-        return { totalKwh: data.totalKwh, columnTotals: data.columnTotals || {} };
+        return { 
+          totalKwh: data.totalKwh, 
+          columnTotals: data.columnTotals || {},
+          rowCount: data.rowCount || 0
+        };
       }
       return null;
     } catch (error) {
       console.error(`Error generating CSV for ${parentMeter.meter_number}:`, error);
       return null;
     }
+  };
+
+  // Helper to apply column settings (selection, operations, factors) to hierarchical CSV data
+  const applyColumnSettingsToHierarchicalData = (
+    csvColumnTotals: Record<string, number>,
+    rowCount: number
+  ): { processedColumnTotals: Record<string, number>; totalKwhPositive: number; totalKwhNegative: number; totalKwh: number } => {
+    const processedColumnTotals: Record<string, number> = {};
+    let totalKwhPositive = 0;
+    let totalKwhNegative = 0;
+    let totalKwh = 0;
+
+    Object.entries(csvColumnTotals).forEach(([column, rawSum]) => {
+      // 1. Only include selected columns
+      if (!selectedColumnsRef.current.has(column)) return;
+      
+      // 2. Get the operation and factor for this column
+      const operation = columnOperationsRef.current.get(column) || 'sum';
+      const factor = Number(columnFactorsRef.current.get(column) || 1);
+      
+      // 3. Apply the operation
+      let result = rawSum;
+      switch (operation) {
+        case 'sum':
+          result = rawSum;
+          break;
+        case 'average':
+          result = rowCount > 0 ? rawSum / rowCount : 0;
+          break;
+        case 'max':
+        case 'min':
+          // For hierarchical data, max/min can't be accurately computed from sums
+          // Fall back to sum for now - these would need per-timestamp tracking
+          result = rawSum;
+          break;
+      }
+      
+      // 4. Apply the scaling factor
+      result = result * factor;
+      
+      // 5. Store the processed value
+      processedColumnTotals[column] = result;
+      
+      // 6. Track positive/negative for totalKwh calculations (exclude kVA columns)
+      const isKvaColumn = column.toLowerCase().includes('kva');
+      if (!isKvaColumn) {
+        if (result > 0) {
+          totalKwhPositive += result;
+        } else if (result < 0) {
+          totalKwhNegative += result;
+        }
+        totalKwh += result;
+      }
+    });
+
+    return { processedColumnTotals, totalKwhPositive, totalKwhNegative, totalKwh };
   };
 
   const handleReconcile = useCallback(async (enableRevenue?: boolean) => {
@@ -1885,7 +1945,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         console.log(`Parent meters with uploaded CSVs (will use uploaded data): ${metersWithUploadedCsvs.size}`, 
           Array.from(metersWithUploadedCsvs));
 
-        const csvResults = new Map<string, { totalKwh: number; columnTotals: Record<string, number> }>();
+        const csvResults = new Map<string, { totalKwh: number; columnTotals: Record<string, number>; rowCount: number }>();
 
         // Generate CSVs in parallel for ALL parent meters (for storage purposes)
         const csvPromises = parentMeters.map(async (parentMeter) => {
@@ -1904,6 +1964,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
 
         // Update parent meters in reconciliationData with CSV-calculated values
         // BUT only if the meter does NOT have an uploaded CSV
+        // Apply the same column selection, operations, and factors as uploaded CSVs
         if (csvResults.size > 0) {
           // Update each meter category that might contain parent meters
           const updateMeterCategory = (meters: any[]) => {
@@ -1911,11 +1972,18 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
               const csvData = csvResults.get(meter.id);
               // Only use hierarchical CSV values if meter does NOT have an uploaded CSV
               if (csvData && !metersWithUploadedCsvs.has(meter.id)) {
-                console.log(`Using hierarchical CSV values for ${meter.meter_number}`);
+                console.log(`Using hierarchical CSV values for ${meter.meter_number} - applying column settings`);
+                
+                // Apply the same column selection, operations, and factors as uploaded CSVs
+                const { processedColumnTotals, totalKwhPositive, totalKwhNegative, totalKwh } = 
+                  applyColumnSettingsToHierarchicalData(csvData.columnTotals, csvData.rowCount);
+                
                 return {
                   ...meter,
-                  columnTotals: csvData.columnTotals,
-                  totalKwh: csvData.totalKwh
+                  columnTotals: processedColumnTotals,
+                  totalKwh: totalKwh,
+                  totalKwhPositive,
+                  totalKwhNegative
                 };
               }
               if (metersWithUploadedCsvs.has(meter.id)) {
@@ -2392,7 +2460,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     );
 
     // Generate hierarchical CSVs for parent meters (needed for correct values)
-    const bulkCsvResults = new Map<string, { totalKwh: number; columnTotals: Record<string, number> }>();
+    const bulkCsvResults = new Map<string, { totalKwh: number; columnTotals: Record<string, number>; rowCount: number }>();
     const parentMetersForCsv = [...(reconciliationData.bulkMeters || []), ...(reconciliationData.solarMeters || []), ...(reconciliationData.tenantMeters || []), ...(reconciliationData.checkMeters || []), ...(reconciliationData.unassignedMeters || [])].filter(meter => {
       const children = meterConnectionsMap.get(meter.id);
       return children && children.length > 0;
@@ -2412,12 +2480,23 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       await Promise.allSettled(csvPromises);
 
       // Update parent meters with CSV values - but only if they don't have uploaded CSVs
+      // Apply the same column selection, operations, and factors as uploaded CSVs
       const updateMeterCategory = (meters: any[]) => {
         return meters.map(meter => {
           const csvData = bulkCsvResults.get(meter.id);
           // Only use hierarchical CSV values if meter does NOT have an uploaded CSV
           if (csvData && !metersWithUploadedCsvs.has(meter.id)) {
-            return { ...meter, columnTotals: csvData.columnTotals, totalKwh: csvData.totalKwh };
+            // Apply the same column selection, operations, and factors as uploaded CSVs
+            const { processedColumnTotals, totalKwhPositive, totalKwhNegative, totalKwh } = 
+              applyColumnSettingsToHierarchicalData(csvData.columnTotals, csvData.rowCount);
+            
+            return { 
+              ...meter, 
+              columnTotals: processedColumnTotals, 
+              totalKwh: totalKwh,
+              totalKwhPositive,
+              totalKwhNegative
+            };
           }
           return meter;
         });
