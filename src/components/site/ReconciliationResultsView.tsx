@@ -142,23 +142,10 @@ export default function ReconciliationResultsView({
     corrections: CorrectedReading[];
   } | null>(null);
 
-  // Create a map of corrections grouped by the ORIGINAL SOURCE meter (where corrupt data actually originated)
-  // Uses originalSourceMeterId if available (for hierarchical layers), falls back to meterId
-  const sourceMeterCorrections = useMemo(() => {
-    const sourceMap = new Map<string, CorrectedReading[]>();
-    
-    for (const corrections of meterCorrections.values()) {
-      for (const correction of corrections) {
-        // Use originalSourceMeterId for proper attribution through hierarchical layers
-        const sourceMeterId = correction.originalSourceMeterId || correction.meterId;
-        const existing = sourceMap.get(sourceMeterId) || [];
-        existing.push(correction);
-        sourceMap.set(sourceMeterId, existing);
-      }
-    }
-    
-    return sourceMap;
-  }, [meterCorrections]);
+  // Corrections are now properly propagated from children to parents in ReconciliationTab
+  // meterCorrections.get(meterId) returns the corrections relevant to that meter:
+  // - For leaf meters: their own detected corruptions
+  // - For parent meters: corrections propagated from their descendants
 
   const handleShowCorrections = (meterId: string, meterNumber: string, corrections: CorrectedReading[]) => {
     setSelectedMeterForCorrections({ meterId, meterNumber, corrections });
@@ -214,10 +201,10 @@ export default function ReconciliationResultsView({
 
   const renderMeterRow = (meter: MeterData, isRevenueView: boolean = false) => {
     const childIds = meterConnections?.get(meter.id) || [];
-    // Parent meter corrections (aggregated from children)
-    const parentCorrections = meterCorrections.get(meter.id) || [];
-    // Source meter corrections (this meter's own corrupt data)
-    const sourceCorrections = sourceMeterCorrections.get(meter.id) || [];
+    // Get corrections for this meter directly from meterCorrections
+    // For leaf meters: their own corruptions; For parents: propagated from children
+    const corrections = meterCorrections.get(meter.id) || [];
+    const hasChildren = childIds.length > 0;
     let hierarchicalTotal = 0;
     
     // Use saved hierarchical total if available, otherwise calculate on the fly
@@ -248,7 +235,6 @@ export default function ReconciliationResultsView({
     const marginLeft = indentLevel * 24;
     const parentInfo = meterParentInfo.get(meter.id);
     
-    const hasChildren = childIds.length > 0;
     const isExpanded = expandedMeters.has(meter.id);
     
     const meterAssignment = meterAssignments.get(meter.id) || meter.assignment;
@@ -303,26 +289,39 @@ export default function ReconciliationResultsView({
               {meter.hasError && (
                 <Badge variant="destructive" className="text-xs">Error: {meter.errorMessage || 'Failed to load'}</Badge>
               )}
-              {sourceCorrections.length > 0 && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-1 h-5 px-2 bg-destructive/20 border-destructive/50 text-destructive hover:bg-destructive/30"
-                  onClick={() => handleShowCorrections(meter.id, meter.meter_number, sourceCorrections)}
-                >
-                  <AlertCircle className="h-3 w-3" />
-                  <span className="text-xs">{sourceCorrections.length} corrupt</span>
-                </Button>
+              {/* Leaf meters show BOTH corrupt (red) AND corrected (amber) badges */}
+              {corrections.length > 0 && !hasChildren && (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1 h-5 px-2 bg-destructive/20 border-destructive/50 text-destructive hover:bg-destructive/30"
+                    onClick={() => handleShowCorrections(meter.id, meter.meter_number, corrections)}
+                  >
+                    <AlertCircle className="h-3 w-3" />
+                    <span className="text-xs">{corrections.length} corrupt</span>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1 h-5 px-2 bg-amber-500/20 border-amber-500/50 text-amber-700 dark:text-amber-400 hover:bg-amber-500/30"
+                    onClick={() => handleShowCorrections(meter.id, meter.meter_number, corrections)}
+                  >
+                    <AlertTriangle className="h-3 w-3" />
+                    <span className="text-xs">{corrections.length} corrected</span>
+                  </Button>
+                </>
               )}
-              {parentCorrections.length > 0 && (
+              {/* Parent meters show ONLY corrected (amber) badge */}
+              {corrections.length > 0 && hasChildren && (
                 <Button
                   variant="outline"
                   size="sm"
                   className="gap-1 h-5 px-2 bg-amber-500/20 border-amber-500/50 text-amber-700 dark:text-amber-400 hover:bg-amber-500/30"
-                  onClick={() => handleShowCorrections(meter.id, meter.meter_number, parentCorrections)}
+                  onClick={() => handleShowCorrections(meter.id, meter.meter_number, corrections)}
                 >
                   <AlertTriangle className="h-3 w-3" />
-                  <span className="text-xs">{parentCorrections.length} corrected</span>
+                  <span className="text-xs">{corrections.length} corrected</span>
                 </Button>
               )}
               {parentInfo && (
