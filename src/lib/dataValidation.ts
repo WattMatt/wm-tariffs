@@ -25,6 +25,9 @@ export interface CorrectedReading {
   correctedValue: number;
   fieldName: string;
   reason: string;
+  // Track the ORIGINAL source meter through hierarchical layers
+  originalSourceMeterId?: string;
+  originalSourceMeterNumber?: string;
 }
 
 export interface DataValidationResult {

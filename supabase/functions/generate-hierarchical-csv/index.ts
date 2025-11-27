@@ -29,6 +29,9 @@ interface CorrectedReading {
   correctedValue: number;
   fieldName: string;
   reason: string;
+  // Track the ORIGINAL source meter through hierarchical layers
+  originalSourceMeterId: string;
+  originalSourceMeterNumber: string;
 }
 
 // Corruption detection thresholds
@@ -239,7 +242,9 @@ Deno.serve(async (req) => {
                 originalValue: kwhValue,
                 correctedValue: 0,
                 fieldName: 'Total kWh',
-                reason: `Value ${kwhValue.toLocaleString()} exceeds max threshold ${THRESHOLDS.maxKwhPer30Min.toLocaleString()}`
+                reason: `Value ${kwhValue.toLocaleString()} exceeds max threshold ${THRESHOLDS.maxKwhPer30Min.toLocaleString()}`,
+                originalSourceMeterId: childMeterId,
+                originalSourceMeterNumber: meterNumberMap.get(childMeterId) || 'Unknown'
               });
               // Don't add corrupt value
             } else {
@@ -266,7 +271,9 @@ Deno.serve(async (req) => {
                 originalValue: value,
                 correctedValue: 0,
                 fieldName: header,
-                reason: `Value ${value.toLocaleString()} exceeds max threshold ${threshold.toLocaleString()}`
+                reason: `Value ${value.toLocaleString()} exceeds max threshold ${threshold.toLocaleString()}`,
+                originalSourceMeterId: childMeterId,
+                originalSourceMeterNumber: meterNumberMap.get(childMeterId) || 'Unknown'
               });
               // Don't add corrupt value
             } else {
@@ -346,7 +353,9 @@ Deno.serve(async (req) => {
             originalValue: reading.kwh_value,
             correctedValue: 0,
             fieldName: 'kwh_value',
-            reason: `Value ${reading.kwh_value.toLocaleString()} exceeds max threshold ${THRESHOLDS.maxKwhPer30Min.toLocaleString()}`
+            reason: `Value ${reading.kwh_value.toLocaleString()} exceeds max threshold ${THRESHOLDS.maxKwhPer30Min.toLocaleString()}`,
+            originalSourceMeterId: reading.meter_id,
+            originalSourceMeterNumber: meterNumberMap.get(reading.meter_id) || 'Unknown'
           });
           // Don't add corrupt value
         } else {
@@ -373,7 +382,9 @@ Deno.serve(async (req) => {
                     originalValue: numValue,
                     correctedValue: 0,
                     fieldName: col,
-                    reason: `Value ${numValue.toLocaleString()} exceeds max threshold ${threshold.toLocaleString()}`
+                    reason: `Value ${numValue.toLocaleString()} exceeds max threshold ${threshold.toLocaleString()}`,
+                    originalSourceMeterId: reading.meter_id,
+                    originalSourceMeterNumber: meterNumberMap.get(reading.meter_id) || 'Unknown'
                   });
                   // Don't add corrupt value
                 } else {
@@ -538,7 +549,8 @@ Deno.serve(async (req) => {
           content_hash: contentHash,
           readings_inserted: rowCount,
           updated_at: new Date().toISOString(),
-          file_size: finalCsvContent.length
+          file_size: finalCsvContent.length,
+          parse_status: 'generated' // CRITICAL: Mark as generated so parent meters can find this CSV
         })
         .eq('id', existingRecord.id);
 
