@@ -18,7 +18,7 @@ import { SplitViewReportEditor } from "./SplitViewReportEditor";
 import SaveReportDialog from "./SaveReportDialog";
 import SavedReportsList from "./SavedReportsList";
 import { ReportGenerationProgress } from "./ReportGenerationProgress";
-import { generateMeterTypeChart, generateConsumptionChart, generateTariffComparisonChart, generateClusteredTariffChart, generateDocumentVsAssignedChart, generateTariffAnalysisChart } from "./ChartGenerator";
+import { generateMeterTypeChart, generateConsumptionChart, generateTariffComparisonChart, generateClusteredTariffChart, generateDocumentVsAssignedChart, generateTariffAnalysisChart, generateReconciliationVsDocumentChart } from "./ChartGenerator";
 
 interface BatchStatus {
   batchNumber: number;
@@ -1244,6 +1244,47 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         
         // Section 4: Tariff Comparison
         addSectionHeading("4. TARIFF COMPARISON", 16, true);
+        addText("Document values compared against assigned tariff rates for each meter.");
+        addSpacer(5);
+        
+        const rateComparisonCharts = (previewData as any).rateComparisonCharts;
+        if (rateComparisonCharts && Object.keys(rateComparisonCharts).length > 0) {
+          for (const meterId of Object.keys(rateComparisonCharts)) {
+            const meterChartData = rateComparisonCharts[meterId];
+            
+            addSubsectionHeading(`Meter: ${meterChartData.meterNumber}${meterChartData.meterName ? ` (${meterChartData.meterName})` : ''}`);
+            addSpacer(3);
+            
+            // Render charts in rows of 3 (same layout as Section 6)
+            const chartEntries = Object.entries(meterChartData.charts || {});
+            const chartWidth = (pageWidth - leftMargin - rightMargin - 10) / 3;
+            const chartHeight = chartWidth * 0.75;
+            
+            for (let i = 0; i < chartEntries.length; i += 3) {
+              // Check for page break
+              if (yPos > pageHeight - bottomMargin - chartHeight - 20) {
+                addFooter();
+                addPageNumber();
+                pdf.addPage();
+                yPos = topMargin;
+              }
+              
+              // Render up to 3 charts per row
+              for (let j = 0; j < 3 && (i + j) < chartEntries.length; j++) {
+                const [chargeType, chartImage] = chartEntries[i + j];
+                if (chartImage) {
+                  const chartX = leftMargin + (j * (chartWidth + 5));
+                  pdf.addImage(chartImage as string, 'PNG', chartX, yPos, chartWidth - 2, chartHeight);
+                }
+              }
+              yPos += chartHeight + 5;
+            }
+            
+            addSpacer(5);
+          }
+        }
+        
+        // Then render the comparison tables
         renderSection('tariff-comparison');
         addSpacer(8);
         
@@ -1297,17 +1338,16 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         }
         addSpacer(8);
         
-        // Section 6: Rate Comparison Charts
-        addSectionHeading("6. RATE COMPARISON CHARTS", 16, true);
-        addText("Document values compared against assigned tariff rates for each meter.");
+        // Section 6: Billing Comparison Charts
+        addSectionHeading("6. BILLING COMPARISON CHARTS", 16, true);
+        addText("Reconciliation costs compared against document billed amounts for each meter.");
         addSpacer(5);
         
-        const rateComparisonCharts = (previewData as any).rateComparisonCharts;
-        if (rateComparisonCharts && Object.keys(rateComparisonCharts).length > 0) {
-          for (const meterId of Object.keys(rateComparisonCharts)) {
-            const meterChartData = rateComparisonCharts[meterId];
+        const billingComparisonCharts = (previewData as any).billingComparisonCharts;
+        if (billingComparisonCharts && Object.keys(billingComparisonCharts).length > 0) {
+          for (const meterId of Object.keys(billingComparisonCharts)) {
+            const meterChartData = billingComparisonCharts[meterId];
             
-            // Add meter subheading
             addSubsectionHeading(`Meter: ${meterChartData.meterNumber}${meterChartData.meterName ? ` (${meterChartData.meterName})` : ''}`);
             addSpacer(3);
             
@@ -1327,7 +1367,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
               
               // Render up to 3 charts per row
               for (let j = 0; j < 3 && (i + j) < chartEntries.length; j++) {
-                const [chargeType, chartImage] = chartEntries[i + j];
+                const [metricTitle, chartImage] = chartEntries[i + j];
                 if (chartImage) {
                   const chartX = leftMargin + (j * (chartWidth + 5));
                   pdf.addImage(chartImage as string, 'PNG', chartX, yPos, chartWidth - 2, chartHeight);
@@ -1339,7 +1379,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             addSpacer(8);
           }
         } else {
-          addText("No rate comparison charts available.");
+          addText("No billing comparison data available.");
         }
         addSpacer(8);
         
@@ -2698,6 +2738,149 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         tariffComparisonContent = comparisonSections.join('\n\n');
       }
 
+      // Fetch documents with extractions early for both tariff analysis and billing comparison
+      setGenerationProgress(65);
+      setGenerationStatus("Fetching document data...");
+      
+      const { data: docsWithExtractions } = await supabase
+        .from('site_documents')
+        .select('*, document_extractions(*)')
+        .eq('site_id', siteId)
+        .eq('is_folder', false)
+        .order('upload_date', { ascending: true });
+
+      // Generate billing comparison charts for Section 6 (Reconciliation Cost vs Document Billed)
+      const billingComparisonCharts: Record<string, {
+        meterNumber: string;
+        meterName?: string;
+        charts: Record<string, string>;
+      }> = {};
+
+      if (selectedReconciliation?.reconciliation_meter_results && docsWithExtractions) {
+        // Group documents by meter
+        const meterDocsMap = new Map<string, any[]>();
+        docsWithExtractions.forEach(doc => {
+          if (doc.meter_id && doc.document_extractions?.length > 0) {
+            if (!meterDocsMap.has(doc.meter_id)) {
+              meterDocsMap.set(doc.meter_id, []);
+            }
+            meterDocsMap.get(doc.meter_id)!.push(doc);
+          }
+        });
+
+        // Sort meters according to hierarchy order
+        const meterOrder = selectedReconciliation.meter_order || [];
+        const sortedMeterResults = [...selectedReconciliation.reconciliation_meter_results]
+          .sort((a, b) => {
+            const indexA = meterOrder.indexOf(a.meter_id);
+            const indexB = meterOrder.indexOf(b.meter_id);
+            if (indexA === -1 && indexB === -1) return 0;
+            if (indexA === -1) return 1;
+            if (indexB === -1) return -1;
+            return indexA - indexB;
+          });
+
+        for (const meterResult of sortedMeterResults) {
+          const meterDocs = meterDocsMap.get(meterResult.meter_id) || [];
+          if (meterDocs.length === 0) continue;
+
+          billingComparisonCharts[meterResult.meter_id] = {
+            meterNumber: meterResult.meter_number,
+            meterName: meterResult.meter_name,
+            charts: {}
+          };
+
+          // Metrics to compare
+          const metrics = [
+            { key: 'Total Costs', label: 'Total Costs' },
+            { key: 'Demand Charge Summer', label: 'Demand Charge Summer' },
+            { key: 'Demand Charge Winter', label: 'Demand Charge Winter' },
+            { key: 'Energy Charge Summer', label: 'Energy Charge Summer' },
+            { key: 'Energy Charge Winter', label: 'Energy Charge Winter' }
+          ];
+
+          for (const metric of metrics) {
+            const chartData: { period: string; reconciliationValue: number; documentValue: number }[] = [];
+
+            for (const doc of meterDocs) {
+              const extraction = doc.document_extractions[0];
+              if (!extraction) continue;
+
+              const periodStart = extraction.period_start ? new Date(extraction.period_start) : null;
+              const periodEnd = extraction.period_end ? new Date(extraction.period_end) : null;
+              if (!periodStart || !periodEnd) continue;
+
+              const periodLabel = `${format(periodStart, "MMM yyyy")} - ${format(periodEnd, "MMM yyyy")}`;
+
+              // Extract values based on metric
+              let reconciliationValue = 0;
+              let documentValue = 0;
+
+              const lineItems = extraction.extracted_data?.line_items || [];
+
+              if (metric.key === 'Total Costs') {
+                reconciliationValue = meterResult.total_cost || 0;
+                documentValue = extraction.total_amount || 0;
+              } else if (metric.key === 'Demand Charge Summer') {
+                const demandSummer = lineItems.find((item: any) => 
+                  item.unit === 'kVA' && item.season === 'Summer' && item.supply === 'Normal'
+                );
+                documentValue = demandSummer?.amount || 0;
+                reconciliationValue = meterResult.demand_charges ? (meterResult.demand_charges / 2) : 0; // Split equally
+              } else if (metric.key === 'Demand Charge Winter') {
+                const demandWinter = lineItems.find((item: any) => 
+                  item.unit === 'kVA' && item.season === 'Winter' && item.supply === 'Normal'
+                );
+                documentValue = demandWinter?.amount || 0;
+                reconciliationValue = meterResult.demand_charges ? (meterResult.demand_charges / 2) : 0; // Split equally
+              } else if (metric.key === 'Energy Charge Summer') {
+                const energySummer = lineItems.find((item: any) => 
+                  item.unit === 'kWh' && item.season === 'Summer' && item.supply === 'Normal'
+                );
+                documentValue = energySummer?.amount || 0;
+                reconciliationValue = meterResult.energy_cost ? (meterResult.energy_cost / 2) : 0; // Split equally
+              } else if (metric.key === 'Energy Charge Winter') {
+                const energyWinter = lineItems.find((item: any) => 
+                  item.unit === 'kWh' && item.season === 'Winter' && item.supply === 'Normal'
+                );
+                documentValue = energyWinter?.amount || 0;
+                reconciliationValue = meterResult.energy_cost ? (meterResult.energy_cost / 2) : 0; // Split equally
+              }
+
+              if (reconciliationValue > 0 || documentValue > 0) {
+                chartData.push({
+                  period: periodLabel,
+                  reconciliationValue,
+                  documentValue
+                });
+              }
+            }
+
+            if (chartData.length > 0) {
+              try {
+                // Sort chronologically
+                const sortedChartData = [...chartData].sort((a, b) => {
+                  const dateA = new Date(a.period.split(' - ')[0]);
+                  const dateB = new Date(b.period.split(' - ')[0]);
+                  return dateA.getTime() - dateB.getTime();
+                });
+
+                const chartImage = generateReconciliationVsDocumentChart(
+                  metric.label,
+                  sortedChartData,
+                  500,
+                  320
+                );
+
+                billingComparisonCharts[meterResult.meter_id].charts[metric.label] = chartImage;
+              } catch (err) {
+                console.error(`Error generating billing comparison chart for ${metric.label}:`, err);
+              }
+            }
+          }
+        }
+      }
+
       const reportData = {
         clientName: siteDetails.clientName,
         sections: {
@@ -2862,14 +3045,7 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
       
       const tariffAnalysisCharts: Record<string, Record<string, string>> = {};
       
-      // Fetch documents with extractions for tariff analysis
-      const { data: docsWithExtractions } = await supabase
-        .from('site_documents')
-        .select('*, document_extractions(*)')
-        .eq('site_id', siteId)
-        .eq('is_folder', false)
-        .order('upload_date', { ascending: true });
-
+      // docsWithExtractions already fetched earlier for billing comparison charts
       if (docsWithExtractions && docsWithExtractions.length > 0) {
         // Group documents by meter
         const meterDocsMap = new Map<string, any[]>();
@@ -3027,7 +3203,8 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
         tariffChartImages,
         tariffsByName,
         tariffAnalysisCharts, // Add tariff analysis charts for PDF rendering
-        rateComparisonCharts, // Add rate comparison charts for Section 6 PDF rendering
+        rateComparisonCharts, // Add rate comparison charts for Section 4 PDF rendering
+        billingComparisonCharts, // Add billing comparison charts for Section 6 PDF rendering
         chartImages: {
           meterTypeChart,
           consumptionChart
