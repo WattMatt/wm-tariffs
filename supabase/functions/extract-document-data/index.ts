@@ -374,6 +374,32 @@ Return the data in a structured format with all line items in an array.`;
       extractedData.currency = 'R';
     }
     
+    // Normalize line items - ensure consistent consumption calculation
+    if (extractedData.line_items && Array.isArray(extractedData.line_items)) {
+      extractedData.line_items = extractedData.line_items.map((item: any) => {
+        // Handle both field naming conventions (old_reading/previous_reading)
+        const prevReading = item.previous_reading ?? item.old_reading ?? 0;
+        const currReading = item.current_reading ?? item.new_reading ?? null;
+        
+        // Normalize previous_reading: always default to 0 if null/undefined
+        item.previous_reading = prevReading;
+        item.old_reading = prevReading;
+        
+        // If we have a current reading but consumption is 0 or missing, recalculate
+        if (currReading !== null && currReading !== undefined) {
+          const calculatedConsumption = currReading - prevReading;
+          
+          // Only override if consumption is missing, 0, or doesn't make sense
+          if (item.consumption === null || item.consumption === undefined || item.consumption === 0) {
+            item.consumption = calculatedConsumption;
+            console.log(`Recalculated consumption for ${item.description}: ${currReading} - ${prevReading} = ${calculatedConsumption}`);
+          }
+        }
+        
+        return item;
+      });
+    }
+    
     console.log("Extracted data:", extractedData);
 
     // Delete any existing extractions for this document before creating a new one
