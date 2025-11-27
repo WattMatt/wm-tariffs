@@ -122,14 +122,25 @@ Also extract:
 - Supply authority/municipality name`
       : `You are an expert at extracting data from tenant electricity bills.
 
+CRITICAL TENANT DETAILS - ALWAYS EXTRACT:
+These three fields are ALWAYS present on every tenant bill and MUST be extracted:
+1. **Shop Number** - Usually appears as "DB-XX" or just a number. Located near the top of the bill, often below the tenant name. Extract ONLY the raw number/identifier (system will add DB- prefix).
+2. **Tenant Name** - The business/company name. Appears prominently near the top of the bill BEFORE the account reference.
+3. **Account Reference** - A reference number in format like "XXX/XXX/XXXXXX". Appears AFTER the tenant name.
+
+These fields are MANDATORY. If you cannot clearly identify them, look for:
+- Shop Number: Near "Unit", "Shop", "Premises" labels or below tenant name
+- Tenant Name: The largest text near the top, or after "To:" or "Tenant:"
+- Account Reference: Near "Ref", "Account", "Reference" labels
+
 CRITICAL: Extract ALL line items from the billing table in the document. Each row in the table represents a separate charge and should become a line item.
 
 Extract the following information:
 - Billing period (start and end dates)
 - Total amount (sum of all line items)
-- Tenant name (NOTE: The tenant name appears BEFORE the account reference number. Extract only the tenant name, not the account reference)
-- Account reference number (This appears AFTER the tenant name. Extract only the reference number)
-- Shop number (CRITICAL: Extract ONLY the raw shop number WITHOUT any "DB-" prefix. The system will add the prefix automatically. The shop number is usually located BELOW the tenant name and account reference)
+- Tenant name (MANDATORY - see above)
+- Account reference number (MANDATORY - see above)
+- Shop number (MANDATORY - see above)
 - Line items array: For EACH row in the billing table, extract:
   * Description (e.g., "Electrical", "Water", "Misc")
   * Supply (CRITICAL: If the description contains the word "Generator", set this to "Emergency", otherwise set it to "Normal")
@@ -273,7 +284,9 @@ Return the data in a structured format with all line items in an array.`;
                   description: "Any other relevant extracted information"
                 }
               },
-              required: ["period_start", "period_end", "total_amount"],
+              required: documentType === 'tenant_bill' 
+                ? ["period_start", "period_end", "total_amount", "shop_number", "tenant_name", "account_reference"]
+                : ["period_start", "period_end", "total_amount"],
               additionalProperties: false
             }
           }
@@ -398,6 +411,25 @@ Return the data in a structured format with all line items in an array.`;
         
         return item;
       });
+    }
+    
+    // Ensure tenant details are always present for tenant bills
+    if (documentType !== 'municipal_account') {
+      // Log warnings if critical tenant fields are missing
+      if (!extractedData.shop_number) {
+        console.warn('⚠️ MISSING: shop_number not extracted from tenant bill');
+      }
+      if (!extractedData.tenant_name) {
+        console.warn('⚠️ MISSING: tenant_name not extracted from tenant bill');
+      }
+      if (!extractedData.account_reference) {
+        console.warn('⚠️ MISSING: account_reference not extracted from tenant bill');
+      }
+      
+      // Ensure fields exist in extracted_data even if empty (for UI consistency)
+      extractedData.shop_number = extractedData.shop_number || null;
+      extractedData.tenant_name = extractedData.tenant_name || null;
+      extractedData.account_reference = extractedData.account_reference || null;
     }
     
     console.log("Extracted data:", extractedData);
