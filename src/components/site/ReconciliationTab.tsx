@@ -1763,6 +1763,26 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     };
   };
 
+  // Helper to check which parent meters have uploaded (not generated) CSV files
+  const getMetersWithUploadedCsvs = async (meterIds: string[]): Promise<Set<string>> => {
+    if (meterIds.length === 0) return new Set();
+    
+    const { data, error } = await supabase
+      .from('meter_csv_files')
+      .select('meter_id, file_name')
+      .in('meter_id', meterIds)
+      .eq('parse_status', 'parsed');
+    
+    if (error || !data) return new Set();
+    
+    // Filter out hierarchical CSVs - only return meters with actual uploaded data
+    const uploadedMeterIds = data
+      .filter(d => !d.file_name.toLowerCase().includes('hierarchical'))
+      .map(d => d.meter_id);
+    
+    return new Set(uploadedMeterIds);
+  };
+
   // Helper function to generate hierarchical CSV for a parent meter at run time
   const generateHierarchicalCsvForMeter = async (
     parentMeter: { id: string; meter_number: string },
@@ -1859,9 +1879,15 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         console.log(`Generating ${parentMeters.length} hierarchical CSV file(s) at run time...`);
         toast.info(`Generating ${parentMeters.length} hierarchical profile(s)...`);
 
+        // Check which parent meters have their own uploaded CSVs
+        const parentMeterIds = parentMeters.map(m => m.id);
+        const metersWithUploadedCsvs = await getMetersWithUploadedCsvs(parentMeterIds);
+        console.log(`Parent meters with uploaded CSVs (will use uploaded data): ${metersWithUploadedCsvs.size}`, 
+          Array.from(metersWithUploadedCsvs));
+
         const csvResults = new Map<string, { totalKwh: number; columnTotals: Record<string, number> }>();
 
-        // Generate CSVs in parallel
+        // Generate CSVs in parallel for ALL parent meters (for storage purposes)
         const csvPromises = parentMeters.map(async (parentMeter) => {
           const result = await generateHierarchicalCsvForMeter(
             parentMeter,
@@ -1877,17 +1903,23 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         console.log('Hierarchical CSV generation complete at run time');
 
         // Update parent meters in reconciliationData with CSV-calculated values
+        // BUT only if the meter does NOT have an uploaded CSV
         if (csvResults.size > 0) {
           // Update each meter category that might contain parent meters
           const updateMeterCategory = (meters: any[]) => {
             return meters.map(meter => {
               const csvData = csvResults.get(meter.id);
-              if (csvData) {
+              // Only use hierarchical CSV values if meter does NOT have an uploaded CSV
+              if (csvData && !metersWithUploadedCsvs.has(meter.id)) {
+                console.log(`Using hierarchical CSV values for ${meter.meter_number}`);
                 return {
                   ...meter,
                   columnTotals: csvData.columnTotals,
                   totalKwh: csvData.totalKwh
                 };
+              }
+              if (metersWithUploadedCsvs.has(meter.id)) {
+                console.log(`Using uploaded CSV values for ${meter.meter_number} (has real uploaded data)`);
               }
               return meter;
             });
@@ -2367,6 +2399,10 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     });
 
     if (parentMetersForCsv.length > 0) {
+      // Check which parent meters have their own uploaded CSVs
+      const parentMeterIds = parentMetersForCsv.map(m => m.id);
+      const metersWithUploadedCsvs = await getMetersWithUploadedCsvs(parentMeterIds);
+      
       const csvPromises = parentMetersForCsv.map(async (parentMeter) => {
         const result = await generateHierarchicalCsvForMeter(parentMeter, fullDateTimeFrom, fullDateTimeTo);
         if (result) {
@@ -2375,11 +2411,12 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       });
       await Promise.allSettled(csvPromises);
 
-      // Update parent meters with CSV values
+      // Update parent meters with CSV values - but only if they don't have uploaded CSVs
       const updateMeterCategory = (meters: any[]) => {
         return meters.map(meter => {
           const csvData = bulkCsvResults.get(meter.id);
-          if (csvData) {
+          // Only use hierarchical CSV values if meter does NOT have an uploaded CSV
+          if (csvData && !metersWithUploadedCsvs.has(meter.id)) {
             return { ...meter, columnTotals: csvData.columnTotals, totalKwh: csvData.totalKwh };
           }
           return meter;
