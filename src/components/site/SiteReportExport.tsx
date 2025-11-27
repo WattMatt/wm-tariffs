@@ -1255,12 +1255,12 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             addSubsectionHeading(`Meter: ${meterChartData.meterNumber}${meterChartData.meterName ? ` (${meterChartData.meterName})` : ''}`);
             addSpacer(3);
             
-            // Render charts in rows of 3 (same layout as Section 6)
+            // Render charts in rows of 2 for better readability
             const chartEntries = Object.entries(meterChartData.charts || {});
-            const chartWidth = (pageWidth - leftMargin - rightMargin - 10) / 3;
+            const chartWidth = (pageWidth - leftMargin - rightMargin - 5) / 2;
             const chartHeight = chartWidth * 0.75;
             
-            for (let i = 0; i < chartEntries.length; i += 3) {
+            for (let i = 0; i < chartEntries.length; i += 2) {
               // Check for page break
               if (yPos > pageHeight - bottomMargin - chartHeight - 20) {
                 addFooter();
@@ -1269,8 +1269,8 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
                 yPos = topMargin;
               }
               
-              // Render up to 3 charts per row
-              for (let j = 0; j < 3 && (i + j) < chartEntries.length; j++) {
+              // Render up to 2 charts per row
+              for (let j = 0; j < 2 && (i + j) < chartEntries.length; j++) {
                 const [chargeType, chartImage] = chartEntries[i + j];
                 if (chartImage) {
                   const chartX = leftMargin + (j * (chartWidth + 5));
@@ -1305,12 +1305,12 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             addSubsectionHeading(`Meter: ${meter.meter_number}${meter.name ? ` (${meter.name})` : ''}`);
             addSpacer(3);
             
-            // Render 6 charts (2 rows of 3)
+            // Render 6 charts (3 rows of 2)
             const metrics = ['Total Amount', 'Basic Charge', 'kVA Charge', 'kWh Charge', 'kVA Consumption', 'kWh Consumption'];
-            const chartWidth = (pageWidth - leftMargin - rightMargin - 10) / 3; // 10 = 2 gaps of 5
+            const chartWidth = (pageWidth - leftMargin - rightMargin - 5) / 2; // 5 = 1 gap
             const chartHeight = chartWidth * 0.75;
             
-            for (let i = 0; i < metrics.length; i += 3) {
+            for (let i = 0; i < metrics.length; i += 2) {
               // Check for page break
               if (yPos > pageHeight - bottomMargin - chartHeight - 20) {
                 addFooter();
@@ -1319,8 +1319,8 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
                 yPos = topMargin;
               }
               
-              // Render up to 3 charts in a row
-              for (let j = 0; j < 3 && (i + j) < metrics.length; j++) {
+              // Render up to 2 charts in a row
+              for (let j = 0; j < 2 && (i + j) < metrics.length; j++) {
                 const metric = metrics[i + j];
                 const chartImage = meterCharts[metric];
                 if (chartImage) {
@@ -1351,12 +1351,12 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             addSubsectionHeading(`Meter: ${meterChartData.meterNumber}${meterChartData.meterName ? ` (${meterChartData.meterName})` : ''}`);
             addSpacer(3);
             
-            // Render charts in rows of 3
+            // Render charts in rows of 2 for better readability
             const chartEntries = Object.entries(meterChartData.charts || {});
-            const chartWidth = (pageWidth - leftMargin - rightMargin - 10) / 3;
+            const chartWidth = (pageWidth - leftMargin - rightMargin - 5) / 2;
             const chartHeight = chartWidth * 0.75;
             
-            for (let i = 0; i < chartEntries.length; i += 3) {
+            for (let i = 0; i < chartEntries.length; i += 2) {
               // Check for page break
               if (yPos > pageHeight - bottomMargin - chartHeight - 20) {
                 addFooter();
@@ -1365,8 +1365,8 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
                 yPos = topMargin;
               }
               
-              // Render up to 3 charts per row
-              for (let j = 0; j < 3 && (i + j) < chartEntries.length; j++) {
+              // Render up to 2 charts per row
+              for (let j = 0; j < 2 && (i + j) < chartEntries.length; j++) {
                 const [metricTitle, chartImage] = chartEntries[i + j];
                 if (chartImage) {
                   const chartX = leftMargin + (j * (chartWidth + 5));
