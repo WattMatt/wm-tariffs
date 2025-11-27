@@ -76,6 +76,26 @@ Deno.serve(async (req) => {
     const meterNumberMap = new Map<string, string>();
     meterInfo?.forEach(m => meterNumberMap.set(m.id, m.meter_number));
 
+    // ===== SOLAR METER DETECTION: Fetch meter associations to identify solar meters =====
+    const { data: reconcSettings } = await supabase
+      .from('site_reconciliation_settings')
+      .select('meter_associations')
+      .eq('site_id', siteId)
+      .maybeSingle();
+
+    // Build set of solar meter IDs (those designated as "solar_energy")
+    const solarMeterIds = new Set<string>();
+    if (reconcSettings?.meter_associations) {
+      const associations = reconcSettings.meter_associations as Record<string, string>;
+      Object.entries(associations).forEach(([meterId, assignment]) => {
+        if (assignment === 'solar_energy') {
+          solarMeterIds.add(meterId);
+          console.log(`Identified solar meter: ${meterId} (${meterNumberMap.get(meterId) || 'unknown'})`);
+        }
+      });
+    }
+    console.log(`Found ${solarMeterIds.size} solar meters to invert`);
+
     // ===== LAYERED APPROACH: Check which immediate children have generated CSVs =====
     const { data: childCsvFiles } = await supabase
       .from('meter_csv_files')
@@ -230,20 +250,28 @@ Deno.serve(async (req) => {
           
           const group = groupedData.get(slot)!;
           
-          // Add kWh value directly - child CSVs are already corrected, no need to re-check
-          if (kwhIdx >= 0) {
-            const kwhValue = parseFloat(values[kwhIdx]) || 0;
-            group.totalKwh += kwhValue;
+          // Determine if this child meter is a solar meter (invert values)
+          const isSolarMeter = solarMeterIds.has(childMeterId);
+          const multiplier = isSolarMeter ? -1 : 1;
+          
+          if (isSolarMeter && i === 1) {
+            console.log(`Applying inversion (multiplier: -1) for solar meter CSV: ${meterNumberMap.get(childMeterId) || childMeterId}`);
           }
           
-          // Add other column values directly - already corrected in child CSV
+          // Add kWh value with multiplier - child CSVs are already corrected, no need to re-check
+          if (kwhIdx >= 0) {
+            const kwhValue = parseFloat(values[kwhIdx]) || 0;
+            group.totalKwh += kwhValue * multiplier;
+          }
+          
+          // Add other column values with multiplier - already corrected in child CSV
           headers.forEach((header, idx) => {
             if (idx === 0 || idx === kwhIdx) return;
             
             const value = parseFloat(values[idx]) || 0;
             if (value === 0) return;
             
-            group.columnSums[header] = (group.columnSums[header] || 0) + value;
+            group.columnSums[header] = (group.columnSums[header] || 0) + (value * multiplier);
           });
         }
         
@@ -309,6 +337,10 @@ Deno.serve(async (req) => {
 
         const group = groupedData.get(matchingTs)!;
         
+        // Determine if this is a solar meter (invert values)
+        const isSolarMeter = solarMeterIds.has(reading.meter_id);
+        const multiplier = isSolarMeter ? -1 : 1;
+        
         // Check kWh value for corruption
         if (Math.abs(reading.kwh_value) > THRESHOLDS.maxKwhPer30Min) {
           corrections.push({
@@ -324,7 +356,7 @@ Deno.serve(async (req) => {
           });
           // Don't add corrupt value
         } else {
-          group.totalKwh += reading.kwh_value;
+          group.totalKwh += reading.kwh_value * multiplier;
         }
 
         // Sum all metadata columns with corruption check
@@ -353,7 +385,7 @@ Deno.serve(async (req) => {
                   });
                   // Don't add corrupt value
                 } else {
-                  group.columnSums[col] = (group.columnSums[col] || 0) + numValue;
+                  group.columnSums[col] = (group.columnSums[col] || 0) + (numValue * multiplier);
                 }
               }
             }
