@@ -106,6 +106,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
   // Refs for stable access to latest values in callbacks
   const previewDataRef = useRef<any>(null);
   const selectedColumnsRef = useRef<Set<string>>(new Set());
+  const columnFactorsRef = useRef<Map<string, string>>(new Map());
+  const columnOperationsRef = useRef<Map<string, string>>(new Map());
 
   // Persistent reconciliation state key
   const reconciliationStateKey = `reconciliation_state_${siteId}`;
@@ -154,6 +156,14 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
   useEffect(() => {
     selectedColumnsRef.current = selectedColumns;
   }, [selectedColumns]);
+  
+  useEffect(() => {
+    columnFactorsRef.current = columnFactors;
+  }, [columnFactors]);
+  
+  useEffect(() => {
+    columnOperationsRef.current = columnOperations;
+  }, [columnOperations]);
 
   // Restore persistent state on mount
   useEffect(() => {
@@ -1376,7 +1386,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
             if (key.toLowerCase().includes('time') || key.toLowerCase().includes('date')) return;
             
             // Only process selected columns
-            if (!selectedColumns.has(key)) return;
+            if (!selectedColumnsRef.current.has(key)) return;
             
             const numValue = Number(value);
             if (!isNaN(numValue) && value !== null && value !== '') {
@@ -1390,8 +1400,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         
         // Apply operations and scaling to each column
         Object.entries(columnValues).forEach(([key, values]) => {
-          const operation = columnOperations.get(key) || 'sum';
-          const factor = Number(columnFactors.get(key) || 1);
+          const operation = columnOperationsRef.current.get(key) || 'sum';
+          const factor = Number(columnFactorsRef.current.get(key) || 1);
           
           let result = 0;
           switch (operation) {
