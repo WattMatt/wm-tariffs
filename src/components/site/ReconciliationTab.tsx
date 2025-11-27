@@ -3307,7 +3307,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                   variant="outline"
                   size="sm"
                   onClick={() => setIsSaveDialogOpen(true)}
-                  disabled={isLoading || isCalculatingRevenue || selectedDocumentIds.length > 0}
+                  disabled={isLoading || isCalculatingRevenue}
                   className="w-full"
                 >
                   <Save className="w-4 h-4 mr-2" />
