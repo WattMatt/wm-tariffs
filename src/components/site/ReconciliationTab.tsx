@@ -2023,10 +2023,26 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         console.log('Hierarchical CSV generation complete at run time');
         setIsGeneratingCsvs(false);
 
+        // Group corrections by originalSourceMeterId to apply to leaf meters
+        const leafMeterCorrections = new Map<string, Map<string, number>>();
+        for (const corrections of allCorrections.values()) {
+          for (const correction of corrections) {
+            const sourceMeterId = correction.originalSourceMeterId || correction.meterId;
+            if (!leafMeterCorrections.has(sourceMeterId)) {
+              leafMeterCorrections.set(sourceMeterId, new Map());
+            }
+            const fieldCorrections = leafMeterCorrections.get(sourceMeterId)!;
+            // Accumulate correction delta: correctedValue - originalValue
+            const currentDelta = fieldCorrections.get(correction.fieldName) || 0;
+            fieldCorrections.set(correction.fieldName, currentDelta + (correction.correctedValue - correction.originalValue));
+          }
+        }
+        console.log(`Leaf meter corrections grouped for ${leafMeterCorrections.size} meters`);
+
         // Update parent meters in reconciliationData with CSV-calculated values
         // BUT only if the meter does NOT have an uploaded CSV
         // Apply the same column selection, operations, and factors as uploaded CSVs
-        if (csvResults.size > 0) {
+        if (csvResults.size > 0 || leafMeterCorrections.size > 0) {
           // Update each meter category that might contain parent meters
           const updateMeterCategory = (meters: any[]) => {
             return meters.map(meter => {
@@ -2047,6 +2063,34 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                   totalKwhNegative
                 };
               }
+              
+              // Apply corrections to leaf meters (meters with corrections but no CSV data)
+              const meterCorrections = leafMeterCorrections.get(meter.id);
+              if (meterCorrections && !csvData) {
+                console.log(`Applying ${meterCorrections.size} correction fields to leaf meter ${meter.meter_number}`);
+                const updatedColumnTotals = { ...meter.columnTotals };
+                let totalKwhDelta = 0;
+                
+                for (const [fieldName, delta] of meterCorrections.entries()) {
+                  // Apply delta to column totals
+                  if (fieldName === 'kwh_value' || fieldName === 'Total kWh') {
+                    totalKwhDelta += delta;
+                  } else if (updatedColumnTotals[fieldName] !== undefined) {
+                    updatedColumnTotals[fieldName] = (updatedColumnTotals[fieldName] || 0) + delta;
+                    console.log(`  ${fieldName}: ${meter.columnTotals?.[fieldName]?.toLocaleString()} → ${updatedColumnTotals[fieldName].toLocaleString()}`);
+                  }
+                }
+                
+                const newTotalKwh = (meter.totalKwh || 0) + totalKwhDelta;
+                return {
+                  ...meter,
+                  columnTotals: updatedColumnTotals,
+                  totalKwh: newTotalKwh,
+                  totalKwhPositive: newTotalKwh > 0 ? newTotalKwh : 0,
+                  totalKwhNegative: newTotalKwh < 0 ? newTotalKwh : 0
+                };
+              }
+              
               if (metersWithUploadedCsvs.has(meter.id)) {
                 console.log(`Using uploaded CSV values for ${meter.meter_number} (has real uploaded data)`);
               }
