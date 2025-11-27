@@ -2817,11 +2817,26 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
               const periodEnd = extraction.period_end ? new Date(extraction.period_end) : null;
               if (!periodStart || !periodEnd) continue;
 
-              const periodLabel = `${format(periodStart, "MMM yyyy")} - ${format(periodEnd, "MMM yyyy")}`;
+              // Ensure consistent x-axis labels (always show date range)
+              const startLabel = format(periodStart, "MMM yyyy");
+              const endLabel = format(periodEnd, "MMM yyyy");
+              const periodLabel = startLabel === endLabel ? startLabel : `${startLabel} - ${endLabel}`;
 
               // Get pre-calculated values from document_tariff_calculations
               const calcKey = `${meterResult.meter_id}_${doc.id}`;
               const docCalc = docCalcMap.get(calcKey);
+              
+              console.log(`📊 [Chart Debug] ${metric.key} - Period: ${periodLabel}`, {
+                periodStart: periodStart.toISOString(),
+                periodEnd: periodEnd.toISOString(),
+                docCalc: docCalc ? {
+                  total_cost: docCalc.total_cost,
+                  fixed_charges: docCalc.fixed_charges,
+                  demand_charges: docCalc.demand_charges,
+                  energy_cost: docCalc.energy_cost
+                } : 'NOT FOUND',
+                documentId: doc.id
+              });
               
               // Extract values based on metric
               let calculatedValue = 0;

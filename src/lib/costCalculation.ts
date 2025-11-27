@@ -286,13 +286,20 @@ export async function calculateMeterCost(
     // Add fixed charges (prorated by calendar month days)
     let fixedCharges = 0;
     if (tariff.tariff_charges) {
+      console.log('🔍 [Cost Calculation Debug] Tariff Charges:', tariff.tariff_charges);
+      console.log('🔍 [Cost Calculation Debug] Date Range:', { dateFrom: dateFrom.toISOString(), dateTo: dateTo.toISOString() });
+      
       const monthlyCharge = tariff.tariff_charges.reduce((sum: number, charge: any) => {
         if (charge.charge_type === "basic_monthly" || charge.charge_type === "basic_charge") {
+          console.log('🔍 [Cost Calculation Debug] Found basic charge:', charge);
           return sum + Number(charge.charge_amount);
         }
         return sum;
       }, 0);
+      
+      console.log('🔍 [Cost Calculation Debug] Monthly Charge Total:', monthlyCharge);
       fixedCharges = calculateProratedBasicCharges(dateFrom, dateTo, monthlyCharge);
+      console.log('🔍 [Cost Calculation Debug] Prorated Fixed Charges:', fixedCharges);
     }
 
     // Add demand charges (kVA-based)
