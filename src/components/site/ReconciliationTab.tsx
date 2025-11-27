@@ -2404,17 +2404,21 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       };
       
       // Calculate hierarchical total for each meter that has children
+      // IMPORTANT: Use meter.totalKwh directly - it was already calculated from hierarchical CSV
+      // during handleReconcile. This ensures bottom-up processing where each parent's totalKwh
+      // equals its immediate child's hierarchical CSV value (not recursive leaf sum).
       allMeters.forEach(meter => {
         const childIds = meterConnectionsMap.get(meter.id) || [];
         if (childIds.length > 0) {
-          const hierarchicalTotal = childIds.reduce((sum, childId) => {
-            return sum + getLeafMeterSum(childId);
-          }, 0);
+          // Use the meter's totalKwh directly - it was set from hierarchical CSV generation
+          // This respects the bottom-up calculation: Council uses Bulk Check's CSV value,
+          // NOT the sum of all leaf descendants
+          const hierarchicalTotal = meter.totalKwh || 0;
           hierarchicalTotals.set(meter.id, hierarchicalTotal);
           
-          // Aggregate column totals and max values for parent meters
-          hierarchicalColumnTotals.set(meter.id, getLeafColumnTotals(meter.id));
-          hierarchicalColumnMaxValues.set(meter.id, getLeafColumnMaxValues(meter.id));
+          // Use the meter's own column totals/max values from CSV, not recursive leaf aggregation
+          hierarchicalColumnTotals.set(meter.id, meter.columnTotals || {});
+          hierarchicalColumnMaxValues.set(meter.id, meter.columnMaxValues || {});
         }
       });
       

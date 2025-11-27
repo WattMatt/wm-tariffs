@@ -207,27 +207,20 @@ export default function ReconciliationResultsView({
     const hasChildren = childIds.length > 0;
     let hierarchicalTotal = 0;
     
-    // Use saved hierarchical total if available, otherwise calculate on the fly
+    // Use saved hierarchical total if available, otherwise use meter's totalKwh
+    // IMPORTANT: For parent meters, totalKwh was calculated from hierarchical CSV during
+    // handleReconcile. This respects bottom-up processing where Council's P1 equals
+    // Bulk Check's P1 (not the sum of all leaf descendants).
     if (meter.hierarchicalTotal !== undefined) {
       hierarchicalTotal = meter.hierarchicalTotal;
+    } else if (childIds.length > 0 && meter.totalKwh !== undefined) {
+      // Parent meter with CSV-calculated totalKwh - use it directly
+      hierarchicalTotal = meter.totalKwh;
     } else if (childIds.length > 0) {
-      const getLeafMeterSum = (meterId: string): number => {
-        const children = meterConnections?.get(meterId) || [];
-        
-        if (children.length === 0) {
-          const meterData = meters.find((m: any) => m.id === meterId);
-          const isSolar = meterAssignments.get(meterId) === "solar_energy";
-          const value = meterData?.totalKwh || 0;
-          return isSolar ? -value : value;
-        }
-        
-        return children.reduce((sum, childId) => {
-          return sum + getLeafMeterSum(childId);
-        }, 0);
-      };
-      
+      // Fallback only if no pre-calculated value exists (shouldn't happen with CSV generation)
       hierarchicalTotal = childIds.reduce((sum, childId) => {
-        return sum + getLeafMeterSum(childId);
+        const childMeter = meters.find((m: any) => m.id === childId);
+        return sum + (childMeter?.totalKwh || 0);
       }, 0);
     }
     
