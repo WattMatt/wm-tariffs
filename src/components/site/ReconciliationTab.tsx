@@ -1866,7 +1866,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     parentMeter: { id: string; meter_number: string },
     fullDateTimeFrom: string,
     fullDateTimeTo: string
-  ): Promise<{ totalKwh: number; columnTotals: Record<string, number>; rowCount: number; corrections: Array<any> } | null> => {
+  ): Promise<{ totalKwh: number; columnTotals: Record<string, number>; columnMaxValues: Record<string, number>; rowCount: number; corrections: Array<any> } | null> => {
     const childMeterIds = meterConnectionsMap.get(parentMeter.id) || [];
     if (childMeterIds.length === 0) return null;
 
@@ -1898,6 +1898,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         return { 
           totalKwh: data.totalKwh, 
           columnTotals: data.columnTotals || {},
+          columnMaxValues: data.columnMaxValues || {},
           rowCount: data.rowCount || 0,
           corrections
         };
@@ -2034,7 +2035,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         console.log(`Parent meters with uploaded CSVs (will use uploaded data): ${metersWithUploadedCsvs.size}`, 
           Array.from(metersWithUploadedCsvs));
 
-        const csvResults = new Map<string, { totalKwh: number; columnTotals: Record<string, number>; rowCount: number }>();
+        const csvResults = new Map<string, { totalKwh: number; columnTotals: Record<string, number>; columnMaxValues: Record<string, number>; rowCount: number }>();
         const allCorrections = new Map<string, Array<any>>();
         
         // Delete old generated CSVs before reconciliation to ensure fresh corruption-checked data
@@ -2065,6 +2066,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
             csvResults.set(parentMeter.id, {
               totalKwh: result.totalKwh,
               columnTotals: result.columnTotals,
+              columnMaxValues: result.columnMaxValues,
               rowCount: result.rowCount
             });
             
@@ -2158,6 +2160,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                 return {
                   ...meter,
                   columnTotals: processedColumnTotals,
+                  columnMaxValues: csvData.columnMaxValues || {},
                   totalKwh: totalKwh,
                   totalKwhPositive,
                   totalKwhNegative
@@ -2642,7 +2645,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     );
 
     // Generate hierarchical CSVs for parent meters (needed for correct values)
-    const bulkCsvResults = new Map<string, { totalKwh: number; columnTotals: Record<string, number>; rowCount: number }>();
+    const bulkCsvResults = new Map<string, { totalKwh: number; columnTotals: Record<string, number>; columnMaxValues: Record<string, number>; rowCount: number }>();
     const parentMetersForCsv = [...(reconciliationData.bulkMeters || []), ...(reconciliationData.solarMeters || []), ...(reconciliationData.tenantMeters || []), ...(reconciliationData.checkMeters || []), ...(reconciliationData.unassignedMeters || [])].filter(meter => {
       const children = meterConnectionsMap.get(meter.id);
       return children && children.length > 0;
@@ -2656,7 +2659,12 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       const csvPromises = parentMetersForCsv.map(async (parentMeter) => {
         const result = await generateHierarchicalCsvForMeter(parentMeter, fullDateTimeFrom, fullDateTimeTo);
         if (result) {
-          bulkCsvResults.set(parentMeter.id, result);
+          bulkCsvResults.set(parentMeter.id, {
+            totalKwh: result.totalKwh,
+            columnTotals: result.columnTotals,
+            columnMaxValues: result.columnMaxValues,
+            rowCount: result.rowCount
+          });
         }
       });
       await Promise.allSettled(csvPromises);
@@ -2675,6 +2683,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
             return { 
               ...meter, 
               columnTotals: processedColumnTotals, 
+              columnMaxValues: csvData.columnMaxValues || {},
               totalKwh: totalKwh,
               totalKwhPositive,
               totalKwhNegative
