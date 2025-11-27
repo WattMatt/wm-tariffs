@@ -440,7 +440,7 @@ export default function TariffAssignmentTab({
       const dataPoint: any = {
         period: formatDateStringToMonthYear(doc.periodEnd),
         amount: metricValue !== null ? metricValue : (doc.totalAmountExcludingEmergency ?? doc.totalAmount),
-        documentAmount: (doc.totalAmountExcludingEmergency ?? doc.totalAmount) || null,
+        documentAmount: metricValue || null,
         documentId: doc.documentId,
         meterReading: readings.current,
         consumption: readings.current !== null && readings.previous !== null ? 
@@ -3287,8 +3287,8 @@ export default function TariffAssignmentTab({
                               yAxisId="left"
                               tick={{ fontSize: 12 }}
                               label={{ 
-                                value: showDocumentCharts && selectedChartMetric.includes('consumption') 
-                                  ? 'kWh Consumption' 
+                                value: showDocumentCharts 
+                                  ? getMetricLabel(selectedChartMetric) 
                                   : 'Amount (R)', 
                                 angle: -90, 
                                 position: 'insideLeft',
@@ -3311,7 +3311,9 @@ export default function TariffAssignmentTab({
                               orientation="right"
                               tick={{ fontSize: 12 }}
                               label={{ 
-                                value: 'Meter Reading (kWh)', 
+                                value: selectedChartMetric.includes('kva') 
+                                  ? 'Meter Reading (kVA)' 
+                                  : 'Meter Reading (kWh)', 
                                 angle: 90, 
                                 position: 'insideRight',
                                 offset: -20,
@@ -3648,7 +3650,7 @@ export default function TariffAssignmentTab({
               chartData = prepareComparisonData(viewingAllDocs.docs, costsMap);
             } else {
               // Both Analysis and Assignments tabs use document amounts for "View All Documents"
-              chartData = prepareAnalysisData(viewingAllDocs.docs);
+              chartData = prepareAnalysisData(viewingAllDocs.docs, selectedChartMetric);
             }
             
             // Check for mixed currencies
