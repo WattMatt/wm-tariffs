@@ -230,55 +230,20 @@ Deno.serve(async (req) => {
           
           const group = groupedData.get(slot)!;
           
-          // Add kWh value with corruption check
+          // Add kWh value directly - child CSVs are already corrected, no need to re-check
           if (kwhIdx >= 0) {
             const kwhValue = parseFloat(values[kwhIdx]) || 0;
-            
-            if (Math.abs(kwhValue) > THRESHOLDS.maxKwhPer30Min) {
-              corrections.push({
-                timestamp: slot,
-                meterId: childMeterId,
-                meterNumber: meterNumberMap.get(childMeterId) || 'Unknown',
-                originalValue: kwhValue,
-                correctedValue: 0,
-                fieldName: 'Total kWh',
-                reason: `Value ${kwhValue.toLocaleString()} exceeds max threshold ${THRESHOLDS.maxKwhPer30Min.toLocaleString()}`,
-                originalSourceMeterId: childMeterId,
-                originalSourceMeterNumber: meterNumberMap.get(childMeterId) || 'Unknown'
-              });
-              // Don't add corrupt value
-            } else {
-              group.totalKwh += kwhValue;
-            }
+            group.totalKwh += kwhValue;
           }
           
-          // Add other column values with corruption check
+          // Add other column values directly - already corrected in child CSV
           headers.forEach((header, idx) => {
             if (idx === 0 || idx === kwhIdx) return;
             
             const value = parseFloat(values[idx]) || 0;
             if (value === 0) return;
             
-            // Determine threshold based on column type
-            const isKva = header.toLowerCase().includes('kva') || header.toLowerCase() === 's';
-            const threshold = isKva ? THRESHOLDS.maxKvaPer30Min : THRESHOLDS.maxMetadataValue;
-            
-            if (Math.abs(value) > threshold) {
-              corrections.push({
-                timestamp: slot,
-                meterId: childMeterId,
-                meterNumber: meterNumberMap.get(childMeterId) || 'Unknown',
-                originalValue: value,
-                correctedValue: 0,
-                fieldName: header,
-                reason: `Value ${value.toLocaleString()} exceeds max threshold ${threshold.toLocaleString()}`,
-                originalSourceMeterId: childMeterId,
-                originalSourceMeterNumber: meterNumberMap.get(childMeterId) || 'Unknown'
-              });
-              // Don't add corrupt value
-            } else {
-              group.columnSums[header] = (group.columnSums[header] || 0) + value;
-            }
+            group.columnSums[header] = (group.columnSums[header] || 0) + value;
           });
         }
         
