@@ -1549,8 +1549,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       return sum + meterValue;
     }, 0);
     
-    // Solar Energy: sum all solar meters + sum of all grid negative values (can be negative)
-    const solarMeterTotal = solarEnergyMeters.reduce((sum, m) => sum + Math.max(0, m.totalKwh), 0);
+    // Solar Energy: sum all solar meters (include ALL values for net) + sum of all grid negative values
+    const solarMeterTotal = solarEnergyMeters.reduce((sum, m) => sum + m.totalKwh, 0);
     const gridNegative = gridSupplyMeters.reduce((sum, m) => sum + (m.totalKwhNegative || 0), 0);
     const otherTotal = solarMeterTotal + gridNegative;
     const tenantTotal = tenantMeters.reduce((sum, m) => sum + m.totalKwh, 0);
