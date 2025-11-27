@@ -469,7 +469,7 @@ export default function TariffAssignmentTab({
   };
 
   // Helper function for Comparison tab: shows reconciliation costs only when available
-  const prepareComparisonData = (docs: DocumentShopNumber[], reconciliationCostsMap: { [docId: string]: number }) => {
+  const prepareComparisonData = (docs: DocumentShopNumber[], reconciliationCostsMap: { [docId: string]: number }, metric: string = 'total') => {
     const winterMonths = [6, 7, 8];
     const summerMonths = [1, 2, 3, 4, 5, 9, 10, 11, 12];
     
@@ -544,7 +544,7 @@ export default function TariffAssignmentTab({
       const dataPoint: any = {
         period: formatDateStringToMonthYear(displayDateEnd),
         amount: reconciliationCostsMap[doc.documentId] !== undefined ? reconciliationCostsMap[doc.documentId] : null,
-        documentAmount: doc.totalAmountExcludingEmergency ?? doc.totalAmount,
+        documentAmount: extractMetricValue(doc, metric),
         documentId: doc.documentId,
       };
 
@@ -821,7 +821,7 @@ export default function TariffAssignmentTab({
     // Calculate chart data based on the mode
     if (hideSeasonalAverages) {
       const costsMap = getReconciliationCostsMap(selectedChartMeter.meter.id, selectedChartMeter.docs);
-      const data = prepareComparisonData(selectedChartMeter.docs, costsMap);
+      const data = prepareComparisonData(selectedChartMeter.docs, costsMap, selectedChartMetric);
       setChartData(data);
     } else if (showDocumentCharts) {
       const result = prepareAnalysisData(selectedChartMeter.docs, selectedChartMetric);
