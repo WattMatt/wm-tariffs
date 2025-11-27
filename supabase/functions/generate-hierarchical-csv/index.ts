@@ -83,20 +83,40 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 1. Fetch all readings from leaf meters in the date range
-    const { data: readings, error: readingsError } = await supabase
-      .from('meter_readings')
-      .select('reading_timestamp, kwh_value, metadata, meter_id')
-      .in('meter_id', leafMeterIds)
-      .gte('reading_timestamp', dateFrom)
-      .lte('reading_timestamp', dateTo)
-      .order('reading_timestamp', { ascending: true });
+    // 1. Fetch ALL readings from leaf meters in the date range (with pagination)
+    const PAGE_SIZE = 1000;
+    let allReadings: ReadingRow[] = [];
+    let offset = 0;
+    let hasMore = true;
 
-    if (readingsError) {
-      throw new Error(`Failed to fetch readings: ${readingsError.message}`);
+    console.log('Fetching all readings with pagination...');
+    
+    while (hasMore) {
+      const { data: pageData, error: readingsError } = await supabase
+        .from('meter_readings')
+        .select('reading_timestamp, kwh_value, metadata, meter_id')
+        .in('meter_id', leafMeterIds)
+        .gte('reading_timestamp', dateFrom)
+        .lte('reading_timestamp', dateTo)
+        .order('reading_timestamp', { ascending: true })
+        .range(offset, offset + PAGE_SIZE - 1);
+
+      if (readingsError) {
+        throw new Error(`Failed to fetch readings: ${readingsError.message}`);
+      }
+
+      if (pageData && pageData.length > 0) {
+        allReadings = allReadings.concat(pageData as ReadingRow[]);
+        offset += pageData.length;
+        hasMore = pageData.length === PAGE_SIZE;
+        console.log(`Fetched page: ${pageData.length} rows, total so far: ${allReadings.length}`);
+      } else {
+        hasMore = false;
+      }
     }
 
-    console.log(`Fetched ${readings?.length || 0} readings from ${leafMeterIds.length} leaf meters`);
+    const readings = allReadings;
+    console.log(`Fetched ${readings.length} total readings from ${leafMeterIds.length} leaf meters`);
 
     // 2. Discover all unique numeric columns from the readings metadata
     const allColumns = new Set<string>();
