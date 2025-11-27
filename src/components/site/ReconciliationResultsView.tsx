@@ -78,6 +78,8 @@ interface ReconciliationResultsViewProps {
   isLoadingRevenue?: boolean;
   energyProgress?: { current: number; total: number };
   revenueProgress?: { current: number; total: number };
+  isGeneratingCsvs?: boolean;
+  csvGenerationProgress?: { current: number; total: number };
   hasPreviewData?: boolean;
   canReconcile?: boolean;
   isBulkMode?: boolean;
@@ -118,6 +120,8 @@ export default function ReconciliationResultsView({
   isLoadingRevenue = false,
   energyProgress = { current: 0, total: 0 },
   revenueProgress = { current: 0, total: 0 },
+  isGeneratingCsvs = false,
+  csvGenerationProgress = { current: 0, total: 0 },
   hasPreviewData = false,
   canReconcile = false,
   isBulkMode = false,
@@ -441,8 +445,19 @@ export default function ReconciliationResultsView({
           >
             {isLoadingEnergy ? (
               <>
-                <X className="h-4 w-4" />
-                <span>{isCancelling ? 'Cancelling...' : `Cancel Analyzing... ${energyProgress.current}/${energyProgress.total}`}</span>
+                {isGeneratingCsvs ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <X className="h-4 w-4" />
+                )}
+                <span>
+                  {isCancelling 
+                    ? 'Cancelling...' 
+                    : isGeneratingCsvs 
+                      ? `Generating profiles... ${csvGenerationProgress.current}/${csvGenerationProgress.total}`
+                      : `Cancel Analyzing... ${energyProgress.current}/${energyProgress.total}`
+                  }
+                </span>
               </>
             ) : meters && meters.length > 0 ? (
               <>
