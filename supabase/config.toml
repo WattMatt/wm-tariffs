@@ -32,3 +32,6 @@ verify_jwt = false
 
 [functions.cleanup-orphaned-snippets]
 verify_jwt = false
+
+[functions.generate-hierarchical-csv]
+verify_jwt = false

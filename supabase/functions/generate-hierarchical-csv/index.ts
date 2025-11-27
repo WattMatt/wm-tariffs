@@ -165,13 +165,14 @@ Deno.serve(async (req) => {
     const siteName = sanitizeName(siteData.name);
     const sanitizedMeterNumber = sanitizeName(parentMeterNumber);
 
-    const filePath = `${clientName}/${siteName}/Metering/Meters/${sanitizedMeterNumber}/CSVs/Hierarchical_Profile.csv`;
+    const fileName = `${sanitizedMeterNumber}_Hierarchical_Energy_Profile.csv`;
+    const filePath = `${clientName}/${siteName}/Metering/Reconciliations/${fileName}`;
 
     // 5. Check if CSV already exists
     const { data: existingFiles } = await supabase.storage
       .from('client-files')
-      .list(`${clientName}/${siteName}/Metering/Meters/${sanitizedMeterNumber}/CSVs`, {
-        search: 'Hierarchical_Profile.csv'
+      .list(`${clientName}/${siteName}/Metering/Reconciliations`, {
+        search: fileName
       });
 
     let finalCsvContent = newCsvContent;
@@ -240,7 +241,7 @@ Deno.serve(async (req) => {
       .from('meter_csv_files')
       .select('id')
       .eq('meter_id', parentMeterId)
-      .eq('file_name', 'Hierarchical_Profile.csv')
+      .eq('file_name', fileName)
       .single();
 
     if (existingRecord) {
@@ -265,7 +266,7 @@ Deno.serve(async (req) => {
         .insert({
           site_id: siteId,
           meter_id: parentMeterId,
-          file_name: 'Hierarchical_Profile.csv',
+          file_name: fileName,
           file_path: filePath,
           content_hash: contentHash,
           file_size: finalCsvContent.length,
