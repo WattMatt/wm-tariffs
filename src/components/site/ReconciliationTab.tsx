@@ -1543,16 +1543,20 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     ]);
     const unassignedMeters = Array.isArray(safeMeters) ? safeMeters.filter(m => !assignedMeterIds.has(m.id)) : [];
 
-    // Grid Supply: sum all positive values from all grid supply meters
-    const bulkTotal = gridSupplyMeters.reduce((sum, m) => sum + (m.totalKwhPositive || 0), 0);
+    // Grid Supply: use totalKwhPositive if columns selected, otherwise fall back to totalKwh
+    const bulkTotal = gridSupplyMeters.reduce((sum, m) => {
+      const meterValue = m.totalKwhPositive > 0 ? m.totalKwhPositive : Math.max(0, m.totalKwh);
+      return sum + meterValue;
+    }, 0);
     
-    // Solar Energy: sum all solar meters + sum of all grid negative values
+    // Solar Energy: sum all solar meters + sum of all grid negative values (can be negative)
     const solarMeterTotal = solarEnergyMeters.reduce((sum, m) => sum + Math.max(0, m.totalKwh), 0);
     const gridNegative = gridSupplyMeters.reduce((sum, m) => sum + (m.totalKwhNegative || 0), 0);
     const otherTotal = solarMeterTotal + gridNegative;
     const tenantTotal = tenantMeters.reduce((sum, m) => sum + m.totalKwh, 0);
     
-    const totalSupply = bulkTotal + otherTotal;
+    // Total Supply: Grid Supply + only positive Solar contribution
+    const totalSupply = bulkTotal + Math.max(0, otherTotal);
     const recoveryRate = totalSupply > 0 ? (tenantTotal / totalSupply) * 100 : 0;
     const discrepancy = totalSupply - tenantTotal;
 
