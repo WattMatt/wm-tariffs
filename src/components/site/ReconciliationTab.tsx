@@ -92,6 +92,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
   const [revenueReconciliationEnabled, setRevenueReconciliationEnabled] = useState(false);
   const [isCalculatingRevenue, setIsCalculatingRevenue] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [isGeneratingCsvs, setIsGeneratingCsvs] = useState(false);
+  const [csvGenerationProgress, setCsvGenerationProgress] = useState({ current: 0, total: 0 });
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
   const [isBulkProcessing, setIsBulkProcessing] = useState(false);
   const [bulkProgress, setBulkProgress] = useState<{
@@ -1938,6 +1940,10 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       if (parentMeters.length > 0) {
         console.log(`Generating ${parentMeters.length} hierarchical CSV file(s) at run time...`);
         toast.info(`Generating ${parentMeters.length} hierarchical profile(s)...`);
+        
+        // Update UI to show we're generating CSVs
+        setIsGeneratingCsvs(true);
+        setCsvGenerationProgress({ current: 0, total: parentMeters.length });
 
         // Check which parent meters have their own uploaded CSVs
         const parentMeterIds = parentMeters.map(m => m.id);
@@ -1946,6 +1952,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           Array.from(metersWithUploadedCsvs));
 
         const csvResults = new Map<string, { totalKwh: number; columnTotals: Record<string, number>; rowCount: number }>();
+        let csvCompleted = 0;
 
         // Generate CSVs in parallel for ALL parent meters (for storage purposes)
         const csvPromises = parentMeters.map(async (parentMeter) => {
@@ -1957,10 +1964,14 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           if (result) {
             csvResults.set(parentMeter.id, result);
           }
+          // Update progress after each CSV completes
+          csvCompleted++;
+          setCsvGenerationProgress({ current: csvCompleted, total: parentMeters.length });
         });
 
         await Promise.allSettled(csvPromises);
         console.log('Hierarchical CSV generation complete at run time');
+        setIsGeneratingCsvs(false);
 
         // Update parent meters in reconciliationData with CSV-calculated values
         // BUT only if the meter does NOT have an uploaded CSV
@@ -2038,6 +2049,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       setIsLoading(false);
       setIsCalculatingRevenue(false);
       setIsCancelling(false);
+      setIsGeneratingCsvs(false);
+      setCsvGenerationProgress({ current: 0, total: 0 });
       cancelReconciliationRef.current = false;
     }
   }, [dateFrom, dateTo, timeFrom, timeTo, revenueReconciliationEnabled, meterConnectionsMap, siteId]);
@@ -2051,8 +2064,10 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       // Force cleanup immediately
       setIsLoading(false);
       setIsCalculatingRevenue(false);
+      setIsGeneratingCsvs(false);
       setEnergyProgress({ current: 0, total: 0 });
       setRevenueProgress({ current: 0, total: 0 });
+      setCsvGenerationProgress({ current: 0, total: 0 });
       
       toast.info("Reconciliation cancelled");
       
@@ -3762,6 +3777,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           isLoadingRevenue={isCalculatingRevenue}
           energyProgress={energyProgress}
           revenueProgress={revenueProgress}
+          isGeneratingCsvs={isGeneratingCsvs}
+          csvGenerationProgress={csvGenerationProgress}
           hasPreviewData={previewData !== null}
           canReconcile={selectedColumns.size > 0}
           isBulkMode={selectedDocumentIds.length > 0}
