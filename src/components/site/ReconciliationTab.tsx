@@ -167,24 +167,34 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     columnOperationsRef.current = columnOperations;
   }, [columnOperations]);
 
-  // Restore persistent state on mount
+  // Restore persistent state on mount - but don't restore stale loading states
   useEffect(() => {
     const savedState = localStorage.getItem(reconciliationStateKey);
     if (savedState) {
       try {
         const parsed = JSON.parse(savedState);
+        const stateAge = Date.now() - (parsed.timestamp || 0);
+        const MAX_STATE_AGE = 5 * 60 * 1000; // 5 minutes
+        
+        // If state indicates loading, we can't actually resume mid-calculation
         if (parsed.isLoading || parsed.isCalculatingRevenue) {
-          setIsLoading(parsed.isLoading || false);
-          setIsCalculatingRevenue(parsed.isCalculatingRevenue || false);
-          setEnergyProgress(parsed.energyProgress || { current: 0, total: 0 });
-          setRevenueProgress(parsed.revenueProgress || { current: 0, total: 0 });
+          // Clear the stale loading state
+          localStorage.removeItem(reconciliationStateKey);
+          
           if (parsed.reconciliationData) {
+            // Only restore completed reconciliation data if available
             setReconciliationData(parsed.reconciliationData);
+            toast.info("Restored previous reconciliation results");
+          } else if (stateAge < MAX_STATE_AGE) {
+            toast.warning("Previous reconciliation was interrupted. Please restart.");
           }
-          toast.info("Resuming reconciliation process...");
+        } else if (parsed.reconciliationData) {
+          // Not in loading state but has data - safe to restore
+          setReconciliationData(parsed.reconciliationData);
         }
       } catch (e) {
         console.error("Failed to restore reconciliation state:", e);
+        localStorage.removeItem(reconciliationStateKey);
       }
     }
   }, [siteId, reconciliationStateKey]);
@@ -192,15 +202,18 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
   // Save reconciliation state to localStorage whenever it changes
   useEffect(() => {
     if (isLoading || isCalculatingRevenue) {
-      const stateToSave = {
-        isLoading,
-        isCalculatingRevenue,
-        energyProgress,
-        revenueProgress,
-        reconciliationData,
-        timestamp: Date.now()
-      };
-      localStorage.setItem(reconciliationStateKey, JSON.stringify(stateToSave));
+      // Only save state if there's actual progress (not 0/0 starting state)
+      if (energyProgress.total > 0 || revenueProgress.total > 0) {
+        const stateToSave = {
+          isLoading,
+          isCalculatingRevenue,
+          energyProgress,
+          revenueProgress,
+          reconciliationData,
+          timestamp: Date.now()
+        };
+        localStorage.setItem(reconciliationStateKey, JSON.stringify(stateToSave));
+      }
     } else {
       // Clear state when reconciliation completes
       localStorage.removeItem(reconciliationStateKey);
