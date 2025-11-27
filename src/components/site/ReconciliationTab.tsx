@@ -7,7 +7,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { CalendarIcon, Download, Eye, FileDown, ChevronRight, ChevronLeft, ArrowRight, Check, X, Save, BarChart3, Activity, Calculator, Calendar as CalendarHistoryIcon, Loader2, RotateCcw, Eraser } from "lucide-react";
+import { CalendarIcon, Download, Eye, FileDown, ChevronRight, ChevronLeft, ArrowRight, Check, X, Save, BarChart3, Activity, Calculator, Calendar as CalendarHistoryIcon, Loader2, RotateCcw, Eraser, RefreshCw } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -327,50 +327,51 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
   }, [siteId]);
 
   // Fetch document date ranges (Municipal and Tenant Bills)
-  useEffect(() => {
-    const fetchDocumentDateRanges = async () => {
-      setIsLoadingDocuments(true);
-      const { data, error } = await supabase
-        .from('site_documents')
-        .select(`
-          id,
-          document_type,
-          file_name,
-          document_extractions (
-            period_start,
-            period_end
-          )
-        `)
-        .eq('site_id', siteId)
-        .in('document_type', ['municipal_account', 'tenant_bill'])
-        .not('document_extractions.period_start', 'is', null)
-        .not('document_extractions.period_end', 'is', null);
+  const fetchDocumentDateRanges = async () => {
+    setIsLoadingDocuments(true);
+    const { data, error } = await supabase
+      .from('site_documents')
+      .select(`
+        id,
+        document_type,
+        file_name,
+        document_extractions (
+          period_start,
+          period_end
+        )
+      `)
+      .eq('site_id', siteId)
+      .in('document_type', ['municipal_account', 'tenant_bill'])
+      .not('document_extractions.period_start', 'is', null)
+      .not('document_extractions.period_end', 'is', null);
 
-      if (error) {
-        console.error("Error fetching document date ranges:", error);
-        setIsLoadingDocuments(false);
-        return;
-      }
-
-      if (data) {
-        const ranges = data
-          .filter(doc => doc.document_extractions && doc.document_extractions.length > 0)
-          .map(doc => ({
-            id: doc.id,
-            document_type: doc.document_type,
-            file_name: doc.file_name,
-            period_start: doc.document_extractions[0].period_start,
-            period_end: doc.document_extractions[0].period_end,
-          }))
-          .sort((a, b) => {
-            return new Date(b.period_start).getTime() - new Date(a.period_start).getTime();
-          });
-
-        setDocumentDateRanges(ranges);
-      }
+    if (error) {
+      console.error("Error fetching document date ranges:", error);
       setIsLoadingDocuments(false);
-    };
+      return;
+    }
 
+    if (data) {
+      const ranges = data
+        .filter(doc => doc.document_extractions && doc.document_extractions.length > 0)
+        .map(doc => ({
+          id: doc.id,
+          document_type: doc.document_type,
+          file_name: doc.file_name,
+          period_start: doc.document_extractions[0].period_start,
+          period_end: doc.document_extractions[0].period_end,
+        }))
+        .sort((a, b) => {
+          return new Date(b.period_start).getTime() - new Date(a.period_start).getTime();
+        });
+
+      setDocumentDateRanges(ranges);
+    }
+    setIsLoadingDocuments(false);
+  };
+
+  // Load document date ranges on mount
+  useEffect(() => {
     fetchDocumentDateRanges();
   }, [siteId]);
 
@@ -2599,9 +2600,21 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           </div>
 
           <div className="space-y-2">
-            <Label>Document Period</Label>
+            <div className="flex items-center justify-between">
+              <Label>Document Period</Label>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => fetchDocumentDateRanges()}
+                disabled={isLoadingDocuments}
+                className="h-6 w-6 p-0"
+                title="Refresh document periods"
+              >
+                <RefreshCw className={cn("h-3 w-3", isLoadingDocuments && "animate-spin")} />
+              </Button>
+            </div>
             <Select
-              disabled={isLoadingDateRanges || isLoadingDocuments || documentDateRanges.length === 0 || !totalDateRange.earliest || !totalDateRange.latest}
+              disabled={isLoadingDocuments || documentDateRanges.length === 0}
               onValueChange={(value) => {
                 const selected = documentDateRanges.find(d => d.id === value);
                 if (selected) {
@@ -2616,15 +2629,14 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                   setDateTo(endDate);
                   setTimeFrom("00:00");
                   setTimeTo("23:59");
+                  setUserSetDates(true);
                   toast.success(`Date range set from ${format(startDate, "PP")} to ${format(endDate, "PP")}`);
                 }
               }}
             >
-              <SelectTrigger className="w-full" disabled={isLoadingDateRanges || isLoadingDocuments || documentDateRanges.length === 0 || !totalDateRange.earliest || !totalDateRange.latest}>
+              <SelectTrigger className="w-full" disabled={isLoadingDocuments || documentDateRanges.length === 0}>
                 <SelectValue placeholder={
-                  isLoadingDateRanges
-                    ? "Loading date ranges..."
-                    : isLoadingDocuments 
+                  isLoadingDocuments 
                     ? "Loading document periods..." 
                     : documentDateRanges.length === 0 
                     ? "No document periods available" 
@@ -2671,7 +2683,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                       "w-full justify-start text-left font-normal",
                       !dateFrom && "text-muted-foreground"
                     )}
-                    disabled={isLoadingDateRanges || !totalDateRange.earliest || !totalDateRange.latest}
+                    disabled={isLoadingDateRanges && !dateFrom}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {dateFrom ? `${format(dateFrom, "PP")} at ${timeFrom}` : "Pick date & time"}
@@ -2724,7 +2736,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                       "w-full justify-start text-left font-normal",
                       !dateTo && "text-muted-foreground"
                     )}
-                    disabled={isLoadingDateRanges || !totalDateRange.earliest || !totalDateRange.latest}
+                    disabled={isLoadingDateRanges && !dateTo}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {dateTo ? `${format(dateTo, "PP")} at ${timeTo}` : "Pick date & time"}
@@ -2768,7 +2780,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
             </div>
           </div>
 
-          <Button onClick={handlePreview} disabled={isLoadingDateRanges || isLoadingPreview || !dateFrom || !dateTo || !selectedMeterId || !totalDateRange.earliest || !totalDateRange.latest} className="w-full">
+          <Button onClick={handlePreview} disabled={isLoadingPreview || !dateFrom || !dateTo || !selectedMeterId} className="w-full">
             <Eye className="mr-2 h-4 w-4" />
             {isLoadingPreview ? "Loading Preview..." : "Preview Meter Data"}
           </Button>
