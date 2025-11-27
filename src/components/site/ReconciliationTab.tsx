@@ -212,11 +212,11 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     try {
       const settingsData = {
         site_id: siteId,
-        available_columns: previewData?.availableColumns || [],
+        available_columns: previewDataRef.current?.availableColumns || [],
         meter_associations: Object.fromEntries(meterAssignments),
-        selected_columns: Array.from(selectedColumns),
-        column_operations: Object.fromEntries(columnOperations),
-        column_factors: Object.fromEntries(columnFactors),
+        selected_columns: Array.from(selectedColumnsRef.current),
+        column_operations: Object.fromEntries(columnOperationsRef.current),
+        column_factors: Object.fromEntries(columnFactorsRef.current),
         meter_order: availableMeters.map(m => m.id),
         meters_for_summation: Array.from(selectedMetersForSummation)
       };
