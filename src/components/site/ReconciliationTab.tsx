@@ -1646,6 +1646,11 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       let totalCostCalculated = 0;
       
       for (const meter of meterData) {
+        // Extract max kVA from columnMaxValues (look for "S (kVA)" or similar keys)
+        const meterMaxKva = Object.entries(meter.columnMaxValues || {})
+          .filter(([key]) => key.toLowerCase().includes('kva') || key.toLowerCase() === 's (kva)')
+          .reduce((max, [, value]) => Math.max(max, Number(value) || 0), 0);
+        
         if (meter.assigned_tariff_name && meter.totalKwhPositive > 0) {
           const costResult = await calculateMeterCostAcrossPeriods(
             meter.id,
@@ -1653,7 +1658,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
             meter.assigned_tariff_name,
             new Date(startDateTime),
             new Date(endDateTime),
-            meter.totalKwhPositive
+            meter.totalKwhPositive,
+            meterMaxKva
           );
           
           meterRevenues.set(meter.id, costResult);
@@ -1679,7 +1685,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
             meter.tariff_structure_id,
             new Date(startDateTime),
             new Date(endDateTime),
-            meter.totalKwhPositive
+            meter.totalKwhPositive,
+            meterMaxKva
           );
           
           meterRevenues.set(meter.id, costResult);
@@ -1970,6 +1977,11 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
             .map(async (meter) => {
               const hierarchicalTotal = hierarchicalTotals.get(meter.id)!;
               
+              // Extract max kVA from columnMaxValues for this meter
+              const meterMaxKva = Object.entries(meter.columnMaxValues || {})
+                .filter(([key]) => key.toLowerCase().includes('kva') || key.toLowerCase() === 's (kva)')
+                .reduce((max, [, value]) => Math.max(max, Number(value) || 0), 0);
+              
               try {
                 if (meter.assigned_tariff_name) {
                   const costResult = await calculateMeterCostAcrossPeriods(
@@ -1978,7 +1990,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                     meter.assigned_tariff_name,
                     new Date(getFullDateTime(dateFrom, timeFrom)),
                     new Date(getFullDateTime(dateTo, timeTo)),
-                    hierarchicalTotal
+                    hierarchicalTotal,
+                    meterMaxKva
                   );
                   return { meter, costResult };
                 } else if (meter.tariff_structure_id) {
@@ -1987,7 +2000,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                     meter.tariff_structure_id,
                     new Date(getFullDateTime(dateFrom, timeFrom)),
                     new Date(getFullDateTime(dateTo, timeTo)),
-                    hierarchicalTotal
+                    hierarchicalTotal,
+                    meterMaxKva
                   );
                   return { meter, costResult };
                 }
