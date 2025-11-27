@@ -222,14 +222,21 @@ Deno.serve(async (req) => {
         const existingLines = existingContent.split('\n').filter(line => line.trim());
         const newLines = csvRows.slice(1); // Skip header from new data
 
-        // Combine and remove duplicates by timestamp
-        const allDataLines = [...existingLines.slice(1), ...newLines];
+        // First, add all existing lines to the map
         const uniqueLines = new Map<string, string>();
-        
-        allDataLines.forEach(line => {
+        existingLines.slice(1).forEach(line => {
           const timestamp = line.split(',')[0];
-          if (!uniqueLines.has(timestamp)) {
+          if (timestamp) {
             uniqueLines.set(timestamp, line);
+          }
+        });
+
+        // Then, overwrite/add with new lines
+        // This will REPLACE existing timestamps and APPEND new ones
+        newLines.forEach(line => {
+          const timestamp = line.split(',')[0];
+          if (timestamp) {
+            uniqueLines.set(timestamp, line); // Overwrites if timestamp exists
           }
         });
 
@@ -239,7 +246,7 @@ Deno.serve(async (req) => {
           .map(([, line]) => line);
 
         finalCsvContent = [headerColumns.join(','), ...sortedLines].join('\n');
-        console.log(`Merged CSV: ${sortedLines.length} unique rows`);
+        console.log(`Merged CSV: ${sortedLines.length} total rows (replaced existing + appended new)`);
       }
     }
 
