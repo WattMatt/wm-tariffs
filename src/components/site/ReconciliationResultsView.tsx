@@ -142,15 +142,18 @@ export default function ReconciliationResultsView({
     corrections: CorrectedReading[];
   } | null>(null);
 
-  // Create a map of corrections grouped by the SOURCE meter (where corrupt data originated)
+  // Create a map of corrections grouped by the ORIGINAL SOURCE meter (where corrupt data actually originated)
+  // Uses originalSourceMeterId if available (for hierarchical layers), falls back to meterId
   const sourceMeterCorrections = useMemo(() => {
     const sourceMap = new Map<string, CorrectedReading[]>();
     
     for (const corrections of meterCorrections.values()) {
       for (const correction of corrections) {
-        const existing = sourceMap.get(correction.meterId) || [];
+        // Use originalSourceMeterId for proper attribution through hierarchical layers
+        const sourceMeterId = correction.originalSourceMeterId || correction.meterId;
+        const existing = sourceMap.get(sourceMeterId) || [];
         existing.push(correction);
-        sourceMap.set(correction.meterId, existing);
+        sourceMap.set(sourceMeterId, existing);
       }
     }
     

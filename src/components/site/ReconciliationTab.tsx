@@ -112,18 +112,10 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
   const [hierarchicalCsvResults, setHierarchicalCsvResults] = useState<Map<string, {
     totalKwh: number;
     columnTotals: Record<string, number>;
-  }>>(new Map());
+}>>(new Map());
   
   // State for tracking corrections made during hierarchical CSV generation
-  const [meterCorrections, setMeterCorrections] = useState<Map<string, Array<{
-    timestamp: string;
-    meterId: string;
-    meterNumber: string;
-    originalValue: number;
-    correctedValue: number;
-    fieldName: string;
-    reason: string;
-  }>>>(new Map());
+  const [meterCorrections, setMeterCorrections] = useState<Map<string, CorrectedReading[]>>(new Map());
   
   // Refs for stable access to latest values in callbacks
   const previewDataRef = useRef<any>(null);
