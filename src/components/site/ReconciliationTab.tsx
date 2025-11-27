@@ -807,7 +807,34 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     setTimeFrom("00:00");
     setTimeTo("23:59");
     setUserSetDates(false); // Allow bulk selection to override dates
-  }, [selectedDocumentIds, documentDateRanges, totalDateRange, userSetDates]);
+  }, [selectedDocumentIds, documentDateRanges]);
+
+  // Auto-trigger preview when documents are selected and meter is available
+  // This ref prevents double-triggering during the same selection change
+  const lastAutoPreviewTrigger = useRef<string>("");
+  
+  useEffect(() => {
+    // Only auto-preview if documents are selected and we have a valid meter
+    if (selectedDocumentIds.length === 0 || !selectedMeterId || isLoadingPreview) return;
+    
+    // Check if dates are set from documents
+    const selectedDocs = documentDateRanges.filter(d => selectedDocumentIds.includes(d.id));
+    if (selectedDocs.length === 0) return;
+    
+    // Create a trigger key to prevent duplicate calls
+    const triggerKey = `${selectedDocumentIds.join(',')}-${selectedMeterId}`;
+    if (lastAutoPreviewTrigger.current === triggerKey) return;
+    
+    // Small delay to ensure state is settled, then trigger preview
+    const timer = setTimeout(() => {
+      if (dateFrom && dateTo && selectedMeterId && !isLoadingPreview) {
+        lastAutoPreviewTrigger.current = triggerKey;
+        handlePreview();
+      }
+    }, 100);
+    
+    return () => clearTimeout(timer);
+  }, [selectedDocumentIds, selectedMeterId, dateFrom, dateTo, documentDateRanges]);
 
   // Toggle expand/collapse for meters
   const toggleMeterExpanded = (meterId: string) => {
