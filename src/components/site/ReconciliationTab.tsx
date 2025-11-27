@@ -2716,7 +2716,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     }
 
     // Save using the SAME pattern as handleSaveReconciliation
-    const runName = `${fileName} - ${format(startDate, "MMM yyyy")}`;
+    const runName = `${fileName} - ${format(endDate, "MMM yyyy")}`;
     
     try {
       const { data: { user } } = await supabase.auth.getUser();
