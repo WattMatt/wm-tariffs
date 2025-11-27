@@ -1921,6 +1921,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       // 3. Calculate hierarchical totals for meters with children
       const meterMap = new Map(allMeters.map(m => [m.id, m]));
       const hierarchicalTotals = new Map<string, number>();
+      const hierarchicalColumnTotals = new Map<string, Record<string, number>>();
+      const hierarchicalColumnMaxValues = new Map<string, Record<string, number>>();
       
       // Helper function to calculate summation by only counting leaf meters
       const getLeafMeterSum = (meterId: string, visited = new Set<string>()): number => {
@@ -1946,6 +1948,50 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         }, 0);
       };
       
+      // Helper to aggregate columnTotals from leaf meters
+      const getLeafColumnTotals = (meterId: string, visited = new Set<string>()): Record<string, number> => {
+        if (visited.has(meterId)) return {};
+        visited.add(meterId);
+        
+        const children = meterConnectionsMap.get(meterId) || [];
+        
+        if (children.length === 0) {
+          const meterData = meterMap.get(meterId);
+          return meterData?.columnTotals || {};
+        }
+        
+        const aggregated: Record<string, number> = {};
+        children.forEach(childId => {
+          const childTotals = getLeafColumnTotals(childId, new Set(visited));
+          Object.entries(childTotals).forEach(([key, value]) => {
+            aggregated[key] = (aggregated[key] || 0) + value;
+          });
+        });
+        return aggregated;
+      };
+      
+      // Helper to get max of columnMaxValues from leaf meters
+      const getLeafColumnMaxValues = (meterId: string, visited = new Set<string>()): Record<string, number> => {
+        if (visited.has(meterId)) return {};
+        visited.add(meterId);
+        
+        const children = meterConnectionsMap.get(meterId) || [];
+        
+        if (children.length === 0) {
+          const meterData = meterMap.get(meterId);
+          return meterData?.columnMaxValues || {};
+        }
+        
+        const aggregated: Record<string, number> = {};
+        children.forEach(childId => {
+          const childMaxValues = getLeafColumnMaxValues(childId, new Set(visited));
+          Object.entries(childMaxValues).forEach(([key, value]) => {
+            aggregated[key] = Math.max(aggregated[key] || 0, value);
+          });
+        });
+        return aggregated;
+      };
+      
       // Calculate hierarchical total for each meter that has children
       allMeters.forEach(meter => {
         const childIds = meterConnectionsMap.get(meter.id) || [];
@@ -1954,6 +2000,10 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
             return sum + getLeafMeterSum(childId);
           }, 0);
           hierarchicalTotals.set(meter.id, hierarchicalTotal);
+          
+          // Aggregate column totals and max values for parent meters
+          hierarchicalColumnTotals.set(meter.id, getLeafColumnTotals(meter.id));
+          hierarchicalColumnMaxValues.set(meter.id, getLeafColumnMaxValues(meter.id));
         }
       });
       
@@ -2065,8 +2115,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           total_kwh_negative: meter.totalKwhNegative || 0,
           hierarchical_total: hierarchicalTotals.get(meter.id) || 0,
           readings_count: meter.readingsCount || 0,
-          column_totals: meter.columnTotals || null,
-          column_max_values: meter.columnMaxValues || null,
+          column_totals: meter.columnTotals || hierarchicalColumnTotals.get(meter.id) || null,
+          column_max_values: meter.columnMaxValues || hierarchicalColumnMaxValues.get(meter.id) || null,
           has_error: meter.hasError || false,
           error_message: meter.errorMessage || null,
           // Revenue fields
@@ -2301,6 +2351,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       // 3. Calculate hierarchical totals (same logic as saveReconciliation)
       const meterMap = new Map(allMeters.map(m => [m.id, m]));
       const hierarchicalTotals = new Map<string, number>();
+      const hierarchicalColumnTotals = new Map<string, Record<string, number>>();
+      const hierarchicalColumnMaxValues = new Map<string, Record<string, number>>();
       
       const getLeafMeterSum = (meterId: string, visited = new Set<string>()): number => {
         if (visited.has(meterId)) return 0;
@@ -2322,6 +2374,42 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         }, 0);
       };
       
+      const getLeafColumnTotals = (meterId: string, visited = new Set<string>()): Record<string, number> => {
+        if (visited.has(meterId)) return {};
+        visited.add(meterId);
+        const children = meterConnectionsMap.get(meterId) || [];
+        if (children.length === 0) {
+          const meterData = meterMap.get(meterId);
+          return meterData?.columnTotals || {};
+        }
+        const aggregated: Record<string, number> = {};
+        children.forEach(childId => {
+          const childTotals = getLeafColumnTotals(childId, new Set(visited));
+          Object.entries(childTotals).forEach(([key, value]) => {
+            aggregated[key] = (aggregated[key] || 0) + value;
+          });
+        });
+        return aggregated;
+      };
+      
+      const getLeafColumnMaxValues = (meterId: string, visited = new Set<string>()): Record<string, number> => {
+        if (visited.has(meterId)) return {};
+        visited.add(meterId);
+        const children = meterConnectionsMap.get(meterId) || [];
+        if (children.length === 0) {
+          const meterData = meterMap.get(meterId);
+          return meterData?.columnMaxValues || {};
+        }
+        const aggregated: Record<string, number> = {};
+        children.forEach(childId => {
+          const childMaxValues = getLeafColumnMaxValues(childId, new Set(visited));
+          Object.entries(childMaxValues).forEach(([key, value]) => {
+            aggregated[key] = Math.max(aggregated[key] || 0, value);
+          });
+        });
+        return aggregated;
+      };
+      
       allMeters.forEach(meter => {
         const childIds = meterConnectionsMap.get(meter.id) || [];
         if (childIds.length > 0) {
@@ -2329,6 +2417,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
             return sum + getLeafMeterSum(childId);
           }, 0);
           hierarchicalTotals.set(meter.id, hierarchicalTotal);
+          hierarchicalColumnTotals.set(meter.id, getLeafColumnTotals(meter.id));
+          hierarchicalColumnMaxValues.set(meter.id, getLeafColumnMaxValues(meter.id));
         }
       });
       
@@ -2349,8 +2439,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           total_kwh_negative: meter.totalKwhNegative || 0,
           hierarchical_total: hierarchicalTotals.get(meter.id) || 0,
           readings_count: meter.readingsCount || 0,
-          column_totals: meter.columnTotals || null,
-          column_max_values: meter.columnMaxValues || null,
+          column_totals: meter.columnTotals || hierarchicalColumnTotals.get(meter.id) || null,
+          column_max_values: meter.columnMaxValues || hierarchicalColumnMaxValues.get(meter.id) || null,
           has_error: meter.hasError || false,
           error_message: meter.errorMessage || null,
           tariff_name: revenueInfo?.tariffName || null,
@@ -2505,6 +2595,50 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       hasError: m.hasError || false,
       errorMessage: m.errorMessage || null
     }]));
+    
+    // Helper to aggregate columnTotals from leaf meters for display
+    const getLeafColumnTotalsForDisplay = (meterId: string, visited = new Set<string>()): Record<string, number> => {
+      if (visited.has(meterId)) return {};
+      visited.add(meterId);
+      
+      const children = meterConnectionsMap.get(meterId) || [];
+      
+      if (children.length === 0) {
+        const meterData = meterMap.get(meterId);
+        return meterData?.columnTotals || {};
+      }
+      
+      const aggregated: Record<string, number> = {};
+      children.forEach(childId => {
+        const childTotals = getLeafColumnTotalsForDisplay(childId, new Set(visited));
+        Object.entries(childTotals).forEach(([key, value]) => {
+          aggregated[key] = (aggregated[key] || 0) + value;
+        });
+      });
+      return aggregated;
+    };
+    
+    // Helper to get max of columnMaxValues from leaf meters for display
+    const getLeafColumnMaxValuesForDisplay = (meterId: string, visited = new Set<string>()): Record<string, number> => {
+      if (visited.has(meterId)) return {};
+      visited.add(meterId);
+      
+      const children = meterConnectionsMap.get(meterId) || [];
+      
+      if (children.length === 0) {
+        const meterData = meterMap.get(meterId);
+        return meterData?.columnMaxValues || {};
+      }
+      
+      const aggregated: Record<string, number> = {};
+      children.forEach(childId => {
+        const childMaxValues = getLeafColumnMaxValuesForDisplay(childId, new Set(visited));
+        Object.entries(childMaxValues).forEach(([key, value]) => {
+          aggregated[key] = Math.max(aggregated[key] || 0, value);
+        });
+      });
+      return aggregated;
+    };
 
     // Order meters according to availableMeters (which has the hierarchy)
     const orderedMeters = availableMeters
@@ -2512,9 +2646,26 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         const meterData = meterMap.get(availMeter.id);
         if (!meterData) return undefined;
         
+        // Check if this is a parent meter (has children)
+        const children = meterConnectionsMap.get(availMeter.id) || [];
+        const isParentMeter = children.length > 0;
+        
+        // For parent meters, aggregate column values from children
+        let columnTotals = meterData.columnTotals;
+        let columnMaxValues = meterData.columnMaxValues;
+        
+        if (isParentMeter && (!columnTotals || Object.keys(columnTotals).length === 0)) {
+          columnTotals = getLeafColumnTotalsForDisplay(availMeter.id);
+        }
+        if (isParentMeter && (!columnMaxValues || Object.keys(columnMaxValues).length === 0)) {
+          columnMaxValues = getLeafColumnMaxValuesForDisplay(availMeter.id);
+        }
+        
         // Add error info from failedMeters if it exists
         return {
           ...meterData,
+          columnTotals,
+          columnMaxValues,
           hasError: meterData.hasError || failedMeters.has(availMeter.id),
           errorMessage: meterData.errorMessage || failedMeters.get(availMeter.id) || null
         };
@@ -2522,7 +2673,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       .filter(m => m !== undefined);
 
     return orderedMeters;
-  }, [reconciliationData, availableMeters.length]);
+  }, [reconciliationData, availableMeters.length, meterConnectionsMap]);
 
   return (
     <Tabs defaultValue="analysis" className="space-y-6">
