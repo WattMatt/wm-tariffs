@@ -446,6 +446,55 @@ Return the data in a structured format with all line items in an array.`;
         
         return item;
       });
+      
+      // Calculate total_amount from electricity line items only (exclude emergency, water, etc.)
+      let electricityTotal = 0;
+      
+      extractedData.line_items.forEach((item: any) => {
+        const description = item.description?.toLowerCase() || '';
+        const supply = item.supply?.toLowerCase() || 'normal';
+        const unit = item.unit?.toLowerCase() || '';
+        
+        // Only include Normal Supply electricity charges
+        // Exclude Emergency Supply, water, refuse, rates, etc.
+        const isElectricity = 
+          description.includes('electricity') ||
+          description.includes('electrical') ||
+          description.includes('kwh') ||
+          description.includes('kva') ||
+          description.includes('basic') ||
+          description.includes('power') ||
+          description.includes('energy') ||
+          description.includes('conv') ||
+          unit === 'kwh' ||
+          unit === 'kva' ||
+          unit === 'monthly';
+        
+        const isNormalSupply = supply !== 'emergency';
+        
+        // Exclude items that are clearly not electricity
+        const isNotElectricity = 
+          description.includes('water') ||
+          description.includes('refuse') ||
+          description.includes('sewerage') ||
+          description.includes('rates') ||
+          description.includes('generator'); // Generator = Emergency Supply
+        
+        if (isElectricity && isNormalSupply && !isNotElectricity && item.amount) {
+          electricityTotal += item.amount;
+          console.log(`Including in electricity total: ${item.description} = ${item.amount}`);
+        } else if (item.amount) {
+          console.log(`Excluding from electricity total: ${item.description} = ${item.amount} (supply=${supply})`);
+        }
+      });
+      
+      // Store the original document total for reference
+      extractedData.document_total = extractedData.total_amount;
+      
+      // Replace total_amount with electricity-only total
+      extractedData.total_amount = Math.round(electricityTotal * 100) / 100;
+      
+      console.log(`Electricity total calculated: ${extractedData.total_amount} (original document total: ${extractedData.document_total})`);
     }
     
     // Ensure tenant details are always present for tenant bills
