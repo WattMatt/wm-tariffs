@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { FileDown, Download, ChevronRight, Save, Loader2, Zap, Calculator, DollarSign, X, AlertTriangle } from "lucide-react";
+import { FileDown, Download, ChevronRight, Save, Loader2, Zap, Calculator, DollarSign, X, AlertTriangle, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import CorrectionsDialog from "./CorrectionsDialog";
@@ -142,8 +142,22 @@ export default function ReconciliationResultsView({
     corrections: CorrectedReading[];
   } | null>(null);
 
-  const handleShowCorrections = (meterId: string, meterNumber: string) => {
-    const corrections = meterCorrections.get(meterId) || [];
+  // Create a map of corrections grouped by the SOURCE meter (where corrupt data originated)
+  const sourceMeterCorrections = useMemo(() => {
+    const sourceMap = new Map<string, CorrectedReading[]>();
+    
+    for (const corrections of meterCorrections.values()) {
+      for (const correction of corrections) {
+        const existing = sourceMap.get(correction.meterId) || [];
+        existing.push(correction);
+        sourceMap.set(correction.meterId, existing);
+      }
+    }
+    
+    return sourceMap;
+  }, [meterCorrections]);
+
+  const handleShowCorrections = (meterId: string, meterNumber: string, corrections: CorrectedReading[]) => {
     setSelectedMeterForCorrections({ meterId, meterNumber, corrections });
     setCorrectionsDialogOpen(true);
   };
@@ -197,7 +211,10 @@ export default function ReconciliationResultsView({
 
   const renderMeterRow = (meter: MeterData, isRevenueView: boolean = false) => {
     const childIds = meterConnections?.get(meter.id) || [];
-    const corrections = meterCorrections.get(meter.id) || [];
+    // Parent meter corrections (aggregated from children)
+    const parentCorrections = meterCorrections.get(meter.id) || [];
+    // Source meter corrections (this meter's own corrupt data)
+    const sourceCorrections = sourceMeterCorrections.get(meter.id) || [];
     let hierarchicalTotal = 0;
     
     // Use saved hierarchical total if available, otherwise calculate on the fly
@@ -283,15 +300,26 @@ export default function ReconciliationResultsView({
               {meter.hasError && (
                 <Badge variant="destructive" className="text-xs">Error: {meter.errorMessage || 'Failed to load'}</Badge>
               )}
-              {corrections.length > 0 && (
+              {sourceCorrections.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1 h-5 px-2 bg-destructive/20 border-destructive/50 text-destructive hover:bg-destructive/30"
+                  onClick={() => handleShowCorrections(meter.id, meter.meter_number, sourceCorrections)}
+                >
+                  <AlertCircle className="h-3 w-3" />
+                  <span className="text-xs">{sourceCorrections.length} corrupt</span>
+                </Button>
+              )}
+              {parentCorrections.length > 0 && (
                 <Button
                   variant="outline"
                   size="sm"
                   className="gap-1 h-5 px-2 bg-amber-500/20 border-amber-500/50 text-amber-700 dark:text-amber-400 hover:bg-amber-500/30"
-                  onClick={() => handleShowCorrections(meter.id, meter.meter_number)}
+                  onClick={() => handleShowCorrections(meter.id, meter.meter_number, parentCorrections)}
                 >
                   <AlertTriangle className="h-3 w-3" />
-                  <span className="text-xs">{corrections.length} corrected</span>
+                  <span className="text-xs">{parentCorrections.length} corrected</span>
                 </Button>
               )}
               {parentInfo && (
