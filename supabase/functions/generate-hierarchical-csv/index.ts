@@ -133,23 +133,66 @@ Deno.serve(async (req) => {
     const columns = Array.from(allColumns).sort();
     console.log(`Discovered ${columns.length} numeric columns:`, columns);
 
-    // 3. Group readings by timestamp and SUM all values (raw summation, no operations/factors)
+    // 3. Generate ALL timestamps for the requested period (30-minute intervals)
+    const generateAllTimestamps = (fromDate: string, toDate: string): string[] => {
+      const timestamps: string[] = [];
+      const start = new Date(fromDate);
+      const end = new Date(toDate);
+      const intervalMs = 30 * 60 * 1000; // 30 minutes
+      
+      let current = new Date(start);
+      while (current <= end) {
+        timestamps.push(current.toISOString());
+        current = new Date(current.getTime() + intervalMs);
+      }
+      
+      return timestamps;
+    };
+
+    const allTimestamps = generateAllTimestamps(dateFrom, dateTo);
+    console.log(`Generated ${allTimestamps.length} expected timestamps for period`);
+
+    // 4. Initialize groupedData with ALL timestamps (zero values as default)
     const groupedData = new Map<string, {
       totalKwh: number;
       columnSums: Record<string, number>;
     }>();
 
-    readings?.forEach((reading: ReadingRow) => {
-      const timestamp = reading.reading_timestamp;
+    // Pre-populate with all expected timestamps
+    allTimestamps.forEach(ts => {
+      groupedData.set(ts, {
+        totalKwh: 0,
+        columnSums: {}
+      });
+    });
 
-      if (!groupedData.has(timestamp)) {
-        groupedData.set(timestamp, {
-          totalKwh: 0,
-          columnSums: {}
+    // 5. Populate with actual readings, matching to nearest timestamp
+    readings?.forEach((reading: ReadingRow) => {
+      const readingTime = new Date(reading.reading_timestamp).getTime();
+      
+      // Find the matching timestamp (exact match or closest 30-min slot)
+      let matchingTs = reading.reading_timestamp;
+      
+      // Check if exact timestamp exists
+      if (!groupedData.has(matchingTs)) {
+        // Find the closest timestamp in allTimestamps
+        const closest = allTimestamps.find(ts => {
+          const tsTime = new Date(ts).getTime();
+          return Math.abs(tsTime - readingTime) < 60000; // Within 1 minute tolerance
         });
+        
+        if (closest) {
+          matchingTs = closest;
+        } else {
+          // Add the timestamp if it doesn't match (edge case)
+          groupedData.set(matchingTs, {
+            totalKwh: 0,
+            columnSums: {}
+          });
+        }
       }
 
-      const group = groupedData.get(timestamp)!;
+      const group = groupedData.get(matchingTs)!;
       group.totalKwh += reading.kwh_value; // Always sum kWh
 
       // Sum all metadata columns (raw values, no factors applied)
@@ -166,7 +209,9 @@ Deno.serve(async (req) => {
       }
     });
 
-    // 4. Generate CSV rows
+    console.log(`GroupedData has ${groupedData.size} timestamps after populating readings`);
+
+    // 6. Generate CSV rows
     const csvRows: string[] = [];
     const headerColumns = ['Timestamp', 'Total kWh', ...columns];
     csvRows.push(headerColumns.join(','));
@@ -185,7 +230,7 @@ Deno.serve(async (req) => {
     const newCsvContent = csvRows.join('\n');
     console.log(`Generated ${csvRows.length - 1} CSV rows`);
 
-    // 5. Calculate final totals for response (raw sums)
+    // 7. Calculate final totals for response (raw sums)
     const totalKwh = Array.from(groupedData.values())
       .reduce((sum, d) => sum + d.totalKwh, 0);
 
@@ -198,7 +243,7 @@ Deno.serve(async (req) => {
     console.log('Total kWh:', totalKwh);
     console.log('Column totals:', columnTotals);
 
-    // 6. Get site and client info for storage path
+    // 8. Get site and client info for storage path
     const { data: siteData, error: siteError } = await supabase
       .from('sites')
       .select('name, clients(name)')
@@ -219,7 +264,7 @@ Deno.serve(async (req) => {
     const fileName = `${sanitizedMeterNumber}_Hierarchical_Energy_Profile.csv`;
     const filePath = `${clientName}/${siteName}/Metering/Reconciliations/${fileName}`;
 
-    // 7. Check if CSV already exists
+    // 9. Check if CSV already exists and merge data
     const { data: existingFiles } = await supabase.storage
       .from('client-files')
       .list(`${clientName}/${siteName}/Metering/Reconciliations`, {
@@ -270,7 +315,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 8. Upload CSV
+    // 10. Upload CSV
     const { error: uploadError } = await supabase.storage
       .from('client-files')
       .upload(filePath, finalCsvContent, {
@@ -284,7 +329,7 @@ Deno.serve(async (req) => {
 
     console.log('CSV uploaded successfully to:', filePath);
 
-    // 9. Update meter_csv_files table
+    // 11. Update meter_csv_files table
     const rowCount = finalCsvContent.split('\n').length - 1;
     const contentHash = await crypto.subtle.digest(
       'SHA-256',
