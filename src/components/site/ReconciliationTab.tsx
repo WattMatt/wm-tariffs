@@ -1855,9 +1855,15 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       depth: getHierarchyDepth(m.id)
     }));
     
-    // Sort by depth descending (deepest first)
+    // Sort by depth ascending (shallowest first = closest to leaves = process first)
+    // This ensures bottom-up processing: MB-3.1 → MB-2.1 → MB-1.1 → Bulk Check → Council
     return withDepth
-      .sort((a, b) => b.depth - a.depth)
+      .sort((a, b) => {
+        // Primary: ascending depth (closest to leaves first)
+        if (a.depth !== b.depth) return a.depth - b.depth;
+        // Secondary: descending meter number for consistent order at same depth
+        return b.meter_number.localeCompare(a.meter_number);
+      })
       .map(({ depth, ...rest }) => rest);
   };
 
