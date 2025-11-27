@@ -166,30 +166,35 @@ Deno.serve(async (req) => {
       });
     });
 
-    // 5. Populate with actual readings, matching to nearest timestamp
+    // Helper to round timestamp to nearest 30-min slot (O(1) instead of O(n) search)
+    const roundToSlot = (timestamp: string): string => {
+      const date = new Date(timestamp);
+      const minutes = date.getMinutes();
+      // Round to nearest 30-min: 0-14 -> 0, 15-44 -> 30, 45-59 -> next hour
+      if (minutes < 15) {
+        date.setMinutes(0);
+      } else if (minutes < 45) {
+        date.setMinutes(30);
+      } else {
+        date.setHours(date.getHours() + 1);
+        date.setMinutes(0);
+      }
+      date.setSeconds(0);
+      date.setMilliseconds(0);
+      return date.toISOString();
+    };
+
+    // 5. Populate with actual readings, matching to nearest timestamp slot
     readings?.forEach((reading: ReadingRow) => {
-      const readingTime = new Date(reading.reading_timestamp).getTime();
+      // Compute the slot directly (O(1)) instead of searching (O(n))
+      let matchingTs = roundToSlot(reading.reading_timestamp);
       
-      // Find the matching timestamp (exact match or closest 30-min slot)
-      let matchingTs = reading.reading_timestamp;
-      
-      // Check if exact timestamp exists
+      // If the computed slot doesn't exist in our map (edge case), add it
       if (!groupedData.has(matchingTs)) {
-        // Find the closest timestamp in allTimestamps
-        const closest = allTimestamps.find(ts => {
-          const tsTime = new Date(ts).getTime();
-          return Math.abs(tsTime - readingTime) < 60000; // Within 1 minute tolerance
+        groupedData.set(matchingTs, {
+          totalKwh: 0,
+          columnSums: {}
         });
-        
-        if (closest) {
-          matchingTs = closest;
-        } else {
-          // Add the timestamp if it doesn't match (edge case)
-          groupedData.set(matchingTs, {
-            totalKwh: 0,
-            columnSums: {}
-          });
-        }
       }
 
       const group = groupedData.get(matchingTs)!;
