@@ -695,11 +695,16 @@ export default function TariffAssignmentTab({
     [meterId: string]: { 
       [dateRangeKey: string]: {
         total_cost: number;
+        energy_cost: number;
+        fixed_charges: number;
+        demand_charges: number;
+        total_kwh: number;
+        column_max_values: Record<string, number>;
         run_name: string;
         date_from: string;
         date_to: string;
       }
-    } 
+    }
   }>({});
   const [isLoadingReconciliationCosts, setIsLoadingReconciliationCosts] = useState(false);
   
@@ -820,7 +825,7 @@ export default function TariffAssignmentTab({
 
     // Calculate chart data based on the mode
     if (hideSeasonalAverages) {
-      const costsMap = getReconciliationCostsMap(selectedChartMeter.meter.id, selectedChartMeter.docs);
+      const costsMap = getReconciliationCostsMap(selectedChartMeter.meter.id, selectedChartMeter.docs, selectedChartMetric);
       const data = prepareComparisonData(selectedChartMeter.docs, costsMap, selectedChartMetric);
       setChartData(data);
     } else if (showDocumentCharts) {
@@ -968,7 +973,7 @@ export default function TariffAssignmentTab({
       const runIds = runs.map(r => r.id);
       const { data: meterResults, error: resultsError } = await supabase
         .from('reconciliation_meter_results')
-        .select('reconciliation_run_id, meter_id, total_cost, energy_cost, fixed_charges')
+        .select('reconciliation_run_id, meter_id, total_cost, energy_cost, fixed_charges, demand_charges, total_kwh, column_max_values')
         .in('reconciliation_run_id', runIds);
 
       if (resultsError) {
@@ -991,6 +996,11 @@ export default function TariffAssignmentTab({
           const periodKey = `${run.date_from}_${run.date_to}`;
           costsMap[result.meter_id][periodKey] = {
             total_cost: result.total_cost || 0,
+            energy_cost: result.energy_cost || 0,
+            fixed_charges: result.fixed_charges || 0,
+            demand_charges: result.demand_charges || 0,
+            total_kwh: result.total_kwh || 0,
+            column_max_values: (result.column_max_values as Record<string, number>) || {},
             run_name: run.run_name,
             date_from: run.date_from,
             date_to: run.date_to
@@ -1014,9 +1024,9 @@ export default function TariffAssignmentTab({
   };
 
   // Helper to get reconciliation cost for a document
-  const getReconciliationCostForDocument = (meterId: string, periodStart: string, periodEnd: string): number | null => {
+  const getReconciliationCostForDocument = (meterId: string, periodStart: string, periodEnd: string, metric: string = 'total'): number | null => {
     const meterCosts = reconciliationCosts[meterId];
-    console.log(`💰 Looking for cost: meter ${meterId}, period ${periodStart} to ${periodEnd}`);
+    console.log(`💰 Looking for ${metric} value: meter ${meterId}, period ${periodStart} to ${periodEnd}`);
     if (!meterCosts) {
       console.log(`   ❌ Meter ${meterId} not in reconciliation state!`);
       console.log(`   Available meters:`, Object.keys(reconciliationCosts));
@@ -1024,11 +1034,11 @@ export default function TariffAssignmentTab({
     }
     console.log(`   ✅ Meter found with ${Object.keys(meterCosts).length} periods`);
 
-    console.log(`Looking for reconciliation cost for meter ${meterId}, document period: ${periodStart} to ${periodEnd}`);
+    console.log(`Looking for reconciliation ${metric} for meter ${meterId}, document period: ${periodStart} to ${periodEnd}`);
 
     // Find matching reconciliation run by date overlap
     for (const [periodKey, costData] of Object.entries(meterCosts)) {
-      console.log(`  Checking reconciliation period: ${costData.date_from} to ${costData.date_to}, cost: ${costData.total_cost}`);
+      console.log(`  Checking reconciliation period: ${costData.date_from} to ${costData.date_to}`);
 
       // Only check end dates (allowing for 5-day variance)
       const daysDiff = daysBetweenDateStrings(periodEnd, extractDateFromTimestamp(costData.date_to));
@@ -1036,8 +1046,32 @@ export default function TariffAssignmentTab({
       const endMatches = daysDiff < 5; // Within 5 days
       
       if (endMatches) {
-        console.log(`  ✓ Match found! Using cost: ${costData.total_cost}`);
-        return costData.total_cost;
+        // Return the appropriate field based on metric
+        let value: number | null = null;
+        switch (metric) {
+          case 'basic':
+            value = costData.fixed_charges;
+            break;
+          case 'kwh-charge':
+            value = costData.energy_cost;
+            break;
+          case 'kva-charge':
+            value = costData.demand_charges;
+            break;
+          case 'kwh-consumption':
+            value = costData.total_kwh;
+            break;
+          case 'kva-consumption':
+            // Extract from column_max_values - typically "S (kVA)"
+            value = costData.column_max_values?.['S (kVA)'] || null;
+            break;
+          case 'total':
+          default:
+            value = costData.total_cost;
+            break;
+        }
+        console.log(`  ✓ Match found! Using ${metric} value: ${value}`);
+        return value;
       }
     }
 
@@ -1046,10 +1080,10 @@ export default function TariffAssignmentTab({
   };
 
   // Build reconciliation costs map for a specific meter's documents
-  const getReconciliationCostsMap = (meterId: string, docs: DocumentShopNumber[]): { [docId: string]: number } => {
+  const getReconciliationCostsMap = (meterId: string, docs: DocumentShopNumber[], metric: string = 'total'): { [docId: string]: number } => {
     const costsMap: { [docId: string]: number } = {};
     
-    console.log(`🔍 Building costs map for meter ${meterId}`);
+    console.log(`🔍 Building costs map for meter ${meterId}, metric: ${metric}`);
     console.log(`   Documents to process: ${docs.length}`);
     console.log(`   Meter in reconciliation state: ${!!reconciliationCosts[meterId]}`);
     if (reconciliationCosts[meterId]) {
@@ -1057,12 +1091,12 @@ export default function TariffAssignmentTab({
     }
     
     docs.forEach(doc => {
-      const cost = getReconciliationCostForDocument(meterId, doc.periodStart, doc.periodEnd);
+      const cost = getReconciliationCostForDocument(meterId, doc.periodStart, doc.periodEnd, metric);
       if (cost !== null) {
         costsMap[doc.documentId] = cost;
-        console.log(`  Mapped doc ${doc.documentId} (${doc.periodStart} to ${doc.periodEnd}) -> cost: ${cost}`);
+        console.log(`  Mapped doc ${doc.documentId} (${doc.periodStart} to ${doc.periodEnd}) -> ${metric}: ${cost}`);
       } else {
-        console.log(`  No cost found for doc ${doc.documentId} (${doc.periodStart} to ${doc.periodEnd})`);
+        console.log(`  No ${metric} found for doc ${doc.documentId} (${doc.periodStart} to ${doc.periodEnd})`);
       }
     });
 
@@ -2313,7 +2347,7 @@ export default function TariffAssignmentTab({
                         // Comparison tab: use reconciliation costs (only show blue bars when data exists)
                         console.log(`📊 Rendering chart for meter ${meter.id} in comparison mode`);
                         console.log(`   Reconciliation state populated:`, Object.keys(reconciliationCosts).length > 0);
-                        const costsMap = getReconciliationCostsMap(meter.id, filteredShops);
+                        const costsMap = getReconciliationCostsMap(meter.id, filteredShops, selectedChartMetric);
                         console.log(`   Costs map result:`, costsMap);
                         console.log(`   Mapped ${Object.keys(costsMap).length} documents to costs`);
                         chartData = prepareComparisonData(filteredShops, costsMap);
@@ -3646,8 +3680,8 @@ export default function TariffAssignmentTab({
             // Analysis tab: use document extracted values
             let chartData;
             if (hideSeasonalAverages) {
-              const costsMap = getReconciliationCostsMap(viewingAllDocs.meter.id, viewingAllDocs.docs);
-              chartData = prepareComparisonData(viewingAllDocs.docs, costsMap);
+              const costsMap = getReconciliationCostsMap(viewingAllDocs.meter.id, viewingAllDocs.docs, selectedChartMetric);
+              chartData = prepareComparisonData(viewingAllDocs.docs, costsMap, selectedChartMetric);
             } else {
               // Both Analysis and Assignments tabs use document amounts for "View All Documents"
               chartData = prepareAnalysisData(viewingAllDocs.docs, selectedChartMetric);
