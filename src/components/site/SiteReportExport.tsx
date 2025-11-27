@@ -2780,6 +2780,13 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             return indexA - indexB;
           });
 
+        // Create lookup map for document_tariff_calculations
+        const docCalcMap = new Map<string, any>();
+        documentCalculations?.forEach(calc => {
+          const key = `${calc.meter_id}_${calc.document_id}`;
+          docCalcMap.set(key, calc);
+        });
+
         for (const meterResult of sortedMeterResults) {
           const meterDocs = meterDocsMap.get(meterResult.meter_id) || [];
           if (meterDocs.length === 0) continue;
@@ -2793,10 +2800,9 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           // Metrics to compare
           const metrics = [
             { key: 'Total Costs', label: 'Total Costs' },
-            { key: 'Demand Charge Summer', label: 'Demand Charge Summer' },
-            { key: 'Demand Charge Winter', label: 'Demand Charge Winter' },
-            { key: 'Energy Charge Summer', label: 'Energy Charge Summer' },
-            { key: 'Energy Charge Winter', label: 'Energy Charge Winter' }
+            { key: 'Basic Charge', label: 'Basic Charge' },
+            { key: 'Demand Charge', label: 'Demand Charge' },
+            { key: 'Energy Charge', label: 'Energy Charge' }
           ];
 
           for (const metric of metrics) {
@@ -2812,45 +2818,46 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
 
               const periodLabel = `${format(periodStart, "MMM yyyy")} - ${format(periodEnd, "MMM yyyy")}`;
 
+              // Get pre-calculated values from document_tariff_calculations
+              const calcKey = `${meterResult.meter_id}_${doc.id}`;
+              const docCalc = docCalcMap.get(calcKey);
+              
               // Extract values based on metric
-              let reconciliationValue = 0;
+              let calculatedValue = 0;
               let documentValue = 0;
 
               const lineItems = extraction.extracted_data?.line_items || [];
 
               if (metric.key === 'Total Costs') {
-                reconciliationValue = meterResult.total_cost || 0;
+                // Use pre-calculated total_cost vs document total_amount
+                calculatedValue = docCalc?.total_cost || 0;
                 documentValue = extraction.total_amount || 0;
-              } else if (metric.key === 'Demand Charge Summer') {
-                const demandSummer = lineItems.find((item: any) => 
-                  item.unit === 'kVA' && item.season === 'Summer' && item.supply === 'Normal'
+              } else if (metric.key === 'Basic Charge') {
+                // From docCalc: fixed_charges; From document: unit === 'Monthly' items
+                calculatedValue = docCalc?.fixed_charges || 0;
+                const basicItems = lineItems.filter((item: any) => 
+                  item.unit === 'Monthly' || 
+                  item.description?.toLowerCase().includes('basic')
                 );
-                documentValue = demandSummer?.amount || 0;
-                reconciliationValue = meterResult.demand_charges ? (meterResult.demand_charges / 2) : 0; // Split equally
-              } else if (metric.key === 'Demand Charge Winter') {
-                const demandWinter = lineItems.find((item: any) => 
-                  item.unit === 'kVA' && item.season === 'Winter' && item.supply === 'Normal'
+                documentValue = basicItems.reduce((sum: number, item: any) => sum + (item.amount || 0), 0);
+              } else if (metric.key === 'Demand Charge') {
+                // From docCalc: demand_charges; From document: unit === 'kVA' items
+                calculatedValue = docCalc?.demand_charges || 0;
+                const demandItems = lineItems.filter((item: any) => item.unit === 'kVA');
+                documentValue = demandItems.reduce((sum: number, item: any) => sum + (item.amount || 0), 0);
+              } else if (metric.key === 'Energy Charge') {
+                // From docCalc: energy_cost; From document: unit === 'kWh' items
+                calculatedValue = docCalc?.energy_cost || 0;
+                const energyItems = lineItems.filter((item: any) => 
+                  item.unit === 'kWh' && item.supply === 'Normal'
                 );
-                documentValue = demandWinter?.amount || 0;
-                reconciliationValue = meterResult.demand_charges ? (meterResult.demand_charges / 2) : 0; // Split equally
-              } else if (metric.key === 'Energy Charge Summer') {
-                const energySummer = lineItems.find((item: any) => 
-                  item.unit === 'kWh' && item.season === 'Summer' && item.supply === 'Normal'
-                );
-                documentValue = energySummer?.amount || 0;
-                reconciliationValue = meterResult.energy_cost ? (meterResult.energy_cost / 2) : 0; // Split equally
-              } else if (metric.key === 'Energy Charge Winter') {
-                const energyWinter = lineItems.find((item: any) => 
-                  item.unit === 'kWh' && item.season === 'Winter' && item.supply === 'Normal'
-                );
-                documentValue = energyWinter?.amount || 0;
-                reconciliationValue = meterResult.energy_cost ? (meterResult.energy_cost / 2) : 0; // Split equally
+                documentValue = energyItems.reduce((sum: number, item: any) => sum + (item.amount || 0), 0);
               }
 
-              if (reconciliationValue > 0 || documentValue > 0) {
+              if (calculatedValue > 0 || documentValue > 0) {
                 chartData.push({
                   period: periodLabel,
-                  reconciliationValue,
+                  reconciliationValue: calculatedValue,
                   documentValue
                 });
               }
