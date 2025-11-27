@@ -588,6 +588,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
 
         // Check if we have saved meter order to restore
         const savedMeterOrder = (window as any).__savedMeterOrder;
+        let finalMeters: typeof hierarchicalMeters;
+        
         if (savedMeterOrder && savedMeterOrder.length > 0) {
           // Reorder hierarchicalMeters based on saved order
           const orderedMeters: typeof hierarchicalMeters = [];
@@ -605,10 +607,23 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           // Add any new meters that weren't in the saved order
           metersById.forEach(meter => orderedMeters.push(meter));
           
-          setAvailableMeters(orderedMeters);
+          finalMeters = orderedMeters;
           delete (window as any).__savedMeterOrder;
         } else {
-          setAvailableMeters(hierarchicalMeters);
+          finalMeters = hierarchicalMeters;
+        }
+        
+        setAvailableMeters(finalMeters);
+        
+        // Auto-select first meter with data immediately (before date ranges load)
+        // This allows preview to work as soon as dates are set from documents
+        const bulkMeter = finalMeters.find(m => m.meter_type === "bulk_meter" && m.hasData);
+        const firstMeterWithData = finalMeters.find(m => m.hasData);
+        
+        if (bulkMeter) {
+          setSelectedMeterId(bulkMeter.id);
+        } else if (firstMeterWithData) {
+          setSelectedMeterId(firstMeterWithData.id);
         }
         
         // Merge database hierarchy with any saved manual indent overrides
@@ -680,16 +695,6 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         });
         
         setTotalDateRange({ earliest: overallEarliest, latest: overallLatest });
-
-        // Auto-select first meter with data, or bulk meter if available
-        const bulkMeter = hierarchicalMeters.find(m => m.meter_type === "bulk_meter" && m.hasData);
-        const firstMeterWithData = hierarchicalMeters.find(m => m.hasData);
-        
-        if (bulkMeter) {
-          setSelectedMeterId(bulkMeter.id);
-        } else if (firstMeterWithData) {
-          setSelectedMeterId(firstMeterWithData.id);
-        }
       } catch (error) {
         console.error("Error fetching available meters:", error);
       } finally {
@@ -807,34 +812,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     setTimeFrom("00:00");
     setTimeTo("23:59");
     setUserSetDates(false); // Allow bulk selection to override dates
-  }, [selectedDocumentIds, documentDateRanges]);
-
-  // Auto-trigger preview when documents are selected and meter is available
-  // This ref prevents double-triggering during the same selection change
-  const lastAutoPreviewTrigger = useRef<string>("");
-  
-  useEffect(() => {
-    // Only auto-preview if documents are selected and we have a valid meter
-    if (selectedDocumentIds.length === 0 || !selectedMeterId || isLoadingPreview) return;
-    
-    // Check if dates are set from documents
-    const selectedDocs = documentDateRanges.filter(d => selectedDocumentIds.includes(d.id));
-    if (selectedDocs.length === 0) return;
-    
-    // Create a trigger key to prevent duplicate calls
-    const triggerKey = `${selectedDocumentIds.join(',')}-${selectedMeterId}`;
-    if (lastAutoPreviewTrigger.current === triggerKey) return;
-    
-    // Small delay to ensure state is settled, then trigger preview
-    const timer = setTimeout(() => {
-      if (dateFrom && dateTo && selectedMeterId && !isLoadingPreview) {
-        lastAutoPreviewTrigger.current = triggerKey;
-        handlePreview();
-      }
-    }, 100);
-    
-    return () => clearTimeout(timer);
-  }, [selectedDocumentIds, selectedMeterId, dateFrom, dateTo, documentDateRanges]);
+  }, [selectedDocumentIds, documentDateRanges, totalDateRange, userSetDates]);
 
   // Toggle expand/collapse for meters
   const toggleMeterExpanded = (meterId: string) => {
