@@ -1913,9 +1913,11 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
   // Helper to apply column settings (selection, operations, factors) to hierarchical CSV data
   const applyColumnSettingsToHierarchicalData = (
     csvColumnTotals: Record<string, number>,
+    csvColumnMaxValues: Record<string, number>,
     rowCount: number
-  ): { processedColumnTotals: Record<string, number>; totalKwhPositive: number; totalKwhNegative: number; totalKwh: number } => {
+  ): { processedColumnTotals: Record<string, number>; processedColumnMaxValues: Record<string, number>; totalKwhPositive: number; totalKwhNegative: number; totalKwh: number } => {
     const processedColumnTotals: Record<string, number> = {};
+    const processedColumnMaxValues: Record<string, number> = {};
     let totalKwhPositive = 0;
     let totalKwhNegative = 0;
     let totalKwh = 0;
@@ -1963,7 +1965,19 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       }
     });
 
-    return { processedColumnTotals, totalKwhPositive, totalKwhNegative, totalKwh };
+    // Process columnMaxValues - filter by selected columns and apply factor
+    Object.entries(csvColumnMaxValues).forEach(([column, rawValue]) => {
+      // Only include selected columns
+      if (!selectedColumnsRef.current.has(column)) return;
+      
+      // Get the factor for this column (max values use factor but not operations like average)
+      const factor = Number(columnFactorsRef.current.get(column) || 1);
+      
+      // Apply the scaling factor
+      processedColumnMaxValues[column] = rawValue * factor;
+    });
+
+    return { processedColumnTotals, processedColumnMaxValues, totalKwhPositive, totalKwhNegative, totalKwh };
   };
 
   const handleReconcile = useCallback(async (enableRevenue?: boolean) => {
@@ -2154,13 +2168,13 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                 console.log(`Using hierarchical CSV values for ${meter.meter_number} - applying column settings`);
                 
                 // Apply the same column selection, operations, and factors as uploaded CSVs
-                const { processedColumnTotals, totalKwhPositive, totalKwhNegative, totalKwh } = 
-                  applyColumnSettingsToHierarchicalData(csvData.columnTotals, csvData.rowCount);
+                const { processedColumnTotals, processedColumnMaxValues, totalKwhPositive, totalKwhNegative, totalKwh } = 
+                  applyColumnSettingsToHierarchicalData(csvData.columnTotals, csvData.columnMaxValues || {}, csvData.rowCount);
                 
                 return {
                   ...meter,
                   columnTotals: processedColumnTotals,
-                  columnMaxValues: csvData.columnMaxValues || {},
+                  columnMaxValues: processedColumnMaxValues,
                   totalKwh: totalKwh,
                   totalKwhPositive,
                   totalKwhNegative
@@ -2677,13 +2691,13 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           // Only use hierarchical CSV values if meter does NOT have an uploaded CSV
           if (csvData && !metersWithUploadedCsvs.has(meter.id)) {
             // Apply the same column selection, operations, and factors as uploaded CSVs
-            const { processedColumnTotals, totalKwhPositive, totalKwhNegative, totalKwh } = 
-              applyColumnSettingsToHierarchicalData(csvData.columnTotals, csvData.rowCount);
+            const { processedColumnTotals, processedColumnMaxValues, totalKwhPositive, totalKwhNegative, totalKwh } = 
+              applyColumnSettingsToHierarchicalData(csvData.columnTotals, csvData.columnMaxValues || {}, csvData.rowCount);
             
             return { 
               ...meter, 
               columnTotals: processedColumnTotals, 
-              columnMaxValues: csvData.columnMaxValues || {},
+              columnMaxValues: processedColumnMaxValues,
               totalKwh: totalKwh,
               totalKwhPositive,
               totalKwhNegative
