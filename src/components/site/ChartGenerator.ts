@@ -287,18 +287,21 @@ export const generateTariffAnalysisChart = (
   unit: string,
   data: { period: string; value: number; winterAvg?: number; summerAvg?: number }[],
   width: number = 500,
-  height: number = 320
+  height: number = 320,
+  scaleFactor: number = 3
 ): string => {
   const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
+  const scaledWidth = width * scaleFactor;
+  const scaledHeight = height * scaleFactor;
+  canvas.width = scaledWidth;
+  canvas.height = scaledHeight;
   const ctx = canvas.getContext('2d');
   
   if (!ctx) return '';
   
   // Clear canvas with white background
   ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, width, height);
+  ctx.fillRect(0, 0, scaledWidth, scaledHeight);
   
   // Colors
   const barColor = '#9ca3af';  // Gray bars
@@ -307,52 +310,52 @@ export const generateTariffAnalysisChart = (
   
   // Draw title
   ctx.fillStyle = '#000000';
-  ctx.font = 'bold 14px sans-serif';
+  ctx.font = `bold ${14 * scaleFactor}px sans-serif`;
   ctx.textAlign = 'center';
-  ctx.fillText(title, width / 2, 25);
+  ctx.fillText(title, scaledWidth / 2, 25 * scaleFactor);
   
   // Draw unit
   if (unit && unit.trim()) {
-    ctx.font = '11px sans-serif';
-    ctx.fillText(`(${unit})`, width / 2, 42);
+    ctx.font = `${11 * scaleFactor}px sans-serif`;
+    ctx.fillText(`(${unit})`, scaledWidth / 2, 42 * scaleFactor);
   }
   
   // Draw legend
-  const legendY = 55;
-  const legendSpacing = 110;
-  let legendX = width / 2 - legendSpacing;
+  const legendY = 55 * scaleFactor;
+  const legendSpacing = 110 * scaleFactor;
+  let legendX = scaledWidth / 2 - legendSpacing;
   
   ctx.fillStyle = barColor;
-  ctx.fillRect(legendX, legendY, 12, 12);
+  ctx.fillRect(legendX, legendY, 12 * scaleFactor, 12 * scaleFactor);
   ctx.fillStyle = '#000000';
-  ctx.font = '10px sans-serif';
+  ctx.font = `${10 * scaleFactor}px sans-serif`;
   ctx.textAlign = 'left';
-  ctx.fillText('Amount', legendX + 16, legendY + 10);
+  ctx.fillText('Amount', legendX + 16 * scaleFactor, legendY + 10 * scaleFactor);
   
   legendX += legendSpacing;
   ctx.strokeStyle = winterLineColor;
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 2 * scaleFactor;
   ctx.beginPath();
-  ctx.moveTo(legendX, legendY + 6);
-  ctx.lineTo(legendX + 12, legendY + 6);
+  ctx.moveTo(legendX, legendY + 6 * scaleFactor);
+  ctx.lineTo(legendX + 12 * scaleFactor, legendY + 6 * scaleFactor);
   ctx.stroke();
-  ctx.fillText('Winter Avg', legendX + 16, legendY + 10);
+  ctx.fillText('Winter Avg', legendX + 16 * scaleFactor, legendY + 10 * scaleFactor);
   
   legendX += legendSpacing;
   ctx.strokeStyle = summerLineColor;
   ctx.beginPath();
-  ctx.moveTo(legendX, legendY + 6);
-  ctx.lineTo(legendX + 12, legendY + 6);
+  ctx.moveTo(legendX, legendY + 6 * scaleFactor);
+  ctx.lineTo(legendX + 12 * scaleFactor, legendY + 6 * scaleFactor);
   ctx.stroke();
-  ctx.fillText('Summer Avg', legendX + 16, legendY + 10);
+  ctx.fillText('Summer Avg', legendX + 16 * scaleFactor, legendY + 10 * scaleFactor);
   
   // Chart area
-  const padding = 50;
-  const bottomPadding = 100;
-  const topPadding = 80;
-  const chartWidth = width - padding * 2;
-  const chartHeight = height - topPadding - bottomPadding;
-  const barWidth = Math.max((chartWidth / data.length) * 0.6, 20);
+  const padding = 50 * scaleFactor;
+  const bottomPadding = 100 * scaleFactor;
+  const topPadding = 80 * scaleFactor;
+  const chartWidth = scaledWidth - padding * 2;
+  const chartHeight = scaledHeight - topPadding - bottomPadding;
+  const barWidth = Math.max((chartWidth / data.length) * 0.6, 20 * scaleFactor);
   const barSpacing = chartWidth / data.length;
   
   // Find max value for scaling
@@ -370,17 +373,17 @@ export const generateTariffAnalysisChart = (
     
     // Draw value on top
     ctx.fillStyle = '#000000';
-    ctx.font = 'bold 9px sans-serif';
+    ctx.font = `bold ${9 * scaleFactor}px sans-serif`;
     ctx.textAlign = 'center';
     if (item.value > 0) {
-      ctx.fillText(abbreviateNumber(item.value), x + barWidth / 2, y - 3);
+      ctx.fillText(abbreviateNumber(item.value), x + barWidth / 2, y - 3 * scaleFactor);
     }
   });
   
   // Draw average lines
   if (data.some(d => d.winterAvg !== undefined)) {
     ctx.strokeStyle = winterLineColor;
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 2 * scaleFactor;
     ctx.beginPath();
     data.forEach((item, index) => {
       if (item.winterAvg !== undefined) {
@@ -398,7 +401,7 @@ export const generateTariffAnalysisChart = (
   
   if (data.some(d => d.summerAvg !== undefined)) {
     ctx.strokeStyle = summerLineColor;
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 2 * scaleFactor;
     ctx.beginPath();
     data.forEach((item, index) => {
       if (item.summerAvg !== undefined) {
@@ -417,11 +420,11 @@ export const generateTariffAnalysisChart = (
   // Draw x-axis labels (rotated)
   ctx.save();
   ctx.fillStyle = '#000000';
-  ctx.font = '9px sans-serif';
+  ctx.font = `${9 * scaleFactor}px sans-serif`;
   ctx.textAlign = 'right';
   data.forEach((item, index) => {
     const x = padding + index * barSpacing + barSpacing / 2;
-    const y = topPadding + chartHeight + 10;
+    const y = topPadding + chartHeight + 10 * scaleFactor;
     ctx.translate(x, y);
     ctx.rotate(-Math.PI / 4);
     ctx.fillText(item.period, 0, 0);
