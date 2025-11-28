@@ -6,6 +6,7 @@ import { format } from "date-fns";
 import { toast } from "sonner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { FileDown, Eye, Trash2, Download, FileText, Zap, DollarSign } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -77,6 +78,61 @@ export default function ReconciliationHistoryTab({ siteId, siteName }: Reconcili
   const [deleteRunId, setDeleteRunId] = useState<string | null>(null);
   const [reportRun, setReportRun] = useState<ReconciliationRun | null>(null);
   const [isReportOpen, setIsReportOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedIds(new Set(runs.map(r => r.id)));
+    } else {
+      setSelectedIds(new Set());
+    }
+  };
+
+  const handleSelectRow = (id: string, checked: boolean) => {
+    const newSelected = new Set(selectedIds);
+    if (checked) {
+      newSelected.add(id);
+    } else {
+      newSelected.delete(id);
+    }
+    setSelectedIds(newSelected);
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    
+    setIsBulkDeleting(true);
+    try {
+      const { error } = await supabase
+        .from("reconciliation_runs")
+        .delete()
+        .in("id", Array.from(selectedIds));
+
+      if (error) throw error;
+
+      toast.success(`Deleted ${selectedIds.size} reconciliation(s)`);
+      setRuns(runs.filter(r => !selectedIds.has(r.id)));
+      setSelectedIds(new Set());
+    } catch (error) {
+      console.error("Error deleting reconciliations:", error);
+      toast.error("Failed to delete reconciliations");
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  };
+
+  const handleBulkExportCSV = () => {
+    const selectedRuns = runs.filter(r => selectedIds.has(r.id));
+    selectedRuns.forEach(run => exportToCSV(run));
+    toast.success(`Exported ${selectedRuns.length} reconciliation(s) to CSV`);
+  };
+
+  const handleBulkExportExcel = () => {
+    const selectedRuns = runs.filter(r => selectedIds.has(r.id));
+    selectedRuns.forEach(run => exportToExcel(run));
+    toast.success(`Exported ${selectedRuns.length} reconciliation(s) to Excel`);
+  };
 
   useEffect(() => {
     fetchReconciliationHistory();
@@ -265,8 +321,44 @@ export default function ReconciliationHistoryTab({ siteId, siteName }: Reconcili
     <>
       <Card>
         <CardHeader>
-          <CardTitle>Reconciliation History</CardTitle>
-          <CardDescription>View and manage saved reconciliation runs</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Reconciliation History</CardTitle>
+              <CardDescription>View and manage saved reconciliation runs</CardDescription>
+            </div>
+            {selectedIds.size > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">
+                  {selectedIds.size} selected
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleBulkExportCSV}
+                >
+                  <FileDown className="h-4 w-4 mr-1" />
+                  CSV
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleBulkExportExcel}
+                >
+                  <Download className="h-4 w-4 mr-1" />
+                  Excel
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={handleBulkDelete}
+                  disabled={isBulkDeleting}
+                >
+                  <Trash2 className="h-4 w-4 mr-1" />
+                  Delete
+                </Button>
+              </div>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           {runs.length === 0 ? (
@@ -277,6 +369,13 @@ export default function ReconciliationHistoryTab({ siteId, siteName }: Reconcili
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-[40px]">
+                    <Checkbox
+                      checked={selectedIds.size === runs.length && runs.length > 0}
+                      onCheckedChange={handleSelectAll}
+                      aria-label="Select all"
+                    />
+                  </TableHead>
                   <TableHead>Run Name</TableHead>
                   <TableHead>Date Range</TableHead>
                   <TableHead>Run Date</TableHead>
@@ -288,7 +387,14 @@ export default function ReconciliationHistoryTab({ siteId, siteName }: Reconcili
               </TableHeader>
               <TableBody>
                 {runs.map((run) => (
-                  <TableRow key={run.id}>
+                  <TableRow key={run.id} data-state={selectedIds.has(run.id) ? "selected" : undefined}>
+                    <TableCell>
+                      <Checkbox
+                        checked={selectedIds.has(run.id)}
+                        onCheckedChange={(checked) => handleSelectRow(run.id, checked as boolean)}
+                        aria-label={`Select ${run.run_name}`}
+                      />
+                    </TableCell>
                     <TableCell className="font-medium">{run.run_name}</TableCell>
                     <TableCell className="text-sm">
                       {format(new Date(run.date_from), "dd MMM yyyy")} - {format(new Date(run.date_to), "dd MMM yyyy")}
