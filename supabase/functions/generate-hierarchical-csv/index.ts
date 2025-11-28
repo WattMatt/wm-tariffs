@@ -11,36 +11,47 @@ interface HierarchicalCSVRequest {
   siteId: string;
   dateFrom: string;
   dateTo: string;
-  childMeterIds: string[]; // Immediate children only
-  columns: string[]; // Columns from site_reconciliation_settings
+  childMeterIds: string[];
+  columns: string[]; // Columns from site_reconciliation_settings (e.g., "P1 (kWh)", "P2 (kWh)", "S (kVA)")
 }
 
-interface CorrectedReading {
-  timestamp: string;
-  meterId: string;
-  meterNumber: string;
-  originalValue: number;
-  correctedValue: number;
-  fieldName: string;
-  reason: string;
-  originalSourceMeterId: string;
-  originalSourceMeterNumber: string;
+interface AggregatedData {
+  [column: string]: number;
 }
 
-// Corruption detection thresholds
-const THRESHOLDS = {
-  maxKwhPer30Min: 10000,
-  maxKvaPer30Min: 50000,
-  maxMetadataValue: 100000,
+// Helper to round timestamp to nearest 30-min slot
+const roundToSlot = (timestamp: string): string => {
+  const date = new Date(timestamp);
+  if (isNaN(date.getTime())) {
+    console.warn(`Invalid timestamp for rounding: ${timestamp}`);
+    return timestamp;
+  }
+  const minutes = date.getMinutes();
+  if (minutes < 15) {
+    date.setMinutes(0);
+  } else if (minutes < 45) {
+    date.setMinutes(30);
+  } else {
+    date.setHours(date.getHours() + 1);
+    date.setMinutes(0);
+  }
+  date.setSeconds(0);
+  date.setMilliseconds(0);
+  return date.toISOString();
 };
 
-// Helper to normalize timestamps to consistent ISO format
-const normalizeTimestamp = (ts: string): string => {
-  try {
-    return new Date(ts).toISOString();
-  } catch {
-    return ts;
-  }
+// Helper to sanitize names for storage paths
+const sanitizeName = (name: string): string => {
+  return name.trim().replace(/[^a-zA-Z0-9\s-_]/g, '').replace(/\s+/g, ' ');
+};
+
+// Helper to generate content hash
+const generateHash = async (content: string): Promise<string> => {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(content);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 32);
 };
 
 Deno.serve(async (req) => {
@@ -63,15 +74,17 @@ Deno.serve(async (req) => {
       columns: passedColumns
     } = await req.json() as HierarchicalCSVRequest;
 
-    console.log('Generating hierarchical CSV for parent meter:', parentMeterNumber);
-    console.log('Immediate child meter IDs:', childMeterIds);
+    console.log('=== GENERATING HIERARCHICAL CSV FROM DATABASE ===');
+    console.log('Parent meter:', parentMeterNumber, '(', parentMeterId, ')');
+    console.log('Child meter IDs:', childMeterIds);
     console.log('Date range:', dateFrom, 'to', dateTo);
-    console.log('Passed columns:', passedColumns);
+    console.log('Columns to aggregate:', passedColumns);
 
-    // Track all corrections made during processing
-    const corrections: CorrectedReading[] = [];
-    
-    // Get meter number mapping for all children
+    if (!childMeterIds || childMeterIds.length === 0) {
+      throw new Error('No child meter IDs provided');
+    }
+
+    // Get meter number mapping for logging
     const { data: meterInfo } = await supabase
       .from('meters')
       .select('id, meter_number')
@@ -79,8 +92,9 @@ Deno.serve(async (req) => {
     
     const meterNumberMap = new Map<string, string>();
     meterInfo?.forEach(m => meterNumberMap.set(m.id, m.meter_number));
+    console.log('Child meters:', Array.from(meterNumberMap.entries()).map(([id, num]) => num).join(', '));
 
-    // Fetch meter associations to identify solar meters
+    // Fetch meter associations to identify solar meters (for sign inversion)
     const { data: reconcSettings } = await supabase
       .from('site_reconciliation_settings')
       .select('meter_associations')
@@ -93,279 +107,125 @@ Deno.serve(async (req) => {
       Object.entries(associations).forEach(([meterId, assignment]) => {
         if (assignment === 'solar_energy') {
           solarMeterIds.add(meterId);
-          console.log(`Identified solar meter: ${meterId} (${meterNumberMap.get(meterId) || 'unknown'})`);
+          console.log(`Solar meter identified: ${meterNumberMap.get(meterId) || meterId}`);
         }
       });
     }
-    console.log(`Found ${solarMeterIds.size} solar meters to invert`);
+    console.log(`Found ${solarMeterIds.size} solar meters (values will be inverted)`);
 
-    // Get CSV files for immediate children (prioritize generated > parsed)
-    const { data: childCsvFiles } = await supabase
-      .from('meter_csv_files')
-      .select('meter_id, file_path, file_name, parse_status')
-      .in('meter_id', childMeterIds)
-      .in('parse_status', ['generated', 'parsed']);
+    // ===== STEP 1: Query meter_readings for ALL child meters within date range =====
+    console.log('Fetching readings from meter_readings table...');
+    
+    const PAGE_SIZE = 1000;
+    let allReadings: Array<{
+      reading_timestamp: string;
+      kwh_value: number;
+      kva_value: number | null;
+      metadata: Record<string, any> | null;
+      meter_id: string;
+    }> = [];
+    let offset = 0;
+    let hasMore = true;
 
-    const childrenWithCsv = new Map<string, { path: string; isGenerated: boolean }>();
-    childCsvFiles?.forEach(f => {
-      const isHierarchical = f.file_name.toLowerCase().includes('hierarchical');
-      const existing = childrenWithCsv.get(f.meter_id);
-      
-      if (f.parse_status === 'generated' && isHierarchical) {
-        childrenWithCsv.set(f.meter_id, { path: f.file_path, isGenerated: true });
-        console.log(`✓ Using GENERATED hierarchical CSV for ${meterNumberMap.get(f.meter_id) || f.meter_id}: ${f.file_name}`);
-      } else if (f.parse_status === 'parsed' && !isHierarchical && !existing?.isGenerated) {
-        childrenWithCsv.set(f.meter_id, { path: f.file_path, isGenerated: false });
-        console.log(`Using UPLOADED CSV for ${meterNumberMap.get(f.meter_id) || f.meter_id}: ${f.file_name}`);
+    while (hasMore) {
+      const { data: pageData, error: readingsError } = await supabase
+        .from('meter_readings')
+        .select('reading_timestamp, kwh_value, kva_value, metadata, meter_id')
+        .in('meter_id', childMeterIds)
+        .gte('reading_timestamp', dateFrom)
+        .lte('reading_timestamp', dateTo)
+        .order('reading_timestamp', { ascending: true })
+        .range(offset, offset + PAGE_SIZE - 1);
+
+      if (readingsError) {
+        throw new Error(`Failed to fetch readings: ${readingsError.message}`);
       }
-    });
-    
-    const childrenWithoutCsv = childMeterIds.filter(id => !childrenWithCsv.has(id));
-    const metersForRawReadings = childrenWithoutCsv;
-    
-    console.log(`Children with CSV: ${childrenWithCsv.size}`);
-    console.log(`Children without CSV (will use raw readings): ${metersForRawReadings.length}`);
 
-    // Helper to round timestamp to nearest 30-min slot
-    const roundToSlot = (timestamp: string): string => {
-      const date = new Date(timestamp);
-      const minutes = date.getMinutes();
-      if (minutes < 15) {
-        date.setMinutes(0);
-      } else if (minutes < 45) {
-        date.setMinutes(30);
+      if (pageData && pageData.length > 0) {
+        allReadings = allReadings.concat(pageData);
+        offset += pageData.length;
+        hasMore = pageData.length === PAGE_SIZE;
       } else {
-        date.setHours(date.getHours() + 1);
-        date.setMinutes(0);
-      }
-      date.setSeconds(0);
-      date.setMilliseconds(0);
-      return date.toISOString();
-    };
-
-    // Use passed columns exactly as provided (NO "Total kWh" column)
-    const columns = passedColumns || [];
-    console.log(`Using ${columns.length} columns from site settings:`, columns);
-
-    // ===== STEP 1: Find timestamps from the LONGEST child CSV within date range =====
-    let masterTimestamps: string[] = [];
-    let longestChildId: string | null = null;
-
-    // First, collect all CSV data and find the longest one
-    const childCsvData = new Map<string, { headers: string[]; rows: Map<string, string[]> }>();
-
-    for (const [childMeterId, csvInfo] of childrenWithCsv.entries()) {
-      try {
-        const { data: csvData, error: downloadError } = await supabase.storage
-          .from('client-files')
-          .download(csvInfo.path);
-
-        if (downloadError || !csvData) {
-          console.error(`Failed to download CSV for ${childMeterId}:`, downloadError);
-          continue;
-        }
-
-        const csvText = await csvData.text();
-        const lines = csvText.split('\n').filter(line => line.trim());
-        
-        if (lines.length < 2) continue;
-
-        const headers = lines[0].split(',').map(h => h.trim());
-        const rows = new Map<string, string[]>();
-        
-        for (let i = 1; i < lines.length; i++) {
-          const values = lines[i].split(',');
-          const rawTimestamp = values[0]?.trim();
-          if (!rawTimestamp) continue;
-          
-          const slot = roundToSlot(rawTimestamp);
-          
-          // Filter to only include timestamps within date range
-          if (slot >= dateFrom && slot <= dateTo) {
-            rows.set(slot, values);
-          }
-        }
-
-        childCsvData.set(childMeterId, { headers, rows });
-        
-        const timestamps = Array.from(rows.keys());
-        if (timestamps.length > masterTimestamps.length) {
-          masterTimestamps = timestamps;
-          longestChildId = childMeterId;
-        }
-        
-        console.log(`Read ${rows.size} rows from ${meterNumberMap.get(childMeterId) || childMeterId}`);
-      } catch (error) {
-        console.error(`Error reading CSV for ${childMeterId}:`, error);
+        hasMore = false;
       }
     }
 
-    console.log(`Using timestamps from ${longestChildId ? meterNumberMap.get(longestChildId) || longestChildId : 'none'}, ${masterTimestamps.length} timestamps`);
+    console.log(`Fetched ${allReadings.length} total readings from ${childMeterIds.length} child meters`);
 
-    // Sort master timestamps
-    masterTimestamps.sort((a, b) => a.localeCompare(b));
+    if (allReadings.length === 0) {
+      console.warn('No readings found for child meters in date range');
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'No readings found for child meters in the specified date range',
+          totalKwh: 0,
+          columnTotals: {},
+          columnMaxValues: {}
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
-    // Initialize groupedData with timestamps from longest child
-    const groupedData = new Map<string, Record<string, number>>();
-    masterTimestamps.forEach(ts => {
-      groupedData.set(ts, {});
-    });
+    // ===== STEP 2: Aggregate readings by timestamp =====
+    console.log('Aggregating readings by timestamp...');
+    
+    const columns = passedColumns || [];
+    const groupedData = new Map<string, AggregatedData>();
 
-    // ===== STEP 2: Aggregate data from all child CSVs =====
-    for (const [childMeterId, csvDataInfo] of childCsvData.entries()) {
-      const { headers, rows } = csvDataInfo;
-      const isSolarMeter = solarMeterIds.has(childMeterId);
-      const multiplier = isSolarMeter ? -1 : 1;
+    allReadings.forEach(reading => {
+      const slot = roundToSlot(reading.reading_timestamp);
       
-      if (isSolarMeter) {
-        console.log(`Applying inversion (multiplier: -1) for solar meter CSV: ${meterNumberMap.get(childMeterId) || childMeterId}`);
+      if (!groupedData.has(slot)) {
+        groupedData.set(slot, {});
       }
+      
+      const group = groupedData.get(slot)!;
+      const isSolarMeter = solarMeterIds.has(reading.meter_id);
+      const multiplier = isSolarMeter ? -1 : 1;
 
-      for (const [timestamp, values] of rows.entries()) {
-        if (!groupedData.has(timestamp)) continue; // Skip if not in master timestamps
-
-        const group = groupedData.get(timestamp)!;
-
-        // Sum each known column from passed columns
+      // Aggregate imported_fields from metadata
+      if (reading.metadata?.imported_fields) {
+        const importedFields = reading.metadata.imported_fields as Record<string, any>;
+        
         columns.forEach(col => {
-          const headerIdx = headers.findIndex(h => h === col);
-          if (headerIdx >= 0 && headerIdx < values.length) {
-            const rawValue = parseFloat(values[headerIdx]) || 0;
-            group[col] = (group[col] || 0) + (rawValue * multiplier);
+          const value = importedFields[col];
+          if (value !== null && value !== undefined) {
+            const numValue = Number(value);
+            if (!isNaN(numValue)) {
+              group[col] = (group[col] || 0) + (numValue * multiplier);
+            }
           }
         });
       }
-    }
+    });
 
-    // ===== STEP 3: Fetch raw readings for children without CSVs =====
-    if (metersForRawReadings.length > 0) {
-      const PAGE_SIZE = 1000;
-      let allReadings: Array<{
-        reading_timestamp: string;
-        kwh_value: number;
-        metadata: Record<string, any> | null;
-        meter_id: string;
-      }> = [];
-      let offset = 0;
-      let hasMore = true;
+    console.log(`Aggregated data into ${groupedData.size} time slots`);
 
-      console.log(`Fetching readings from meter_readings for ${metersForRawReadings.length} immediate children without CSVs...`);
-      
-      while (hasMore) {
-        const { data: pageData, error: readingsError } = await supabase
-          .from('meter_readings')
-          .select('reading_timestamp, kwh_value, metadata, meter_id')
-          .in('meter_id', metersForRawReadings)
-          .gte('reading_timestamp', dateFrom)
-          .lte('reading_timestamp', dateTo)
-          .order('reading_timestamp', { ascending: true })
-          .range(offset, offset + PAGE_SIZE - 1);
-
-        if (readingsError) {
-          throw new Error(`Failed to fetch readings: ${readingsError.message}`);
-        }
-
-        if (pageData && pageData.length > 0) {
-          allReadings = allReadings.concat(pageData);
-          offset += pageData.length;
-          hasMore = pageData.length === PAGE_SIZE;
-        } else {
-          hasMore = false;
-        }
-      }
-
-      console.log(`Fetched ${allReadings.length} total readings from ${metersForRawReadings.length} immediate children`);
-
-      // Add raw readings timestamps to master if not already present
-      allReadings.forEach(reading => {
-        const slot = roundToSlot(reading.reading_timestamp);
-        if (!groupedData.has(slot)) {
-          groupedData.set(slot, {});
-          masterTimestamps.push(slot);
-        }
-      });
-      
-      // Re-sort master timestamps after adding new ones
-      masterTimestamps.sort((a, b) => a.localeCompare(b));
-
-      // Aggregate raw readings
-      allReadings.forEach(reading => {
-        const slot = roundToSlot(reading.reading_timestamp);
-        const group = groupedData.get(slot)!;
-        
-        const isSolarMeter = solarMeterIds.has(reading.meter_id);
-        const multiplier = isSolarMeter ? -1 : 1;
-
-        // Check kWh value for corruption
-        if (Math.abs(reading.kwh_value) > THRESHOLDS.maxKwhPer30Min) {
-          corrections.push({
-            timestamp: reading.reading_timestamp,
-            meterId: reading.meter_id,
-            meterNumber: meterNumberMap.get(reading.meter_id) || 'Unknown',
-            originalValue: reading.kwh_value,
-            correctedValue: 0,
-            fieldName: 'kwh_value',
-            reason: `Value ${reading.kwh_value.toLocaleString()} exceeds max threshold ${THRESHOLDS.maxKwhPer30Min.toLocaleString()}`,
-            originalSourceMeterId: reading.meter_id,
-            originalSourceMeterNumber: meterNumberMap.get(reading.meter_id) || 'Unknown'
-          });
-        }
-
-        // Sum metadata columns
-        if (reading.metadata?.imported_fields) {
-          columns.forEach(col => {
-            const value = reading.metadata?.imported_fields?.[col];
-            if (value !== null && value !== undefined) {
-              const numValue = Number(value);
-              if (!isNaN(numValue) && numValue !== 0) {
-                const isKva = col.toLowerCase().includes('kva') || col.toLowerCase() === 's';
-                const threshold = isKva ? THRESHOLDS.maxKvaPer30Min : THRESHOLDS.maxMetadataValue;
-                
-                if (Math.abs(numValue) > threshold) {
-                  corrections.push({
-                    timestamp: reading.reading_timestamp,
-                    meterId: reading.meter_id,
-                    meterNumber: meterNumberMap.get(reading.meter_id) || 'Unknown',
-                    originalValue: numValue,
-                    correctedValue: 0,
-                    fieldName: col,
-                    reason: `Value ${numValue.toLocaleString()} exceeds max threshold ${threshold.toLocaleString()}`,
-                    originalSourceMeterId: reading.meter_id,
-                    originalSourceMeterNumber: meterNumberMap.get(reading.meter_id) || 'Unknown'
-                  });
-                } else {
-                  group[col] = (group[col] || 0) + (numValue * multiplier);
-                }
-              }
-            }
-          });
-        }
-      });
-    }
-
-    console.log(`Total corrections made: ${corrections.length}`);
-    console.log(`GroupedData has ${groupedData.size} timestamps after aggregation`);
-
-    // ===== STEP 4: Generate CSV rows (NO "Total kWh" column) =====
+    // ===== STEP 3: Generate CSV content =====
+    console.log('Generating CSV content...');
+    
     const csvRows: string[] = [];
-    // Header: Timestamp followed by passed columns ONLY
+    
+    // Header row: Timestamp followed by columns
     const headerColumns = ['Timestamp', ...columns];
     csvRows.push(headerColumns.join(','));
 
-    Array.from(groupedData.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .forEach(([timestamp, data]) => {
-        const row = [
-          timestamp,
-          ...columns.map(col => (data[col] || 0).toFixed(4))
-        ];
-        csvRows.push(row.join(','));
-      });
+    // Sort timestamps and create data rows
+    const sortedTimestamps = Array.from(groupedData.keys()).sort((a, b) => a.localeCompare(b));
+    
+    sortedTimestamps.forEach(timestamp => {
+      const data = groupedData.get(timestamp)!;
+      const row = [
+        timestamp,
+        ...columns.map(col => (data[col] || 0).toFixed(4))
+      ];
+      csvRows.push(row.join(','));
+    });
 
-    const newCsvContent = csvRows.join('\n');
-    console.log(`Generated ${csvRows.length - 1} CSV rows with ${columns.length} columns`);
+    const csvContent = csvRows.join('\n');
+    console.log(`Generated CSV with ${csvRows.length - 1} data rows and ${columns.length} columns`);
 
-    // Calculate final totals for response (NO "Total kWh")
+    // Calculate summary statistics
     const columnTotals: Record<string, number> = {};
     const columnMaxValues: Record<string, number> = {};
     
@@ -374,24 +234,29 @@ Deno.serve(async (req) => {
       const isKvaColumn = colLower.includes('kva') || colLower === 's';
       
       if (isKvaColumn) {
+        // For kVA columns, track max value
         const values = Array.from(groupedData.values()).map(d => d[col] || 0);
         columnMaxValues[col] = values.length > 0 ? Math.max(...values) : 0;
       } else {
+        // For kWh columns, track sum
         columnTotals[col] = Array.from(groupedData.values())
           .reduce((sum, d) => sum + (d[col] || 0), 0);
       }
     });
 
-    // Calculate totalKwh from kWh-related columns in columnTotals
+    // Calculate total kWh from kWh-related columns
     const kwhColumns = columns.filter(c => 
-      c.toLowerCase().includes('kwh') || /^P\d+$/.test(c)
+      c.toLowerCase().includes('kwh') || /^P\d+/.test(c)
     );
     const totalKwh = kwhColumns.reduce((sum, col) => sum + (columnTotals[col] || 0), 0);
 
-    console.log('Total kWh (calculated from kWh columns):', totalKwh);
-    console.log('Column totals (sums):', columnTotals);
-    console.log('Column max values (kVA):', columnMaxValues);
+    console.log('Total kWh:', totalKwh);
+    console.log('Column totals:', columnTotals);
+    console.log('Column max values:', columnMaxValues);
 
+    // ===== STEP 4: Upload CSV to storage =====
+    console.log('Uploading CSV to storage...');
+    
     // Get site and client info for storage path
     const { data: siteData, error: siteError } = await supabase
       .from('sites')
@@ -400,11 +265,8 @@ Deno.serve(async (req) => {
       .single();
 
     if (siteError || !siteData) {
-      throw new Error('Failed to fetch site data');
+      throw new Error(`Failed to fetch site data: ${siteError?.message || 'Site not found'}`);
     }
-
-    const sanitizeName = (name: string) => 
-      name.trim().replace(/[^a-zA-Z0-9\s-_]/g, '').replace(/\s+/g, ' ');
 
     const clientName = sanitizeName((siteData.clients as any).name);
     const siteName = sanitizeName(siteData.name);
@@ -413,122 +275,94 @@ Deno.serve(async (req) => {
     const fileName = `${sanitizedMeterNumber}_Hierarchical_Energy_Profile.csv`;
     const filePath = `${clientName}/${siteName}/Metering/Reconciliations/${fileName}`;
 
-    // Check if CSV already exists
-    const { data: existingFiles } = await supabase.storage
-      .from('client-files')
-      .list(`${clientName}/${siteName}/Metering/Reconciliations`, {
-        search: fileName
-      });
-
-    let finalCsvContent = newCsvContent;
-    const fileExists = existingFiles && existingFiles.length > 0;
-
-    if (fileExists) {
-      console.log('Existing CSV found, checking column structure...');
-      
-      const { data: existingCsv, error: downloadError } = await supabase.storage
-        .from('client-files')
-        .download(filePath);
-
-      if (!downloadError && existingCsv) {
-        const existingContent = await existingCsv.text();
-        const existingLines = existingContent.split('\n').filter(line => line.trim());
-        
-        if (existingLines.length > 0) {
-          const existingHeader = existingLines[0];
-          const newHeader = headerColumns.join(',');
-          const existingColumnCount = existingHeader.split(',').length;
-          const newColumnCount = headerColumns.length;
-          
-          // If column structure changed, replace entirely instead of merging
-          if (existingColumnCount !== newColumnCount || existingHeader !== newHeader) {
-            console.log(`Column structure changed (${existingColumnCount} -> ${newColumnCount}), replacing CSV entirely`);
-            finalCsvContent = newCsvContent;
-          } else {
-            // Column structure matches - merge with timestamp normalization
-            console.log('Column structure matches, merging data with normalized timestamps...');
-            const newLines = csvRows.slice(1);
-
-            // Use normalized timestamps for merging
-            const uniqueLines = new Map<string, string>();
-            
-            // Add existing lines with normalized timestamps
-            existingLines.slice(1).forEach(line => {
-              const rawTimestamp = line.split(',')[0];
-              if (rawTimestamp) {
-                const normalizedTs = normalizeTimestamp(rawTimestamp);
-                uniqueLines.set(normalizedTs, line);
-              }
-            });
-
-            // New data replaces existing timestamps (with normalized keys)
-            newLines.forEach(line => {
-              const rawTimestamp = line.split(',')[0];
-              if (rawTimestamp) {
-                const normalizedTs = normalizeTimestamp(rawTimestamp);
-                uniqueLines.set(normalizedTs, line);
-              }
-            });
-
-            const sortedLines = Array.from(uniqueLines.entries())
-              .sort(([a], [b]) => a.localeCompare(b))
-              .map(([, line]) => line);
-
-            finalCsvContent = [headerColumns.join(','), ...sortedLines].join('\n');
-            console.log(`Merged CSV: ${sortedLines.length} total rows`);
-          }
-        }
-      }
-    }
-
-    // Upload CSV
+    // Upload CSV to storage (upsert)
+    const csvBlob = new Blob([csvContent], { type: 'text/csv' });
     const { error: uploadError } = await supabase.storage
       .from('client-files')
-      .upload(filePath, finalCsvContent, {
-        contentType: 'text/csv',
-        upsert: true
+      .upload(filePath, csvBlob, { 
+        upsert: true,
+        contentType: 'text/csv'
       });
 
     if (uploadError) {
       throw new Error(`Failed to upload CSV: ${uploadError.message}`);
     }
 
-    console.log('CSV uploaded successfully to:', filePath);
+    console.log(`CSV uploaded to: ${filePath}`);
 
-    // Update meter_csv_files table
-    const rowCount = finalCsvContent.split('\n').length - 1;
-    const contentHash = await crypto.subtle.digest(
-      'SHA-256',
-      new TextEncoder().encode(finalCsvContent)
-    ).then(buf => Array.from(new Uint8Array(buf))
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('')
-    );
+    // ===== STEP 5: Create/Update meter_csv_files record =====
+    console.log('Creating/updating meter_csv_files record...');
+    
+    const contentHash = await generateHash(csvContent);
 
+    // Build column mapping for the generated CSV
+    // Column 0 = Timestamp (combined datetime)
+    // Column 1+ = data columns
+    const columnMapping: Record<string, any> = {
+      dateColumn: '0',
+      timeColumn: '-1', // Combined in timestamp
+      valueColumn: '1', // First data column (usually P1 or similar)
+      kvaColumn: '-1',
+      dateTimeFormat: 'YYYY-MM-DDTHH:mm:ss.sssZ',
+      renamedHeaders: {} as Record<number, string>,
+      columnDataTypes: {} as Record<string, string>
+    };
+
+    // Map all columns to their indices
+    columns.forEach((col, idx) => {
+      const colIdx = idx + 1; // +1 because Timestamp is at 0
+      columnMapping.renamedHeaders[colIdx] = col;
+      columnMapping.columnDataTypes[colIdx.toString()] = 'float';
+      
+      // If this is a kVA column, set it as the kva column
+      const colLower = col.toLowerCase();
+      if ((colLower.includes('kva') || colLower === 's') && columnMapping.kvaColumn === '-1') {
+        columnMapping.kvaColumn = colIdx.toString();
+      }
+    });
+
+    // Check if record already exists for this meter
     const { data: existingRecord } = await supabase
       .from('meter_csv_files')
       .select('id')
       .eq('meter_id', parentMeterId)
       .eq('file_name', fileName)
-      .single();
+      .maybeSingle();
+
+    let csvFileId: string;
 
     if (existingRecord) {
-      const { error: updateError } = await supabase
+      // Update existing record
+      const { data: updatedRecord, error: updateError } = await supabase
         .from('meter_csv_files')
         .update({
+          file_path: filePath,
           content_hash: contentHash,
-          readings_inserted: rowCount,
+          file_size: csvContent.length,
+          upload_status: 'uploaded',
+          parse_status: 'pending',
+          separator: ',',
+          header_row_number: 1,
+          column_mapping: columnMapping,
           updated_at: new Date().toISOString(),
-          file_size: finalCsvContent.length,
-          parse_status: 'generated'
+          error_message: null,
+          readings_inserted: 0,
+          duplicates_skipped: 0,
+          parse_errors: 0
         })
-        .eq('id', existingRecord.id);
+        .eq('id', existingRecord.id)
+        .select('id')
+        .single();
 
       if (updateError) {
-        console.error('Failed to update meter_csv_files:', updateError);
+        throw new Error(`Failed to update meter_csv_files: ${updateError.message}`);
       }
+      
+      csvFileId = updatedRecord.id;
+      console.log(`Updated existing meter_csv_files record: ${csvFileId}`);
     } else {
-      const { error: insertError } = await supabase
+      // Insert new record
+      const { data: newRecord, error: insertError } = await supabase
         .from('meter_csv_files')
         .insert({
           site_id: siteId,
@@ -536,42 +370,110 @@ Deno.serve(async (req) => {
           file_name: fileName,
           file_path: filePath,
           content_hash: contentHash,
-          file_size: finalCsvContent.length,
+          file_size: csvContent.length,
           upload_status: 'uploaded',
-          parse_status: 'generated',
-          readings_inserted: rowCount
-        });
+          parse_status: 'pending',
+          separator: ',',
+          header_row_number: 1,
+          column_mapping: columnMapping
+        })
+        .select('id')
+        .single();
 
       if (insertError) {
-        console.error('Failed to insert into meter_csv_files:', insertError);
+        throw new Error(`Failed to insert meter_csv_files: ${insertError.message}`);
       }
+      
+      csvFileId = newRecord.id;
+      console.log(`Created new meter_csv_files record: ${csvFileId}`);
     }
+
+    // ===== STEP 6: Delete existing readings for parent meter in date range =====
+    console.log('Deleting existing readings for parent meter in date range...');
+    
+    const { error: deleteError } = await supabase
+      .from('meter_readings')
+      .delete()
+      .eq('meter_id', parentMeterId)
+      .gte('reading_timestamp', dateFrom)
+      .lte('reading_timestamp', dateTo);
+
+    if (deleteError) {
+      console.warn(`Failed to delete existing readings: ${deleteError.message}`);
+    } else {
+      console.log('Existing readings deleted successfully');
+    }
+
+    // ===== STEP 7: Call process-meter-csv to parse the hierarchical CSV =====
+    console.log('Invoking process-meter-csv to parse the hierarchical CSV...');
+    
+    const { data: parseResult, error: parseError } = await supabase.functions.invoke('process-meter-csv', {
+      body: {
+        csvFileId: csvFileId,
+        meterId: parentMeterId,
+        filePath: filePath,
+        separator: ',',
+        headerRowNumber: 1,
+        columnMapping: columnMapping
+      }
+    });
+
+    if (parseError) {
+      console.error('Error calling process-meter-csv:', parseError);
+      // Don't throw - the CSV is uploaded, parsing can be retried
+      
+      // Update the record with error status
+      await supabase
+        .from('meter_csv_files')
+        .update({
+          parse_status: 'error',
+          error_message: `Parse invocation failed: ${parseError.message}`
+        })
+        .eq('id', csvFileId);
+    } else {
+      console.log('process-meter-csv result:', parseResult);
+      
+      // Update record to 'generated' status after successful parsing
+      await supabase
+        .from('meter_csv_files')
+        .update({
+          parse_status: 'generated',
+          parsed_at: new Date().toISOString(),
+          readings_inserted: parseResult?.inserted || 0,
+          duplicates_skipped: parseResult?.skipped || 0,
+          parse_errors: parseResult?.parseErrors || 0
+        })
+        .eq('id', csvFileId);
+    }
+
+    console.log('=== HIERARCHICAL CSV GENERATION COMPLETE ===');
 
     return new Response(
       JSON.stringify({
         success: true,
         filePath,
-        rowCount,
+        fileName,
+        csvFileId,
         totalKwh,
         columnTotals,
         columnMaxValues,
-        columns,
-        corrections,
-        message: corrections.length > 0 
-          ? `CSV created with ${corrections.length} corrupt value(s) corrected` 
-          : fileExists ? 'CSV updated with new data' : 'CSV created successfully'
+        rowCount: sortedTimestamps.length,
+        parseResult: parseResult || null
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
     console.error('Error generating hierarchical CSV:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    const errorMessage = error instanceof Error ? error.message : String(error);
     return new Response(
-      JSON.stringify({ error: errorMessage }),
+      JSON.stringify({ 
+        success: false, 
+        error: errorMessage 
+      }),
       { 
         status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       }
     );
   }
