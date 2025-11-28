@@ -2,9 +2,10 @@ import { useState, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { FileDown, Download, ChevronRight, Save, Loader2, Zap, Calculator, DollarSign, X, AlertTriangle, AlertCircle } from "lucide-react";
+import { FileDown, Download, ChevronRight, Save, Loader2, Zap, Calculator, DollarSign, X, AlertTriangle, AlertCircle, ChevronDown, Upload, GitBranch } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import CorrectionsDialog from "./CorrectionsDialog";
 import type { CorrectedReading } from "@/lib/dataValidation";
 
@@ -68,6 +69,8 @@ interface ReconciliationResultsViewProps {
   meterAssignments?: Map<string, string>;
   showDownloadButtons?: boolean;
   onDownloadMeter?: (meter: MeterData) => void;
+  onDownloadMeterCsvFile?: (meterId: string, fileType: 'parsed' | 'generated') => void;
+  meterCsvFiles?: Map<string, { parsed?: string; generated?: string }>;
   onDownloadAll?: () => void;
   onSave?: () => void;
   showSaveButton?: boolean;
@@ -96,6 +99,72 @@ interface ReconciliationResultsViewProps {
   meterCorrections?: Map<string, CorrectedReading[]>;
 }
 
+// Smart CSV download button that shows dropdown when both parsed and generated CSVs exist
+function CsvDownloadButton({ 
+  meter, 
+  csvFiles, 
+  onDownloadOnTheFly, 
+  onDownloadFromStorage 
+}: { 
+  meter: MeterData;
+  csvFiles?: { parsed?: string; generated?: string };
+  onDownloadOnTheFly: () => void;
+  onDownloadFromStorage?: (meterId: string, fileType: 'parsed' | 'generated') => void;
+}) {
+  const hasParsed = !!csvFiles?.parsed;
+  const hasGenerated = !!csvFiles?.generated;
+  const hasBoth = hasParsed && hasGenerated;
+  const hasAny = hasParsed || hasGenerated;
+
+  // If no stored files, fall back to on-the-fly download
+  if (!hasAny || !onDownloadFromStorage) {
+    return (
+      <Button variant="ghost" size="sm" className="gap-2 h-8" onClick={onDownloadOnTheFly}>
+        <FileDown className="w-3 h-3" />
+        CSV
+      </Button>
+    );
+  }
+
+  // If only one type, download directly (prioritize parsed)
+  if (!hasBoth) {
+    return (
+      <Button 
+        variant="ghost" 
+        size="sm" 
+        className="gap-2 h-8"
+        onClick={() => onDownloadFromStorage(meter.id, hasParsed ? 'parsed' : 'generated')}
+      >
+        <FileDown className="w-3 h-3" />
+        CSV
+      </Button>
+    );
+  }
+
+  // If both exist, show dropdown
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="sm" className="gap-1.5 h-8">
+          <FileDown className="w-3 h-3" />
+          CSV
+          <ChevronDown className="w-3 h-3" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-48">
+        <DropdownMenuItem onClick={() => onDownloadFromStorage(meter.id, 'parsed')}>
+          <Upload className="w-4 h-4 mr-2" />
+          Uploaded CSV
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onDownloadFromStorage(meter.id, 'generated')}>
+          <GitBranch className="w-4 h-4 mr-2" />
+          Generated Hierarchical
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 export default function ReconciliationResultsView({
   bulkTotal,
   solarTotal,
@@ -111,6 +180,8 @@ export default function ReconciliationResultsView({
   meterAssignments = new Map(),
   showDownloadButtons = true,
   onDownloadMeter,
+  onDownloadMeterCsvFile,
+  meterCsvFiles = new Map(),
   onDownloadAll,
   onSave,
   showSaveButton = false,
@@ -397,15 +468,12 @@ export default function ReconciliationResultsView({
                   </div>
                 )}
                 {!isRevenueView && showDownloadButtons && onDownloadMeter && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="gap-2 h-8"
-                    onClick={() => onDownloadMeter(meter)}
-                  >
-                    <FileDown className="w-3 h-3" />
-                    CSV
-                  </Button>
+                  <CsvDownloadButton
+                    meter={meter}
+                    csvFiles={meterCsvFiles.get(meter.id)}
+                    onDownloadOnTheFly={() => onDownloadMeter(meter)}
+                    onDownloadFromStorage={onDownloadMeterCsvFile}
+                  />
                 )}
               </>
             )}
