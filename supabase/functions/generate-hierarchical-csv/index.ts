@@ -12,13 +12,7 @@ interface HierarchicalCSVRequest {
   dateFrom: string;
   dateTo: string;
   childMeterIds: string[]; // Immediate children only
-}
-
-interface ReadingRow {
-  reading_timestamp: string;
-  kwh_value: number;
-  metadata: Record<string, any> | null;
-  meter_id: string;
+  columns: string[]; // Columns from site_reconciliation_settings
 }
 
 interface CorrectedReading {
@@ -29,16 +23,15 @@ interface CorrectedReading {
   correctedValue: number;
   fieldName: string;
   reason: string;
-  // Track the ORIGINAL source meter through hierarchical layers
   originalSourceMeterId: string;
   originalSourceMeterNumber: string;
 }
 
 // Corruption detection thresholds
 const THRESHOLDS = {
-  maxKwhPer30Min: 10000,    // 10,000 kWh per 30 mins = 20MW sustained
-  maxKvaPer30Min: 50000,    // 50,000 kVA per 30 mins
-  maxMetadataValue: 100000, // 100,000 for any metadata column
+  maxKwhPer30Min: 10000,
+  maxKvaPer30Min: 50000,
+  maxMetadataValue: 100000,
 };
 
 Deno.serve(async (req) => {
@@ -57,17 +50,19 @@ Deno.serve(async (req) => {
       siteId,
       dateFrom,
       dateTo,
-      childMeterIds
+      childMeterIds,
+      columns: passedColumns
     } = await req.json() as HierarchicalCSVRequest;
 
     console.log('Generating hierarchical CSV for parent meter:', parentMeterNumber);
     console.log('Immediate child meter IDs:', childMeterIds);
     console.log('Date range:', dateFrom, 'to', dateTo);
+    console.log('Passed columns:', passedColumns);
 
     // Track all corrections made during processing
     const corrections: CorrectedReading[] = [];
     
-    // Get meter number mapping for all children (for correction logging)
+    // Get meter number mapping for all children
     const { data: meterInfo } = await supabase
       .from('meters')
       .select('id, meter_number')
@@ -76,14 +71,13 @@ Deno.serve(async (req) => {
     const meterNumberMap = new Map<string, string>();
     meterInfo?.forEach(m => meterNumberMap.set(m.id, m.meter_number));
 
-    // ===== SOLAR METER DETECTION: Fetch meter associations to identify solar meters =====
+    // Fetch meter associations to identify solar meters
     const { data: reconcSettings } = await supabase
       .from('site_reconciliation_settings')
       .select('meter_associations')
       .eq('site_id', siteId)
       .maybeSingle();
 
-    // Build set of solar meter IDs (those designated as "solar_energy")
     const solarMeterIds = new Set<string>();
     if (reconcSettings?.meter_associations) {
       const associations = reconcSettings.meter_associations as Record<string, string>;
@@ -96,39 +90,32 @@ Deno.serve(async (req) => {
     }
     console.log(`Found ${solarMeterIds.size} solar meters to invert`);
 
-    // ===== LAYERED APPROACH: Check which immediate children have CSVs =====
-    // PRIORITY: Generated hierarchical CSVs > Uploaded CSVs > Raw readings (from immediate child only)
+    // Get CSV files for immediate children (prioritize generated > parsed)
     const { data: childCsvFiles } = await supabase
       .from('meter_csv_files')
       .select('meter_id, file_path, file_name, parse_status')
       .in('meter_id', childMeterIds)
-      .in('parse_status', ['generated', 'parsed']);  // Get both types
+      .in('parse_status', ['generated', 'parsed']);
 
-    // Build map prioritizing generated CSVs over uploaded CSVs
     const childrenWithCsv = new Map<string, { path: string; isGenerated: boolean }>();
     childCsvFiles?.forEach(f => {
       const isHierarchical = f.file_name.toLowerCase().includes('hierarchical');
       const existing = childrenWithCsv.get(f.meter_id);
       
       if (f.parse_status === 'generated' && isHierarchical) {
-        // Generated hierarchical CSV - highest priority
         childrenWithCsv.set(f.meter_id, { path: f.file_path, isGenerated: true });
         console.log(`✓ Using GENERATED hierarchical CSV for ${meterNumberMap.get(f.meter_id) || f.meter_id}: ${f.file_name}`);
       } else if (f.parse_status === 'parsed' && !isHierarchical && !existing?.isGenerated) {
-        // Uploaded CSV - use only if no generated CSV exists
         childrenWithCsv.set(f.meter_id, { path: f.file_path, isGenerated: false });
         console.log(`Using UPLOADED CSV for ${meterNumberMap.get(f.meter_id) || f.meter_id}: ${f.file_name}`);
       }
     });
     
-    // Children without any CSV - will fetch raw readings from these meters directly (NOT their children)
     const childrenWithoutCsv = childMeterIds.filter(id => !childrenWithCsv.has(id));
-    
-    // For children without CSV, we use their raw readings DIRECTLY (no recursive leaf meter lookup)
     const metersForRawReadings = childrenWithoutCsv;
     
     console.log(`Children with CSV: ${childrenWithCsv.size}`);
-    console.log(`Children without CSV (will use raw readings from immediate child): ${metersForRawReadings.length}`);
+    console.log(`Children without CSV (will use raw readings): ${metersForRawReadings.length}`);
 
     // Helper to round timestamp to nearest 30-min slot
     const roundToSlot = (timestamp: string): string => {
@@ -147,50 +134,22 @@ Deno.serve(async (req) => {
       return date.toISOString();
     };
 
-    // Generate ALL timestamps for the requested period (30-minute intervals)
-    const generateAllTimestamps = (fromDate: string, toDate: string): string[] => {
-      const timestamps: string[] = [];
-      const start = new Date(fromDate);
-      const end = new Date(toDate);
-      const intervalMs = 30 * 60 * 1000;
-      
-      let current = new Date(start);
-      while (current <= end) {
-        timestamps.push(current.toISOString());
-        current = new Date(current.getTime() + intervalMs);
-      }
-      
-      return timestamps;
-    };
+    // Use passed columns (filter out "Total kWh" as we'll calculate it ourselves)
+    const columns = (passedColumns || []).filter(c => c !== 'Total kWh');
+    console.log(`Using ${columns.length} columns from site settings:`, columns);
 
-    const allTimestamps = generateAllTimestamps(dateFrom, dateTo);
-    console.log(`Generated ${allTimestamps.length} expected timestamps for period`);
+    // ===== STEP 1: Find timestamps from the LONGEST child CSV within date range =====
+    let masterTimestamps: string[] = [];
+    let longestChildId: string | null = null;
 
-    // Initialize groupedData with ALL timestamps (zero values as default)
-    const groupedData = new Map<string, {
-      totalKwh: number;
-      columnSums: Record<string, number>;
-    }>();
+    // First, collect all CSV data and find the longest one
+    const childCsvData = new Map<string, { headers: string[]; rows: Map<string, string[]> }>();
 
-    allTimestamps.forEach(ts => {
-      groupedData.set(ts, {
-        totalKwh: 0,
-        columnSums: {}
-      });
-    });
-
-    // Discover all columns
-    const allColumns = new Set<string>();
-
-    // ===== PART 1: Read from existing CSVs (generated hierarchical or uploaded) =====
     for (const [childMeterId, csvInfo] of childrenWithCsv.entries()) {
-      const { path: filePath, isGenerated } = csvInfo;
-      console.log(`Reading ${isGenerated ? 'GENERATED' : 'UPLOADED'} CSV for child ${meterNumberMap.get(childMeterId) || childMeterId}: ${filePath}`);
-      
       try {
         const { data: csvData, error: downloadError } = await supabase.storage
           .from('client-files')
-          .download(filePath);
+          .download(csvInfo.path);
 
         if (downloadError || !csvData) {
           console.error(`Failed to download CSV for ${childMeterId}:`, downloadError);
@@ -200,73 +159,91 @@ Deno.serve(async (req) => {
         const csvText = await csvData.text();
         const lines = csvText.split('\n').filter(line => line.trim());
         
-        if (lines.length < 2) {
-          console.log(`CSV for ${childMeterId} is empty or has no data rows`);
-          continue;
-        }
+        if (lines.length < 2) continue;
 
-        // Parse header
         const headers = lines[0].split(',').map(h => h.trim());
-        const timestampIdx = 0;
-        const kwhIdx = headers.findIndex(h => h.toLowerCase().includes('kwh'));
+        const rows = new Map<string, string[]>();
         
-        // Track columns from this CSV
-        headers.forEach((h, idx) => {
-          if (idx > 0 && !h.toLowerCase().includes('timestamp')) {
-            allColumns.add(h);
-          }
-        });
-
-        // Parse data rows and merge into groupedData
         for (let i = 1; i < lines.length; i++) {
           const values = lines[i].split(',');
-          const timestamp = values[timestampIdx]?.trim();
+          const rawTimestamp = values[0]?.trim();
+          if (!rawTimestamp) continue;
           
-          if (!timestamp) continue;
+          const slot = roundToSlot(rawTimestamp);
           
-          const slot = roundToSlot(timestamp);
-          if (!groupedData.has(slot)) {
-            groupedData.set(slot, { totalKwh: 0, columnSums: {} });
+          // Filter to only include timestamps within date range
+          if (slot >= dateFrom && slot <= dateTo) {
+            rows.set(slot, values);
           }
-          
-          const group = groupedData.get(slot)!;
-          
-          // Determine if this child meter is a solar meter (invert values)
-          const isSolarMeter = solarMeterIds.has(childMeterId);
-          const multiplier = isSolarMeter ? -1 : 1;
-          
-          if (isSolarMeter && i === 1) {
-            console.log(`Applying inversion (multiplier: -1) for solar meter CSV: ${meterNumberMap.get(childMeterId) || childMeterId}`);
-          }
-          
-          // Add kWh value with multiplier - child CSVs are already corrected, no need to re-check
-          if (kwhIdx >= 0) {
-            const kwhValue = parseFloat(values[kwhIdx]) || 0;
-            group.totalKwh += kwhValue * multiplier;
-          }
-          
-          // Add other column values with multiplier - already corrected in child CSV
-          headers.forEach((header, idx) => {
-            if (idx === 0 || idx === kwhIdx) return;
-            
-            const value = parseFloat(values[idx]) || 0;
-            if (value === 0) return;
-            
-            group.columnSums[header] = (group.columnSums[header] || 0) + (value * multiplier);
-          });
+        }
+
+        childCsvData.set(childMeterId, { headers, rows });
+        
+        const timestamps = Array.from(rows.keys());
+        if (timestamps.length > masterTimestamps.length) {
+          masterTimestamps = timestamps;
+          longestChildId = childMeterId;
         }
         
-        console.log(`Merged ${lines.length - 1} rows from ${meterNumberMap.get(childMeterId) || childMeterId}`);
+        console.log(`Read ${rows.size} rows from ${meterNumberMap.get(childMeterId) || childMeterId}`);
       } catch (error) {
         console.error(`Error reading CSV for ${childMeterId}:`, error);
       }
     }
 
-    // ===== PART 2: Fetch readings from meter_readings for IMMEDIATE CHILDREN without CSVs =====
-    // NOTE: We only go ONE level deep - no recursive leaf meter lookup
+    console.log(`Using timestamps from ${longestChildId ? meterNumberMap.get(longestChildId) || longestChildId : 'none'}, ${masterTimestamps.length} timestamps`);
+
+    // Sort master timestamps
+    masterTimestamps.sort((a, b) => a.localeCompare(b));
+
+    // Initialize groupedData with timestamps from longest child
+    const groupedData = new Map<string, Record<string, number>>();
+    masterTimestamps.forEach(ts => {
+      groupedData.set(ts, {});
+    });
+
+    // ===== STEP 2: Aggregate data from all child CSVs =====
+    for (const [childMeterId, csvDataInfo] of childCsvData.entries()) {
+      const { headers, rows } = csvDataInfo;
+      const isSolarMeter = solarMeterIds.has(childMeterId);
+      const multiplier = isSolarMeter ? -1 : 1;
+      
+      if (isSolarMeter) {
+        console.log(`Applying inversion (multiplier: -1) for solar meter CSV: ${meterNumberMap.get(childMeterId) || childMeterId}`);
+      }
+
+      for (const [timestamp, values] of rows.entries()) {
+        if (!groupedData.has(timestamp)) continue; // Skip if not in master timestamps
+
+        const group = groupedData.get(timestamp)!;
+
+        // Sum each known column
+        columns.forEach(col => {
+          const headerIdx = headers.findIndex(h => h === col);
+          if (headerIdx >= 0 && headerIdx < values.length) {
+            const rawValue = parseFloat(values[headerIdx]) || 0;
+            group[col] = (group[col] || 0) + (rawValue * multiplier);
+          }
+        });
+
+        // Also handle "Total kWh" column from child if present
+        const totalKwhIdx = headers.findIndex(h => h === 'Total kWh');
+        if (totalKwhIdx >= 0 && totalKwhIdx < values.length) {
+          const rawValue = parseFloat(values[totalKwhIdx]) || 0;
+          group['_childTotalKwh'] = (group['_childTotalKwh'] || 0) + (rawValue * multiplier);
+        }
+      }
+    }
+
+    // ===== STEP 3: Fetch raw readings for children without CSVs =====
     if (metersForRawReadings.length > 0) {
       const PAGE_SIZE = 1000;
-      let allReadings: ReadingRow[] = [];
+      let allReadings: Array<{
+        reading_timestamp: string;
+        kwh_value: number;
+        metadata: Record<string, any> | null;
+        meter_id: string;
+      }> = [];
       let offset = 0;
       let hasMore = true;
 
@@ -287,10 +264,9 @@ Deno.serve(async (req) => {
         }
 
         if (pageData && pageData.length > 0) {
-          allReadings = allReadings.concat(pageData as ReadingRow[]);
+          allReadings = allReadings.concat(pageData);
           offset += pageData.length;
           hasMore = pageData.length === PAGE_SIZE;
-          console.log(`Fetched page: ${pageData.length} rows, total so far: ${allReadings.length}`);
         } else {
           hasMore = false;
         }
@@ -298,31 +274,26 @@ Deno.serve(async (req) => {
 
       console.log(`Fetched ${allReadings.length} total readings from ${metersForRawReadings.length} immediate children`);
 
-      // Discover columns from readings
-      allReadings?.forEach((reading: ReadingRow) => {
-        if (reading.metadata?.imported_fields) {
-          Object.entries(reading.metadata.imported_fields).forEach(([key, value]) => {
-            if (typeof value === 'number' || (typeof value === 'string' && !isNaN(Number(value)))) {
-              allColumns.add(key);
-            }
-          });
+      // Add raw readings timestamps to master if not already present
+      allReadings.forEach(reading => {
+        const slot = roundToSlot(reading.reading_timestamp);
+        if (!groupedData.has(slot)) {
+          groupedData.set(slot, {});
+          masterTimestamps.push(slot);
         }
       });
+      
+      // Re-sort master timestamps after adding new ones
+      masterTimestamps.sort((a, b) => a.localeCompare(b));
 
-      // Populate groupedData with readings (with corruption detection)
-      allReadings?.forEach((reading: ReadingRow) => {
-        const matchingTs = roundToSlot(reading.reading_timestamp);
+      // Aggregate raw readings
+      allReadings.forEach(reading => {
+        const slot = roundToSlot(reading.reading_timestamp);
+        const group = groupedData.get(slot)!;
         
-        if (!groupedData.has(matchingTs)) {
-          groupedData.set(matchingTs, { totalKwh: 0, columnSums: {} });
-        }
-
-        const group = groupedData.get(matchingTs)!;
-        
-        // Determine if this is a solar meter (invert values)
         const isSolarMeter = solarMeterIds.has(reading.meter_id);
         const multiplier = isSolarMeter ? -1 : 1;
-        
+
         // Check kWh value for corruption
         if (Math.abs(reading.kwh_value) > THRESHOLDS.maxKwhPer30Min) {
           corrections.push({
@@ -336,20 +307,17 @@ Deno.serve(async (req) => {
             originalSourceMeterId: reading.meter_id,
             originalSourceMeterNumber: meterNumberMap.get(reading.meter_id) || 'Unknown'
           });
-          // Don't add corrupt value
         } else {
-          group.totalKwh += reading.kwh_value * multiplier;
+          group['_childTotalKwh'] = (group['_childTotalKwh'] || 0) + (reading.kwh_value * multiplier);
         }
 
-        // Sum all metadata columns with corruption check
+        // Sum metadata columns
         if (reading.metadata?.imported_fields) {
-          const columns = Array.from(allColumns);
           columns.forEach(col => {
             const value = reading.metadata?.imported_fields?.[col];
             if (value !== null && value !== undefined) {
               const numValue = Number(value);
               if (!isNaN(numValue) && numValue !== 0) {
-                // Determine threshold
                 const isKva = col.toLowerCase().includes('kva') || col.toLowerCase() === 's';
                 const threshold = isKva ? THRESHOLDS.maxKvaPer30Min : THRESHOLDS.maxMetadataValue;
                 
@@ -365,9 +333,8 @@ Deno.serve(async (req) => {
                     originalSourceMeterId: reading.meter_id,
                     originalSourceMeterNumber: meterNumberMap.get(reading.meter_id) || 'Unknown'
                   });
-                  // Don't add corrupt value
                 } else {
-                  group.columnSums[col] = (group.columnSums[col] || 0) + (numValue * multiplier);
+                  group[col] = (group[col] || 0) + (numValue * multiplier);
                 }
               }
             }
@@ -376,24 +343,34 @@ Deno.serve(async (req) => {
       });
     }
 
-    const columns = Array.from(allColumns).sort();
-    console.log(`Discovered ${columns.length} numeric columns:`, columns);
     console.log(`Total corrections made: ${corrections.length}`);
+    console.log(`GroupedData has ${groupedData.size} timestamps after aggregation`);
 
-    if (corrections.length > 0) {
-      console.log('Corrections summary:');
-      const byMeter = corrections.reduce((acc, c) => {
-        acc[c.meterNumber] = (acc[c.meterNumber] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>);
-      console.log(byMeter);
-    }
+    // ===== STEP 4: Calculate Total kWh for each timestamp =====
+    // If children had "Total kWh" column, use that sum; otherwise sum from kWh columns
+    const kwhColumns = columns.filter(c => 
+      c.toLowerCase().includes('kwh') || /^P\d+$/.test(c)
+    );
+    
+    groupedData.forEach((data, timestamp) => {
+      if (data['_childTotalKwh'] !== undefined) {
+        // Use summed Total kWh from children
+        data['Total kWh'] = data['_childTotalKwh'];
+        delete data['_childTotalKwh'];
+      } else {
+        // Calculate from kWh columns
+        let totalKwh = 0;
+        kwhColumns.forEach(col => {
+          totalKwh += data[col] || 0;
+        });
+        data['Total kWh'] = totalKwh;
+      }
+    });
 
-    console.log(`GroupedData has ${groupedData.size} timestamps after populating`);
-
-    // Generate CSV rows
+    // ===== STEP 5: Generate CSV rows =====
     const csvRows: string[] = [];
-    const headerColumns = ['Timestamp', 'Total kWh', ...columns];
+    // Header: Timestamp, columns (without Total kWh), Total kWh at the end
+    const headerColumns = ['Timestamp', ...columns, 'Total kWh'];
     csvRows.push(headerColumns.join(','));
 
     Array.from(groupedData.entries())
@@ -401,8 +378,8 @@ Deno.serve(async (req) => {
       .forEach(([timestamp, data]) => {
         const row = [
           timestamp,
-          data.totalKwh.toFixed(4),
-          ...columns.map(col => (data.columnSums[col] || 0).toFixed(4))
+          ...columns.map(col => (data[col] || 0).toFixed(4)),
+          (data['Total kWh'] || 0).toFixed(4)
         ];
         csvRows.push(row.join(','));
       });
@@ -412,24 +389,21 @@ Deno.serve(async (req) => {
 
     // Calculate final totals for response
     const totalKwh = Array.from(groupedData.values())
-      .reduce((sum, d) => sum + d.totalKwh, 0);
+      .reduce((sum, d) => sum + (d['Total kWh'] || 0), 0);
 
     const columnTotals: Record<string, number> = {};
     const columnMaxValues: Record<string, number> = {};
     
     columns.forEach(col => {
       const colLower = col.toLowerCase();
-      // kVA columns should use MAX (peak demand), not SUM
       const isKvaColumn = colLower.includes('kva') || colLower === 's';
       
       if (isKvaColumn) {
-        // For kVA columns: find the MAXIMUM of the per-interval sums
-        const values = Array.from(groupedData.values()).map(d => d.columnSums[col] || 0);
+        const values = Array.from(groupedData.values()).map(d => d[col] || 0);
         columnMaxValues[col] = values.length > 0 ? Math.max(...values) : 0;
       } else {
-        // For kWh columns: SUM across all timestamps
         columnTotals[col] = Array.from(groupedData.values())
-          .reduce((sum, d) => sum + (d.columnSums[col] || 0), 0);
+          .reduce((sum, d) => sum + (d[col] || 0), 0);
       }
     });
 
@@ -458,7 +432,7 @@ Deno.serve(async (req) => {
     const fileName = `${sanitizedMeterNumber}_Hierarchical_Energy_Profile.csv`;
     const filePath = `${clientName}/${siteName}/Metering/Reconciliations/${fileName}`;
 
-    // Check if CSV already exists and merge data
+    // Check if CSV already exists and merge data (KEEP existing merge logic)
     const { data: existingFiles } = await supabase.storage
       .from('client-files')
       .list(`${clientName}/${siteName}/Metering/Reconciliations`, {
@@ -480,6 +454,7 @@ Deno.serve(async (req) => {
         const existingLines = existingContent.split('\n').filter(line => line.trim());
         const newLines = csvRows.slice(1);
 
+        // Use new timestamps to replace existing, keep old timestamps that aren't in new data
         const uniqueLines = new Map<string, string>();
         existingLines.slice(1).forEach(line => {
           const timestamp = line.split(',')[0];
@@ -488,6 +463,7 @@ Deno.serve(async (req) => {
           }
         });
 
+        // New data replaces existing timestamps
         newLines.forEach(line => {
           const timestamp = line.split(',')[0];
           if (timestamp) {
@@ -543,7 +519,7 @@ Deno.serve(async (req) => {
           readings_inserted: rowCount,
           updated_at: new Date().toISOString(),
           file_size: finalCsvContent.length,
-          parse_status: 'generated' // CRITICAL: Mark as generated so parent meters can find this CSV
+          parse_status: 'generated'
         })
         .eq('id', existingRecord.id);
 
@@ -576,10 +552,10 @@ Deno.serve(async (req) => {
         filePath,
         rowCount,
         totalKwh,
-        columnTotals,      // P1, P2, etc. (sums for kWh columns)
-        columnMaxValues,   // S kVA (maximum for kVA columns)
+        columnTotals,
+        columnMaxValues,
         columns,
-        corrections, // Return all corrections made
+        corrections,
         message: corrections.length > 0 
           ? `CSV created with ${corrections.length} corrupt value(s) corrected` 
           : fileExists ? 'CSV updated with new data' : 'CSV created successfully'
