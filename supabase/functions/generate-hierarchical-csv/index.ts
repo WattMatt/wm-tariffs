@@ -94,10 +94,10 @@ Deno.serve(async (req) => {
     meterInfo?.forEach(m => meterNumberMap.set(m.id, m.meter_number));
     console.log('Child meters:', Array.from(meterNumberMap.entries()).map(([id, num]) => num).join(', '));
 
-    // Fetch meter associations to identify solar meters (for sign inversion)
+    // Fetch meter associations and column factors for sign inversion
     const { data: reconcSettings } = await supabase
       .from('site_reconciliation_settings')
-      .select('meter_associations')
+      .select('meter_associations, column_factors')
       .eq('site_id', siteId)
       .maybeSingle();
 
@@ -111,7 +111,11 @@ Deno.serve(async (req) => {
         }
       });
     }
-    console.log(`Found ${solarMeterIds.size} solar meters (values will be inverted)`);
+    console.log(`Found ${solarMeterIds.size} solar meters`);
+
+    // Get column factors (default to 1 for any unspecified columns)
+    const columnFactors = (reconcSettings?.column_factors as Record<string, number>) || {};
+    console.log('Column factors:', columnFactors);
 
     // ===== STEP 1: Query meter_readings for ALL child meters within date range =====
     console.log('Fetching readings from meter_readings table...');
@@ -181,7 +185,6 @@ Deno.serve(async (req) => {
       
       const group = groupedData.get(slot)!;
       const isSolarMeter = solarMeterIds.has(reading.meter_id);
-      const multiplier = isSolarMeter ? -1 : 1;
 
       // Aggregate imported_fields from metadata
       if (reading.metadata?.imported_fields) {
@@ -192,6 +195,10 @@ Deno.serve(async (req) => {
           if (value !== null && value !== undefined) {
             const numValue = Number(value);
             if (!isNaN(numValue)) {
+              // Get column factor (default to 1 if not specified)
+              const columnFactor = columnFactors[col] ?? 1;
+              // For solar meters, invert the factor; for normal meters, use as-is
+              const multiplier = isSolarMeter ? -columnFactor : columnFactor;
               group[col] = (group[col] || 0) + (numValue * multiplier);
             }
           }
