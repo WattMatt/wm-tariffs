@@ -290,31 +290,96 @@ Deno.serve(async (req) => {
 
     console.log(`CSV uploaded to: ${filePath}`);
 
-    // ===== STEP 5: Create/Update meter_csv_files record =====
+    // ===== STEP 5: Delete existing readings for parent meter in date range =====
+    console.log('Deleting existing readings for parent meter in date range...');
+    
+    const { error: deleteError, count: deleteCount } = await supabase
+      .from('meter_readings')
+      .delete()
+      .eq('meter_id', parentMeterId)
+      .gte('reading_timestamp', dateFrom)
+      .lte('reading_timestamp', dateTo);
+
+    if (deleteError) {
+      console.warn(`Failed to delete existing readings: ${deleteError.message}`);
+    } else {
+      console.log(`Deleted existing readings for parent meter`);
+    }
+
+    // ===== STEP 6: Insert aggregated data directly into meter_readings =====
+    console.log('Inserting aggregated data into meter_readings...');
+    
+    const readingsToInsert = sortedTimestamps.map(timestamp => {
+      const data = groupedData.get(timestamp)!;
+      
+      // Calculate kwh_value from kWh columns (sum of P1, P2, etc.)
+      const kwhValue = kwhColumns.reduce((sum, col) => sum + (data[col] || 0), 0);
+      
+      // Get kVA value from kVA columns (take max)
+      const kvaColumns = columns.filter(c => 
+        c.toLowerCase().includes('kva') || c.toLowerCase() === 's'
+      );
+      const kvaValue = kvaColumns.length > 0 
+        ? Math.max(...kvaColumns.map(col => data[col] || 0))
+        : null;
+      
+      return {
+        meter_id: parentMeterId,
+        reading_timestamp: timestamp,
+        kwh_value: kwhValue,
+        kva_value: kvaValue,
+        metadata: {
+          source: 'hierarchical_aggregation',
+          source_file: fileName,
+          imported_at: new Date().toISOString(),
+          child_meter_count: childMeterIds.length,
+          imported_fields: data // Store all column values
+        }
+      };
+    });
+
+    // Batch insert in chunks of 500
+    const BATCH_SIZE = 500;
+    let totalInserted = 0;
+    let insertErrors = 0;
+
+    for (let i = 0; i < readingsToInsert.length; i += BATCH_SIZE) {
+      const batch = readingsToInsert.slice(i, i + BATCH_SIZE);
+      const { error: insertError } = await supabase
+        .from('meter_readings')
+        .insert(batch);
+
+      if (insertError) {
+        console.error(`Error inserting batch ${i / BATCH_SIZE + 1}:`, insertError.message);
+        insertErrors++;
+      } else {
+        totalInserted += batch.length;
+      }
+    }
+
+    console.log(`Inserted ${totalInserted} readings for parent meter`);
+
+    // ===== STEP 7: Create/Update meter_csv_files record =====
     console.log('Creating/updating meter_csv_files record...');
     
     const contentHash = await generateHash(csvContent);
 
     // Build column mapping for the generated CSV
-    // Column 0 = Timestamp (combined datetime)
-    // Column 1+ = data columns
     const columnMapping: Record<string, any> = {
       dateColumn: '0',
-      timeColumn: '-1', // Combined in timestamp
-      valueColumn: '1', // First data column (usually P1 or similar)
+      timeColumn: '-1',
+      valueColumn: '1',
       kvaColumn: '-1',
       dateTimeFormat: 'YYYY-MM-DDTHH:mm:ss.sssZ',
       renamedHeaders: {} as Record<number, string>,
       columnDataTypes: {} as Record<string, string>
     };
 
-    // Map all columns to their indices
     columns.forEach((col, idx) => {
-      const colIdx = idx + 1; // +1 because Timestamp is at 0
+      const colIdx = idx + 1;
       columnMapping.renamedHeaders[colIdx] = col;
       columnMapping.columnDataTypes[colIdx.toString()] = 'float';
       
-      // If this is a kVA column, set it as the kva column
       const colLower = col.toLowerCase();
       if ((colLower.includes('kva') || colLower === 's') && columnMapping.kvaColumn === '-1') {
         columnMapping.kvaColumn = colIdx.toString();
@@ -332,7 +397,6 @@ Deno.serve(async (req) => {
     let csvFileId: string;
 
     if (existingRecord) {
-      // Update existing record
       const { data: updatedRecord, error: updateError } = await supabase
         .from('meter_csv_files')
         .update({
@@ -340,15 +404,16 @@ Deno.serve(async (req) => {
           content_hash: contentHash,
           file_size: csvContent.length,
           upload_status: 'uploaded',
-          parse_status: 'pending',
+          parse_status: 'generated',
+          parsed_at: new Date().toISOString(),
           separator: ',',
           header_row_number: 1,
           column_mapping: columnMapping,
           updated_at: new Date().toISOString(),
-          error_message: null,
-          readings_inserted: 0,
+          error_message: insertErrors > 0 ? `${insertErrors} batch insert errors` : null,
+          readings_inserted: totalInserted,
           duplicates_skipped: 0,
-          parse_errors: 0
+          parse_errors: insertErrors
         })
         .eq('id', existingRecord.id)
         .select('id')
@@ -361,7 +426,6 @@ Deno.serve(async (req) => {
       csvFileId = updatedRecord.id;
       console.log(`Updated existing meter_csv_files record: ${csvFileId}`);
     } else {
-      // Insert new record
       const { data: newRecord, error: insertError } = await supabase
         .from('meter_csv_files')
         .insert({
@@ -372,10 +436,14 @@ Deno.serve(async (req) => {
           content_hash: contentHash,
           file_size: csvContent.length,
           upload_status: 'uploaded',
-          parse_status: 'pending',
+          parse_status: 'generated',
+          parsed_at: new Date().toISOString(),
           separator: ',',
           header_row_number: 1,
-          column_mapping: columnMapping
+          column_mapping: columnMapping,
+          readings_inserted: totalInserted,
+          duplicates_skipped: 0,
+          parse_errors: insertErrors
         })
         .select('id')
         .single();
@@ -386,64 +454,6 @@ Deno.serve(async (req) => {
       
       csvFileId = newRecord.id;
       console.log(`Created new meter_csv_files record: ${csvFileId}`);
-    }
-
-    // ===== STEP 6: Delete existing readings for parent meter in date range =====
-    console.log('Deleting existing readings for parent meter in date range...');
-    
-    const { error: deleteError } = await supabase
-      .from('meter_readings')
-      .delete()
-      .eq('meter_id', parentMeterId)
-      .gte('reading_timestamp', dateFrom)
-      .lte('reading_timestamp', dateTo);
-
-    if (deleteError) {
-      console.warn(`Failed to delete existing readings: ${deleteError.message}`);
-    } else {
-      console.log('Existing readings deleted successfully');
-    }
-
-    // ===== STEP 7: Call process-meter-csv to parse the hierarchical CSV =====
-    console.log('Invoking process-meter-csv to parse the hierarchical CSV...');
-    
-    const { data: parseResult, error: parseError } = await supabase.functions.invoke('process-meter-csv', {
-      body: {
-        csvFileId: csvFileId,
-        meterId: parentMeterId,
-        filePath: filePath,
-        separator: ',',
-        headerRowNumber: 1,
-        columnMapping: columnMapping
-      }
-    });
-
-    if (parseError) {
-      console.error('Error calling process-meter-csv:', parseError);
-      // Don't throw - the CSV is uploaded, parsing can be retried
-      
-      // Update the record with error status
-      await supabase
-        .from('meter_csv_files')
-        .update({
-          parse_status: 'error',
-          error_message: `Parse invocation failed: ${parseError.message}`
-        })
-        .eq('id', csvFileId);
-    } else {
-      console.log('process-meter-csv result:', parseResult);
-      
-      // Update record to 'generated' status after successful parsing
-      await supabase
-        .from('meter_csv_files')
-        .update({
-          parse_status: 'generated',
-          parsed_at: new Date().toISOString(),
-          readings_inserted: parseResult?.inserted || 0,
-          duplicates_skipped: parseResult?.skipped || 0,
-          parse_errors: parseResult?.parseErrors || 0
-        })
-        .eq('id', csvFileId);
     }
 
     console.log('=== HIERARCHICAL CSV GENERATION COMPLETE ===');
@@ -458,7 +468,8 @@ Deno.serve(async (req) => {
         columnTotals,
         columnMaxValues,
         rowCount: sortedTimestamps.length,
-        parseResult: parseResult || null
+        readingsInserted: totalInserted,
+        insertErrors
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
