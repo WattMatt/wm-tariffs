@@ -1959,8 +1959,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           break;
       }
       
-      // 4. Apply the scaling factor
-      result = result * factor;
+      // 4. Skip factor multiplication - factors already applied by edge function
+      // during hierarchical CSV generation (including solar inversion)
       
       // 5. Store the processed value
       processedColumnTotals[column] = result;
@@ -1982,11 +1982,9 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       // Only include selected columns
       if (!selectedColumnsRef.current.has(column)) return;
       
-      // Get the factor for this column (max values use factor but not operations like average)
-      const factor = Number(columnFactorsRef.current.get(column) || 1);
-      
-      // Apply the scaling factor
-      processedColumnMaxValues[column] = rawValue * factor;
+      // Skip factor multiplication - factors already applied by edge function
+      // during hierarchical CSV generation (including solar inversion)
+      processedColumnMaxValues[column] = rawValue;
     });
 
     return { processedColumnTotals, processedColumnMaxValues, totalKwhPositive, totalKwhNegative, totalKwh };
