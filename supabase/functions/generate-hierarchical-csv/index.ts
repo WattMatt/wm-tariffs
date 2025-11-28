@@ -34,6 +34,15 @@ const THRESHOLDS = {
   maxMetadataValue: 100000,
 };
 
+// Helper to normalize timestamps to consistent ISO format
+const normalizeTimestamp = (ts: string): string => {
+  try {
+    return new Date(ts).toISOString();
+  } catch {
+    return ts;
+  }
+};
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -134,8 +143,8 @@ Deno.serve(async (req) => {
       return date.toISOString();
     };
 
-    // Use passed columns (filter out "Total kWh" as we'll calculate it ourselves)
-    const columns = (passedColumns || []).filter(c => c !== 'Total kWh');
+    // Use passed columns exactly as provided (NO "Total kWh" column)
+    const columns = passedColumns || [];
     console.log(`Using ${columns.length} columns from site settings:`, columns);
 
     // ===== STEP 1: Find timestamps from the LONGEST child CSV within date range =====
@@ -217,7 +226,7 @@ Deno.serve(async (req) => {
 
         const group = groupedData.get(timestamp)!;
 
-        // Sum each known column
+        // Sum each known column from passed columns
         columns.forEach(col => {
           const headerIdx = headers.findIndex(h => h === col);
           if (headerIdx >= 0 && headerIdx < values.length) {
@@ -225,13 +234,6 @@ Deno.serve(async (req) => {
             group[col] = (group[col] || 0) + (rawValue * multiplier);
           }
         });
-
-        // Also handle "Total kWh" column from child if present
-        const totalKwhIdx = headers.findIndex(h => h === 'Total kWh');
-        if (totalKwhIdx >= 0 && totalKwhIdx < values.length) {
-          const rawValue = parseFloat(values[totalKwhIdx]) || 0;
-          group['_childTotalKwh'] = (group['_childTotalKwh'] || 0) + (rawValue * multiplier);
-        }
       }
     }
 
@@ -307,8 +309,6 @@ Deno.serve(async (req) => {
             originalSourceMeterId: reading.meter_id,
             originalSourceMeterNumber: meterNumberMap.get(reading.meter_id) || 'Unknown'
           });
-        } else {
-          group['_childTotalKwh'] = (group['_childTotalKwh'] || 0) + (reading.kwh_value * multiplier);
         }
 
         // Sum metadata columns
@@ -346,31 +346,10 @@ Deno.serve(async (req) => {
     console.log(`Total corrections made: ${corrections.length}`);
     console.log(`GroupedData has ${groupedData.size} timestamps after aggregation`);
 
-    // ===== STEP 4: Calculate Total kWh for each timestamp =====
-    // If children had "Total kWh" column, use that sum; otherwise sum from kWh columns
-    const kwhColumns = columns.filter(c => 
-      c.toLowerCase().includes('kwh') || /^P\d+$/.test(c)
-    );
-    
-    groupedData.forEach((data, timestamp) => {
-      if (data['_childTotalKwh'] !== undefined) {
-        // Use summed Total kWh from children
-        data['Total kWh'] = data['_childTotalKwh'];
-        delete data['_childTotalKwh'];
-      } else {
-        // Calculate from kWh columns
-        let totalKwh = 0;
-        kwhColumns.forEach(col => {
-          totalKwh += data[col] || 0;
-        });
-        data['Total kWh'] = totalKwh;
-      }
-    });
-
-    // ===== STEP 5: Generate CSV rows =====
+    // ===== STEP 4: Generate CSV rows (NO "Total kWh" column) =====
     const csvRows: string[] = [];
-    // Header: Timestamp, columns (without Total kWh), Total kWh at the end
-    const headerColumns = ['Timestamp', ...columns, 'Total kWh'];
+    // Header: Timestamp followed by passed columns ONLY
+    const headerColumns = ['Timestamp', ...columns];
     csvRows.push(headerColumns.join(','));
 
     Array.from(groupedData.entries())
@@ -378,19 +357,15 @@ Deno.serve(async (req) => {
       .forEach(([timestamp, data]) => {
         const row = [
           timestamp,
-          ...columns.map(col => (data[col] || 0).toFixed(4)),
-          (data['Total kWh'] || 0).toFixed(4)
+          ...columns.map(col => (data[col] || 0).toFixed(4))
         ];
         csvRows.push(row.join(','));
       });
 
     const newCsvContent = csvRows.join('\n');
-    console.log(`Generated ${csvRows.length - 1} CSV rows`);
+    console.log(`Generated ${csvRows.length - 1} CSV rows with ${columns.length} columns`);
 
-    // Calculate final totals for response
-    const totalKwh = Array.from(groupedData.values())
-      .reduce((sum, d) => sum + (d['Total kWh'] || 0), 0);
-
+    // Calculate final totals for response (NO "Total kWh")
     const columnTotals: Record<string, number> = {};
     const columnMaxValues: Record<string, number> = {};
     
@@ -407,7 +382,13 @@ Deno.serve(async (req) => {
       }
     });
 
-    console.log('Total kWh:', totalKwh);
+    // Calculate totalKwh from kWh-related columns in columnTotals
+    const kwhColumns = columns.filter(c => 
+      c.toLowerCase().includes('kwh') || /^P\d+$/.test(c)
+    );
+    const totalKwh = kwhColumns.reduce((sum, col) => sum + (columnTotals[col] || 0), 0);
+
+    console.log('Total kWh (calculated from kWh columns):', totalKwh);
     console.log('Column totals (sums):', columnTotals);
     console.log('Column max values (kVA):', columnMaxValues);
 
@@ -432,7 +413,7 @@ Deno.serve(async (req) => {
     const fileName = `${sanitizedMeterNumber}_Hierarchical_Energy_Profile.csv`;
     const filePath = `${clientName}/${siteName}/Metering/Reconciliations/${fileName}`;
 
-    // Check if CSV already exists and merge data (KEEP existing merge logic)
+    // Check if CSV already exists
     const { data: existingFiles } = await supabase.storage
       .from('client-files')
       .list(`${clientName}/${siteName}/Metering/Reconciliations`, {
@@ -443,7 +424,7 @@ Deno.serve(async (req) => {
     const fileExists = existingFiles && existingFiles.length > 0;
 
     if (fileExists) {
-      console.log('Existing CSV found, merging data...');
+      console.log('Existing CSV found, checking column structure...');
       
       const { data: existingCsv, error: downloadError } = await supabase.storage
         .from('client-files')
@@ -452,31 +433,51 @@ Deno.serve(async (req) => {
       if (!downloadError && existingCsv) {
         const existingContent = await existingCsv.text();
         const existingLines = existingContent.split('\n').filter(line => line.trim());
-        const newLines = csvRows.slice(1);
+        
+        if (existingLines.length > 0) {
+          const existingHeader = existingLines[0];
+          const newHeader = headerColumns.join(',');
+          const existingColumnCount = existingHeader.split(',').length;
+          const newColumnCount = headerColumns.length;
+          
+          // If column structure changed, replace entirely instead of merging
+          if (existingColumnCount !== newColumnCount || existingHeader !== newHeader) {
+            console.log(`Column structure changed (${existingColumnCount} -> ${newColumnCount}), replacing CSV entirely`);
+            finalCsvContent = newCsvContent;
+          } else {
+            // Column structure matches - merge with timestamp normalization
+            console.log('Column structure matches, merging data with normalized timestamps...');
+            const newLines = csvRows.slice(1);
 
-        // Use new timestamps to replace existing, keep old timestamps that aren't in new data
-        const uniqueLines = new Map<string, string>();
-        existingLines.slice(1).forEach(line => {
-          const timestamp = line.split(',')[0];
-          if (timestamp) {
-            uniqueLines.set(timestamp, line);
+            // Use normalized timestamps for merging
+            const uniqueLines = new Map<string, string>();
+            
+            // Add existing lines with normalized timestamps
+            existingLines.slice(1).forEach(line => {
+              const rawTimestamp = line.split(',')[0];
+              if (rawTimestamp) {
+                const normalizedTs = normalizeTimestamp(rawTimestamp);
+                uniqueLines.set(normalizedTs, line);
+              }
+            });
+
+            // New data replaces existing timestamps (with normalized keys)
+            newLines.forEach(line => {
+              const rawTimestamp = line.split(',')[0];
+              if (rawTimestamp) {
+                const normalizedTs = normalizeTimestamp(rawTimestamp);
+                uniqueLines.set(normalizedTs, line);
+              }
+            });
+
+            const sortedLines = Array.from(uniqueLines.entries())
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([, line]) => line);
+
+            finalCsvContent = [headerColumns.join(','), ...sortedLines].join('\n');
+            console.log(`Merged CSV: ${sortedLines.length} total rows`);
           }
-        });
-
-        // New data replaces existing timestamps
-        newLines.forEach(line => {
-          const timestamp = line.split(',')[0];
-          if (timestamp) {
-            uniqueLines.set(timestamp, line);
-          }
-        });
-
-        const sortedLines = Array.from(uniqueLines.entries())
-          .sort(([a], [b]) => a.localeCompare(b))
-          .map(([, line]) => line);
-
-        finalCsvContent = [headerColumns.join(','), ...sortedLines].join('\n');
-        console.log(`Merged CSV: ${sortedLines.length} total rows`);
+        }
       }
     }
 

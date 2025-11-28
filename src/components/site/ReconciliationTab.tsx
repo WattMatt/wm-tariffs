@@ -2028,49 +2028,37 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     try {
       const fullDateTimeFrom = getFullDateTime(dateFrom, timeFrom);
       const fullDateTimeTo = getFullDateTime(dateTo, timeTo);
-
       const shouldCalculateRevenue = enableRevenue !== undefined ? enableRevenue : revenueReconciliationEnabled;
-      
-      const { meterData, errors, reconciliationData, leafCorrectionsByMeter } = await performReconciliationCalculation(
-        fullDateTimeFrom,
-        fullDateTimeTo,
-        shouldCalculateRevenue
-      );
 
-      setFailedMeters(errors);
-      
-      if (shouldCalculateRevenue) {
-        setIsCalculatingRevenue(false);
-        toast.success("Revenue calculation complete");
-      }
-
-      // Generate hierarchical CSVs for parent meters at run time
-      const parentMeters = meterData.filter(meter => {
+      // ===== STEP 1: Generate hierarchical CSVs FIRST =====
+      // This ensures hierarchical data is available before reconciliation calculation
+      const allMetersForCsvCheck = availableMeters;
+      const parentMetersForCsv = allMetersForCsvCheck.filter(meter => {
         const children = meterConnectionsMap.get(meter.id);
         return children && children.length > 0;
       });
 
-      if (parentMeters.length > 0) {
-        // Sort parent meters by hierarchy depth (deepest first) for bottom-up processing
-        const sortedParentMeters = sortParentMetersByDepth(parentMeters);
-        console.log(`Generating ${sortedParentMeters.length} hierarchical CSV file(s) in bottom-up order...`);
+      const csvResults = new Map<string, { totalKwh: number; columnTotals: Record<string, number>; columnMaxValues: Record<string, number>; rowCount: number }>();
+      const allCorrections = new Map<string, Array<any>>();
+      let metersWithUploadedCsvs = new Set<string>();
+
+      if (parentMetersForCsv.length > 0) {
+        // Sort parent meters by hierarchy depth for bottom-up processing
+        const sortedParentMeters = sortParentMetersByDepth(parentMetersForCsv);
+        console.log(`STEP 1: Generating ${sortedParentMeters.length} hierarchical CSV file(s) FIRST...`);
         console.log('Processing order:', sortedParentMeters.map(m => m.meter_number));
         toast.info(`Generating ${sortedParentMeters.length} hierarchical profile(s)...`);
         
-        // Update UI to show we're generating CSVs
         setIsGeneratingCsvs(true);
         setCsvGenerationProgress({ current: 0, total: sortedParentMeters.length });
 
         // Check which parent meters have their own uploaded CSVs
         const parentMeterIds = sortedParentMeters.map(m => m.id);
-        const metersWithUploadedCsvs = await getMetersWithUploadedCsvs(parentMeterIds);
+        metersWithUploadedCsvs = await getMetersWithUploadedCsvs(parentMeterIds);
         console.log(`Parent meters with uploaded CSVs (will use uploaded data): ${metersWithUploadedCsvs.size}`, 
           Array.from(metersWithUploadedCsvs));
 
-        const csvResults = new Map<string, { totalKwh: number; columnTotals: Record<string, number>; columnMaxValues: Record<string, number>; rowCount: number }>();
-        const allCorrections = new Map<string, Array<any>>();
-        
-        // Delete old generated CSVs before reconciliation to ensure fresh corruption-checked data
+        // Delete old generated CSVs to ensure fresh data
         const { error: deleteError } = await supabase
           .from('meter_csv_files')
           .delete()
@@ -2083,9 +2071,12 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           console.log('Deleted old generated CSVs to ensure fresh data');
         }
         
-        // Process CSVs sequentially in bottom-up order (deepest children first)
-        // This ensures child CSVs are available when parent CSVs need them
+        // Generate CSVs sequentially in bottom-up order
         for (let i = 0; i < sortedParentMeters.length; i++) {
+          if (cancelReconciliationRef.current) {
+            throw new Error('Reconciliation cancelled by user');
+          }
+          
           const parentMeter = sortedParentMeters[i];
           
           const result = await generateHierarchicalCsvForMeter(
@@ -2102,123 +2093,134 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
               rowCount: result.rowCount
             });
             
-            // Store corrections for this parent meter
             if (result.corrections && result.corrections.length > 0) {
               allCorrections.set(parentMeter.id, result.corrections);
               console.log(`📝 ${result.corrections.length} corrections for ${parentMeter.meter_number}`);
             }
           }
           
-          // Update progress after each CSV completes
           setCsvGenerationProgress({ current: i + 1, total: sortedParentMeters.length });
         }
         
-        // Merge leaf meter corrections (from processSingleMeter) with hierarchical corrections
-        // Leaf corrections are already applied during processing, but we need them for display
-        for (const [meterId, corrections] of leafCorrectionsByMeter.entries()) {
-          if (allCorrections.has(meterId)) {
-            allCorrections.get(meterId)!.push(...corrections);
-          } else {
-            allCorrections.set(meterId, corrections);
-          }
-        }
-        
-        // Propagate corrections from children to parents recursively
-        // This ensures parent meters show the "corrected" badge when their children have corrections
-        const getAllDescendantCorrections = (meterId: string): CorrectedReading[] => {
-          const childIds = meterConnectionsMap.get(meterId) || [];
-          let descendantCorrections: CorrectedReading[] = [];
-          
-          for (const childId of childIds) {
-            // Get this child's own corrections
-            const childCorrections = allCorrections.get(childId) || [];
-            const leafCorrections = leafCorrectionsByMeter.get(childId) || [];
-            
-            // Get corrections from child's descendants (recursive)
-            const grandchildCorrections = getAllDescendantCorrections(childId);
-            
-            descendantCorrections.push(...childCorrections, ...leafCorrections, ...grandchildCorrections);
-          }
-          
-          return descendantCorrections;
-        };
-        
-        // Update allCorrections for each parent meter with accumulated corrections
-        for (const parentMeter of sortedParentMeters) {
-          const existingCorrections = allCorrections.get(parentMeter.id) || [];
-          const descendantCorrections = getAllDescendantCorrections(parentMeter.id);
-          
-          // Deduplicate by timestamp + originalSourceMeterId + fieldName
-          const uniqueCorrections = [...existingCorrections];
-          for (const correction of descendantCorrections) {
-            const isDuplicate = uniqueCorrections.some(c =>
-              c.timestamp === correction.timestamp &&
-              c.originalSourceMeterId === correction.originalSourceMeterId &&
-              c.fieldName === correction.fieldName
-            );
-            if (!isDuplicate) {
-              uniqueCorrections.push(correction);
-            }
-          }
-          
-          if (uniqueCorrections.length > 0) {
-            allCorrections.set(parentMeter.id, uniqueCorrections);
-            console.log(`📊 ${parentMeter.meter_number} now has ${uniqueCorrections.length} corrections (propagated from children)`);
-          }
-        }
-        
-        // Update corrections state with both leaf and hierarchical corrections
-        setMeterCorrections(allCorrections);
-        console.log('Hierarchical CSV generation complete at run time');
+        console.log('STEP 1 COMPLETE: Hierarchical CSVs generated');
         setIsGeneratingCsvs(false);
-
-        // Update parent meters in reconciliationData with CSV-calculated values
-        // BUT only if the meter does NOT have an uploaded CSV
-        // Apply the same column selection, operations, and factors as uploaded CSVs
-        // Note: Leaf meter corrections are already applied during processSingleMeter
-        if (csvResults.size > 0) {
-          // Update each meter category that might contain parent meters
-          const updateMeterCategory = (meters: any[]) => {
-            return meters.map(meter => {
-              const csvData = csvResults.get(meter.id);
-              // Only use hierarchical CSV values if meter does NOT have an uploaded CSV
-              if (csvData && !metersWithUploadedCsvs.has(meter.id)) {
-                console.log(`Using hierarchical CSV values for ${meter.meter_number} - applying column settings`);
-                
-                // Apply the same column selection, operations, and factors as uploaded CSVs
-                const { processedColumnTotals, processedColumnMaxValues, totalKwhPositive, totalKwhNegative, totalKwh } = 
-                  applyColumnSettingsToHierarchicalData(csvData.columnTotals, csvData.columnMaxValues || {}, csvData.rowCount);
-                
-                return {
-                  ...meter,
-                  columnTotals: processedColumnTotals,
-                  columnMaxValues: processedColumnMaxValues,
-                  totalKwh: totalKwh,
-                  totalKwhPositive,
-                  totalKwhNegative
-                };
-              }
-              
-              if (metersWithUploadedCsvs.has(meter.id)) {
-                console.log(`Using uploaded CSV values for ${meter.meter_number} (has real uploaded data)`);
-              }
-              return meter;
-            });
-          };
-
-          reconciliationData.councilBulk = updateMeterCategory(reconciliationData.councilBulk || []);
-          reconciliationData.bulkMeters = updateMeterCategory(reconciliationData.bulkMeters || []);
-          reconciliationData.solarMeters = updateMeterCategory(reconciliationData.solarMeters || []);
-          reconciliationData.checkMeters = updateMeterCategory(reconciliationData.checkMeters || []);
-          reconciliationData.tenantMeters = updateMeterCategory(reconciliationData.tenantMeters || []);
-          reconciliationData.distribution = updateMeterCategory(reconciliationData.distribution || []);
-          reconciliationData.distributionMeters = updateMeterCategory(reconciliationData.distributionMeters || []);
-          reconciliationData.otherMeters = updateMeterCategory(reconciliationData.otherMeters || []);
-          reconciliationData.unassignedMeters = updateMeterCategory(reconciliationData.unassignedMeters || []);
-        }
-
-        setHierarchicalCsvResults(csvResults);
       }
+
+      // ===== STEP 2: Perform energy/revenue reconciliation =====
+      // Now perform reconciliation - this uses meter_readings for leaf meters
+      // and the hierarchical CSV values will be applied to parent meters afterwards
+      console.log('STEP 2: Performing energy/revenue reconciliation...');
+      
+      const { meterData, errors, reconciliationData, leafCorrectionsByMeter } = await performReconciliationCalculation(
+        fullDateTimeFrom,
+        fullDateTimeTo,
+        shouldCalculateRevenue
+      );
+
+      setFailedMeters(errors);
+      
+      if (shouldCalculateRevenue) {
+        setIsCalculatingRevenue(false);
+        toast.success("Revenue calculation complete");
+      }
+
+      // ===== STEP 3: Apply hierarchical CSV values to parent meters =====
+      // Merge leaf meter corrections with hierarchical corrections
+      for (const [meterId, corrections] of leafCorrectionsByMeter.entries()) {
+        if (allCorrections.has(meterId)) {
+          allCorrections.get(meterId)!.push(...corrections);
+        } else {
+          allCorrections.set(meterId, corrections);
+        }
+      }
+      
+      // Propagate corrections from children to parents recursively
+      const getAllDescendantCorrections = (meterId: string): CorrectedReading[] => {
+        const childIds = meterConnectionsMap.get(meterId) || [];
+        let descendantCorrections: CorrectedReading[] = [];
+        
+        for (const childId of childIds) {
+          const childCorrections = allCorrections.get(childId) || [];
+          const leafCorrections = leafCorrectionsByMeter.get(childId) || [];
+          const grandchildCorrections = getAllDescendantCorrections(childId);
+          descendantCorrections.push(...childCorrections, ...leafCorrections, ...grandchildCorrections);
+        }
+        
+        return descendantCorrections;
+      };
+      
+      // Update allCorrections for each parent meter
+      const parentMeters = meterData.filter(meter => {
+        const children = meterConnectionsMap.get(meter.id);
+        return children && children.length > 0;
+      });
+      
+      for (const parentMeter of parentMeters) {
+        const existingCorrections = allCorrections.get(parentMeter.id) || [];
+        const descendantCorrections = getAllDescendantCorrections(parentMeter.id);
+        
+        // Deduplicate
+        const uniqueCorrections = [...existingCorrections];
+        for (const correction of descendantCorrections) {
+          const isDuplicate = uniqueCorrections.some(c =>
+            c.timestamp === correction.timestamp &&
+            c.originalSourceMeterId === correction.originalSourceMeterId &&
+            c.fieldName === correction.fieldName
+          );
+          if (!isDuplicate) {
+            uniqueCorrections.push(correction);
+          }
+        }
+        
+        if (uniqueCorrections.length > 0) {
+          allCorrections.set(parentMeter.id, uniqueCorrections);
+          console.log(`📊 ${parentMeter.meter_number} now has ${uniqueCorrections.length} corrections (propagated)`);
+        }
+      }
+      
+      setMeterCorrections(allCorrections);
+
+      // Update parent meters with hierarchical CSV values
+      // Only if meter does NOT have an uploaded CSV
+      if (csvResults.size > 0) {
+        const updateMeterCategory = (meters: any[]) => {
+          return meters.map(meter => {
+            const csvData = csvResults.get(meter.id);
+            if (csvData && !metersWithUploadedCsvs.has(meter.id)) {
+              console.log(`Using hierarchical CSV values for ${meter.meter_number}`);
+              
+              const { processedColumnTotals, processedColumnMaxValues, totalKwhPositive, totalKwhNegative, totalKwh } = 
+                applyColumnSettingsToHierarchicalData(csvData.columnTotals, csvData.columnMaxValues || {}, csvData.rowCount);
+              
+              return {
+                ...meter,
+                columnTotals: processedColumnTotals,
+                columnMaxValues: processedColumnMaxValues,
+                totalKwh: totalKwh,
+                totalKwhPositive,
+                totalKwhNegative
+              };
+            }
+            
+            if (metersWithUploadedCsvs.has(meter.id)) {
+              console.log(`Using uploaded CSV values for ${meter.meter_number}`);
+            }
+            return meter;
+          });
+        };
+
+        reconciliationData.councilBulk = updateMeterCategory(reconciliationData.councilBulk || []);
+        reconciliationData.bulkMeters = updateMeterCategory(reconciliationData.bulkMeters || []);
+        reconciliationData.solarMeters = updateMeterCategory(reconciliationData.solarMeters || []);
+        reconciliationData.checkMeters = updateMeterCategory(reconciliationData.checkMeters || []);
+        reconciliationData.tenantMeters = updateMeterCategory(reconciliationData.tenantMeters || []);
+        reconciliationData.distribution = updateMeterCategory(reconciliationData.distribution || []);
+        reconciliationData.distributionMeters = updateMeterCategory(reconciliationData.distributionMeters || []);
+        reconciliationData.otherMeters = updateMeterCategory(reconciliationData.otherMeters || []);
+        reconciliationData.unassignedMeters = updateMeterCategory(reconciliationData.unassignedMeters || []);
+      }
+
+      setHierarchicalCsvResults(csvResults);
 
       await saveReconciliationSettings();
       setReconciliationData(reconciliationData);
