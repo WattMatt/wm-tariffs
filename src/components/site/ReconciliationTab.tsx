@@ -117,6 +117,9 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
   // State for tracking corrections made during hierarchical CSV generation
   const [meterCorrections, setMeterCorrections] = useState<Map<string, CorrectedReading[]>>(new Map());
   
+  // State for tracking available CSV files (parsed/generated) for each meter
+  const [meterCsvFilesInfo, setMeterCsvFilesInfo] = useState<Map<string, { parsed?: string; generated?: string }>>(new Map());
+  
   // Refs for stable access to latest values in callbacks
   const previewDataRef = useRef<any>(null);
   const selectedColumnsRef = useRef<Set<string>>(new Set());
@@ -337,6 +340,14 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       delete (window as any).__savedMeterOrder;
     };
   }, [siteId]);
+
+  // Fetch CSV files info when meters are available
+  useEffect(() => {
+    if (availableMeters.length > 0) {
+      const meterIds = availableMeters.map(m => m.id);
+      fetchMeterCsvFilesInfo(meterIds);
+    }
+  }, [availableMeters]);
 
   // Fetch document date ranges (Municipal and Tenant Bills)
   const fetchDocumentDateRanges = async () => {
@@ -2996,6 +3007,90 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     }
   };
 
+  // Download CSV file from storage (parsed or generated)
+  const downloadMeterCsvFile = async (meterId: string, fileType: 'parsed' | 'generated') => {
+    try {
+      toast.loading(`Downloading ${fileType} CSV...`);
+      
+      // Query meter_csv_files for the matching file
+      const { data: csvFile, error } = await supabase
+        .from('meter_csv_files')
+        .select('file_path, file_name, parsed_file_path')
+        .eq('meter_id', meterId)
+        .eq('parse_status', fileType === 'parsed' ? 'parsed' : 'generated')
+        .maybeSingle();
+      
+      if (error || !csvFile) {
+        toast.dismiss();
+        toast.error(`No ${fileType} CSV file found`);
+        return;
+      }
+      
+      // Use parsed_file_path for parsed files, file_path for generated
+      const storagePath = fileType === 'parsed' && csvFile.parsed_file_path 
+        ? csvFile.parsed_file_path 
+        : csvFile.file_path;
+      
+      // Get signed URL from storage
+      const { data: urlData, error: urlError } = await supabase.storage
+        .from('client-files')
+        .createSignedUrl(storagePath, 3600);
+      
+      if (urlError || !urlData?.signedUrl) {
+        toast.dismiss();
+        toast.error('Failed to get download URL');
+        return;
+      }
+      
+      // Trigger download
+      const link = document.createElement('a');
+      link.href = urlData.signedUrl;
+      link.download = csvFile.file_name;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      toast.dismiss();
+      toast.success(`Downloaded ${fileType} CSV`);
+    } catch (error) {
+      console.error('CSV download from storage error:', error);
+      toast.dismiss();
+      toast.error('Failed to download CSV');
+    }
+  };
+
+  // Fetch available CSV files info for all meters
+  const fetchMeterCsvFilesInfo = async (meterIds: string[]) => {
+    if (meterIds.length === 0) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('meter_csv_files')
+        .select('meter_id, file_path, parse_status')
+        .in('meter_id', meterIds)
+        .in('parse_status', ['parsed', 'generated']);
+      
+      if (error) {
+        console.error('Error fetching CSV files info:', error);
+        return;
+      }
+      
+      const map = new Map<string, { parsed?: string; generated?: string }>();
+      data?.forEach(file => {
+        const existing = map.get(file.meter_id) || {};
+        if (file.parse_status === 'parsed') {
+          existing.parsed = file.file_path;
+        } else if (file.parse_status === 'generated') {
+          existing.generated = file.file_path;
+        }
+        map.set(file.meter_id, existing);
+      });
+      setMeterCsvFilesInfo(map);
+    } catch (error) {
+      console.error('Error fetching CSV files info:', error);
+    }
+  };
+
   const downloadAllMetersCSV = async () => {
     if (!reconciliationData) return;
 
@@ -3961,6 +4056,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           meterAssignments={meterAssignments}
           showDownloadButtons={reconciliationData !== null}
           onDownloadMeter={downloadMeterCSV}
+          onDownloadMeterCsvFile={downloadMeterCsvFile}
+          meterCsvFiles={meterCsvFilesInfo}
           onDownloadAll={downloadAllMetersCSV}
           showSaveButton={true}
           onSave={() => setIsSaveDialogOpen(true)}
