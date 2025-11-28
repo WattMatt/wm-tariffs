@@ -804,13 +804,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
   // Update date range when bulk documents are selected
   useEffect(() => {
     if (selectedDocumentIds.length === 0) {
-      // When cleared, revert to overall date range if available
-      if (totalDateRange.earliest && totalDateRange.latest && !userSetDates) {
-        setDateFrom(totalDateRange.earliest);
-        setDateTo(totalDateRange.latest);
-        setTimeFrom(format(totalDateRange.earliest, "HH:mm"));
-        setTimeTo(format(totalDateRange.latest, "HH:mm"));
-      }
+      // Don't auto-populate dates - user must manually select
       return;
     }
 
