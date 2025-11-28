@@ -1895,7 +1895,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           siteId,
           dateFrom: fullDateTimeFrom,
           dateTo: fullDateTimeTo,
-          childMeterIds
+          childMeterIds,
+          columns: previewDataRef.current?.availableColumns || []
         }
       });
 
