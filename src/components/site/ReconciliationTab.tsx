@@ -1344,13 +1344,14 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           }
           
           // Query ONLY direct (uploaded) readings - exclude hierarchical_aggregation
+          // Uploaded CSV readings have NO 'source' key in metadata, so metadata->>'source' is NULL
           const { data: pageReadings, error: pageError } = await supabase
             .from("meter_readings")
             .select("kwh_value, reading_timestamp, metadata")
             .eq("meter_id", meter.id)
             .gte("reading_timestamp", fullDateTimeFrom)
             .lte("reading_timestamp", fullDateTimeTo)
-            .or('metadata->source.is.null,metadata->>source.neq.hierarchical_aggregation')
+            .is('metadata->>source', null)
             .order("reading_timestamp", { ascending: true })
             .range(start, start + pageSize - 1);
 
