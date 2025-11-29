@@ -1334,6 +1334,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       let fetchError: any = null;
 
       // Wrap entire pagination loop in client-side timeout
+      // IMPORTANT: Fetch ONLY direct readings (from uploaded CSVs), exclude hierarchical aggregation data
+      // This ensures "Direct" values come only from uploaded CSV data
       const fetchAllPages = async () => {
         while (hasMore) {
           // Check for cancellation during pagination
@@ -1341,12 +1343,14 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
             throw new Error('Reconciliation cancelled by user');
           }
           
+          // Query ONLY direct (uploaded) readings - exclude hierarchical_aggregation
           const { data: pageReadings, error: pageError } = await supabase
             .from("meter_readings")
             .select("kwh_value, reading_timestamp, metadata")
             .eq("meter_id", meter.id)
             .gte("reading_timestamp", fullDateTimeFrom)
             .lte("reading_timestamp", fullDateTimeTo)
+            .or('metadata->source.is.null,metadata->>source.neq.hierarchical_aggregation')
             .order("reading_timestamp", { ascending: true })
             .range(start, start + pageSize - 1);
 
@@ -1361,7 +1365,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
             hasMore = pageReadings.length === pageSize;
             
             if (pageReadings.length === pageSize) {
-              console.log(`Fetching page ${Math.floor(start / pageSize)} for meter ${meter.meter_number}...`);
+              console.log(`Fetching page ${Math.floor(start / pageSize)} for meter ${meter.meter_number} (direct only)...`);
             }
           } else {
             hasMore = false;

@@ -297,20 +297,22 @@ Deno.serve(async (req) => {
 
     console.log(`CSV uploaded to: ${filePath}`);
 
-    // ===== STEP 5: Delete existing readings for parent meter in date range =====
-    console.log('Deleting existing readings for parent meter in date range...');
+    // ===== STEP 5: Delete existing HIERARCHICAL readings for parent meter in date range =====
+    // IMPORTANT: Only delete readings with source='hierarchical_aggregation' to preserve uploaded CSV data
+    console.log('Deleting existing HIERARCHICAL readings for parent meter in date range...');
     
-    const { error: deleteError, count: deleteCount } = await supabase
+    const { error: deleteError } = await supabase
       .from('meter_readings')
       .delete()
       .eq('meter_id', parentMeterId)
       .gte('reading_timestamp', dateFrom)
-      .lte('reading_timestamp', dateTo);
+      .lte('reading_timestamp', dateTo)
+      .eq('metadata->>source', 'hierarchical_aggregation');
 
     if (deleteError) {
-      console.warn(`Failed to delete existing readings: ${deleteError.message}`);
+      console.warn(`Failed to delete existing hierarchical readings: ${deleteError.message}`);
     } else {
-      console.log(`Deleted existing readings for parent meter`);
+      console.log(`Deleted existing hierarchical readings for parent meter (preserved uploaded CSV data)`);
     }
 
     // ===== STEP 6: Insert aggregated data directly into meter_readings =====
