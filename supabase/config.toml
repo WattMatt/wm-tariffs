@@ -35,3 +35,6 @@ verify_jwt = false
 
 [functions.generate-hierarchical-csv]
 verify_jwt = false
+
+[functions.migrate-readings-source]
+verify_jwt = false
