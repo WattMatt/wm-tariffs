@@ -1367,6 +1367,13 @@ export type Database = {
         }
         Returns: boolean
       }
+      migrate_readings_source_batch: {
+        Args: { batch_limit?: number }
+        Returns: {
+          remaining_count: number
+          updated_count: number
+        }[]
+      }
     }
     Enums: {
       app_role: "admin" | "auditor" | "operator"
