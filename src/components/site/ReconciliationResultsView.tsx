@@ -26,6 +26,18 @@ interface MeterData {
   hasError?: boolean;
   errorMessage?: string;
   hierarchicalTotal?: number;
+  
+  // Direct values (from uploaded/parsed CSV)
+  directTotalKwh?: number;
+  directColumnTotals?: Record<string, number>;
+  directColumnMaxValues?: Record<string, number>;
+  directReadingsCount?: number;
+  
+  // Hierarchical values (from generated hierarchical CSV)
+  hierarchicalTotalKwh?: number;
+  hierarchicalColumnTotals?: Record<string, number>;
+  hierarchicalColumnMaxValues?: Record<string, number>;
+  
   // Revenue fields
   tariffName?: string;
   energyCost?: number;
@@ -34,6 +46,28 @@ interface MeterData {
   totalCost?: number;
   avgCostPerKwh?: number;
   costCalculationError?: string;
+  
+  // Dual revenue (direct vs hierarchical)
+  directRevenue?: {
+    energyCost: number;
+    fixedCharges: number;
+    demandCharges: number;
+    totalCost: number;
+    avgCostPerKwh: number;
+    tariffName: string;
+    hasError: boolean;
+    errorMessage?: string;
+  };
+  hierarchicalRevenue?: {
+    energyCost: number;
+    fixedCharges: number;
+    demandCharges: number;
+    totalCost: number;
+    avgCostPerKwh: number;
+    tariffName: string;
+    hasError: boolean;
+    errorMessage?: string;
+  };
 }
 
 interface RevenueData {
@@ -449,20 +483,36 @@ export default function ReconciliationResultsView({
                     )}
                   </div>
                 ) : (
-                  // Energy View - Show kWh
-                  <div className="text-right">
-                    <div className="text-sm font-medium">
-                      {childIds.length > 0 ? hierarchicalTotal.toFixed(2) : meter.totalKwh.toFixed(2)} kWh
+                  // Energy View - Show kWh with Hierarchical vs Direct comparison
+                  <div className="flex items-center gap-4">
+                    {/* Hierarchical values (prioritized) */}
+                    <div className="text-right">
+                      <div className="text-sm font-medium text-primary">
+                        {(meter.hierarchicalTotalKwh !== undefined 
+                          ? meter.hierarchicalTotalKwh 
+                          : childIds.length > 0 
+                            ? hierarchicalTotal 
+                            : meter.totalKwh
+                        ).toFixed(2)} kWh
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {meter.hierarchicalTotalKwh !== undefined || childIds.length > 0
+                          ? 'Hierarchical'
+                          : `${meter.readingsCount} readings`
+                        }
+                      </div>
                     </div>
-                    <div className="text-xs text-muted-foreground">
-                      {childIds.length > 0 
-                        ? `(sum of ${childIds.length} child meter${childIds.length > 1 ? 's' : ''})`
-                        : `${meter.readingsCount} readings`
-                      }
-                    </div>
-                    {childIds.length > 0 && meter.totalKwh > 0 && (
-                      <div className="text-xs text-muted-foreground mt-1">
-                        Direct: {meter.totalKwh.toFixed(2)} kWh
+                    
+                    {/* Direct values (from uploaded/parsed CSV) - only show if different */}
+                    {(meter.directTotalKwh !== undefined && 
+                      meter.directTotalKwh !== meter.hierarchicalTotalKwh) && (
+                      <div className="text-right border-l border-border/50 pl-4">
+                        <div className="text-sm font-medium text-muted-foreground">
+                          {meter.directTotalKwh.toFixed(2)} kWh
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          Direct ({meter.directReadingsCount || meter.readingsCount} readings)
+                        </div>
                       </div>
                     )}
                   </div>
@@ -513,22 +563,75 @@ export default function ReconciliationResultsView({
           </div>
         )}
 
-        {!isRevenueView && (meter.columnTotals || meter.columnMaxValues) && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 pt-2 border-t border-border/50">
-            {meter.columnTotals && Object.entries(meter.columnTotals)
-              .filter(([key]) => !meter.columnMaxValues?.[key])
-              .map(([key, value]) => (
-              <div key={key} className="text-xs">
-                <span className="text-muted-foreground">{key}: </span>
-                <span className="font-medium">{value.toFixed(2)}</span>
+        {/* Column values display - Energy View */}
+        {!isRevenueView && (meter.columnTotals || meter.columnMaxValues || meter.hierarchicalColumnTotals || meter.directColumnTotals) && (
+          <div className="pt-2 border-t border-border/50 space-y-2">
+            {/* Hierarchical values (primary) */}
+            {(meter.hierarchicalColumnTotals || meter.hierarchicalColumnMaxValues) && (
+              <div>
+                <div className="text-xs font-medium text-primary mb-1">Hierarchical:</div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  {meter.hierarchicalColumnTotals && Object.entries(meter.hierarchicalColumnTotals)
+                    .filter(([key]) => !meter.hierarchicalColumnMaxValues?.[key])
+                    .map(([key, value]) => (
+                    <div key={`hier-tot-${key}`} className="text-xs">
+                      <span className="text-muted-foreground">{key}: </span>
+                      <span className="font-medium text-primary">{value.toFixed(2)}</span>
+                    </div>
+                  ))}
+                  {meter.hierarchicalColumnMaxValues && Object.entries(meter.hierarchicalColumnMaxValues).map(([key, value]) => (
+                    <div key={`hier-max-${key}`} className="text-xs">
+                      <span className="text-muted-foreground">{key}: </span>
+                      <span className="font-medium text-primary">{value.toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
-            ))}
-            {meter.columnMaxValues && Object.entries(meter.columnMaxValues).map(([key, value]) => (
-              <div key={key} className="text-xs">
-                <span className="text-muted-foreground">{key}: </span>
-                <span className="font-medium">{value.toFixed(2)}</span>
+            )}
+            
+            {/* Direct values (comparison) */}
+            {(meter.directColumnTotals || meter.directColumnMaxValues) && 
+             (meter.hierarchicalColumnTotals || meter.hierarchicalColumnMaxValues) && (
+              <div>
+                <div className="text-xs font-medium text-muted-foreground mb-1">Direct:</div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  {meter.directColumnTotals && Object.entries(meter.directColumnTotals)
+                    .filter(([key]) => !meter.directColumnMaxValues?.[key])
+                    .map(([key, value]) => (
+                    <div key={`dir-tot-${key}`} className="text-xs">
+                      <span className="text-muted-foreground">{key}: </span>
+                      <span className="font-medium">{value.toFixed(2)}</span>
+                    </div>
+                  ))}
+                  {meter.directColumnMaxValues && Object.entries(meter.directColumnMaxValues).map(([key, value]) => (
+                    <div key={`dir-max-${key}`} className="text-xs">
+                      <span className="text-muted-foreground">{key}: </span>
+                      <span className="font-medium">{value.toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
-            ))}
+            )}
+            
+            {/* Single set of values (leaf meters or meters without hierarchical data) */}
+            {!(meter.hierarchicalColumnTotals || meter.hierarchicalColumnMaxValues) && (meter.columnTotals || meter.columnMaxValues) && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                {meter.columnTotals && Object.entries(meter.columnTotals)
+                  .filter(([key]) => !meter.columnMaxValues?.[key])
+                  .map(([key, value]) => (
+                  <div key={key} className="text-xs">
+                    <span className="text-muted-foreground">{key}: </span>
+                    <span className="font-medium">{value.toFixed(2)}</span>
+                  </div>
+                ))}
+                {meter.columnMaxValues && Object.entries(meter.columnMaxValues).map(([key, value]) => (
+                  <div key={key} className="text-xs">
+                    <span className="text-muted-foreground">{key}: </span>
+                    <span className="font-medium">{value.toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
