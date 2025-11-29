@@ -493,6 +493,7 @@ Deno.serve(async (req) => {
 
         // Build metadata object
         const metadata: any = {
+          source: 'Parsed',
           source_file: fileName,
           imported_at: new Date().toISOString(),
         };
