@@ -542,17 +542,28 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
             });
           };
           
-          // Find all bulk meters (they have no parent in connections)
+          // Find all root-level meters (council_meter and bulk_meter types that have no parent)
           const allChildIds = new Set<string>();
           childrenMap.forEach(children => {
             children.forEach(childId => allChildIds.add(childId));
           });
           
+          // Council meters are top-level (e.g., "Council" meter)
+          const councilMeters = metersWithData
+            .filter(m => m.meter_type === 'council_meter' && !allChildIds.has(m.id))
+            .sort((a, b) => a.meter_number.localeCompare(b.meter_number));
+          
+          // Bulk meters are also top-level (e.g., "Bulk Check" meter)
           const bulkMeters = metersWithData
             .filter(m => m.meter_type === 'bulk_meter' && !allChildIds.has(m.id))
             .sort((a, b) => a.meter_number.localeCompare(b.meter_number));
           
-          // Start hierarchy with bulk meters at level 0
+          // Start hierarchy with council meters first (highest in hierarchy)
+          councilMeters.forEach(meter => {
+            addMeterWithChildren(meter.id, 0);
+          });
+          
+          // Then add bulk meters
           bulkMeters.forEach(meter => {
             addMeterWithChildren(meter.id, 0);
           });
@@ -584,9 +595,10 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
             });
         } else {
           // Fallback: Use meter types to create visual hierarchy
-          // Bulk (0) → Check (1) → Tenant (2) → Other (3)
+          // Council (0) → Bulk (0) → Check (1) → Tenant (2) → Other (3)
           const getIndentByType = (meterType: string): number => {
             switch (meterType) {
+              case 'council_meter': return 0;
               case 'bulk_meter': return 0;
               case 'check_meter': return 1;
               case 'tenant_meter': return 2;
@@ -1859,6 +1871,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
   };
 
   // Sort parent meters by hierarchy depth (deepest first for bottom-up processing)
+  // This ensures: Leaf meters → Check meters → Bulk Check → Council (shallowest last)
   const sortParentMetersByDepth = (parentMeters: Array<{ id: string; meter_number: string }>): Array<{ id: string; meter_number: string }> => {
     const withDepth = parentMeters.map(m => ({
       ...m,
