@@ -495,16 +495,17 @@ export default function MunicipalityExtractionDialog({
       
       const croppedImageUrl = croppedCanvas.toDataURL('image/png');
       
-      // Upload to storage
-      // Tariff extractions are stored in a flat structure since they're temporary extraction files
+      // Phase 1: Upload to temp location
       const response = await fetch(croppedImageUrl);
       const blob = await response.blob();
       const timestamp = Date.now();
-      const fileName = `municipality-extract-${timestamp}.png`;
+      
+      const { generateTempTariffExtractPath, inferProvinceFromFilename, moveTariffExtractToFinalLocation } = await import('@/lib/storagePaths');
+      const { bucket, path: tempPath } = generateTempTariffExtractPath(timestamp);
       
       const { error: uploadError } = await supabase.storage
-        .from('client-files')
-        .upload(fileName, blob, {
+        .from(bucket)
+        .upload(tempPath, blob, {
           contentType: 'image/png',
           upsert: false
         });
@@ -512,8 +513,11 @@ export default function MunicipalityExtractionDialog({
       if (uploadError) throw uploadError;
       
       const { data: { publicUrl } } = supabase.storage
-        .from('client-files')
-        .getPublicUrl(fileName);
+        .from(bucket)
+        .getPublicUrl(tempPath);
+      
+      // Store temp info for later move
+      const province = pdfFile ? inferProvinceFromFilename(pdfFile.name) : 'Unknown';
       
       // Call AI to extract municipality data from the cropped image
       console.log("Calling extract-tariff-data with imageUrl:", publicUrl);
@@ -600,6 +604,17 @@ export default function MunicipalityExtractionDialog({
       console.log("Append mode:", appendMode);
       console.log("Existing data:", JSON.stringify(existingData, null, 2));
       console.log("ExtractedData state:", JSON.stringify(extractedData, null, 2));
+      
+      // Phase 2: Move file to final location now that we have the municipality name
+      if (newData.municipalityName && tempPath) {
+        try {
+          const finalUrl = await moveTariffExtractToFinalLocation(tempPath, province, newData.municipalityName, timestamp);
+          console.log("Moved tariff extract to final location:", finalUrl);
+        } catch (moveError) {
+          console.warn("Failed to move tariff extract to final location:", moveError);
+          // Continue anyway - the temp file will remain but extraction succeeded
+        }
+      }
       
       // If in append mode, merge the tariff structures
       if (appendMode && existingData) {

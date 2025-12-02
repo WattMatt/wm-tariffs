@@ -126,20 +126,21 @@ export default function PdfImportDialog() {
     return fullText;
   };
 
-  const uploadPdfImageToStorage = async (imageDataUrl: string, fileName: string): Promise<string> => {
+  const uploadPdfImageToStorage = async (imageDataUrl: string, fileName: string): Promise<{ publicUrl: string; tempPath: string; timestamp: number; province: string }> => {
+    const { generateTempTariffExtractPath, inferProvinceFromFilename } = await import('@/lib/storagePaths');
+    
     // Convert data URL to blob
     const response = await fetch(imageDataUrl);
     const blob = await response.blob();
     
-    // Create unique file name with timestamp
+    // Upload to temp location
     const timestamp = Date.now();
-    const uniqueFileName = `${timestamp}-${fileName.replace(/\.pdf$/i, '.png')}`;
+    const { bucket, path: tempPath } = generateTempTariffExtractPath(timestamp);
+    const province = inferProvinceFromFilename(fileName);
     
-    // Tariff extractions are stored in a flat structure since they're temporary extraction files
-    // not tied to a specific client/site hierarchy
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from('client-files')
-      .upload(uniqueFileName, blob, {
+    const { error: uploadError } = await supabase.storage
+      .from(bucket)
+      .upload(tempPath, blob, {
         contentType: 'image/png',
         upsert: false
       });
@@ -148,10 +149,10 @@ export default function PdfImportDialog() {
     
     // Get public URL
     const { data: { publicUrl } } = supabase.storage
-      .from('client-files')
-      .getPublicUrl(uniqueFileName);
+      .from(bucket)
+      .getPublicUrl(tempPath);
     
-    return publicUrl;
+    return { publicUrl, tempPath, timestamp, province };
   };
 
   const handleIdentifyMunicipalities = async () => {
@@ -271,18 +272,11 @@ export default function PdfImportDialog() {
             }
             
             if (municipalityName && !foundMunicipalities.some(m => m.name === municipalityName)) {
+              const { inferProvinceFromFilename } = await import('@/lib/storagePaths');
               municipalityData = {
                 name: municipalityName,
                 nersaIncrease: parseFloat(percentMatch[1].replace(',', '.')),
-                province: file!.name.includes('Eastern') ? 'Eastern Cape' : 
-                         file!.name.includes('Free') ? 'Free State' : 
-                         file!.name.includes('Western') ? 'Western Cape' :
-                         file!.name.includes('Northern') ? 'Northern Cape' :
-                         file!.name.includes('Gauteng') ? 'Gauteng' :
-                         file!.name.includes('KwaZulu') || file!.name.includes('KZN') ? 'KwaZulu-Natal' :
-                         file!.name.includes('Limpopo') ? 'Limpopo' :
-                         file!.name.includes('Mpumalanga') ? 'Mpumalanga' :
-                         file!.name.includes('North West') || file!.name.includes('NorthWest') ? 'North West' : 'Unknown',
+                province: inferProvinceFromFilename(file!.name),
                 status: 'extracting' as const
               };
               municipalityFound = true;
@@ -296,11 +290,11 @@ export default function PdfImportDialog() {
       
       // If still no pattern found, use sheet name as municipality
       if (!municipalityFound && sheetName && !sheetName.match(/^Sheet\d+$/i)) {
+        const { inferProvinceFromFilename } = await import('@/lib/storagePaths');
         municipalityData = {
           name: sheetName,
           nersaIncrease: 0,
-          province: file!.name.includes('Eastern') ? 'Eastern Cape' : 
-                   file!.name.includes('Free') ? 'Free State' : 'Unknown',
+          province: inferProvinceFromFilename(file!.name),
           status: 'extracting' as const
         };
         municipalityFound = true;
