@@ -28,10 +28,12 @@ Deno.serve(async (req) => {
 
     // If csvFileId is provided but not filePath, fetch it from the database
     let actualFilePath = filePath;
+    let isGeneratedCsv = false;
+    
     if (csvFileId && !actualFilePath) {
       const { data: csvFile, error: fetchError } = await supabase
         .from('meter_csv_files')
-        .select('file_path')
+        .select('file_path, generated_date_from')
         .eq('id', csvFileId)
         .single();
       
@@ -40,6 +42,7 @@ Deno.serve(async (req) => {
       }
       
       actualFilePath = csvFile.file_path;
+      isGeneratedCsv = !!csvFile.generated_date_from;  // If generated_date_from exists, this is a generated CSV
     }
 
     if (!actualFilePath) {
@@ -594,7 +597,8 @@ Deno.serve(async (req) => {
     const { error: updateError } = await supabase
       .from('meter_csv_files')
       .update({
-        parse_status: readings.length > 0 ? 'parsed' : 'error',
+        // Use 'generated' for hierarchical CSVs, 'parsed' for uploaded CSVs
+        parse_status: readings.length > 0 ? (isGeneratedCsv ? 'generated' : 'parsed') : 'error',
         parsed_at: new Date().toISOString(),
         readings_inserted: readings.length,
         duplicates_skipped: skipped,
