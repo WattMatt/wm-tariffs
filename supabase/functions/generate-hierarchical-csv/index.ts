@@ -530,11 +530,20 @@ Deno.serve(async (req) => {
 
     const parentReadings = sortedTimestamps.map(timestamp => {
       const data = groupedData.get(timestamp)!;
+      
+      // Calculate kwh_value from actual aggregated P1 + P2 columns for THIS timestamp
+      const p1Value = data['P1 (kWh)'] || data['P1'] || 0;
+      const p2Value = data['P2 (kWh)'] || data['P2'] || 0;
+      const timestampKwh = p1Value + p2Value;
+      
+      // Get kva_value from aggregated S (kVA) column
+      const kvaValue = data['S (kVA)'] || data['S'] || null;
+      
       return {
         meter_id: parentMeterId,
         reading_timestamp: timestamp,
-        kwh_value: totalKwh / sortedTimestamps.length, // Average per slot (for compatibility)
-        kva_value: null,
+        kwh_value: timestampKwh,
+        kva_value: kvaValue,
         metadata: {
           source: 'hierarchical_aggregation',
           generated_at: new Date().toISOString(),
