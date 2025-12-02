@@ -124,8 +124,28 @@ Deno.serve(async (req) => {
     const columnFactors = (reconcSettings?.column_factors as Record<string, number>) || {};
     console.log('Column factors:', columnFactors);
 
+    // ===== STEP 0: Prepare hierarchical_meter_readings table =====
+    console.log('STEP 0: Preparing hierarchical_meter_readings table...');
+    
+    // All meter IDs involved (children + parent)
+    const allMeterIds = [...childMeterIds, parentMeterId];
+    
+    // Delete existing entries for all involved meters in the date range
+    const { error: deleteError } = await supabase
+      .from('hierarchical_meter_readings')
+      .delete()
+      .in('meter_id', allMeterIds)
+      .gte('reading_timestamp', dateFrom)
+      .lte('reading_timestamp', dateTo);
+    
+    if (deleteError) {
+      console.warn(`Failed to clear existing hierarchical readings: ${deleteError.message}`);
+    } else {
+      console.log(`Cleared existing hierarchical readings for ${allMeterIds.length} meters`);
+    }
+
     // ===== STEP 1: Query meter_readings for ALL child meters within date range =====
-    console.log('Fetching readings from meter_readings table...');
+    console.log('STEP 1: Fetching readings from meter_readings table...');
     
     const PAGE_SIZE = 1000;
     let allReadings: Array<{
@@ -179,8 +199,42 @@ Deno.serve(async (req) => {
       );
     }
 
+    // ===== STEP 1.5: Copy child readings to hierarchical_meter_readings =====
+    console.log('STEP 1.5: Copying child readings to hierarchical_meter_readings...');
+    
+    const COPY_BATCH_SIZE = 1000;
+    let copiedCount = 0;
+
+    for (let i = 0; i < allReadings.length; i += COPY_BATCH_SIZE) {
+      const batch = allReadings.slice(i, i + COPY_BATCH_SIZE).map(reading => ({
+        meter_id: reading.meter_id,
+        reading_timestamp: reading.reading_timestamp,
+        kwh_value: reading.kwh_value,
+        kva_value: reading.kva_value,
+        metadata: {
+          ...reading.metadata,
+          source: 'Copied',
+          copied_from: 'meter_readings',
+          copied_at: new Date().toISOString()
+        }
+      }));
+      
+      const { error: insertError } = await supabase
+        .from('hierarchical_meter_readings')
+        .insert(batch);
+
+      if (insertError) {
+        console.error(`Failed to copy readings batch ${i}: ${insertError.message}`);
+        // Continue with next batch instead of throwing
+      } else {
+        copiedCount += batch.length;
+      }
+    }
+
+    console.log(`Copied ${copiedCount} child readings to hierarchical_meter_readings`);
+
     // ===== STEP 2: Aggregate readings by timestamp =====
-    console.log('Aggregating readings by timestamp...');
+    console.log('STEP 2: Aggregating readings by timestamp...');
     
     const columns = passedColumns || [];
     const groupedData = new Map<string, AggregatedData>();
@@ -215,10 +269,76 @@ Deno.serve(async (req) => {
       }
     });
 
-    console.log(`Aggregated data into ${groupedData.size} time slots`);
+    console.log(`Aggregated new data into ${groupedData.size} time slots`);
+
+    // ===== STEP 2.5: Fetch existing CSV and merge with new data =====
+    console.log('STEP 2.5: Checking for existing hierarchical CSV to merge...');
+    
+    // Get site and client info for storage path
+    const { data: siteData, error: siteError } = await supabase
+      .from('sites')
+      .select('name, clients(name)')
+      .eq('id', siteId)
+      .single();
+
+    if (siteError || !siteData) {
+      throw new Error(`Failed to fetch site data: ${siteError?.message || 'Site not found'}`);
+    }
+
+    const clientName = sanitizeName((siteData.clients as any).name);
+    const siteName = sanitizeName(siteData.name);
+    const sanitizedMeterNumber = sanitizeName(parentMeterNumber);
+    const fileName = `${sanitizedMeterNumber}_Hierarchical_Energy_Profile.csv`;
+    const filePath = `${clientName}/${siteName}/Metering/Reconciliations/${fileName}`;
+
+    // Try to fetch existing CSV
+    const { data: existingCsvRecord } = await supabase
+      .from('meter_csv_files')
+      .select('file_path')
+      .eq('meter_id', parentMeterId)
+      .eq('file_name', fileName)
+      .maybeSingle();
+
+    if (existingCsvRecord?.file_path) {
+      console.log('Found existing hierarchical CSV, downloading and merging...');
+      
+      const { data: existingFile } = await supabase.storage
+        .from('client-files')
+        .download(existingCsvRecord.file_path);
+      
+      if (existingFile) {
+        try {
+          const existingContent = await existingFile.text();
+          const existingLines = existingContent.split('\n');
+          
+          // Skip header rows (first 2 rows: meter identifier and column headers)
+          for (let i = 2; i < existingLines.length; i++) {
+            const row = existingLines[i].trim();
+            if (!row) continue;
+            
+            const values = row.split(',');
+            const timestamp = values[0];
+            
+            // Only add if not already in new data (new data takes precedence)
+            if (timestamp && !groupedData.has(timestamp)) {
+              const data: AggregatedData = {};
+              columns.forEach((col, idx) => {
+                const value = parseFloat(values[idx + 1]) || 0;
+                data[col] = value;
+              });
+              groupedData.set(timestamp, data);
+            }
+          }
+          
+          console.log(`Merged with existing data. Total time slots: ${groupedData.size}`);
+        } catch (mergeError) {
+          console.warn('Failed to parse existing CSV for merge:', mergeError);
+        }
+      }
+    }
 
     // ===== STEP 3: Generate CSV content =====
-    console.log('Generating CSV content...');
+    console.log('STEP 3: Generating CSV content...');
     
     const csvRows: string[] = [];
     
@@ -242,7 +362,7 @@ Deno.serve(async (req) => {
     });
 
     const csvContent = csvRows.join('\n');
-    console.log(`Generated CSV with ${csvRows.length - 1} data rows and ${columns.length} columns`);
+    console.log(`Generated CSV with ${csvRows.length - 2} data rows and ${columns.length} columns`);
 
     // Calculate summary statistics
     const columnTotals: Record<string, number> = {};
@@ -274,25 +394,7 @@ Deno.serve(async (req) => {
     console.log('Column max values:', columnMaxValues);
 
     // ===== STEP 4: Upload CSV to storage =====
-    console.log('Uploading CSV to storage...');
-    
-    // Get site and client info for storage path
-    const { data: siteData, error: siteError } = await supabase
-      .from('sites')
-      .select('name, clients(name)')
-      .eq('id', siteId)
-      .single();
-
-    if (siteError || !siteData) {
-      throw new Error(`Failed to fetch site data: ${siteError?.message || 'Site not found'}`);
-    }
-
-    const clientName = sanitizeName((siteData.clients as any).name);
-    const siteName = sanitizeName(siteData.name);
-    const sanitizedMeterNumber = sanitizeName(parentMeterNumber);
-
-    const fileName = `${sanitizedMeterNumber}_Hierarchical_Energy_Profile.csv`;
-    const filePath = `${clientName}/${siteName}/Metering/Reconciliations/${fileName}`;
+    console.log('STEP 4: Uploading CSV to storage...');
 
     // Upload CSV to storage (upsert)
     const csvBlob = new Blob([csvContent], { type: 'text/csv' });
@@ -310,7 +412,7 @@ Deno.serve(async (req) => {
     console.log(`CSV uploaded to: ${filePath}`);
 
     // ===== STEP 5: Create/Update meter_csv_files record =====
-    console.log('Creating/updating meter_csv_files record...');
+    console.log('STEP 5: Creating/updating meter_csv_files record...');
     
     const contentHash = await generateHash(csvContent);
 
@@ -423,7 +525,8 @@ Deno.serve(async (req) => {
         columnMaxValues,
         rowCount: sortedTimestamps.length,
         requiresParsing: true,
-        columnMapping
+        columnMapping,
+        copiedChildReadings: copiedCount
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

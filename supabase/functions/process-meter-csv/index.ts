@@ -23,7 +23,8 @@ Deno.serve(async (req) => {
       dateFormat = "auto", 
       timeInterval = 30, 
       headerRowNumber = 1,
-      columnMapping = null 
+      columnMapping = null,
+      targetTable = 'meter_readings' // NEW: specify which table to insert into
     } = await req.json();
 
     // If csvFileId is provided but not filePath, fetch it from the database
@@ -51,6 +52,7 @@ Deno.serve(async (req) => {
 
     console.log(`Processing CSV for meter ${meterId} from ${actualFilePath} with separator "${separator}", dateFormat "${dateFormat}", timeInterval ${timeInterval} minutes, headerRowNumber: ${headerRowNumber}`);
     console.log('Column Mapping:', JSON.stringify(columnMapping, null, 2));
+    console.log(`Target table: ${targetTable}`);
 
     // Extract filename from path
     const fileName = actualFilePath.split('/').pop() || 'unknown.csv';
@@ -524,7 +526,7 @@ Deno.serve(async (req) => {
       console.log('Sample errors:', errors);
     }
 
-    // Insert in batches
+    // Insert in batches - use the specified target table
     if (readings.length > 0) {
       const batchSize = 1000;
       let inserted = 0;
@@ -532,16 +534,16 @@ Deno.serve(async (req) => {
       for (let i = 0; i < readings.length; i += batchSize) {
         const batch = readings.slice(i, i + batchSize);
         const { error: insertError } = await supabase
-          .from('meter_readings')
+          .from(targetTable) // Use dynamic table name
           .insert(batch);
 
         if (insertError) {
           console.error('Insert error:', insertError);
-          throw new Error(`Insert failed at batch ${i}: ${insertError.message}`);
+          throw new Error(`Insert failed at batch ${i} into ${targetTable}: ${insertError.message}`);
         }
 
         inserted += batch.length;
-        console.log(`Inserted batch: ${inserted}/${readings.length}`);
+        console.log(`Inserted batch: ${inserted}/${readings.length} into ${targetTable}`);
       }
     }
 
