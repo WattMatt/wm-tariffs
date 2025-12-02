@@ -111,6 +111,11 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
   // Cancel reconciliation ref
   const cancelReconciliationRef = useRef(false);
   
+  // Auto-save debounce ref
+  const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [isAutoSaving, setIsAutoSaving] = useState(false);
+  const hasInitializedRef = useRef(false); // Prevent auto-save on initial load
+  
   // State for hierarchical CSV results (used to update parent meter values at run time)
   const [hierarchicalCsvResults, setHierarchicalCsvResults] = useState<Map<string, {
     totalKwh: number;
@@ -249,7 +254,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
   }, [isLoading, isCalculatingRevenue, energyProgress, revenueProgress, reconciliationData, reconciliationStateKey]);
 
   // Save reconciliation settings
-  const saveReconciliationSettings = async () => {
+  const saveReconciliationSettings = async (showToast = true) => {
     try {
       const settingsData = {
         site_id: siteId,
@@ -268,13 +273,53 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
 
       if (error) {
         console.error('Error saving reconciliation settings:', error);
-      } else {
+      } else if (showToast) {
         toast.success("Settings saved for next time");
       }
     } catch (error) {
       console.error('Error saving reconciliation settings:', error);
     }
   };
+
+  // Debounced auto-save function (500ms delay, no toast)
+  const autoSaveSettings = useCallback(() => {
+    // Don't auto-save if preview data hasn't loaded yet
+    if (!previewDataRef.current) return;
+    
+    // Clear any pending save
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current);
+    }
+    
+    setIsAutoSaving(true);
+    autoSaveTimeoutRef.current = setTimeout(async () => {
+      await saveReconciliationSettings(false); // Save without toast
+      setIsAutoSaving(false);
+    }, 500);
+  }, [siteId, meterAssignments, availableMeters, selectedMetersForSummation]);
+
+  // Auto-save when settings change
+  useEffect(() => {
+    // Skip initial render and wait for initialization
+    if (!hasInitializedRef.current) {
+      // Mark as initialized after first load of settings completes
+      if (previewData) {
+        hasInitializedRef.current = true;
+      }
+      return;
+    }
+    
+    autoSaveSettings();
+  }, [selectedColumns, columnOperations, columnFactors, meterAssignments, selectedMetersForSummation, availableMeters]);
+
+  // Cleanup auto-save timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Reset reconciliation settings
   const resetReconciliationSettings = async () => {
