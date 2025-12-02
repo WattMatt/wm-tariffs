@@ -50,8 +50,11 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     id: string;
     meter_number: string;
     meter_type: string;
-    hasData: boolean;
+    hasData?: boolean;
+    tariff_structure_id?: string | null;
   }>>([]);
+  const [isLoadingMeters, setIsLoadingMeters] = useState(false);
+  const [metersFullyLoaded, setMetersFullyLoaded] = useState(false); // Track if full hierarchy is loaded
   const [meterDateRange, setMeterDateRange] = useState<{
     earliest: Date | null;
     latest: Date | null;
@@ -486,212 +489,211 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     setIsLoadingDocuments(false);
   };
 
-  // Load document date ranges on mount
-  useEffect(() => {
-    fetchDocumentDateRanges();
-  }, [siteId]);
+  // Fetch only overall date range on mount (fast aggregate query)
+  const fetchDateRanges = async () => {
+    try {
+      setIsLoadingDateRanges(true);
+      
+      // Get all meter IDs for this site first
+      const { data: meterIds } = await supabase
+        .from("meters")
+        .select("id")
+        .eq("site_id", siteId);
+      
+      if (!meterIds || meterIds.length === 0) {
+        setTotalDateRange({ earliest: null, latest: null });
+        setIsLoadingDateRanges(false);
+        return;
+      }
+      
+      const ids = meterIds.map(m => m.id);
+      
+      // Get earliest reading across all site meters
+      const { data: earliestData } = await supabase
+        .from("meter_readings")
+        .select("reading_timestamp")
+        .in("meter_id", ids)
+        .order("reading_timestamp", { ascending: true })
+        .limit(1);
+      
+      // Get latest reading across all site meters
+      const { data: latestData } = await supabase
+        .from("meter_readings")
+        .select("reading_timestamp")
+        .in("meter_id", ids)
+        .order("reading_timestamp", { ascending: false })
+        .limit(1);
+      
+      const earliest = earliestData?.[0] ? new Date(earliestData[0].reading_timestamp) : null;
+      const latest = latestData?.[0] ? new Date(latestData[0].reading_timestamp) : null;
+      
+      setTotalDateRange({ earliest, latest });
+    } catch (error) {
+      console.error("Error fetching date ranges:", error);
+    } finally {
+      setIsLoadingDateRanges(false);
+    }
+  };
 
-  // Fetch available meters with CSV data and build hierarchy
-  useEffect(() => {
-    const fetchAvailableMeters = async () => {
-      try {
-        setIsLoadingDateRanges(true);
-        // Get all meters for this site
-        const { data: meters, error: metersError } = await supabase
-          .from("meters")
-          .select("id, meter_number, meter_type, tariff_structure_id")
-          .eq("site_id", siteId)
-          .order("meter_number");
-
-        if (metersError || !meters) {
-          console.error("Error fetching meters:", metersError);
-          return;
-        }
-
-        // Fetch meter connections - ONLY for meters in this site
-        const { data: connections, error: connectionsError } = await supabase
-          .from("meter_connections")
-          .select(`
-            parent_meter_id,
-            child_meter_id,
-            parent:meters!meter_connections_parent_meter_id_fkey(site_id),
-            child:meters!meter_connections_child_meter_id_fkey(site_id)
-          `);
-
-        if (connectionsError) {
-          console.error("Error fetching meter connections:", connectionsError);
-        }
-
-        // Filter to only connections where BOTH meters are in the current site
-        const siteConnections = connections?.filter(conn => 
-          conn.parent?.site_id === siteId && conn.child?.site_id === siteId
-        ) || [];
-
-        // Build parent-child map for hierarchy
-        // DB structure: parent_meter_id is the parent (upstream), child_meter_id is the child (downstream)
-        // For display: we want childrenMap where key = parent, value = children
-        const childrenMap = new Map<string, string[]>();
+  // Fetch basic meter list on mount (fast - no hierarchy, no data checks)
+  const fetchBasicMeters = async () => {
+    try {
+      setIsLoadingMeters(true);
+      
+      const { data: meters, error } = await supabase
+        .from("meters")
+        .select("id, meter_number, meter_type, tariff_structure_id")
+        .eq("site_id", siteId)
+        .order("meter_number");
+      
+      if (error || !meters) {
+        console.error("Error fetching meters:", error);
+        return;
+      }
+      
+      // Check if we have saved meter order to restore
+      const savedMeterOrder = (window as any).__savedMeterOrder;
+      let finalMeters = meters;
+      
+      if (savedMeterOrder && savedMeterOrder.length > 0) {
+        const orderedMeters: typeof meters = [];
+        const metersById = new Map(meters.map(m => [m.id, m]));
         
-        siteConnections.forEach(conn => {
-          // conn.parent_meter_id is the parent (upstream)
-          // conn.child_meter_id is the child (downstream)
-          if (!childrenMap.has(conn.parent_meter_id)) {
-            childrenMap.set(conn.parent_meter_id, []);
+        savedMeterOrder.forEach((meterId: string) => {
+          const meter = metersById.get(meterId);
+          if (meter) {
+            orderedMeters.push(meter);
+            metersById.delete(meterId);
           }
-          childrenMap.get(conn.parent_meter_id)!.push(conn.child_meter_id);
-        });
-
-        // Check which meters have actual readings data
-        const metersWithData = await Promise.all(
-          meters.map(async (meter) => {
-            const { data: readings } = await supabase
-              .from("meter_readings")
-              .select("id")
-              .eq("meter_id", meter.id)
-              .limit(1);
-
-            return {
-              ...meter,
-              hasData: readings && readings.length > 0,
-            };
-          })
-        );
-
-        // Build hierarchical meter list
-        const meterMap = new Map(metersWithData.map(m => [m.id, m]));
-        const processedMeters = new Set<string>();
-        const hierarchicalMeters: typeof metersWithData = [];
-        const indentLevels = new Map<string, number>();
-        
-        // Build parent info map: child meter_id -> parent meter_number
-        // Also build connections map: parent_id -> child_ids for hierarchical calculations
-        const meterParentMap = new Map<string, string>();
-        const connectionsMap = new Map<string, string[]>();
-        
-        siteConnections.forEach(conn => {
-          // conn.parent_meter_id is the parent (upstream)
-          // conn.child_meter_id is the child (downstream)
-          const parentMeter = metersWithData.find(m => m.id === conn.parent_meter_id);
-          if (parentMeter) {
-            meterParentMap.set(conn.child_meter_id, parentMeter.meter_number);
-          }
-          
-          // Build connections map for calculations: parent -> children
-          if (!connectionsMap.has(conn.parent_meter_id)) {
-            connectionsMap.set(conn.parent_meter_id, []);
-          }
-          connectionsMap.get(conn.parent_meter_id)!.push(conn.child_meter_id);
         });
         
-        setMeterConnectionsMap(connectionsMap);
+        metersById.forEach(meter => orderedMeters.push(meter));
+        finalMeters = orderedMeters;
+        delete (window as any).__savedMeterOrder;
+      }
+      
+      setAvailableMeters(finalMeters);
+      
+      // Auto-select first bulk meter or first meter
+      const bulkMeter = finalMeters.find(m => m.meter_type === "bulk_meter");
+      if (bulkMeter) {
+        setSelectedMeterId(bulkMeter.id);
+      } else if (finalMeters.length > 0) {
+        setSelectedMeterId(finalMeters[0].id);
+      }
+      
+      // Load saved indent levels if available
+      const savedIndentLevels = loadIndentLevelsFromStorage();
+      if (savedIndentLevels.size > 0) {
+        setMeterIndentLevels(savedIndentLevels);
+      }
+    } catch (error) {
+      console.error("Error fetching basic meters:", error);
+    } finally {
+      setIsLoadingMeters(false);
+    }
+  };
 
-        // Check if we have any connections in the database
-        const hasConnections = siteConnections && siteConnections.length > 0;
+  // Load full meter hierarchy, connections, and data availability (called from Preview button)
+  const loadFullMeterHierarchy = async () => {
+    try {
+      // Fetch all meters with tariff structure
+      const { data: meters, error: metersError } = await supabase
+        .from("meters")
+        .select("id, meter_number, meter_type, tariff_structure_id")
+        .eq("site_id", siteId)
+        .order("meter_number");
 
-        if (hasConnections) {
-          // Recursive function to add meter and its children
-          const addMeterWithChildren = (meterId: string, level: number) => {
-            if (processedMeters.has(meterId)) return;
-            
-            const meter = meterMap.get(meterId);
-            if (!meter) return;
-            
-            hierarchicalMeters.push(meter);
-            indentLevels.set(meterId, level);
-            processedMeters.add(meterId);
-            
-            // Add all children of this meter
-            const children = childrenMap.get(meterId) || [];
-            
-            // Helper function to get meter type priority
-            const getMeterTypePriority = (meterType: string): number => {
-              switch (meterType) {
-                case 'bulk_meter': return 0;
-                case 'check_meter': return 1;
-                case 'tenant_meter': return 2;
-                case 'other': return 3;
-                default: return 3;
-              }
-            };
-            
-            children.sort((a, b) => {
-              const meterA = meterMap.get(a);
-              const meterB = meterMap.get(b);
-              
-              // First sort by meter type priority
-              const priorityA = getMeterTypePriority(meterA?.meter_type || '');
-              const priorityB = getMeterTypePriority(meterB?.meter_type || '');
-              
-              if (priorityA !== priorityB) {
-                return priorityA - priorityB;
-              }
-              
-              // Then sort alphabetically by meter number
-              return (meterA?.meter_number || '').localeCompare(meterB?.meter_number || '');
-            });
-            
-            children.forEach(childId => {
-              addMeterWithChildren(childId, level + 1);
-            });
+      if (metersError || !meters) {
+        console.error("Error fetching meters:", metersError);
+        return;
+      }
+
+      // Fetch meter connections
+      const { data: connections, error: connectionsError } = await supabase
+        .from("meter_connections")
+        .select(`
+          parent_meter_id,
+          child_meter_id,
+          parent:meters!meter_connections_parent_meter_id_fkey(site_id),
+          child:meters!meter_connections_child_meter_id_fkey(site_id)
+        `);
+
+      if (connectionsError) {
+        console.error("Error fetching meter connections:", connectionsError);
+      }
+
+      // Filter to only connections where BOTH meters are in the current site
+      const siteConnections = connections?.filter(conn => 
+        conn.parent?.site_id === siteId && conn.child?.site_id === siteId
+      ) || [];
+
+      // Build parent-child map for hierarchy
+      const childrenMap = new Map<string, string[]>();
+      siteConnections.forEach(conn => {
+        if (!childrenMap.has(conn.parent_meter_id)) {
+          childrenMap.set(conn.parent_meter_id, []);
+        }
+        childrenMap.get(conn.parent_meter_id)!.push(conn.child_meter_id);
+      });
+
+      // Check which meters have actual readings data
+      const metersWithData = await Promise.all(
+        meters.map(async (meter) => {
+          const { data: readings } = await supabase
+            .from("meter_readings")
+            .select("id")
+            .eq("meter_id", meter.id)
+            .limit(1);
+
+          return {
+            ...meter,
+            hasData: readings && readings.length > 0,
           };
+        })
+      );
+
+      // Build hierarchical meter list
+      const meterMap = new Map(metersWithData.map(m => [m.id, m]));
+      const processedMeters = new Set<string>();
+      const hierarchicalMeters: typeof metersWithData = [];
+      const indentLevels = new Map<string, number>();
+      
+      // Build parent info map and connections map
+      const meterParentMap = new Map<string, string>();
+      const connectionsMap = new Map<string, string[]>();
+      
+      siteConnections.forEach(conn => {
+        const parentMeter = metersWithData.find(m => m.id === conn.parent_meter_id);
+        if (parentMeter) {
+          meterParentMap.set(conn.child_meter_id, parentMeter.meter_number);
+        }
+        
+        if (!connectionsMap.has(conn.parent_meter_id)) {
+          connectionsMap.set(conn.parent_meter_id, []);
+        }
+        connectionsMap.get(conn.parent_meter_id)!.push(conn.child_meter_id);
+      });
+      
+      setMeterConnectionsMap(connectionsMap);
+
+      const hasConnections = siteConnections && siteConnections.length > 0;
+
+      if (hasConnections) {
+        const addMeterWithChildren = (meterId: string, level: number) => {
+          if (processedMeters.has(meterId)) return;
           
-          // Find all root-level meters (council_meter and bulk_meter types that have no parent)
-          const allChildIds = new Set<string>();
-          childrenMap.forEach(children => {
-            children.forEach(childId => allChildIds.add(childId));
-          });
+          const meter = meterMap.get(meterId);
+          if (!meter) return;
           
-          // Council meters are top-level (e.g., "Council" meter)
-          const councilMeters = metersWithData
-            .filter(m => m.meter_type === 'council_meter' && !allChildIds.has(m.id))
-            .sort((a, b) => a.meter_number.localeCompare(b.meter_number));
+          hierarchicalMeters.push(meter);
+          indentLevels.set(meterId, level);
+          processedMeters.add(meterId);
           
-          // Bulk meters are also top-level (e.g., "Bulk Check" meter)
-          const bulkMeters = metersWithData
-            .filter(m => m.meter_type === 'bulk_meter' && !allChildIds.has(m.id))
-            .sort((a, b) => a.meter_number.localeCompare(b.meter_number));
+          const children = childrenMap.get(meterId) || [];
           
-          // Start hierarchy with council meters first (highest in hierarchy)
-          councilMeters.forEach(meter => {
-            addMeterWithChildren(meter.id, 0);
-          });
-          
-          // Then add bulk meters
-          bulkMeters.forEach(meter => {
-            addMeterWithChildren(meter.id, 0);
-          });
-          
-          // Process any check meters that aren't connected to bulk meters
-          const checkMeters = metersWithData
-            .filter(m => m.meter_type === 'check_meter' && !processedMeters.has(m.id) && !allChildIds.has(m.id))
-            .sort((a, b) => a.meter_number.localeCompare(b.meter_number));
-          
-          checkMeters.forEach(meter => {
-            addMeterWithChildren(meter.id, 0);
-          });
-          
-          // Process any tenant meters that aren't connected
-          const tenantMeters = metersWithData
-            .filter(m => m.meter_type === 'tenant_meter' && !processedMeters.has(m.id) && !allChildIds.has(m.id))
-            .sort((a, b) => a.meter_number.localeCompare(b.meter_number));
-          
-          tenantMeters.forEach(meter => {
-            addMeterWithChildren(meter.id, 0);
-          });
-          
-          // Process any remaining meters
-          metersWithData
-            .filter(m => !processedMeters.has(m.id))
-            .sort((a, b) => a.meter_number.localeCompare(b.meter_number))
-            .forEach(meter => {
-              addMeterWithChildren(meter.id, 0);
-            });
-        } else {
-          // Fallback: Use meter types to create visual hierarchy
-          // Council (0) → Bulk (0) → Check (1) → Tenant (2) → Other (3)
-          const getIndentByType = (meterType: string): number => {
+          const getMeterTypePriority = (meterType: string): number => {
             switch (meterType) {
-              case 'council_meter': return 0;
               case 'bulk_meter': return 0;
               case 'check_meter': return 1;
               case 'tenant_meter': return 2;
@@ -699,138 +701,172 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
               default: return 3;
             }
           };
-
-          // Sort meters by type hierarchy
-          const sortedMeters = [...metersWithData].sort((a, b) => {
-            const levelA = getIndentByType(a.meter_type);
-            const levelB = getIndentByType(b.meter_type);
-            if (levelA !== levelB) return levelA - levelB;
-            return a.meter_number.localeCompare(b.meter_number);
-          });
-
-          sortedMeters.forEach(meter => {
-            hierarchicalMeters.push(meter);
-            indentLevels.set(meter.id, getIndentByType(meter.meter_type));
-          });
-        }
-
-        // Check if we have saved meter order to restore
-        const savedMeterOrder = (window as any).__savedMeterOrder;
-        let finalMeters: typeof hierarchicalMeters;
-        
-        if (savedMeterOrder && savedMeterOrder.length > 0) {
-          // Reorder hierarchicalMeters based on saved order
-          const orderedMeters: typeof hierarchicalMeters = [];
-          const metersById = new Map(hierarchicalMeters.map(m => [m.id, m]));
           
-          // Add meters in saved order
-          savedMeterOrder.forEach((meterId: string) => {
-            const meter = metersById.get(meterId);
-            if (meter) {
-              orderedMeters.push(meter);
-              metersById.delete(meterId);
-            }
+          children.sort((a, b) => {
+            const meterA = meterMap.get(a);
+            const meterB = meterMap.get(b);
+            const priorityA = getMeterTypePriority(meterA?.meter_type || '');
+            const priorityB = getMeterTypePriority(meterB?.meter_type || '');
+            if (priorityA !== priorityB) return priorityA - priorityB;
+            return (meterA?.meter_number || '').localeCompare(meterB?.meter_number || '');
           });
           
-          // Add any new meters that weren't in the saved order
-          metersById.forEach(meter => orderedMeters.push(meter));
-          
-          finalMeters = orderedMeters;
-          delete (window as any).__savedMeterOrder;
-        } else {
-          finalMeters = hierarchicalMeters;
-        }
+          children.forEach(childId => {
+            addMeterWithChildren(childId, level + 1);
+          });
+        };
         
-        setAvailableMeters(finalMeters);
+        const allChildIds = new Set<string>();
+        childrenMap.forEach(children => {
+          children.forEach(childId => allChildIds.add(childId));
+        });
         
-        // Auto-select first meter with data immediately (before date ranges load)
-        // This allows preview to work as soon as dates are set from documents
+        const councilMeters = metersWithData
+          .filter(m => m.meter_type === 'council_meter' && !allChildIds.has(m.id))
+          .sort((a, b) => a.meter_number.localeCompare(b.meter_number));
+        
+        const bulkMeters = metersWithData
+          .filter(m => m.meter_type === 'bulk_meter' && !allChildIds.has(m.id))
+          .sort((a, b) => a.meter_number.localeCompare(b.meter_number));
+        
+        councilMeters.forEach(meter => addMeterWithChildren(meter.id, 0));
+        bulkMeters.forEach(meter => addMeterWithChildren(meter.id, 0));
+        
+        const checkMeters = metersWithData
+          .filter(m => m.meter_type === 'check_meter' && !processedMeters.has(m.id) && !allChildIds.has(m.id))
+          .sort((a, b) => a.meter_number.localeCompare(b.meter_number));
+        checkMeters.forEach(meter => addMeterWithChildren(meter.id, 0));
+        
+        const tenantMeters = metersWithData
+          .filter(m => m.meter_type === 'tenant_meter' && !processedMeters.has(m.id) && !allChildIds.has(m.id))
+          .sort((a, b) => a.meter_number.localeCompare(b.meter_number));
+        tenantMeters.forEach(meter => addMeterWithChildren(meter.id, 0));
+        
+        metersWithData
+          .filter(m => !processedMeters.has(m.id))
+          .sort((a, b) => a.meter_number.localeCompare(b.meter_number))
+          .forEach(meter => addMeterWithChildren(meter.id, 0));
+      } else {
+        const getIndentByType = (meterType: string): number => {
+          switch (meterType) {
+            case 'council_meter': return 0;
+            case 'bulk_meter': return 0;
+            case 'check_meter': return 1;
+            case 'tenant_meter': return 2;
+            case 'other': return 3;
+            default: return 3;
+          }
+        };
+
+        const sortedMeters = [...metersWithData].sort((a, b) => {
+          const levelA = getIndentByType(a.meter_type);
+          const levelB = getIndentByType(b.meter_type);
+          if (levelA !== levelB) return levelA - levelB;
+          return a.meter_number.localeCompare(b.meter_number);
+        });
+
+        sortedMeters.forEach(meter => {
+          hierarchicalMeters.push(meter);
+          indentLevels.set(meter.id, getIndentByType(meter.meter_type));
+        });
+      }
+
+      // Apply saved meter order if available
+      const savedMeterOrder = (window as any).__savedMeterOrder;
+      let finalMeters: typeof hierarchicalMeters;
+      
+      if (savedMeterOrder && savedMeterOrder.length > 0) {
+        const orderedMeters: typeof hierarchicalMeters = [];
+        const metersById = new Map(hierarchicalMeters.map(m => [m.id, m]));
+        
+        savedMeterOrder.forEach((meterId: string) => {
+          const meter = metersById.get(meterId);
+          if (meter) {
+            orderedMeters.push(meter);
+            metersById.delete(meterId);
+          }
+        });
+        
+        metersById.forEach(meter => orderedMeters.push(meter));
+        finalMeters = orderedMeters;
+        delete (window as any).__savedMeterOrder;
+      } else {
+        finalMeters = hierarchicalMeters;
+      }
+      
+      setAvailableMeters(finalMeters);
+      
+      // Update selected meter if current selection doesn't have data
+      const currentMeter = finalMeters.find(m => m.id === selectedMeterId);
+      if (!currentMeter?.hasData) {
         const bulkMeter = finalMeters.find(m => m.meter_type === "bulk_meter" && m.hasData);
         const firstMeterWithData = finalMeters.find(m => m.hasData);
-        
         if (bulkMeter) {
           setSelectedMeterId(bulkMeter.id);
         } else if (firstMeterWithData) {
           setSelectedMeterId(firstMeterWithData.id);
         }
-        
-        // Merge database hierarchy with any saved manual indent overrides
-        const savedIndentLevels = loadIndentLevelsFromStorage();
-        const mergedIndentLevels = new Map(indentLevels);
-        
-        // Apply saved manual overrides (they take precedence)
-        savedIndentLevels.forEach((level, meterId) => {
-          if (mergedIndentLevels.has(meterId)) {
-            mergedIndentLevels.set(meterId, level);
-          }
-        });
-        
-        setMeterIndentLevels(mergedIndentLevels);
-        setMeterParentInfo(meterParentMap);
-
-        // Fetch date ranges for all meters with data
-        const dateRangesMap = new Map();
-        await Promise.all(
-          hierarchicalMeters
-            .filter(m => m.hasData)
-            .map(async (meter) => {
-              const { data: earliestData } = await supabase
-                .from("meter_readings")
-                .select("reading_timestamp")
-                .eq("meter_id", meter.id)
-                .order("reading_timestamp", { ascending: true })
-                .limit(1);
-
-              const { data: latestData } = await supabase
-                .from("meter_readings")
-                .select("reading_timestamp")
-                .eq("meter_id", meter.id)
-                .order("reading_timestamp", { ascending: false })
-                .limit(1);
-
-              const { count } = await supabase
-                .from("meter_readings")
-                .select("*", { count: "exact", head: true })
-                .eq("meter_id", meter.id);
-
-              if (earliestData && earliestData.length > 0 && latestData && latestData.length > 0) {
-                dateRangesMap.set(meter.id, {
-                  earliest: new Date(earliestData[0].reading_timestamp),
-                  latest: new Date(latestData[0].reading_timestamp),
-                  readingsCount: count || 0
-                });
-              }
-            })
-        );
-        
-        setAllMeterDateRanges(dateRangesMap);
-
-        // Calculate overall date range
-        let overallEarliest: Date | null = null;
-        let overallLatest: Date | null = null;
-        
-        dateRangesMap.forEach((range) => {
-          if (range.earliest) {
-            if (!overallEarliest || range.earliest < overallEarliest) {
-              overallEarliest = range.earliest;
-            }
-          }
-          if (range.latest) {
-            if (!overallLatest || range.latest > overallLatest) {
-              overallLatest = range.latest;
-            }
-          }
-        });
-        
-        setTotalDateRange({ earliest: overallEarliest, latest: overallLatest });
-      } catch (error) {
-        console.error("Error fetching available meters:", error);
-      } finally {
-        setIsLoadingDateRanges(false);
       }
-    };
+      
+      // Merge database hierarchy with saved manual indent overrides
+      const savedIndentLevels = loadIndentLevelsFromStorage();
+      const mergedIndentLevels = new Map(indentLevels);
+      savedIndentLevels.forEach((level, meterId) => {
+        if (mergedIndentLevels.has(meterId)) {
+          mergedIndentLevels.set(meterId, level);
+        }
+      });
+      
+      setMeterIndentLevels(mergedIndentLevels);
+      setMeterParentInfo(meterParentMap);
 
-    fetchAvailableMeters();
+      // Fetch date ranges for all meters with data
+      const dateRangesMap = new Map();
+      await Promise.all(
+        hierarchicalMeters
+          .filter(m => m.hasData)
+          .map(async (meter) => {
+            const { data: earliestData } = await supabase
+              .from("meter_readings")
+              .select("reading_timestamp")
+              .eq("meter_id", meter.id)
+              .order("reading_timestamp", { ascending: true })
+              .limit(1);
+
+            const { data: latestData } = await supabase
+              .from("meter_readings")
+              .select("reading_timestamp")
+              .eq("meter_id", meter.id)
+              .order("reading_timestamp", { ascending: false })
+              .limit(1);
+
+            const { count } = await supabase
+              .from("meter_readings")
+              .select("*", { count: "exact", head: true })
+              .eq("meter_id", meter.id);
+
+            if (earliestData && earliestData.length > 0 && latestData && latestData.length > 0) {
+              dateRangesMap.set(meter.id, {
+                earliest: new Date(earliestData[0].reading_timestamp),
+                latest: new Date(latestData[0].reading_timestamp),
+                readingsCount: count || 0
+              });
+            }
+          })
+      );
+      
+      setAllMeterDateRanges(dateRangesMap);
+      setMetersFullyLoaded(true);
+    } catch (error) {
+      console.error("Error loading full meter hierarchy:", error);
+      throw error;
+    }
+  };
+
+  // Load date ranges and basic meters on mount
+  useEffect(() => {
+    fetchDateRanges();
+    fetchBasicMeters();
   }, [siteId]);
 
   // Auto-expand all parent meters when reconciliation data loads
@@ -1008,11 +1044,15 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
   };
   
   // Reset meter hierarchy to database defaults
-  const handleResetHierarchy = () => {
+  const handleResetHierarchy = async () => {
     clearIndentLevelsFromStorage();
-    toast.success("Meter hierarchy reset. Refreshing...");
-    // Trigger re-fetch by setting meters to empty which will cause useEffect to re-run
-    setAvailableMeters([]);
+    setMetersFullyLoaded(false);
+    setMeterConnectionsMap(new Map());
+    setMeterIndentLevels(new Map());
+    setMeterParentInfo(new Map());
+    toast.success("Meter hierarchy reset. Click Preview to reload.");
+    // Reload basic meters
+    await fetchBasicMeters();
   };
 
   const handleDragStart = (e: React.DragEvent, meterId: string) => {
@@ -1130,6 +1170,12 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     setIsLoadingPreview(true);
 
     try {
+      // Load full meter hierarchy if not already loaded
+      if (!metersFullyLoaded) {
+        toast.info("Loading meter hierarchy...");
+        await loadFullMeterHierarchy();
+      }
+
       // First check if there's any data in the selected range
       const fullDateTimeFrom = getFullDateTime(dateFrom, timeFrom);
       const fullDateTimeTo = getFullDateTime(dateTo, timeTo);
@@ -3648,9 +3694,25 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label>Bulk Reconciliation - Select Multiple Periods (Municipal Bills Only)</Label>
+            <div className="flex items-center justify-between">
+              <Label>Bulk Reconciliation - Select Multiple Periods (Municipal Bills Only)</Label>
+              {documentDateRanges.length === 0 && !isLoadingDocuments && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fetchDocumentDateRanges()}
+                >
+                  Load Documents
+                </Button>
+              )}
+            </div>
             <div className="border rounded-md p-3 space-y-2 max-h-[300px] overflow-y-auto bg-background">
-              {documentDateRanges && documentDateRanges.length > 0 ? (
+              {isLoadingDocuments ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                  Loading document periods...
+                </div>
+              ) : documentDateRanges && documentDateRanges.length > 0 ? (
                 documentDateRanges
                   .filter(doc => doc.document_type === 'municipal_account')
                   .map((doc) => (
@@ -3672,7 +3734,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                     </div>
                   ))
               ) : (
-                <p className="text-sm text-muted-foreground">No municipal bill periods available</p>
+                <p className="text-sm text-muted-foreground">Click "Load Documents" to fetch available periods</p>
               )}
             </div>
             {selectedDocumentIds.length > 0 && (
@@ -3694,77 +3756,82 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           </div>
 
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label>Document Period</Label>
+            <Label>Document Period</Label>
+            <div className="flex items-center gap-2">
+              <Select
+                disabled={isLoadingDocuments || documentDateRanges.length === 0}
+                onValueChange={(value) => {
+                  const selected = documentDateRanges.find(d => d.id === value);
+                  if (selected) {
+                    const startDate = new Date(selected.period_start);
+                    startDate.setHours(0, 0, 0, 0);
+                    
+                    const endDate = new Date(selected.period_end);
+                    endDate.setDate(endDate.getDate() - 1);
+                    endDate.setHours(23, 59, 0, 0);
+                    
+                    setDateFrom(startDate);
+                    setDateTo(endDate);
+                    setTimeFrom("00:00");
+                    setTimeTo("23:59");
+                    setUserSetDates(true);
+                    toast.success(`Date range set from ${format(startDate, "PP")} to ${format(endDate, "PP")}`);
+                  }
+                }}
+              >
+                <SelectTrigger className="flex-1" disabled={isLoadingDocuments}>
+                  <SelectValue placeholder={
+                    isLoadingDocuments 
+                      ? "Loading..." 
+                      : documentDateRanges.length === 0 
+                      ? "Click 'Load Documents' to fetch periods" 
+                      : "Select a document period..."
+                  } />
+                </SelectTrigger>
+                <SelectContent className="bg-popover z-50">
+                  {/* Group by document type */}
+                  {documentDateRanges.filter(d => d.document_type === 'municipal_account').length > 0 && (
+                    <>
+                      <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Municipal Bills</div>
+                      {documentDateRanges
+                        .filter(d => d.document_type === 'municipal_account')
+                        .map((doc) => (
+                          <SelectItem key={doc.id} value={doc.id}>
+                            {doc.file_name} ({format(new Date(doc.period_start), "PP")} - {format(new Date(doc.period_end), "PP")})
+                          </SelectItem>
+                        ))}
+                    </>
+                  )}
+                  {documentDateRanges.filter(d => d.document_type === 'tenant_bill').length > 0 && (
+                    <>
+                      <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground mt-2">Tenant Bills</div>
+                      {documentDateRanges
+                        .filter(d => d.document_type === 'tenant_bill')
+                        .map((doc) => (
+                          <SelectItem key={doc.id} value={doc.id}>
+                            {doc.file_name} ({format(new Date(doc.period_start), "PP")} - {format(new Date(doc.period_end), "PP")})
+                          </SelectItem>
+                        ))}
+                    </>
+                  )}
+                </SelectContent>
+              </Select>
               <Button
-                variant="ghost"
+                variant="outline"
                 size="sm"
                 onClick={() => fetchDocumentDateRanges()}
                 disabled={isLoadingDocuments}
-                className="h-6 w-6 p-0"
-                title="Refresh document periods"
               >
-                <RefreshCw className={cn("h-3 w-3", isLoadingDocuments && "animate-spin")} />
+                {isLoadingDocuments ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    Loading...
+                  </>
+                ) : (
+                  "Load Documents"
+                )}
               </Button>
             </div>
-            <Select
-              disabled={isLoadingDocuments || documentDateRanges.length === 0}
-              onValueChange={(value) => {
-                const selected = documentDateRanges.find(d => d.id === value);
-                if (selected) {
-                  const startDate = new Date(selected.period_start);
-                  startDate.setHours(0, 0, 0, 0);
-                  
-                  const endDate = new Date(selected.period_end);
-                  endDate.setDate(endDate.getDate() - 1);
-                  endDate.setHours(23, 59, 0, 0);
-                  
-                  setDateFrom(startDate);
-                  setDateTo(endDate);
-                  setTimeFrom("00:00");
-                  setTimeTo("23:59");
-                  setUserSetDates(true);
-                  toast.success(`Date range set from ${format(startDate, "PP")} to ${format(endDate, "PP")}`);
-                }
-              }}
-            >
-              <SelectTrigger className="w-full" disabled={isLoadingDocuments || documentDateRanges.length === 0}>
-                <SelectValue placeholder={
-                  isLoadingDocuments 
-                    ? "Loading document periods..." 
-                    : documentDateRanges.length === 0 
-                    ? "No document periods available" 
-                    : "Select a document period..."
-                } />
-              </SelectTrigger>
-              <SelectContent className="bg-popover z-50">
-                {/* Group by document type */}
-                {documentDateRanges.filter(d => d.document_type === 'municipal_account').length > 0 && (
-                  <>
-                    <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Municipal Bills</div>
-                    {documentDateRanges
-                      .filter(d => d.document_type === 'municipal_account')
-                      .map((doc) => (
-                        <SelectItem key={doc.id} value={doc.id}>
-                          {doc.file_name} ({format(new Date(doc.period_start), "PP")} - {format(new Date(doc.period_end), "PP")})
-                        </SelectItem>
-                      ))}
-                  </>
-                )}
-                {documentDateRanges.filter(d => d.document_type === 'tenant_bill').length > 0 && (
-                  <>
-                    <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground mt-2">Tenant Bills</div>
-                    {documentDateRanges
-                      .filter(d => d.document_type === 'tenant_bill')
-                      .map((doc) => (
-                        <SelectItem key={doc.id} value={doc.id}>
-                          {doc.file_name} ({format(new Date(doc.period_start), "PP")} - {format(new Date(doc.period_end), "PP")})
-                        </SelectItem>
-                      ))}
-                  </>
-                )}
-              </SelectContent>
-            </Select>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
