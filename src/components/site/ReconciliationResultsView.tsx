@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { FileDown, Download, ChevronRight, Save, Loader2, Zap, Calculator, DollarSign, X, AlertTriangle, AlertCircle, ChevronDown, Upload, GitBranch } from "lucide-react";
+import { FileDown, Download, ChevronRight, Save, Loader2, Zap, Calculator, DollarSign, X, AlertTriangle, AlertCircle, ChevronDown, Upload, GitBranch, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -111,6 +111,9 @@ interface ReconciliationResultsViewProps {
   revenueData?: RevenueData | null;
   onReconcileEnergy?: () => void;
   onReconcileRevenue?: () => void;
+  onGenerateHierarchy?: () => void;
+  isGeneratingHierarchy?: boolean;
+  hierarchyGenerated?: boolean;
   onCancelReconciliation?: () => void;
   isCancelling?: boolean;
   isLoadingEnergy?: boolean;
@@ -222,6 +225,9 @@ export default function ReconciliationResultsView({
   revenueData = null,
   onReconcileEnergy,
   onReconcileRevenue,
+  onGenerateHierarchy,
+  isGeneratingHierarchy = false,
+  hierarchyGenerated = false,
   onCancelReconciliation,
   isCancelling = false,
   isLoadingEnergy = false,
@@ -270,6 +276,14 @@ export default function ReconciliationResultsView({
       onCancelReconciliation?.();
     } else if (!revenueData) {
       onReconcileRevenue?.();
+    }
+  };
+
+  const handleHierarchyTabClick = () => {
+    if (isGeneratingHierarchy) {
+      onCancelReconciliation?.();
+    } else if (!hierarchyGenerated) {
+      onGenerateHierarchy?.();
     }
   };
 
@@ -667,11 +681,43 @@ export default function ReconciliationResultsView({
       )}
       
       <Tabs defaultValue="energy" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 h-auto p-1 gap-2 bg-transparent">
+        <TabsList className="grid w-full grid-cols-3 h-auto p-1 gap-2 bg-transparent">
+          <TabsTrigger 
+            value="hierarchy" 
+            onClick={handleHierarchyTabClick}
+            disabled={!canReconcile || isLoadingEnergy || isLoadingRevenue}
+            className="gap-2 h-12 bg-muted text-foreground hover:bg-muted/80 data-[state=active]:bg-muted/90 data-[state=active]:text-foreground data-[state=active]:shadow-md disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
+          >
+            {isGeneratingHierarchy ? (
+              <>
+                {isCancelling ? (
+                  <X className="h-4 w-4" />
+                ) : (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                )}
+                <span>
+                  {isCancelling 
+                    ? 'Cancelling...' 
+                    : `Generating... ${csvGenerationProgress.current}/${csvGenerationProgress.total}`
+                  }
+                </span>
+              </>
+            ) : hierarchyGenerated ? (
+              <>
+                <GitBranch className="h-4 w-4" />
+                <span>Hierarchy</span>
+              </>
+            ) : (
+              <>
+                <GitBranch className="h-4 w-4" />
+                <span>Generate Hierarchy</span>
+              </>
+            )}
+          </TabsTrigger>
           <TabsTrigger 
             value="energy" 
             onClick={handleEnergyTabClick}
-            disabled={!canReconcile || isLoadingRevenue}
+            disabled={!canReconcile || isLoadingRevenue || isGeneratingHierarchy}
             className="gap-2 h-12 bg-muted text-foreground hover:bg-muted/80 data-[state=active]:bg-muted/90 data-[state=active]:text-foreground data-[state=active]:shadow-md disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
           >
             {isLoadingEnergy ? (
@@ -705,7 +751,7 @@ export default function ReconciliationResultsView({
           <TabsTrigger
             value="revenue" 
             onClick={handleRevenueTabClick}
-            disabled={!canReconcile || isLoadingEnergy}
+            disabled={!canReconcile || isLoadingEnergy || isGeneratingHierarchy}
             className="gap-2 h-12 bg-muted text-foreground hover:bg-muted/80 data-[state=active]:bg-muted/90 data-[state=active]:text-foreground data-[state=active]:shadow-md disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
           >
             {isLoadingRevenue ? (
@@ -726,6 +772,34 @@ export default function ReconciliationResultsView({
             )}
           </TabsTrigger>
         </TabsList>
+
+        {/* Hierarchy Tab */}
+        <TabsContent value="hierarchy" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Hierarchical CSV Generation</CardTitle>
+              <CardDescription>
+                {hierarchyGenerated 
+                  ? "Hierarchical CSVs have been generated and are ready for use in energy calculations."
+                  : "Generate hierarchical CSV files for parent meters before running energy calculations."
+                }
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {hierarchyGenerated ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Check className="h-4 w-4 text-green-600" />
+                  <span>Hierarchy generation complete. You can now calculate energy.</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <AlertCircle className="h-4 w-4" />
+                  <span>Click "Generate Hierarchy" above to start.</span>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         {/* Energy Reconciliation Tab */}
         <TabsContent value="energy" className="space-y-6">

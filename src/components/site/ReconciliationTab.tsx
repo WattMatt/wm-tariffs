@@ -112,7 +112,17 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
   const [hierarchicalCsvResults, setHierarchicalCsvResults] = useState<Map<string, {
     totalKwh: number;
     columnTotals: Record<string, number>;
-}>>(new Map());
+  }>>(new Map());
+  
+  // State for separate hierarchy generation
+  const [isGeneratingHierarchy, setIsGeneratingHierarchy] = useState(false);
+  const [hierarchyGenerated, setHierarchyGenerated] = useState(false);
+  const [hierarchyCsvData, setHierarchyCsvData] = useState<Map<string, {
+    totalKwh: number;
+    columnTotals: Record<string, number>;
+    columnMaxValues: Record<string, number>;
+    rowCount: number;
+  }>>(new Map());
   
   // State for tracking corrections made during hierarchical CSV generation
   const [meterCorrections, setMeterCorrections] = useState<Map<string, CorrectedReading[]>>(new Map());
@@ -340,6 +350,12 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       delete (window as any).__savedMeterOrder;
     };
   }, [siteId]);
+
+  // Reset hierarchy state when date range or columns change
+  useEffect(() => {
+    setHierarchyGenerated(false);
+    setHierarchyCsvData(new Map());
+  }, [dateFrom, dateTo, selectedColumns, columnFactors, columnOperations]);
 
   // Fetch CSV files info when meters are available
   useEffect(() => {
@@ -2008,7 +2024,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     return { processedColumnTotals, processedColumnMaxValues, totalKwhPositive, totalKwhNegative, totalKwh };
   };
 
-  const handleReconcile = useCallback(async (enableRevenue?: boolean) => {
+  // Handler for "Generate Hierarchy" button - STEP 1 only
+  const handleGenerateHierarchy = useCallback(async () => {
     if (!dateFrom || !dateTo) {
       toast.error("Please select a date range");
       return;
@@ -2024,24 +2041,16 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       return;
     }
 
-    setIsColumnsOpen(false);
-    setIsMetersOpen(false);
+    setIsGeneratingHierarchy(true);
+    setCsvGenerationProgress({ current: 0, total: 0 });
+    setMeterCorrections(new Map());
     cancelReconciliationRef.current = false;
-    
-    setIsLoading(true);
-    setEnergyProgress({ current: 0, total: 0 });
-    setRevenueProgress({ current: 0, total: 0 });
-    setFailedMeters(new Map());
-    setHierarchicalCsvResults(new Map());
-    setMeterCorrections(new Map()); // Clear previous corrections
 
     try {
       const fullDateTimeFrom = getFullDateTime(dateFrom, timeFrom);
       const fullDateTimeTo = getFullDateTime(dateTo, timeTo);
-      const shouldCalculateRevenue = enableRevenue !== undefined ? enableRevenue : revenueReconciliationEnabled;
 
-      // ===== STEP 1: Generate hierarchical CSVs FIRST =====
-      // This ensures hierarchical data is available before reconciliation calculation
+      // ===== STEP 1: Generate hierarchical CSVs =====
       const allMetersForCsvCheck = availableMeters;
       const parentMetersForCsv = allMetersForCsvCheck.filter(meter => {
         const children = meterConnectionsMap.get(meter.id);
@@ -2053,13 +2062,11 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       let metersWithUploadedCsvs = new Set<string>();
 
       if (parentMetersForCsv.length > 0) {
-        // Sort parent meters by hierarchy depth for bottom-up processing
         const sortedParentMeters = sortParentMetersByDepth(parentMetersForCsv);
-        console.log(`STEP 1: Generating ${sortedParentMeters.length} hierarchical CSV file(s) FIRST...`);
+        console.log(`Generating ${sortedParentMeters.length} hierarchical CSV file(s)...`);
         console.log('Processing order:', sortedParentMeters.map(m => m.meter_number));
         toast.info(`Generating ${sortedParentMeters.length} hierarchical profile(s)...`);
         
-        setIsGeneratingCsvs(true);
         setCsvGenerationProgress({ current: 0, total: sortedParentMeters.length });
 
         // Check which parent meters have their own uploaded CSVs
@@ -2084,7 +2091,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         // Generate CSVs sequentially in bottom-up order
         for (let i = 0; i < sortedParentMeters.length; i++) {
           if (cancelReconciliationRef.current) {
-            throw new Error('Reconciliation cancelled by user');
+            throw new Error('Hierarchy generation cancelled by user');
           }
           
           const parentMeter = sortedParentMeters[i];
@@ -2112,9 +2119,199 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           setCsvGenerationProgress({ current: i + 1, total: sortedParentMeters.length });
         }
         
-        console.log('STEP 1 COMPLETE: Hierarchical CSVs generated');
-        setIsGeneratingCsvs(false);
+        console.log('Hierarchy generation complete');
+        
+        // Propagate corrections to parents
+        const getAllDescendantCorrections = (meterId: string): CorrectedReading[] => {
+          const childIds = meterConnectionsMap.get(meterId) || [];
+          let descendantCorrections: CorrectedReading[] = [];
+          
+          for (const childId of childIds) {
+            const childCorrections = allCorrections.get(childId) || [];
+            const grandchildCorrections = getAllDescendantCorrections(childId);
+            descendantCorrections.push(...childCorrections, ...grandchildCorrections);
+          }
+          
+          return descendantCorrections;
+        };
+        
+        // Update allCorrections for each parent meter
+        const parentMeters = sortedParentMeters;
+        
+        for (const parentMeter of parentMeters) {
+          const existingCorrections = allCorrections.get(parentMeter.id) || [];
+          const descendantCorrections = getAllDescendantCorrections(parentMeter.id);
+          
+          // Deduplicate
+          const uniqueCorrections = [...existingCorrections];
+          for (const correction of descendantCorrections) {
+            const isDuplicate = uniqueCorrections.some(c =>
+              c.timestamp === correction.timestamp &&
+              c.originalSourceMeterId === correction.originalSourceMeterId &&
+              c.fieldName === correction.fieldName
+            );
+            if (!isDuplicate) {
+              uniqueCorrections.push(correction);
+            }
+          }
+          
+          if (uniqueCorrections.length > 0) {
+            allCorrections.set(parentMeter.id, uniqueCorrections);
+            console.log(`📊 ${parentMeter.meter_number} now has ${uniqueCorrections.length} corrections (propagated)`);
+          }
+        }
+        
+        setMeterCorrections(allCorrections);
+        setHierarchyCsvData(csvResults);
+        setHierarchyGenerated(true);
+        toast.success(`Generated ${sortedParentMeters.length} hierarchical CSV file(s)`);
+      } else {
+        toast.info("No parent meters found - no hierarchical CSVs needed");
+        setHierarchyGenerated(true);
       }
+      
+    } catch (error: any) {
+      console.error("Error generating hierarchy:", error);
+      if (!cancelReconciliationRef.current) {
+        toast.error(`Failed to generate hierarchy: ${error.message}`);
+      } else {
+        toast.info("Hierarchy generation cancelled");
+      }
+      setHierarchyGenerated(false);
+      setHierarchyCsvData(new Map());
+    } finally {
+      setIsGeneratingHierarchy(false);
+      setCsvGenerationProgress({ current: 0, total: 0 });
+    }
+  }, [dateFrom, dateTo, timeFrom, timeTo, availableMeters, meterConnectionsMap, siteId]);
+
+  const handleReconcile = useCallback(async (enableRevenue?: boolean) => {
+    if (!dateFrom || !dateTo) {
+      toast.error("Please select a date range");
+      return;
+    }
+
+    if (!previewDataRef.current) {
+      toast.error("Please preview data first");
+      return;
+    }
+
+    if (selectedColumnsRef.current.size === 0) {
+      toast.error("Please select at least one column to calculate");
+      return;
+    }
+
+    setIsColumnsOpen(false);
+    setIsMetersOpen(false);
+    cancelReconciliationRef.current = false;
+    
+    setIsLoading(true);
+    setEnergyProgress({ current: 0, total: 0 });
+    setRevenueProgress({ current: 0, total: 0 });
+    setFailedMeters(new Map());
+    setHierarchicalCsvResults(new Map());
+    
+    // Only clear corrections if we're regenerating hierarchy
+    if (!hierarchyGenerated) {
+      setMeterCorrections(new Map());
+    }
+
+    try {
+      const fullDateTimeFrom = getFullDateTime(dateFrom, timeFrom);
+      const fullDateTimeTo = getFullDateTime(dateTo, timeTo);
+      const shouldCalculateRevenue = enableRevenue !== undefined ? enableRevenue : revenueReconciliationEnabled;
+
+      // ===== STEP 1: Use hierarchical CSVs if already generated, otherwise generate them =====
+      let csvResults: Map<string, { totalKwh: number; columnTotals: Record<string, number>; columnMaxValues: Record<string, number>; rowCount: number }>;
+      const allCorrections = new Map(meterCorrections);
+
+      if (hierarchyGenerated && hierarchyCsvData.size > 0) {
+        // Use already generated hierarchy
+        console.log('STEP 1: Using pre-generated hierarchical CSVs');
+        csvResults = hierarchyCsvData;
+        toast.info("Using pre-generated hierarchical data...");
+      } else {
+        // Generate hierarchy inline (same as before)
+        const allMetersForCsvCheck = availableMeters;
+        const parentMetersForCsv = allMetersForCsvCheck.filter(meter => {
+          const children = meterConnectionsMap.get(meter.id);
+          return children && children.length > 0;
+        });
+
+        csvResults = new Map();
+        let metersWithUploadedCsvs = new Set<string>();
+
+        if (parentMetersForCsv.length > 0) {
+          const sortedParentMeters = sortParentMetersByDepth(parentMetersForCsv);
+          console.log(`STEP 1: Generating ${sortedParentMeters.length} hierarchical CSV file(s)...`);
+          console.log('Processing order:', sortedParentMeters.map(m => m.meter_number));
+          toast.info(`Generating ${sortedParentMeters.length} hierarchical profile(s)...`);
+          
+          setIsGeneratingCsvs(true);
+          setCsvGenerationProgress({ current: 0, total: sortedParentMeters.length });
+
+          // Check which parent meters have their own uploaded CSVs
+          const parentMeterIds = sortedParentMeters.map(m => m.id);
+          metersWithUploadedCsvs = await getMetersWithUploadedCsvs(parentMeterIds);
+          console.log(`Parent meters with uploaded CSVs (will use uploaded data): ${metersWithUploadedCsvs.size}`, 
+            Array.from(metersWithUploadedCsvs));
+
+          // Delete old generated CSVs to ensure fresh data
+          const { error: deleteError } = await supabase
+            .from('meter_csv_files')
+            .delete()
+            .eq('site_id', siteId)
+            .eq('parse_status', 'generated');
+          
+          if (deleteError) {
+            console.warn('Failed to delete old generated CSVs:', deleteError);
+          } else {
+            console.log('Deleted old generated CSVs to ensure fresh data');
+          }
+          
+          // Generate CSVs sequentially in bottom-up order
+          for (let i = 0; i < sortedParentMeters.length; i++) {
+            if (cancelReconciliationRef.current) {
+              throw new Error('Reconciliation cancelled by user');
+            }
+            
+            const parentMeter = sortedParentMeters[i];
+            
+            const result = await generateHierarchicalCsvForMeter(
+              parentMeter,
+              fullDateTimeFrom,
+              fullDateTimeTo
+            );
+            
+            if (result) {
+              csvResults.set(parentMeter.id, {
+                totalKwh: result.totalKwh,
+                columnTotals: result.columnTotals,
+                columnMaxValues: result.columnMaxValues,
+                rowCount: result.rowCount
+              });
+              
+              if (result.corrections && result.corrections.length > 0) {
+                allCorrections.set(parentMeter.id, result.corrections);
+                console.log(`📝 ${result.corrections.length} corrections for ${parentMeter.meter_number}`);
+              }
+            }
+            
+            setCsvGenerationProgress({ current: i + 1, total: sortedParentMeters.length });
+          }
+          
+          console.log('STEP 1 COMPLETE: Hierarchical CSVs generated');
+          setIsGeneratingCsvs(false);
+        }
+      }
+
+      // Determine which meters have uploaded CSVs (needed for updateMeterCategory)
+      const parentMetersForCsvCheck = availableMeters.filter(meter => {
+        const children = meterConnectionsMap.get(meter.id);
+        return children && children.length > 0;
+      });
+      const parentMeterIds = parentMetersForCsvCheck.map(m => m.id);
+      const metersWithUploadedCsvs = await getMetersWithUploadedCsvs(parentMeterIds);
 
       // ===== STEP 2: Perform energy/revenue reconciliation =====
       // Now perform reconciliation - this uses meter_readings for leaf meters
@@ -4159,6 +4356,9 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           revenueData={reconciliationData?.revenueData || null}
           onReconcileEnergy={() => handleReconcile(false)}
           onReconcileRevenue={() => handleReconcile(true)}
+          onGenerateHierarchy={handleGenerateHierarchy}
+          isGeneratingHierarchy={isGeneratingHierarchy}
+          hierarchyGenerated={hierarchyGenerated}
           onCancelReconciliation={cancelReconciliation}
           isCancelling={isCancelling}
           isLoadingEnergy={isLoading && !isCalculatingRevenue}
