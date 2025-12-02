@@ -1457,6 +1457,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
             .gte("reading_timestamp", fullDateTimeFrom)
             .lte("reading_timestamp", fullDateTimeTo)
             .or('metadata->>source.eq.Parsed,metadata->>source.is.null')
+            .not('metadata->>source_file', 'ilike', '%Hierarchical%')
             .order("reading_timestamp", { ascending: true })
             .range(start, start + pageSize - 1);
 
