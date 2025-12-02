@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 // Bucket names
 const CLIENT_FILES_BUCKET = 'client-files';
 const APP_ASSETS_BUCKET = 'app-assets';
+const TARIFF_FILES_BUCKET = 'tariff-files';
 
 // South African provinces for tariff organization
 const SA_PROVINCES = [
@@ -134,7 +135,7 @@ export const inferProvinceFromFilename = (filename: string): string => {
 
 /**
  * Generate temporary tariff extraction path (before municipality is known)
- * Pattern: Tariffs/_temp/tariff-extract-{timestamp}.png
+ * Pattern: _temp/tariff-extract-{timestamp}.png
  * 
  * @param timestamp - The timestamp for unique identification
  * @returns Object with bucket name and path
@@ -143,14 +144,14 @@ export const generateTempTariffExtractPath = (
   timestamp: number
 ): { bucket: string; path: string } => {
   return {
-    bucket: CLIENT_FILES_BUCKET,
-    path: `Tariffs/_temp/tariff-extract-${timestamp}.png`
+    bucket: TARIFF_FILES_BUCKET,
+    path: `_temp/tariff-extract-${timestamp}.png`
   };
 };
 
 /**
  * Generate tariff extraction storage path
- * Pattern: Tariffs/{Province}/{Municipality}/{Municipality}-tariff-extract-{timestamp}.png
+ * Pattern: {Province}/{Municipality}/{Municipality}-tariff-extract-{timestamp}.png
  * 
  * @param province - The province name (e.g., "Gauteng", "KwaZulu-Natal")
  * @param municipalityName - The municipality name
@@ -166,8 +167,8 @@ export const generateTariffExtractPath = (
   const sanitizedMunicipality = sanitizeName(municipalityName);
   const fileName = `${sanitizedMunicipality}-tariff-extract-${timestamp}.png`;
   return {
-    bucket: CLIENT_FILES_BUCKET,
-    path: `Tariffs/${sanitizedProvince}/${sanitizedMunicipality}/${fileName}`
+    bucket: TARIFF_FILES_BUCKET,
+    path: `${sanitizedProvince}/${sanitizedMunicipality}/${fileName}`
   };
 };
 
@@ -189,9 +190,9 @@ export const moveTariffExtractToFinalLocation = async (
 ): Promise<string> => {
   const { bucket, path: newPath } = generateTariffExtractPath(province, municipalityName, timestamp);
   
-  // Download from temp
+  // Download from temp (tariff-files bucket)
   const { data: fileData, error: downloadError } = await supabase.storage
-    .from(bucket)
+    .from(TARIFF_FILES_BUCKET)
     .download(tempPath);
   
   if (downloadError) {
@@ -210,7 +211,7 @@ export const moveTariffExtractToFinalLocation = async (
   }
   
   // Delete temp file (don't throw if this fails)
-  const { error: deleteError } = await supabase.storage.from(bucket).remove([tempPath]);
+  const { error: deleteError } = await supabase.storage.from(TARIFF_FILES_BUCKET).remove([tempPath]);
   if (deleteError) {
     console.warn('Failed to delete temp file:', deleteError);
   }
