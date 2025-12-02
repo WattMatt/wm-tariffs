@@ -773,34 +773,6 @@ export default function ReconciliationResultsView({
           </TabsTrigger>
         </TabsList>
 
-        {/* Hierarchy Tab */}
-        <TabsContent value="hierarchy" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Hierarchical CSV Generation</CardTitle>
-              <CardDescription>
-                {hierarchyGenerated 
-                  ? "Hierarchical CSVs have been generated and are ready for use in energy calculations."
-                  : "Generate hierarchical CSV files for parent meters before running energy calculations."
-                }
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {hierarchyGenerated ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Check className="h-4 w-4 text-green-600" />
-                  <span>Hierarchy generation complete. You can now calculate energy.</span>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <AlertCircle className="h-4 w-4" />
-                  <span>Click "Generate Hierarchy" above to start.</span>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
         {/* Energy Reconciliation Tab */}
         <TabsContent value="energy" className="space-y-6">
           {meters && meters.length > 0 && (
