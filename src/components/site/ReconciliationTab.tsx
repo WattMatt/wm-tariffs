@@ -2349,99 +2349,38 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       const fullDateTimeTo = getFullDateTime(dateTo, timeTo);
       const shouldCalculateRevenue = enableRevenue !== undefined ? enableRevenue : revenueReconciliationEnabled;
 
-      // ===== STEP 1: Use hierarchical CSVs if already generated, otherwise generate them =====
-      let csvResults: Map<string, { totalKwh: number; columnTotals: Record<string, number>; columnMaxValues: Record<string, number>; rowCount: number }>;
+      // ===== STEP 1: Fetch existing hierarchical data (no generation) =====
+      let csvResults = new Map<string, { totalKwh: number; columnTotals: Record<string, number>; columnMaxValues: Record<string, number>; rowCount: number }>();
       const allCorrections = new Map(meterCorrections);
 
-      // Check existing hierarchical CSV coverage in database
-      const allMetersForCsvCheck = availableMeters;
-      const parentMetersForCsv = allMetersForCsvCheck.filter(meter => {
+      // Get parent meters (meters with children)
+      const parentMetersForCsv = availableMeters.filter(meter => {
         const children = meterConnectionsMap.get(meter.id);
         return children && children.length > 0;
       });
 
-      csvResults = new Map();
-
       if (parentMetersForCsv.length > 0) {
         const parentMeterIds = parentMetersForCsv.map(m => m.id);
-        const coverageMap = await checkHierarchicalCsvCoverage(
+        
+        // Fetch hierarchical data from meter_readings (already parsed from generated CSVs)
+        console.log(`STEP 1: Fetching existing hierarchical data for ${parentMeterIds.length} parent meters...`);
+        const existingData = await fetchHierarchicalDataFromReadings(
           parentMeterIds,
           fullDateTimeFrom,
           fullDateTimeTo
         );
-
-        // Filter to only meters that need regeneration (not covered)
-        const metersNeedingRegeneration = parentMetersForCsv.filter(m => 
-          !coverageMap.get(m.id)
-        );
-
-        // Fetch data for meters that are already covered
-        const alreadyCoveredIds = parentMeterIds.filter(id => coverageMap.get(id));
-        if (alreadyCoveredIds.length > 0) {
-          console.log(`Using existing hierarchical data for ${alreadyCoveredIds.length} meters (date range covered)`);
-          const existingData = await fetchHierarchicalDataFromReadings(
-            alreadyCoveredIds,
-            fullDateTimeFrom,
-            fullDateTimeTo
-          );
-          existingData.forEach((data, meterId) => {
-            csvResults.set(meterId, data);
-          });
+        
+        existingData.forEach((data, meterId) => {
+          csvResults.set(meterId, data);
+        });
+        
+        const metersWithHierarchicalData = csvResults.size;
+        const metersWithoutData = parentMeterIds.length - metersWithHierarchicalData;
+        
+        if (metersWithoutData > 0) {
+          console.log(`${metersWithoutData} parent meter(s) have no hierarchical data - run "Generate Hierarchy" first`);
         }
-
-        if (metersNeedingRegeneration.length > 0) {
-          // Some meters need regeneration
-          const sortedParentMeters = sortParentMetersByDepth(metersNeedingRegeneration);
-          console.log(`STEP 1: Regenerating ${sortedParentMeters.length} hierarchical CSV file(s) (date range not covered)...`);
-          console.log('Processing order:', sortedParentMeters.map(m => m.meter_number));
-          toast.info(`Generating ${sortedParentMeters.length} hierarchical profile(s)...`);
-          
-          setIsGeneratingCsvs(true);
-          setCsvGenerationProgress({ current: 0, total: sortedParentMeters.length });
-
-          // Check which parent meters have their own uploaded CSVs
-          const parentMeterIdsToRegen = sortedParentMeters.map(m => m.id);
-          const metersWithUploadedCsvs = await getMetersWithUploadedCsvs(parentMeterIdsToRegen);
-          console.log(`Parent meters with uploaded CSVs (will use uploaded data): ${metersWithUploadedCsvs.size}`, 
-            Array.from(metersWithUploadedCsvs));
-          
-          // Generate CSVs sequentially in bottom-up order
-          for (let i = 0; i < sortedParentMeters.length; i++) {
-            if (cancelReconciliationRef.current) {
-              throw new Error('Reconciliation cancelled by user');
-            }
-            
-            const parentMeter = sortedParentMeters[i];
-            
-            const result = await generateHierarchicalCsvForMeter(
-              parentMeter,
-              fullDateTimeFrom,
-              fullDateTimeTo
-            );
-            
-            if (result) {
-              csvResults.set(parentMeter.id, {
-                totalKwh: result.totalKwh,
-                columnTotals: result.columnTotals,
-                columnMaxValues: result.columnMaxValues,
-                rowCount: result.rowCount
-              });
-              
-              if (result.corrections && result.corrections.length > 0) {
-                allCorrections.set(parentMeter.id, result.corrections);
-                console.log(`📝 ${result.corrections.length} corrections for ${parentMeter.meter_number}`);
-              }
-            }
-            
-            setCsvGenerationProgress({ current: i + 1, total: sortedParentMeters.length });
-          }
-          
-          console.log('STEP 1 COMPLETE: Hierarchical CSVs generated');
-          setIsGeneratingCsvs(false);
-        } else {
-          console.log('STEP 1: All parent meters have valid hierarchical CSVs - using existing data');
-          toast.info("Using existing hierarchical data...");
-        }
+        console.log(`STEP 1 COMPLETE: Using hierarchical data for ${metersWithHierarchicalData} parent meter(s)`);
       }
 
       // Determine which meters have uploaded CSVs (needed for updateMeterCategory)
