@@ -2220,8 +2220,9 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           break;
       }
       
-      // 4. Skip factor multiplication - factors already applied by edge function
-      // during hierarchical CSV generation (including solar inversion)
+      // 4. Apply column factor - same as regular reconciliation
+      // Factors are applied here during reconciliation, NOT in the edge function
+      result = result * factor;
       
       // 5. Store the processed value
       processedColumnTotals[column] = result;
@@ -2243,9 +2244,9 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       // Only include selected columns
       if (!selectedColumnsRef.current.has(column)) return;
       
-      // Skip factor multiplication - factors already applied by edge function
-      // during hierarchical CSV generation (including solar inversion)
-      processedColumnMaxValues[column] = rawValue;
+      // Apply column factor - same as regular reconciliation
+      const factor = Number(columnFactorsRef.current.get(column) || 1);
+      processedColumnMaxValues[column] = rawValue * factor;
     });
 
     return { processedColumnTotals, processedColumnMaxValues, totalKwhPositive, totalKwhNegative, totalKwh };
