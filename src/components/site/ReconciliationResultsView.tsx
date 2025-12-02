@@ -564,9 +564,7 @@ export default function ReconciliationResultsView({
               <div>
                 <div className="text-xs font-medium text-primary mb-1">Hierarchical:</div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                  {meter.hierarchicalColumnTotals && Object.entries(meter.hierarchicalColumnTotals)
-                    .filter(([key]) => !meter.hierarchicalColumnMaxValues?.[key])
-                    .map(([key, value]) => (
+                  {meter.hierarchicalColumnTotals && Object.entries(meter.hierarchicalColumnTotals).map(([key, value]) => (
                     <div key={`hier-tot-${key}`} className="text-xs">
                       <span className="text-muted-foreground">{key}: </span>
                       <span className="font-medium text-primary">{value.toFixed(2)}</span>
@@ -574,7 +572,7 @@ export default function ReconciliationResultsView({
                   ))}
                   {meter.hierarchicalColumnMaxValues && Object.entries(meter.hierarchicalColumnMaxValues).map(([key, value]) => (
                     <div key={`hier-max-${key}`} className="text-xs">
-                      <span className="text-muted-foreground">{key}: </span>
+                      <span className="text-muted-foreground">{key} (max): </span>
                       <span className="font-medium text-primary">{value.toFixed(2)}</span>
                     </div>
                   ))}
@@ -588,9 +586,7 @@ export default function ReconciliationResultsView({
               <div>
                 <div className="text-xs font-medium text-muted-foreground mb-1">Direct:</div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                  {meter.directColumnTotals && Object.entries(meter.directColumnTotals)
-                    .filter(([key]) => !meter.directColumnMaxValues?.[key])
-                    .map(([key, value]) => (
+                  {meter.directColumnTotals && Object.entries(meter.directColumnTotals).map(([key, value]) => (
                     <div key={`dir-tot-${key}`} className="text-xs">
                       <span className="text-muted-foreground">{key}: </span>
                       <span className="font-medium">{value.toFixed(2)}</span>

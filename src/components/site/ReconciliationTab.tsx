@@ -486,7 +486,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
   const fetchHierarchicalDataFromReadings = async (
     meterIds: string[],
     dateFrom: string,
-    dateTo: string
+    dateTo: string,
+    colOperations?: Map<string, string>
   ): Promise<Map<string, { totalKwh: number; columnTotals: Record<string, number>; columnMaxValues: Record<string, number>; rowCount: number }>> => {
     const results = new Map();
     
@@ -511,8 +512,16 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           const imported = metadata?.imported_fields || {};
           Object.entries(imported).forEach(([key, value]) => {
             const numValue = Number(value) || 0;
-            columnTotals[key] = (columnTotals[key] || 0) + numValue;
-            columnMaxValues[key] = Math.max(columnMaxValues[key] || 0, numValue);
+            // Use columnOperations to determine which aggregation to apply
+            const operation = colOperations?.get(key) || 'sum';
+            
+            if (operation === 'max') {
+              // Only store in maxValues for max operation
+              columnMaxValues[key] = Math.max(columnMaxValues[key] || 0, numValue);
+            } else {
+              // Store in totals for sum operation (default)
+              columnTotals[key] = (columnTotals[key] || 0) + numValue;
+            }
           });
         });
         
@@ -2496,7 +2505,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         const existingData = await fetchHierarchicalDataFromReadings(
           parentMeterIds,
           fullDateTimeFrom,
-          fullDateTimeTo
+          fullDateTimeTo,
+          columnOperations
         );
         
         existingData.forEach((data, meterId) => {
