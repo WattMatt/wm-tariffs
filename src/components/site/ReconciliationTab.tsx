@@ -1993,6 +1993,14 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     if (childMeterIds.length === 0) return null;
 
     try {
+      // Filter out datetime column(s) - the edge function generates its own 'Time' column
+      const allColumns = previewDataRef.current?.availableColumns || [];
+      const dataColumns = allColumns.filter((col: string) => {
+        const colLower = col.toLowerCase();
+        // Exclude time/date columns - the edge function generates 'Time' from rounded slot times
+        return colLower !== 'time' && colLower !== 'timestamp' && colLower !== 'date' && colLower !== 'datetime';
+      });
+      
       const { data, error } = await supabase.functions.invoke('generate-hierarchical-csv', {
         body: {
           parentMeterId: parentMeter.id,
@@ -2001,7 +2009,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           dateFrom: fullDateTimeFrom,
           dateTo: fullDateTimeTo,
           childMeterIds,
-          columns: previewDataRef.current?.availableColumns || []
+          columns: dataColumns
         }
       });
 
