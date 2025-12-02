@@ -125,29 +125,13 @@ Deno.serve(async (req) => {
     console.log('Column factors:', columnFactors);
 
     // ===== STEP 0: Prepare hierarchical_meter_readings table =====
-    // IMPORTANT: Only delete "Copied" readings for child meters, preserving any 
-    // previously aggregated parent readings. This prevents cascading deletion 
-    // when a parent meter is also a child of another parent meter.
+    // IMPORTANT: Only delete the parent meter's aggregated readings.
+    // Child "Copied" readings are preserved and upserted (not deleted).
+    // This prevents data loss when running hierarchy generation multiple times.
     console.log('STEP 0: Preparing hierarchical_meter_readings table...');
     
-    // Delete only COPIED child readings (not aggregated parent readings that might exist)
-    // We use a raw filter since metadata is JSONB
-    const { error: deleteChildError, count: deletedChildCount } = await supabase
-      .from('hierarchical_meter_readings')
-      .delete()
-      .in('meter_id', childMeterIds)
-      .gte('reading_timestamp', dateFrom)
-      .lte('reading_timestamp', dateTo)
-      .filter('metadata->>source', 'eq', 'Copied');
-    
-    if (deleteChildError) {
-      console.warn(`Failed to clear copied child readings: ${deleteChildError.message}`);
-    } else {
-      console.log(`Cleared copied child readings for ${childMeterIds.length} child meters`);
-    }
-    
     // Delete ONLY the current parent meter's readings (to replace with new aggregation)
-    const { error: deleteParentError, count: deletedParentCount } = await supabase
+    const { error: deleteParentError } = await supabase
       .from('hierarchical_meter_readings')
       .delete()
       .eq('meter_id', parentMeterId)
@@ -235,9 +219,13 @@ Deno.serve(async (req) => {
         }
       }));
       
+      // Use upsert to preserve existing copied data and only update if changed
       const { error: insertError } = await supabase
         .from('hierarchical_meter_readings')
-        .insert(batch);
+        .upsert(batch, {
+          onConflict: 'meter_id,reading_timestamp',
+          ignoreDuplicates: false
+        });
 
       if (insertError) {
         console.error(`Failed to copy readings batch ${i}: ${insertError.message}`);
