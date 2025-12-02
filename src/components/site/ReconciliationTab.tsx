@@ -490,36 +490,50 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     colOperations?: Map<string, string>
   ): Promise<Map<string, { totalKwh: number; columnTotals: Record<string, number>; columnMaxValues: Record<string, number>; rowCount: number }>> => {
     const results = new Map();
+    const pageSize = 1000;
     
     for (const meterId of meterIds) {
-      // Query from the dedicated hierarchical_meter_readings table
-      const { data: readings } = await supabase
-        .from('hierarchical_meter_readings')
-        .select('kwh_value, kva_value, metadata')
-        .eq('meter_id', meterId)
-        .gte('reading_timestamp', dateFrom)
-        .lte('reading_timestamp', dateTo)
-        .eq('metadata->>source', 'hierarchical_aggregation');
+      // Paginated fetch from hierarchical_meter_readings
+      let allReadings: any[] = [];
+      let start = 0;
+      let hasMore = true;
       
-      if (readings && readings.length > 0) {
+      while (hasMore) {
+        const { data: pageData } = await supabase
+          .from('hierarchical_meter_readings')
+          .select('kwh_value, kva_value, metadata')
+          .eq('meter_id', meterId)
+          .gte('reading_timestamp', dateFrom)
+          .lte('reading_timestamp', dateTo)
+          .eq('metadata->>source', 'hierarchical_aggregation')
+          .order('reading_timestamp', { ascending: true })
+          .range(start, start + pageSize - 1);
+        
+        if (pageData && pageData.length > 0) {
+          allReadings = allReadings.concat(pageData);
+          start += pageSize;
+          hasMore = pageData.length === pageSize;
+        } else {
+          hasMore = false;
+        }
+      }
+      
+      if (allReadings.length > 0) {
         let totalKwh = 0;
         const columnTotals: Record<string, number> = {};
         const columnMaxValues: Record<string, number> = {};
         
-        readings.forEach(r => {
+        allReadings.forEach(r => {
           totalKwh += r.kwh_value || 0;
           const metadata = r.metadata as any;
           const imported = metadata?.imported_fields || {};
           Object.entries(imported).forEach(([key, value]) => {
             const numValue = Number(value) || 0;
-            // Use columnOperations to determine which aggregation to apply
             const operation = colOperations?.get(key) || 'sum';
             
             if (operation === 'max') {
-              // Only store in maxValues for max operation
               columnMaxValues[key] = Math.max(columnMaxValues[key] || 0, numValue);
             } else {
-              // Store in totals for sum operation (default)
               columnTotals[key] = (columnTotals[key] || 0) + numValue;
             }
           });
@@ -529,7 +543,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           totalKwh,
           columnTotals,
           columnMaxValues,
-          rowCount: readings.length
+          rowCount: allReadings.length
         });
       }
     }
