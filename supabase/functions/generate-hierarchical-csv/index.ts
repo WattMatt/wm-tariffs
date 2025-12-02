@@ -145,6 +145,8 @@ Deno.serve(async (req) => {
         .in('meter_id', childMeterIds)
         .gte('reading_timestamp', dateFrom)
         .lte('reading_timestamp', dateTo)
+        .or('metadata->>source.eq.Parsed,metadata->>source.is.null')
+        .not('metadata->>source_file', 'ilike', '%Hierarchical%')
         .order('reading_timestamp', { ascending: true })
         .range(offset, offset + PAGE_SIZE - 1);
 
