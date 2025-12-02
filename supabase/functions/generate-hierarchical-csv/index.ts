@@ -26,10 +26,10 @@ const roundToSlot = (timestamp: string): string => {
     console.warn(`Invalid timestamp for rounding: ${timestamp}`);
     return timestamp;
   }
-  const minutes = date.getMinutes();
-  if (minutes < 15) {
+  const mins = date.getMinutes();
+  if (mins < 15) {
     date.setMinutes(0);
-  } else if (minutes < 45) {
+  } else if (mins < 45) {
     date.setMinutes(30);
   } else {
     date.setHours(date.getHours() + 1);
@@ -37,7 +37,14 @@ const roundToSlot = (timestamp: string): string => {
   }
   date.setSeconds(0);
   date.setMilliseconds(0);
-  return date.toISOString();
+  // Format as YYYY-MM-DD HH:MM:SS to match uploaded CSV format
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  const hours = String(date.getUTCHours()).padStart(2, '0');
+  const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+  const seconds = String(date.getUTCSeconds()).padStart(2, '0');
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 };
 
 // Helper to sanitize names for storage paths
@@ -213,8 +220,12 @@ Deno.serve(async (req) => {
     
     const csvRows: string[] = [];
     
-    // Header row: Timestamp followed by columns
-    const headerColumns = ['Timestamp', ...columns];
+    // Row 1: Meter identifier row (empty cells + "Virtual" for hierarchical meter)
+    const meterIdentifierRow = ['', 'Virtual', ...columns.map(() => '')];
+    csvRows.push(meterIdentifierRow.join(','));
+    
+    // Row 2: Column headers with 'Time' (not 'Timestamp') to match uploaded CSV format
+    const headerColumns = ['Time', ...columns];
     csvRows.push(headerColumns.join(','));
 
     // Sort timestamps and create data rows
@@ -308,7 +319,7 @@ Deno.serve(async (req) => {
       timeColumn: '-1',
       valueColumn: '1',
       kvaColumn: '-1',
-      dateTimeFormat: 'YYYY-MM-DDTHH:mm:ss.sssZ',
+      dateTimeFormat: 'YYYY-MM-DD HH:mm:ss',
       renamedHeaders: {} as Record<number, string>,
       columnDataTypes: {} as Record<string, string>
     };
@@ -345,7 +356,7 @@ Deno.serve(async (req) => {
           parse_status: 'pending',
           parsed_at: null,
           separator: ',',
-          header_row_number: 1,
+          header_row_number: 2,  // Headers are now on row 2 (row 1 is meter identifier)
           column_mapping: columnMapping,
           updated_at: new Date().toISOString(),
           error_message: null,
@@ -379,7 +390,7 @@ Deno.serve(async (req) => {
           parse_status: 'pending',
           parsed_at: null,
           separator: ',',
-          header_row_number: 1,
+          header_row_number: 2,  // Headers are now on row 2 (row 1 is meter identifier)
           column_mapping: columnMapping,
           readings_inserted: 0,
           duplicates_skipped: 0,
