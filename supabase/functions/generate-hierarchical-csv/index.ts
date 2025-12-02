@@ -125,23 +125,39 @@ Deno.serve(async (req) => {
     console.log('Column factors:', columnFactors);
 
     // ===== STEP 0: Prepare hierarchical_meter_readings table =====
+    // IMPORTANT: Only delete "Copied" readings for child meters, preserving any 
+    // previously aggregated parent readings. This prevents cascading deletion 
+    // when a parent meter is also a child of another parent meter.
     console.log('STEP 0: Preparing hierarchical_meter_readings table...');
     
-    // All meter IDs involved (children + parent)
-    const allMeterIds = [...childMeterIds, parentMeterId];
-    
-    // Delete existing entries for all involved meters in the date range
-    const { error: deleteError } = await supabase
+    // Delete only COPIED child readings (not aggregated parent readings that might exist)
+    // We use a raw filter since metadata is JSONB
+    const { error: deleteChildError, count: deletedChildCount } = await supabase
       .from('hierarchical_meter_readings')
       .delete()
-      .in('meter_id', allMeterIds)
+      .in('meter_id', childMeterIds)
+      .gte('reading_timestamp', dateFrom)
+      .lte('reading_timestamp', dateTo)
+      .filter('metadata->>source', 'eq', 'Copied');
+    
+    if (deleteChildError) {
+      console.warn(`Failed to clear copied child readings: ${deleteChildError.message}`);
+    } else {
+      console.log(`Cleared copied child readings for ${childMeterIds.length} child meters`);
+    }
+    
+    // Delete ONLY the current parent meter's readings (to replace with new aggregation)
+    const { error: deleteParentError, count: deletedParentCount } = await supabase
+      .from('hierarchical_meter_readings')
+      .delete()
+      .eq('meter_id', parentMeterId)
       .gte('reading_timestamp', dateFrom)
       .lte('reading_timestamp', dateTo);
     
-    if (deleteError) {
-      console.warn(`Failed to clear existing hierarchical readings: ${deleteError.message}`);
+    if (deleteParentError) {
+      console.warn(`Failed to clear parent readings: ${deleteParentError.message}`);
     } else {
-      console.log(`Cleared existing hierarchical readings for ${allMeterIds.length} meters`);
+      console.log(`Cleared existing readings for parent meter ${parentMeterNumber}`);
     }
 
     // ===== STEP 1: Query meter_readings for ALL child meters within date range =====
