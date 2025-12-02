@@ -101,6 +101,22 @@ Deno.serve(async (req) => {
     meterInfo?.forEach(m => meterNumberMap.set(m.id, m.meter_number));
     console.log('Child meters:', Array.from(meterNumberMap.entries()).map(([id, num]) => num).join(', '));
 
+    // ===== IDENTIFY LEAF VS PARENT CHILD METERS =====
+    // Check which child meters have their own children (are parent meters in the hierarchy)
+    const { data: childrenOfChildren } = await supabase
+      .from('meter_connections')
+      .select('parent_meter_id')
+      .in('parent_meter_id', childMeterIds);
+
+    const parentChildMeterIds = new Set<string>(
+      childrenOfChildren?.map(c => c.parent_meter_id) || []
+    );
+    const leafChildMeterIds = childMeterIds.filter(id => !parentChildMeterIds.has(id));
+
+    console.log(`Child meters breakdown: ${leafChildMeterIds.length} leaf, ${parentChildMeterIds.size} parent`);
+    console.log('Leaf meters:', leafChildMeterIds.map(id => meterNumberMap.get(id) || id).join(', '));
+    console.log('Parent meters (will use aggregated data):', Array.from(parentChildMeterIds).map(id => meterNumberMap.get(id) || id).join(', '));
+
     // Fetch meter associations and column factors for sign inversion
     const { data: reconcSettings } = await supabase
       .from('site_reconciliation_settings')
@@ -144,8 +160,10 @@ Deno.serve(async (req) => {
       console.log(`Cleared existing readings for parent meter ${parentMeterNumber}`);
     }
 
-    // ===== STEP 1: Query meter_readings for ALL child meters within date range =====
-    console.log('STEP 1: Fetching readings from meter_readings table...');
+    // ===== STEP 1: Fetch readings from appropriate sources =====
+    // Leaf meters: fetch from meter_readings (direct data)
+    // Parent meters: fetch from hierarchical_meter_readings (aggregated data)
+    console.log('STEP 1: Fetching readings from appropriate sources...');
     
     const PAGE_SIZE = 1000;
     let allReadings: Array<{
@@ -155,35 +173,80 @@ Deno.serve(async (req) => {
       metadata: Record<string, any> | null;
       meter_id: string;
     }> = [];
-    let offset = 0;
-    let hasMore = true;
+    
+    // Track which readings came from meter_readings (need to be copied)
+    let leafReadings: typeof allReadings = [];
 
-    while (hasMore) {
-      const { data: pageData, error: readingsError } = await supabase
-        .from('meter_readings')
-        .select('reading_timestamp, kwh_value, kva_value, metadata, meter_id')
-        .in('meter_id', childMeterIds)
-        .gte('reading_timestamp', dateFrom)
-        .lte('reading_timestamp', dateTo)
-        .or('metadata->>source.eq.Parsed,metadata->>source.is.null')
-        .not('metadata->>source_file', 'ilike', '%Hierarchical%')
-        .order('reading_timestamp', { ascending: true })
-        .range(offset, offset + PAGE_SIZE - 1);
+    // ===== STEP 1A: Fetch LEAF meter readings from meter_readings =====
+    if (leafChildMeterIds.length > 0) {
+      console.log(`Fetching leaf meter readings from meter_readings for ${leafChildMeterIds.length} meters...`);
+      let offset = 0;
+      let hasMore = true;
 
-      if (readingsError) {
-        throw new Error(`Failed to fetch readings: ${readingsError.message}`);
+      while (hasMore) {
+        const { data: pageData, error: readingsError } = await supabase
+          .from('meter_readings')
+          .select('reading_timestamp, kwh_value, kva_value, metadata, meter_id')
+          .in('meter_id', leafChildMeterIds)
+          .gte('reading_timestamp', dateFrom)
+          .lte('reading_timestamp', dateTo)
+          .or('metadata->>source.eq.Parsed,metadata->>source.is.null')
+          .not('metadata->>source_file', 'ilike', '%Hierarchical%')
+          .order('reading_timestamp', { ascending: true })
+          .range(offset, offset + PAGE_SIZE - 1);
+
+        if (readingsError) {
+          throw new Error(`Failed to fetch leaf readings: ${readingsError.message}`);
+        }
+
+        if (pageData && pageData.length > 0) {
+          leafReadings = leafReadings.concat(pageData);
+          offset += pageData.length;
+          hasMore = pageData.length === PAGE_SIZE;
+        } else {
+          hasMore = false;
+        }
       }
-
-      if (pageData && pageData.length > 0) {
-        allReadings = allReadings.concat(pageData);
-        offset += pageData.length;
-        hasMore = pageData.length === PAGE_SIZE;
-      } else {
-        hasMore = false;
-      }
+      
+      console.log(`Fetched ${leafReadings.length} readings from leaf meters`);
+      allReadings = allReadings.concat(leafReadings);
     }
 
-    console.log(`Fetched ${allReadings.length} total readings from ${childMeterIds.length} child meters`);
+    // ===== STEP 1B: Fetch PARENT meter readings from hierarchical_meter_readings =====
+    if (parentChildMeterIds.size > 0) {
+      console.log(`Fetching parent meter aggregated data from hierarchical_meter_readings for ${parentChildMeterIds.size} meters...`);
+      const parentMeterIdsArray = Array.from(parentChildMeterIds);
+      let offset = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        const { data: pageData, error: hierarchicalError } = await supabase
+          .from('hierarchical_meter_readings')
+          .select('reading_timestamp, kwh_value, kva_value, metadata, meter_id')
+          .in('meter_id', parentMeterIdsArray)
+          .gte('reading_timestamp', dateFrom)
+          .lte('reading_timestamp', dateTo)
+          .eq('metadata->>source', 'hierarchical_aggregation')
+          .order('reading_timestamp', { ascending: true })
+          .range(offset, offset + PAGE_SIZE - 1);
+
+        if (hierarchicalError) {
+          throw new Error(`Failed to fetch hierarchical readings: ${hierarchicalError.message}`);
+        }
+
+        if (pageData && pageData.length > 0) {
+          allReadings = allReadings.concat(pageData);
+          offset += pageData.length;
+          hasMore = pageData.length === PAGE_SIZE;
+        } else {
+          hasMore = false;
+        }
+      }
+      
+      console.log(`Fetched ${allReadings.length - leafReadings.length} readings from parent meters (hierarchical aggregation)`);
+    }
+
+    console.log(`Total readings for aggregation: ${allReadings.length}`);
 
     if (allReadings.length === 0) {
       console.warn('No readings found for child meters in date range');
@@ -199,14 +262,15 @@ Deno.serve(async (req) => {
       );
     }
 
-    // ===== STEP 1.5: Copy child readings to hierarchical_meter_readings =====
-    console.log('STEP 1.5: Copying child readings to hierarchical_meter_readings...');
+    // ===== STEP 1.5: Copy ONLY LEAF meter readings to hierarchical_meter_readings =====
+    // Parent meter readings are already in hierarchical_meter_readings (from their own hierarchy generation)
+    console.log('STEP 1.5: Copying LEAF meter readings to hierarchical_meter_readings...');
     
     const COPY_BATCH_SIZE = 1000;
     let copiedCount = 0;
 
-    for (let i = 0; i < allReadings.length; i += COPY_BATCH_SIZE) {
-      const batch = allReadings.slice(i, i + COPY_BATCH_SIZE).map(reading => ({
+    for (let i = 0; i < leafReadings.length; i += COPY_BATCH_SIZE) {
+      const batch = leafReadings.slice(i, i + COPY_BATCH_SIZE).map(reading => ({
         meter_id: reading.meter_id,
         reading_timestamp: reading.reading_timestamp,
         kwh_value: reading.kwh_value,
@@ -235,7 +299,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`Copied ${copiedCount} child readings to hierarchical_meter_readings`);
+    console.log(`Copied ${copiedCount} LEAF meter readings to hierarchical_meter_readings (skipped ${parentChildMeterIds.size} parent meters)`);
 
     // ===== STEP 2: Aggregate readings by timestamp =====
     console.log('STEP 2: Aggregating readings by timestamp...');
