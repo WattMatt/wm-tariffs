@@ -496,7 +496,7 @@ Deno.serve(async (req) => {
 
         // Build metadata object
         const metadata: any = {
-          source: 'Parsed',
+          source: isGeneratedCsv ? 'hierarchical_aggregation' : 'Parsed',
           source_file: fileName,
           imported_at: new Date().toISOString(),
         };
