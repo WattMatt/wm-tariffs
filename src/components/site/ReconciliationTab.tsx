@@ -867,6 +867,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
   useEffect(() => {
     fetchDateRanges();
     fetchBasicMeters();
+    fetchDocumentDateRanges();
   }, [siteId]);
 
   // Auto-expand all parent meters when reconciliation data loads
@@ -3694,18 +3695,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label>Bulk Reconciliation - Select Multiple Periods (Municipal Bills Only)</Label>
-              {documentDateRanges.length === 0 && !isLoadingDocuments && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => fetchDocumentDateRanges()}
-                >
-                  Load Documents
-                </Button>
-              )}
-            </div>
+            <Label>Bulk Reconciliation - Select Multiple Periods (Municipal Bills Only)</Label>
             <div className="border rounded-md p-3 space-y-2 max-h-[300px] overflow-y-auto bg-background">
               {isLoadingDocuments ? (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -3823,12 +3813,9 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                 disabled={isLoadingDocuments}
               >
                 {isLoadingDocuments ? (
-                  <>
-                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                    Loading...
-                  </>
+                  <RefreshCw className="h-4 w-4 animate-spin" />
                 ) : (
-                  "Load Documents"
+                  <RefreshCw className="h-4 w-4" />
                 )}
               </Button>
             </div>
