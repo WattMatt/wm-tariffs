@@ -264,6 +264,8 @@ export type Database = {
           file_name: string
           file_path: string
           file_size: number | null
+          generated_date_from: string | null
+          generated_date_to: string | null
           header_row_number: number | null
           id: string
           meter_id: string
@@ -288,6 +290,8 @@ export type Database = {
           file_name: string
           file_path: string
           file_size?: number | null
+          generated_date_from?: string | null
+          generated_date_to?: string | null
           header_row_number?: number | null
           id?: string
           meter_id: string
@@ -312,6 +316,8 @@ export type Database = {
           file_name?: string
           file_path?: string
           file_size?: number | null
+          generated_date_from?: string | null
+          generated_date_to?: string | null
           header_row_number?: number | null
           id?: string
           meter_id?: string

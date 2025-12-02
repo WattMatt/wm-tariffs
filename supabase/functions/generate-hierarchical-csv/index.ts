@@ -351,7 +351,9 @@ Deno.serve(async (req) => {
           error_message: null,
           readings_inserted: 0,
           duplicates_skipped: 0,
-          parse_errors: 0
+          parse_errors: 0,
+          generated_date_from: dateFrom,
+          generated_date_to: dateTo,
         })
         .eq('id', existingRecord.id)
         .select('id')
@@ -381,7 +383,9 @@ Deno.serve(async (req) => {
           column_mapping: columnMapping,
           readings_inserted: 0,
           duplicates_skipped: 0,
-          parse_errors: 0
+          parse_errors: 0,
+          generated_date_from: dateFrom,
+          generated_date_to: dateTo,
         })
         .select('id')
         .single();
