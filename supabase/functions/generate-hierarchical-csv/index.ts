@@ -297,78 +297,7 @@ Deno.serve(async (req) => {
 
     console.log(`CSV uploaded to: ${filePath}`);
 
-    // ===== STEP 5: Delete existing HIERARCHICAL readings for parent meter in date range =====
-    // IMPORTANT: Only delete readings with source='hierarchical_aggregation' to preserve uploaded CSV data
-    console.log('Deleting existing HIERARCHICAL readings for parent meter in date range...');
-    
-    const { error: deleteError } = await supabase
-      .from('meter_readings')
-      .delete()
-      .eq('meter_id', parentMeterId)
-      .gte('reading_timestamp', dateFrom)
-      .lte('reading_timestamp', dateTo)
-      .eq('metadata->>source', 'hierarchical_aggregation');
-
-    if (deleteError) {
-      console.warn(`Failed to delete existing hierarchical readings: ${deleteError.message}`);
-    } else {
-      console.log(`Deleted existing hierarchical readings for parent meter (preserved uploaded CSV data)`);
-    }
-
-    // ===== STEP 6: Insert aggregated data directly into meter_readings =====
-    console.log('Inserting aggregated data into meter_readings...');
-    
-    const readingsToInsert = sortedTimestamps.map(timestamp => {
-      const data = groupedData.get(timestamp)!;
-      
-      // Calculate kwh_value from kWh columns (sum of P1, P2, etc.)
-      const kwhValue = kwhColumns.reduce((sum, col) => sum + (data[col] || 0), 0);
-      
-      // Get kVA value from kVA columns (take max)
-      const kvaColumns = columns.filter(c => 
-        c.toLowerCase().includes('kva') || c.toLowerCase() === 's'
-      );
-      const kvaValue = kvaColumns.length > 0 
-        ? Math.max(...kvaColumns.map(col => data[col] || 0))
-        : null;
-      
-      return {
-        meter_id: parentMeterId,
-        reading_timestamp: timestamp,
-        kwh_value: kwhValue,
-        kva_value: kvaValue,
-        metadata: {
-          source: 'hierarchical_aggregation',
-          source_file: fileName,
-          imported_at: new Date().toISOString(),
-          child_meter_count: childMeterIds.length,
-          imported_fields: data // Store all column values
-        }
-      };
-    });
-
-    // Batch insert in chunks of 500
-    const BATCH_SIZE = 500;
-    let totalInserted = 0;
-    let insertErrors = 0;
-
-    for (let i = 0; i < readingsToInsert.length; i += BATCH_SIZE) {
-      const batch = readingsToInsert.slice(i, i + BATCH_SIZE);
-      const { error: insertError } = await supabase
-        .from('meter_readings')
-        .insert(batch);
-
-      if (insertError) {
-        console.error(`Error inserting batch ${i / BATCH_SIZE + 1}:`, insertError.message);
-        insertErrors++;
-      } else {
-        totalInserted += batch.length;
-      }
-    }
-
-    console.log(`Inserted ${totalInserted} readings for parent meter`);
-
-    // ===== STEP 7: Create/Update meter_csv_files record =====
+    // ===== STEP 5: Create/Update meter_csv_files record =====
     console.log('Creating/updating meter_csv_files record...');
     
     const contentHash = await generateHash(csvContent);
@@ -413,16 +342,16 @@ Deno.serve(async (req) => {
           content_hash: contentHash,
           file_size: csvContent.length,
           upload_status: 'uploaded',
-          parse_status: 'generated',
-          parsed_at: new Date().toISOString(),
+          parse_status: 'pending',
+          parsed_at: null,
           separator: ',',
           header_row_number: 1,
           column_mapping: columnMapping,
           updated_at: new Date().toISOString(),
-          error_message: insertErrors > 0 ? `${insertErrors} batch insert errors` : null,
-          readings_inserted: totalInserted,
+          error_message: null,
+          readings_inserted: 0,
           duplicates_skipped: 0,
-          parse_errors: insertErrors
+          parse_errors: 0
         })
         .eq('id', existingRecord.id)
         .select('id')
@@ -445,14 +374,14 @@ Deno.serve(async (req) => {
           content_hash: contentHash,
           file_size: csvContent.length,
           upload_status: 'uploaded',
-          parse_status: 'generated',
-          parsed_at: new Date().toISOString(),
+          parse_status: 'pending',
+          parsed_at: null,
           separator: ',',
           header_row_number: 1,
           column_mapping: columnMapping,
-          readings_inserted: totalInserted,
+          readings_inserted: 0,
           duplicates_skipped: 0,
-          parse_errors: insertErrors
+          parse_errors: 0
         })
         .select('id')
         .single();
@@ -477,8 +406,8 @@ Deno.serve(async (req) => {
         columnTotals,
         columnMaxValues,
         rowCount: sortedTimestamps.length,
-        readingsInserted: totalInserted,
-        insertErrors
+        requiresParsing: true,
+        columnMapping
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
