@@ -306,6 +306,11 @@ Deno.serve(async (req) => {
     
     const columns = passedColumns || [];
     const groupedData = new Map<string, AggregatedData>();
+    
+    // Create a Set of leaf meter IDs for quick lookup
+    // CRITICAL: Only leaf meter readings need column factors applied
+    // Parent meter readings from hierarchical_meter_readings already have factors applied
+    const leafMeterIdSet = new Set(leafChildMeterIds);
 
     allReadings.forEach(reading => {
       const slot = roundToSlot(reading.reading_timestamp);
@@ -316,6 +321,7 @@ Deno.serve(async (req) => {
       
       const group = groupedData.get(slot)!;
       const isSolarMeter = solarMeterIds.has(reading.meter_id);
+      const isLeafMeter = leafMeterIdSet.has(reading.meter_id);
 
       // Aggregate imported_fields from metadata
       if (reading.metadata?.imported_fields) {
@@ -326,11 +332,19 @@ Deno.serve(async (req) => {
           if (value !== null && value !== undefined) {
             const numValue = Number(value);
             if (!isNaN(numValue)) {
-              // Get column factor (default to 1 if not specified)
-              const columnFactor = columnFactors[col] ?? 1;
-              // For solar meters, invert the factor; for normal meters, use as-is
-              const multiplier = isSolarMeter ? -columnFactor : columnFactor;
-              group[col] = (group[col] || 0) + (numValue * multiplier);
+              // CRITICAL FIX: Only apply column factors to LEAF meter readings
+              // Parent meter readings from hierarchical_meter_readings already have factors applied
+              // from their own hierarchy generation - applying again would cause double inversion
+              if (isLeafMeter) {
+                // Get column factor (default to 1 if not specified)
+                const columnFactor = columnFactors[col] ?? 1;
+                // For solar meters, invert the factor; for normal meters, use as-is
+                const multiplier = isSolarMeter ? -columnFactor : columnFactor;
+                group[col] = (group[col] || 0) + (numValue * multiplier);
+              } else {
+                // Parent meter data - use values as-is (factors already applied during their hierarchy generation)
+                group[col] = (group[col] || 0) + numValue;
+              }
             }
           }
         });
