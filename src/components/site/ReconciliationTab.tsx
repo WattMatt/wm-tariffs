@@ -2505,27 +2505,41 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       setMeterCorrections(allCorrections);
 
       // Update meters with BOTH direct and hierarchical CSV values
-      // Store direct values (from uploaded/parsed CSV or meter_readings)
+      // Store direct values (from uploaded/parsed CSV or meter_readings calculation)
       // Store hierarchical values (from generated hierarchical CSV)
-      // The main totalKwh/columnTotals prioritize hierarchical if available
+      // CRITICAL: Direct values MUST come from processSingleMeter (source='Parsed' readings only)
       const updateMeterCategory = (meters: any[]) => {
         return meters.map(meter => {
           const csvData = csvResults.get(meter.id);
           const hasHierarchicalCsv = csvData !== undefined;
           const hasUploadedCsv = metersWithUploadedCsvs.has(meter.id);
           
-          // Always store the direct values (from uploaded CSV or meter_readings calculation)
+          // CRITICAL FIX: Always preserve direct values from processSingleMeter
+          // These values come from meter_readings with source='Parsed' ONLY
+          // DO NOT let them be overwritten by hierarchical data (source='hierarchical_aggregation')
           const directTotalKwh = meter.totalKwh;
-          const directColumnTotals = meter.columnTotals;
-          const directColumnMaxValues = meter.columnMaxValues;
+          const directColumnTotals = { ...meter.columnTotals };
+          const directColumnMaxValues = { ...meter.columnMaxValues };
           const directReadingsCount = meter.readingsCount;
           
-          // If we have hierarchical CSV data, process it
+          // Debug logging to verify direct values are correct
           if (hasHierarchicalCsv) {
+            console.log(`📊 ${meter.meter_number} values:`, {
+              direct: { totalKwh: directTotalKwh, readingsCount: directReadingsCount },
+              hierarchical: { totalKwh: csvData.totalKwh, rowCount: csvData.rowCount }
+            });
+          }
+          
+          // If we have hierarchical CSV data, process it
+          if (hasHierarchicalCsv && csvData) {
             const { processedColumnTotals, processedColumnMaxValues, totalKwhPositive, totalKwhNegative, totalKwh } = 
               applyColumnSettingsToHierarchicalData(csvData.columnTotals, csvData.columnMaxValues || {}, csvData.rowCount);
             
-            console.log(`Storing BOTH values for ${meter.meter_number}: Hierarchical=${totalKwh.toFixed(2)} kWh, Direct=${directTotalKwh.toFixed(2)} kWh`);
+            console.log(`Storing BOTH values for ${meter.meter_number}:`, {
+              hierarchical: `${totalKwh.toFixed(2)} kWh (${csvData.rowCount} readings)`,
+              direct: `${directTotalKwh.toFixed(2)} kWh (${directReadingsCount} readings)`,
+              hasUploadedCsv
+            });
             
             // If meter has uploaded CSV, keep using direct values as primary but still store hierarchical
             if (hasUploadedCsv) {
@@ -2536,7 +2550,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                 totalKwh: directTotalKwh,
                 columnTotals: directColumnTotals,
                 columnMaxValues: directColumnMaxValues,
-                // Store both for comparison
+                // Store BOTH for comparison - ensure direct values are from processSingleMeter
                 directTotalKwh,
                 directColumnTotals,
                 directColumnMaxValues,
@@ -2544,10 +2558,11 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                 hierarchicalTotalKwh: totalKwh,
                 hierarchicalColumnTotals: processedColumnTotals,
                 hierarchicalColumnMaxValues: processedColumnMaxValues,
+                hierarchicalReadingsCount: csvData.rowCount,
               };
             }
             
-            // No uploaded CSV - use hierarchical as primary
+            // No uploaded CSV - use hierarchical as primary BUT still preserve direct values from processSingleMeter
             console.log(`  → Using Hierarchical as primary for ${meter.meter_number}`);
             return {
               ...meter,
@@ -2557,7 +2572,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
               columnMaxValues: processedColumnMaxValues,
               totalKwhPositive,
               totalKwhNegative,
-              // Store both for comparison
+              // CRITICAL: Store direct values from processSingleMeter (source='Parsed' readings)
+              // These MUST NOT be overwritten by hierarchical data
               directTotalKwh,
               directColumnTotals,
               directColumnMaxValues,
@@ -2565,6 +2581,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
               hierarchicalTotalKwh: totalKwh,
               hierarchicalColumnTotals: processedColumnTotals,
               hierarchicalColumnMaxValues: processedColumnMaxValues,
+              hierarchicalReadingsCount: csvData.rowCount,
             };
           }
           
