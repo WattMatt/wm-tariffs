@@ -44,7 +44,8 @@ interface Meter {
   tariff_structure_id: string | null;
   is_revenue_critical: boolean;
   created_at: string;
-  has_raw_csv?: boolean;
+  has_uploaded_csv?: boolean;
+  has_generated_csv?: boolean;
   has_parsed?: boolean;
   has_schematic_position?: boolean;
   is_duplicate?: boolean;
@@ -178,14 +179,22 @@ export default function MetersTab({ siteId }: MetersTabProps) {
     if (error) {
       toast.error("Failed to fetch meters");
     } else {
-      // Check which meters have raw CSV files and parsed data
+      // Check which meters have uploaded, generated, and parsed CSV files
       const metersWithStatus = await Promise.all(
         (data || []).map(async (meter) => {
-          // Check for raw CSV files (uploaded)
-          const { count: csvFilesCount } = await supabase
+          // Check for uploaded CSV files (parse_status = 'parsed')
+          const { count: uploadedCount } = await supabase
             .from("meter_csv_files")
             .select("*", { count: "exact", head: true })
-            .eq("meter_id", meter.id);
+            .eq("meter_id", meter.id)
+            .eq("parse_status", "parsed");
+          
+          // Check for generated CSV files (parse_status = 'generated')
+          const { count: generatedCount } = await supabase
+            .from("meter_csv_files")
+            .select("*", { count: "exact", head: true })
+            .eq("meter_id", meter.id)
+            .eq("parse_status", "generated");
           
           // Check for parsed CSV files (those with parsed_file_path)
           const { count: parsedFilesCount } = await supabase
@@ -200,15 +209,17 @@ export default function MetersTab({ siteId }: MetersTabProps) {
             .select("*", { count: "exact", head: true })
             .eq("meter_id", meter.id);
           
-          const hasRawCsv = (csvFilesCount ?? 0) > 0;
+          const hasUploadedCsv = (uploadedCount ?? 0) > 0;
+          const hasGeneratedCsv = (generatedCount ?? 0) > 0;
           const hasParsed = (parsedFilesCount ?? 0) > 0;
           const hasSchematicPosition = (positionsCount ?? 0) > 0;
           
-          console.log(`Meter ${meter.meter_number}: Raw CSV: ${hasRawCsv}, Parsed: ${hasParsed}, On Schematic: ${hasSchematicPosition}`);
+          console.log(`Meter ${meter.meter_number}: Uploaded CSV: ${hasUploadedCsv}, Generated CSV: ${hasGeneratedCsv}, Parsed: ${hasParsed}, On Schematic: ${hasSchematicPosition}`);
           
           return {
             ...meter,
-            has_raw_csv: hasRawCsv,
+            has_uploaded_csv: hasUploadedCsv,
+            has_generated_csv: hasGeneratedCsv,
             has_parsed: hasParsed,
             has_schematic_position: hasSchematicPosition
           };
@@ -1026,7 +1037,7 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                             Duplicate
                           </Badge>
                         )}
-                        {meter.has_raw_csv && (
+                        {(meter.has_uploaded_csv || meter.has_generated_csv) && (
                           <Badge 
                             variant="outline" 
                             className="gap-1 bg-blue-500/10 border-blue-500/50 text-blue-600 dark:text-blue-400 cursor-pointer hover:bg-blue-500/20 transition-colors"
@@ -1034,10 +1045,18 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                               await fetchRawCsvData(meter.id);
                               setIsRawCsvViewOpen(true);
                             }}
-                            title="View raw CSV data"
+                            title={meter.has_uploaded_csv && meter.has_generated_csv 
+                              ? "Has both uploaded and generated CSV data"
+                              : meter.has_uploaded_csv 
+                                ? "View uploaded CSV data"
+                                : "View generated CSV data"}
                           >
                             <Database className="w-3 h-3" />
-                            Raw
+                            {meter.has_uploaded_csv && meter.has_generated_csv 
+                              ? "Up/Gen"
+                              : meter.has_uploaded_csv 
+                                ? "Uploaded"
+                                : "Generated"}
                           </Badge>
                         )}
                         {meter.has_parsed && (
