@@ -2164,12 +2164,12 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         console.log(`Parent meters with uploaded CSVs (will use uploaded data): ${metersWithUploadedCsvs.size}`, 
           Array.from(metersWithUploadedCsvs));
 
-        // Delete old generated CSVs to ensure fresh data
+        // Delete old generated CSVs to ensure fresh data (match by file name pattern)
         const { error: deleteError } = await supabase
           .from('meter_csv_files')
           .delete()
           .eq('site_id', siteId)
-          .eq('parse_status', 'generated');
+          .ilike('file_name', '%Hierarchical%');
         
         if (deleteError) {
           console.warn('Failed to delete old generated CSVs:', deleteError);
@@ -2209,12 +2209,25 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
               console.log(`Parsing generated CSV for ${parentMeter.meter_number}...`);
               
               try {
+                // Delete old hierarchical readings for this meter before inserting new ones
+                const { error: deleteReadingsError } = await supabase
+                  .from('meter_readings')
+                  .delete()
+                  .eq('meter_id', parentMeter.id)
+                  .ilike('metadata->>source_file', '%Hierarchical%');
+                
+                if (deleteReadingsError) {
+                  console.warn(`Failed to delete old hierarchical readings for ${parentMeter.meter_number}:`, deleteReadingsError);
+                } else {
+                  console.log(`Deleted old hierarchical readings for ${parentMeter.meter_number}`);
+                }
+
                 const { error: parseError, data: parseData } = await supabase.functions.invoke('process-meter-csv', {
                   body: {
                     csvFileId: result.csvFileId,
                     meterId: parentMeter.id,
                     separator: ',',
-                    headerRowNumber: 1,
+                    headerRowNumber: 2,
                     columnMapping: result.columnMapping
                   }
                 });
