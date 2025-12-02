@@ -215,6 +215,47 @@ export type Database = {
           },
         ]
       }
+      hierarchical_meter_readings: {
+        Row: {
+          created_at: string | null
+          id: string
+          kva_value: number | null
+          kwh_value: number
+          metadata: Json | null
+          meter_id: string
+          reading_timestamp: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          kva_value?: number | null
+          kwh_value: number
+          metadata?: Json | null
+          meter_id: string
+          reading_timestamp: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          kva_value?: number | null
+          kwh_value?: number
+          metadata?: Json | null
+          meter_id?: string
+          reading_timestamp?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hierarchical_meter_readings_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meter_connections: {
         Row: {
           child_meter_id: string

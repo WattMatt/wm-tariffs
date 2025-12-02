@@ -437,7 +437,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     return coverageMap;
   };
 
-  // Fetch hierarchical data from meter_readings for covered date ranges
+  // Fetch hierarchical data from hierarchical_meter_readings table for covered date ranges
   const fetchHierarchicalDataFromReadings = async (
     meterIds: string[],
     dateFrom: string,
@@ -446,8 +446,9 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     const results = new Map();
     
     for (const meterId of meterIds) {
+      // Query from the dedicated hierarchical_meter_readings table
       const { data: readings } = await supabase
-        .from('meter_readings')
+        .from('hierarchical_meter_readings')
         .select('kwh_value, kva_value, metadata')
         .eq('meter_id', meterId)
         .gte('reading_timestamp', dateFrom)
@@ -2296,44 +2297,34 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
               console.log(`📝 ${result.corrections.length} corrections for ${parentMeter.meter_number}`);
             }
 
-            // Parse the generated CSV using the standard process-meter-csv function
-            if (result.requiresParsing && result.csvFileId) {
-              console.log(`Parsing generated CSV for ${parentMeter.meter_number}...`);
-              
-              try {
-                // Delete old hierarchical readings for this meter before inserting new ones
-                const { error: deleteReadingsError } = await supabase
-                  .from('meter_readings')
-                  .delete()
-                  .eq('meter_id', parentMeter.id)
-                  .ilike('metadata->>source_file', '%Hierarchical%');
+              // Parse the generated CSV into hierarchical_meter_readings table
+              if (result.requiresParsing && result.csvFileId) {
+                console.log(`Parsing generated CSV for ${parentMeter.meter_number} into hierarchical_meter_readings...`);
                 
-                if (deleteReadingsError) {
-                  console.warn(`Failed to delete old hierarchical readings for ${parentMeter.meter_number}:`, deleteReadingsError);
-                } else {
-                  console.log(`Deleted old hierarchical readings for ${parentMeter.meter_number}`);
-                }
+                try {
+                  // No need to delete old readings - generate-hierarchical-csv already cleared the table
 
-                const { error: parseError, data: parseData } = await supabase.functions.invoke('process-meter-csv', {
-                  body: {
-                    csvFileId: result.csvFileId,
-                    meterId: parentMeter.id,
-                    separator: ',',
-                    headerRowNumber: 2,
-                    columnMapping: result.columnMapping
+                  const { error: parseError, data: parseData } = await supabase.functions.invoke('process-meter-csv', {
+                    body: {
+                      csvFileId: result.csvFileId,
+                      meterId: parentMeter.id,
+                      separator: ',',
+                      headerRowNumber: 2,
+                      columnMapping: result.columnMapping,
+                      targetTable: 'hierarchical_meter_readings' // NEW: insert into dedicated table
+                    }
+                  });
+                  
+                  if (parseError) {
+                    console.error(`Failed to parse generated CSV for ${parentMeter.meter_number}:`, parseError);
+                    toast.error(`Failed to parse CSV for ${parentMeter.meter_number}`);
+                  } else {
+                    console.log(`✅ Parsed generated CSV for ${parentMeter.meter_number}: ${parseData?.readingsInserted || 0} readings into hierarchical_meter_readings`);
                   }
-                });
-                
-                if (parseError) {
-                  console.error(`Failed to parse generated CSV for ${parentMeter.meter_number}:`, parseError);
-                  toast.error(`Failed to parse CSV for ${parentMeter.meter_number}`);
-                } else {
-                  console.log(`✅ Parsed generated CSV for ${parentMeter.meter_number}: ${parseData?.readingsCount || 0} readings`);
+                } catch (parseErr) {
+                  console.error(`Exception parsing CSV for ${parentMeter.meter_number}:`, parseErr);
                 }
-              } catch (parseErr) {
-                console.error(`Exception parsing CSV for ${parentMeter.meter_number}:`, parseErr);
               }
-            }
           }
           
           setCsvGenerationProgress({ current: i + 1, total: sortedParentMeters.length });
