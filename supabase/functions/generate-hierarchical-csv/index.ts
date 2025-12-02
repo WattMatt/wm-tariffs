@@ -220,9 +220,8 @@ Deno.serve(async (req) => {
     
     const csvRows: string[] = [];
     
-    // Row 1: Meter identifier row (empty cells + "Virtual" for hierarchical meter)
-    const meterIdentifierRow = ['', 'Virtual', ...columns.map(() => '')];
-    csvRows.push(meterIdentifierRow.join(','));
+    // Row 1: Meter identifier row - exactly "pnpscada.com,Virtual" with no additional empty cells
+    csvRows.push('pnpscada.com,Virtual');
     
     // Row 2: Column headers with 'Time' (not 'Timestamp') to match uploaded CSV format
     const headerColumns = ['Time', ...columns];
