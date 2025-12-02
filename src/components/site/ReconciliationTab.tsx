@@ -1911,7 +1911,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     parentMeter: { id: string; meter_number: string },
     fullDateTimeFrom: string,
     fullDateTimeTo: string
-  ): Promise<{ totalKwh: number; columnTotals: Record<string, number>; columnMaxValues: Record<string, number>; rowCount: number; corrections: Array<any> } | null> => {
+  ): Promise<{ totalKwh: number; columnTotals: Record<string, number>; columnMaxValues: Record<string, number>; rowCount: number; corrections: Array<any>; requiresParsing?: boolean; csvFileId?: string; columnMapping?: Record<string, any> } | null> => {
     const childMeterIds = meterConnectionsMap.get(parentMeter.id) || [];
     if (childMeterIds.length === 0) return null;
 
@@ -1946,7 +1946,10 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           columnTotals: data.columnTotals || {},
           columnMaxValues: data.columnMaxValues || {},
           rowCount: data.rowCount || 0,
-          corrections
+          corrections,
+          requiresParsing: data.requiresParsing,
+          csvFileId: data.csvFileId,
+          columnMapping: data.columnMapping
         };
       }
       return null;
@@ -2113,6 +2116,32 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
             if (result.corrections && result.corrections.length > 0) {
               allCorrections.set(parentMeter.id, result.corrections);
               console.log(`📝 ${result.corrections.length} corrections for ${parentMeter.meter_number}`);
+            }
+
+            // Parse the generated CSV using the standard process-meter-csv function
+            if (result.requiresParsing && result.csvFileId) {
+              console.log(`Parsing generated CSV for ${parentMeter.meter_number}...`);
+              
+              try {
+                const { error: parseError, data: parseData } = await supabase.functions.invoke('process-meter-csv', {
+                  body: {
+                    csvFileId: result.csvFileId,
+                    meterId: parentMeter.id,
+                    separator: ',',
+                    headerRowNumber: 1,
+                    columnMapping: result.columnMapping
+                  }
+                });
+                
+                if (parseError) {
+                  console.error(`Failed to parse generated CSV for ${parentMeter.meter_number}:`, parseError);
+                  toast.error(`Failed to parse CSV for ${parentMeter.meter_number}`);
+                } else {
+                  console.log(`✅ Parsed generated CSV for ${parentMeter.meter_number}: ${parseData?.readingsCount || 0} readings`);
+                }
+              } catch (parseErr) {
+                console.error(`Exception parsing CSV for ${parentMeter.meter_number}:`, parseErr);
+              }
             }
           }
           
