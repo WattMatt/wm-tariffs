@@ -399,6 +399,51 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     };
   }, [siteId]);
 
+  // Realtime subscription for meters and settings changes
+  useEffect(() => {
+    // Subscribe to meters changes for this site
+    const metersChannel = supabase
+      .channel(`reconciliation-meters-${siteId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'meters',
+          filter: `site_id=eq.${siteId}`
+        },
+        () => {
+          console.log('Meters changed, refreshing reconciliation data...');
+          fetchBasicMeters();
+          fetchDateRanges();
+        }
+      )
+      .subscribe();
+
+    // Subscribe to reconciliation settings changes
+    const settingsChannel = supabase
+      .channel(`reconciliation-settings-${siteId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'site_reconciliation_settings',
+          filter: `site_id=eq.${siteId}`
+        },
+        () => {
+          console.log('Reconciliation settings changed, reloading...');
+          loadReconciliationSettings();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(metersChannel);
+      supabase.removeChannel(settingsChannel);
+    };
+  }, [siteId]);
+
   // Check existing hierarchical CSV coverage in database
   const checkHierarchicalCsvCoverage = async (
     parentMeterIds: string[],

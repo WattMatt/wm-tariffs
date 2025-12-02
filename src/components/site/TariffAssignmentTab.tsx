@@ -779,6 +779,30 @@ export default function TariffAssignmentTab({
     fetchDocumentShopNumbers();
   }, [siteId]);
 
+  // Realtime subscription for meters changes
+  useEffect(() => {
+    const metersChannel = supabase
+      .channel(`tariff-assignment-meters-${siteId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'meters',
+          filter: `site_id=eq.${siteId}`
+        },
+        () => {
+          console.log('Meters changed, refreshing tariff assignment...');
+          fetchMeters();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(metersChannel);
+    };
+  }, [siteId]);
+
   useEffect(() => {
     if (site?.supply_authority_id) {
       fetchTariffStructures();
