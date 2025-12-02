@@ -324,31 +324,10 @@ export default function ReconciliationResultsView({
     // For leaf meters: their own corruptions; For parents: propagated from children
     const corrections = meterCorrections.get(meter.id) || [];
     const hasChildren = childIds.length > 0;
-    let hierarchicalTotal = 0;
     
-    // Use saved hierarchical total if available, otherwise calculate on the fly
-    if (meter.hierarchicalTotal !== undefined) {
-      hierarchicalTotal = meter.hierarchicalTotal;
-    } else if (childIds.length > 0) {
-      const getLeafMeterSum = (meterId: string): number => {
-        const children = meterConnections?.get(meterId) || [];
-        
-        if (children.length === 0) {
-          const meterData = meters.find((m: any) => m.id === meterId);
-          const isSolar = meterAssignments.get(meterId) === "solar_energy";
-          const value = meterData?.totalKwh || 0;
-          return isSolar ? -value : value;
-        }
-        
-        return children.reduce((sum, childId) => {
-          return sum + getLeafMeterSum(childId);
-        }, 0);
-      };
-      
-      hierarchicalTotal = childIds.reduce((sum, childId) => {
-        return sum + getLeafMeterSum(childId);
-      }, 0);
-    }
+    // CRITICAL: Use ONLY database hierarchical value - no client-side fallback
+    // This ensures we display correctly aggregated P1, P2, S values from hierarchical_meter_readings
+    const hierarchicalTotal = meter.hierarchicalTotalKwh ?? meter.hierarchicalTotal ?? 0;
     
     const indentLevel = meterIndentLevels.get(meter.id) || 0;
     const marginLeft = indentLevel * 24;

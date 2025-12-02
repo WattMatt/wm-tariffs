@@ -2921,7 +2921,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           // Process all parent meters in parallel
           const parentMeterPromises = allMeters
             .filter(meter => {
-              const hierarchicalTotal = hierarchicalTotals.get(meter.id);
+              // Use database hierarchical value, fallback to client-side
+              const hierarchicalTotal = meter.hierarchicalTotalKwh ?? hierarchicalTotals.get(meter.id);
               const existingRevenue = meterRevenues.get(meter.id);
               // Include parent meters with hierarchical totals that either:
               // 1. Don't have revenue calculated yet, OR
@@ -2930,7 +2931,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                      (!existingRevenue || (existingRevenue as any).totalCost === 0);
             })
             .map(async (meter) => {
-              const hierarchicalTotal = hierarchicalTotals.get(meter.id)!;
+              // Use database hierarchical value, fallback to client-side
+              const hierarchicalTotal = meter.hierarchicalTotalKwh ?? hierarchicalTotals.get(meter.id) ?? 0;
               
               // Extract max kVA from columnMaxValues for this meter
               const meterMaxKva = Object.entries(meter.columnMaxValues || {})
@@ -3013,7 +3015,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           total_kwh: meter.totalKwh || 0,
           total_kwh_positive: meter.totalKwhPositive || 0,
           total_kwh_negative: meter.totalKwhNegative || 0,
-          hierarchical_total: hierarchicalTotals.get(meter.id) || 0,
+          hierarchical_total: meter.hierarchicalTotalKwh ?? hierarchicalTotals.get(meter.id) ?? 0,
           readings_count: meter.readingsCount || 0,
           column_totals: meter.columnTotals || hierarchicalColumnTotals.get(meter.id) || null,
           column_max_values: meter.columnMaxValues || hierarchicalColumnMaxValues.get(meter.id) || null,
@@ -3388,7 +3390,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           total_kwh: meter.totalKwh || 0,
           total_kwh_positive: meter.totalKwhPositive || 0,
           total_kwh_negative: meter.totalKwhNegative || 0,
-          hierarchical_total: hierarchicalTotals.get(meter.id) || 0,
+          hierarchical_total: meter.hierarchicalTotalKwh ?? hierarchicalTotals.get(meter.id) ?? 0,
           readings_count: meter.readingsCount || 0,
           column_totals: meter.columnTotals || hierarchicalColumnTotals.get(meter.id) || null,
           column_max_values: meter.columnMaxValues || hierarchicalColumnMaxValues.get(meter.id) || null,
