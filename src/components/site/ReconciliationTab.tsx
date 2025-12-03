@@ -48,6 +48,11 @@ import {
   useMeterHierarchy,
   useReconciliationSettings,
 } from "@/hooks/reconciliation";
+import {
+  DateRangeSelector,
+  ColumnConfiguration,
+  DocumentPeriodSelector,
+} from "@/components/reconciliation";
 
 interface ReconciliationTabProps {
   siteId: string;
@@ -3605,239 +3610,41 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label>Bulk Reconciliation - Select Multiple Periods (Municipal Bills Only)</Label>
-            <div className="border rounded-md p-3 space-y-2 max-h-[300px] overflow-y-auto bg-background">
-              {isLoadingDocuments ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <RefreshCw className="h-4 w-4 animate-spin" />
-                  Loading document periods...
-                </div>
-              ) : documentDateRanges && documentDateRanges.length > 0 ? (
-                documentDateRanges
-                  .filter(doc => doc.document_type === 'municipal_account')
-                  .map((doc) => (
-                    <div key={doc.id} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`bulk-${doc.id}`}
-                        checked={selectedDocumentIds.includes(doc.id)}
-                        onCheckedChange={(checked) => {
-                          if (checked) {
-                            setSelectedDocumentIds([...selectedDocumentIds, doc.id]);
-                          } else {
-                            setSelectedDocumentIds(selectedDocumentIds.filter(id => id !== doc.id));
-                          }
-                        }}
-                      />
-                      <label htmlFor={`bulk-${doc.id}`} className="text-sm cursor-pointer flex-1">
-                        {doc.file_name} ({format(new Date(doc.period_start), "MMM d, yyyy")} - {format(new Date(doc.period_end), "MMM d, yyyy")})
-                      </label>
-                    </div>
-                  ))
-              ) : (
-                <p className="text-sm text-muted-foreground">Click "Load Documents" to fetch available periods</p>
-              )}
-            </div>
-            {selectedDocumentIds.length > 0 && (
-              <div className="flex items-center justify-between pt-2">
-                <span className="text-sm text-muted-foreground">
-                  {selectedDocumentIds.length} period(s) selected
-                </span>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setSelectedDocumentIds([])}
-                  >
-                    Clear Selection
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="space-y-2">
-            <Label>Document Period</Label>
-            <div className="flex items-center gap-2">
-              <Select
-                disabled={isLoadingDocuments || documentDateRanges.length === 0}
-                onValueChange={(value) => {
-                  const selected = documentDateRanges.find(d => d.id === value);
-                  if (selected) {
-                    const startDate = new Date(selected.period_start);
-                    startDate.setHours(0, 0, 0, 0);
-                    
-                    const endDate = new Date(selected.period_end);
-                    endDate.setDate(endDate.getDate() - 1);
-                    endDate.setHours(23, 59, 0, 0);
-                    
-                    setDateFrom(startDate);
-                    setDateTo(endDate);
-                    setTimeFrom("00:00");
-                    setTimeTo("23:59");
-                    setUserSetDates(true);
-                    toast.success(`Date range set from ${format(startDate, "PP")} to ${format(endDate, "PP")}`);
-                  }
-                }}
-              >
-                <SelectTrigger className="flex-1" disabled={isLoadingDocuments}>
-                  <SelectValue placeholder={
-                    isLoadingDocuments 
-                      ? "Loading..." 
-                      : documentDateRanges.length === 0 
-                      ? "Click 'Load Documents' to fetch periods" 
-                      : "Select a document period..."
-                  } />
-                </SelectTrigger>
-                <SelectContent className="bg-popover z-50">
-                  {/* Group by document type */}
-                  {documentDateRanges.filter(d => d.document_type === 'municipal_account').length > 0 && (
-                    <>
-                      <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Municipal Bills</div>
-                      {documentDateRanges
-                        .filter(d => d.document_type === 'municipal_account')
-                        .map((doc) => (
-                          <SelectItem key={doc.id} value={doc.id}>
-                            {doc.file_name} ({format(new Date(doc.period_start), "PP")} - {format(new Date(doc.period_end), "PP")})
-                          </SelectItem>
-                        ))}
-                    </>
-                  )}
-                  {documentDateRanges.filter(d => d.document_type === 'tenant_bill').length > 0 && (
-                    <>
-                      <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground mt-2">Tenant Bills</div>
-                      {documentDateRanges
-                        .filter(d => d.document_type === 'tenant_bill')
-                        .map((doc) => (
-                          <SelectItem key={doc.id} value={doc.id}>
-                            {doc.file_name} ({format(new Date(doc.period_start), "PP")} - {format(new Date(doc.period_end), "PP")})
-                          </SelectItem>
-                        ))}
-                    </>
-                  )}
-                </SelectContent>
-              </Select>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => fetchDocumentDateRanges()}
-                disabled={isLoadingDocuments}
-              >
-                {isLoadingDocuments ? (
-                  <RefreshCw className="h-4 w-4 animate-spin" />
-                ) : (
-                  <RefreshCw className="h-4 w-4" />
-                )}
-              </Button>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>From Date & Time</Label>
-              <Popover open={isDateFromOpen} onOpenChange={setIsDateFromOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !dateFrom && "text-muted-foreground"
-                    )}
-                    disabled={isLoadingDateRanges && !dateFrom}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {dateFrom ? `${format(dateFrom, "PP")} at ${timeFrom}` : "Pick date & time"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0 bg-popover z-50" align="start">
-                  <div>
-                    <Calendar 
-                      mode="single" 
-                      selected={dateFrom} 
-                      onSelect={(date) => {
-                        setDateFrom(date);
-                        setUserSetDates(true);
-                      }}
-                      className={cn("p-3 pointer-events-auto")}
-                      disabled={false}
-                      fromYear={2000}
-                      toYear={2050}
-                      captionLayout="dropdown-buttons"
-                    />
-                    <div className="px-3 pb-3">
-                      <Input
-                        type="time"
-                        value={timeFrom}
-                        onChange={(e) => {
-                          setTimeFrom(e.target.value);
-                          setUserSetDates(true);
-                        }}
-                        onBlur={() => {
-                          // Close after user finishes editing and leaves the field
-                          if (timeFrom && timeFrom.length === 5) {
-                            setTimeout(() => setIsDateFromOpen(false), 100);
-                          }
-                        }}
-                        className="w-full"
-                      />
-                    </div>
-                  </div>
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            <div className="space-y-2">
-              <Label>To Date & Time</Label>
-              <Popover open={isDateToOpen} onOpenChange={setIsDateToOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !dateTo && "text-muted-foreground"
-                    )}
-                    disabled={isLoadingDateRanges && !dateTo}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {dateTo ? `${format(dateTo, "PP")} at ${timeTo}` : "Pick date & time"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0 bg-popover z-50" align="start">
-                  <div>
-                    <Calendar 
-                      mode="single" 
-                      selected={dateTo} 
-                      onSelect={(date) => {
-                        setDateTo(date);
-                        setUserSetDates(true);
-                      }}
-                      className={cn("p-3 pointer-events-auto")}
-                      disabled={false}
-                      fromYear={2000}
-                      toYear={2050}
-                      captionLayout="dropdown-buttons"
-                    />
-                    <div className="px-3 pb-3">
-                      <Input
-                        type="time"
-                        value={timeTo}
-                        onChange={(e) => {
-                          setTimeTo(e.target.value);
-                          setUserSetDates(true);
-                        }}
-                        onBlur={() => {
-                          // Close after user finishes editing and leaves the field
-                          if (timeTo && timeTo.length === 5) {
-                            setTimeout(() => setIsDateToOpen(false), 100);
-                          }
-                        }}
-                        className="w-full"
-                      />
-                    </div>
-                  </div>
-                </PopoverContent>
-              </Popover>
-            </div>
-          </div>
+          <DocumentPeriodSelector
+            documentDateRanges={documentDateRanges}
+            selectedDocumentIds={selectedDocumentIds}
+            isLoadingDocuments={isLoadingDocuments}
+            onSelectedDocumentIdsChange={setSelectedDocumentIds}
+            onDocumentPeriodSelect={(doc) => {
+              const startDate = new Date(doc.period_start);
+              startDate.setHours(0, 0, 0, 0);
+              const endDate = new Date(doc.period_end);
+              endDate.setDate(endDate.getDate() - 1);
+              endDate.setHours(23, 59, 0, 0);
+              setDateFrom(startDate);
+              setDateTo(endDate);
+              setTimeFrom("00:00");
+              setTimeTo("23:59");
+              setUserSetDates(true);
+              toast.success(`Date range set from ${format(startDate, "PP")} to ${format(endDate, "PP")}`);
+            }}
+            onRefreshDocuments={fetchDocumentDateRanges}
+          />
+          <DateRangeSelector
+            dateFrom={dateFrom}
+            dateTo={dateTo}
+            timeFrom={timeFrom}
+            timeTo={timeTo}
+            isDateFromOpen={isDateFromOpen}
+            isDateToOpen={isDateToOpen}
+            onDateFromChange={setDateFrom}
+            onDateToChange={setDateTo}
+            onTimeFromChange={setTimeFrom}
+            onTimeToChange={setTimeTo}
+            onDateFromOpenChange={setIsDateFromOpen}
+            onDateToOpenChange={setIsDateToOpen}
+            onUserSetDates={() => setUserSetDates(true)}
+          />
 
           <Button onClick={handlePreview} disabled={isLoadingPreview || !dateFrom || !dateTo || !selectedMeterId} className="w-full">
             <Eye className="mr-2 h-4 w-4" />
@@ -3855,152 +3662,17 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
-            <Collapsible open={isColumnsOpen} onOpenChange={setIsColumnsOpen}>
-              <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
-                <CollapsibleTrigger className="flex items-center justify-between w-full mb-3 hover:underline">
-                  <Label className="text-sm font-semibold cursor-pointer">Available Columns - Select to Include in Calculations</Label>
-                  <ChevronRight className={cn("h-4 w-4 transition-transform", isColumnsOpen && "rotate-90")} />
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <div className="border rounded-lg overflow-hidden">
-                    <Table>
-                  <TableHeader>
-                    <TableRow className="bg-muted/50">
-                      <TableHead className="w-12">
-                        <Checkbox
-                          id="select-all-columns"
-                          checked={selectedColumns.size === previewData.availableColumns.length}
-                          onCheckedChange={(checked) => {
-                            if (checked) {
-                              const newSelected = new Set<string>(previewData.availableColumns as string[]);
-                              setSelectedColumns(newSelected);
-                              const newOps = new Map(columnOperations);
-                              const newFactors = new Map(columnFactors);
-                              previewData.availableColumns.forEach((col: string) => {
-                                if (!newOps.has(col)) newOps.set(col, "sum");
-                                if (!newFactors.has(col)) newFactors.set(col, "1");
-                              });
-                              setColumnOperations(newOps);
-                              setColumnFactors(newFactors);
-                            } else {
-                              setSelectedColumns(new Set());
-                            }
-                          }}
-                        />
-                      </TableHead>
-                      <TableHead className="font-semibold">
-                        <span 
-                          className="cursor-pointer hover:underline"
-                          onClick={() => {
-                            const allSelected = selectedColumns.size === previewData.availableColumns.length;
-                            if (!allSelected) {
-                              const newSelected = new Set<string>(previewData.availableColumns as string[]);
-                              setSelectedColumns(newSelected);
-                              const newOps = new Map(columnOperations);
-                              const newFactors = new Map(columnFactors);
-                              previewData.availableColumns.forEach((col: string) => {
-                                if (!newOps.has(col)) newOps.set(col, "sum");
-                                if (!newFactors.has(col)) newFactors.set(col, "1");
-                              });
-                              setColumnOperations(newOps);
-                              setColumnFactors(newFactors);
-                            } else {
-                              setSelectedColumns(new Set());
-                            }
-                          }}
-                        >
-                          Column Name
-                        </span>
-                      </TableHead>
-                      <TableHead className="w-32 font-semibold">Operation</TableHead>
-                      <TableHead className="w-24 font-semibold">Factor</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {previewData.availableColumns.map((column: string) => (
-                      <TableRow key={column} className="hover:bg-muted/30">
-                        <TableCell className="py-2">
-                          <Checkbox
-                            id={`column-${column}`}
-                            checked={selectedColumns.has(column)}
-                            onCheckedChange={(checked) => {
-                              const newSelected = new Set(selectedColumns);
-                              if (checked) {
-                                newSelected.add(column);
-                                if (!columnOperations.has(column)) {
-                                  const newOps = new Map(columnOperations);
-                                  newOps.set(column, "sum");
-                                  setColumnOperations(newOps);
-                                }
-                                if (!columnFactors.has(column)) {
-                                  const newFactors = new Map(columnFactors);
-                                  newFactors.set(column, "1");
-                                  setColumnFactors(newFactors);
-                                }
-                              } else {
-                                newSelected.delete(column);
-                              }
-                              setSelectedColumns(newSelected);
-                            }}
-                          />
-                        </TableCell>
-                        <TableCell className="py-2">
-                          <Label
-                            htmlFor={`column-${column}`}
-                            className="text-sm cursor-pointer font-medium"
-                          >
-                            {column}
-                          </Label>
-                        </TableCell>
-                        <TableCell className="py-2">
-                          {selectedColumns.has(column) ? (
-                            <Select
-                              value={columnOperations.get(column) || "sum"}
-                              onValueChange={(value) => {
-                                const newOps = new Map(columnOperations);
-                                newOps.set(column, value);
-                                setColumnOperations(newOps);
-                              }}
-                            >
-                              <SelectTrigger className="h-8 text-xs">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="sum">Sum</SelectItem>
-                                <SelectItem value="min">Min</SelectItem>
-                                <SelectItem value="max">Max</SelectItem>
-                                <SelectItem value="average">Average</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="py-2">
-                          {selectedColumns.has(column) ? (
-                            <Input
-                              type="number"
-                              step="0.01"
-                              value={columnFactors.get(column) || 1}
-                              onChange={(e) => {
-                                const newFactors = new Map(columnFactors);
-                                newFactors.set(column, e.target.value || "1");
-                                setColumnFactors(newFactors);
-                              }}
-                              className="h-8 text-xs"
-                            />
-                          ) : (
-                            <span className="text-xs text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-                </CollapsibleContent>
-              </div>
-            </Collapsible>
+            <ColumnConfiguration
+              availableColumns={previewData.availableColumns || []}
+              selectedColumns={selectedColumns}
+              columnOperations={columnOperations}
+              columnFactors={columnFactors}
+              isOpen={isColumnsOpen}
+              onOpenChange={setIsColumnsOpen}
+              onSelectedColumnsChange={setSelectedColumns}
+              onColumnOperationsChange={setColumnOperations}
+              onColumnFactorsChange={setColumnFactors}
+            />
 
             <Collapsible open={isMetersOpen} onOpenChange={setIsMetersOpen}>
               <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
