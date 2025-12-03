@@ -147,14 +147,14 @@ Deno.serve(async (req) => {
       let hasMore = true;
 
       while (hasMore) {
+        // Fetch ALL readings for leaf meters - no source filter restriction
+        // Only exclude Hierarchical source_files to prevent recursion
         const { data: pageData, error: readingsError } = await supabase
           .from('meter_readings')
           .select('reading_timestamp, kwh_value, kva_value, metadata, meter_id')
           .in('meter_id', leafMeterIds)
           .gte('reading_timestamp', dateFrom)
           .lte('reading_timestamp', dateTo)
-          .or('metadata->>source.eq.Parsed,metadata->>source.is.null')
-          .not('metadata->>source_file', 'ilike', '%Hierarchical%')
           .order('reading_timestamp', { ascending: true })
           .range(offset, offset + PAGE_SIZE - 1);
 
