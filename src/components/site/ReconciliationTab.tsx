@@ -1339,14 +1339,15 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       
       lines.forEach(line => {
         const metadata = line.metadata as any;
-        const parentId = metadata?.parent_meter_id;
-        const childId = metadata?.child_meter_id;
+        // Schematic lines are drawn from child to parent, so field names are inverted
+        const actualParentId = metadata?.child_meter_id;   // End of line = parent
+        const actualChildId = metadata?.parent_meter_id;   // Start of line = child
         
-        if (parentId && childId) {
-          const pairKey = `${parentId}-${childId}`;
+        if (actualParentId && actualChildId) {
+          const pairKey = `${actualParentId}-${actualChildId}`;
           if (!seenPairs.has(pairKey)) {
             seenPairs.add(pairKey);
-            connections.push({ parent_meter_id: parentId, child_meter_id: childId });
+            connections.push({ parent_meter_id: actualParentId, child_meter_id: actualChildId });
           }
         }
       });
