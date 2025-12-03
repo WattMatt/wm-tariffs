@@ -712,193 +712,32 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       return;
     }
 
-    setIsColumnsOpen(false);
-    setIsMetersOpen(false);
-    cancelReconciliationRef.current = false;
-    
-    setIsLoading(true);
-    setEnergyProgress({ current: 0, total: 0 });
-    setRevenueProgress({ current: 0, total: 0 });
-    setFailedMeters(new Map());
-    setHierarchicalCsvResults(new Map());
-    
-    // Only clear corrections if we're regenerating hierarchy
-    if (!hierarchyGenerated) {
-      setMeterCorrections(new Map());
-    }
+    const result = await runner.runReconciliation({
+      dateFrom,
+      dateTo,
+      timeFrom,
+      timeTo,
+      enableRevenue: enableRevenue !== undefined ? enableRevenue : revenueReconciliationEnabled,
+      availableMeters,
+      meterConnectionsMap,
+      hierarchyGenerated,
+      meterCorrections,
+      getMetersWithUploadedCsvs: execution.getMetersWithUploadedCsvs,
+      updateMeterCategoryWithHierarchy: execution.updateMeterCategoryWithHierarchy,
+      saveReconciliationSettings,
+      setIsLoading,
+      setFailedMeters,
+      setHierarchicalCsvResults,
+      setReconciliationData,
+      setAvailableMeters,
+      setIsColumnsOpen,
+      setIsMetersOpen,
+      setIsCancelling,
+      setIsGeneratingCsvs,
+    });
 
-    try {
-      const fullDateTimeFrom = getFullDateTime(dateFrom, timeFrom);
-      const fullDateTimeTo = getFullDateTime(dateTo, timeTo);
-      const shouldCalculateRevenue = enableRevenue !== undefined ? enableRevenue : revenueReconciliationEnabled;
-
-      // ===== STEP 1: Fetch existing hierarchical data (no generation) =====
-      let csvResults = new Map<string, { totalKwh: number; columnTotals: Record<string, number>; columnMaxValues: Record<string, number>; rowCount: number }>();
-      const allCorrections = new Map(meterCorrections);
-
-      // Get parent meters (meters with children)
-      const parentMetersForCsv = availableMeters.filter(meter => {
-        const children = meterConnectionsMap.get(meter.id);
-        return children && children.length > 0;
-      });
-
-      if (parentMetersForCsv.length > 0) {
-        const parentMeterIds = parentMetersForCsv.map(m => m.id);
-        
-        // Fetch hierarchical data from meter_readings (already parsed from generated CSVs)
-        console.log(`STEP 1: Fetching existing hierarchical data for ${parentMeterIds.length} parent meters...`);
-        const existingData = await fetchHierarchicalDataFromReadings(
-          parentMeterIds,
-          fullDateTimeFrom,
-          fullDateTimeTo,
-          columnOperationsRef.current
-        );
-        
-        existingData.forEach((data, meterId) => {
-          csvResults.set(meterId, data);
-        });
-        
-        const metersWithHierarchicalData = csvResults.size;
-        const metersWithoutData = parentMeterIds.length - metersWithHierarchicalData;
-        
-        if (metersWithoutData > 0) {
-          console.log(`${metersWithoutData} parent meter(s) have no hierarchical data - run "Generate Hierarchy" first`);
-        }
-        console.log(`STEP 1 COMPLETE: Using hierarchical data for ${metersWithHierarchicalData} parent meter(s)`);
-      }
-
-      // Determine which meters have uploaded CSVs (needed for updateMeterCategory)
-      const parentMetersForCsvCheck = availableMeters.filter(meter => {
-        const children = meterConnectionsMap.get(meter.id);
-        return children && children.length > 0;
-      });
-      const parentMeterIds = parentMetersForCsvCheck.map(m => m.id);
-      const metersWithUploadedCsvs = await execution.getMetersWithUploadedCsvs(parentMeterIds);
-
-      // ===== STEP 2: Perform energy/revenue reconciliation =====
-      // Now perform reconciliation - this uses meter_readings for leaf meters
-      // and the hierarchical CSV values will be applied to parent meters afterwards
-      console.log('STEP 2: Performing energy/revenue reconciliation...');
-      
-      const { meterData, errors, reconciliationData, leafCorrectionsByMeter } = await runner.performReconciliationCalculation(
-        fullDateTimeFrom,
-        fullDateTimeTo,
-        shouldCalculateRevenue
-      );
-
-      setFailedMeters(errors);
-      
-      if (shouldCalculateRevenue) {
-        setIsCalculatingRevenue(false);
-        toast.success("Revenue calculation complete");
-      }
-
-      // ===== STEP 3: Apply hierarchical CSV values to parent meters =====
-      // Merge leaf meter corrections with hierarchical corrections
-      for (const [meterId, corrections] of leafCorrectionsByMeter.entries()) {
-        if (allCorrections.has(meterId)) {
-          allCorrections.get(meterId)!.push(...corrections);
-        } else {
-          allCorrections.set(meterId, corrections);
-        }
-      }
-      
-      // Propagate corrections from children to parents recursively
-      const getAllDescendantCorrections = (meterId: string): CorrectedReading[] => {
-        const childIds = meterConnectionsMap.get(meterId) || [];
-        let descendantCorrections: CorrectedReading[] = [];
-        
-        for (const childId of childIds) {
-          const childCorrections = allCorrections.get(childId) || [];
-          const leafCorrections = leafCorrectionsByMeter.get(childId) || [];
-          const grandchildCorrections = getAllDescendantCorrections(childId);
-          descendantCorrections.push(...childCorrections, ...leafCorrections, ...grandchildCorrections);
-        }
-        
-        return descendantCorrections;
-      };
-      
-      // Update allCorrections for each parent meter
-      const parentMeters = meterData.filter(meter => {
-        const children = meterConnectionsMap.get(meter.id);
-        return children && children.length > 0;
-      });
-      
-      for (const parentMeter of parentMeters) {
-        const existingCorrections = allCorrections.get(parentMeter.id) || [];
-        const descendantCorrections = getAllDescendantCorrections(parentMeter.id);
-        
-        // Deduplicate
-        const uniqueCorrections = [...existingCorrections];
-        for (const correction of descendantCorrections) {
-          const isDuplicate = uniqueCorrections.some(c =>
-            c.timestamp === correction.timestamp &&
-            c.originalSourceMeterId === correction.originalSourceMeterId &&
-            c.fieldName === correction.fieldName
-          );
-          if (!isDuplicate) {
-            uniqueCorrections.push(correction);
-          }
-        }
-        
-        if (uniqueCorrections.length > 0) {
-          allCorrections.set(parentMeter.id, uniqueCorrections);
-          console.log(`📊 ${parentMeter.meter_number} now has ${uniqueCorrections.length} corrections (propagated)`);
-        }
-      }
-      
-      setMeterCorrections(allCorrections);
-
-      // Update meters with BOTH direct and hierarchical CSV values using consolidated hook function
-      reconciliationData.councilBulk = execution.updateMeterCategoryWithHierarchy(reconciliationData.councilBulk || [], csvResults, metersWithUploadedCsvs);
-      reconciliationData.bulkMeters = execution.updateMeterCategoryWithHierarchy(reconciliationData.bulkMeters || [], csvResults, metersWithUploadedCsvs);
-      reconciliationData.solarMeters = execution.updateMeterCategoryWithHierarchy(reconciliationData.solarMeters || [], csvResults, metersWithUploadedCsvs);
-      reconciliationData.checkMeters = execution.updateMeterCategoryWithHierarchy(reconciliationData.checkMeters || [], csvResults, metersWithUploadedCsvs);
-      reconciliationData.tenantMeters = execution.updateMeterCategoryWithHierarchy(reconciliationData.tenantMeters || [], csvResults, metersWithUploadedCsvs);
-      reconciliationData.distribution = execution.updateMeterCategoryWithHierarchy(reconciliationData.distribution || [], csvResults, metersWithUploadedCsvs);
-      reconciliationData.distributionMeters = execution.updateMeterCategoryWithHierarchy(reconciliationData.distributionMeters || [], csvResults, metersWithUploadedCsvs);
-      reconciliationData.otherMeters = execution.updateMeterCategoryWithHierarchy(reconciliationData.otherMeters || [], csvResults, metersWithUploadedCsvs);
-      reconciliationData.unassignedMeters = execution.updateMeterCategoryWithHierarchy(reconciliationData.unassignedMeters || [], csvResults, metersWithUploadedCsvs);
-
-
-      setHierarchicalCsvResults(csvResults);
-
-      await saveReconciliationSettings();
-      setReconciliationData(reconciliationData);
-
-      // Update availableMeters to reflect which meters have data
-      setAvailableMeters(prevMeters => 
-        prevMeters.map(meter => {
-          const meterReadings = meterData.find(m => m.id === meter.id);
-          return {
-            ...meter,
-            hasData: meterReadings ? meterReadings.readingsCount > 0 : false
-          };
-        })
-      );
-
-      if (errors.size > 0) {
-        toast.warning(`Reconciliation complete with ${errors.size} meter failure${errors.size > 1 ? 's' : ''}`);
-      } else {
-        toast.success("Reconciliation complete");
-      }
-    } catch (error: any) {
-      console.error("Reconciliation error:", error);
-      
-      if (error.message === 'Reconciliation cancelled by user') {
-        toast.info("Reconciliation cancelled");
-      } else {
-        toast.error("Failed to complete reconciliation");
-      }
-    } finally {
-      setIsLoading(false);
-      setIsCalculatingRevenue(false);
-      setIsCancelling(false);
-      setIsGeneratingCsvs(false);
-      setCsvGenerationProgress({ current: 0, total: 0 });
-      cancelReconciliationRef.current = false;
-    }
-  }, [dateFrom, dateTo, timeFrom, timeTo, revenueReconciliationEnabled, meterConnectionsMap, siteId]);
+    return result;
+  }, [dateFrom, dateTo, timeFrom, timeTo, revenueReconciliationEnabled, availableMeters, meterConnectionsMap, hierarchyGenerated, meterCorrections, runner, execution, saveReconciliationSettings]);
 
   const cancelReconciliation = () => {
     if (!isCancelling) {
@@ -954,144 +793,20 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
   };
 
   const handleBulkReconcile = async () => {
-    if (selectedDocumentIds.length === 0) {
-      toast.error("Please select at least one period to reconcile");
-      return;
-    }
-
-    setIsBulkProcessing(true);
-    const totalDocs = selectedDocumentIds.length;
-
-    try {
-      let successCount = 0;
-      let errorCount = 0;
-      const errors: string[] = [];
-
-      // Process each document with its own specific date range
-      for (let i = 0; i < selectedDocumentIds.length; i++) {
-        const docId = selectedDocumentIds[i];
-        try {
-          const doc = documentDateRanges.find(d => d.id === docId);
-          if (!doc) continue;
-
-          // Update progress state
-          setBulkProgress({
-            currentDocument: doc.file_name,
-            current: i + 1,
-            total: totalDocs
-          });
-
-          // Use this document's specific date range
-          const startDate = new Date(doc.period_start);
-          startDate.setHours(0, 0, 0, 0);
-          
-          const endDate = new Date(doc.period_end);
-          endDate.setDate(endDate.getDate() - 1);
-          endDate.setHours(23, 59, 0, 0);
-
-          // Run reconciliation using this document's specific date range
-          await handleReconcileForPeriod(startDate, endDate, doc.file_name);
-          successCount++;
-
-        } catch (error) {
-          console.error(`Error processing ${docId}:`, error);
-          errorCount++;
-          const doc = documentDateRanges.find(d => d.id === docId);
-          errors.push(doc?.file_name || docId);
-        }
-      }
-
-      if (successCount > 0) {
-        toast.success(
-          `Bulk reconciliation complete! ${successCount} reconciliation(s) saved${errorCount > 0 ? `, ${errorCount} failed` : ''}.`
-        );
-      }
-
-      if (errors.length > 0) {
-        toast.error(`Failed periods: ${errors.join(', ')}`);
-      }
-
-      setSelectedDocumentIds([]);
-      setBulkProgress({ currentDocument: '', current: 0, total: 0 });
-    } catch (error) {
-      console.error("Bulk reconciliation error:", error);
-      toast.error("Failed to complete bulk reconciliation");
-    } finally {
-      setIsBulkProcessing(false);
-    }
-  };
-
-  const handleReconcileForPeriod = async (startDate: Date, endDate: Date, fileName: string) => {
-    if (!previewData) {
-      throw new Error("Please preview data first");
-    }
-
-    if (selectedColumns.size === 0) {
-      throw new Error("Please select at least one column to calculate");
-    }
-
-    const fullDateTimeFrom = getFullDateTime(startDate, "00:00");
-    const fullDateTimeTo = getFullDateTime(endDate, "23:59");
-
-    // Use the shared reconciliation calculation function with revenue enabled
-    const { reconciliationData } = await runner.performReconciliationCalculation(
-      fullDateTimeFrom,
-      fullDateTimeTo,
-      true // Always enable revenue for bulk reconciliation
-    );
-
-    // Generate hierarchical CSVs for parent meters (needed for correct values)
-    const bulkCsvResults = new Map<string, { totalKwh: number; columnTotals: Record<string, number>; columnMaxValues: Record<string, number>; rowCount: number }>();
-    const parentMetersForCsv = [...(reconciliationData.bulkMeters || []), ...(reconciliationData.solarMeters || []), ...(reconciliationData.tenantMeters || []), ...(reconciliationData.checkMeters || []), ...(reconciliationData.unassignedMeters || [])].filter(meter => {
-      const children = meterConnectionsMap.get(meter.id);
-      return children && children.length > 0;
+    await runner.runBulkReconcile({
+      selectedDocumentIds,
+      documentDateRanges,
+      previewData,
+      selectedColumns,
+      meterConnectionsMap,
+      availableMeters,
+      getMetersWithUploadedCsvs: execution.getMetersWithUploadedCsvs,
+      updateMeterCategoryWithHierarchy: execution.updateMeterCategoryWithHierarchy,
+      saveReconciliationRun: execution.saveReconciliationRun,
+      setIsBulkProcessing,
+      setBulkProgress,
+      setSelectedDocumentIds,
     });
-
-    if (parentMetersForCsv.length > 0) {
-      // Check which parent meters have their own uploaded CSVs
-      const parentMeterIds = parentMetersForCsv.map(m => m.id);
-      const metersWithUploadedCsvs = await execution.getMetersWithUploadedCsvs(parentMeterIds);
-      
-      const csvPromises = parentMetersForCsv.map(async (parentMeter) => {
-        const childMeterIds = meterConnectionsMap.get(parentMeter.id) || [];
-        const result = await runner.generateHierarchicalCsvForMeter(parentMeter, fullDateTimeFrom, fullDateTimeTo, childMeterIds);
-        if (result) {
-          bulkCsvResults.set(parentMeter.id, {
-            totalKwh: result.totalKwh,
-            columnTotals: result.columnTotals,
-            columnMaxValues: result.columnMaxValues,
-            rowCount: result.rowCount
-          });
-        }
-      });
-      await Promise.allSettled(csvPromises);
-
-      // Update meters with BOTH direct and hierarchical CSV values using consolidated hook function
-      reconciliationData.bulkMeters = execution.updateMeterCategoryWithHierarchy(reconciliationData.bulkMeters || [], bulkCsvResults, metersWithUploadedCsvs);
-      reconciliationData.councilBulk = execution.updateMeterCategoryWithHierarchy(reconciliationData.councilBulk || [], bulkCsvResults, metersWithUploadedCsvs);
-      reconciliationData.solarMeters = execution.updateMeterCategoryWithHierarchy(reconciliationData.solarMeters || [], bulkCsvResults, metersWithUploadedCsvs);
-      reconciliationData.tenantMeters = execution.updateMeterCategoryWithHierarchy(reconciliationData.tenantMeters || [], bulkCsvResults, metersWithUploadedCsvs);
-      reconciliationData.checkMeters = execution.updateMeterCategoryWithHierarchy(reconciliationData.checkMeters || [], bulkCsvResults, metersWithUploadedCsvs);
-      reconciliationData.unassignedMeters = execution.updateMeterCategoryWithHierarchy(reconciliationData.unassignedMeters || [], bulkCsvResults, metersWithUploadedCsvs);
-    }
-
-    // Save using the consolidated execution hook
-    const runName = `${fileName} - ${format(endDate, "MMM yyyy")}`;
-    
-    try {
-      await execution.saveReconciliationRun(
-        runName,
-        null, // no notes for bulk reconciliation
-        fullDateTimeFrom,
-        fullDateTimeTo,
-        reconciliationData,
-        availableMeters,
-        bulkCsvResults
-      );
-    } catch (error) {
-      console.error('Save bulk reconciliation error:', error);
-      throw error;
-    }
   };
 
   // Note: downloadMeterCSV, downloadMeterCsvFile, downloadAllMetersCSV moved to useDownloadUtils hook

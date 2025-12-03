@@ -1,4 +1,4 @@
-import { useCallback, RefObject } from 'react';
+import { useCallback, RefObject, MutableRefObject } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -26,7 +26,7 @@ export interface UseReconciliationRunnerOptions {
   columnOperationsRef: RefObject<Map<string, string>>;
   columnFactorsRef: RefObject<Map<string, string>>;
   meterAssignments: Map<string, string>;
-  cancelRef: RefObject<boolean>;
+  cancelRef: MutableRefObject<boolean>;
   previewDataRef: RefObject<{ availableColumns: string[] } | null>;
   onEnergyProgress?: (progress: { current: number; total: number }) => void;
   onRevenueProgress?: (progress: { current: number; total: number }) => void;
@@ -42,6 +42,47 @@ export interface UseReconciliationRunnerOptions {
   onSelectedColumns?: (columns: Set<string>) => void;
   onColumnOperations?: (operations: Map<string, string>) => void;
   onColumnFactors?: (factors: Map<string, string>) => void;
+}
+
+export interface RunReconciliationOptions {
+  dateFrom: Date;
+  dateTo: Date;
+  timeFrom: string;
+  timeTo: string;
+  enableRevenue: boolean;
+  availableMeters: any[];
+  meterConnectionsMap: Map<string, string[]>;
+  hierarchyGenerated: boolean;
+  meterCorrections: Map<string, CorrectedReading[]>;
+  // Callbacks
+  getMetersWithUploadedCsvs: (meterIds: string[]) => Promise<Set<string>>;
+  updateMeterCategoryWithHierarchy: (meters: MeterResult[], csvResults: Map<string, any>, metersWithUploadedCsvs: Set<string>) => MeterResult[];
+  saveReconciliationSettings: () => Promise<void>;
+  setIsLoading: (loading: boolean) => void;
+  setFailedMeters: (meters: Map<string, string>) => void;
+  setHierarchicalCsvResults: (results: Map<string, any>) => void;
+  setReconciliationData: (data: any) => void;
+  setAvailableMeters: (fn: (prev: any[]) => any[]) => void;
+  setIsColumnsOpen: (open: boolean) => void;
+  setIsMetersOpen: (open: boolean) => void;
+  setIsCancelling: (cancelling: boolean) => void;
+  setIsGeneratingCsvs: (generating: boolean) => void;
+}
+
+export interface BulkReconcileOptions {
+  selectedDocumentIds: string[];
+  documentDateRanges: Array<{ id: string; file_name: string; period_start: string; period_end: string }>;
+  previewData: any;
+  selectedColumns: Set<string>;
+  meterConnectionsMap: Map<string, string[]>;
+  availableMeters: any[];
+  // Callbacks
+  getMetersWithUploadedCsvs: (meterIds: string[]) => Promise<Set<string>>;
+  updateMeterCategoryWithHierarchy: (meters: MeterResult[], csvResults: Map<string, any>, metersWithUploadedCsvs: Set<string>) => MeterResult[];
+  saveReconciliationRun: (runName: string, notes: string | null, dateFrom: string, dateTo: string, reconciliationData: any, meters: any[], csvResults: Map<string, any>) => Promise<string>;
+  setIsBulkProcessing: (processing: boolean) => void;
+  setBulkProgress: (progress: { currentDocument: string; current: number; total: number }) => void;
+  setSelectedDocumentIds: (ids: string[]) => void;
 }
 
 export interface ProcessedMeterData {
@@ -1206,6 +1247,398 @@ export function useReconciliationRunner(options: UseReconciliationRunnerOptions)
     }
   }, [siteId, onPreviewData, onSelectedColumns, onColumnOperations, onColumnFactors]);
 
+  /**
+   * Run full reconciliation with hierarchical data fetching
+   */
+  const runReconciliation = useCallback(async (options: RunReconciliationOptions) => {
+    const {
+      dateFrom,
+      dateTo,
+      timeFrom,
+      timeTo,
+      enableRevenue,
+      availableMeters,
+      meterConnectionsMap,
+      hierarchyGenerated,
+      meterCorrections,
+      getMetersWithUploadedCsvs,
+      updateMeterCategoryWithHierarchy,
+      saveReconciliationSettings,
+      setIsLoading,
+      setFailedMeters,
+      setHierarchicalCsvResults,
+      setReconciliationData,
+      setAvailableMeters,
+      setIsColumnsOpen,
+      setIsMetersOpen,
+      setIsCancelling,
+      setIsGeneratingCsvs,
+    } = options;
+
+    setIsColumnsOpen(false);
+    setIsMetersOpen(false);
+    cancelRef.current = false;
+    
+    setIsLoading(true);
+    onEnergyProgress?.({ current: 0, total: 0 });
+    onRevenueProgress?.({ current: 0, total: 0 });
+    setFailedMeters(new Map());
+    setHierarchicalCsvResults(new Map());
+    
+    if (!hierarchyGenerated) {
+      onMeterCorrections?.(new Map());
+    }
+
+    try {
+      const fullDateTimeFrom = getFullDateTime(dateFrom, timeFrom);
+      const fullDateTimeTo = getFullDateTime(dateTo, timeTo);
+
+      // Fetch existing hierarchical data
+      let csvResults = new Map<string, { totalKwh: number; columnTotals: Record<string, number>; columnMaxValues: Record<string, number>; rowCount: number }>();
+      const allCorrections = new Map(meterCorrections);
+
+      const parentMetersForCsv = availableMeters.filter(meter => {
+        const children = meterConnectionsMap.get(meter.id);
+        return children && children.length > 0;
+      });
+
+      if (parentMetersForCsv.length > 0) {
+        const parentMeterIds = parentMetersForCsv.map(m => m.id);
+        
+        console.log(`STEP 1: Fetching existing hierarchical data for ${parentMeterIds.length} parent meters...`);
+        
+        // Paginated fetch from hierarchical_meter_readings
+        for (const meterId of parentMeterIds) {
+          let allReadings: any[] = [];
+          let start = 0;
+          const pageSize = 1000;
+          let hasMore = true;
+          
+          while (hasMore) {
+            const { data: pageData } = await supabase
+              .from('hierarchical_meter_readings')
+              .select('kwh_value, kva_value, metadata')
+              .eq('meter_id', meterId)
+              .gte('reading_timestamp', fullDateTimeFrom)
+              .lte('reading_timestamp', fullDateTimeTo)
+              .eq('metadata->>source', 'hierarchical_aggregation')
+              .order('reading_timestamp', { ascending: true })
+              .range(start, start + pageSize - 1);
+            
+            if (pageData && pageData.length > 0) {
+              allReadings = allReadings.concat(pageData);
+              start += pageSize;
+              hasMore = pageData.length === pageSize;
+            } else {
+              hasMore = false;
+            }
+          }
+          
+          if (allReadings.length > 0) {
+            let totalKwh = 0;
+            const columnTotals: Record<string, number> = {};
+            const columnMaxValues: Record<string, number> = {};
+            
+            allReadings.forEach(r => {
+              totalKwh += r.kwh_value || 0;
+              const metadata = r.metadata as any;
+              const imported = metadata?.imported_fields || {};
+              Object.entries(imported).forEach(([key, value]) => {
+                const numValue = Number(value) || 0;
+                const operation = columnOperationsRef.current.get(key) || 'sum';
+                
+                if (operation === 'max') {
+                  columnMaxValues[key] = Math.max(columnMaxValues[key] || 0, numValue);
+                } else {
+                  columnTotals[key] = (columnTotals[key] || 0) + numValue;
+                }
+              });
+            });
+            
+            csvResults.set(meterId, {
+              totalKwh,
+              columnTotals,
+              columnMaxValues,
+              rowCount: allReadings.length
+            });
+          }
+        }
+        
+        console.log(`STEP 1 COMPLETE: Using hierarchical data for ${csvResults.size} parent meter(s)`);
+      }
+
+      const parentMeterIds = parentMetersForCsv.map(m => m.id);
+      const metersWithUploadedCsvs = await getMetersWithUploadedCsvs(parentMeterIds);
+
+      console.log('STEP 2: Performing energy/revenue reconciliation...');
+      
+      const { meterData, errors, reconciliationData, leafCorrectionsByMeter } = await performReconciliationCalculation(
+        fullDateTimeFrom,
+        fullDateTimeTo,
+        enableRevenue
+      );
+
+      setFailedMeters(errors);
+      
+      if (enableRevenue) {
+        setIsCalculatingRevenue?.(false);
+        toast.success("Revenue calculation complete");
+      }
+
+      // Merge corrections
+      for (const [meterId, corrections] of leafCorrectionsByMeter.entries()) {
+        if (allCorrections.has(meterId)) {
+          allCorrections.get(meterId)!.push(...corrections);
+        } else {
+          allCorrections.set(meterId, corrections);
+        }
+      }
+      
+      // Propagate corrections from children to parents
+      const getAllDescendantCorrections = (meterId: string): CorrectedReading[] => {
+        const childIds = meterConnectionsMap.get(meterId) || [];
+        let descendantCorrections: CorrectedReading[] = [];
+        
+        for (const childId of childIds) {
+          const childCorrections = allCorrections.get(childId) || [];
+          const leafCorrections = leafCorrectionsByMeter.get(childId) || [];
+          const grandchildCorrections = getAllDescendantCorrections(childId);
+          descendantCorrections.push(...childCorrections, ...leafCorrections, ...grandchildCorrections);
+        }
+        
+        return descendantCorrections;
+      };
+      
+      const parentMeters = meterData.filter(meter => {
+        const children = meterConnectionsMap.get(meter.id);
+        return children && children.length > 0;
+      });
+      
+      for (const parentMeter of parentMeters) {
+        const existingCorrections = allCorrections.get(parentMeter.id) || [];
+        const descendantCorrections = getAllDescendantCorrections(parentMeter.id);
+        
+        const uniqueCorrections = [...existingCorrections];
+        for (const correction of descendantCorrections) {
+          const isDuplicate = uniqueCorrections.some(c =>
+            c.timestamp === correction.timestamp &&
+            c.originalSourceMeterId === correction.originalSourceMeterId &&
+            c.fieldName === correction.fieldName
+          );
+          if (!isDuplicate) {
+            uniqueCorrections.push(correction);
+          }
+        }
+        
+        if (uniqueCorrections.length > 0) {
+          allCorrections.set(parentMeter.id, uniqueCorrections);
+        }
+      }
+      
+      onMeterCorrections?.(allCorrections);
+
+      // Update meters with hierarchical values
+      reconciliationData.councilBulk = updateMeterCategoryWithHierarchy(reconciliationData.councilBulk || [], csvResults, metersWithUploadedCsvs);
+      reconciliationData.bulkMeters = updateMeterCategoryWithHierarchy(reconciliationData.bulkMeters || [], csvResults, metersWithUploadedCsvs);
+      reconciliationData.solarMeters = updateMeterCategoryWithHierarchy(reconciliationData.solarMeters || [], csvResults, metersWithUploadedCsvs);
+      reconciliationData.checkMeters = updateMeterCategoryWithHierarchy(reconciliationData.checkMeters || [], csvResults, metersWithUploadedCsvs);
+      reconciliationData.tenantMeters = updateMeterCategoryWithHierarchy(reconciliationData.tenantMeters || [], csvResults, metersWithUploadedCsvs);
+      reconciliationData.distribution = updateMeterCategoryWithHierarchy(reconciliationData.distribution || [], csvResults, metersWithUploadedCsvs);
+      reconciliationData.distributionMeters = updateMeterCategoryWithHierarchy(reconciliationData.distributionMeters || [], csvResults, metersWithUploadedCsvs);
+      reconciliationData.otherMeters = updateMeterCategoryWithHierarchy(reconciliationData.otherMeters || [], csvResults, metersWithUploadedCsvs);
+      reconciliationData.unassignedMeters = updateMeterCategoryWithHierarchy(reconciliationData.unassignedMeters || [], csvResults, metersWithUploadedCsvs);
+
+      setHierarchicalCsvResults(csvResults);
+      await saveReconciliationSettings();
+      setReconciliationData(reconciliationData);
+
+      setAvailableMeters(prevMeters => 
+        prevMeters.map(meter => {
+          const meterReadings = meterData.find(m => m.id === meter.id);
+          return {
+            ...meter,
+            hasData: meterReadings ? meterReadings.readingsCount > 0 : false
+          };
+        })
+      );
+
+      if (errors.size > 0) {
+        toast.warning(`Reconciliation complete with ${errors.size} meter failure${errors.size > 1 ? 's' : ''}`);
+      } else {
+        toast.success("Reconciliation complete");
+      }
+
+      return { success: true, reconciliationData };
+    } catch (error: any) {
+      console.error("Reconciliation error:", error);
+      
+      if (error.message === 'Reconciliation cancelled by user') {
+        toast.info("Reconciliation cancelled");
+      } else {
+        toast.error("Failed to complete reconciliation");
+      }
+      
+      return { success: false, error };
+    } finally {
+      setIsLoading(false);
+      setIsCalculatingRevenue?.(false);
+      setIsCancelling(false);
+      setIsGeneratingCsvs(false);
+      onCsvGenerationProgress?.({ current: 0, total: 0 });
+      cancelRef.current = false;
+    }
+  }, [cancelRef, columnOperationsRef, performReconciliationCalculation, onEnergyProgress, onRevenueProgress, onMeterCorrections, onCsvGenerationProgress, setIsCalculatingRevenue]);
+
+  /**
+   * Run bulk reconciliation for multiple document periods
+   */
+  const runBulkReconcile = useCallback(async (options: BulkReconcileOptions) => {
+    const {
+      selectedDocumentIds,
+      documentDateRanges,
+      previewData,
+      selectedColumns,
+      meterConnectionsMap,
+      availableMeters,
+      getMetersWithUploadedCsvs,
+      updateMeterCategoryWithHierarchy,
+      saveReconciliationRun,
+      setIsBulkProcessing,
+      setBulkProgress,
+      setSelectedDocumentIds,
+    } = options;
+
+    if (selectedDocumentIds.length === 0) {
+      toast.error("Please select at least one period to reconcile");
+      return;
+    }
+
+    setIsBulkProcessing(true);
+    const totalDocs = selectedDocumentIds.length;
+
+    try {
+      let successCount = 0;
+      let errorCount = 0;
+      const errors: string[] = [];
+
+      for (let i = 0; i < selectedDocumentIds.length; i++) {
+        const docId = selectedDocumentIds[i];
+        try {
+          const doc = documentDateRanges.find(d => d.id === docId);
+          if (!doc) continue;
+
+          setBulkProgress({
+            currentDocument: doc.file_name,
+            current: i + 1,
+            total: totalDocs
+          });
+
+          const startDate = new Date(doc.period_start);
+          startDate.setHours(0, 0, 0, 0);
+          
+          const endDate = new Date(doc.period_end);
+          endDate.setDate(endDate.getDate() - 1);
+          endDate.setHours(23, 59, 0, 0);
+
+          if (!previewData) {
+            throw new Error("Please preview data first");
+          }
+
+          if (selectedColumns.size === 0) {
+            throw new Error("Please select at least one column to calculate");
+          }
+
+          const fullDateTimeFrom = getFullDateTime(startDate, "00:00");
+          const fullDateTimeTo = getFullDateTime(endDate, "23:59");
+
+          const { reconciliationData } = await performReconciliationCalculation(
+            fullDateTimeFrom,
+            fullDateTimeTo,
+            true
+          );
+
+          // Generate hierarchical CSVs for parent meters
+          const bulkCsvResults = new Map<string, { totalKwh: number; columnTotals: Record<string, number>; columnMaxValues: Record<string, number>; rowCount: number }>();
+          const allMeterCategories = [
+            ...(reconciliationData.bulkMeters || []),
+            ...(reconciliationData.solarMeters || []),
+            ...(reconciliationData.tenantMeters || []),
+            ...(reconciliationData.checkMeters || []),
+            ...(reconciliationData.unassignedMeters || [])
+          ];
+          
+          const parentMetersForCsv = allMeterCategories.filter(meter => {
+            const children = meterConnectionsMap.get(meter.id);
+            return children && children.length > 0;
+          });
+
+          if (parentMetersForCsv.length > 0) {
+            const parentMeterIds = parentMetersForCsv.map(m => m.id);
+            const metersWithUploadedCsvs = await getMetersWithUploadedCsvs(parentMeterIds);
+            
+            const csvPromises = parentMetersForCsv.map(async (parentMeter) => {
+              const childMeterIds = meterConnectionsMap.get(parentMeter.id) || [];
+              const result = await generateHierarchicalCsvForMeter(parentMeter, fullDateTimeFrom, fullDateTimeTo, childMeterIds);
+              if (result) {
+                bulkCsvResults.set(parentMeter.id, {
+                  totalKwh: result.totalKwh,
+                  columnTotals: result.columnTotals,
+                  columnMaxValues: result.columnMaxValues,
+                  rowCount: result.rowCount
+                });
+              }
+            });
+            await Promise.allSettled(csvPromises);
+
+            reconciliationData.bulkMeters = updateMeterCategoryWithHierarchy(reconciliationData.bulkMeters || [], bulkCsvResults, metersWithUploadedCsvs);
+            reconciliationData.councilBulk = updateMeterCategoryWithHierarchy(reconciliationData.councilBulk || [], bulkCsvResults, metersWithUploadedCsvs);
+            reconciliationData.solarMeters = updateMeterCategoryWithHierarchy(reconciliationData.solarMeters || [], bulkCsvResults, metersWithUploadedCsvs);
+            reconciliationData.tenantMeters = updateMeterCategoryWithHierarchy(reconciliationData.tenantMeters || [], bulkCsvResults, metersWithUploadedCsvs);
+            reconciliationData.checkMeters = updateMeterCategoryWithHierarchy(reconciliationData.checkMeters || [], bulkCsvResults, metersWithUploadedCsvs);
+            reconciliationData.unassignedMeters = updateMeterCategoryWithHierarchy(reconciliationData.unassignedMeters || [], bulkCsvResults, metersWithUploadedCsvs);
+          }
+
+          const runName = `${doc.file_name} - ${format(endDate, "MMM yyyy")}`;
+          
+          await saveReconciliationRun(
+            runName,
+            null,
+            fullDateTimeFrom,
+            fullDateTimeTo,
+            reconciliationData,
+            availableMeters,
+            bulkCsvResults
+          );
+          
+          successCount++;
+        } catch (error) {
+          console.error(`Error processing ${docId}:`, error);
+          errorCount++;
+          const doc = documentDateRanges.find(d => d.id === docId);
+          errors.push(doc?.file_name || docId);
+        }
+      }
+
+      if (successCount > 0) {
+        toast.success(
+          `Bulk reconciliation complete! ${successCount} reconciliation(s) saved${errorCount > 0 ? `, ${errorCount} failed` : ''}.`
+        );
+      }
+
+      if (errors.length > 0) {
+        toast.error(`Failed periods: ${errors.join(', ')}`);
+      }
+
+      setSelectedDocumentIds([]);
+      setBulkProgress({ currentDocument: '', current: 0, total: 0 });
+    } catch (error) {
+      console.error("Bulk reconciliation error:", error);
+      toast.error("Failed to complete bulk reconciliation");
+    } finally {
+      setIsBulkProcessing(false);
+    }
+  }, [performReconciliationCalculation, generateHierarchicalCsvForMeter]);
+
   return {
     processSingleMeter,
     processMeterBatches,
@@ -1213,5 +1646,7 @@ export function useReconciliationRunner(options: UseReconciliationRunnerOptions)
     generateHierarchicalCsvForMeter,
     runHierarchyGeneration,
     runPreview,
+    runReconciliation,
+    runBulkReconcile,
   };
 }
