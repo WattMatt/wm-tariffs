@@ -52,6 +52,7 @@ import {
   DateRangeSelector,
   ColumnConfiguration,
   DocumentPeriodSelector,
+  MeterHierarchyList,
 } from "@/components/reconciliation";
 
 interface ReconciliationTabProps {
@@ -3674,350 +3675,31 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
               onColumnFactorsChange={setColumnFactors}
             />
 
-            <Collapsible open={isMetersOpen} onOpenChange={setIsMetersOpen}>
-              <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
-                <div className="flex items-center justify-between w-full mb-3">
-                  <CollapsibleTrigger className="flex items-center gap-2 flex-1 hover:underline cursor-pointer">
-                    <div className="flex flex-col items-start gap-1">
-                      <Label className="text-sm font-semibold cursor-pointer">Meters Associated with This Site</Label>
-                      <span className="text-xs text-muted-foreground font-normal">Select multiple meters and drag to reorder or use indent buttons</span>
-                    </div>
-                  </CollapsibleTrigger>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant={hasMeterChangesUnsaved ? "default" : "outline"}
-                      size="sm"
-                      className="h-7"
-                      disabled={!hasMeterChangesUnsaved}
-                      onClick={handleSaveMeterSettings}
-                    >
-                      <Save className="h-3 w-3 mr-1" />
-                      Save
-                    </Button>
-                    <CollapsibleTrigger className="p-1 hover:bg-accent rounded">
-                      <ChevronRight className={cn("h-4 w-4 transition-transform", isMetersOpen && "rotate-90")} />
-                    </CollapsibleTrigger>
-                  </div>
-                </div>
-                <CollapsibleContent>
-              
-              {/* Column Headers */}
-              <div className="flex items-center gap-2 mb-2 pb-2 border-b">
-                <div className="w-6 flex items-center justify-start">
-                  <Checkbox
-                    checked={availableMeters.length > 0 && selectedMetersForSummation.size === availableMeters.length}
-                    onCheckedChange={(checked) => {
-                      if (checked) {
-                        setSelectedMetersForSummation(new Set(availableMeters.map(m => m.id)));
-                      } else {
-                        setSelectedMetersForSummation(new Set());
-                      }
-                    }}
-                  />
-                </div>
-                <div className="flex-1 flex items-center gap-2">
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      disabled={selectedMetersForSummation.size === 0 || Array.from(selectedMetersForSummation).every(id => (meterIndentLevels.get(id) || 0) === 0)}
-                      onClick={() => {
-                        if (selectedMetersForSummation.size > 0) {
-                          const newLevels = new Map(meterIndentLevels);
-                          selectedMetersForSummation.forEach(meterId => {
-                            const currentLevel = newLevels.get(meterId) || 0;
-                            if (currentLevel > 0) {
-                              newLevels.set(meterId, currentLevel - 1);
-                            }
-                          });
-                          setMeterIndentLevels(newLevels);
-                          saveIndentLevelsToStorage(newLevels);
-                        }
-                      }}
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      disabled={selectedMetersForSummation.size === 0 || Array.from(selectedMetersForSummation).every(id => (meterIndentLevels.get(id) || 0) === 6)}
-                      onClick={() => {
-                        if (selectedMetersForSummation.size > 0) {
-                          const newLevels = new Map(meterIndentLevels);
-                          selectedMetersForSummation.forEach(meterId => {
-                            const currentLevel = newLevels.get(meterId) || 0;
-                            if (currentLevel < 6) {
-                              newLevels.set(meterId, currentLevel + 1);
-                            }
-                          });
-                          setMeterIndentLevels(newLevels);
-                          saveIndentLevelsToStorage(newLevels);
-                        }
-                      }}
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 ml-2"
-                      onClick={handleResetHierarchy}
-                      title="Reset hierarchy to database defaults"
-                    >
-                      <RotateCcw className="h-3 w-3 mr-1" />
-                      Reset
-                    </Button>
-                  </div>
-                  <div className="flex-1 flex items-center justify-between p-3">
-                    <button 
-                      onClick={() => {
-                        if (sortColumn === 'meter') {
-                          setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-                        } else {
-                          setSortColumn('meter');
-                          setSortDirection('asc');
-                        }
-                      }}
-                      className="flex items-center gap-1 text-xs font-semibold hover:text-primary transition-colors"
-                    >
-                      Meter Number
-                      <ChevronRight className={cn(
-                        "h-3 w-3 transition-transform",
-                        sortColumn === 'meter' && sortDirection === 'asc' && "-rotate-90",
-                        sortColumn === 'meter' && sortDirection === 'desc' && "rotate-90"
-                      )} />
-                    </button>
-                    <div className="flex items-center gap-6">
-                      <button 
-                        onClick={() => {
-                          if (sortColumn === 'grid') {
-                            setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-                          } else {
-                            setSortColumn('grid');
-                            setSortDirection('asc');
-                          }
-                        }}
-                        className="w-24 flex items-center justify-center gap-1 text-xs font-semibold hover:text-primary transition-colors"
-                      >
-                        Grid Supply
-                        <ChevronRight className={cn(
-                          "h-3 w-3 transition-transform",
-                          sortColumn === 'grid' && sortDirection === 'asc' && "-rotate-90",
-                          sortColumn === 'grid' && sortDirection === 'desc' && "rotate-90"
-                        )} />
-                      </button>
-                      <button 
-                        onClick={() => {
-                          if (sortColumn === 'solar') {
-                            setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-                          } else {
-                            setSortColumn('solar');
-                            setSortDirection('asc');
-                          }
-                        }}
-                        className="w-24 flex items-center justify-center gap-1 text-xs font-semibold hover:text-primary transition-colors"
-                      >
-                        Solar Supply
-                        <ChevronRight className={cn(
-                          "h-3 w-3 transition-transform",
-                          sortColumn === 'solar' && sortDirection === 'asc' && "-rotate-90",
-                          sortColumn === 'solar' && sortDirection === 'desc' && "rotate-90"
-                        )} />
-                      </button>
-                      <button 
-                        onClick={() => {
-                          if (sortColumn === 'status') {
-                            setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-                          } else {
-                            setSortColumn('status');
-                            setSortDirection('asc');
-                          }
-                        }}
-                        className="w-24 flex items-center justify-center gap-1 text-xs font-semibold hover:text-primary transition-colors"
-                      >
-                        Data Status
-                        <ChevronRight className={cn(
-                          "h-3 w-3 transition-transform",
-                          sortColumn === 'status' && sortDirection === 'asc' && "-rotate-90",
-                          sortColumn === 'status' && sortDirection === 'desc' && "rotate-90"
-                        )} />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="space-y-2">
-                {availableMeters.length === 0 ? (
-                  <div className="text-sm text-muted-foreground italic">No meters found for this site</div>
-                ) : (
-                  (() => {
-                    let sortedMeters = [...availableMeters];
-                    
-                    if (sortColumn) {
-                      sortedMeters.sort((a, b) => {
-                        let compareValue = 0;
-                        
-                        switch (sortColumn) {
-                          case 'meter':
-                            compareValue = a.meter_number.localeCompare(b.meter_number);
-                            break;
-                          case 'grid':
-                            const aGrid = a.meter_type === 'bulk' || a.meter_type === 'check';
-                            const bGrid = b.meter_type === 'bulk' || b.meter_type === 'check';
-                            compareValue = aGrid === bGrid ? 0 : aGrid ? -1 : 1;
-                            break;
-                          case 'solar':
-                            const aSolar = a.meter_type === 'solar';
-                            const bSolar = b.meter_type === 'solar';
-                            compareValue = aSolar === bSolar ? 0 : aSolar ? -1 : 1;
-                            break;
-                          case 'status':
-                            const aHasData = a.hasData ? 1 : 0;
-                            const bHasData = b.hasData ? 1 : 0;
-                            compareValue = aHasData - bHasData;
-                            break;
-                        }
-                        
-                        return sortDirection === 'asc' ? compareValue : -compareValue;
-                      });
-                    }
-                    
-                    return sortedMeters.map((meter) => {
-                    const indentLevel = meterIndentLevels.get(meter.id) || 0;
-                    const contentMarginLeft = indentLevel * 24; // 24px per indent level - only for content, not checkbox
-                    const isDragging = draggedMeterId === meter.id;
-                    const isDragOver = dragOverMeterId === meter.id;
-                    const parentInfo = meterParentInfo.get(meter.id);
-                    
-                    return (
-                      <div 
-                        key={meter.id} 
-                        className="flex items-center gap-2"
-                      >
-                        <div className="w-6 flex items-center justify-start">
-                          <Checkbox
-                            checked={selectedMetersForSummation.has(meter.id)}
-                            onCheckedChange={(checked) => {
-                              const newSelected = new Set(selectedMetersForSummation);
-                              if (checked) {
-                                newSelected.add(meter.id);
-                              } else {
-                                newSelected.delete(meter.id);
-                              }
-                              setSelectedMetersForSummation(newSelected);
-                            }}
-                          />
-                        </div>
-                        <div className="flex-1 flex items-center gap-2" style={{ marginLeft: `${contentMarginLeft}px` }}>
-                          <div className="flex gap-1">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 w-8 p-0"
-                              onClick={() => handleOutdentMeter(meter.id)}
-                              disabled={indentLevel === 0}
-                            >
-                              <ChevronLeft className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 w-8 p-0"
-                              onClick={() => handleIndentMeter(meter.id)}
-                              disabled={indentLevel >= 6}
-                            >
-                              <ChevronRight className="h-4 w-4" />
-                            </Button>
-                          </div>
-                          <div 
-                            className={cn(
-                              "flex items-center justify-between flex-1 p-3 rounded-md border bg-card hover:bg-accent/5 transition-colors cursor-move relative",
-                              isDragging && "opacity-50",
-                              isDragOver && "border-primary border-2",
-                              selectedMetersForSummation.has(meter.id) && "ring-2 ring-primary/20"
-                            )}
-                            draggable
-                            onDragStart={(e) => handleDragStart(e, meter.id)}
-                            onDragOver={handleDragOver}
-                            onDragEnter={() => handleDragEnter(meter.id)}
-                            onDragLeave={handleDragLeave}
-                            onDrop={(e) => handleDrop(e, meter.id)}
-                            onDragEnd={handleDragEnd}
-                          >
-                            {selectedMetersForSummation.has(meter.id) && selectedMetersForSummation.size > 1 && draggedMeterId === meter.id && (
-                              <div className="absolute -top-2 -right-2 bg-primary text-primary-foreground text-xs rounded-full w-6 h-6 flex items-center justify-center font-semibold z-10">
-                                {selectedMetersForSummation.size}
-                              </div>
-                            )}
-                            <div className="flex items-center gap-2 flex-1">
-                              {indentLevel > 0 && (
-                                <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                              )}
-                              <span className="font-medium">{meter.meter_number}</span>
-                              {parentInfo && (
-                                <span className="text-xs text-muted-foreground">
-                                  → {parentInfo}
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-6">
-                              <div className="w-24 flex justify-center">
-                                <Checkbox
-                                  id={`grid-${meter.id}`}
-                                  checked={meterAssignments.get(meter.id) === "grid_supply"}
-                                  disabled={meterAssignments.get(meter.id) === "solar_energy"}
-                                  onCheckedChange={(checked) => {
-                                    const newAssignments = new Map(meterAssignments);
-                                    if (checked) {
-                                      newAssignments.set(meter.id, "grid_supply");
-                                    } else {
-                                      newAssignments.delete(meter.id);
-                                    }
-                                    setMeterAssignments(newAssignments);
-                                  }}
-                                />
-                              </div>
-                              <div className="w-24 flex justify-center">
-                                <Checkbox
-                                  id={`solar-${meter.id}`}
-                                  checked={meterAssignments.get(meter.id) === "solar_energy"}
-                                  disabled={meterAssignments.get(meter.id) === "grid_supply"}
-                                  onCheckedChange={(checked) => {
-                                    const newAssignments = new Map(meterAssignments);
-                                    if (checked) {
-                                      newAssignments.set(meter.id, "solar_energy");
-                                    } else {
-                                      newAssignments.delete(meter.id);
-                                    }
-                                    setMeterAssignments(newAssignments);
-                                  }}
-                                />
-                              </div>
-                              <div className="w-24 flex justify-center">
-                                {meter.hasData ? (
-                                  <div className="h-4 w-4 rounded-full bg-primary flex items-center justify-center">
-                                    <Check className="h-3 w-3 text-primary-foreground" />
-                                  </div>
-                                ) : (
-                                  <div className="h-4 w-4 rounded-full bg-black flex items-center justify-center">
-                                    <X className="h-3 w-3 text-white" />
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })})()
-                )}
-              </div>
-              </CollapsibleContent>
-            </div>
-            </Collapsible>
+            <MeterHierarchyList
+              availableMeters={availableMeters}
+              meterIndentLevels={meterIndentLevels}
+              meterParentInfo={meterParentInfo}
+              meterAssignments={meterAssignments}
+              selectedMetersForSummation={selectedMetersForSummation}
+              sortColumn={sortColumn}
+              sortDirection={sortDirection}
+              isOpen={isMetersOpen}
+              hasMeterChangesUnsaved={hasMeterChangesUnsaved}
+              draggedMeterId={draggedMeterId}
+              dragOverMeterId={dragOverMeterId}
+              onOpenChange={setIsMetersOpen}
+              onMeterIndentLevelsChange={setMeterIndentLevels}
+              onMeterAssignmentsChange={setMeterAssignments}
+              onSelectedMetersChange={setSelectedMetersForSummation}
+              onSortColumnChange={setSortColumn}
+              onSortDirectionChange={setSortDirection}
+              onSaveIndentLevels={saveIndentLevelsToStorage}
+              onSaveMeterSettings={handleSaveMeterSettings}
+              onResetHierarchy={handleResetHierarchy}
+              onMetersReorder={setAvailableMeters}
+              onDraggedMeterIdChange={setDraggedMeterId}
+              onDragOverMeterIdChange={setDragOverMeterId}
+            />
 
             {/* Reconciliation Action Buttons - Removed, moved to tabs */}
 
