@@ -2177,22 +2177,31 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
   };
 
   // Helper function to calculate hierarchy depth for bottom-up processing
-  const getHierarchyDepth = (meterId: string, visited = new Set<string>()): number => {
+  // Accepts connections map as parameter to support both state and fresh fetches
+  const getHierarchyDepth = (
+    meterId: string, 
+    connectionsMap: Map<string, string[]>,
+    visited = new Set<string>()
+  ): number => {
     if (visited.has(meterId)) return 0; // Prevent cycles
     visited.add(meterId);
     
-    const children = meterConnectionsMap.get(meterId) || [];
+    const children = connectionsMap.get(meterId) || [];
     if (children.length === 0) return 0;
     
-    return 1 + Math.max(...children.map(c => getHierarchyDepth(c, new Set(visited))));
+    return 1 + Math.max(...children.map(c => getHierarchyDepth(c, connectionsMap, new Set(visited))));
   };
 
   // Sort parent meters by hierarchy depth (deepest first for bottom-up processing)
   // This ensures: Leaf meters → Check meters → Bulk Check → Council (shallowest last)
-  const sortParentMetersByDepth = (parentMeters: Array<{ id: string; meter_number: string }>): Array<{ id: string; meter_number: string }> => {
+  // Accepts connections map as parameter to support fresh fetches
+  const sortParentMetersByDepth = (
+    parentMeters: Array<{ id: string; meter_number: string }>,
+    connectionsMap: Map<string, string[]>
+  ): Array<{ id: string; meter_number: string }> => {
     const withDepth = parentMeters.map(m => ({
       ...m,
-      depth: getHierarchyDepth(m.id)
+      depth: getHierarchyDepth(m.id, connectionsMap)
     }));
     
     // Sort by depth ascending (shallowest first = closest to leaves = process first)
@@ -2211,9 +2220,9 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
   const generateHierarchicalCsvForMeter = async (
     parentMeter: { id: string; meter_number: string },
     fullDateTimeFrom: string,
-    fullDateTimeTo: string
+    fullDateTimeTo: string,
+    childMeterIds: string[]
   ): Promise<{ totalKwh: number; columnTotals: Record<string, number>; columnMaxValues: Record<string, number>; rowCount: number; corrections: Array<any>; requiresParsing?: boolean; csvFileId?: string; columnMapping?: Record<string, any> } | null> => {
-    const childMeterIds = meterConnectionsMap.get(parentMeter.id) || [];
     if (childMeterIds.length === 0) return null;
 
     try {
@@ -2374,19 +2383,78 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       const fullDateTimeFrom = getFullDateTime(dateFrom, timeFrom);
       const fullDateTimeTo = getFullDateTime(dateTo, timeTo);
 
+      // ===== STEP 0: Fetch fresh meter connections from database =====
+      // This ensures we have all parent-child relationships before detecting parent meters
+      console.log('Fetching fresh meter connections from database...');
+      const { data: freshConnections, error: connError } = await supabase
+        .from('meter_connections')
+        .select(`
+          id,
+          parent_meter_id,
+          child_meter_id,
+          parent:meters!meter_connections_parent_meter_id_fkey(id, site_id),
+          child:meters!meter_connections_child_meter_id_fkey(id, site_id)
+        `);
+
+      if (connError) {
+        console.error('Error fetching meter connections:', connError);
+        throw new Error('Failed to fetch meter connections');
+      }
+
+      // Filter to only connections where BOTH meters are in the current site
+      const siteConnections = freshConnections?.filter(conn => 
+        conn.parent?.site_id === siteId && conn.child?.site_id === siteId
+      ) || [];
+
+      // Build fresh connections map
+      const freshConnectionsMap = new Map<string, string[]>();
+      siteConnections.forEach(conn => {
+        if (!freshConnectionsMap.has(conn.parent_meter_id)) {
+          freshConnectionsMap.set(conn.parent_meter_id, []);
+        }
+        freshConnectionsMap.get(conn.parent_meter_id)!.push(conn.child_meter_id);
+      });
+
+      // Update state with fresh connections
+      setMeterConnectionsMap(freshConnectionsMap);
+
+      console.log(`Fresh meter connections loaded: ${freshConnectionsMap.size} parent meters`);
+      console.log('Parent meter IDs from fresh connections:', Array.from(freshConnectionsMap.keys()));
+      
+      // Debug: Log each parent and its children
+      freshConnectionsMap.forEach((children, parentId) => {
+        const parentMeter = availableMeters.find(m => m.id === parentId);
+        const childMeters = children.map(childId => {
+          const child = availableMeters.find(m => m.id === childId);
+          return child?.meter_number || childId;
+        });
+        console.log(`Parent ${parentMeter?.meter_number || parentId}: ${children.length} children:`, childMeters);
+      });
+
       // ===== STEP 1: Generate hierarchical CSVs =====
       const allMetersForCsvCheck = availableMeters;
+      console.log(`Total meters available: ${allMetersForCsvCheck.length}`);
+      console.log('All meter numbers:', allMetersForCsvCheck.map(m => m.meter_number));
+      
+      // Use fresh connections map for filtering
       const parentMetersForCsv = allMetersForCsvCheck.filter(meter => {
-        const children = meterConnectionsMap.get(meter.id);
-        return children && children.length > 0;
+        const children = freshConnectionsMap.get(meter.id);
+        const isParent = children && children.length > 0;
+        if (isParent) {
+          console.log(`✓ ${meter.meter_number} IS a parent (${children.length} children)`);
+        }
+        return isParent;
       });
+
+      console.log(`Detected ${parentMetersForCsv.length} parent meters for CSV generation:`, 
+        parentMetersForCsv.map(m => m.meter_number));
 
       const csvResults = new Map<string, { totalKwh: number; columnTotals: Record<string, number>; columnMaxValues: Record<string, number>; rowCount: number }>();
       const allCorrections = new Map<string, Array<any>>();
       let metersWithUploadedCsvs = new Set<string>();
 
       if (parentMetersForCsv.length > 0) {
-        const sortedParentMeters = sortParentMetersByDepth(parentMetersForCsv);
+        const sortedParentMeters = sortParentMetersByDepth(parentMetersForCsv, freshConnectionsMap);
         console.log(`Generating ${sortedParentMeters.length} hierarchical CSV file(s)...`);
         console.log('Processing order:', sortedParentMeters.map(m => m.meter_number));
         toast.info(`Generating ${sortedParentMeters.length} hierarchical profile(s)...`);
@@ -2419,11 +2487,13 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           }
           
           const parentMeter = sortedParentMeters[i];
+          const childMeterIds = freshConnectionsMap.get(parentMeter.id) || [];
           
           const result = await generateHierarchicalCsvForMeter(
             parentMeter,
             fullDateTimeFrom,
-            fullDateTimeTo
+            fullDateTimeTo,
+            childMeterIds
           );
           
           if (result) {
@@ -2474,9 +2544,9 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         
         console.log('Hierarchy generation complete');
         
-        // Propagate corrections to parents
+        // Propagate corrections to parents using fresh connections
         const getAllDescendantCorrections = (meterId: string): CorrectedReading[] => {
-          const childIds = meterConnectionsMap.get(meterId) || [];
+          const childIds = freshConnectionsMap.get(meterId) || [];
           let descendantCorrections: CorrectedReading[] = [];
           
           for (const childId of childIds) {
@@ -2536,7 +2606,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       setIsGeneratingHierarchy(false);
       setCsvGenerationProgress({ current: 0, total: 0 });
     }
-  }, [dateFrom, dateTo, timeFrom, timeTo, availableMeters, meterConnectionsMap, siteId]);
+  }, [dateFrom, dateTo, timeFrom, timeTo, availableMeters, siteId]);
 
   const handleReconcile = useCallback(async (enableRevenue?: boolean) => {
     if (!dateFrom || !dateTo) {
@@ -3266,7 +3336,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       const metersWithUploadedCsvs = await getMetersWithUploadedCsvs(parentMeterIds);
       
       const csvPromises = parentMetersForCsv.map(async (parentMeter) => {
-        const result = await generateHierarchicalCsvForMeter(parentMeter, fullDateTimeFrom, fullDateTimeTo);
+        const childMeterIds = meterConnectionsMap.get(parentMeter.id) || [];
+        const result = await generateHierarchicalCsvForMeter(parentMeter, fullDateTimeFrom, fullDateTimeTo, childMeterIds);
         if (result) {
           bulkCsvResults.set(parentMeter.id, {
             totalKwh: result.totalKwh,
