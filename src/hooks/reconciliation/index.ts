@@ -31,4 +31,5 @@ export type {
   UseReconciliationRunnerOptions,
   ProcessedMeterData,
   HierarchicalCsvGenerationResult,
+  PreviewData,
 } from './useReconciliationRunner';
