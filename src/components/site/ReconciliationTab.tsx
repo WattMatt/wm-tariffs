@@ -2643,16 +2643,29 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
 
       // ===== STEP 1: Copy ALL leaf meters upfront =====
       console.log('STEP 1: Copying ALL leaf meters to hierarchical_meter_readings...');
+      console.log('=== FRONTEND DEBUG: About to call copyLeafMetersOnly ===');
+      const copyBody = {
+        siteId,
+        dateFrom: fullDateTimeFrom,
+        dateTo: fullDateTimeTo,
+        copyLeafMetersOnly: true
+      };
+      console.log('=== FRONTEND DEBUG: Request body:', JSON.stringify(copyBody));
       toast.info('Copying leaf meter data...');
       
-      const { data: copyResult, error: copyError } = await supabase.functions.invoke('generate-hierarchical-csv', {
-        body: {
-          siteId,
-          dateFrom: fullDateTimeFrom,
-          dateTo: fullDateTimeTo,
-          copyLeafMetersOnly: true
-        }
-      });
+      let copyResult: any;
+      let copyError: any;
+      try {
+        const response = await supabase.functions.invoke('generate-hierarchical-csv', {
+          body: copyBody
+        });
+        copyResult = response.data;
+        copyError = response.error;
+        console.log('=== FRONTEND DEBUG: copyLeafMetersOnly response ===', { copyResult, copyError });
+      } catch (e) {
+        console.error('=== FRONTEND DEBUG: copyLeafMetersOnly EXCEPTION ===', e);
+        throw e;
+      }
       
       if (copyError) {
         throw new Error(`Failed to copy leaf meters: ${copyError.message}`);
