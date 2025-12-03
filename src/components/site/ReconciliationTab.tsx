@@ -4274,28 +4274,29 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
 
             <Collapsible open={isMetersOpen} onOpenChange={setIsMetersOpen}>
               <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
-                <CollapsibleTrigger className="flex items-center justify-between w-full mb-3 hover:underline">
-                  <div className="flex flex-col items-start gap-1">
-                    <Label className="text-sm font-semibold cursor-pointer">Meters Associated with This Site</Label>
-                    <span className="text-xs text-muted-foreground font-normal">Select multiple meters and drag to reorder or use indent buttons</span>
-                  </div>
+                <div className="flex items-center justify-between w-full mb-3">
+                  <CollapsibleTrigger className="flex items-center gap-2 flex-1 hover:underline cursor-pointer">
+                    <div className="flex flex-col items-start gap-1">
+                      <Label className="text-sm font-semibold cursor-pointer">Meters Associated with This Site</Label>
+                      <span className="text-xs text-muted-foreground font-normal">Select multiple meters and drag to reorder or use indent buttons</span>
+                    </div>
+                  </CollapsibleTrigger>
                   <div className="flex items-center gap-2">
                     <Button
                       variant={hasMeterChangesUnsaved ? "default" : "outline"}
                       size="sm"
                       className="h-7"
                       disabled={!hasMeterChangesUnsaved}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        saveMeterSettings();
-                      }}
+                      onClick={() => saveMeterSettings()}
                     >
                       <Save className="h-3 w-3 mr-1" />
                       Save
                     </Button>
-                    <ChevronRight className={cn("h-4 w-4 transition-transform", isMetersOpen && "rotate-90")} />
+                    <CollapsibleTrigger className="p-1 hover:bg-accent rounded">
+                      <ChevronRight className={cn("h-4 w-4 transition-transform", isMetersOpen && "rotate-90")} />
+                    </CollapsibleTrigger>
                   </div>
-                </CollapsibleTrigger>
+                </div>
                 <CollapsibleContent>
               
               {/* Column Headers */}
