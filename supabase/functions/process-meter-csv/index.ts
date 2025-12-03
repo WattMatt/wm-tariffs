@@ -533,17 +533,21 @@ Deno.serve(async (req) => {
 
       for (let i = 0; i < readings.length; i += batchSize) {
         const batch = readings.slice(i, i + batchSize);
+        // Use upsert to prevent duplicate key errors - update existing records if they exist
         const { error: insertError } = await supabase
           .from(targetTable) // Use dynamic table name
-          .insert(batch);
+          .upsert(batch, { 
+            onConflict: 'meter_id,reading_timestamp',
+            ignoreDuplicates: false // Update existing records with new data
+          });
 
         if (insertError) {
-          console.error('Insert error:', insertError);
-          throw new Error(`Insert failed at batch ${i} into ${targetTable}: ${insertError.message}`);
+          console.error('Upsert error:', insertError);
+          throw new Error(`Upsert failed at batch ${i} into ${targetTable}: ${insertError.message}`);
         }
 
         inserted += batch.length;
-        console.log(`Inserted batch: ${inserted}/${readings.length} into ${targetTable}`);
+        console.log(`Upserted batch: ${inserted}/${readings.length} into ${targetTable}`);
       }
     }
 
