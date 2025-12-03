@@ -381,17 +381,89 @@ Deno.serve(async (req) => {
     });
 
     if (allReadings.length === 0) {
-      console.error('CRITICAL: No readings found in hierarchical_meter_readings for child meters');
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: 'No readings found for child meters. Make sure to call with copyLeafMetersOnly=true first.',
-          totalKwh: 0,
-          columnTotals: {},
-          columnMaxValues: {}
-        }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      console.log('⚠️ No hierarchical data found - AUTO-COPYING leaf child meters from meter_readings...');
+      
+      // AUTO-COPY FALLBACK: Copy leaf child meters from meter_readings
+      if (leafChildMeterIds.length > 0) {
+        console.log(`Fetching ${leafChildMeterIds.length} leaf meters from meter_readings...`);
+        
+        // Fetch leaf meter readings from meter_readings
+        const { data: leafReadings, error: leafErr } = await supabase
+          .from('meter_readings')
+          .select('reading_timestamp, kwh_value, kva_value, metadata, meter_id')
+          .in('meter_id', leafChildMeterIds)
+          .gte('reading_timestamp', dateFrom)
+          .lte('reading_timestamp', dateTo);
+        
+        if (leafErr) {
+          console.error('Failed to fetch leaf readings from meter_readings:', leafErr);
+        } else if (leafReadings && leafReadings.length > 0) {
+          console.log(`Found ${leafReadings.length} readings in meter_readings, copying to hierarchical_meter_readings...`);
+          
+          // Prepare for insertion with source='Copied'
+          const readingsToInsert = leafReadings.map(r => ({
+            meter_id: r.meter_id,
+            reading_timestamp: r.reading_timestamp,
+            kwh_value: r.kwh_value,
+            kva_value: r.kva_value,
+            metadata: {
+              ...(r.metadata || {}),
+              source: 'Copied'
+            }
+          }));
+          
+          // Batch insert in chunks of 500
+          const BATCH_SIZE = 500;
+          let totalInserted = 0;
+          for (let i = 0; i < readingsToInsert.length; i += BATCH_SIZE) {
+            const batch = readingsToInsert.slice(i, i + BATCH_SIZE);
+            const { error: insertErr } = await supabase
+              .from('hierarchical_meter_readings')
+              .upsert(batch, { 
+                onConflict: 'meter_id,reading_timestamp',
+                ignoreDuplicates: false 
+              });
+            
+            if (insertErr) {
+              console.error(`Error inserting batch ${i / BATCH_SIZE + 1}:`, insertErr);
+            } else {
+              totalInserted += batch.length;
+            }
+          }
+          
+          console.log(`✅ Auto-copied ${totalInserted} leaf meter readings to hierarchical_meter_readings`);
+          
+          // Re-fetch all readings after auto-copy
+          const { data: retryReadings, error: retryErr } = await supabase
+            .from('hierarchical_meter_readings')
+            .select('reading_timestamp, kwh_value, kva_value, metadata, meter_id')
+            .in('meter_id', childMeterIds)
+            .gte('reading_timestamp', dateFrom)
+            .lte('reading_timestamp', dateTo);
+          
+          if (!retryErr && retryReadings && retryReadings.length > 0) {
+            console.log(`After auto-copy: Found ${retryReadings.length} readings`);
+            allReadings = retryReadings;
+          }
+        } else {
+          console.log('No leaf readings found in meter_readings either');
+        }
+      }
+      
+      // If still no readings after auto-copy attempt, return error
+      if (allReadings.length === 0) {
+        console.error('CRITICAL: No readings found even after auto-copy attempt');
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: 'No readings found for child meters in either meter_readings or hierarchical_meter_readings.',
+            totalKwh: 0,
+            columnTotals: {},
+            columnMaxValues: {}
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
     }
 
     // Aggregate readings by timestamp
