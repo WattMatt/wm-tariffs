@@ -1,20 +1,13 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { CalendarIcon, Download, Eye, FileDown, ChevronRight, ChevronLeft, ArrowRight, Check, X, Save, BarChart3, Activity, Calculator, Calendar as CalendarHistoryIcon, Loader2, RotateCcw, Eraser, RefreshCw } from "lucide-react";
+import { Eye, Save, BarChart3, Activity, Calculator, Calendar as CalendarHistoryIcon, Loader2, RotateCcw, Eraser } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import Papa from "papaparse";
 import SaveReconciliationDialog from "./SaveReconciliationDialog";
 import ReconciliationResultsView from "./ReconciliationResultsView";
 import ReconciliationHistoryTab from "./ReconciliationHistoryTab";
@@ -22,8 +15,6 @@ import ReconciliationCompareTab from "./ReconciliationCompareTab";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Switch } from "@/components/ui/switch";
-import { calculateMeterCost, calculateMeterCostAcrossPeriods } from "@/lib/costCalculation";
-import { isValueCorrupt, type CorrectedReading } from "@/lib/dataValidation";
 import {
   fetchDateRanges as fetchDateRangesFromDb,
   fetchBasicMeters as fetchBasicMetersFromDb,
@@ -31,7 +22,6 @@ import {
   fetchHierarchicalDataFromReadings,
   fetchMeterCsvFilesInfo as fetchMeterCsvFilesInfoFromDb,
   checkHierarchicalCsvCoverage,
-  fetchSchematicConnections as fetchSchematicConnectionsFromDb,
   getFullDateTime,
   getHierarchyDepth,
   deriveConnectionsFromIndents as deriveConnectionsFromIndentsUtil,
