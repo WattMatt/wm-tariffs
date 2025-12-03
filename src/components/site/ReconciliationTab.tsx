@@ -1379,6 +1379,14 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         return;
       }
       
+      // Fetch meters directly from database to get meter_number for parent info
+      const { data: metersData } = await supabase
+        .from('meters')
+        .select('id, meter_number')
+        .eq('site_id', siteId);
+      
+      const metersMap = new Map(metersData?.map(m => [m.id, m.meter_number]) || []);
+      
       // Build meterConnectionsMap (parent -> [children])
       const connectionsMap = new Map<string, string[]>();
       schematicConnections.forEach(conn => {
@@ -1389,12 +1397,12 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       });
       setMeterConnectionsMap(connectionsMap);
       
-      // Build meterParentInfo (child -> parent meter_number)
+      // Build meterParentInfo (child -> parent meter_number) using fresh DB data
       const parentInfo = new Map<string, string>();
       schematicConnections.forEach(conn => {
-        const parentMeter = availableMeters.find(m => m.id === conn.parent_meter_id);
-        if (parentMeter) {
-          parentInfo.set(conn.child_meter_id, parentMeter.meter_number);
+        const parentMeterNumber = metersMap.get(conn.parent_meter_id);
+        if (parentMeterNumber) {
+          parentInfo.set(conn.child_meter_id, parentMeterNumber);
         }
       });
       setMeterParentInfo(parentInfo);
@@ -1414,8 +1422,9 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         return 1 + calculateIndentLevel(parentConnection.parent_meter_id, visited);
       };
       
+      // Calculate indent levels for all meters from DB
       const indentLevels = new Map<string, number>();
-      availableMeters.forEach(meter => {
+      metersData?.forEach(meter => {
         indentLevels.set(meter.id, calculateIndentLevel(meter.id));
       });
       setMeterIndentLevels(indentLevels);
