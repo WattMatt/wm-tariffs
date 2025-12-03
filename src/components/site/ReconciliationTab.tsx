@@ -2528,7 +2528,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           parentMeterIds,
           fullDateTimeFrom,
           fullDateTimeTo,
-          columnOperations
+          columnOperationsRef.current
         );
         
         existingData.forEach((data, meterId) => {
