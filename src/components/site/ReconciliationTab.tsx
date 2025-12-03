@@ -2883,183 +2883,19 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       reconciliationData.unassignedMeters = execution.updateMeterCategoryWithHierarchy(reconciliationData.unassignedMeters || [], bulkCsvResults, metersWithUploadedCsvs);
     }
 
-    // Save using the SAME pattern as handleSaveReconciliation
+    // Save using the consolidated execution hook
     const runName = `${fileName} - ${format(endDate, "MMM yyyy")}`;
     
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      // 1. Insert reconciliation run with meter order
-      const meterOrder = availableMeters.map(m => m.id);
-      
-      const { data: run, error: runError } = await supabase
-        .from('reconciliation_runs')
-        .insert({
-          site_id: siteId,
-          run_name: runName,
-          date_from: fullDateTimeFrom,
-          date_to: fullDateTimeTo,
-          bulk_total: reconciliationData.bulkTotal,
-          solar_total: reconciliationData.solarTotal,
-          tenant_total: reconciliationData.tenantTotal || 0,
-          total_supply: reconciliationData.totalSupply,
-          recovery_rate: reconciliationData.recoveryRate,
-          discrepancy: reconciliationData.discrepancy,
-          created_by: user?.id,
-          notes: null,
-          revenue_enabled: reconciliationData.revenueData !== null,
-          grid_supply_cost: reconciliationData.revenueData?.gridSupplyCost || 0,
-          solar_cost: reconciliationData.revenueData?.solarCost || 0,
-          tenant_cost: reconciliationData.revenueData?.tenantCost || 0,
-          total_revenue: reconciliationData.revenueData?.totalRevenue || 0,
-          avg_cost_per_kwh: reconciliationData.revenueData?.avgCostPerKwh || 0,
-          meter_order: meterOrder
-        })
-        .select()
-        .single();
-      
-      if (runError) throw runError;
-      
-      // 2. Prepare all meters with their assignments (same as saveReconciliation)
-      const meterDataMap = new Map<string, any>();
-      
-      [...(reconciliationData.bulkMeters || []).map((m: any) => ({ ...m, assignment: 'grid_supply' })),
-       ...(reconciliationData.solarMeters || []).map((m: any) => ({ ...m, assignment: 'solar' })),
-       ...(reconciliationData.tenantMeters || []).map((m: any) => ({ ...m, assignment: 'tenant' })),
-       ...(reconciliationData.checkMeters || []).map((m: any) => ({ ...m, assignment: 'check' })),
-       ...(reconciliationData.unassignedMeters || []).map((m: any) => ({ ...m, assignment: 'unassigned' }))
-      ].forEach(m => meterDataMap.set(m.id, m));
-      
-      // Use availableMeters to maintain hierarchical order
-      const allMeters = availableMeters
-        .filter(m => meterDataMap.has(m.id))
-        .map(m => meterDataMap.get(m.id));
-      
-      // 3. Calculate hierarchical totals (same logic as saveReconciliation)
-      const meterMap = new Map(allMeters.map(m => [m.id, m]));
-      const hierarchicalTotals = new Map<string, number>();
-      const hierarchicalColumnTotals = new Map<string, Record<string, number>>();
-      const hierarchicalColumnMaxValues = new Map<string, Record<string, number>>();
-      
-      const getLeafMeterSum = (meterId: string, visited = new Set<string>()): number => {
-        if (visited.has(meterId)) return 0;
-        visited.add(meterId);
-        
-        const children = meterConnectionsMap.get(meterId) || [];
-        
-        if (children.length === 0) {
-          const meterData = meterMap.get(meterId);
-          if (!meterData) return 0;
-          
-          const isSolar = meterAssignments.get(meterId) === "solar_energy" || meterData.assignment === 'solar';
-          const value = meterData.totalKwh || 0;
-          return isSolar ? -value : value;
-        }
-        
-        return children.reduce((sum, childId) => {
-          return sum + getLeafMeterSum(childId, visited);
-        }, 0);
-      };
-      
-      const getLeafColumnTotals = (meterId: string, visited = new Set<string>()): Record<string, number> => {
-        if (visited.has(meterId)) return {};
-        visited.add(meterId);
-        const children = meterConnectionsMap.get(meterId) || [];
-        if (children.length === 0) {
-          const meterData = meterMap.get(meterId);
-          return meterData?.columnTotals || {};
-        }
-        const aggregated: Record<string, number> = {};
-        children.forEach(childId => {
-          const childTotals = getLeafColumnTotals(childId, new Set(visited));
-          Object.entries(childTotals).forEach(([key, value]) => {
-            aggregated[key] = (aggregated[key] || 0) + value;
-          });
-        });
-        return aggregated;
-      };
-      
-      const getLeafColumnMaxValues = (meterId: string, visited = new Set<string>()): Record<string, number> => {
-        if (visited.has(meterId)) return {};
-        visited.add(meterId);
-        const children = meterConnectionsMap.get(meterId) || [];
-        if (children.length === 0) {
-          const meterData = meterMap.get(meterId);
-          return meterData?.columnMaxValues || {};
-        }
-        const aggregated: Record<string, number> = {};
-        children.forEach(childId => {
-          const childMaxValues = getLeafColumnMaxValues(childId, new Set(visited));
-          Object.entries(childMaxValues).forEach(([key, value]) => {
-            aggregated[key] = Math.max(aggregated[key] || 0, value);
-          });
-        });
-        return aggregated;
-      };
-      
-      allMeters.forEach(meter => {
-        const childIds = meterConnectionsMap.get(meter.id) || [];
-        if (childIds.length > 0) {
-          const hierarchicalTotal = childIds.reduce((sum, childId) => {
-            return sum + getLeafMeterSum(childId);
-          }, 0);
-          hierarchicalTotals.set(meter.id, hierarchicalTotal);
-          hierarchicalColumnTotals.set(meter.id, getLeafColumnTotals(meter.id));
-          hierarchicalColumnMaxValues.set(meter.id, getLeafColumnMaxValues(meter.id));
-        }
-      });
-      
-      // 4. Insert meter results (same as saveReconciliation)
-      const meterResults = allMeters.map((meter: any) => {
-        const revenueInfo = reconciliationData.revenueData?.meterRevenues.get(meter.id);
-        return {
-          reconciliation_run_id: run.id,
-          meter_id: meter.id,
-          meter_number: meter.meter_number,
-          meter_type: meter.meter_type,
-          meter_name: meter.name || null,
-          location: meter.location || null,
-          assignment: meter.assignment,
-          tariff_structure_id: meter.tariff_structure_id,
-          total_kwh: meter.totalKwh || 0,
-          total_kwh_positive: meter.totalKwhPositive || 0,
-          total_kwh_negative: meter.totalKwhNegative || 0,
-          hierarchical_total: meter.hierarchicalTotalKwh ?? hierarchicalTotals.get(meter.id) ?? 0,
-          readings_count: meter.readingsCount || 0,
-          column_totals: meter.columnTotals || hierarchicalColumnTotals.get(meter.id) || null,
-          column_max_values: meter.columnMaxValues || hierarchicalColumnMaxValues.get(meter.id) || null,
-          has_error: meter.hasError || false,
-          error_message: meter.errorMessage || null,
-          tariff_name: revenueInfo?.tariffName || null,
-          energy_cost: revenueInfo?.energyCost || 0,
-          fixed_charges: revenueInfo?.fixedCharges || 0,
-          demand_charges: revenueInfo?.demandCharges || 0,
-          total_cost: revenueInfo?.totalCost || 0,
-          avg_cost_per_kwh: revenueInfo?.avgCostPerKwh || 0,
-          cost_calculation_error: revenueInfo?.hasError ? revenueInfo.errorMessage : null
-        };
-      });
-      
-      const { error: resultsError } = await supabase
-        .from('reconciliation_meter_results')
-        .insert(meterResults);
-      
-      if (resultsError) throw resultsError;
-      
-      // Update parent meter results with CSV-calculated values
-      if (bulkCsvResults.size > 0) {
-        for (const [meterId, csvData] of bulkCsvResults) {
-          await supabase
-            .from('reconciliation_meter_results')
-            .update({
-              column_totals: csvData.columnTotals,
-              hierarchical_total: csvData.totalKwh
-            })
-            .eq('reconciliation_run_id', run.id)
-            .eq('meter_id', meterId);
-        }
-      }
-      
+      await execution.saveReconciliationRun(
+        runName,
+        null, // no notes for bulk reconciliation
+        fullDateTimeFrom,
+        fullDateTimeTo,
+        reconciliationData,
+        availableMeters,
+        bulkCsvResults
+      );
     } catch (error) {
       console.error('Save bulk reconciliation error:', error);
       throw error;
