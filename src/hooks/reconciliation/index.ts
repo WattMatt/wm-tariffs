@@ -32,6 +32,8 @@ export type {
   ProcessedMeterData,
   HierarchicalCsvGenerationResult,
   PreviewData,
+  RunReconciliationOptions,
+  BulkReconcileOptions,
 } from './useReconciliationRunner';
 
 export { useDownloadUtils } from './useDownloadUtils';
