@@ -347,9 +347,81 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     setHasMeterChangesUnsaved(true);
   }, [meterAssignments, selectedMetersForSummation, availableMeters]);
 
+  // Derive parent-child connections from indent levels and meter order
+  const deriveConnectionsFromIndents = () => {
+    const connections: { parent_meter_id: string; child_meter_id: string }[] = [];
+    
+    availableMeters.forEach((meter, index) => {
+      const indentLevel = meterIndentLevels.get(meter.id) || 0;
+      
+      if (indentLevel > 0) {
+        // Find parent: closest preceding meter with indent level - 1
+        for (let i = index - 1; i >= 0; i--) {
+          const prevMeter = availableMeters[i];
+          const prevIndent = meterIndentLevels.get(prevMeter.id) || 0;
+          if (prevIndent === indentLevel - 1) {
+            connections.push({ parent_meter_id: prevMeter.id, child_meter_id: meter.id });
+            break;
+          }
+        }
+      }
+    });
+    
+    return connections;
+  };
+
   // Manual save function for meter settings
   const saveMeterSettings = async () => {
     try {
+      // Get all meter IDs for this site
+      const meterIds = availableMeters.map(m => m.id);
+      
+      // Derive new connections from indent levels
+      const newConnections = deriveConnectionsFromIndents();
+      console.log('Saving meter connections derived from indent levels:', newConnections);
+      
+      // Delete existing connections for these meters
+      if (meterIds.length > 0) {
+        const { error: deleteError } = await supabase
+          .from('meter_connections')
+          .delete()
+          .or(`parent_meter_id.in.(${meterIds.join(',')}),child_meter_id.in.(${meterIds.join(',')})`);
+        
+        if (deleteError) {
+          console.error('Error deleting old meter connections:', deleteError);
+          throw deleteError;
+        }
+      }
+      
+      // Insert new connections
+      if (newConnections.length > 0) {
+        const { error: insertError } = await supabase
+          .from('meter_connections')
+          .insert(newConnections);
+        
+        if (insertError) {
+          console.error('Error inserting new meter connections:', insertError);
+          throw insertError;
+        }
+      }
+      
+      // Update meterConnectionsMap state to reflect new connections
+      const connectionsMap = new Map<string, string[]>();
+      newConnections.forEach(conn => {
+        const children = connectionsMap.get(conn.parent_meter_id) || [];
+        children.push(conn.child_meter_id);
+        connectionsMap.set(conn.parent_meter_id, children);
+      });
+      setMeterConnectionsMap(connectionsMap);
+      
+      // Update meterParentInfo state
+      const parentInfo = new Map<string, string>();
+      newConnections.forEach(conn => {
+        parentInfo.set(conn.child_meter_id, conn.parent_meter_id);
+      });
+      setMeterParentInfo(parentInfo);
+      
+      // Save other settings to site_reconciliation_settings
       const settingsData = {
         site_id: siteId,
         meter_associations: Object.fromEntries(meterAssignments),
@@ -366,7 +438,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         toast.error("Failed to save meter settings");
       } else {
         setHasMeterChangesUnsaved(false);
-        toast.success("Meter settings saved");
+        toast.success("Meter settings and hierarchy saved");
       }
     } catch (error) {
       console.error('Error saving meter settings:', error);
