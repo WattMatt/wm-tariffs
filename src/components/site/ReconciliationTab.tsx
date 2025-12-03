@@ -2376,107 +2376,17 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       
       setMeterCorrections(allCorrections);
 
-      // Update meters with BOTH direct and hierarchical CSV values
-      // Store direct values (from uploaded/parsed CSV or meter_readings calculation)
-      // Store hierarchical values (from generated hierarchical CSV)
-      // CRITICAL: Direct values MUST come from processSingleMeter (source='Parsed' readings only)
-      const updateMeterCategory = (meters: any[]) => {
-        return meters.map(meter => {
-          const csvData = csvResults.get(meter.id);
-          const hasHierarchicalCsv = csvData !== undefined;
-          const hasUploadedCsv = metersWithUploadedCsvs.has(meter.id);
-          
-          // CRITICAL FIX: Always preserve direct values from processSingleMeter
-          // These values come from meter_readings with source='Parsed' ONLY
-          // DO NOT let them be overwritten by hierarchical data (source='hierarchical_aggregation')
-          const directTotalKwh = meter.totalKwh;
-          const directColumnTotals = { ...meter.columnTotals };
-          const directColumnMaxValues = { ...meter.columnMaxValues };
-          const directReadingsCount = meter.readingsCount;
-          
-          // Debug logging to verify direct values are correct
-          if (hasHierarchicalCsv) {
-            console.log(`📊 ${meter.meter_number} values:`, {
-              direct: { totalKwh: directTotalKwh, readingsCount: directReadingsCount },
-              hierarchical: { totalKwh: csvData.totalKwh, rowCount: csvData.rowCount }
-            });
-          }
-          
-          // If we have hierarchical CSV data, process it
-          if (hasHierarchicalCsv && csvData) {
-            const { processedColumnTotals, processedColumnMaxValues, totalKwhPositive, totalKwhNegative, totalKwh } = 
-              execution.applyColumnSettingsToHierarchicalData(csvData.columnTotals, csvData.columnMaxValues || {}, csvData.rowCount);
-            
-            console.log(`Storing BOTH values for ${meter.meter_number}:`, {
-              hierarchical: `${totalKwh.toFixed(2)} kWh (${csvData.rowCount} readings)`,
-              direct: `${directTotalKwh.toFixed(2)} kWh (${directReadingsCount} readings)`,
-              hasUploadedCsv
-            });
-            
-            // If meter has uploaded CSV, keep using direct values as primary but still store hierarchical
-            if (hasUploadedCsv) {
-              console.log(`  → Using Direct (uploaded CSV) as primary for ${meter.meter_number}`);
-              return {
-                ...meter,
-                // Primary values stay as direct (uploaded CSV)
-                totalKwh: directTotalKwh,
-                columnTotals: directColumnTotals,
-                columnMaxValues: directColumnMaxValues,
-                // Store BOTH for comparison - ensure direct values are from processSingleMeter
-                directTotalKwh,
-                directColumnTotals,
-                directColumnMaxValues,
-                directReadingsCount,
-                hierarchicalTotalKwh: totalKwh,
-                hierarchicalColumnTotals: processedColumnTotals,
-                hierarchicalColumnMaxValues: processedColumnMaxValues,
-                hierarchicalReadingsCount: csvData.rowCount,
-              };
-            }
-            
-            // No uploaded CSV - use hierarchical as primary BUT still preserve direct values from processSingleMeter
-            console.log(`  → Using Hierarchical as primary for ${meter.meter_number}`);
-            return {
-              ...meter,
-              // Primary values use hierarchical
-              totalKwh: totalKwh,
-              columnTotals: processedColumnTotals,
-              columnMaxValues: processedColumnMaxValues,
-              totalKwhPositive,
-              totalKwhNegative,
-              // CRITICAL: Store direct values from processSingleMeter (source='Parsed' readings)
-              // These MUST NOT be overwritten by hierarchical data
-              directTotalKwh,
-              directColumnTotals,
-              directColumnMaxValues,
-              directReadingsCount,
-              hierarchicalTotalKwh: totalKwh,
-              hierarchicalColumnTotals: processedColumnTotals,
-              hierarchicalColumnMaxValues: processedColumnMaxValues,
-              hierarchicalReadingsCount: csvData.rowCount,
-            };
-          }
-          
-          // No hierarchical CSV - just leaf meter with direct values
-          return {
-            ...meter,
-            directTotalKwh,
-            directColumnTotals,
-            directColumnMaxValues,
-            directReadingsCount,
-          };
-        });
-      };
+      // Update meters with BOTH direct and hierarchical CSV values using consolidated hook function
+      reconciliationData.councilBulk = execution.updateMeterCategoryWithHierarchy(reconciliationData.councilBulk || [], csvResults, metersWithUploadedCsvs);
+      reconciliationData.bulkMeters = execution.updateMeterCategoryWithHierarchy(reconciliationData.bulkMeters || [], csvResults, metersWithUploadedCsvs);
+      reconciliationData.solarMeters = execution.updateMeterCategoryWithHierarchy(reconciliationData.solarMeters || [], csvResults, metersWithUploadedCsvs);
+      reconciliationData.checkMeters = execution.updateMeterCategoryWithHierarchy(reconciliationData.checkMeters || [], csvResults, metersWithUploadedCsvs);
+      reconciliationData.tenantMeters = execution.updateMeterCategoryWithHierarchy(reconciliationData.tenantMeters || [], csvResults, metersWithUploadedCsvs);
+      reconciliationData.distribution = execution.updateMeterCategoryWithHierarchy(reconciliationData.distribution || [], csvResults, metersWithUploadedCsvs);
+      reconciliationData.distributionMeters = execution.updateMeterCategoryWithHierarchy(reconciliationData.distributionMeters || [], csvResults, metersWithUploadedCsvs);
+      reconciliationData.otherMeters = execution.updateMeterCategoryWithHierarchy(reconciliationData.otherMeters || [], csvResults, metersWithUploadedCsvs);
+      reconciliationData.unassignedMeters = execution.updateMeterCategoryWithHierarchy(reconciliationData.unassignedMeters || [], csvResults, metersWithUploadedCsvs);
 
-      reconciliationData.councilBulk = updateMeterCategory(reconciliationData.councilBulk || []);
-      reconciliationData.bulkMeters = updateMeterCategory(reconciliationData.bulkMeters || []);
-      reconciliationData.solarMeters = updateMeterCategory(reconciliationData.solarMeters || []);
-      reconciliationData.checkMeters = updateMeterCategory(reconciliationData.checkMeters || []);
-      reconciliationData.tenantMeters = updateMeterCategory(reconciliationData.tenantMeters || []);
-      reconciliationData.distribution = updateMeterCategory(reconciliationData.distribution || []);
-      reconciliationData.distributionMeters = updateMeterCategory(reconciliationData.distributionMeters || []);
-      reconciliationData.otherMeters = updateMeterCategory(reconciliationData.otherMeters || []);
-      reconciliationData.unassignedMeters = updateMeterCategory(reconciliationData.unassignedMeters || []);
 
       setHierarchicalCsvResults(csvResults);
 
@@ -2964,73 +2874,13 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       });
       await Promise.allSettled(csvPromises);
 
-      // Update parent meters with CSV values - but only if they don't have uploaded CSVs
-      // Update meters with BOTH direct and hierarchical CSV values (same as handleReconcile)
-      const updateMeterCategory = (meters: any[]) => {
-        return meters.map(meter => {
-          const csvData = bulkCsvResults.get(meter.id);
-          const hasHierarchicalCsv = csvData !== undefined;
-          const hasUploadedCsv = metersWithUploadedCsvs.has(meter.id);
-          
-          // Store direct values
-          const directTotalKwh = meter.totalKwh;
-          const directColumnTotals = meter.columnTotals;
-          const directColumnMaxValues = meter.columnMaxValues;
-          const directReadingsCount = meter.readingsCount;
-          
-          if (hasHierarchicalCsv) {
-            const { processedColumnTotals, processedColumnMaxValues, totalKwhPositive, totalKwhNegative, totalKwh } = 
-              execution.applyColumnSettingsToHierarchicalData(csvData.columnTotals, csvData.columnMaxValues || {}, csvData.rowCount);
-            
-            if (hasUploadedCsv) {
-              return {
-                ...meter,
-                totalKwh: directTotalKwh,
-                columnTotals: directColumnTotals,
-                columnMaxValues: directColumnMaxValues,
-                directTotalKwh,
-                directColumnTotals,
-                directColumnMaxValues,
-                directReadingsCount,
-                hierarchicalTotalKwh: totalKwh,
-                hierarchicalColumnTotals: processedColumnTotals,
-                hierarchicalColumnMaxValues: processedColumnMaxValues,
-              };
-            }
-            
-            return { 
-              ...meter, 
-              columnTotals: processedColumnTotals, 
-              columnMaxValues: processedColumnMaxValues,
-              totalKwh: totalKwh,
-              totalKwhPositive,
-              totalKwhNegative,
-              directTotalKwh,
-              directColumnTotals,
-              directColumnMaxValues,
-              directReadingsCount,
-              hierarchicalTotalKwh: totalKwh,
-              hierarchicalColumnTotals: processedColumnTotals,
-              hierarchicalColumnMaxValues: processedColumnMaxValues,
-            };
-          }
-          
-          return {
-            ...meter,
-            directTotalKwh,
-            directColumnTotals,
-            directColumnMaxValues,
-            directReadingsCount,
-          };
-        });
-      };
-
-      reconciliationData.bulkMeters = updateMeterCategory(reconciliationData.bulkMeters || []);
-      reconciliationData.councilBulk = updateMeterCategory(reconciliationData.councilBulk || []);
-      reconciliationData.solarMeters = updateMeterCategory(reconciliationData.solarMeters || []);
-      reconciliationData.tenantMeters = updateMeterCategory(reconciliationData.tenantMeters || []);
-      reconciliationData.checkMeters = updateMeterCategory(reconciliationData.checkMeters || []);
-      reconciliationData.unassignedMeters = updateMeterCategory(reconciliationData.unassignedMeters || []);
+      // Update meters with BOTH direct and hierarchical CSV values using consolidated hook function
+      reconciliationData.bulkMeters = execution.updateMeterCategoryWithHierarchy(reconciliationData.bulkMeters || [], bulkCsvResults, metersWithUploadedCsvs);
+      reconciliationData.councilBulk = execution.updateMeterCategoryWithHierarchy(reconciliationData.councilBulk || [], bulkCsvResults, metersWithUploadedCsvs);
+      reconciliationData.solarMeters = execution.updateMeterCategoryWithHierarchy(reconciliationData.solarMeters || [], bulkCsvResults, metersWithUploadedCsvs);
+      reconciliationData.tenantMeters = execution.updateMeterCategoryWithHierarchy(reconciliationData.tenantMeters || [], bulkCsvResults, metersWithUploadedCsvs);
+      reconciliationData.checkMeters = execution.updateMeterCategoryWithHierarchy(reconciliationData.checkMeters || [], bulkCsvResults, metersWithUploadedCsvs);
+      reconciliationData.unassignedMeters = execution.updateMeterCategoryWithHierarchy(reconciliationData.unassignedMeters || [], bulkCsvResults, metersWithUploadedCsvs);
     }
 
     // Save using the SAME pattern as handleSaveReconciliation
