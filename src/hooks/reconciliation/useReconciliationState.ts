@@ -67,10 +67,7 @@ export function useReconciliationState({ siteId }: UseReconciliationStateOptions
   
   // Hierarchy CSV data
   const [hierarchyCsvData, setHierarchyCsvData] = useState<Map<string, HierarchyCsvData>>(new Map());
-  const [hierarchicalCsvResults, setHierarchicalCsvResults] = useState<Map<string, {
-    totalKwh: number;
-    columnTotals: Record<string, number>;
-  }>>(new Map());
+  const [hierarchicalCsvResults, setHierarchicalCsvResults] = useState<Map<string, HierarchyCsvData>>(new Map());
   
   // Corrections tracking
   const [meterCorrections, setMeterCorrections] = useState<Map<string, CorrectedReading[]>>(new Map());
