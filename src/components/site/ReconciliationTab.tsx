@@ -43,6 +43,11 @@ import {
   type MeterConnection,
   type HierarchicalCsvResult,
 } from "@/lib/reconciliation";
+import {
+  useReconciliationState,
+  useMeterHierarchy,
+  useReconciliationSettings,
+} from "@/hooks/reconciliation";
 
 interface ReconciliationTabProps {
   siteId: string;
@@ -50,176 +55,119 @@ interface ReconciliationTabProps {
 }
 
 export default function ReconciliationTab({ siteId, siteName }: ReconciliationTabProps) {
-  const [dateFrom, setDateFrom] = useState<Date>();
-  const [dateTo, setDateTo] = useState<Date>();
-  const [timeFrom, setTimeFrom] = useState<string>("00:00");
-  const [timeTo, setTimeTo] = useState<string>("23:59");
-  const [reconciliationData, setReconciliationData] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [previewData, setPreviewData] = useState<any>(null);
-  const [selectedColumns, setSelectedColumns] = useState<Set<string>>(new Set());
-  const [columnOperations, setColumnOperations] = useState<Map<string, string>>(new Map());
-  const [columnFactors, setColumnFactors] = useState<Map<string, string>>(new Map());
-  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
-  const [isDateFromOpen, setIsDateFromOpen] = useState(false);
-  const [isDateToOpen, setIsDateToOpen] = useState(false);
-  const [selectedMeterId, setSelectedMeterId] = useState<string | null>(null);
-  const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
-  const [availableMeters, setAvailableMeters] = useState<Array<{
-    id: string;
-    meter_number: string;
-    meter_type: string;
-    hasData?: boolean;
-    tariff_structure_id?: string | null;
-  }>>([]);
-  const [isLoadingMeters, setIsLoadingMeters] = useState(false);
-  const [metersFullyLoaded, setMetersFullyLoaded] = useState(false); // Track if full hierarchy is loaded
-  const [meterDateRange, setMeterDateRange] = useState<{
-    earliest: Date | null;
-    latest: Date | null;
-    readingsCount: number;
-  }>({ earliest: null, latest: null, readingsCount: 0 });
-  const [allMeterDateRanges, setAllMeterDateRanges] = useState<Map<string, {
-    earliest: Date | null;
-    latest: Date | null;
-    readingsCount: number;
-  }>>(new Map());
-  const [totalDateRange, setTotalDateRange] = useState<{
-    earliest: Date | null;
-    latest: Date | null;
-  }>({ earliest: null, latest: null });
-  const [meterIndentLevels, setMeterIndentLevels] = useState<Map<string, number>>(new Map());
-  const [meterParentInfo, setMeterParentInfo] = useState<Map<string, string>>(new Map()); // meter_id -> parent meter_number
-  const [draggedMeterId, setDraggedMeterId] = useState<string | null>(null);
-  const [dragOverMeterId, setDragOverMeterId] = useState<string | null>(null);
-  const [selectedMetersForSummation, setSelectedMetersForSummation] = useState<Set<string>>(new Set());
-  const [meterConnectionsMap, setMeterConnectionsMap] = useState<Map<string, string[]>>(new Map()); // parent_id -> child_ids
-  // Removed reconciliationProgress - now using separate energyProgress and revenueProgress states
-  const [meterAssignments, setMeterAssignments] = useState<Map<string, string>>(new Map()); // meter_id -> "grid_supply" | "solar_energy" | "none"
-  const [expandedMeters, setExpandedMeters] = useState<Set<string>>(new Set()); // Set of meter IDs that are expanded
-  const [userSetDates, setUserSetDates] = useState(false); // Track if user manually set dates
-  const [failedMeters, setFailedMeters] = useState<Map<string, string>>(new Map()); // meter_id -> error message
-  const [isColumnsOpen, setIsColumnsOpen] = useState(true); // Control collapse state of columns section
-  const [isMetersOpen, setIsMetersOpen] = useState(true); // Control collapse state of meters section
-  const [sortColumn, setSortColumn] = useState<'meter' | 'grid' | 'solar' | 'status' | null>(null);
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
-  const [documentDateRanges, setDocumentDateRanges] = useState<Array<{
-    id: string;
-    document_type: string;
-    file_name: string;
-    period_start: string;
-    period_end: string;
-  }>>([]);
-  const [isLoadingDocuments, setIsLoadingDocuments] = useState(false);
-  const [isLoadingDateRanges, setIsLoadingDateRanges] = useState(false);
-  const [revenueReconciliationEnabled, setRevenueReconciliationEnabled] = useState(false);
-  const [isCalculatingRevenue, setIsCalculatingRevenue] = useState(false);
-  const [isCancelling, setIsCancelling] = useState(false);
-  const [isGeneratingCsvs, setIsGeneratingCsvs] = useState(false);
-  const [csvGenerationProgress, setCsvGenerationProgress] = useState({ current: 0, total: 0 });
-  const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
-  const [isBulkProcessing, setIsBulkProcessing] = useState(false);
-  const [bulkProgress, setBulkProgress] = useState<{
-    currentDocument: string;
-    current: number;
-    total: number;
-  }>({ currentDocument: '', current: 0, total: 0 });
-  const [energyProgress, setEnergyProgress] = useState({ current: 0, total: 0 });
-  const [revenueProgress, setRevenueProgress] = useState({ current: 0, total: 0 });
+  // ==================== HOOKS ====================
+  // Core reconciliation state (dates, loading, progress, data)
+  const reconciliationState = useReconciliationState({ siteId });
   
-  // Cancel reconciliation ref
-  const cancelReconciliationRef = useRef(false);
+  // Meter hierarchy state (meters, connections, date ranges)
+  const meterHierarchy = useMeterHierarchy({ siteId });
   
-  // Auto-save debounce ref
+  // Settings state (columns, assignments, auto-save)
+  const settings = useReconciliationSettings({
+    siteId,
+    availableMeters: meterHierarchy.availableMeters,
+    previewDataRef: reconciliationState.previewDataRef,
+  });
+
+  // ==================== DESTRUCTURE HOOK VALUES ====================
+  // Reconciliation state
+  const {
+    dateFrom, setDateFrom,
+    dateTo, setDateTo,
+    timeFrom, setTimeFrom,
+    timeTo, setTimeTo,
+    userSetDates, setUserSetDates,
+    isDateFromOpen, setIsDateFromOpen,
+    isDateToOpen, setIsDateToOpen,
+    reconciliationData, setReconciliationData,
+    previewData, setPreviewData,
+    previewDataRef,
+    isLoading, setIsLoading,
+    isLoadingPreview, setIsLoadingPreview,
+    isCalculatingRevenue, setIsCalculatingRevenue,
+    isGeneratingCsvs, setIsGeneratingCsvs,
+    isGeneratingHierarchy, setIsGeneratingHierarchy,
+    energyProgress, setEnergyProgress,
+    revenueProgress, setRevenueProgress,
+    csvGenerationProgress, setCsvGenerationProgress,
+    failedMeters, setFailedMeters,
+    isCancelling, setIsCancelling,
+    cancelReconciliationRef,
+    isSaveDialogOpen, setIsSaveDialogOpen,
+    revenueReconciliationEnabled, setRevenueReconciliationEnabled,
+    hierarchyGenerated, setHierarchyGenerated,
+    hierarchyCsvData, setHierarchyCsvData,
+    hierarchicalCsvResults, setHierarchicalCsvResults,
+    meterCorrections, setMeterCorrections,
+    selectedDocumentIds, setSelectedDocumentIds,
+    isBulkProcessing, setIsBulkProcessing,
+    bulkProgress, setBulkProgress,
+  } = reconciliationState;
+
+  // Meter hierarchy
+  const {
+    availableMeters, setAvailableMeters,
+    isLoadingMeters,
+    metersFullyLoaded, setMetersFullyLoaded,
+    selectedMeterId, setSelectedMeterId,
+    meterIndentLevels, setMeterIndentLevels,
+    meterParentInfo, setMeterParentInfo,
+    meterConnectionsMap, setMeterConnectionsMap,
+    expandedMeters, setExpandedMeters,
+    draggedMeterId, setDraggedMeterId,
+    dragOverMeterId, setDragOverMeterId,
+    totalDateRange, setTotalDateRange,
+    allMeterDateRanges, setAllMeterDateRanges,
+    meterDateRange, setMeterDateRange,
+    isLoadingDateRanges,
+    documentDateRanges, setDocumentDateRanges,
+    isLoadingDocuments,
+    meterCsvFilesInfo, setMeterCsvFilesInfo,
+    fetchBasicMeters,
+    fetchDateRanges,
+    fetchDocumentDateRanges,
+    fetchSchematicConnections,
+    fetchMeterCsvFilesInfo,
+    toggleMeterExpanded,
+    isMeterVisible,
+    loadIndentLevelsFromStorage,
+    saveIndentLevelsToStorage,
+    clearIndentLevelsFromStorage,
+    expandAllParents,
+  } = meterHierarchy;
+
+  // Settings
+  const {
+    selectedColumns, setSelectedColumns,
+    columnOperations, setColumnOperations,
+    columnFactors, setColumnFactors,
+    selectedColumnsRef,
+    columnFactorsRef,
+    columnOperationsRef,
+    meterAssignments, setMeterAssignments,
+    selectedMetersForSummation, setSelectedMetersForSummation,
+    isColumnsOpen, setIsColumnsOpen,
+    isMetersOpen, setIsMetersOpen,
+    sortColumn, setSortColumn,
+    sortDirection, setSortDirection,
+    isAutoSaving,
+    hasMeterChangesUnsaved, setHasMeterChangesUnsaved,
+    loadReconciliationSettings,
+    saveReconciliationSettings,
+    saveMeterSettings,
+  } = settings;
+
+  // ==================== LOCAL STATE (component-specific) ====================
+  // Refs that need to stay local
+  const hasInitializedRef = useRef(false);
+  const hasMeterInitializedRef = useRef(false);
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const [isAutoSaving, setIsAutoSaving] = useState(false);
-  const hasInitializedRef = useRef(false); // Prevent auto-save on initial load
-  const hasMeterInitializedRef = useRef(false); // Prevent tracking meter changes on initial load
-  const [hasMeterChangesUnsaved, setHasMeterChangesUnsaved] = useState(false); // Track unsaved meter changes
-  
-  // State for hierarchical CSV results (used to update parent meter values at run time)
-  const [hierarchicalCsvResults, setHierarchicalCsvResults] = useState<Map<string, {
-    totalKwh: number;
-    columnTotals: Record<string, number>;
-  }>>(new Map());
-  
-  // State for separate hierarchy generation
-  const [isGeneratingHierarchy, setIsGeneratingHierarchy] = useState(false);
-  const [hierarchyGenerated, setHierarchyGenerated] = useState(false);
-  const [hierarchyCsvData, setHierarchyCsvData] = useState<Map<string, {
-    totalKwh: number;
-    columnTotals: Record<string, number>;
-    columnMaxValues: Record<string, number>;
-    rowCount: number;
-  }>>(new Map());
-  
-  // State for tracking corrections made during hierarchical CSV generation
-  const [meterCorrections, setMeterCorrections] = useState<Map<string, CorrectedReading[]>>(new Map());
-  
-  // State for tracking available CSV files (parsed/generated) for each meter
-  const [meterCsvFilesInfo, setMeterCsvFilesInfo] = useState<Map<string, { parsed?: string; generated?: string }>>(new Map());
-  
-  // Refs for stable access to latest values in callbacks
-  const previewDataRef = useRef<any>(null);
-  const selectedColumnsRef = useRef<Set<string>>(new Set());
-  const columnFactorsRef = useRef<Map<string, string>>(new Map());
-  const columnOperationsRef = useRef<Map<string, string>>(new Map());
 
   // Persistent reconciliation state key
   const reconciliationStateKey = `reconciliation_state_${siteId}`;
   
   // localStorage key for manual indent levels
   const indentLevelsStorageKey = `reconciliation-indent-levels-${siteId}`;
-  
-  // Save manual indent levels to localStorage
-  const saveIndentLevelsToStorage = (levels: Map<string, number>) => {
-    try {
-      const levelsObj = Object.fromEntries(levels);
-      localStorage.setItem(indentLevelsStorageKey, JSON.stringify(levelsObj));
-    } catch (error) {
-      console.error("Error saving indent levels to localStorage:", error);
-    }
-  };
-  
-  // Load manual indent levels from localStorage
-  const loadIndentLevelsFromStorage = (): Map<string, number> => {
-    try {
-      const stored = localStorage.getItem(indentLevelsStorageKey);
-      if (stored) {
-        const levelsObj = JSON.parse(stored);
-        return new Map(Object.entries(levelsObj).map(([k, v]) => [k, v as number]));
-      }
-    } catch (error) {
-      console.error("Error loading indent levels from localStorage:", error);
-    }
-    return new Map();
-  };
-  
-  // Clear manual indent levels from localStorage
-  const clearIndentLevelsFromStorage = () => {
-    try {
-      localStorage.removeItem(indentLevelsStorageKey);
-    } catch (error) {
-      console.error("Error clearing indent levels from localStorage:", error);
-    }
-  };
-
-  // Update refs when state changes
-  useEffect(() => {
-    previewDataRef.current = previewData;
-  }, [previewData]);
-  
-  useEffect(() => {
-    selectedColumnsRef.current = selectedColumns;
-  }, [selectedColumns]);
-  
-  useEffect(() => {
-    columnFactorsRef.current = columnFactors;
-  }, [columnFactors]);
-  
-  useEffect(() => {
-    columnOperationsRef.current = columnOperations;
-  }, [columnOperations]);
 
   // Restore persistent state on mount - but don't restore stale loading states
   useEffect(() => {
@@ -274,180 +222,14 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     }
   }, [isLoading, isCalculatingRevenue, energyProgress, revenueProgress, reconciliationData, reconciliationStateKey]);
 
-  // Save reconciliation settings
-  const saveReconciliationSettings = async (showToast = true) => {
-    try {
-      const settingsData = {
-        site_id: siteId,
-        available_columns: previewDataRef.current?.availableColumns || [],
-        meter_associations: Object.fromEntries(meterAssignments),
-        selected_columns: Array.from(selectedColumnsRef.current),
-        column_operations: Object.fromEntries(columnOperationsRef.current),
-        column_factors: Object.fromEntries(columnFactorsRef.current),
-        meter_order: availableMeters.map(m => m.id),
-        meters_for_summation: Array.from(selectedMetersForSummation)
-      };
-
-      const { error } = await supabase
-        .from('site_reconciliation_settings')
-        .upsert(settingsData, { onConflict: 'site_id' });
-
-      if (error) {
-        console.error('Error saving reconciliation settings:', error);
-      } else if (showToast) {
-        toast.success("Settings saved for next time");
-      }
-    } catch (error) {
-      console.error('Error saving reconciliation settings:', error);
-    }
-  };
-
-  // Debounced auto-save function for column settings only (500ms delay, no toast)
-  const autoSaveColumnSettings = useCallback(() => {
-    // Don't auto-save if preview data hasn't loaded yet
-    if (!previewDataRef.current) return;
-    
-    // Clear any pending save
-    if (autoSaveTimeoutRef.current) {
-      clearTimeout(autoSaveTimeoutRef.current);
-    }
-    
-    setIsAutoSaving(true);
-    autoSaveTimeoutRef.current = setTimeout(async () => {
-      // Save only column-related settings
-      try {
-        const settingsData = {
-          site_id: siteId,
-          available_columns: previewDataRef.current?.availableColumns || [],
-          selected_columns: Array.from(selectedColumnsRef.current),
-          column_operations: Object.fromEntries(columnOperationsRef.current),
-          column_factors: Object.fromEntries(columnFactorsRef.current),
-        };
-
-        const { error } = await supabase
-          .from('site_reconciliation_settings')
-          .upsert(settingsData, { onConflict: 'site_id' });
-
-        if (error) {
-          console.error('Error auto-saving column settings:', error);
-        }
-      } catch (error) {
-        console.error('Error auto-saving column settings:', error);
-      }
-      setIsAutoSaving(false);
-    }, 500);
-  }, [siteId]);
-
-  // Auto-save when column settings change (NOT meter settings)
-  useEffect(() => {
-    // Skip initial render and wait for initialization
-    if (!hasInitializedRef.current) {
-      // Mark as initialized after first load of settings completes
-      if (previewData) {
-        hasInitializedRef.current = true;
-      }
-      return;
-    }
-    
-    autoSaveColumnSettings();
-  }, [selectedColumns, columnOperations, columnFactors]);
-
-  // Track meter changes separately (mark as unsaved, don't auto-save)
-  useEffect(() => {
-    // Skip initial load
-    if (!hasMeterInitializedRef.current) {
-      // Mark as initialized after meters are loaded
-      if (availableMeters.length > 0) {
-        hasMeterInitializedRef.current = true;
-      }
-      return;
-    }
-    
-    setHasMeterChangesUnsaved(true);
-  }, [meterAssignments, selectedMetersForSummation, availableMeters]);
-
-  // Derive parent-child connections from indent levels and meter order
+  // Derive parent-child connections from indent levels and meter order (wrapper using hook util)
   const deriveConnectionsFromIndents = () => {
     return deriveConnectionsFromIndentsUtil(availableMeters, meterIndentLevels);
   };
 
-  // Manual save function for meter settings
-  const saveMeterSettings = async () => {
-    try {
-      // Get all meter IDs for this site
-      const meterIds = availableMeters.map(m => m.id);
-      
-      // Derive new connections from indent levels
-      const newConnections = deriveConnectionsFromIndents();
-      console.log('Saving meter connections derived from indent levels:', newConnections);
-      
-      // Delete existing connections for these meters
-      if (meterIds.length > 0) {
-        const { error: deleteError } = await supabase
-          .from('meter_connections')
-          .delete()
-          .or(`parent_meter_id.in.(${meterIds.join(',')}),child_meter_id.in.(${meterIds.join(',')})`);
-        
-        if (deleteError) {
-          console.error('Error deleting old meter connections:', deleteError);
-          throw deleteError;
-        }
-      }
-      
-      // Insert new connections
-      if (newConnections.length > 0) {
-        const { error: insertError } = await supabase
-          .from('meter_connections')
-          .insert(newConnections);
-        
-        if (insertError) {
-          console.error('Error inserting new meter connections:', insertError);
-          throw insertError;
-        }
-      }
-      
-      // Update meterConnectionsMap state to reflect new connections
-      const connectionsMap = new Map<string, string[]>();
-      newConnections.forEach(conn => {
-        const children = connectionsMap.get(conn.parent_meter_id) || [];
-        children.push(conn.child_meter_id);
-        connectionsMap.set(conn.parent_meter_id, children);
-      });
-      setMeterConnectionsMap(connectionsMap);
-      
-      // Update meterParentInfo state - use meter_number not UUID
-      const parentInfo = new Map<string, string>();
-      newConnections.forEach(conn => {
-        const parentMeter = availableMeters.find(m => m.id === conn.parent_meter_id);
-        if (parentMeter) {
-          parentInfo.set(conn.child_meter_id, parentMeter.meter_number);
-        }
-      });
-      setMeterParentInfo(parentInfo);
-      
-      // Save other settings to site_reconciliation_settings
-      const settingsData = {
-        site_id: siteId,
-        meter_associations: Object.fromEntries(meterAssignments),
-        meter_order: availableMeters.map(m => m.id),
-        meters_for_summation: Array.from(selectedMetersForSummation)
-      };
-
-      const { error } = await supabase
-        .from('site_reconciliation_settings')
-        .upsert(settingsData, { onConflict: 'site_id' });
-
-      if (error) {
-        console.error('Error saving meter settings:', error);
-        toast.error("Failed to save meter settings");
-      } else {
-        setHasMeterChangesUnsaved(false);
-        toast.success("Meter settings and hierarchy saved");
-      }
-    } catch (error) {
-      console.error('Error saving meter settings:', error);
-      toast.error("Failed to save meter settings");
-    }
+  // Wrapper for saveMeterSettings that passes deriveConnectionsFromIndents
+  const handleSaveMeterSettings = async () => {
+    await saveMeterSettings(deriveConnectionsFromIndents);
   };
 
   // Cleanup auto-save timeout on unmount
@@ -482,105 +264,6 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       toast.error("Failed to reset reconciliation settings");
     }
   };
-
-  // Load saved reconciliation settings
-  const loadReconciliationSettings = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('site_reconciliation_settings')
-        .select('*')
-        .eq('site_id', siteId)
-        .maybeSingle();
-
-      if (error) {
-        console.error('Error loading reconciliation settings:', error);
-        return;
-      }
-
-      if (data) {
-        // Restore meter assignments
-        const associations = new Map(Object.entries(data.meter_associations || {}));
-        setMeterAssignments(associations);
-        
-        // Store saved meter order for restoration after availableMeters is loaded
-        if (data.meter_order && data.meter_order.length > 0) {
-          (window as any).__savedMeterOrder = data.meter_order;
-        }
-        
-        // Restore meters for summation
-        if (data.meters_for_summation && data.meters_for_summation.length > 0) {
-          setSelectedMetersForSummation(new Set(data.meters_for_summation));
-        }
-        
-        // Store column settings for restoration after preview loads
-        if (data.selected_columns && data.selected_columns.length > 0) {
-          (window as any).__savedColumnSettings = {
-            selected_columns: data.selected_columns,
-            column_operations: data.column_operations,
-            column_factors: data.column_factors
-          };
-        }
-      }
-    } catch (error) {
-      console.error('Error loading reconciliation settings:', error);
-    }
-  };
-
-  // Load settings on component mount
-  useEffect(() => {
-    loadReconciliationSettings();
-    
-    // Cleanup on unmount
-    return () => {
-      delete (window as any).__savedColumnSettings;
-      delete (window as any).__savedMeterOrder;
-    };
-  }, [siteId]);
-
-  // Realtime subscription for meters and settings changes
-  useEffect(() => {
-    // Subscribe to meters changes for this site
-    const metersChannel = supabase
-      .channel(`reconciliation-meters-${siteId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'meters',
-          filter: `site_id=eq.${siteId}`
-        },
-        () => {
-          console.log('Meters changed, refreshing reconciliation data...');
-          fetchBasicMeters();
-          fetchDateRanges();
-        }
-      )
-      .subscribe();
-
-    // Subscribe to reconciliation settings changes
-    const settingsChannel = supabase
-      .channel(`reconciliation-settings-${siteId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'site_reconciliation_settings',
-          filter: `site_id=eq.${siteId}`
-        },
-        () => {
-          console.log('Reconciliation settings changed, reloading...');
-          loadReconciliationSettings();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(metersChannel);
-      supabase.removeChannel(settingsChannel);
-    };
-  }, [siteId]);
 
   // Check existing hierarchical CSV coverage in database
   const checkHierarchicalCsvCoverage = async (
@@ -690,92 +373,13 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
   };
 
   // Fetch CSV files info when meters are available
+  // Fetch CSV files info when meters are available (handled by hook now)
   useEffect(() => {
     if (availableMeters.length > 0) {
       const meterIds = availableMeters.map(m => m.id);
       fetchMeterCsvFilesInfo(meterIds);
     }
   }, [availableMeters]);
-
-  // Fetch document date ranges (Municipal and Tenant Bills)
-  const fetchDocumentDateRanges = async () => {
-    setIsLoadingDocuments(true);
-    const ranges = await fetchDocumentDateRangesFromDb(siteId);
-    setDocumentDateRanges(ranges);
-    setIsLoadingDocuments(false);
-  };
-
-  // Fetch only overall date range on mount (fast aggregate query)
-  const fetchDateRanges = async () => {
-    try {
-      setIsLoadingDateRanges(true);
-      const range = await fetchDateRangesFromDb(siteId);
-      setTotalDateRange(range);
-    } catch (error) {
-      console.error("Error fetching date ranges:", error);
-    } finally {
-      setIsLoadingDateRanges(false);
-    }
-  };
-
-  // Fetch basic meter list on mount (fast - no hierarchy, no data checks)
-  const fetchBasicMeters = async () => {
-    try {
-      setIsLoadingMeters(true);
-      
-      const { data: meters, error } = await supabase
-        .from("meters")
-        .select("id, meter_number, meter_type, tariff_structure_id")
-        .eq("site_id", siteId)
-        .order("meter_number");
-      
-      if (error || !meters) {
-        console.error("Error fetching meters:", error);
-        return;
-      }
-      
-      // Check if we have saved meter order to restore
-      const savedMeterOrder = (window as any).__savedMeterOrder;
-      let finalMeters = meters;
-      
-      if (savedMeterOrder && savedMeterOrder.length > 0) {
-        const orderedMeters: typeof meters = [];
-        const metersById = new Map(meters.map(m => [m.id, m]));
-        
-        savedMeterOrder.forEach((meterId: string) => {
-          const meter = metersById.get(meterId);
-          if (meter) {
-            orderedMeters.push(meter);
-            metersById.delete(meterId);
-          }
-        });
-        
-        metersById.forEach(meter => orderedMeters.push(meter));
-        finalMeters = orderedMeters;
-        delete (window as any).__savedMeterOrder;
-      }
-      
-      setAvailableMeters(finalMeters);
-      
-      // Auto-select first bulk meter or first meter
-      const bulkMeter = finalMeters.find(m => m.meter_type === "bulk_meter");
-      if (bulkMeter) {
-        setSelectedMeterId(bulkMeter.id);
-      } else if (finalMeters.length > 0) {
-        setSelectedMeterId(finalMeters[0].id);
-      }
-      
-      // Load saved indent levels if available
-      const savedIndentLevels = loadIndentLevelsFromStorage();
-      if (savedIndentLevels.size > 0) {
-        setMeterIndentLevels(savedIndentLevels);
-      }
-    } catch (error) {
-      console.error("Error fetching basic meters:", error);
-    } finally {
-      setIsLoadingMeters(false);
-    }
-  };
 
   // Load full meter hierarchy, connections, and data availability (called from Preview button)
   const loadFullMeterHierarchy = async () => {
@@ -1169,22 +773,6 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     setUserSetDates(false); // Allow bulk selection to override dates
   }, [selectedDocumentIds, documentDateRanges, totalDateRange, userSetDates]);
 
-  // Toggle expand/collapse for meters
-  const toggleMeterExpanded = (meterId: string) => {
-    const newExpanded = new Set(expandedMeters);
-    if (newExpanded.has(meterId)) {
-      newExpanded.delete(meterId);
-    } else {
-      newExpanded.add(meterId);
-    }
-    setExpandedMeters(newExpanded);
-  };
-
-  // Check if a meter is visible based on hierarchy
-  const isMeterVisible = (meterId: string) => {
-    return isMeterVisibleUtil(meterId, meterConnectionsMap, expandedMeters);
-  };
-
   const handleIndentMeter = (meterId: string) => {
     const newLevels = new Map(meterIndentLevels);
     
@@ -1227,11 +815,6 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     
     setMeterIndentLevels(newLevels);
     saveIndentLevelsToStorage(newLevels); // Persist to localStorage
-  };
-  
-  // Fetch connections from schematic_lines metadata as fallback when meter_connections is empty
-  const fetchSchematicConnections = async (): Promise<MeterConnection[]> => {
-    return fetchSchematicConnectionsFromDb(siteId);
   };
   
   // Reset meter hierarchy to database defaults (restore from schematic connections)
@@ -3853,13 +3436,6 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     }
   };
 
-  // Fetch available CSV files info for all meters
-  const fetchMeterCsvFilesInfo = async (meterIds: string[]) => {
-    if (meterIds.length === 0) return;
-    const map = await fetchMeterCsvFilesInfoFromDb(meterIds);
-    setMeterCsvFilesInfo(map);
-  };
-
   const downloadAllMetersCSV = async () => {
     if (!reconciliationData) return;
 
@@ -4441,7 +4017,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                       size="sm"
                       className="h-7"
                       disabled={!hasMeterChangesUnsaved}
-                      onClick={() => saveMeterSettings()}
+                      onClick={handleSaveMeterSettings}
                     >
                       <Save className="h-3 w-3 mr-1" />
                       Save
