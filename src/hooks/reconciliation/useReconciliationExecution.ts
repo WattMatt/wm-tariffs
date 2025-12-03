@@ -369,7 +369,7 @@ export function useReconciliationExecution(options: UseReconciliationExecutionOp
   // ========== MAIN EXECUTION FUNCTIONS ==========
 
   /**
-   * Save a reconciliation run to the database
+   * Save a reconciliation run to the database with full parent meter revenue calculation
    */
   const saveReconciliationRun = useCallback(async (
     runName: string,
@@ -377,7 +377,7 @@ export function useReconciliationExecution(options: UseReconciliationExecutionOp
     dateFrom: string,
     dateTo: string,
     reconciliationData: ReconciliationResult,
-    availableMeters: Array<{ id: string }>,
+    availableMeters: Array<{ id: string; [key: string]: any }>,
     hierarchicalCsvResults?: Map<string, { totalKwh: number; columnTotals: Record<string, number>; columnMaxValues: Record<string, number>; rowCount: number }>
   ): Promise<string> => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -429,6 +429,85 @@ export function useReconciliationExecution(options: UseReconciliationExecutionOp
     // Calculate hierarchical totals
     const { hierarchicalTotals, hierarchicalColumnTotals, hierarchicalColumnMaxValues } =
       calculateHierarchicalTotals(allMeters, meterConnectionsMap);
+
+    // Calculate revenue for parent meters using hierarchical totals
+    if (reconciliationData.revenueData) {
+      const { data: siteData } = await supabase
+        .from("sites")
+        .select("supply_authority_id")
+        .eq("id", siteId)
+        .single();
+      
+      if (siteData?.supply_authority_id) {
+        const meterRevenues = new Map(reconciliationData.revenueData.meterRevenues);
+        
+        // Process all parent meters in parallel
+        const parentMeterPromises = allMeters
+          .filter(meter => {
+            const hierarchicalTotal = meter.hierarchicalTotalKwh ?? hierarchicalTotals.get(meter.id);
+            const existingRevenue = meterRevenues.get(meter.id);
+            return hierarchicalTotal && hierarchicalTotal > 0 && 
+                   (!existingRevenue || (existingRevenue as any).totalCost === 0);
+          })
+          .map(async (meter) => {
+            const hierarchicalTotal = meter.hierarchicalTotalKwh ?? hierarchicalTotals.get(meter.id) ?? 0;
+            const meterMaxKva = Object.entries(meter.columnMaxValues || {})
+              .filter(([key]) => key.toLowerCase().includes('kva') || key.toLowerCase() === 's (kva)')
+              .reduce((max, [, value]) => Math.max(max, Number(value) || 0), 0);
+            
+            try {
+              if (meter.assigned_tariff_name) {
+                const costResult = await calculateMeterCostAcrossPeriods(
+                  meter.id,
+                  siteData.supply_authority_id,
+                  meter.assigned_tariff_name,
+                  new Date(dateFrom),
+                  new Date(dateTo),
+                  hierarchicalTotal,
+                  meterMaxKva
+                );
+                return { meter, costResult };
+              } else if (meter.tariff_structure_id) {
+                const costResult = await calculateMeterCost(
+                  meter.id,
+                  meter.tariff_structure_id,
+                  new Date(dateFrom),
+                  new Date(dateTo),
+                  hierarchicalTotal,
+                  meterMaxKva
+                );
+                return { meter, costResult };
+              }
+            } catch (error) {
+              console.error(`Failed to calculate revenue for parent meter ${meter.meter_number}:`, error);
+              return {
+                meter,
+                costResult: {
+                  hasError: true,
+                  errorMessage: error instanceof Error ? error.message : 'Cost calculation failed',
+                  totalCost: 0,
+                  energyCost: 0,
+                  fixedCharges: 0,
+                  demandCharges: 0,
+                  avgCostPerKwh: 0,
+                  tariffName: meter.assigned_tariff_name || null
+                }
+              };
+            }
+            return null;
+          });
+
+        const results = await Promise.allSettled(parentMeterPromises);
+        results.forEach((result) => {
+          if (result.status === 'fulfilled' && result.value) {
+            const { meter, costResult } = result.value;
+            meterRevenues.set(meter.id, costResult);
+          }
+        });
+        
+        reconciliationData.revenueData.meterRevenues = meterRevenues;
+      }
+    }
 
     // Prepare meter results for insertion
     const meterResults = allMeters.map(meter => {
