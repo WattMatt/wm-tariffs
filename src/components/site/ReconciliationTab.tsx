@@ -115,6 +115,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
   const hasInitializedRef = useRef(false); // Prevent auto-save on initial load
+  const hasMeterInitializedRef = useRef(false); // Prevent tracking meter changes on initial load
+  const [hasMeterChangesUnsaved, setHasMeterChangesUnsaved] = useState(false); // Track unsaved meter changes
   
   // State for hierarchical CSV results (used to update parent meter values at run time)
   const [hierarchicalCsvResults, setHierarchicalCsvResults] = useState<Map<string, {
@@ -281,8 +283,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     }
   };
 
-  // Debounced auto-save function (500ms delay, no toast)
-  const autoSaveSettings = useCallback(() => {
+  // Debounced auto-save function for column settings only (500ms delay, no toast)
+  const autoSaveColumnSettings = useCallback(() => {
     // Don't auto-save if preview data hasn't loaded yet
     if (!previewDataRef.current) return;
     
@@ -293,12 +295,31 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     
     setIsAutoSaving(true);
     autoSaveTimeoutRef.current = setTimeout(async () => {
-      await saveReconciliationSettings(false); // Save without toast
+      // Save only column-related settings
+      try {
+        const settingsData = {
+          site_id: siteId,
+          available_columns: previewDataRef.current?.availableColumns || [],
+          selected_columns: Array.from(selectedColumnsRef.current),
+          column_operations: Object.fromEntries(columnOperationsRef.current),
+          column_factors: Object.fromEntries(columnFactorsRef.current),
+        };
+
+        const { error } = await supabase
+          .from('site_reconciliation_settings')
+          .upsert(settingsData, { onConflict: 'site_id' });
+
+        if (error) {
+          console.error('Error auto-saving column settings:', error);
+        }
+      } catch (error) {
+        console.error('Error auto-saving column settings:', error);
+      }
       setIsAutoSaving(false);
     }, 500);
-  }, [siteId, meterAssignments, availableMeters, selectedMetersForSummation]);
+  }, [siteId]);
 
-  // Auto-save when settings change
+  // Auto-save when column settings change (NOT meter settings)
   useEffect(() => {
     // Skip initial render and wait for initialization
     if (!hasInitializedRef.current) {
@@ -309,8 +330,49 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       return;
     }
     
-    autoSaveSettings();
-  }, [selectedColumns, columnOperations, columnFactors, meterAssignments, selectedMetersForSummation, availableMeters]);
+    autoSaveColumnSettings();
+  }, [selectedColumns, columnOperations, columnFactors]);
+
+  // Track meter changes separately (mark as unsaved, don't auto-save)
+  useEffect(() => {
+    // Skip initial load
+    if (!hasMeterInitializedRef.current) {
+      // Mark as initialized after meters are loaded
+      if (availableMeters.length > 0) {
+        hasMeterInitializedRef.current = true;
+      }
+      return;
+    }
+    
+    setHasMeterChangesUnsaved(true);
+  }, [meterAssignments, selectedMetersForSummation, availableMeters]);
+
+  // Manual save function for meter settings
+  const saveMeterSettings = async () => {
+    try {
+      const settingsData = {
+        site_id: siteId,
+        meter_associations: Object.fromEntries(meterAssignments),
+        meter_order: availableMeters.map(m => m.id),
+        meters_for_summation: Array.from(selectedMetersForSummation)
+      };
+
+      const { error } = await supabase
+        .from('site_reconciliation_settings')
+        .upsert(settingsData, { onConflict: 'site_id' });
+
+      if (error) {
+        console.error('Error saving meter settings:', error);
+        toast.error("Failed to save meter settings");
+      } else {
+        setHasMeterChangesUnsaved(false);
+        toast.success("Meter settings saved");
+      }
+    } catch (error) {
+      console.error('Error saving meter settings:', error);
+      toast.error("Failed to save meter settings");
+    }
+  };
 
   // Cleanup auto-save timeout on unmount
   useEffect(() => {
@@ -4217,7 +4279,22 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
                     <Label className="text-sm font-semibold cursor-pointer">Meters Associated with This Site</Label>
                     <span className="text-xs text-muted-foreground font-normal">Select multiple meters and drag to reorder or use indent buttons</span>
                   </div>
-                  <ChevronRight className={cn("h-4 w-4 transition-transform", isMetersOpen && "rotate-90")} />
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant={hasMeterChangesUnsaved ? "default" : "outline"}
+                      size="sm"
+                      className="h-7"
+                      disabled={!hasMeterChangesUnsaved}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        saveMeterSettings();
+                      }}
+                    >
+                      <Save className="h-3 w-3 mr-1" />
+                      Save
+                    </Button>
+                    <ChevronRight className={cn("h-4 w-4 transition-transform", isMetersOpen && "rotate-90")} />
+                  </div>
                 </CollapsibleTrigger>
                 <CollapsibleContent>
               
