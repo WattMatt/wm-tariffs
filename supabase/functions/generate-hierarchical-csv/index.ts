@@ -14,6 +14,7 @@ interface HierarchicalCSVRequest {
   childMeterIds?: string[];
   columns?: string[];
   copyLeafMetersOnly?: boolean; // NEW: Mode to copy all leaf meters upfront
+  meterAssociations?: Record<string, string>; // meter_id -> "solar_energy" | "grid_supply" | etc
 }
 
 interface AggregatedData {
@@ -88,8 +89,14 @@ Deno.serve(async (req) => {
       dateTo,
       childMeterIds,
       columns: passedColumns,
-      copyLeafMetersOnly
+      copyLeafMetersOnly,
+      meterAssociations
     } = requestBody;
+    
+    // Log meter associations for debugging
+    if (meterAssociations && Object.keys(meterAssociations).length > 0) {
+      console.log('Meter associations received:', meterAssociations);
+    }
 
     // ===== MODE 1: COPY ALL LEAF METERS FOR SITE =====
     if (copyLeafMetersOnly) {
@@ -470,6 +477,19 @@ Deno.serve(async (req) => {
     console.log('Aggregating readings by timestamp...');
     const columns = passedColumns || [];
     const groupedData = new Map<string, AggregatedData>();
+    
+    // Identify solar meters from meterAssociations
+    const solarMeterIds = new Set<string>();
+    if (meterAssociations) {
+      Object.entries(meterAssociations).forEach(([meterId, assignment]) => {
+        if (assignment === 'solar_energy') {
+          solarMeterIds.add(meterId);
+        }
+      });
+    }
+    if (solarMeterIds.size > 0) {
+      console.log(`Solar meters identified (will subtract values): ${Array.from(solarMeterIds).map(id => meterNumberMap.get(id) || id).join(', ')}`);
+    }
 
     allReadings.forEach(reading => {
       const slot = roundToSlot(reading.reading_timestamp);
@@ -479,6 +499,9 @@ Deno.serve(async (req) => {
       }
       
       const group = groupedData.get(slot)!;
+      
+      // Check if this meter is a solar meter - invert (subtract) its values
+      const isSolarMeter = solarMeterIds.has(reading.meter_id);
 
       if (reading.metadata?.imported_fields) {
         const importedFields = reading.metadata.imported_fields as Record<string, any>;
@@ -488,7 +511,12 @@ Deno.serve(async (req) => {
           if (value !== null && value !== undefined) {
             const numValue = Number(value);
             if (!isNaN(numValue)) {
-              group[col] = (group[col] || 0) + numValue;
+              // For solar meters, SUBTRACT instead of ADD (inverted factor)
+              if (isSolarMeter) {
+                group[col] = (group[col] || 0) - numValue;
+              } else {
+                group[col] = (group[col] || 0) + numValue;
+              }
             }
           }
         });
