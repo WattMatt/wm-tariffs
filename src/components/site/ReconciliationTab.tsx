@@ -316,113 +316,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       toast.error("Failed to reset reconciliation settings");
     }
   };
-
-  // Check existing hierarchical CSV coverage in database
-  const checkHierarchicalCsvCoverage = async (
-    parentMeterIds: string[],
-    dateFrom: string,
-    dateTo: string
-  ): Promise<Map<string, boolean>> => {
-    if (parentMeterIds.length === 0) return new Map();
-
-    const { data: existingCsvs } = await supabase
-      .from('meter_csv_files')
-      .select('meter_id, generated_date_from, generated_date_to, parse_status')
-      .in('meter_id', parentMeterIds)
-      .ilike('file_name', '%Hierarchical%');
-
-    const coverageMap = new Map<string, boolean>();
-    
-    for (const meterId of parentMeterIds) {
-      const csv = existingCsvs?.find(c => 
-        c.meter_id === meterId && 
-        (c.parse_status === 'parsed' || c.parse_status === 'pending')
-      );
-      
-      if (csv && csv.generated_date_from && csv.generated_date_to) {
-        const csvStart = new Date(csv.generated_date_from).getTime();
-        const csvEnd = new Date(csv.generated_date_to).getTime();
-        const reqStart = new Date(dateFrom).getTime();
-        const reqEnd = new Date(dateTo).getTime();
-        
-        const isCovered = csvStart <= reqStart && csvEnd >= reqEnd;
-        coverageMap.set(meterId, isCovered);
-      } else {
-        coverageMap.set(meterId, false);
-      }
-    }
-    
-    return coverageMap;
-  };
-
-  // Fetch hierarchical data from hierarchical_meter_readings table for covered date ranges
-  const fetchHierarchicalDataFromReadings = async (
-    meterIds: string[],
-    dateFrom: string,
-    dateTo: string,
-    colOperations?: Map<string, string>
-  ): Promise<Map<string, { totalKwh: number; columnTotals: Record<string, number>; columnMaxValues: Record<string, number>; rowCount: number }>> => {
-    const results = new Map();
-    const pageSize = 1000;
-    
-    for (const meterId of meterIds) {
-      // Paginated fetch from hierarchical_meter_readings
-      let allReadings: any[] = [];
-      let start = 0;
-      let hasMore = true;
-      
-      while (hasMore) {
-        const { data: pageData } = await supabase
-          .from('hierarchical_meter_readings')
-          .select('kwh_value, kva_value, metadata')
-          .eq('meter_id', meterId)
-          .gte('reading_timestamp', dateFrom)
-          .lte('reading_timestamp', dateTo)
-          .eq('metadata->>source', 'hierarchical_aggregation')
-          .order('reading_timestamp', { ascending: true })
-          .range(start, start + pageSize - 1);
-        
-        if (pageData && pageData.length > 0) {
-          allReadings = allReadings.concat(pageData);
-          start += pageSize;
-          hasMore = pageData.length === pageSize;
-        } else {
-          hasMore = false;
-        }
-      }
-      
-      if (allReadings.length > 0) {
-        let totalKwh = 0;
-        const columnTotals: Record<string, number> = {};
-        const columnMaxValues: Record<string, number> = {};
-        
-        allReadings.forEach(r => {
-          totalKwh += r.kwh_value || 0;
-          const metadata = r.metadata as any;
-          const imported = metadata?.imported_fields || {};
-          Object.entries(imported).forEach(([key, value]) => {
-            const numValue = Number(value) || 0;
-            const operation = colOperations?.get(key) || 'sum';
-            
-            if (operation === 'max') {
-              columnMaxValues[key] = Math.max(columnMaxValues[key] || 0, numValue);
-            } else {
-              columnTotals[key] = (columnTotals[key] || 0) + numValue;
-            }
-          });
-        });
-        
-        results.set(meterId, {
-          totalKwh,
-          columnTotals,
-          columnMaxValues,
-          rowCount: allReadings.length
-        });
-      }
-    }
-    
-    return results;
-  };
+  // Note: checkHierarchicalCsvCoverage and fetchHierarchicalDataFromReadings 
+  // are imported from @/lib/reconciliation
 
   // Fetch CSV files info when meters are available
   // Fetch CSV files info when meters are available (handled by hook now)
@@ -1035,17 +930,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     setDragOverMeterId(null);
   };
 
-  // Helper to combine date and time and format as naive timestamp string
-  const getFullDateTime = (date: Date, time: string): string => {
-    const [hours, minutes] = time.split(':').map(Number);
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const hrs = String(hours).padStart(2, '0');
-    const mins = String(minutes).padStart(2, '0');
-    // Return formatted string without timezone: "YYYY-MM-DD HH:mm:ss"
-    return `${year}-${month}-${day} ${hrs}:${mins}:00`;
-  };
+  // Note: getFullDateTime is imported from @/lib/reconciliation
 
   const handlePreview = async () => {
     if (!dateFrom || !dateTo) {
