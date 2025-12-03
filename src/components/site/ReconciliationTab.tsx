@@ -2511,94 +2511,9 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         .filter(m => meterDataMap.has(m.id))
         .map(m => meterDataMap.get(m.id));
       
-      // 3. Calculate hierarchical totals for meters with children
-      const meterMap = new Map(allMeters.map(m => [m.id, m]));
-      const hierarchicalTotals = new Map<string, number>();
-      const hierarchicalColumnTotals = new Map<string, Record<string, number>>();
-      const hierarchicalColumnMaxValues = new Map<string, Record<string, number>>();
-      
-      // Helper function to calculate summation by only counting leaf meters
-      const getLeafMeterSum = (meterId: string, visited = new Set<string>()): number => {
-        if (visited.has(meterId)) return 0; // Prevent infinite loops
-        visited.add(meterId);
-        
-        const children = meterConnectionsMap.get(meterId) || [];
-        
-        // If this meter has no children, it's a leaf - return its value
-        if (children.length === 0) {
-          const meterData = meterMap.get(meterId);
-          if (!meterData) return 0;
-          
-          const isSolar = meterAssignments.get(meterId) === "solar_energy" || meterData.assignment === 'solar';
-          const value = meterData.totalKwh || 0;
-          // Solar meters subtract from the total instead of adding
-          return isSolar ? -value : value;
-        }
-        
-        // If this meter has children, recursively sum only its leaf descendants
-        return children.reduce((sum, childId) => {
-          return sum + getLeafMeterSum(childId, visited);
-        }, 0);
-      };
-      
-      // Helper to aggregate columnTotals from leaf meters
-      const getLeafColumnTotals = (meterId: string, visited = new Set<string>()): Record<string, number> => {
-        if (visited.has(meterId)) return {};
-        visited.add(meterId);
-        
-        const children = meterConnectionsMap.get(meterId) || [];
-        
-        if (children.length === 0) {
-          const meterData = meterMap.get(meterId);
-          return meterData?.columnTotals || {};
-        }
-        
-        const aggregated: Record<string, number> = {};
-        children.forEach(childId => {
-          const childTotals = getLeafColumnTotals(childId, new Set(visited));
-          Object.entries(childTotals).forEach(([key, value]) => {
-            aggregated[key] = (aggregated[key] || 0) + value;
-          });
-        });
-        return aggregated;
-      };
-      
-      // Helper to get max of columnMaxValues from leaf meters
-      const getLeafColumnMaxValues = (meterId: string, visited = new Set<string>()): Record<string, number> => {
-        if (visited.has(meterId)) return {};
-        visited.add(meterId);
-        
-        const children = meterConnectionsMap.get(meterId) || [];
-        
-        if (children.length === 0) {
-          const meterData = meterMap.get(meterId);
-          return meterData?.columnMaxValues || {};
-        }
-        
-        const aggregated: Record<string, number> = {};
-        children.forEach(childId => {
-          const childMaxValues = getLeafColumnMaxValues(childId, new Set(visited));
-          Object.entries(childMaxValues).forEach(([key, value]) => {
-            aggregated[key] = Math.max(aggregated[key] || 0, value);
-          });
-        });
-        return aggregated;
-      };
-      
-      // Calculate hierarchical total for each meter that has children
-      allMeters.forEach(meter => {
-        const childIds = meterConnectionsMap.get(meter.id) || [];
-        if (childIds.length > 0) {
-          const hierarchicalTotal = childIds.reduce((sum, childId) => {
-            return sum + getLeafMeterSum(childId);
-          }, 0);
-          hierarchicalTotals.set(meter.id, hierarchicalTotal);
-          
-          // Aggregate column totals and max values for parent meters
-          hierarchicalColumnTotals.set(meter.id, getLeafColumnTotals(meter.id));
-          hierarchicalColumnMaxValues.set(meter.id, getLeafColumnMaxValues(meter.id));
-        }
-      });
+      // 3. Calculate hierarchical totals using consolidated hook function
+      const { hierarchicalTotals, hierarchicalColumnTotals, hierarchicalColumnMaxValues } =
+        execution.calculateHierarchicalTotals(allMeters, meterConnectionsMap);
       
       // Calculate revenue for parent meters using hierarchical totals
       if (reconciliationData.revenueData) {
