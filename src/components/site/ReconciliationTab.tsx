@@ -24,6 +24,25 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Switch } from "@/components/ui/switch";
 import { calculateMeterCost, calculateMeterCostAcrossPeriods } from "@/lib/costCalculation";
 import { isValueCorrupt, type CorrectedReading } from "@/lib/dataValidation";
+import {
+  fetchDateRanges as fetchDateRangesFromDb,
+  fetchBasicMeters as fetchBasicMetersFromDb,
+  fetchDocumentDateRanges as fetchDocumentDateRangesFromDb,
+  fetchHierarchicalDataFromReadings,
+  fetchMeterCsvFilesInfo as fetchMeterCsvFilesInfoFromDb,
+  checkHierarchicalCsvCoverage,
+  getMetersWithUploadedCsvs,
+  fetchSchematicConnections as fetchSchematicConnectionsFromDb,
+  getFullDateTime,
+  getHierarchyDepth,
+  sortParentMetersByDepth,
+  deriveConnectionsFromIndents as deriveConnectionsFromIndentsUtil,
+  isMeterVisible as isMeterVisibleUtil,
+  generateHierarchicalCsvForMeter as generateHierarchicalCsvForMeterUtil,
+  applyColumnSettingsToHierarchicalData as applyColumnSettingsUtil,
+  type MeterConnection,
+  type HierarchicalCsvResult,
+} from "@/lib/reconciliation";
 
 interface ReconciliationTabProps {
   siteId: string;
@@ -349,25 +368,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
 
   // Derive parent-child connections from indent levels and meter order
   const deriveConnectionsFromIndents = () => {
-    const connections: { parent_meter_id: string; child_meter_id: string }[] = [];
-    
-    availableMeters.forEach((meter, index) => {
-      const indentLevel = meterIndentLevels.get(meter.id) || 0;
-      
-      if (indentLevel > 0) {
-        // Find parent: closest preceding meter with indent level - 1
-        for (let i = index - 1; i >= 0; i--) {
-          const prevMeter = availableMeters[i];
-          const prevIndent = meterIndentLevels.get(prevMeter.id) || 0;
-          if (prevIndent === indentLevel - 1) {
-            connections.push({ parent_meter_id: prevMeter.id, child_meter_id: meter.id });
-            break;
-          }
-        }
-      }
-    });
-    
-    return connections;
+    return deriveConnectionsFromIndentsUtil(availableMeters, meterIndentLevels);
   };
 
   // Manual save function for meter settings
@@ -699,44 +700,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
   // Fetch document date ranges (Municipal and Tenant Bills)
   const fetchDocumentDateRanges = async () => {
     setIsLoadingDocuments(true);
-    const { data, error } = await supabase
-      .from('site_documents')
-      .select(`
-        id,
-        document_type,
-        file_name,
-        document_extractions (
-          period_start,
-          period_end
-        )
-      `)
-      .eq('site_id', siteId)
-      .in('document_type', ['municipal_account', 'tenant_bill'])
-      .not('document_extractions.period_start', 'is', null)
-      .not('document_extractions.period_end', 'is', null);
-
-    if (error) {
-      console.error("Error fetching document date ranges:", error);
-      setIsLoadingDocuments(false);
-      return;
-    }
-
-    if (data) {
-      const ranges = data
-        .filter(doc => doc.document_extractions && doc.document_extractions.length > 0)
-        .map(doc => ({
-          id: doc.id,
-          document_type: doc.document_type,
-          file_name: doc.file_name,
-          period_start: doc.document_extractions[0].period_start,
-          period_end: doc.document_extractions[0].period_end,
-        }))
-        .sort((a, b) => {
-          return new Date(b.period_start).getTime() - new Date(a.period_start).getTime();
-        });
-
-      setDocumentDateRanges(ranges);
-    }
+    const ranges = await fetchDocumentDateRangesFromDb(siteId);
+    setDocumentDateRanges(ranges);
     setIsLoadingDocuments(false);
   };
 
@@ -744,41 +709,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
   const fetchDateRanges = async () => {
     try {
       setIsLoadingDateRanges(true);
-      
-      // Get all meter IDs for this site first
-      const { data: meterIds } = await supabase
-        .from("meters")
-        .select("id")
-        .eq("site_id", siteId);
-      
-      if (!meterIds || meterIds.length === 0) {
-        setTotalDateRange({ earliest: null, latest: null });
-        setIsLoadingDateRanges(false);
-        return;
-      }
-      
-      const ids = meterIds.map(m => m.id);
-      
-      // Get earliest reading across all site meters
-      const { data: earliestData } = await supabase
-        .from("meter_readings")
-        .select("reading_timestamp")
-        .in("meter_id", ids)
-        .order("reading_timestamp", { ascending: true })
-        .limit(1);
-      
-      // Get latest reading across all site meters
-      const { data: latestData } = await supabase
-        .from("meter_readings")
-        .select("reading_timestamp")
-        .in("meter_id", ids)
-        .order("reading_timestamp", { ascending: false })
-        .limit(1);
-      
-      const earliest = earliestData?.[0] ? new Date(earliestData[0].reading_timestamp) : null;
-      const latest = latestData?.[0] ? new Date(latestData[0].reading_timestamp) : null;
-      
-      setTotalDateRange({ earliest, latest });
+      const range = await fetchDateRangesFromDb(siteId);
+      setTotalDateRange(range);
     } catch (error) {
       console.error("Error fetching date ranges:", error);
     } finally {
@@ -1250,18 +1182,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
 
   // Check if a meter is visible based on hierarchy
   const isMeterVisible = (meterId: string) => {
-    // Find parent of this meter
-    const parentId = Array.from(meterConnectionsMap.entries())
-      .find(([_, children]) => children.includes(meterId))?.[0];
-    
-    // If no parent, always visible
-    if (!parentId) return true;
-    
-    // If has parent, check if parent is expanded
-    if (!expandedMeters.has(parentId)) return false;
-    
-    // Recursively check if all ancestors are visible
-    return isMeterVisible(parentId);
+    return isMeterVisibleUtil(meterId, meterConnectionsMap, expandedMeters);
   };
 
   const handleIndentMeter = (meterId: string) => {
@@ -1309,55 +1230,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
   };
   
   // Fetch connections from schematic_lines metadata as fallback when meter_connections is empty
-  const fetchSchematicConnections = async (): Promise<Array<{ parent_meter_id: string; child_meter_id: string }>> => {
-    try {
-      // Get all schematics for this site
-      const { data: schematics, error: schematicsError } = await supabase
-        .from('schematics')
-        .select('id')
-        .eq('site_id', siteId);
-      
-      if (schematicsError || !schematics?.length) {
-        console.log('No schematics found for site');
-        return [];
-      }
-      
-      // Get schematic_lines with connection metadata
-      const { data: lines, error: linesError } = await supabase
-        .from('schematic_lines')
-        .select('metadata')
-        .in('schematic_id', schematics.map(s => s.id));
-      
-      if (linesError || !lines) {
-        console.error('Error fetching schematic lines:', linesError);
-        return [];
-      }
-      
-      // Extract unique parent-child pairs from metadata
-      const connections: Array<{ parent_meter_id: string; child_meter_id: string }> = [];
-      const seenPairs = new Set<string>();
-      
-      lines.forEach(line => {
-        const metadata = line.metadata as any;
-        // Schematic lines are drawn from child to parent, so field names are inverted
-        const actualParentId = metadata?.child_meter_id;   // End of line = parent
-        const actualChildId = metadata?.parent_meter_id;   // Start of line = child
-        
-        if (actualParentId && actualChildId) {
-          const pairKey = `${actualParentId}-${actualChildId}`;
-          if (!seenPairs.has(pairKey)) {
-            seenPairs.add(pairKey);
-            connections.push({ parent_meter_id: actualParentId, child_meter_id: actualChildId });
-          }
-        }
-      });
-      
-      console.log(`Found ${connections.length} connections from schematic_lines`);
-      return connections;
-    } catch (error) {
-      console.error('Error fetching schematic connections:', error);
-      return [];
-    }
+  const fetchSchematicConnections = async (): Promise<MeterConnection[]> => {
+    return fetchSchematicConnectionsFromDb(siteId);
   };
   
   // Reset meter hierarchy to database defaults (restore from schematic connections)
@@ -3982,33 +3856,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
   // Fetch available CSV files info for all meters
   const fetchMeterCsvFilesInfo = async (meterIds: string[]) => {
     if (meterIds.length === 0) return;
-    
-    try {
-      const { data, error } = await supabase
-        .from('meter_csv_files')
-        .select('meter_id, file_path, parse_status')
-        .in('meter_id', meterIds)
-        .in('parse_status', ['parsed', 'generated']);
-      
-      if (error) {
-        console.error('Error fetching CSV files info:', error);
-        return;
-      }
-      
-      const map = new Map<string, { parsed?: string; generated?: string }>();
-      data?.forEach(file => {
-        const existing = map.get(file.meter_id) || {};
-        if (file.parse_status === 'parsed') {
-          existing.parsed = file.file_path;
-        } else if (file.parse_status === 'generated') {
-          existing.generated = file.file_path;
-        }
-        map.set(file.meter_id, existing);
-      });
-      setMeterCsvFilesInfo(map);
-    } catch (error) {
-      console.error('Error fetching CSV files info:', error);
-    }
+    const map = await fetchMeterCsvFilesInfoFromDb(meterIds);
+    setMeterCsvFilesInfo(map);
   };
 
   const downloadAllMetersCSV = async () => {
