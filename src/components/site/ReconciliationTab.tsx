@@ -2589,7 +2589,6 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       const fullDateTimeTo = getFullDateTime(dateTo, timeTo);
 
       // ===== STEP 0: Fetch fresh meter connections from database =====
-      // This ensures we have all parent-child relationships before detecting parent meters
       console.log('Fetching fresh meter connections from database...');
       const { data: freshConnections, error: connError } = await supabase
         .from('meter_connections')
@@ -2624,35 +2623,56 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       setMeterConnectionsMap(freshConnectionsMap);
 
       console.log(`Fresh meter connections loaded: ${freshConnectionsMap.size} parent meters`);
-      console.log('Parent meter IDs from fresh connections:', Array.from(freshConnectionsMap.keys()));
       
-      // Debug: Log each parent and its children
-      freshConnectionsMap.forEach((children, parentId) => {
-        const parentMeter = availableMeters.find(m => m.id === parentId);
-        const childMeters = children.map(childId => {
-          const child = availableMeters.find(m => m.id === childId);
-          return child?.meter_number || childId;
-        });
-        console.log(`Parent ${parentMeter?.meter_number || parentId}: ${children.length} children:`, childMeters);
-      });
+      // ===== STEP 0.5: Clear ALL hierarchical_meter_readings for this site =====
+      console.log('Clearing ALL hierarchical_meter_readings for site...');
+      const siteMetersIds = availableMeters.map(m => m.id);
+      
+      const { error: clearError } = await supabase
+        .from('hierarchical_meter_readings')
+        .delete()
+        .in('meter_id', siteMetersIds)
+        .gte('reading_timestamp', fullDateTimeFrom)
+        .lte('reading_timestamp', fullDateTimeTo);
+      
+      if (clearError) {
+        console.warn('Failed to clear hierarchical_meter_readings:', clearError);
+      } else {
+        console.log('Cleared hierarchical_meter_readings for date range');
+      }
 
-      // ===== STEP 1: Generate hierarchical CSVs =====
-      const allMetersForCsvCheck = availableMeters;
-      console.log(`Total meters available: ${allMetersForCsvCheck.length}`);
-      console.log('All meter numbers:', allMetersForCsvCheck.map(m => m.meter_number));
+      // ===== STEP 1: Copy ALL leaf meters upfront =====
+      console.log('STEP 1: Copying ALL leaf meters to hierarchical_meter_readings...');
+      toast.info('Copying leaf meter data...');
       
-      // Use fresh connections map for filtering
+      const { data: copyResult, error: copyError } = await supabase.functions.invoke('generate-hierarchical-csv', {
+        body: {
+          siteId,
+          dateFrom: fullDateTimeFrom,
+          dateTo: fullDateTimeTo,
+          copyLeafMetersOnly: true
+        }
+      });
+      
+      if (copyError) {
+        throw new Error(`Failed to copy leaf meters: ${copyError.message}`);
+      }
+      
+      if (!copyResult?.success) {
+        throw new Error(copyResult?.error || 'Failed to copy leaf meters');
+      }
+      
+      console.log(`✅ Copied ${copyResult.leafMetersCopied} leaf meters (${copyResult.totalReadingsCopied} readings)`);
+      toast.success(`Copied ${copyResult.totalReadingsCopied} leaf meter readings`);
+
+      // ===== STEP 2: Generate hierarchical CSVs for parent meters =====
+      const allMetersForCsvCheck = availableMeters;
       const parentMetersForCsv = allMetersForCsvCheck.filter(meter => {
         const children = freshConnectionsMap.get(meter.id);
-        const isParent = children && children.length > 0;
-        if (isParent) {
-          console.log(`✓ ${meter.meter_number} IS a parent (${children.length} children)`);
-        }
-        return isParent;
+        return children && children.length > 0;
       });
 
-      console.log(`Detected ${parentMetersForCsv.length} parent meters for CSV generation:`, 
-        parentMetersForCsv.map(m => m.meter_number));
+      console.log(`Detected ${parentMetersForCsv.length} parent meters for CSV generation`);
 
       const csvResults = new Map<string, { totalKwh: number; columnTotals: Record<string, number>; columnMaxValues: Record<string, number>; rowCount: number }>();
       const allCorrections = new Map<string, Array<any>>();
@@ -2669,10 +2689,9 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         // Check which parent meters have their own uploaded CSVs
         const parentMeterIds = sortedParentMeters.map(m => m.id);
         metersWithUploadedCsvs = await getMetersWithUploadedCsvs(parentMeterIds);
-        console.log(`Parent meters with uploaded CSVs (will use uploaded data): ${metersWithUploadedCsvs.size}`, 
-          Array.from(metersWithUploadedCsvs));
+        console.log(`Parent meters with uploaded CSVs: ${metersWithUploadedCsvs.size}`);
 
-        // Delete old generated CSVs to ensure fresh data (match by file name pattern)
+        // Delete old generated CSVs to ensure fresh data
         const { error: deleteError } = await supabase
           .from('meter_csv_files')
           .delete()
@@ -2681,8 +2700,6 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         
         if (deleteError) {
           console.warn('Failed to delete old generated CSVs:', deleteError);
-        } else {
-          console.log('Deleted old generated CSVs to ensure fresh data');
         }
         
         // Generate CSVs sequentially in bottom-up order
@@ -2714,34 +2731,32 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
               console.log(`📝 ${result.corrections.length} corrections for ${parentMeter.meter_number}`);
             }
 
-              // Parse the generated CSV into hierarchical_meter_readings table
-              if (result.requiresParsing && result.csvFileId) {
-                console.log(`Parsing generated CSV for ${parentMeter.meter_number} into hierarchical_meter_readings...`);
-                
-                try {
-                  // No need to delete old readings - generate-hierarchical-csv already cleared the table
-
-                  const { error: parseError, data: parseData } = await supabase.functions.invoke('process-meter-csv', {
-                    body: {
-                      csvFileId: result.csvFileId,
-                      meterId: parentMeter.id,
-                      separator: ',',
-                      headerRowNumber: 2,
-                      columnMapping: result.columnMapping,
-                      targetTable: 'hierarchical_meter_readings' // NEW: insert into dedicated table
-                    }
-                  });
-                  
-                  if (parseError) {
-                    console.error(`Failed to parse generated CSV for ${parentMeter.meter_number}:`, parseError);
-                    toast.error(`Failed to parse CSV for ${parentMeter.meter_number}`);
-                  } else {
-                    console.log(`✅ Parsed generated CSV for ${parentMeter.meter_number}: ${parseData?.readingsInserted || 0} readings into hierarchical_meter_readings`);
+            // Parse the generated CSV into hierarchical_meter_readings table
+            if (result.requiresParsing && result.csvFileId) {
+              console.log(`Parsing generated CSV for ${parentMeter.meter_number} into hierarchical_meter_readings...`);
+              
+              try {
+                const { error: parseError, data: parseData } = await supabase.functions.invoke('process-meter-csv', {
+                  body: {
+                    csvFileId: result.csvFileId,
+                    meterId: parentMeter.id,
+                    separator: ',',
+                    headerRowNumber: 2,
+                    columnMapping: result.columnMapping,
+                    targetTable: 'hierarchical_meter_readings'
                   }
-                } catch (parseErr) {
-                  console.error(`Exception parsing CSV for ${parentMeter.meter_number}:`, parseErr);
+                });
+                
+                if (parseError) {
+                  console.error(`Failed to parse generated CSV for ${parentMeter.meter_number}:`, parseError);
+                  toast.error(`Failed to parse CSV for ${parentMeter.meter_number}`);
+                } else {
+                  console.log(`✅ Parsed generated CSV for ${parentMeter.meter_number}: ${parseData?.readingsInserted || 0} readings`);
                 }
+              } catch (parseErr) {
+                console.error(`Exception parsing CSV for ${parentMeter.meter_number}:`, parseErr);
               }
+            }
           }
           
           setCsvGenerationProgress({ current: i + 1, total: sortedParentMeters.length });
