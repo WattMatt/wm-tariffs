@@ -105,6 +105,11 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     onMeterConnectionsMapUpdate: meterHierarchy.setMeterConnectionsMap,
     onHierarchyCsvData: reconciliationState.setHierarchyCsvData,
     onHierarchyGenerated: reconciliationState.setHierarchyGenerated,
+    // Preview callbacks
+    onPreviewData: reconciliationState.setPreviewData,
+    onSelectedColumns: settings.setSelectedColumns,
+    onColumnOperations: settings.setColumnOperations,
+    onColumnFactors: settings.setColumnFactors,
   });
 
   // ==================== DESTRUCTURE HOOK VALUES ====================
@@ -1047,239 +1052,16 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     setIsLoadingPreview(true);
 
     try {
-      // Load full meter hierarchy if not already loaded
-      if (!metersFullyLoaded) {
-        toast.info("Loading meter hierarchy...");
-        await loadFullMeterHierarchy();
-      }
-
-      // First check if there's any data in the selected range
-      const fullDateTimeFrom = getFullDateTime(dateFrom, timeFrom);
-      const fullDateTimeTo = getFullDateTime(dateTo, timeTo);
-
-      const { count, error: countError } = await supabase
-        .from("meter_readings")
-        .select("*", { count: "exact", head: true })
-        .eq("meter_id", selectedMeterId)
-        .gte("reading_timestamp", fullDateTimeFrom)
-        .lte("reading_timestamp", fullDateTimeTo);
-
-      if (countError) throw countError;
-
-      if (count === 0) {
-        toast.error(
-          `No data found for the selected date range. This meter has data from ${
-            meterDateRange.earliest ? format(meterDateRange.earliest, "MMM dd, yyyy") : "N/A"
-          } to ${
-            meterDateRange.latest ? format(meterDateRange.latest, "MMM dd, yyyy") : "N/A"
-          }`
-        );
-        setIsLoadingPreview(false);
-        return;
-      }
-
-      // Fetch the selected meter
-      const { data: meterData, error: meterError } = await supabase
-        .from("meters")
-        .select("id, meter_number, meter_type")
-        .eq("id", selectedMeterId)
-        .single();
-
-      if (meterError || !meterData) {
-        toast.error("Failed to fetch selected meter");
-        setIsLoadingPreview(false);
-        return;
-      }
-
-      const selectedMeter = meterData;
-
-      // Fetch column mapping from CSV file
-      const { data: csvFile, error: csvError } = await supabase
-        .from("meter_csv_files")
-        .select("column_mapping")
-        .eq("meter_id", selectedMeter.id)
-        .not("column_mapping", "is", null)
-        .order("parsed_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (csvError) {
-        console.error("Error fetching column mapping:", csvError);
-      }
-
-      const columnMapping = csvFile?.column_mapping as any;
-
-      // Fetch ALL readings using pagination (Supabase has 1000-row server limit)
-      let allReadings: any[] = [];
-      let from = 0;
-      const pageSize = 1000;
-      let hasMore = true;
-
-      while (hasMore) {
-        const { data: pageData, error: readingsError } = await supabase
-          .from("meter_readings")
-          .select("*")
-          .eq("meter_id", selectedMeter.id)
-          .gte("reading_timestamp", fullDateTimeFrom)
-          .lte("reading_timestamp", fullDateTimeTo)
-          .order("reading_timestamp", { ascending: true })
-          .range(from, from + pageSize - 1);
-
-        if (readingsError) {
-          toast.error(`Failed to fetch readings: ${readingsError.message}`);
-          setIsLoadingPreview(false);
-          return;
-        }
-
-        if (pageData && pageData.length > 0) {
-          allReadings = [...allReadings, ...pageData];
-          from += pageSize;
-          hasMore = pageData.length === pageSize; // Continue if we got a full page
-        } else {
-          hasMore = false;
-        }
-      }
-
-      const readings = allReadings;
-
-      if (!readings || readings.length === 0) {
-        toast.error("No readings found in selected date range");
-        setIsLoadingPreview(false);
-        return;
-      }
-
-      // Debug: Log actual number of readings fetched
-      console.log(`Preview: Fetched ${readings.length} readings for meter ${selectedMeter.meter_number}`);
-
-      // Extract available columns from column_mapping configuration
-      const availableColumns = new Set<string>();
-      if (columnMapping && columnMapping.renamedHeaders) {
-        // Use the renamed headers from the parsing configuration
-        Object.values(columnMapping.renamedHeaders).forEach((headerName: any) => {
-          if (headerName && typeof headerName === 'string') {
-            availableColumns.add(headerName);
-          }
-        });
-      } else if (readings.length > 0) {
-        // Fallback: extract from first reading's metadata if no column mapping
-        const metadata = readings[0].metadata as any;
-        if (metadata && metadata.imported_fields) {
-          Object.keys(metadata.imported_fields).forEach(key => {
-            availableColumns.add(key);
-          });
-        }
-      }
-
-      // Debug logging
-      console.log('Column Mapping:', columnMapping);
-      console.log('Available Columns:', Array.from(availableColumns));
-      console.log('Sample Reading Metadata:', readings[0]?.metadata);
-
-      // Auto-select all columns initially
-      setSelectedColumns(new Set(availableColumns));
-
-      // Calculate totals and store raw values for operations
-      const totalKwh = readings.reduce((sum, r) => sum + Number(r.kwh_value || 0), 0);
-      const columnTotals: Record<string, number> = {};
-      const columnValues: Record<string, number[]> = {};
-      
-      readings.forEach(reading => {
-        const metadata = reading.metadata as any;
-        const importedFields = metadata?.imported_fields || {};
-        Object.entries(importedFields).forEach(([key, value]) => {
-          const numValue = Number(value);
-          if (!isNaN(numValue) && value !== null && value !== '') {
-            // Store for sum operation
-            columnTotals[key] = (columnTotals[key] || 0) + numValue;
-            // Store raw values for other operations
-            if (!columnValues[key]) {
-              columnValues[key] = [];
-            }
-            columnValues[key].push(numValue);
-          }
-        });
-      });
-
-      setPreviewData({
-        meterNumber: selectedMeter.meter_number,
-        meterType: selectedMeter.meter_type,
-        totalReadings: readings.length,
-        firstReading: readings[0],
-        lastReading: readings[readings.length - 1],
-        sampleReadings: readings.slice(0, 5),
-        availableColumns: Array.from(availableColumns),
-        totalKwh,
-        columnTotals,
-        columnValues
-      });
-
-      // Restore saved settings if available - check pre-loaded settings first
-      try {
-        const preLoadedSettings = (window as any).__savedColumnSettings;
-        
-        if (preLoadedSettings) {
-          // Use pre-loaded settings from mount
-          if (preLoadedSettings.selected_columns && preLoadedSettings.selected_columns.length > 0) {
-            const validSelectedColumns = preLoadedSettings.selected_columns.filter((col: string) => 
-              availableColumns.has(col)
-            );
-            if (validSelectedColumns.length > 0) {
-              setSelectedColumns(new Set(validSelectedColumns));
-            }
-          }
-
-          if (preLoadedSettings.column_operations) {
-            const operations = new Map(Object.entries(preLoadedSettings.column_operations || {}) as [string, string][]);
-            setColumnOperations(operations);
-          }
-
-          if (preLoadedSettings.column_factors) {
-            const factors = new Map(Object.entries(preLoadedSettings.column_factors || {}) as [string, string][]);
-            setColumnFactors(factors);
-          }
-
-          // Clear after use
-          delete (window as any).__savedColumnSettings;
-          toast.success("Restored previous column settings");
-        } else {
-          // Fall back to database call if no pre-loaded settings
-          const { data: savedSettings } = await supabase
-            .from('site_reconciliation_settings')
-            .select('*')
-            .eq('site_id', siteId)
-            .maybeSingle();
-
-          if (savedSettings) {
-            if (savedSettings.selected_columns && savedSettings.selected_columns.length > 0) {
-              const validSelectedColumns = savedSettings.selected_columns.filter((col: string) => 
-                availableColumns.has(col)
-              );
-              if (validSelectedColumns.length > 0) {
-                setSelectedColumns(new Set(validSelectedColumns));
-              }
-            }
-
-            if (savedSettings.column_operations) {
-              const operations = new Map(Object.entries(savedSettings.column_operations || {}) as [string, string][]);
-              setColumnOperations(operations);
-            }
-
-            if (savedSettings.column_factors) {
-              const factors = new Map(Object.entries(savedSettings.column_factors || {}) as [string, string][]);
-              setColumnFactors(factors);
-            }
-
-            toast.success("Restored previous settings");
-          }
-        }
-      } catch (error) {
-        console.error("Error restoring settings:", error);
-      }
-
-      toast.success("Preview loaded successfully");
-    } catch (error) {
-      console.error("Preview error:", error);
-      toast.error("Failed to load preview");
+      await runner.runPreview(
+        dateFrom,
+        dateTo,
+        timeFrom,
+        timeTo,
+        selectedMeterId,
+        meterDateRange,
+        loadFullMeterHierarchy,
+        metersFullyLoaded
+      );
     } finally {
       setIsLoadingPreview(false);
     }
