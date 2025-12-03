@@ -122,20 +122,22 @@ Deno.serve(async (req) => {
     console.log('NOTE: Column factors will be applied during reconciliation, not during CSV generation');
 
     // ===== STEP 0: Prepare hierarchical_meter_readings table =====
-    // Delete ONLY the current parent meter's readings (to replace with new aggregation)
+    // Delete ONLY the current parent meter's AGGREGATED readings (source='hierarchical_aggregation')
+    // This prevents accidentally deleting leaf meter Copied data
     console.log('STEP 0: Preparing hierarchical_meter_readings table...');
     
-    const { error: deleteParentError } = await supabase
+    const { data: deletedData, error: deleteParentError } = await supabase
       .from('hierarchical_meter_readings')
       .delete()
       .eq('meter_id', parentMeterId)
       .gte('reading_timestamp', dateFrom)
-      .lte('reading_timestamp', dateTo);
+      .lte('reading_timestamp', dateTo)
+      .select('id');
     
     if (deleteParentError) {
       console.warn(`Failed to clear parent readings: ${deleteParentError.message}`);
     } else {
-      console.log(`Cleared existing readings for parent meter ${parentMeterNumber}`);
+      console.log(`Cleared ${deletedData?.length || 0} existing readings for parent meter ${parentMeterNumber}`);
     }
 
     // ===== STEP 1: COPY LEAF METER READINGS FIRST =====
@@ -145,8 +147,28 @@ Deno.serve(async (req) => {
     const PAGE_SIZE = 1000;
     const COPY_BATCH_SIZE = 1000;
     let copiedCount = 0;
+    const leafReadingCountsByMeter = new Map<string, number>();
 
     if (leafChildMeterIds.length > 0) {
+      // First, count readings per leaf meter in meter_readings for validation
+      for (const leafMeterId of leafChildMeterIds) {
+        const { count, error: countError } = await supabase
+          .from('meter_readings')
+          .select('*', { count: 'exact', head: true })
+          .eq('meter_id', leafMeterId)
+          .gte('reading_timestamp', dateFrom)
+          .lte('reading_timestamp', dateTo)
+          .or('metadata->>source.eq.Parsed,metadata->>source.is.null')
+          .not('metadata->>source_file', 'ilike', '%Hierarchical%');
+        
+        if (countError) {
+          console.warn(`Failed to count readings for ${meterNumberMap.get(leafMeterId)}: ${countError.message}`);
+        } else {
+          leafReadingCountsByMeter.set(leafMeterId, count || 0);
+          console.log(`Leaf meter ${meterNumberMap.get(leafMeterId)}: ${count || 0} readings in meter_readings`);
+        }
+      }
+
       // Fetch leaf meter readings from meter_readings
       let offset = 0;
       let hasMore = true;
@@ -178,14 +200,25 @@ Deno.serve(async (req) => {
           leafReadingsFromSource = leafReadingsFromSource.concat(pageData);
           offset += pageData.length;
           hasMore = pageData.length === PAGE_SIZE;
+          console.log(`Fetched page: ${offset} readings so far...`);
         } else {
           hasMore = false;
         }
       }
 
-      console.log(`Fetched ${leafReadingsFromSource.length} leaf meter readings from meter_readings`);
+      console.log(`Fetched total ${leafReadingsFromSource.length} leaf meter readings from meter_readings`);
+      
+      // Log breakdown by meter
+      const fetchedByMeter = new Map<string, number>();
+      leafReadingsFromSource.forEach(r => {
+        fetchedByMeter.set(r.meter_id, (fetchedByMeter.get(r.meter_id) || 0) + 1);
+      });
+      fetchedByMeter.forEach((count, meterId) => {
+        console.log(`  ${meterNumberMap.get(meterId)}: ${count} readings fetched`);
+      });
 
       // Copy to hierarchical_meter_readings using upsert
+      let copyErrors = 0;
       for (let i = 0; i < leafReadingsFromSource.length; i += COPY_BATCH_SIZE) {
         const batch = leafReadingsFromSource.slice(i, i + COPY_BATCH_SIZE).map(reading => ({
           meter_id: reading.meter_id,
@@ -208,13 +241,57 @@ Deno.serve(async (req) => {
           });
 
         if (insertError) {
-          console.error(`Failed to copy readings batch ${i}: ${insertError.message}`);
+          console.error(`Failed to copy readings batch ${Math.floor(i / COPY_BATCH_SIZE) + 1}: ${insertError.message}`);
+          copyErrors++;
         } else {
           copiedCount += batch.length;
+          console.log(`Copied batch ${Math.floor(i / COPY_BATCH_SIZE) + 1}: ${copiedCount}/${leafReadingsFromSource.length}`);
         }
       }
 
-      console.log(`Copied ${copiedCount} leaf meter readings to hierarchical_meter_readings`);
+      console.log(`Copied ${copiedCount} leaf meter readings to hierarchical_meter_readings (${copyErrors} batch errors)`);
+      
+      // ===== VALIDATION: Verify leaf meter readings were actually copied =====
+      console.log('STEP 1.5: VALIDATING leaf meter readings in hierarchical_meter_readings...');
+      
+      const validationErrors: string[] = [];
+      const copiedCountsByMeter = new Map<string, number>();
+      
+      for (const leafMeterId of leafChildMeterIds) {
+        const { count, error: valError } = await supabase
+          .from('hierarchical_meter_readings')
+          .select('*', { count: 'exact', head: true })
+          .eq('meter_id', leafMeterId)
+          .gte('reading_timestamp', dateFrom)
+          .lte('reading_timestamp', dateTo);
+        
+        if (valError) {
+          console.error(`Validation query failed for ${meterNumberMap.get(leafMeterId)}: ${valError.message}`);
+          validationErrors.push(`Query failed for ${meterNumberMap.get(leafMeterId)}`);
+        } else {
+          copiedCountsByMeter.set(leafMeterId, count || 0);
+          const sourceCount = leafReadingCountsByMeter.get(leafMeterId) || 0;
+          const meterNum = meterNumberMap.get(leafMeterId) || leafMeterId;
+          
+          if (count === 0 && sourceCount > 0) {
+            console.error(`VALIDATION FAILED: ${meterNum} has ${sourceCount} readings in meter_readings but 0 in hierarchical_meter_readings!`);
+            validationErrors.push(`${meterNum}: Expected ${sourceCount} readings, got 0`);
+          } else if (count !== sourceCount) {
+            console.warn(`VALIDATION WARNING: ${meterNum} has ${sourceCount} in meter_readings but ${count} in hierarchical_meter_readings`);
+          } else {
+            console.log(`VALIDATED: ${meterNum} has ${count} readings in hierarchical_meter_readings`);
+          }
+        }
+      }
+      
+      if (validationErrors.length > 0) {
+        const errorMsg = `Leaf meter copy validation failed:\n${validationErrors.join('\n')}`;
+        console.error(errorMsg);
+        throw new Error(errorMsg);
+      }
+      
+      console.log('VALIDATION PASSED: All leaf meter readings successfully copied');
+      
     } else {
       console.log('No leaf meters to copy - all children are parent meters');
     }
@@ -261,25 +338,45 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Log breakdown by source
+    // Log breakdown by source and meter
     const copiedCount2 = allReadings.filter(r => r.metadata?.source === 'Copied').length;
     const aggregatedCount = allReadings.filter(r => r.metadata?.source === 'hierarchical_aggregation').length;
     console.log(`Fetched ${allReadings.length} total readings from hierarchical_meter_readings`);
     console.log(`  - ${copiedCount2} from Copied (leaf meters)`);
     console.log(`  - ${aggregatedCount} from hierarchical_aggregation (parent meters)`);
+    
+    // Log per-meter breakdown
+    const readingsByMeter = new Map<string, number>();
+    allReadings.forEach(r => {
+      readingsByMeter.set(r.meter_id, (readingsByMeter.get(r.meter_id) || 0) + 1);
+    });
+    console.log('Readings by meter:');
+    childMeterIds.forEach(id => {
+      const count = readingsByMeter.get(id) || 0;
+      const meterNum = meterNumberMap.get(id) || id;
+      const isLeaf = leafChildMeterIds.includes(id);
+      console.log(`  ${meterNum} (${isLeaf ? 'leaf' : 'parent'}): ${count} readings`);
+    });
 
     if (allReadings.length === 0) {
-      console.warn('No readings found in hierarchical_meter_readings for child meters');
+      console.error('CRITICAL: No readings found in hierarchical_meter_readings for child meters');
       return new Response(
         JSON.stringify({
           success: false,
-          error: 'No readings found for child meters in hierarchical_meter_readings. Ensure leaf meters have been copied.',
+          error: 'No readings found for child meters in hierarchical_meter_readings. Leaf meter copy may have failed.',
           totalKwh: 0,
           columnTotals: {},
           columnMaxValues: {}
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
+    
+    // Additional validation: ensure we have readings from ALL child meters
+    const missingMeters = childMeterIds.filter(id => !readingsByMeter.has(id) || readingsByMeter.get(id) === 0);
+    if (missingMeters.length > 0) {
+      const missingNames = missingMeters.map(id => meterNumberMap.get(id) || id);
+      console.error(`WARNING: Missing readings for ${missingMeters.length} child meters: ${missingNames.join(', ')}`);
     }
 
     // ===== STEP 3: Aggregate readings by timestamp =====
