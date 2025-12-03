@@ -31,14 +31,11 @@ import {
   fetchHierarchicalDataFromReadings,
   fetchMeterCsvFilesInfo as fetchMeterCsvFilesInfoFromDb,
   checkHierarchicalCsvCoverage,
-  getMetersWithUploadedCsvs,
   fetchSchematicConnections as fetchSchematicConnectionsFromDb,
   getFullDateTime,
   getHierarchyDepth,
-  sortParentMetersByDepth,
   deriveConnectionsFromIndents as deriveConnectionsFromIndentsUtil,
   isMeterVisible as isMeterVisibleUtil,
-  generateHierarchicalCsvForMeter as generateHierarchicalCsvForMeterUtil,
   applyColumnSettingsToHierarchicalData as applyColumnSettingsUtil,
   type MeterConnection,
   type HierarchicalCsvResult,
@@ -102,6 +99,12 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     onEnergyProgress: reconciliationState.setEnergyProgress,
     onRevenueProgress: reconciliationState.setRevenueProgress,
     setIsCalculatingRevenue: reconciliationState.setIsCalculatingRevenue,
+    // Hierarchy generation callbacks
+    onCsvGenerationProgress: reconciliationState.setCsvGenerationProgress,
+    onMeterCorrections: reconciliationState.setMeterCorrections,
+    onMeterConnectionsMapUpdate: meterHierarchy.setMeterConnectionsMap,
+    onHierarchyCsvData: reconciliationState.setHierarchyCsvData,
+    onHierarchyGenerated: reconciliationState.setHierarchyGenerated,
   });
 
   // ==================== DESTRUCTURE HOOK VALUES ====================
@@ -1297,277 +1300,21 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       return;
     }
 
-    if (!previewDataRef.current) {
-      toast.error("Please preview data first");
-      return;
-    }
-
-    if (selectedColumnsRef.current.size === 0) {
-      toast.error("Please select at least one column to calculate");
-      return;
-    }
-
     setIsGeneratingHierarchy(true);
-    setCsvGenerationProgress({ current: 0, total: 0 });
-    setMeterCorrections(new Map());
     cancelReconciliationRef.current = false;
 
     try {
-      const fullDateTimeFrom = getFullDateTime(dateFrom, timeFrom);
-      const fullDateTimeTo = getFullDateTime(dateTo, timeTo);
-
-      // ===== STEP 0: Fetch fresh meter connections from database =====
-      console.log('Fetching fresh meter connections from database...');
-      const { data: freshConnections, error: connError } = await supabase
-        .from('meter_connections')
-        .select(`
-          id,
-          parent_meter_id,
-          child_meter_id,
-          parent:meters!meter_connections_parent_meter_id_fkey(id, site_id),
-          child:meters!meter_connections_child_meter_id_fkey(id, site_id)
-        `);
-
-      if (connError) {
-        console.error('Error fetching meter connections:', connError);
-        throw new Error('Failed to fetch meter connections');
-      }
-
-      // Filter to only connections where BOTH meters are in the current site
-      const siteConnections = freshConnections?.filter(conn => 
-        conn.parent?.site_id === siteId && conn.child?.site_id === siteId
-      ) || [];
-
-      // Build fresh connections map
-      const freshConnectionsMap = new Map<string, string[]>();
-      siteConnections.forEach(conn => {
-        if (!freshConnectionsMap.has(conn.parent_meter_id)) {
-          freshConnectionsMap.set(conn.parent_meter_id, []);
-        }
-        freshConnectionsMap.get(conn.parent_meter_id)!.push(conn.child_meter_id);
-      });
-
-      // Update state with fresh connections
-      setMeterConnectionsMap(freshConnectionsMap);
-
-      console.log(`Fresh meter connections loaded: ${freshConnectionsMap.size} parent meters`);
-      
-      // ===== STEP 0.5: Clear ALL hierarchical_meter_readings for this site =====
-      console.log('Clearing ALL hierarchical_meter_readings for site...');
-      const siteMetersIds = availableMeters.map(m => m.id);
-      
-      const { error: clearError } = await supabase
-        .from('hierarchical_meter_readings')
-        .delete()
-        .in('meter_id', siteMetersIds)
-        .gte('reading_timestamp', fullDateTimeFrom)
-        .lte('reading_timestamp', fullDateTimeTo);
-      
-      if (clearError) {
-        console.warn('Failed to clear hierarchical_meter_readings:', clearError);
-      } else {
-        console.log('Cleared hierarchical_meter_readings for date range');
-      }
-
-      // ===== STEP 1: Copy ALL leaf meters upfront =====
-      console.log('STEP 1: Copying ALL leaf meters to hierarchical_meter_readings...');
-      console.log('=== FRONTEND DEBUG: About to call copyLeafMetersOnly ===');
-      const copyBody = {
-        siteId,
-        dateFrom: fullDateTimeFrom,
-        dateTo: fullDateTimeTo,
-        copyLeafMetersOnly: true
-      };
-      console.log('=== FRONTEND DEBUG: Request body:', JSON.stringify(copyBody));
-      toast.info('Copying leaf meter data...');
-      
-      let copyResult: any;
-      let copyError: any;
-      try {
-        const response = await supabase.functions.invoke('generate-hierarchical-csv', {
-          body: copyBody
-        });
-        copyResult = response.data;
-        copyError = response.error;
-        console.log('=== FRONTEND DEBUG: copyLeafMetersOnly response ===', { copyResult, copyError });
-      } catch (e) {
-        console.error('=== FRONTEND DEBUG: copyLeafMetersOnly EXCEPTION ===', e);
-        throw e;
-      }
-      
-      if (copyError) {
-        throw new Error(`Failed to copy leaf meters: ${copyError.message}`);
-      }
-      
-      if (!copyResult?.success) {
-        throw new Error(copyResult?.error || 'Failed to copy leaf meters');
-      }
-      
-      console.log(`✅ Copied ${copyResult.leafMetersCopied} leaf meters (${copyResult.totalReadingsCopied} readings)`);
-      toast.success(`Copied ${copyResult.totalReadingsCopied} leaf meter readings`);
-
-      // ===== STEP 2: Generate hierarchical CSVs for parent meters =====
-      const allMetersForCsvCheck = availableMeters;
-      const parentMetersForCsv = allMetersForCsvCheck.filter(meter => {
-        const children = freshConnectionsMap.get(meter.id);
-        return children && children.length > 0;
-      });
-
-      console.log(`Detected ${parentMetersForCsv.length} parent meters for CSV generation`);
-
-      const csvResults = new Map<string, { totalKwh: number; columnTotals: Record<string, number>; columnMaxValues: Record<string, number>; rowCount: number }>();
-      const allCorrections = new Map<string, Array<any>>();
-      let metersWithUploadedCsvs = new Set<string>();
-
-      if (parentMetersForCsv.length > 0) {
-        const sortedParentMeters = sortParentMetersByDepth(parentMetersForCsv, freshConnectionsMap);
-        console.log(`Generating ${sortedParentMeters.length} hierarchical CSV file(s)...`);
-        console.log('Processing order:', sortedParentMeters.map(m => m.meter_number));
-        toast.info(`Generating ${sortedParentMeters.length} hierarchical profile(s)...`);
-        
-        setCsvGenerationProgress({ current: 0, total: sortedParentMeters.length });
-
-        // Check which parent meters have their own uploaded CSVs
-        const parentMeterIds = sortedParentMeters.map(m => m.id);
-        metersWithUploadedCsvs = await execution.getMetersWithUploadedCsvs(parentMeterIds);
-        console.log(`Parent meters with uploaded CSVs: ${metersWithUploadedCsvs.size}`);
-
-        // Delete old generated CSVs to ensure fresh data
-        const { error: deleteError } = await supabase
-          .from('meter_csv_files')
-          .delete()
-          .eq('site_id', siteId)
-          .ilike('file_name', '%Hierarchical%');
-        
-        if (deleteError) {
-          console.warn('Failed to delete old generated CSVs:', deleteError);
-        }
-        
-        // Generate CSVs sequentially in bottom-up order
-        for (let i = 0; i < sortedParentMeters.length; i++) {
-          if (cancelReconciliationRef.current) {
-            throw new Error('Hierarchy generation cancelled by user');
-          }
-          
-          const parentMeter = sortedParentMeters[i];
-          const childMeterIds = freshConnectionsMap.get(parentMeter.id) || [];
-          
-          const result = await runner.generateHierarchicalCsvForMeter(
-            parentMeter,
-            fullDateTimeFrom,
-            fullDateTimeTo,
-            childMeterIds
-          );
-          
-          if (result) {
-            csvResults.set(parentMeter.id, {
-              totalKwh: result.totalKwh,
-              columnTotals: result.columnTotals,
-              columnMaxValues: result.columnMaxValues,
-              rowCount: result.rowCount
-            });
-            
-            if (result.corrections && result.corrections.length > 0) {
-              allCorrections.set(parentMeter.id, result.corrections);
-              console.log(`📝 ${result.corrections.length} corrections for ${parentMeter.meter_number}`);
-            }
-
-            // Parse the generated CSV into hierarchical_meter_readings table
-            if (result.requiresParsing && result.csvFileId) {
-              console.log(`Parsing generated CSV for ${parentMeter.meter_number} into hierarchical_meter_readings...`);
-              
-              try {
-                const { error: parseError, data: parseData } = await supabase.functions.invoke('process-meter-csv', {
-                  body: {
-                    csvFileId: result.csvFileId,
-                    meterId: parentMeter.id,
-                    separator: ',',
-                    headerRowNumber: 2,
-                    columnMapping: result.columnMapping,
-                    targetTable: 'hierarchical_meter_readings'
-                  }
-                });
-                
-                if (parseError) {
-                  console.error(`Failed to parse generated CSV for ${parentMeter.meter_number}:`, parseError);
-                  toast.error(`Failed to parse CSV for ${parentMeter.meter_number}`);
-                } else {
-                  console.log(`✅ Parsed generated CSV for ${parentMeter.meter_number}: ${parseData?.readingsInserted || 0} readings`);
-                }
-              } catch (parseErr) {
-                console.error(`Exception parsing CSV for ${parentMeter.meter_number}:`, parseErr);
-              }
-            }
-          }
-          
-          setCsvGenerationProgress({ current: i + 1, total: sortedParentMeters.length });
-        }
-        
-        console.log('Hierarchy generation complete');
-        
-        // Propagate corrections to parents using fresh connections
-        const getAllDescendantCorrections = (meterId: string): CorrectedReading[] => {
-          const childIds = freshConnectionsMap.get(meterId) || [];
-          let descendantCorrections: CorrectedReading[] = [];
-          
-          for (const childId of childIds) {
-            const childCorrections = allCorrections.get(childId) || [];
-            const grandchildCorrections = getAllDescendantCorrections(childId);
-            descendantCorrections.push(...childCorrections, ...grandchildCorrections);
-          }
-          
-          return descendantCorrections;
-        };
-        
-        // Update allCorrections for each parent meter
-        const parentMeters = sortedParentMeters;
-        
-        for (const parentMeter of parentMeters) {
-          const existingCorrections = allCorrections.get(parentMeter.id) || [];
-          const descendantCorrections = getAllDescendantCorrections(parentMeter.id);
-          
-          // Deduplicate
-          const uniqueCorrections = [...existingCorrections];
-          for (const correction of descendantCorrections) {
-            const isDuplicate = uniqueCorrections.some(c =>
-              c.timestamp === correction.timestamp &&
-              c.originalSourceMeterId === correction.originalSourceMeterId &&
-              c.fieldName === correction.fieldName
-            );
-            if (!isDuplicate) {
-              uniqueCorrections.push(correction);
-            }
-          }
-          
-          if (uniqueCorrections.length > 0) {
-            allCorrections.set(parentMeter.id, uniqueCorrections);
-            console.log(`📊 ${parentMeter.meter_number} now has ${uniqueCorrections.length} corrections (propagated)`);
-          }
-        }
-        
-        setMeterCorrections(allCorrections);
-        setHierarchyCsvData(csvResults);
-        setHierarchyGenerated(true);
-        toast.success(`Generated ${sortedParentMeters.length} hierarchical CSV file(s)`);
-      } else {
-        toast.info("No parent meters found - no hierarchical CSVs needed");
-        setHierarchyGenerated(true);
-      }
-      
-    } catch (error: any) {
-      console.error("Error generating hierarchy:", error);
-      if (!cancelReconciliationRef.current) {
-        toast.error(`Failed to generate hierarchy: ${error.message}`);
-      } else {
-        toast.info("Hierarchy generation cancelled");
-      }
-      setHierarchyGenerated(false);
-      setHierarchyCsvData(new Map());
+      await runner.runHierarchyGeneration(
+        dateFrom,
+        dateTo,
+        timeFrom,
+        timeTo,
+        availableMeters
+      );
     } finally {
       setIsGeneratingHierarchy(false);
-      setCsvGenerationProgress({ current: 0, total: 0 });
     }
-  }, [dateFrom, dateTo, timeFrom, timeTo, availableMeters, siteId]);
+  }, [dateFrom, dateTo, timeFrom, timeTo, availableMeters, runner]);
 
   const handleReconcile = useCallback(async (enableRevenue?: boolean) => {
     if (!dateFrom || !dateTo) {
