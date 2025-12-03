@@ -2228,6 +2228,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       
       // 3. Apply the operation
       let result = rawSum;
+      let isMaxOperation = false;
+      
       switch (operation) {
         case 'sum':
           result = rawSum;
@@ -2236,23 +2238,29 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           result = rowCount > 0 ? rawSum / rowCount : 0;
           break;
         case 'max':
+          // Use the actual max value from csvColumnMaxValues
+          result = csvColumnMaxValues[column] ?? rawSum;
+          isMaxOperation = true;
+          break;
         case 'min':
-          // For hierarchical data, max/min can't be accurately computed from sums
-          // Fall back to sum for now - these would need per-timestamp tracking
+          // Min would need per-timestamp tracking - fall back to sum
           result = rawSum;
           break;
       }
       
-      // 4. Apply column factor - same as regular reconciliation
-      // Factors are applied here during reconciliation, NOT in the edge function
+      // 4. Apply column factor
       result = result * factor;
       
-      // 5. Store the processed value
-      processedColumnTotals[column] = result;
+      // 5. Store the processed value in the correct location
+      if (isMaxOperation) {
+        processedColumnMaxValues[column] = result;
+      } else {
+        processedColumnTotals[column] = result;
+      }
       
-      // 6. Track positive/negative for totalKwh calculations (exclude kVA columns)
+      // 6. Track positive/negative for totalKwh calculations (exclude kVA columns and max columns)
       const isKvaColumn = column.toLowerCase().includes('kva');
-      if (!isKvaColumn) {
+      if (!isKvaColumn && !isMaxOperation) {
         if (result > 0) {
           totalKwhPositive += result;
         } else if (result < 0) {
