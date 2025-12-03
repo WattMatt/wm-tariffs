@@ -2447,7 +2447,8 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           dateFrom: fullDateTimeFrom,
           dateTo: fullDateTimeTo,
           childMeterIds,
-          columns: dataColumns
+          columns: dataColumns,
+          meterAssociations: Object.fromEntries(meterAssignments) // Pass meter assignments for solar inversion
         }
       });
 
