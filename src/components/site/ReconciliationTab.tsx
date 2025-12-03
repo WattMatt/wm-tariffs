@@ -414,10 +414,13 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       });
       setMeterConnectionsMap(connectionsMap);
       
-      // Update meterParentInfo state
+      // Update meterParentInfo state - use meter_number not UUID
       const parentInfo = new Map<string, string>();
       newConnections.forEach(conn => {
-        parentInfo.set(conn.child_meter_id, conn.parent_meter_id);
+        const parentMeter = availableMeters.find(m => m.id === conn.parent_meter_id);
+        if (parentMeter) {
+          parentInfo.set(conn.child_meter_id, parentMeter.meter_number);
+        }
       });
       setMeterParentInfo(parentInfo);
       
