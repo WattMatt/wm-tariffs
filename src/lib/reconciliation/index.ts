@@ -44,3 +44,6 @@ export {
   downloadCsvFromStorage,
   getCsvStorageUrl,
 } from './csvGeneration';
+
+// Re-export hook types for convenience
+export type { MeterConnection, HierarchicalCsvResult, DateRange, DocumentDateRange } from './types';
