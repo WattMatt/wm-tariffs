@@ -72,6 +72,14 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const requestBody = await req.json() as HierarchicalCSVRequest;
+    
+    // DEBUG: Log raw request body immediately
+    console.log('=== RAW REQUEST BODY ===');
+    console.log('Full body:', JSON.stringify(requestBody));
+    console.log('copyLeafMetersOnly value:', requestBody.copyLeafMetersOnly);
+    console.log('copyLeafMetersOnly type:', typeof requestBody.copyLeafMetersOnly);
+    console.log('copyLeafMetersOnly truthy?:', !!requestBody.copyLeafMetersOnly);
+    
     const {
       parentMeterId,
       parentMeterNumber,
@@ -85,6 +93,7 @@ Deno.serve(async (req) => {
 
     // ===== MODE 1: COPY ALL LEAF METERS FOR SITE =====
     if (copyLeafMetersOnly) {
+      console.log('=== ENTERING COPY LEAF METERS MODE ===');
       console.log('=== COPY LEAF METERS ONLY MODE ===');
       console.log('Site ID:', siteId);
       console.log('Date range:', dateFrom, 'to', dateTo);
