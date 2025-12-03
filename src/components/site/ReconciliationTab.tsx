@@ -860,7 +860,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         return;
       }
 
-      // Fetch meter connections
+      // Fetch meter connections from meter_connections table
       const { data: connections, error: connectionsError } = await supabase
         .from("meter_connections")
         .select(`
@@ -875,9 +875,22 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       }
 
       // Filter to only connections where BOTH meters are in the current site
-      const siteConnections = connections?.filter(conn => 
+      let siteConnections = connections?.filter(conn => 
         conn.parent?.site_id === siteId && conn.child?.site_id === siteId
       ) || [];
+      
+      // If no connections in meter_connections table, fall back to schematic_lines
+      if (siteConnections.length === 0) {
+        console.log('No meter_connections found, falling back to schematic_lines');
+        const schematicConnections = await fetchSchematicConnections();
+        siteConnections = schematicConnections.map(conn => ({
+          parent_meter_id: conn.parent_meter_id,
+          child_meter_id: conn.child_meter_id,
+          parent: { site_id: siteId },
+          child: { site_id: siteId }
+        }));
+        console.log(`Using ${siteConnections.length} connections from schematic_lines`);
+      }
 
       // Build parent-child map for hierarchy
       const childrenMap = new Map<string, string[]>();
@@ -1295,16 +1308,123 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     saveIndentLevelsToStorage(newLevels); // Persist to localStorage
   };
   
-  // Reset meter hierarchy to database defaults
+  // Fetch connections from schematic_lines metadata as fallback when meter_connections is empty
+  const fetchSchematicConnections = async (): Promise<Array<{ parent_meter_id: string; child_meter_id: string }>> => {
+    try {
+      // Get all schematics for this site
+      const { data: schematics, error: schematicsError } = await supabase
+        .from('schematics')
+        .select('id')
+        .eq('site_id', siteId);
+      
+      if (schematicsError || !schematics?.length) {
+        console.log('No schematics found for site');
+        return [];
+      }
+      
+      // Get schematic_lines with connection metadata
+      const { data: lines, error: linesError } = await supabase
+        .from('schematic_lines')
+        .select('metadata')
+        .in('schematic_id', schematics.map(s => s.id));
+      
+      if (linesError || !lines) {
+        console.error('Error fetching schematic lines:', linesError);
+        return [];
+      }
+      
+      // Extract unique parent-child pairs from metadata
+      const connections: Array<{ parent_meter_id: string; child_meter_id: string }> = [];
+      const seenPairs = new Set<string>();
+      
+      lines.forEach(line => {
+        const metadata = line.metadata as any;
+        const parentId = metadata?.parent_meter_id;
+        const childId = metadata?.child_meter_id;
+        
+        if (parentId && childId) {
+          const pairKey = `${parentId}-${childId}`;
+          if (!seenPairs.has(pairKey)) {
+            seenPairs.add(pairKey);
+            connections.push({ parent_meter_id: parentId, child_meter_id: childId });
+          }
+        }
+      });
+      
+      console.log(`Found ${connections.length} connections from schematic_lines`);
+      return connections;
+    } catch (error) {
+      console.error('Error fetching schematic connections:', error);
+      return [];
+    }
+  };
+  
+  // Reset meter hierarchy to database defaults (restore from schematic connections)
   const handleResetHierarchy = async () => {
     clearIndentLevelsFromStorage();
     setMetersFullyLoaded(false);
-    setMeterConnectionsMap(new Map());
-    setMeterIndentLevels(new Map());
-    setMeterParentInfo(new Map());
-    toast.success("Meter hierarchy reset. Click Preview to reload.");
-    // Reload basic meters
-    await fetchBasicMeters();
+    
+    try {
+      // Fetch connections from schematic_lines
+      const schematicConnections = await fetchSchematicConnections();
+      
+      if (schematicConnections.length === 0) {
+        // No schematic connections, just clear everything
+        setMeterConnectionsMap(new Map());
+        setMeterIndentLevels(new Map());
+        setMeterParentInfo(new Map());
+        toast.info("No schematic connections found. Hierarchy cleared.");
+        await fetchBasicMeters();
+        return;
+      }
+      
+      // Build meterConnectionsMap (parent -> [children])
+      const connectionsMap = new Map<string, string[]>();
+      schematicConnections.forEach(conn => {
+        if (!connectionsMap.has(conn.parent_meter_id)) {
+          connectionsMap.set(conn.parent_meter_id, []);
+        }
+        connectionsMap.get(conn.parent_meter_id)!.push(conn.child_meter_id);
+      });
+      setMeterConnectionsMap(connectionsMap);
+      
+      // Build meterParentInfo (child -> parent meter_number)
+      const parentInfo = new Map<string, string>();
+      schematicConnections.forEach(conn => {
+        const parentMeter = availableMeters.find(m => m.id === conn.parent_meter_id);
+        if (parentMeter) {
+          parentInfo.set(conn.child_meter_id, parentMeter.meter_number);
+        }
+      });
+      setMeterParentInfo(parentInfo);
+      
+      // Calculate indent levels based on hierarchy
+      const childIds = new Set<string>();
+      schematicConnections.forEach(conn => childIds.add(conn.child_meter_id));
+      
+      const calculateIndentLevel = (meterId: string, visited: Set<string> = new Set()): number => {
+        if (visited.has(meterId)) return 0; // Prevent cycles
+        visited.add(meterId);
+        
+        // Find parent of this meter
+        const parentConnection = schematicConnections.find(c => c.child_meter_id === meterId);
+        if (!parentConnection) return 0; // Root level
+        
+        return 1 + calculateIndentLevel(parentConnection.parent_meter_id, visited);
+      };
+      
+      const indentLevels = new Map<string, number>();
+      availableMeters.forEach(meter => {
+        indentLevels.set(meter.id, calculateIndentLevel(meter.id));
+      });
+      setMeterIndentLevels(indentLevels);
+      
+      toast.success("Meter hierarchy restored from schematic");
+      await fetchBasicMeters();
+    } catch (error) {
+      console.error('Error resetting hierarchy:', error);
+      toast.error("Failed to reset hierarchy");
+    }
   };
 
   const handleDragStart = (e: React.DragEvent, meterId: string) => {
