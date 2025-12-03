@@ -2238,8 +2238,11 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           result = rowCount > 0 ? rawSum / rowCount : 0;
           break;
         case 'max':
-          // Use the actual max value from csvColumnMaxValues
-          result = csvColumnMaxValues[column] ?? rawSum;
+          // Use the actual max value from csvColumnMaxValues - no fallback
+          if (csvColumnMaxValues[column] === undefined) {
+            return; // Skip this column entirely if no max value available
+          }
+          result = csvColumnMaxValues[column];
           isMaxOperation = true;
           break;
         case 'min':
