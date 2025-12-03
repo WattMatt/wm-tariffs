@@ -33,3 +33,6 @@ export type {
   HierarchicalCsvGenerationResult,
   PreviewData,
 } from './useReconciliationRunner';
+
+export { useDownloadUtils } from './useDownloadUtils';
+export type { UseDownloadUtilsOptions } from './useDownloadUtils';
