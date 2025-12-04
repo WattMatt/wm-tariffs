@@ -72,18 +72,28 @@ export interface RunReconciliationOptions {
 export interface BulkReconcileOptions {
   selectedDocumentIds: string[];
   documentDateRanges: Array<{ id: string; file_name: string; period_start: string; period_end: string }>;
-  previewData: any;
-  selectedColumns: Set<string>;
   meterConnectionsMap: Map<string, string[]>;
   availableMeters: any[];
   enableRevenue: boolean;
-  // Callbacks
+  meterCorrections: Map<string, CorrectedReading[]>;
+  // Callbacks matching runReconciliation
   getMetersWithUploadedCsvs: (meterIds: string[]) => Promise<Set<string>>;
   updateMeterCategoryWithHierarchy: (meters: MeterResult[], csvResults: Map<string, any>, metersWithUploadedCsvs: Set<string>) => MeterResult[];
+  saveReconciliationSettings: () => Promise<void>;
   saveReconciliationRun: (runName: string, notes: string | null, dateFrom: string, dateTo: string, reconciliationData: any, meters: any[], csvResults: Map<string, any>) => Promise<string>;
+  // UI state setters
   setIsBulkProcessing: (processing: boolean) => void;
   setBulkProgress: (progress: { currentDocument: string; current: number; total: number }) => void;
   setSelectedDocumentIds: (ids: string[]) => void;
+  setIsLoading: (loading: boolean) => void;
+  setFailedMeters: (meters: Map<string, string>) => void;
+  setHierarchicalCsvResults: (results: Map<string, any>) => void;
+  setReconciliationData: (data: any) => void;
+  setAvailableMeters: (fn: (prev: any[]) => any[]) => void;
+  setIsColumnsOpen: (open: boolean) => void;
+  setIsMetersOpen: (open: boolean) => void;
+  setIsCancelling: (cancelling: boolean) => void;
+  setIsGeneratingCsvs: (generating: boolean) => void;
 }
 
 export interface ProcessedMeterData {
@@ -1492,22 +1502,32 @@ export function useReconciliationRunner(options: UseReconciliationRunnerOptions)
 
   /**
    * Run bulk reconciliation for multiple document periods
+   * Uses the exact same functions as the manual workflow buttons
    */
   const runBulkReconcile = useCallback(async (options: BulkReconcileOptions) => {
     const {
       selectedDocumentIds,
       documentDateRanges,
-      previewData,
-      selectedColumns,
       meterConnectionsMap,
       availableMeters,
       enableRevenue,
+      meterCorrections,
       getMetersWithUploadedCsvs,
       updateMeterCategoryWithHierarchy,
+      saveReconciliationSettings,
       saveReconciliationRun,
       setIsBulkProcessing,
       setBulkProgress,
       setSelectedDocumentIds,
+      setIsLoading,
+      setFailedMeters,
+      setHierarchicalCsvResults,
+      setReconciliationData,
+      setAvailableMeters,
+      setIsColumnsOpen,
+      setIsMetersOpen,
+      setIsCancelling,
+      setIsGeneratingCsvs,
     } = options;
 
     if (selectedDocumentIds.length === 0) {
@@ -1542,15 +1562,7 @@ export function useReconciliationRunner(options: UseReconciliationRunnerOptions)
           endDate.setDate(endDate.getDate() - 1);
           endDate.setHours(23, 59, 0, 0);
 
-          if (!previewData) {
-            throw new Error("Please preview data first");
-          }
-
-          if (selectedColumns.size === 0) {
-            throw new Error("Please select at least one column to calculate");
-          }
-
-          // STEP 1: Generate hierarchy FIRST (matching manual workflow)
+          // STEP 1: Generate hierarchy FIRST (same as manual "Generate Hierarchy" button)
           console.log(`Bulk: Generating hierarchy for ${doc.file_name}...`);
           const hierarchySuccess = await runHierarchyGeneration(
             startDate,
@@ -1564,18 +1576,39 @@ export function useReconciliationRunner(options: UseReconciliationRunnerOptions)
             console.warn(`Bulk: Hierarchy generation failed for ${doc.file_name}, continuing with energy calculation...`);
           }
 
-          // STEP 2: Calculate energy (and optionally revenue) AFTER hierarchy is ready
+          // STEP 2: Calculate energy/revenue (same as manual "Calculate Energy" button)
+          console.log(`Bulk: Calculating energy for ${doc.file_name}...`);
+          const result = await runReconciliation({
+            dateFrom: startDate,
+            dateTo: endDate,
+            timeFrom: "00:00",
+            timeTo: "23:59",
+            enableRevenue,
+            availableMeters,
+            meterConnectionsMap,
+            hierarchyGenerated: hierarchySuccess,
+            meterCorrections,
+            getMetersWithUploadedCsvs,
+            updateMeterCategoryWithHierarchy,
+            saveReconciliationSettings,
+            setIsLoading,
+            setFailedMeters,
+            setHierarchicalCsvResults,
+            setReconciliationData,
+            setAvailableMeters,
+            setIsColumnsOpen,
+            setIsMetersOpen,
+            setIsCancelling,
+            setIsGeneratingCsvs,
+          });
+
+          if (!result.success || !result.reconciliationData) {
+            throw new Error("Reconciliation calculation failed");
+          }
+
+          // STEP 3: Save the reconciliation (same as manual "Save" button)
           const fullDateTimeFrom = getFullDateTime(startDate, "00:00");
           const fullDateTimeTo = getFullDateTime(endDate, "23:59");
-
-          console.log(`Bulk: Calculating energy for ${doc.file_name}...`);
-          const { reconciliationData } = await performReconciliationCalculation(
-            fullDateTimeFrom,
-            fullDateTimeTo,
-            enableRevenue
-          );
-
-          // STEP 3: Save the reconciliation
           const runName = `${doc.file_name} - ${format(endDate, "MMM yyyy")}`;
           
           await saveReconciliationRun(
@@ -1583,7 +1616,7 @@ export function useReconciliationRunner(options: UseReconciliationRunnerOptions)
             null,
             fullDateTimeFrom,
             fullDateTimeTo,
-            reconciliationData,
+            result.reconciliationData,
             availableMeters,
             new Map() // Hierarchy data is already in hierarchical_meter_readings
           );
@@ -1615,13 +1648,9 @@ export function useReconciliationRunner(options: UseReconciliationRunnerOptions)
     } finally {
       setIsBulkProcessing(false);
     }
-  }, [performReconciliationCalculation, runHierarchyGeneration]);
+  }, [runHierarchyGeneration, runReconciliation]);
 
   return {
-    processSingleMeter,
-    processMeterBatches,
-    performReconciliationCalculation,
-    generateHierarchicalCsvForMeter,
     runHierarchyGeneration,
     runPreview,
     runReconciliation,
