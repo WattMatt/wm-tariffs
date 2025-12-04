@@ -1415,10 +1415,9 @@ export default function TariffAssignmentTab({
           const reconDateFrom = extractDateFromTimestamp(run.date_from);
           const reconDateTo = extractDateFromTimestamp(run.date_to);
 
-          // Try to find matching extracted document (within 5 days)
+          // Match documents by same month/year (compare YYYY-MM portion)
           let matchingDoc = meterDocs.find(doc => {
-            const daysDiff = daysBetweenDateStrings(doc.periodEnd, reconDateTo);
-            return daysDiff < 5;
+            return doc.periodEnd.substring(0, 7) === reconDateTo.substring(0, 7);
           });
 
           if (matchingDoc) {
