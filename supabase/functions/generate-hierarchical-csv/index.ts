@@ -331,9 +331,9 @@ Deno.serve(async (req) => {
 
     // ===== FETCH ALL CHILD DATA FROM hierarchical_meter_readings =====
     // Leaf data should already be there from copyLeafMetersOnly call
-    console.log('Fetching ALL child meter data from hierarchical_meter_readings...');
+    // Query each meter individually to avoid large IN clause timeout
+    console.log('Fetching child meter data individually from hierarchical_meter_readings...');
     
-    const PAGE_SIZE = 1000;
     let allReadings: Array<{
       reading_timestamp: string;
       kwh_value: number;
@@ -342,31 +342,44 @@ Deno.serve(async (req) => {
       meter_id: string;
     }> = [];
 
-    let offset = 0;
-    let hasMore = true;
+    // Query each child meter individually - much faster than large IN clause
+    for (const childMeterId of childMeterIds) {
+      const meterNum = meterNumberMap.get(childMeterId) || childMeterId;
+      
+      let offset = 0;
+      let hasMore = true;
+      const PAGE_SIZE = 2000; // Larger page size for single meter queries
+      
+      while (hasMore) {
+        const { data: pageData, error: fetchError } = await supabase
+          .from('hierarchical_meter_readings')
+          .select('reading_timestamp, kwh_value, kva_value, metadata, meter_id')
+          .eq('meter_id', childMeterId)  // Single meter = efficient index lookup
+          .gte('reading_timestamp', dateFrom)
+          .lte('reading_timestamp', dateTo)
+          .order('reading_timestamp', { ascending: true })
+          .range(offset, offset + PAGE_SIZE - 1);
 
-    while (hasMore) {
-      const { data: pageData, error: fetchError } = await supabase
-        .from('hierarchical_meter_readings')
-        .select('reading_timestamp, kwh_value, kva_value, metadata, meter_id')
-        .in('meter_id', childMeterIds)
-        .gte('reading_timestamp', dateFrom)
-        .lte('reading_timestamp', dateTo)
-        .order('reading_timestamp', { ascending: true })
-        .range(offset, offset + PAGE_SIZE - 1);
+        if (fetchError) {
+          console.error(`Failed to fetch meter ${meterNum}: ${fetchError.message}`);
+          throw new Error(`Failed to fetch from hierarchical_meter_readings for meter ${meterNum}: ${fetchError.message}`);
+        }
 
-      if (fetchError) {
-        throw new Error(`Failed to fetch from hierarchical_meter_readings: ${fetchError.message}`);
+        if (pageData && pageData.length > 0) {
+          allReadings.push(...pageData);
+          offset += pageData.length;
+          hasMore = pageData.length === PAGE_SIZE;
+        } else {
+          hasMore = false;
+        }
       }
-
-      if (pageData && pageData.length > 0) {
-        allReadings = allReadings.concat(pageData);
-        offset += pageData.length;
-        hasMore = pageData.length === PAGE_SIZE;
-      } else {
-        hasMore = false;
+      
+      if (offset > 0) {
+        console.log(`  ${meterNum}: ${offset} readings`);
       }
     }
+    
+    console.log(`Total readings fetched: ${allReadings.length}`);
 
     // Log breakdown
     const copiedCount = allReadings.filter(r => r.metadata?.source === 'Copied').length;
@@ -392,19 +405,53 @@ Deno.serve(async (req) => {
       
       // AUTO-COPY FALLBACK: Copy leaf child meters from meter_readings
       if (leafChildMeterIds.length > 0) {
-        console.log(`Fetching ${leafChildMeterIds.length} leaf meters from meter_readings...`);
+        console.log(`Fetching ${leafChildMeterIds.length} leaf meters from meter_readings individually...`);
         
-        // Fetch leaf meter readings from meter_readings
-        const { data: leafReadings, error: leafErr } = await supabase
-          .from('meter_readings')
-          .select('reading_timestamp, kwh_value, kva_value, metadata, meter_id')
-          .in('meter_id', leafChildMeterIds)
-          .gte('reading_timestamp', dateFrom)
-          .lte('reading_timestamp', dateTo);
+        // Fetch leaf meter readings from meter_readings - one meter at a time to avoid timeout
+        const leafReadings: Array<{
+          reading_timestamp: string;
+          kwh_value: number;
+          kva_value: number | null;
+          metadata: Record<string, any> | null;
+          meter_id: string;
+        }> = [];
         
-        if (leafErr) {
-          console.error('Failed to fetch leaf readings from meter_readings:', leafErr);
-        } else if (leafReadings && leafReadings.length > 0) {
+        for (const leafMeterId of leafChildMeterIds) {
+          const meterNum = meterNumberMap.get(leafMeterId) || leafMeterId;
+          let offset = 0;
+          let hasMore = true;
+          const PAGE_SIZE = 2000;
+          
+          while (hasMore) {
+            const { data: pageData, error: leafErr } = await supabase
+              .from('meter_readings')
+              .select('reading_timestamp, kwh_value, kva_value, metadata, meter_id')
+              .eq('meter_id', leafMeterId)
+              .gte('reading_timestamp', dateFrom)
+              .lte('reading_timestamp', dateTo)
+              .order('reading_timestamp', { ascending: true })
+              .range(offset, offset + PAGE_SIZE - 1);
+            
+            if (leafErr) {
+              console.error(`Failed to fetch leaf meter ${meterNum}: ${leafErr.message}`);
+              break;
+            }
+            
+            if (pageData && pageData.length > 0) {
+              leafReadings.push(...pageData);
+              offset += pageData.length;
+              hasMore = pageData.length === PAGE_SIZE;
+            } else {
+              hasMore = false;
+            }
+          }
+          
+          if (offset > 0) {
+            console.log(`  ${meterNum}: ${offset} readings`);
+          }
+        }
+        
+        if (leafReadings.length > 0) {
           console.log(`Found ${leafReadings.length} readings in meter_readings, copying to hierarchical_meter_readings...`);
           
           // Prepare for insertion with source='Copied'
@@ -440,18 +487,36 @@ Deno.serve(async (req) => {
           
           console.log(`✅ Auto-copied ${totalInserted} leaf meter readings to hierarchical_meter_readings`);
           
-          // Re-fetch all readings after auto-copy
-          const { data: retryReadings, error: retryErr } = await supabase
-            .from('hierarchical_meter_readings')
-            .select('reading_timestamp, kwh_value, kva_value, metadata, meter_id')
-            .in('meter_id', childMeterIds)
-            .gte('reading_timestamp', dateFrom)
-            .lte('reading_timestamp', dateTo);
-          
-          if (!retryErr && retryReadings && retryReadings.length > 0) {
-            console.log(`After auto-copy: Found ${retryReadings.length} readings`);
-            allReadings = retryReadings;
+          // Re-fetch all readings after auto-copy - one meter at a time
+          allReadings = [];
+          for (const childMeterId of childMeterIds) {
+            let offset = 0;
+            let hasMore = true;
+            const PAGE_SIZE = 2000;
+            
+            while (hasMore) {
+              const { data: retryData, error: retryErr } = await supabase
+                .from('hierarchical_meter_readings')
+                .select('reading_timestamp, kwh_value, kva_value, metadata, meter_id')
+                .eq('meter_id', childMeterId)
+                .gte('reading_timestamp', dateFrom)
+                .lte('reading_timestamp', dateTo)
+                .order('reading_timestamp', { ascending: true })
+                .range(offset, offset + PAGE_SIZE - 1);
+              
+              if (retryErr) break;
+              
+              if (retryData && retryData.length > 0) {
+                allReadings.push(...retryData);
+                offset += retryData.length;
+                hasMore = retryData.length === PAGE_SIZE;
+              } else {
+                hasMore = false;
+              }
+            }
           }
+          
+          console.log(`After auto-copy: Found ${allReadings.length} readings`);
         } else {
           console.log('No leaf readings found in meter_readings either');
         }
