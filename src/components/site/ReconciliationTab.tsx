@@ -790,6 +790,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       selectedColumns,
       meterConnectionsMap,
       availableMeters,
+      enableRevenue: revenueReconciliationEnabled,
       getMetersWithUploadedCsvs: execution.getMetersWithUploadedCsvs,
       updateMeterCategoryWithHierarchy: execution.updateMeterCategoryWithHierarchy,
       saveReconciliationRun: execution.saveReconciliationRun,
