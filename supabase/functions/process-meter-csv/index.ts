@@ -482,11 +482,14 @@ Deno.serve(async (req) => {
 
         const isoTimestamp = date.toISOString();
 
-        // Skip duplicates
+        // Skip duplicates (both from DB and within this CSV file)
         if (existingTimestamps.has(isoTimestamp)) {
           skipped++;
           continue;
         }
+
+        // Mark this timestamp as seen to prevent duplicates within this CSV
+        existingTimestamps.add(isoTimestamp);
 
         // Add the main value column to extraFields with its renamed header
         if (columnMapping && columnMapping.renamedHeaders && columnMapping.valueColumn) {

@@ -11,7 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, Gauge, Upload, Pencil, Trash2, Database, Trash, Eye, MapPin, ArrowUpDown, ArrowUp, ArrowDown, ChevronDown } from "lucide-react";
+import { Plus, Gauge, Upload, Pencil, Trash2, Database, Trash, Eye, MapPin, ArrowUpDown, ArrowUp, ArrowDown, ChevronDown, AlertCircle, Clock } from "lucide-react";
 import { toast } from "sonner";
 import CsvImportDialog from "./CsvImportDialog";
 import MeterReadingsView from "./MeterReadingsView";
@@ -49,6 +49,8 @@ interface Meter {
   has_parsed?: boolean;
   has_schematic_position?: boolean;
   is_duplicate?: boolean;
+  has_pending_csv?: boolean;
+  has_error_csv?: boolean;
 }
 
 interface TariffStructure {
@@ -179,10 +181,10 @@ export default function MetersTab({ siteId }: MetersTabProps) {
     if (error) {
       toast.error("Failed to fetch meters");
     } else {
-      // Check which meters have uploaded, generated, and parsed CSV files
+      // Check which meters have uploaded, generated, pending, error, and parsed CSV files
       const metersWithStatus = await Promise.all(
         (data || []).map(async (meter) => {
-          // Check for uploaded CSV files (parse_status = 'parsed')
+          // Check for successfully parsed uploaded CSV files (parse_status = 'parsed')
           const { count: uploadedCount } = await supabase
             .from("meter_csv_files")
             .select("*", { count: "exact", head: true })
@@ -195,6 +197,20 @@ export default function MetersTab({ siteId }: MetersTabProps) {
             .select("*", { count: "exact", head: true })
             .eq("meter_id", meter.id)
             .eq("parse_status", "generated");
+          
+          // Check for pending CSV files (uploaded or pending status - awaiting parsing)
+          const { count: pendingCount } = await supabase
+            .from("meter_csv_files")
+            .select("*", { count: "exact", head: true })
+            .eq("meter_id", meter.id)
+            .in("parse_status", ["uploaded", "pending"]);
+          
+          // Check for error CSV files (parsing failed)
+          const { count: errorCount } = await supabase
+            .from("meter_csv_files")
+            .select("*", { count: "exact", head: true })
+            .eq("meter_id", meter.id)
+            .eq("parse_status", "error");
           
           // Check for parsed CSV files (those with parsed_file_path)
           const { count: parsedFilesCount } = await supabase
@@ -211,15 +227,19 @@ export default function MetersTab({ siteId }: MetersTabProps) {
           
           const hasUploadedCsv = (uploadedCount ?? 0) > 0;
           const hasGeneratedCsv = (generatedCount ?? 0) > 0;
+          const hasPendingCsv = (pendingCount ?? 0) > 0;
+          const hasErrorCsv = (errorCount ?? 0) > 0;
           const hasParsed = (parsedFilesCount ?? 0) > 0;
           const hasSchematicPosition = (positionsCount ?? 0) > 0;
           
-          console.log(`Meter ${meter.meter_number}: Uploaded CSV: ${hasUploadedCsv}, Generated CSV: ${hasGeneratedCsv}, Parsed: ${hasParsed}, On Schematic: ${hasSchematicPosition}`);
+          console.log(`Meter ${meter.meter_number}: Uploaded: ${hasUploadedCsv}, Generated: ${hasGeneratedCsv}, Pending: ${hasPendingCsv}, Error: ${hasErrorCsv}, Parsed: ${hasParsed}, On Schematic: ${hasSchematicPosition}`);
           
           return {
             ...meter,
             has_uploaded_csv: hasUploadedCsv,
             has_generated_csv: hasGeneratedCsv,
+            has_pending_csv: hasPendingCsv,
+            has_error_csv: hasErrorCsv,
             has_parsed: hasParsed,
             has_schematic_position: hasSchematicPosition
           };
@@ -1037,6 +1057,29 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                             Duplicate
                           </Badge>
                         )}
+                        {/* Error Badge - Red */}
+                        {meter.has_error_csv && (
+                          <Badge 
+                            variant="outline" 
+                            className="gap-1 bg-destructive/10 border-destructive/50 text-destructive cursor-pointer hover:bg-destructive/20 transition-colors"
+                            title="CSV parsing failed - check file format"
+                          >
+                            <AlertCircle className="w-3 h-3" />
+                            Error
+                          </Badge>
+                        )}
+                        {/* Pending Badge - Amber */}
+                        {meter.has_pending_csv && (
+                          <Badge 
+                            variant="outline" 
+                            className="gap-1 bg-amber-500/10 border-amber-500/50 text-amber-600 dark:text-amber-400"
+                            title="CSV uploaded, awaiting parsing"
+                          >
+                            <Clock className="w-3 h-3" />
+                            Pending
+                          </Badge>
+                        )}
+                        {/* Uploaded/Generated Badge - Blue (for successfully parsed files) */}
                         {(meter.has_uploaded_csv || meter.has_generated_csv) && (
                           <Badge 
                             variant="outline" 
