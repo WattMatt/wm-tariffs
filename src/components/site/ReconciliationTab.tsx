@@ -788,7 +788,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       documentDateRanges,
       meterConnectionsMap,
       availableMeters,
-      enableRevenue: revenueReconciliationEnabled,
+      enableRevenue: true, // Bulk reconciliation always calculates revenue
       meterCorrections,
       getMetersWithUploadedCsvs: execution.getMetersWithUploadedCsvs,
       updateMeterCategoryWithHierarchy: execution.updateMeterCategoryWithHierarchy,
