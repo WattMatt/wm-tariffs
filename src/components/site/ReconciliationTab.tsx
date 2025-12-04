@@ -786,17 +786,26 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     await runner.runBulkReconcile({
       selectedDocumentIds,
       documentDateRanges,
-      previewData,
-      selectedColumns,
       meterConnectionsMap,
       availableMeters,
       enableRevenue: revenueReconciliationEnabled,
+      meterCorrections,
       getMetersWithUploadedCsvs: execution.getMetersWithUploadedCsvs,
       updateMeterCategoryWithHierarchy: execution.updateMeterCategoryWithHierarchy,
+      saveReconciliationSettings: settings.saveReconciliationSettings,
       saveReconciliationRun: execution.saveReconciliationRun,
       setIsBulkProcessing,
       setBulkProgress,
       setSelectedDocumentIds,
+      setIsLoading,
+      setFailedMeters,
+      setHierarchicalCsvResults,
+      setReconciliationData,
+      setAvailableMeters,
+      setIsColumnsOpen,
+      setIsMetersOpen,
+      setIsCancelling,
+      setIsGeneratingCsvs,
     });
   };
 
