@@ -1063,12 +1063,13 @@ export default function TariffAssignmentTab({
   };
 
   // Background capture progress handler
-  const handleBackgroundCaptureProgress = (current: number, total: number, meterNumber: string, metric: string) => {
+  const handleBackgroundCaptureProgress = (current: number, total: number, meterNumber: string, metric: string, batchInfo?: string) => {
     const progress = Math.round((current / total) * 100);
+    const batchStr = batchInfo ? ` [${batchInfo}]` : '';
     
     // Update or create persistent toast
     if (backgroundCaptureToastRef.current) {
-      toast.loading(`Capturing charts... ${current}/${total} (${progress}%) - ${meterNumber}: ${metric}`, {
+      toast.loading(`Capturing charts${batchStr}: ${current}/${total} (${progress}%) - ${meterNumber}`, {
         id: backgroundCaptureToastRef.current,
         action: {
           label: 'Cancel',
