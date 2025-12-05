@@ -6,13 +6,25 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Download, RefreshCw, ImageIcon, Loader2, FolderOpen } from "lucide-react";
+import { Download, RefreshCw, ImageIcon, Loader2, FolderOpen, Camera } from "lucide-react";
 import { buildConnectionsMap, getHierarchyDepth } from '@/lib/reconciliation/hierarchyUtils';
+
+interface BulkCaptureProgress {
+  currentMeter: number;
+  totalMeters: number;
+  meterNumber: string;
+  currentMetric: number;
+  totalMetrics: number;
+  metric: string;
+}
 
 interface ReconciliationChartsDialogProps {
   siteId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onBulkCapture?: () => void;
+  isBulkCapturing?: boolean;
+  bulkCaptureProgress?: BulkCaptureProgress | null;
 }
 
 interface ChartFile {
@@ -53,7 +65,10 @@ const sanitizeName = (name: string): string => {
 export default function ReconciliationChartsDialog({ 
   siteId, 
   open, 
-  onOpenChange 
+  onOpenChange,
+  onBulkCapture,
+  isBulkCapturing = false,
+  bulkCaptureProgress
 }: ReconciliationChartsDialogProps) {
   const [charts, setCharts] = useState<ChartFile[]>([]);
   const [groupedCharts, setGroupedCharts] = useState<Record<string, ChartFile[]>>({});
@@ -280,20 +295,45 @@ export default function ReconciliationChartsDialog({
               </DialogDescription>
             </div>
             <div className="flex items-center gap-2">
+              {onBulkCapture && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={onBulkCapture}
+                  disabled={isBulkCapturing || isLoading}
+                >
+                  {isBulkCapturing ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      {bulkCaptureProgress ? (
+                        `${bulkCaptureProgress.meterNumber} (${bulkCaptureProgress.currentMeter}/${bulkCaptureProgress.totalMeters})`
+                      ) : (
+                        'Capturing...'
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <Camera className="w-4 h-4 mr-2" />
+                      Capture All Charts
+                    </>
+                  )}
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="sm"
                 onClick={fetchCharts}
-                disabled={isLoading}
+                disabled={isLoading || isBulkCapturing}
               >
                 <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
                 Refresh
               </Button>
               {charts.length > 0 && (
                 <Button
-                  variant="default"
+                  variant="outline"
                   size="sm"
                   onClick={downloadAllCharts}
+                  disabled={isBulkCapturing}
                 >
                   <Download className="w-4 h-4 mr-2" />
                   Download All ({charts.length})

@@ -132,6 +132,15 @@ export default function TariffAssignmentTab({
   const [chartsDialogOpen, setChartsDialogOpen] = useState(false);
   const [isCapturingCharts, setIsCapturingCharts] = useState(false);
   const [captureProgress, setCaptureProgress] = useState({ current: 0, total: 0, metric: '' });
+  const [isBulkCapturingCharts, setIsBulkCapturingCharts] = useState(false);
+  const [bulkCaptureProgress, setBulkCaptureProgress] = useState<{
+    currentMeter: number;
+    totalMeters: number;
+    meterNumber: string;
+    currentMetric: number;
+    totalMetrics: number;
+    metric: string;
+  } | null>(null);
   const chartContainerRef = useRef<HTMLDivElement>(null);
 
   // Handle legend click to toggle data series
@@ -1029,6 +1038,100 @@ export default function TariffAssignmentTab({
       toast.warning(`Captured ${successCount}/${metrics.length} charts. ${errors.length} failed.`);
     } else {
       toast.error(`Failed to capture charts: ${errors.join(', ')}`);
+    }
+  };
+
+  // Bulk capture all charts for all meters with documents
+  const bulkCaptureAllMeters = async () => {
+    // Get all meters that have document data
+    const metersWithDocs = meters
+      .map(meter => ({
+        meter,
+        docs: getMatchingShopNumbers(meter)
+      }))
+      .filter(m => m.docs.length > 0);
+    
+    if (metersWithDocs.length === 0) {
+      toast.error('No meters with document data to capture');
+      return;
+    }
+    
+    setIsBulkCapturingCharts(true);
+    const totalMeters = metersWithDocs.length;
+    const metrics = CHART_METRICS.map(m => m.key);
+    const totalMetrics = metrics.length;
+    let totalSuccess = 0;
+    let totalErrors = 0;
+    
+    toast.info(`Starting bulk capture for ${totalMeters} meters (${totalMeters * totalMetrics} charts)...`);
+    
+    for (let meterIdx = 0; meterIdx < metersWithDocs.length; meterIdx++) {
+      const { meter, docs } = metersWithDocs[meterIdx];
+      
+      // Open the chart dialog for this meter
+      setSelectedChartMeter({ meter, docs });
+      
+      // Wait for dialog and chart to render
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      // Capture all 6 metrics for this meter
+      for (let metricIdx = 0; metricIdx < metrics.length; metricIdx++) {
+        const metric = metrics[metricIdx];
+        const metricInfo = CHART_METRICS.find(m => m.key === metric);
+        
+        setBulkCaptureProgress({
+          currentMeter: meterIdx + 1,
+          totalMeters,
+          meterNumber: meter.meter_number,
+          currentMetric: metricIdx + 1,
+          totalMetrics,
+          metric: metricInfo?.title || metric
+        });
+        
+        // Change selected metric
+        setSelectedChartMetric(metric);
+        
+        // Wait for chart to re-render
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        try {
+          const chartElement = chartContainerRef.current?.querySelector('.recharts-responsive-container');
+          if (!chartElement) {
+            totalErrors++;
+            continue;
+          }
+          
+          const canvas = await html2canvas(chartElement as HTMLElement, {
+            backgroundColor: '#ffffff',
+            scale: 2,
+            logging: false,
+            useCORS: true,
+          });
+          
+          const dataUrl = canvas.toDataURL('image/png');
+          const saved = await saveChartToStorage(siteId, meter.meter_number, metricInfo?.filename || metric, dataUrl);
+          
+          if (saved) totalSuccess++;
+          else totalErrors++;
+        } catch (error) {
+          console.error(`Error capturing ${metric} for ${meter.meter_number}:`, error);
+          totalErrors++;
+        }
+      }
+    }
+    
+    // Close dialog and reset
+    setSelectedChartMeter(null);
+    setSelectedChartMetric('total');
+    setIsBulkCapturingCharts(false);
+    setBulkCaptureProgress(null);
+    
+    // Report results
+    const totalCharts = metersWithDocs.length * metrics.length;
+    if (totalErrors === 0) {
+      toast.success(`Successfully captured ${totalSuccess} charts for ${totalMeters} meters`);
+    } else {
+      toast.warning(`Captured ${totalSuccess}/${totalCharts} charts. ${totalErrors} failed.`);
     }
   };
 
@@ -4209,6 +4312,9 @@ export default function TariffAssignmentTab({
         siteId={siteId}
         open={chartsDialogOpen}
         onOpenChange={setChartsDialogOpen}
+        onBulkCapture={bulkCaptureAllMeters}
+        isBulkCapturing={isBulkCapturingCharts}
+        bulkCaptureProgress={bulkCaptureProgress}
       />
     </div>
   );
