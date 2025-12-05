@@ -51,10 +51,13 @@ export {
   getMetersOnSchematic,
   getDocumentsForMeter,
   getReconciliationCostsForMeter,
-  generateMeterCharts,
-  saveMeterCharts,
-  generateAllReconciliationCharts,
+  prepareRechartsData,
+  prepareMeterChartData,
+  dataURLtoBlob,
+  saveChartToStorage,
 } from './chartGeneration';
+
+export type { ChartMetricKey, RechartsDataPoint } from './chartGeneration';
 
 // Re-export hook types for convenience
 export type { MeterConnection, HierarchicalCsvResult, DateRange, DocumentDateRange } from './types';

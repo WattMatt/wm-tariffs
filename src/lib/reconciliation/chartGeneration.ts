@@ -1,6 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
 import { generateStoragePath } from '@/lib/storagePaths';
-import { generateTariffAnalysisChart } from '@/components/site/ChartGenerator';
 import { formatDateStringToMonthYear, getMonthFromDateString } from '@/lib/utils';
 
 // Chart metrics configuration
@@ -45,18 +44,17 @@ interface ReconciliationCostData {
   total_kwh: number;
 }
 
-interface ChartDataPoint {
+// Chart data format for Recharts rendering
+export interface RechartsDataPoint {
   period: string;
-  value: number;
-  winterAvg?: number;
-  summerAvg?: number;
+  amount: number;
+  documentAmount?: number;
 }
 
 /**
  * Get all meters that have been placed on a schematic for this site
  */
 export async function getMetersOnSchematic(siteId: string): Promise<Array<{ id: string; meter_number: string }>> {
-  // Get all schematics for this site
   const { data: schematics, error: schematicError } = await supabase
     .from('schematics')
     .select('id')
@@ -68,7 +66,6 @@ export async function getMetersOnSchematic(siteId: string): Promise<Array<{ id: 
 
   const schematicIds = schematics.map(s => s.id);
 
-  // Get all meter positions for these schematics
   const { data: positions, error: positionsError } = await supabase
     .from('meter_positions')
     .select('meter_id, meters(id, meter_number)')
@@ -78,7 +75,6 @@ export async function getMetersOnSchematic(siteId: string): Promise<Array<{ id: 
     return [];
   }
 
-  // Deduplicate meters (a meter might be on multiple schematics)
   const uniqueMeters = new Map<string, { id: string; meter_number: string }>();
   positions.forEach(pos => {
     const meter = pos.meters as any;
@@ -94,7 +90,6 @@ export async function getMetersOnSchematic(siteId: string): Promise<Array<{ id: 
  * Get tenant bill documents and their extractions for a meter
  */
 export async function getDocumentsForMeter(siteId: string, meterNumber: string): Promise<DocumentData[]> {
-  // Get tenant bills for this site
   const { data: documents, error: docsError } = await supabase
     .from('site_documents')
     .select(`
@@ -124,10 +119,9 @@ export async function getDocumentsForMeter(siteId: string, meterNumber: string):
       const extractedData = extraction.extracted_data || {};
       const lineItems = (extractedData.line_items || []) as DocumentLineItem[];
 
-      // Filter line items for this meter
       const meterLineItems = lineItems.filter(item => 
         item.meter_number === meterNumber || 
-        !item.meter_number // Include items without specific meter assignment
+        !item.meter_number
       );
 
       if (meterLineItems.length > 0 || extractedData.shop_number === meterNumber) {
@@ -142,7 +136,6 @@ export async function getDocumentsForMeter(siteId: string, meterNumber: string):
     });
   });
 
-  // Sort by period end date
   return result.sort((a, b) => a.periodEnd.localeCompare(b.periodEnd));
 }
 
@@ -190,7 +183,6 @@ export async function getReconciliationCostsForMeter(
 
 /**
  * Extract metric value from a document based on metric type
- * Logic copied from TariffAssignmentTab.tsx
  */
 function extractMetricValue(doc: DocumentData, metric: ChartMetricKey): number | null {
   if (metric === 'total') {
@@ -234,117 +226,93 @@ function extractMetricValue(doc: DocumentData, metric: ChartMetricKey): number |
 }
 
 /**
- * Calculate seasonal averages for a metric
- * South African seasons: Winter (Jun-Aug), Summer (Sep-May)
+ * Prepare chart data for Recharts rendering - matches TariffAssignmentTab format
  */
-function calculateSeasonalAverages(
-  docs: DocumentData[], 
-  metric: ChartMetricKey
-): { winterAvg: number | null; summerAvg: number | null } {
-  const winterMonths = [6, 7, 8];
-  const summerMonths = [1, 2, 3, 4, 5, 9, 10, 11, 12];
-
-  const winterValues: number[] = [];
-  const summerValues: number[] = [];
-
-  docs.forEach(doc => {
-    const month = getMonthFromDateString(doc.periodStart);
-    const value = extractMetricValue(doc, metric);
-    
-    if (value !== null && value > 0) {
-      if (winterMonths.includes(month)) {
-        winterValues.push(value);
-      } else if (summerMonths.includes(month)) {
-        summerValues.push(value);
-      }
-    }
-  });
-
-  const winterAvg = winterValues.length > 0
-    ? winterValues.reduce((sum, val) => sum + val, 0) / winterValues.length
-    : null;
-
-  const summerAvg = summerValues.length > 0
-    ? summerValues.reduce((sum, val) => sum + val, 0) / summerValues.length
-    : null;
-
-  return { winterAvg, summerAvg };
-}
-
-/**
- * Prepare chart data for a specific metric
- */
-function prepareChartDataForMetric(
+export function prepareRechartsData(
   docs: DocumentData[],
   reconCosts: ReconciliationCostData[],
   metric: ChartMetricKey
-): ChartDataPoint[] {
-  const { winterAvg, summerAvg } = calculateSeasonalAverages(docs, metric);
-  const winterMonths = [6, 7, 8];
+): RechartsDataPoint[] {
+  // Build a map of reconciliation costs by month-year for matching
+  const reconCostsByMonth = new Map<string, ReconciliationCostData>();
+  reconCosts.forEach(cost => {
+    const monthYear = formatDateStringToMonthYear(cost.period_end);
+    reconCostsByMonth.set(monthYear, cost);
+  });
 
   // Sort documents by period
   const sortedDocs = [...docs].sort((a, b) => a.periodEnd.localeCompare(b.periodEnd));
 
   return sortedDocs.map(doc => {
-    const value = extractMetricValue(doc, metric) || 0;
-    const month = getMonthFromDateString(doc.periodEnd);
-    const isWinter = winterMonths.includes(month);
+    const period = formatDateStringToMonthYear(doc.periodEnd);
+    const documentValue = extractMetricValue(doc, metric) || 0;
+    const reconCost = reconCostsByMonth.get(period);
+    
+    // Calculate reconciliation value based on metric
+    let reconValue = 0;
+    if (reconCost) {
+      switch (metric) {
+        case 'total':
+          reconValue = reconCost.total_cost;
+          break;
+        case 'basic':
+          reconValue = reconCost.fixed_charges;
+          break;
+        case 'kva-charge':
+          reconValue = reconCost.demand_charges;
+          break;
+        case 'kwh-charge':
+          reconValue = reconCost.energy_cost;
+          break;
+        case 'kwh-consumption':
+          reconValue = reconCost.total_kwh;
+          break;
+        default:
+          reconValue = reconCost.total_cost;
+      }
+    }
 
     return {
-      period: formatDateStringToMonthYear(doc.periodEnd),
-      value,
-      winterAvg: isWinter && winterAvg ? winterAvg : undefined,
-      summerAvg: !isWinter && summerAvg ? summerAvg : undefined,
+      period,
+      amount: reconValue,
+      documentAmount: documentValue,
     };
   });
 }
 
 /**
- * Generate all 6 charts for a meter
+ * Prepare all chart data for a meter (all metrics)
  */
-export async function generateMeterCharts(
+export async function prepareMeterChartData(
   siteId: string,
   meterId: string,
   meterNumber: string
-): Promise<Map<string, string>> {
-  const charts = new Map<string, string>();
+): Promise<Map<ChartMetricKey, { data: RechartsDataPoint[]; title: string }>> {
+  const chartDataMap = new Map<ChartMetricKey, { data: RechartsDataPoint[]; title: string }>();
 
-  // Fetch data
   const [docs, reconCosts] = await Promise.all([
     getDocumentsForMeter(siteId, meterNumber),
     getReconciliationCostsForMeter(siteId, meterId),
   ]);
 
-  // Generate chart for each metric
   for (const metric of CHART_METRICS) {
-    const chartData = prepareChartDataForMetric(docs, reconCosts, metric.key);
+    const data = prepareRechartsData(docs, reconCosts, metric.key);
     
-    // Skip if no data
-    if (chartData.length === 0) {
-      continue;
-    }
-
-    const chartImage = generateTariffAnalysisChart(
-      `${meterNumber} - ${metric.title}`,
-      metric.unit,
-      chartData,
-      500,
-      320,
-      3
-    );
-
-    if (chartImage) {
-      charts.set(metric.filename, chartImage);
+    if (data.length > 0) {
+      chartDataMap.set(metric.key, {
+        data,
+        title: `${meterNumber} - ${metric.title}`,
+      });
     }
   }
 
-  return charts;
+  return chartDataMap;
 }
 
 /**
  * Convert base64 data URL to Blob
  */
-function dataURLtoBlob(dataURL: string): Blob {
+export function dataURLtoBlob(dataURL: string): Blob {
   const arr = dataURL.split(',');
   const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/png';
   const bstr = atob(arr[1]);
@@ -357,92 +325,40 @@ function dataURLtoBlob(dataURL: string): Blob {
 }
 
 /**
- * Save meter charts to storage
+ * Save a single chart image to storage
  */
-export async function saveMeterCharts(
+export async function saveChartToStorage(
   siteId: string,
   meterNumber: string,
-  charts: Map<string, string>
-): Promise<number> {
-  let savedCount = 0;
-
-  for (const [metricFilename, chartDataUrl] of charts) {
-    try {
-      const fileName = `${meterNumber}-${metricFilename}.png`;
-      const { bucket, path } = await generateStoragePath(
-        siteId,
-        'Metering',
-        'Reconciliations/Graphs',
-        fileName
-      );
-
-      const blob = dataURLtoBlob(chartDataUrl);
-
-      const { error } = await supabase.storage
-        .from(bucket)
-        .upload(path, blob, {
-          contentType: 'image/png',
-          upsert: true,
-        });
-
-      if (error) {
-        console.error(`Failed to save chart ${fileName}:`, error);
-      } else {
-        savedCount++;
-      }
-    } catch (error) {
-      console.error(`Error saving chart for ${meterNumber}-${metricFilename}:`, error);
-    }
-  }
-
-  return savedCount;
-}
-
-/**
- * Generate and save all reconciliation charts for a site
- */
-export async function generateAllReconciliationCharts(
-  siteId: string,
-  onProgress?: (current: number, total: number, meterNumber: string) => void
-): Promise<{ success: boolean; totalCharts: number; errors: string[] }> {
-  const errors: string[] = [];
-  let totalCharts = 0;
-
+  metricFilename: string,
+  chartDataUrl: string
+): Promise<boolean> {
   try {
-    // Get all meters on schematic
-    const meters = await getMetersOnSchematic(siteId);
+    const fileName = `${meterNumber}-${metricFilename}.png`;
+    const { bucket, path } = await generateStoragePath(
+      siteId,
+      'Metering',
+      'Reconciliations/Graphs',
+      fileName
+    );
+
+    const blob = dataURLtoBlob(chartDataUrl);
+
+    const { error } = await supabase.storage
+      .from(bucket)
+      .upload(path, blob, {
+        contentType: 'image/png',
+        upsert: true,
+      });
+
+    if (error) {
+      console.error(`Failed to save chart ${fileName}:`, error);
+      return false;
+    }
     
-    if (meters.length === 0) {
-      return { success: true, totalCharts: 0, errors: [] };
-    }
-
-    const totalMetrics = CHART_METRICS.length;
-    let currentChart = 0;
-
-    for (const meter of meters) {
-      try {
-        // Generate charts for this meter
-        const charts = await generateMeterCharts(siteId, meter.id, meter.meter_number);
-        
-        // Save charts
-        const savedCount = await saveMeterCharts(siteId, meter.meter_number, charts);
-        totalCharts += savedCount;
-        
-        currentChart += totalMetrics;
-        onProgress?.(currentChart, meters.length * totalMetrics, meter.meter_number);
-      } catch (error) {
-        const errorMsg = `Failed to generate charts for meter ${meter.meter_number}: ${error}`;
-        console.error(errorMsg);
-        errors.push(errorMsg);
-        currentChart += totalMetrics;
-        onProgress?.(currentChart, meters.length * totalMetrics, meter.meter_number);
-      }
-    }
-
-    return { success: errors.length === 0, totalCharts, errors };
+    return true;
   } catch (error) {
-    const errorMsg = `Chart generation failed: ${error}`;
-    console.error(errorMsg);
-    return { success: false, totalCharts, errors: [errorMsg] };
+    console.error(`Error saving chart for ${meterNumber}-${metricFilename}:`, error);
+    return false;
   }
 }

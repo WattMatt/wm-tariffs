@@ -38,3 +38,5 @@ export type {
 
 export { useDownloadUtils } from './useDownloadUtils';
 export type { UseDownloadUtilsOptions } from './useDownloadUtils';
+
+export { useChartCapture } from './useChartCapture';
