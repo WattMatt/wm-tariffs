@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -9,7 +9,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { FileCheck2, AlertCircle, CheckCircle2, DollarSign, Eye, FileText, ArrowUpDown, ArrowUp, ArrowDown, Eraser, Scale, Check, X, ChevronDown, Filter, ImageIcon } from "lucide-react";
+import { FileCheck2, AlertCircle, CheckCircle2, DollarSign, Eye, FileText, ArrowUpDown, ArrowUp, ArrowDown, Eraser, Scale, Check, X, ChevronDown, Filter, ImageIcon, Camera, Loader2 } from "lucide-react";
 import ReconciliationChartsDialog from "./ReconciliationChartsDialog";
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Legend } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
@@ -23,6 +23,8 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { format } from "date-fns";
 import { cn, formatDateString, formatDateStringToLong, formatDateStringToMonthYear, getMonthFromDateString, daysBetweenDateStrings, extractDateFromTimestamp } from "@/lib/utils";
 import { calculateMeterCost } from "@/lib/costCalculation";
+import html2canvas from "html2canvas";
+import { saveChartToStorage, CHART_METRICS } from "@/lib/reconciliation/chartGeneration";
 
 interface TariffAssignmentTabProps {
   siteId: string;
@@ -128,6 +130,9 @@ export default function TariffAssignmentTab({
   const [meterDiscontinuities, setMeterDiscontinuities] = useState<any[]>([]);
   const [hiddenDataKeys, setHiddenDataKeys] = useState<Set<string>>(new Set());
   const [chartsDialogOpen, setChartsDialogOpen] = useState(false);
+  const [isCapturingCharts, setIsCapturingCharts] = useState(false);
+  const [captureProgress, setCaptureProgress] = useState({ current: 0, total: 0, metric: '' });
+  const chartContainerRef = useRef<HTMLDivElement>(null);
 
   // Handle legend click to toggle data series
   const handleLegendClick = (dataKey: string) => {
@@ -946,6 +951,86 @@ export default function TariffAssignmentTab({
       }
     }
   }, [selectedChartMeter, selectedChartMetric, hideSeasonalAverages, showDocumentCharts, chartDialogCalculations]);
+
+  // Capture all charts for the current meter
+  const captureAllChartsForMeter = async () => {
+    if (!selectedChartMeter || !chartContainerRef.current) {
+      toast.error('No chart available to capture');
+      return;
+    }
+
+    const meterNumber = selectedChartMeter.meter.meter_number;
+    const metrics = CHART_METRICS.map(m => m.key);
+    
+    setIsCapturingCharts(true);
+    setCaptureProgress({ current: 0, total: metrics.length, metric: '' });
+    
+    let successCount = 0;
+    const errors: string[] = [];
+    
+    for (let i = 0; i < metrics.length; i++) {
+      const metric = metrics[i];
+      const metricInfo = CHART_METRICS.find(m => m.key === metric);
+      
+      setCaptureProgress({ current: i, total: metrics.length, metric: metricInfo?.title || metric });
+      
+      // Change the selected metric
+      setSelectedChartMetric(metric);
+      
+      // Wait for the chart to re-render
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      try {
+        // Find the chart element within the container
+        const chartElement = chartContainerRef.current?.querySelector('.recharts-responsive-container');
+        if (!chartElement) {
+          errors.push(`${metric}: Chart element not found`);
+          continue;
+        }
+
+        // Capture the chart using html2canvas
+        const canvas = await html2canvas(chartElement as HTMLElement, {
+          backgroundColor: '#ffffff',
+          scale: 2, // Higher quality
+          logging: false,
+          useCORS: true,
+        });
+        
+        const dataUrl = canvas.toDataURL('image/png');
+        
+        // Save to storage
+        const saved = await saveChartToStorage(
+          siteId,
+          meterNumber,
+          metricInfo?.filename || metric,
+          dataUrl
+        );
+        
+        if (saved) {
+          successCount++;
+        } else {
+          errors.push(`${metric}: Failed to save`);
+        }
+      } catch (error) {
+        console.error(`Error capturing chart for ${metric}:`, error);
+        errors.push(`${metric}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    }
+    
+    setIsCapturingCharts(false);
+    setCaptureProgress({ current: 0, total: 0, metric: '' });
+    
+    // Reset to total metric
+    setSelectedChartMetric('total');
+    
+    if (successCount === metrics.length) {
+      toast.success(`Successfully captured all ${successCount} charts for ${meterNumber}`);
+    } else if (successCount > 0) {
+      toast.warning(`Captured ${successCount}/${metrics.length} charts. ${errors.length} failed.`);
+    } else {
+      toast.error(`Failed to capture charts: ${errors.join(', ')}`);
+    }
+  };
 
   // Load calculated costs from database
   const calculateAllCosts = async () => {
@@ -3303,28 +3388,66 @@ export default function TariffAssignmentTab({
                           {showDocumentCharts ? `${getMetricLabel(selectedChartMetric)} Over Time` : 'Billing Cost Over Time'}
                         </CardTitle>
                         
-                        {/* Metric Selection Dropdown - Inside Card */}
-                        {showDocumentCharts && (
-                          <div className="flex items-center gap-2">
-                            <Label htmlFor="metric-select" className="text-sm font-medium whitespace-nowrap">
-                              Metric:
-                            </Label>
-                            <Select value={selectedChartMetric} onValueChange={setSelectedChartMetric}>
-                              <SelectTrigger id="metric-select" className="w-[240px]">
-                                <SelectValue placeholder="Select metric" />
-                              </SelectTrigger>
-                              <SelectContent className="bg-background z-50">
-                                <SelectItem value="total">Total Amount</SelectItem>
-                                <SelectItem value="basic">Basic Charge</SelectItem>
-                                <SelectItem value="kva-charge">kVA Charge</SelectItem>
-                                <SelectItem value="kwh-charge">kWh Charge</SelectItem>
-                                <SelectItem value="kva-consumption">kVA Consumption</SelectItem>
-                                <SelectItem value="kwh-consumption">kWh Consumption</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        )}
+                        <div className="flex items-center gap-3">
+                          {/* Capture All Charts Button */}
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={captureAllChartsForMeter}
+                                  disabled={isCapturingCharts}
+                                >
+                                  {isCapturingCharts ? (
+                                    <>
+                                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                      {captureProgress.current}/{captureProgress.total}
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Camera className="w-4 h-4 mr-2" />
+                                      Capture All Charts
+                                    </>
+                                  )}
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Capture all 6 metric charts for this meter</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                          
+                          {/* Metric Selection Dropdown - Inside Card */}
+                          {showDocumentCharts && (
+                            <div className="flex items-center gap-2">
+                              <Label htmlFor="metric-select" className="text-sm font-medium whitespace-nowrap">
+                                Metric:
+                              </Label>
+                              <Select value={selectedChartMetric} onValueChange={setSelectedChartMetric} disabled={isCapturingCharts}>
+                                <SelectTrigger id="metric-select" className="w-[240px]">
+                                  <SelectValue placeholder="Select metric" />
+                                </SelectTrigger>
+                                <SelectContent className="bg-background z-50">
+                                  <SelectItem value="total">Total Amount</SelectItem>
+                                  <SelectItem value="basic">Basic Charge</SelectItem>
+                                  <SelectItem value="kva-charge">kVA Charge</SelectItem>
+                                  <SelectItem value="kwh-charge">kWh Charge</SelectItem>
+                                  <SelectItem value="kva-consumption">kVA Consumption</SelectItem>
+                                  <SelectItem value="kwh-consumption">kWh Consumption</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          )}
+                        </div>
                       </div>
+                      
+                      {/* Capture Progress */}
+                      {isCapturingCharts && captureProgress.metric && (
+                        <div className="text-sm text-muted-foreground mt-2">
+                          Capturing: {captureProgress.metric}...
+                        </div>
+                      )}
                       
                       {hasMixedCurrencies && (
                         <Alert variant="destructive" className="mt-2">
@@ -3336,6 +3459,7 @@ export default function TariffAssignmentTab({
                       )}
                     </CardHeader>
                     <CardContent>
+                      <div ref={chartContainerRef}>
                       <ChartContainer
                         config={{
                           amount: {
@@ -3521,6 +3645,7 @@ export default function TariffAssignmentTab({
                           </ComposedChart>
                         </ResponsiveContainer>
                       </ChartContainer>
+                      </div>
 
                       {/* Meter Reading Discontinuities Alert */}
                       {showDocumentCharts && meterDiscontinuities && meterDiscontinuities.length > 0 && (
