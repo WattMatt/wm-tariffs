@@ -45,5 +45,16 @@ export {
   getCsvStorageUrl,
 } from './csvGeneration';
 
+// Chart Generation
+export {
+  CHART_METRICS,
+  getMetersOnSchematic,
+  getDocumentsForMeter,
+  getReconciliationCostsForMeter,
+  generateMeterCharts,
+  saveMeterCharts,
+  generateAllReconciliationCharts,
+} from './chartGeneration';
+
 // Re-export hook types for convenience
 export type { MeterConnection, HierarchicalCsvResult, DateRange, DocumentDateRange } from './types';
