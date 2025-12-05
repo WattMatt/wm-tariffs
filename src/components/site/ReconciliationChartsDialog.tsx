@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Download, RefreshCw, ImageIcon, Loader2, FolderOpen, Camera, X } from "lucide-react";
@@ -318,6 +319,8 @@ export default function ReconciliationChartsDialog({
                       <Camera className="w-4 h-4 mr-2" />
                       Capture All Charts
                     </>
+                  )}
+                </Button>
               )}
               {isBulkCapturing && onCancelBulkCapture && (
                 <Button
@@ -327,8 +330,6 @@ export default function ReconciliationChartsDialog({
                 >
                   <X className="w-4 h-4 mr-2" />
                   Cancel
-                </Button>
-              )}
                 </Button>
               )}
               <Button
@@ -353,6 +354,27 @@ export default function ReconciliationChartsDialog({
               )}
             </div>
           </div>
+          
+          {/* Progress bar for bulk capture */}
+          {isBulkCapturing && bulkCaptureProgress && (
+            <div className="mt-4 space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">
+                  Capturing {bulkCaptureProgress.metric} for meter {bulkCaptureProgress.meterNumber}
+                </span>
+                <span className="font-medium">
+                  {Math.round(((bulkCaptureProgress.currentMeter - 1) * bulkCaptureProgress.totalMetrics + bulkCaptureProgress.currentMetric) / (bulkCaptureProgress.totalMeters * bulkCaptureProgress.totalMetrics) * 100)}%
+                </span>
+              </div>
+              <Progress 
+                value={((bulkCaptureProgress.currentMeter - 1) * bulkCaptureProgress.totalMetrics + bulkCaptureProgress.currentMetric) / (bulkCaptureProgress.totalMeters * bulkCaptureProgress.totalMetrics) * 100} 
+                className="h-2"
+              />
+              <p className="text-xs text-muted-foreground">
+                Chart {(bulkCaptureProgress.currentMeter - 1) * bulkCaptureProgress.totalMetrics + bulkCaptureProgress.currentMetric} of {bulkCaptureProgress.totalMeters * bulkCaptureProgress.totalMetrics}
+              </p>
+            </div>
+          )}
         </DialogHeader>
 
         <ScrollArea className="h-[calc(85vh-140px)]">
