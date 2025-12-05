@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { calculateMeterCost, calculateMeterCostAcrossPeriods } from '@/lib/costCalculation';
 import { isValueCorrupt, type CorrectedReading } from '@/lib/dataValidation';
-import { getFullDateTime, generateAllReconciliationCharts } from '@/lib/reconciliation';
+import { getFullDateTime } from '@/lib/reconciliation';
 
 export interface MeterResult {
   id: string;
@@ -560,27 +560,8 @@ export function useReconciliationExecution(options: UseReconciliationExecutionOp
       }
     }
 
-    // Generate and save reconciliation charts for all schematic meters
-    try {
-      console.log('Starting chart generation for all schematic meters...');
-      const chartResult = await generateAllReconciliationCharts(
-        siteId,
-        (current, total, meterNumber) => {
-          console.log(`Generating charts: ${current}/${total} (${meterNumber})`);
-        }
-      );
-      
-      if (chartResult.totalCharts > 0) {
-        console.log(`Successfully saved ${chartResult.totalCharts} charts to Metering/Reconciliations/Graphs`);
-      }
-      
-      if (chartResult.errors.length > 0) {
-        console.warn('Chart generation had errors:', chartResult.errors);
-      }
-    } catch (chartError) {
-      // Don't fail the reconciliation save if chart generation fails
-      console.error('Chart generation failed:', chartError);
-    }
+    // Note: Chart generation now uses html2canvas capture and must be triggered from the UI
+    // after reconciliation save completes. The old Canvas-based generation produced corrupted output.
 
     return run.id;
   }, [siteId, meterConnectionsMap, calculateHierarchicalTotals]);
