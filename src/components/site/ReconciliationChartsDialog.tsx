@@ -4,9 +4,19 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Download, RefreshCw, ImageIcon, Loader2, FolderOpen, Camera, X } from "lucide-react";
+import { Download, RefreshCw, ImageIcon, Loader2, FolderOpen, Camera, X, CheckCircle2, AlertCircle, Play } from "lucide-react";
+
+export interface MeterCaptureStatus {
+  meterId: string;
+  meterNumber: string;
+  status: 'pending' | 'complete' | 'partial' | 'failed';
+  chartsComplete: number;
+  chartsTotal: number;
+  failedMetrics: string[];
+}
 
 interface BulkCaptureProgress {
   currentMeter: number;
@@ -21,11 +31,12 @@ interface ReconciliationChartsDialogProps {
   siteId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onBulkCapture?: () => void;
+  onBulkCapture?: (resumeFromIncomplete?: boolean) => void;
   onCancelBulkCapture?: () => void;
   isBulkCapturing?: boolean;
   bulkCaptureProgress?: BulkCaptureProgress | null;
   isBackgroundCapturing?: boolean;
+  meterCaptureStatuses?: MeterCaptureStatus[];
 }
 
 interface ChartFile {
@@ -71,13 +82,24 @@ export default function ReconciliationChartsDialog({
   onCancelBulkCapture,
   isBulkCapturing = false,
   bulkCaptureProgress,
-  isBackgroundCapturing = false
+  isBackgroundCapturing = false,
+  meterCaptureStatuses = []
 }: ReconciliationChartsDialogProps) {
   const [charts, setCharts] = useState<ChartFile[]>([]);
   const [groupedCharts, setGroupedCharts] = useState<Record<string, ChartFile[]>>({});
   const [meterOrder, setMeterOrder] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Calculate incomplete meters for resume button
+  const incompleteMeters = meterCaptureStatuses.filter(m => m.status !== 'complete');
+  const completeMeters = meterCaptureStatuses.filter(m => m.status === 'complete');
+  const hasIncomplete = incompleteMeters.length > 0 && completeMeters.length > 0;
+
+  // Get status for a meter
+  const getMeterStatus = (meterNumber: string): MeterCaptureStatus | undefined => {
+    return meterCaptureStatuses.find(s => s.meterNumber === meterNumber);
+  };
 
   // Fetch meter order from site_reconciliation_settings
   const fetchMeterOrder = async (): Promise<MeterWithHierarchy[]> => {
@@ -334,24 +356,37 @@ export default function ReconciliationChartsDialog({
             </div>
             <div className="flex items-center gap-2">
               {onBulkCapture && (
-                <Button
-                  variant="default"
-                  size="sm"
-                  onClick={onBulkCapture}
-                  disabled={isBackgroundCapturing || isLoading}
-                >
-                  {isBackgroundCapturing ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Capturing in background...
-                    </>
-                  ) : (
-                    <>
-                      <Camera className="w-4 h-4 mr-2" />
-                      Capture All Charts
-                    </>
+                <>
+                  {hasIncomplete && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => onBulkCapture(true)}
+                      disabled={isBackgroundCapturing || isLoading}
+                    >
+                      <Play className="w-4 h-4 mr-2" />
+                      Resume ({incompleteMeters.length} remaining)
+                    </Button>
                   )}
-                </Button>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={() => onBulkCapture(false)}
+                    disabled={isBackgroundCapturing || isLoading}
+                  >
+                    {isBackgroundCapturing ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Capturing in background...
+                      </>
+                    ) : (
+                      <>
+                        <Camera className="w-4 h-4 mr-2" />
+                        {completeMeters.length > 0 ? 'Restart All' : 'Capture All Charts'}
+                      </>
+                    )}
+                  </Button>
+                </>
               )}
               {isBackgroundCapturing && onCancelBulkCapture && (
                 <Button
@@ -418,50 +453,69 @@ export default function ReconciliationChartsDialog({
             </div>
           ) : (
             <Accordion type="multiple" defaultValue={meterOrder} className="space-y-2">
-              {meterOrder.map((meterNumber, index) => (
-                <AccordionItem key={meterNumber} value={meterNumber} className="border rounded-lg px-4">
-                  <AccordionTrigger className="hover:no-underline">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground w-6">{index + 1}.</span>
-                      <span className="font-semibold">{meterNumber}</span>
-                      <span className="text-sm text-muted-foreground">
-                        ({groupedCharts[meterNumber]?.length || 0} charts)
-                      </span>
-                    </div>
-                  </AccordionTrigger>
-                  <AccordionContent>
-                    <div className="grid grid-cols-3 gap-4 pb-4">
-                      {groupedCharts[meterNumber]?.map((chart) => (
-                        <Card key={chart.name} className="overflow-hidden group relative">
-                          <div className="bg-white relative border-b h-24 cursor-zoom-in transition-all duration-300 hover:scale-[4] hover:z-50 hover:shadow-xl hover:rounded-md origin-center">
-                            <img
-                              src={`${chart.url}?t=${Date.now()}`}
-                              alt={`${chart.meterNumber} - ${chart.metricLabel}`}
-                              className="w-full h-full object-contain"
-                              loading="lazy"
-                            />
-                          </div>
-                          <CardContent className="p-2">
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs font-medium truncate">
-                                {chart.metricLabel}
-                              </span>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                                onClick={() => downloadChart(chart)}
-                              >
-                                <Download className="w-3 h-3" />
-                              </Button>
+              {meterOrder.map((meterNumber, index) => {
+                const status = getMeterStatus(meterNumber);
+                return (
+                  <AccordionItem key={meterNumber} value={meterNumber} className="border rounded-lg px-4">
+                    <AccordionTrigger className="hover:no-underline">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground w-6">{index + 1}.</span>
+                        <span className="font-semibold">{meterNumber}</span>
+                        <span className="text-sm text-muted-foreground">
+                          ({groupedCharts[meterNumber]?.length || 0} charts)
+                        </span>
+                        {status && (
+                          <Badge 
+                            variant={
+                              status.status === 'complete' ? 'default' : 
+                              status.status === 'partial' ? 'secondary' :
+                              status.status === 'failed' ? 'destructive' : 'outline'
+                            }
+                            className="ml-2 text-xs"
+                          >
+                            {status.status === 'complete' && <CheckCircle2 className="w-3 h-3 mr-1" />}
+                            {status.status === 'failed' && <AlertCircle className="w-3 h-3 mr-1" />}
+                            {status.status === 'complete' ? 'Complete' : 
+                             status.status === 'partial' ? `${status.chartsComplete}/${status.chartsTotal}` :
+                             status.status === 'failed' ? 'Failed' : 'Pending'}
+                          </Badge>
+                        )}
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <div className="grid grid-cols-3 gap-4 pb-4">
+                        {groupedCharts[meterNumber]?.map((chart) => (
+                          <Card key={chart.name} className="overflow-hidden group relative">
+                            <div className="bg-white relative border-b h-24 cursor-zoom-in transition-all duration-300 hover:scale-[4] hover:z-50 hover:shadow-xl hover:rounded-md origin-center">
+                              <img
+                                src={`${chart.url}?t=${Date.now()}`}
+                                alt={`${chart.meterNumber} - ${chart.metricLabel}`}
+                                className="w-full h-full object-contain"
+                                loading="lazy"
+                              />
                             </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  </AccordionContent>
-                </AccordionItem>
-              ))}
+                            <CardContent className="p-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-medium truncate">
+                                  {chart.metricLabel}
+                                </span>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                                  onClick={() => downloadChart(chart)}
+                                >
+                                  <Download className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                );
+              })}
             </Accordion>
           )}
         </ScrollArea>

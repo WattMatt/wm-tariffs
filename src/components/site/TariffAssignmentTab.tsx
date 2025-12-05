@@ -10,7 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { FileCheck2, AlertCircle, CheckCircle2, DollarSign, Eye, FileText, ArrowUpDown, ArrowUp, ArrowDown, Eraser, Scale, Check, X, ChevronDown, Filter, ImageIcon, Camera, Loader2 } from "lucide-react";
-import ReconciliationChartsDialog from "./ReconciliationChartsDialog";
+import ReconciliationChartsDialog, { MeterCaptureStatus } from "./ReconciliationChartsDialog";
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Legend } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
@@ -1166,13 +1166,24 @@ export default function TariffAssignmentTab({
     }
   };
 
-  // Handle individual meter completion
+  // Handle individual meter completion - accumulate results for real-time tracking
   const handleMeterCaptureComplete = (result: MeterCaptureResult) => {
     console.log(`[ChartCapture] Meter complete: ${result.meterNumber} - ${result.chartsSuccessful}/${result.chartsAttempted} in ${(result.duration / 1000).toFixed(1)}s`);
+    
+    // Update meter results in real-time (replace existing or add new)
+    setMeterCaptureResults(prev => {
+      const existing = prev.findIndex(r => r.meterId === result.meterId);
+      if (existing >= 0) {
+        const updated = [...prev];
+        updated[existing] = result;
+        return updated;
+      }
+      return [...prev, result];
+    });
   };
 
   // Bulk capture all charts for all meters with documents (background version)
-  const bulkCaptureAllMeters = () => {
+  const bulkCaptureAllMeters = (resumeFromIncomplete: boolean = false) => {
     // Reset cancel and pause flags
     cancelBulkCaptureRef.current = false;
     pauseBulkCaptureRef.current = false;
@@ -1190,11 +1201,33 @@ export default function TariffAssignmentTab({
       toast.error('No meters with document data to capture');
       return;
     }
+
+    // If resuming, filter to only incomplete meters
+    let metersToProcess = metersWithDocs;
+    if (resumeFromIncomplete && meterCaptureResults.length > 0) {
+      const completedMeterIds = new Set(
+        meterCaptureResults
+          .filter(r => r.chartsFailed === 0)
+          .map(r => r.meterId)
+      );
+      metersToProcess = metersWithDocs.filter(m => !completedMeterIds.has(m.meter.id));
+      
+      if (metersToProcess.length === 0) {
+        toast.success('All meters already captured successfully!');
+        setShowCelebration(true);
+        return;
+      }
+      
+      toast.info(`Resuming capture for ${metersToProcess.length} remaining meters`);
+    } else {
+      // Starting fresh - clear previous results
+      setMeterCaptureResults([]);
+    }
     
     // Build the capture queue
     const queue: typeof backgroundCaptureQueue = [];
     
-    for (const { meter, docs } of metersWithDocs) {
+    for (const { meter, docs } of metersToProcess) {
       for (const metricInfo of CHART_METRICS) {
         queue.push({
           meter,
@@ -1205,7 +1238,7 @@ export default function TariffAssignmentTab({
       }
     }
     
-    const totalMeters = metersWithDocs.length;
+    const totalMeters = metersToProcess.length;
     const totalCharts = queue.length;
     
     // Close dialog immediately
@@ -1218,7 +1251,9 @@ export default function TariffAssignmentTab({
     
     // Show persistent toast
     backgroundCaptureToastRef.current = toast.loading(
-      `Starting chart capture for ${totalMeters} meters (${totalCharts} charts)...`,
+      resumeFromIncomplete 
+        ? `Resuming capture for ${totalMeters} meters (${totalCharts} charts)...`
+        : `Starting chart capture for ${totalMeters} meters (${totalCharts} charts)...`,
       {
         action: {
           label: 'Cancel',
@@ -1227,6 +1262,19 @@ export default function TariffAssignmentTab({
       }
     );
   };
+
+  // Compute meter capture statuses from results
+  const meterCaptureStatuses: MeterCaptureStatus[] = React.useMemo(() => {
+    return meterCaptureResults.map(result => ({
+      meterId: result.meterId,
+      meterNumber: result.meterNumber,
+      status: result.chartsFailed === 0 ? 'complete' as const : 
+              result.chartsSuccessful === 0 ? 'failed' as const : 'partial' as const,
+      chartsComplete: result.chartsSuccessful,
+      chartsTotal: result.chartsAttempted,
+      failedMetrics: result.failedMetrics,
+    }));
+  }, [meterCaptureResults]);
 
   // Load calculated costs from database
   const calculateAllCosts = async () => {
@@ -4410,6 +4458,7 @@ export default function TariffAssignmentTab({
         isBulkCapturing={isBulkCapturingCharts}
         bulkCaptureProgress={bulkCaptureProgress}
         isBackgroundCapturing={isBackgroundCapturing}
+        meterCaptureStatuses={meterCaptureStatuses}
       />
 
       {/* Background Chart Capture (renders off-screen) */}
