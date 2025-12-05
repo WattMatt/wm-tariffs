@@ -56,32 +56,45 @@ export interface CaptureLogEntry {
   meterNumber: string;
   metricKey: string;
   metricLabel: string;
-  status: 'pending' | 'rendering' | 'capturing' | 'success' | 'failed' | 'retrying';
+  status: 'pending' | 'rendering' | 'capturing' | 'success' | 'failed' | 'retrying' | 'meter_complete';
   attempt: number;
   error?: string;
   duration?: number;
+  meterIndex?: number;
+  totalMeters?: number;
+}
+
+export interface MeterCaptureResult {
+  meterNumber: string;
+  meterId: string;
+  chartsAttempted: number;
+  chartsSuccessful: number;
+  chartsFailed: number;
+  failedMetrics: string[];
+  duration: number;
 }
 
 interface BackgroundChartCaptureProps {
   siteId: string;
   queue: CaptureQueueItem[];
   onProgress: (current: number, total: number, meterNumber: string, metric: string, batchInfo?: string) => void;
-  onComplete: (success: number, failed: number, cancelled: boolean, log: CaptureLogEntry[]) => void;
+  onComplete: (success: number, failed: number, cancelled: boolean, log: CaptureLogEntry[], meterResults: MeterCaptureResult[]) => void;
   onPauseStateChange?: (isPaused: boolean) => void;
   onLogUpdate?: (log: CaptureLogEntry[]) => void;
+  onMeterComplete?: (result: MeterCaptureResult) => void;
   cancelRef: React.MutableRefObject<boolean>;
   pauseRef: React.MutableRefObject<boolean>;
   isActive: boolean;
 }
 
 // Configuration
-const BATCH_SIZE = 5; // Smaller batches for more stability
-const BATCH_DELAY_MS = 1500;
-const PAUSE_CHECK_INTERVAL_MS = 500;
-const RENDER_SETUP_DELAY_MS = 800; // Time to set up chart
-const RENDER_VERIFY_DELAY_MS = 400; // Time to verify render
+const RENDER_SETUP_DELAY_MS = 800;
+const RENDER_VERIFY_DELAY_MS = 400;
 const MAX_RETRY_ATTEMPTS = 3;
 const RETRY_DELAY_MS = 1000;
+const BETWEEN_CHARTS_DELAY_MS = 500;
+const BETWEEN_METERS_DELAY_MS = 1500;
+const PAUSE_CHECK_INTERVAL_MS = 500;
 
 // Helper to extract metric value from document
 const extractMetricValue = (doc: DocumentShopNumber | undefined, metric: string): number | null => {
@@ -197,6 +210,30 @@ const prepareChartData = async (
   });
 };
 
+// Group queue items by meter
+interface MeterGroup {
+  meter: Meter;
+  items: CaptureQueueItem[];
+}
+
+const groupByMeter = (queue: CaptureQueueItem[]): MeterGroup[] => {
+  const meterMap = new Map<string, MeterGroup>();
+  
+  queue.forEach(item => {
+    const existing = meterMap.get(item.meter.id);
+    if (existing) {
+      existing.items.push(item);
+    } else {
+      meterMap.set(item.meter.id, {
+        meter: item.meter,
+        items: [item],
+      });
+    }
+  });
+  
+  return Array.from(meterMap.values());
+};
+
 export default function BackgroundChartCapture({
   siteId,
   queue,
@@ -204,6 +241,7 @@ export default function BackgroundChartCapture({
   onComplete,
   onPauseStateChange,
   onLogUpdate,
+  onMeterComplete,
   cancelRef,
   pauseRef,
   isActive,
@@ -214,6 +252,7 @@ export default function BackgroundChartCapture({
   const [renderReady, setRenderReady] = useState(false);
   const processingRef = useRef(false);
   const captureLogRef = useRef<CaptureLogEntry[]>([]);
+  const meterResultsRef = useRef<MeterCaptureResult[]>([]);
 
   // Add log entry
   const addLogEntry = useCallback((entry: Omit<CaptureLogEntry, 'timestamp'>) => {
@@ -255,7 +294,9 @@ export default function BackgroundChartCapture({
   // Capture a single chart with forced setup and verification
   const captureChart = useCallback(async (
     item: CaptureQueueItem,
-    attempt: number
+    attempt: number,
+    meterIndex: number,
+    totalMeters: number
   ): Promise<{ success: boolean; error?: string }> => {
     const startTime = Date.now();
     
@@ -267,6 +308,8 @@ export default function BackgroundChartCapture({
         metricLabel: item.metricInfo.title,
         status: 'rendering',
         attempt,
+        meterIndex,
+        totalMeters,
       });
 
       const data = await prepareChartData(item.meter.id, item.docs, item.metric);
@@ -314,6 +357,8 @@ export default function BackgroundChartCapture({
         metricLabel: item.metricInfo.title,
         status: 'capturing',
         attempt,
+        meterIndex,
+        totalMeters,
       });
 
       const chartElement = chartRef.current?.querySelector('.recharts-responsive-container');
@@ -366,6 +411,8 @@ export default function BackgroundChartCapture({
         status: 'success',
         attempt,
         duration,
+        meterIndex,
+        totalMeters,
       });
 
       return { success: true };
@@ -382,145 +429,190 @@ export default function BackgroundChartCapture({
         attempt,
         error: errorMessage,
         duration,
+        meterIndex,
+        totalMeters,
       });
 
       return { success: false, error: errorMessage };
     }
   }, [siteId, addLogEntry, verifyChartRendered]);
 
-  // Process queue with retry logic
-  useEffect(() => {
-    if (!isActive || queue.length === 0 || processingRef.current) return;
+  // Process all 6 charts for a single meter
+  const processMeterCharts = useCallback(async (
+    meterGroup: MeterGroup,
+    meterIndex: number,
+    totalMeters: number
+  ): Promise<MeterCaptureResult> => {
+    const startTime = Date.now();
+    const { meter, items } = meterGroup;
+    let successCount = 0;
+    const failedMetrics: string[] = [];
 
-    const waitWhilePaused = async () => {
+    console.log(`[ChartCapture] Processing meter ${meterIndex + 1}/${totalMeters}: ${meter.meter_number} (${items.length} charts)`);
+
+    for (let chartIndex = 0; chartIndex < items.length; chartIndex++) {
+      const item = items[chartIndex];
+      
+      // Check for cancel
+      if (cancelRef.current) {
+        break;
+      }
+
+      // Check for pause
       while (pauseRef.current && !cancelRef.current) {
         onPauseStateChange?.(true);
         await new Promise(resolve => setTimeout(resolve, PAUSE_CHECK_INTERVAL_MS));
       }
       onPauseStateChange?.(false);
+
+      if (cancelRef.current) {
+        break;
+      }
+
+      // Update progress
+      const overallProgress = (meterIndex * 6) + chartIndex + 1;
+      const totalCharts = totalMeters * 6;
+      onProgress(
+        overallProgress, 
+        totalCharts, 
+        meter.meter_number, 
+        item.metricInfo.title,
+        `Meter ${meterIndex + 1}/${totalMeters} - Chart ${chartIndex + 1}/6`
+      );
+
+      // Attempt capture with retries
+      let success = false;
+      for (let attempt = 1; attempt <= MAX_RETRY_ATTEMPTS && !success; attempt++) {
+        if (attempt > 1) {
+          addLogEntry({
+            meterNumber: meter.meter_number,
+            metricKey: item.metric,
+            metricLabel: item.metricInfo.title,
+            status: 'retrying',
+            attempt,
+            meterIndex,
+            totalMeters,
+          });
+          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+        }
+
+        const result = await captureChart(item, attempt, meterIndex, totalMeters);
+        success = result.success;
+      }
+
+      if (success) {
+        successCount++;
+      } else {
+        failedMetrics.push(item.metricInfo.title);
+      }
+
+      // Small delay between charts within a meter
+      if (chartIndex < items.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, BETWEEN_CHARTS_DELAY_MS));
+      }
+    }
+
+    // If there were failures, do one more retry pass for this meter
+    if (failedMetrics.length > 0 && !cancelRef.current) {
+      console.log(`[ChartCapture] Meter ${meter.meter_number}: Retrying ${failedMetrics.length} failed charts`);
+      
+      const failedItems = items.filter(item => failedMetrics.includes(item.metricInfo.title));
+      
+      for (const item of failedItems) {
+        if (cancelRef.current) break;
+        
+        // Extra retry attempt
+        const result = await captureChart(item, MAX_RETRY_ATTEMPTS + 1, meterIndex, totalMeters);
+        if (result.success) {
+          successCount++;
+          const idx = failedMetrics.indexOf(item.metricInfo.title);
+          if (idx > -1) failedMetrics.splice(idx, 1);
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+      }
+    }
+
+    const duration = Date.now() - startTime;
+    const result: MeterCaptureResult = {
+      meterNumber: meter.meter_number,
+      meterId: meter.id,
+      chartsAttempted: items.length,
+      chartsSuccessful: successCount,
+      chartsFailed: failedMetrics.length,
+      failedMetrics,
+      duration,
     };
 
-    const processQueue = async () => {
+    // Log meter completion
+    addLogEntry({
+      meterNumber: meter.meter_number,
+      metricKey: 'all',
+      metricLabel: `All charts (${successCount}/${items.length} successful)`,
+      status: 'meter_complete',
+      attempt: 1,
+      duration,
+      meterIndex,
+      totalMeters,
+    });
+
+    console.log(`[ChartCapture] Meter ${meter.meter_number} complete: ${successCount}/${items.length} charts successful in ${(duration / 1000).toFixed(1)}s`);
+
+    return result;
+  }, [captureChart, addLogEntry, onProgress, onPauseStateChange, cancelRef, pauseRef]);
+
+  // Process queue meter by meter
+  useEffect(() => {
+    if (!isActive || queue.length === 0 || processingRef.current) return;
+
+    const processAllMeters = async () => {
       processingRef.current = true;
       captureLogRef.current = [];
+      meterResultsRef.current = [];
       
-      let successCount = 0;
-      let failCount = 0;
-      const failedItems: { item: CaptureQueueItem; index: number }[] = [];
+      // Group queue by meter
+      const meterGroups = groupByMeter(queue);
+      const totalMeters = meterGroups.length;
       
-      const totalBatches = Math.ceil(queue.length / BATCH_SIZE);
+      console.log(`[ChartCapture] Starting capture: ${totalMeters} meters, ${queue.length} total charts`);
 
-      console.log(`[ChartCapture] Starting capture of ${queue.length} charts in ${totalBatches} batches`);
+      let totalSuccess = 0;
+      let totalFailed = 0;
 
-      // First pass: process all items
-      for (let i = 0; i < queue.length; i++) {
+      for (let meterIndex = 0; meterIndex < meterGroups.length; meterIndex++) {
         if (cancelRef.current) {
-          onComplete(successCount, failCount + failedItems.length, true, captureLogRef.current);
-          processingRef.current = false;
-          setCurrentItem(null);
-          return;
+          console.log('[ChartCapture] Capture cancelled by user');
+          break;
         }
 
-        await waitWhilePaused();
-
-        if (cancelRef.current) {
-          onComplete(successCount, failCount + failedItems.length, true, captureLogRef.current);
-          processingRef.current = false;
-          setCurrentItem(null);
-          return;
-        }
-
-        const item = queue[i];
-        const currentBatch = Math.floor(i / BATCH_SIZE) + 1;
-        const batchInfo = `Batch ${currentBatch}/${totalBatches}`;
+        const meterGroup = meterGroups[meterIndex];
         
-        onProgress(i + 1, queue.length, item.meter.meter_number, item.metricInfo.title, batchInfo);
+        // Process all 6 charts for this meter
+        const meterResult = await processMeterCharts(meterGroup, meterIndex, totalMeters);
+        
+        // Store result
+        meterResultsRef.current = [...meterResultsRef.current, meterResult];
+        totalSuccess += meterResult.chartsSuccessful;
+        totalFailed += meterResult.chartsFailed;
 
-        // Attempt capture with retry
-        let success = false;
-        for (let attempt = 1; attempt <= MAX_RETRY_ATTEMPTS && !success; attempt++) {
-          if (attempt > 1) {
-            addLogEntry({
-              meterNumber: item.meter.meter_number,
-              metricKey: item.metric,
-              metricLabel: item.metricInfo.title,
-              status: 'retrying',
-              attempt,
-            });
-            await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
-          }
+        // Notify about meter completion
+        onMeterComplete?.(meterResult);
 
-          const result = await captureChart(item, attempt);
-          success = result.success;
-        }
-
-        if (success) {
-          successCount++;
-        } else {
-          failedItems.push({ item, index: i });
-        }
-
-        // Batch delay
-        if ((i + 1) % BATCH_SIZE === 0 && i + 1 < queue.length) {
-          console.log(`[ChartCapture] Completed batch ${currentBatch}/${totalBatches}, pausing...`);
-          await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
+        // Delay before next meter (unless it's the last one or cancelled)
+        if (meterIndex < meterGroups.length - 1 && !cancelRef.current) {
+          console.log(`[ChartCapture] Waiting ${BETWEEN_METERS_DELAY_MS}ms before next meter...`);
+          await new Promise(resolve => setTimeout(resolve, BETWEEN_METERS_DELAY_MS));
         }
       }
 
-      // Retry pass: re-attempt all failed items
-      if (failedItems.length > 0 && !cancelRef.current) {
-        console.log(`[ChartCapture] Starting retry pass for ${failedItems.length} failed items`);
-        
-        for (const { item, index } of failedItems) {
-          if (cancelRef.current) break;
-          await waitWhilePaused();
-          if (cancelRef.current) break;
-
-          onProgress(
-            queue.length, 
-            queue.length, 
-            item.meter.meter_number, 
-            item.metricInfo.title, 
-            `Retry pass (${failedItems.indexOf({ item, index }) + 1}/${failedItems.length})`
-          );
-
-          // Extra retry attempts for previously failed items
-          let success = false;
-          for (let attempt = MAX_RETRY_ATTEMPTS + 1; attempt <= MAX_RETRY_ATTEMPTS + 2 && !success; attempt++) {
-            addLogEntry({
-              meterNumber: item.meter.meter_number,
-              metricKey: item.metric,
-              metricLabel: item.metricInfo.title,
-              status: 'retrying',
-              attempt,
-            });
-            
-            // Longer delay before final retries
-            await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS * 2));
-            
-            const result = await captureChart(item, attempt);
-            success = result.success;
-          }
-
-          if (success) {
-            successCount++;
-            // Remove from fail count since we had counted it earlier
-          } else {
-            failCount++;
-          }
-        }
-      } else {
-        failCount = failedItems.length;
-      }
-
-      console.log(`[ChartCapture] Complete: ${successCount} success, ${failCount} failed`);
-      onComplete(successCount, failCount, false, captureLogRef.current);
+      console.log(`[ChartCapture] All meters complete: ${totalSuccess} success, ${totalFailed} failed`);
+      onComplete(totalSuccess, totalFailed, cancelRef.current, captureLogRef.current, meterResultsRef.current);
       processingRef.current = false;
       setCurrentItem(null);
     };
 
-    processQueue();
-  }, [isActive, queue, captureChart, addLogEntry, onProgress, onComplete, onPauseStateChange, cancelRef, pauseRef]);
+    processAllMeters();
+  }, [isActive, queue, processMeterCharts, onComplete, onMeterComplete, cancelRef]);
 
   if (!isActive || !currentItem) return null;
 
