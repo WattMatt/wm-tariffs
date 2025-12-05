@@ -25,7 +25,7 @@ import { cn, formatDateString, formatDateStringToLong, formatDateStringToMonthYe
 import { calculateMeterCost } from "@/lib/costCalculation";
 import html2canvas from "html2canvas";
 import { saveChartToStorage, CHART_METRICS, ChartMetricKey } from "@/lib/reconciliation/chartGeneration";
-import BackgroundChartCapture, { CaptureLogEntry } from "./BackgroundChartCapture";
+import BackgroundChartCapture, { CaptureLogEntry, MeterCaptureResult } from "./BackgroundChartCapture";
 
 interface TariffAssignmentTabProps {
   siteId: string;
@@ -1106,16 +1106,20 @@ export default function TariffAssignmentTab({
     });
   };
 
+  // State for meter results
+  const [meterCaptureResults, setMeterCaptureResults] = useState<MeterCaptureResult[]>([]);
+
   // Background capture complete handler
-  const handleBackgroundCaptureComplete = (success: number, failed: number, cancelled: boolean, log: CaptureLogEntry[]) => {
+  const handleBackgroundCaptureComplete = (success: number, failed: number, cancelled: boolean, log: CaptureLogEntry[], meterResults: MeterCaptureResult[]) => {
     // Dismiss progress toast
     if (backgroundCaptureToastRef.current) {
       toast.dismiss(backgroundCaptureToastRef.current);
       backgroundCaptureToastRef.current = null;
     }
     
-    // Store the log
+    // Store the log and meter results
     setCaptureLog(log);
+    setMeterCaptureResults(meterResults);
     
     // Reset state
     setIsBackgroundCapturing(false);
@@ -1123,12 +1127,13 @@ export default function TariffAssignmentTab({
     setBulkCaptureProgress(null);
     setBackgroundCaptureQueue([]);
     
-    // Show result with option to view log
-    const total = success + failed;
-    const failedEntries = log.filter(e => e.status === 'failed');
+    // Calculate meter-level stats
+    const totalMeters = meterResults.length;
+    const metersFullySuccessful = meterResults.filter(m => m.chartsFailed === 0).length;
+    const metersWithFailures = meterResults.filter(m => m.chartsFailed > 0);
     
     if (cancelled) {
-      toast.info(`Bulk capture cancelled. Captured ${success}/${total} charts.`, {
+      toast.info(`Capture cancelled. Completed ${meterResults.length} meters (${success} charts).`, {
         action: {
           label: 'View Log',
           onClick: () => setShowCaptureLog(true),
@@ -1136,7 +1141,7 @@ export default function TariffAssignmentTab({
         duration: 10000,
       });
     } else if (failed === 0) {
-      toast.success(`Successfully captured all ${success} charts`, {
+      toast.success(`All ${totalMeters} meters captured successfully (${success} charts)`, {
         action: {
           label: 'View Log',
           onClick: () => setShowCaptureLog(true),
@@ -1144,7 +1149,7 @@ export default function TariffAssignmentTab({
         duration: 5000,
       });
     } else {
-      toast.warning(`Captured ${success}/${total} charts. ${failed} failed.`, {
+      toast.warning(`${metersFullySuccessful}/${totalMeters} meters fully captured. ${failed} charts failed across ${metersWithFailures.length} meters.`, {
         action: {
           label: 'View Log',
           onClick: () => setShowCaptureLog(true),
@@ -1152,9 +1157,14 @@ export default function TariffAssignmentTab({
         duration: 15000,
       });
       
-      // Log failed items for debugging
-      console.log('[ChartCapture] Failed captures:', failedEntries);
+      // Log failed meters for debugging
+      console.log('[ChartCapture] Meters with failures:', metersWithFailures);
     }
+  };
+
+  // Handle individual meter completion
+  const handleMeterCaptureComplete = (result: MeterCaptureResult) => {
+    console.log(`[ChartCapture] Meter complete: ${result.meterNumber} - ${result.chartsSuccessful}/${result.chartsAttempted} in ${(result.duration / 1000).toFixed(1)}s`);
   };
 
   // Bulk capture all charts for all meters with documents (background version)
@@ -4405,6 +4415,7 @@ export default function TariffAssignmentTab({
         onProgress={handleBackgroundCaptureProgress}
         onComplete={handleBackgroundCaptureComplete}
         onPauseStateChange={setIsBulkCapturePaused}
+        onMeterComplete={handleMeterCaptureComplete}
         cancelRef={cancelBulkCaptureRef}
         pauseRef={pauseBulkCaptureRef}
         isActive={isBackgroundCapturing}
@@ -4413,70 +4424,123 @@ export default function TariffAssignmentTab({
 
       {/* Capture Log Dialog */}
       <Dialog open={showCaptureLog} onOpenChange={setShowCaptureLog}>
-        <DialogContent className="max-w-4xl max-h-[80vh]">
+        <DialogContent className="max-w-5xl max-h-[85vh]">
           <DialogHeader>
             <DialogTitle>Chart Capture Log</DialogTitle>
             <DialogDescription>
-              Detailed log of all capture attempts with status and timing information
+              Meter-by-meter capture results and detailed log
             </DialogDescription>
           </DialogHeader>
-          <ScrollArea className="h-[60vh]">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[140px]">Time</TableHead>
-                  <TableHead>Meter</TableHead>
-                  <TableHead>Metric</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="w-[80px]">Attempt</TableHead>
-                  <TableHead className="w-[80px]">Duration</TableHead>
-                  <TableHead>Error</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {captureLog.map((entry, index) => (
-                  <TableRow key={`${entry.timestamp}-${index}`} className={cn(
-                    entry.status === 'failed' && 'bg-destructive/10',
-                    entry.status === 'success' && 'bg-green-500/10',
-                    entry.status === 'retrying' && 'bg-amber-500/10'
-                  )}>
-                    <TableCell className="text-xs font-mono">
-                      {new Date(entry.timestamp).toLocaleTimeString()}
-                    </TableCell>
-                    <TableCell className="font-medium">{entry.meterNumber}</TableCell>
-                    <TableCell>{entry.metricLabel}</TableCell>
-                    <TableCell>
-                      <Badge variant={
-                        entry.status === 'success' ? 'default' :
-                        entry.status === 'failed' ? 'destructive' :
-                        entry.status === 'retrying' ? 'secondary' :
-                        'outline'
-                      } className="text-xs">
-                        {entry.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-center">{entry.attempt}</TableCell>
-                    <TableCell className="text-xs">
-                      {entry.duration ? `${entry.duration}ms` : '-'}
-                    </TableCell>
-                    <TableCell className="text-xs text-destructive max-w-[200px] truncate" title={entry.error}>
-                      {entry.error || '-'}
-                    </TableCell>
+          
+          {/* Meter Summary Section */}
+          {meterCaptureResults.length > 0 && (
+            <div className="mb-4">
+              <h4 className="font-medium mb-2">Meter Summary ({meterCaptureResults.length} meters)</h4>
+              <ScrollArea className="h-[150px] border rounded-md">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[60px]">#</TableHead>
+                      <TableHead>Meter</TableHead>
+                      <TableHead className="w-[100px]">Charts</TableHead>
+                      <TableHead className="w-[100px]">Status</TableHead>
+                      <TableHead className="w-[100px]">Duration</TableHead>
+                      <TableHead>Failed Metrics</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {meterCaptureResults.map((result, index) => (
+                      <TableRow key={result.meterId} className={cn(
+                        result.chartsFailed > 0 && 'bg-destructive/10',
+                        result.chartsFailed === 0 && 'bg-green-500/10'
+                      )}>
+                        <TableCell className="font-mono text-xs">{index + 1}</TableCell>
+                        <TableCell className="font-medium">{result.meterNumber}</TableCell>
+                        <TableCell>
+                          {result.chartsSuccessful}/{result.chartsAttempted}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={result.chartsFailed === 0 ? 'default' : 'destructive'}>
+                            {result.chartsFailed === 0 ? 'Complete' : `${result.chartsFailed} failed`}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          {(result.duration / 1000).toFixed(1)}s
+                        </TableCell>
+                        <TableCell className="text-xs text-destructive">
+                          {result.failedMetrics.length > 0 ? result.failedMetrics.join(', ') : '-'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+            </div>
+          )}
+          
+          {/* Detailed Log Section */}
+          <div>
+            <h4 className="font-medium mb-2">Detailed Log ({captureLog.length} entries)</h4>
+            <ScrollArea className="h-[300px] border rounded-md">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[100px]">Time</TableHead>
+                    <TableHead>Meter</TableHead>
+                    <TableHead>Metric</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="w-[60px]">Attempt</TableHead>
+                    <TableHead className="w-[80px]">Duration</TableHead>
+                    <TableHead>Error</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-            {captureLog.length === 0 && (
-              <div className="text-center py-8 text-muted-foreground">
-                No capture log entries yet
-              </div>
-            )}
-          </ScrollArea>
+                </TableHeader>
+                <TableBody>
+                  {captureLog.map((entry, index) => (
+                    <TableRow key={`${entry.timestamp}-${index}`} className={cn(
+                      entry.status === 'failed' && 'bg-destructive/10',
+                      entry.status === 'success' && 'bg-green-500/10',
+                      entry.status === 'retrying' && 'bg-amber-500/10',
+                      entry.status === 'meter_complete' && 'bg-blue-500/10 font-medium'
+                    )}>
+                      <TableCell className="text-xs font-mono">
+                        {new Date(entry.timestamp).toLocaleTimeString()}
+                      </TableCell>
+                      <TableCell className="font-medium">{entry.meterNumber}</TableCell>
+                      <TableCell>{entry.metricLabel}</TableCell>
+                      <TableCell>
+                        <Badge variant={
+                          entry.status === 'success' ? 'default' :
+                          entry.status === 'failed' ? 'destructive' :
+                          entry.status === 'retrying' ? 'secondary' :
+                          entry.status === 'meter_complete' ? 'outline' :
+                          'outline'
+                        } className="text-xs">
+                          {entry.status === 'meter_complete' ? 'METER DONE' : entry.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-center">{entry.attempt}</TableCell>
+                      <TableCell className="text-xs">
+                        {entry.duration ? `${entry.duration}ms` : '-'}
+                      </TableCell>
+                      <TableCell className="text-xs text-destructive max-w-[200px] truncate" title={entry.error}>
+                        {entry.error || '-'}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              {captureLog.length === 0 && (
+                <div className="text-center py-8 text-muted-foreground">
+                  No capture log entries yet
+                </div>
+              )}
+            </ScrollArea>
+          </div>
+          
           <div className="flex justify-between items-center pt-4 border-t">
             <div className="text-sm text-muted-foreground">
-              Total: {captureLog.length} entries | 
-              Success: {captureLog.filter(e => e.status === 'success').length} | 
-              Failed: {captureLog.filter(e => e.status === 'failed').length}
+              Meters: {meterCaptureResults.length} | 
+              Charts: {captureLog.filter(e => e.status === 'success').length} success, {captureLog.filter(e => e.status === 'failed').length} failed
             </div>
             <Button variant="outline" onClick={() => setShowCaptureLog(false)}>
               Close
