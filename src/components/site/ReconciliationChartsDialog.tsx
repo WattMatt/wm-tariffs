@@ -161,6 +161,19 @@ export default function ReconciliationChartsDialog({
     });
   };
 
+  // Confirm all charts across all meters
+  const confirmAllCharts = () => {
+    setConfirmedCharts(new Set(charts.map(c => c.path)));
+  };
+
+  // Clear all confirmations
+  const clearAllConfirmations = () => {
+    setConfirmedCharts(new Set());
+  };
+
+  // Check if all charts are confirmed
+  const allChartsConfirmed = charts.length > 0 && confirmedCharts.size === charts.length;
+
   // Fetch meter order from site_reconciliation_settings
   const fetchMeterOrder = async (): Promise<MeterWithHierarchy[]> => {
     try {
@@ -479,14 +492,25 @@ export default function ReconciliationChartsDialog({
                 Refresh
               </Button>
               {charts.length > 0 && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={downloadAllCharts}
-                >
-                  <Download className="w-4 h-4 mr-2" />
-                  Download All ({charts.length})
-                </Button>
+                <>
+                  <Button
+                    variant={allChartsConfirmed ? "outline" : "default"}
+                    size="sm"
+                    onClick={allChartsConfirmed ? clearAllConfirmations : confirmAllCharts}
+                    className={allChartsConfirmed ? "" : "bg-green-600 hover:bg-green-700"}
+                  >
+                    <Check className="w-4 h-4 mr-2" />
+                    {allChartsConfirmed ? 'Clear Confirmations' : `Confirm All (${charts.length})`}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={downloadAllCharts}
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Download All ({charts.length})
+                  </Button>
+                </>
               )}
             </div>
           </div>
