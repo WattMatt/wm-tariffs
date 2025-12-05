@@ -24,7 +24,8 @@ import { format } from "date-fns";
 import { cn, formatDateString, formatDateStringToLong, formatDateStringToMonthYear, getMonthFromDateString, daysBetweenDateStrings, extractDateFromTimestamp } from "@/lib/utils";
 import { calculateMeterCost } from "@/lib/costCalculation";
 import html2canvas from "html2canvas";
-import { saveChartToStorage, CHART_METRICS } from "@/lib/reconciliation/chartGeneration";
+import { saveChartToStorage, CHART_METRICS, ChartMetricKey } from "@/lib/reconciliation/chartGeneration";
+import BackgroundChartCapture from "./BackgroundChartCapture";
 
 interface TariffAssignmentTabProps {
   siteId: string;
@@ -143,6 +144,16 @@ export default function TariffAssignmentTab({
   } | null>(null);
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const cancelBulkCaptureRef = useRef(false);
+  
+  // Background capture queue
+  const [backgroundCaptureQueue, setBackgroundCaptureQueue] = useState<Array<{
+    meter: Meter;
+    docs: DocumentShopNumber[];
+    metric: ChartMetricKey;
+    metricInfo: typeof CHART_METRICS[number];
+  }>>([]);
+  const [isBackgroundCapturing, setIsBackgroundCapturing] = useState(false);
+  const backgroundCaptureToastRef = useRef<string | number | null>(null);
 
   // Handle legend click to toggle data series
   const handleLegendClick = (dataKey: string) => {
@@ -1045,11 +1056,65 @@ export default function TariffAssignmentTab({
   // Cancel bulk capture
   const cancelBulkCapture = () => {
     cancelBulkCaptureRef.current = true;
+    if (backgroundCaptureToastRef.current) {
+      toast.dismiss(backgroundCaptureToastRef.current);
+    }
     toast.info('Cancelling bulk capture...');
   };
 
-  // Bulk capture all charts for all meters with documents
-  const bulkCaptureAllMeters = async () => {
+  // Background capture progress handler
+  const handleBackgroundCaptureProgress = (current: number, total: number, meterNumber: string, metric: string) => {
+    const progress = Math.round((current / total) * 100);
+    
+    // Update or create persistent toast
+    if (backgroundCaptureToastRef.current) {
+      toast.loading(`Capturing charts... ${current}/${total} (${progress}%) - ${meterNumber}: ${metric}`, {
+        id: backgroundCaptureToastRef.current,
+        action: {
+          label: 'Cancel',
+          onClick: () => cancelBulkCapture(),
+        },
+      });
+    }
+    
+    // Update progress state for dialog if open
+    setBulkCaptureProgress({
+      currentMeter: Math.ceil(current / CHART_METRICS.length),
+      totalMeters: Math.ceil(total / CHART_METRICS.length),
+      meterNumber,
+      currentMetric: ((current - 1) % CHART_METRICS.length) + 1,
+      totalMetrics: CHART_METRICS.length,
+      metric,
+    });
+  };
+
+  // Background capture complete handler
+  const handleBackgroundCaptureComplete = (success: number, failed: number, cancelled: boolean) => {
+    // Dismiss progress toast
+    if (backgroundCaptureToastRef.current) {
+      toast.dismiss(backgroundCaptureToastRef.current);
+      backgroundCaptureToastRef.current = null;
+    }
+    
+    // Reset state
+    setIsBackgroundCapturing(false);
+    setIsBulkCapturingCharts(false);
+    setBulkCaptureProgress(null);
+    setBackgroundCaptureQueue([]);
+    
+    // Show result
+    const total = success + failed;
+    if (cancelled) {
+      toast.info(`Bulk capture cancelled. Captured ${success}/${total} charts.`);
+    } else if (failed === 0) {
+      toast.success(`Successfully captured ${success} charts`);
+    } else {
+      toast.warning(`Captured ${success}/${total} charts. ${failed} failed.`);
+    }
+  };
+
+  // Bulk capture all charts for all meters with documents (background version)
+  const bulkCaptureAllMeters = () => {
     // Reset cancel flag
     cancelBulkCaptureRef.current = false;
     
@@ -1066,98 +1131,41 @@ export default function TariffAssignmentTab({
       return;
     }
     
-    setIsBulkCapturingCharts(true);
-    const totalMeters = metersWithDocs.length;
-    const metrics = CHART_METRICS.map(m => m.key);
-    const totalMetrics = metrics.length;
-    let totalSuccess = 0;
-    let totalErrors = 0;
-    let wasCancelled = false;
+    // Build the capture queue
+    const queue: typeof backgroundCaptureQueue = [];
     
-    toast.info(`Starting bulk capture for ${totalMeters} meters (${totalMeters * totalMetrics} charts)...`);
-    
-    for (let meterIdx = 0; meterIdx < metersWithDocs.length; meterIdx++) {
-      // Check for cancellation
-      if (cancelBulkCaptureRef.current) {
-        wasCancelled = true;
-        break;
-      }
-      
-      const { meter, docs } = metersWithDocs[meterIdx];
-      
-      // Open the chart dialog for this meter
-      setSelectedChartMeter({ meter, docs });
-      
-      // Wait for dialog and chart to render
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-      // Capture all 6 metrics for this meter
-      for (let metricIdx = 0; metricIdx < metrics.length; metricIdx++) {
-        // Check for cancellation
-        if (cancelBulkCaptureRef.current) {
-          wasCancelled = true;
-          break;
-        }
-        
-        const metric = metrics[metricIdx];
-        const metricInfo = CHART_METRICS.find(m => m.key === metric);
-        
-        setBulkCaptureProgress({
-          currentMeter: meterIdx + 1,
-          totalMeters,
-          meterNumber: meter.meter_number,
-          currentMetric: metricIdx + 1,
-          totalMetrics,
-          metric: metricInfo?.title || metric
+    for (const { meter, docs } of metersWithDocs) {
+      for (const metricInfo of CHART_METRICS) {
+        queue.push({
+          meter,
+          docs,
+          metric: metricInfo.key,
+          metricInfo,
         });
-        
-        // Change selected metric
-        setSelectedChartMetric(metric);
-        
-        // Wait for chart to re-render
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        try {
-          const chartElement = chartContainerRef.current?.querySelector('.recharts-responsive-container');
-          if (!chartElement) {
-            totalErrors++;
-            continue;
-          }
-          
-          const canvas = await html2canvas(chartElement as HTMLElement, {
-            backgroundColor: '#ffffff',
-            scale: 2,
-            logging: false,
-            useCORS: true,
-          });
-          
-          const dataUrl = canvas.toDataURL('image/png');
-          const saved = await saveChartToStorage(siteId, meter.meter_number, metricInfo?.filename || metric, dataUrl);
-          
-          if (saved) totalSuccess++;
-          else totalErrors++;
-        } catch (error) {
-          console.error(`Error capturing ${metric} for ${meter.meter_number}:`, error);
-          totalErrors++;
-        }
       }
     }
     
-    // Close dialog and reset
-    setSelectedChartMeter(null);
-    setSelectedChartMetric('total');
-    setIsBulkCapturingCharts(false);
-    setBulkCaptureProgress(null);
+    const totalMeters = metersWithDocs.length;
+    const totalCharts = queue.length;
     
-    // Report results
-    const totalCharts = metersWithDocs.length * metrics.length;
-    if (wasCancelled) {
-      toast.info(`Bulk capture cancelled. Captured ${totalSuccess}/${totalCharts} charts.`);
-    } else if (totalErrors === 0) {
-      toast.success(`Successfully captured ${totalSuccess} charts for ${totalMeters} meters`);
-    } else {
-      toast.warning(`Captured ${totalSuccess}/${totalCharts} charts. ${totalErrors} failed.`);
-    }
+    // Close dialog immediately
+    setChartsDialogOpen(false);
+    
+    // Start background capture
+    setBackgroundCaptureQueue(queue);
+    setIsBackgroundCapturing(true);
+    setIsBulkCapturingCharts(true);
+    
+    // Show persistent toast
+    backgroundCaptureToastRef.current = toast.loading(
+      `Starting chart capture for ${totalMeters} meters (${totalCharts} charts)...`,
+      {
+        action: {
+          label: 'Cancel',
+          onClick: () => cancelBulkCapture(),
+        },
+      }
+    );
   };
 
   // Load calculated costs from database
@@ -4341,6 +4349,17 @@ export default function TariffAssignmentTab({
         onCancelBulkCapture={cancelBulkCapture}
         isBulkCapturing={isBulkCapturingCharts}
         bulkCaptureProgress={bulkCaptureProgress}
+        isBackgroundCapturing={isBackgroundCapturing}
+      />
+
+      {/* Background Chart Capture (renders off-screen) */}
+      <BackgroundChartCapture
+        siteId={siteId}
+        queue={backgroundCaptureQueue}
+        onProgress={handleBackgroundCaptureProgress}
+        onComplete={handleBackgroundCaptureComplete}
+        cancelRef={cancelBulkCaptureRef}
+        isActive={isBackgroundCapturing}
       />
     </div>
   );
