@@ -5,9 +5,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Download, RefreshCw, ImageIcon, Loader2, FolderOpen, Camera, X, CheckCircle2, AlertCircle, Play } from "lucide-react";
+import { Download, RefreshCw, ImageIcon, Loader2, FolderOpen, Camera, X, CheckCircle2, AlertCircle, Play, Check } from "lucide-react";
 
 export interface MeterCaptureStatus {
   meterId: string;
@@ -92,17 +93,72 @@ export default function ReconciliationChartsDialog({
   const [meterOrder, setMeterOrder] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmedCharts, setConfirmedCharts] = useState<Set<string>>(new Set());
 
-  // Calculate meter categories for buttons
-  const incompleteMeters = meterCaptureStatuses.filter(m => m.status !== 'complete');
-  const completeMeters = meterCaptureStatuses.filter(m => m.status === 'complete');
-  const failedMeters = meterCaptureStatuses.filter(m => m.status === 'failed' || m.status === 'partial');
+  // Calculate meter status based on confirmation - unconfirmed = failed
+  const getMeterConfirmationStatus = (meterNumber: string): 'complete' | 'partial' | 'pending' => {
+    const meterCharts = groupedCharts[meterNumber] || [];
+    if (meterCharts.length === 0) return 'pending';
+    
+    const confirmedCount = meterCharts.filter(c => confirmedCharts.has(c.path)).length;
+    if (confirmedCount === meterCharts.length) return 'complete';
+    if (confirmedCount > 0) return 'partial';
+    return 'pending';
+  };
+
+  // Calculate overall meter categories for buttons based on confirmation status
+  const getEffectiveStatus = (meterNumber: string): MeterCaptureStatus['status'] => {
+    const captureStatus = meterCaptureStatuses.find(s => s.meterNumber === meterNumber);
+    const confirmStatus = getMeterConfirmationStatus(meterNumber);
+    
+    // If capture failed, it's failed
+    if (captureStatus?.status === 'failed') return 'failed';
+    
+    // If captured but not confirmed, treat as failed (needs retry)
+    if (captureStatus?.status === 'complete' && confirmStatus !== 'complete') return 'partial';
+    
+    // Return capture status if available, otherwise pending
+    return captureStatus?.status || 'pending';
+  };
+
+  const incompleteMeters = meterOrder.filter(m => getEffectiveStatus(m) !== 'complete');
+  const completeMeters = meterOrder.filter(m => getEffectiveStatus(m) === 'complete');
+  const failedMeters = meterOrder.filter(m => ['failed', 'partial'].includes(getEffectiveStatus(m)));
   const hasIncomplete = incompleteMeters.length > 0 && completeMeters.length > 0;
   const hasFailed = failedMeters.length > 0;
 
-  // Get status for a meter
+  // Get status for a meter (for badge display)
   const getMeterStatus = (meterNumber: string): MeterCaptureStatus | undefined => {
     return meterCaptureStatuses.find(s => s.meterNumber === meterNumber);
+  };
+
+  // Toggle chart confirmation
+  const toggleChartConfirmation = (chartPath: string) => {
+    setConfirmedCharts(prev => {
+      const next = new Set(prev);
+      if (next.has(chartPath)) {
+        next.delete(chartPath);
+      } else {
+        next.add(chartPath);
+      }
+      return next;
+    });
+  };
+
+  // Confirm all charts for a meter
+  const confirmAllMeterCharts = (meterNumber: string, confirm: boolean) => {
+    const meterCharts = groupedCharts[meterNumber] || [];
+    setConfirmedCharts(prev => {
+      const next = new Set(prev);
+      meterCharts.forEach(c => {
+        if (confirm) {
+          next.add(c.path);
+        } else {
+          next.delete(c.path);
+        }
+      });
+      return next;
+    });
   };
 
   // Fetch meter order from site_reconciliation_settings
@@ -470,15 +526,21 @@ export default function ReconciliationChartsDialog({
             <Accordion type="multiple" defaultValue={meterOrder} className="space-y-2">
               {meterOrder.map((meterNumber, index) => {
                 const status = getMeterStatus(meterNumber);
+                const confirmStatus = getMeterConfirmationStatus(meterNumber);
+                const meterCharts = groupedCharts[meterNumber] || [];
+                const confirmedCount = meterCharts.filter(c => confirmedCharts.has(c.path)).length;
+                const allConfirmed = confirmedCount === meterCharts.length && meterCharts.length > 0;
+                
                 return (
                   <AccordionItem key={meterNumber} value={meterNumber} className="border rounded-lg px-4">
                     <AccordionTrigger className="hover:no-underline">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-1">
                         <span className="text-xs text-muted-foreground w-6">{index + 1}.</span>
                         <span className="font-semibold">{meterNumber}</span>
                         <span className="text-sm text-muted-foreground">
-                          ({groupedCharts[meterNumber]?.length || 0} charts)
+                          ({meterCharts.length} charts)
                         </span>
+                        {/* Capture status badge */}
                         {status && (
                           <Badge 
                             variant={
@@ -486,46 +548,95 @@ export default function ReconciliationChartsDialog({
                               status.status === 'partial' ? 'secondary' :
                               status.status === 'failed' ? 'destructive' : 'outline'
                             }
-                            className="ml-2 text-xs"
+                            className="text-xs"
                           >
                             {status.status === 'complete' && <CheckCircle2 className="w-3 h-3 mr-1" />}
                             {status.status === 'failed' && <AlertCircle className="w-3 h-3 mr-1" />}
-                            {status.status === 'complete' ? 'Complete' : 
+                            {status.status === 'complete' ? 'Captured' : 
                              status.status === 'partial' ? `${status.chartsComplete}/${status.chartsTotal}` :
                              status.status === 'failed' ? 'Failed' : 'Pending'}
+                          </Badge>
+                        )}
+                        {/* Confirmation status badge */}
+                        {meterCharts.length > 0 && (
+                          <Badge 
+                            variant={
+                              confirmStatus === 'complete' ? 'default' : 
+                              confirmStatus === 'partial' ? 'secondary' : 'outline'
+                            }
+                            className={`text-xs ${confirmStatus === 'complete' ? 'bg-green-600' : ''}`}
+                          >
+                            {confirmStatus === 'complete' && <Check className="w-3 h-3 mr-1" />}
+                            {confirmStatus === 'complete' ? 'Confirmed' : 
+                             confirmStatus === 'partial' ? `${confirmedCount}/${meterCharts.length} Confirmed` : 
+                             'Unconfirmed'}
                           </Badge>
                         )}
                       </div>
                     </AccordionTrigger>
                     <AccordionContent>
+                      {/* Confirm all toggle for meter */}
+                      <div className="flex items-center gap-2 mb-3 pb-2 border-b">
+                        <Checkbox
+                          id={`confirm-all-${meterNumber}`}
+                          checked={allConfirmed}
+                          onCheckedChange={(checked) => confirmAllMeterCharts(meterNumber, !!checked)}
+                        />
+                        <label 
+                          htmlFor={`confirm-all-${meterNumber}`}
+                          className="text-sm font-medium cursor-pointer"
+                        >
+                          Confirm all charts for this meter
+                        </label>
+                      </div>
                       <div className="grid grid-cols-3 gap-4 pb-4">
-                        {groupedCharts[meterNumber]?.map((chart) => (
-                          <Card key={chart.name} className="overflow-hidden group relative">
-                            <div className="bg-white relative border-b h-24 cursor-zoom-in transition-all duration-300 hover:scale-[4] hover:z-50 hover:shadow-xl hover:rounded-md origin-center">
-                              <img
-                                src={`${chart.url}?t=${Date.now()}`}
-                                alt={`${chart.meterNumber} - ${chart.metricLabel}`}
-                                className="w-full h-full object-contain"
-                                loading="lazy"
-                              />
-                            </div>
-                            <CardContent className="p-2">
-                              <div className="flex items-center justify-between">
-                                <span className="text-xs font-medium truncate">
-                                  {chart.metricLabel}
-                                </span>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                                  onClick={() => downloadChart(chart)}
-                                >
-                                  <Download className="w-3 h-3" />
-                                </Button>
+                        {meterCharts.map((chart) => {
+                          const isConfirmed = confirmedCharts.has(chart.path);
+                          return (
+                            <Card 
+                              key={chart.name} 
+                              className={`overflow-hidden group relative transition-all ${isConfirmed ? 'ring-2 ring-green-500' : 'ring-1 ring-destructive/30'}`}
+                            >
+                              <div className="bg-white relative border-b h-24 cursor-zoom-in transition-all duration-300 hover:scale-[4] hover:z-50 hover:shadow-xl hover:rounded-md origin-center">
+                                <img
+                                  src={`${chart.url}?t=${Date.now()}`}
+                                  alt={`${chart.meterNumber} - ${chart.metricLabel}`}
+                                  className="w-full h-full object-contain"
+                                  loading="lazy"
+                                />
+                                {/* Confirmation indicator overlay */}
+                                {isConfirmed && (
+                                  <div className="absolute top-1 right-1 bg-green-500 rounded-full p-1">
+                                    <Check className="w-3 h-3 text-white" />
+                                  </div>
+                                )}
                               </div>
-                            </CardContent>
-                          </Card>
-                        ))}
+                              <CardContent className="p-2">
+                                <div className="flex items-center gap-2">
+                                  <Checkbox
+                                    id={`confirm-${chart.path}`}
+                                    checked={isConfirmed}
+                                    onCheckedChange={() => toggleChartConfirmation(chart.path)}
+                                  />
+                                  <label 
+                                    htmlFor={`confirm-${chart.path}`}
+                                    className="text-xs font-medium truncate flex-1 cursor-pointer"
+                                  >
+                                    {chart.metricLabel}
+                                  </label>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    onClick={() => downloadChart(chart)}
+                                  >
+                                    <Download className="w-3 h-3" />
+                                  </Button>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          );
+                        })}
                       </div>
                     </AccordionContent>
                   </AccordionItem>
