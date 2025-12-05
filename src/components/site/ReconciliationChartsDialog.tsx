@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Download, RefreshCw, ImageIcon, Loader2, FolderOpen, Sparkles } from "lucide-react";
 import { ChartCaptureContainer } from "./ChartCapture";
+import { buildConnectionsMap, getHierarchyDepth } from '@/lib/reconciliation/hierarchyUtils';
 
 interface ReconciliationChartsDialogProps {
   siteId: string;
@@ -25,6 +26,13 @@ interface ChartFile {
   metricLabel: string;
 }
 
+interface MeterWithHierarchy {
+  id: string;
+  meter_number: string;
+  depth: number;
+  order: number;
+}
+
 const METRIC_LABELS: Record<string, string> = {
   'total': 'Total Amount',
   'basic': 'Basic Charge',
@@ -33,6 +41,8 @@ const METRIC_LABELS: Record<string, string> = {
   'kva-consumption': 'kVA Consumption',
   'kwh-consumption': 'kWh Consumption',
 };
+
+const METRIC_ORDER = ['total', 'basic', 'kva-charge', 'kwh-charge', 'kva-consumption', 'kwh-consumption'];
 
 // Sanitize name to match storage path format
 const sanitizeName = (name: string): string => {
@@ -49,6 +59,7 @@ export default function ReconciliationChartsDialog({
 }: ReconciliationChartsDialogProps) {
   const [charts, setCharts] = useState<ChartFile[]>([]);
   const [groupedCharts, setGroupedCharts] = useState<Record<string, ChartFile[]>>({});
+  const [meterOrder, setMeterOrder] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -79,21 +90,69 @@ export default function ReconciliationChartsDialog({
     setGenerateTrigger(true);
   };
 
+  // Fetch meter hierarchy order
+  const fetchMeterHierarchy = async (): Promise<MeterWithHierarchy[]> => {
+    try {
+      // Get all meters for the site
+      const { data: meters, error: metersError } = await supabase
+        .from('meters')
+        .select('id, meter_number')
+        .eq('site_id', siteId);
+
+      if (metersError || !meters) return [];
+
+      // Get meter connections
+      const { data: connections } = await supabase
+        .from('meter_connections')
+        .select('parent_meter_id, child_meter_id')
+        .or(`parent_meter_id.in.(${meters.map(m => m.id).join(',')}),child_meter_id.in.(${meters.map(m => m.id).join(',')})`);
+
+      const connectionsMap = buildConnectionsMap(connections || []);
+
+      // Calculate hierarchy depth for each meter
+      const metersWithDepth = meters.map(meter => ({
+        ...meter,
+        depth: getHierarchyDepth(meter.id, connectionsMap),
+      }));
+
+      // Sort: shallowest first (parents before children), then by meter number
+      metersWithDepth.sort((a, b) => {
+        if (a.depth !== b.depth) return a.depth - b.depth;
+        return a.meter_number.localeCompare(b.meter_number);
+      });
+
+      return metersWithDepth.map((m, idx) => ({ ...m, order: idx }));
+    } catch (err) {
+      console.error('Error fetching meter hierarchy:', err);
+      return [];
+    }
+  };
+
   const fetchCharts = async () => {
     setIsLoading(true);
     setError(null);
     
     try {
-      // Get site and client names for path construction
-      const { data: siteData, error: siteError } = await supabase
-        .from('sites')
-        .select('name, clients(name)')
-        .eq('id', siteId)
-        .single();
+      // Fetch meter hierarchy and chart files in parallel
+      const [metersWithHierarchy, siteData] = await Promise.all([
+        fetchMeterHierarchy(),
+        supabase
+          .from('sites')
+          .select('name, clients(name)')
+          .eq('id', siteId)
+          .single()
+          .then(res => res.data),
+      ]);
 
-      if (siteError || !siteData) {
+      if (!siteData) {
         throw new Error('Failed to fetch site information');
       }
+
+      // Build meter order map
+      const meterOrderMap = new Map<string, number>();
+      metersWithHierarchy.forEach(m => {
+        meterOrderMap.set(m.meter_number, m.order);
+      });
 
       const clientName = sanitizeName((siteData.clients as any)?.name || '');
       const siteName = sanitizeName(siteData.name);
@@ -111,6 +170,7 @@ export default function ReconciliationChartsDialog({
       if (!files || files.length === 0) {
         setCharts([]);
         setGroupedCharts({});
+        setMeterOrder([]);
         return;
       }
 
@@ -147,24 +207,33 @@ export default function ReconciliationChartsDialog({
         });
       }
 
-      // Sort by meter number then by metric
+      // Sort by hierarchy order, then by metric order
       chartFiles.sort((a, b) => {
-        const meterCompare = a.meterNumber.localeCompare(b.meterNumber);
-        if (meterCompare !== 0) return meterCompare;
-        return a.metric.localeCompare(b.metric);
+        const orderA = meterOrderMap.get(a.meterNumber) ?? 9999;
+        const orderB = meterOrderMap.get(b.meterNumber) ?? 9999;
+        if (orderA !== orderB) return orderA - orderB;
+        
+        // Same meter - sort by metric order
+        const metricOrderA = METRIC_ORDER.indexOf(a.metric);
+        const metricOrderB = METRIC_ORDER.indexOf(b.metric);
+        return metricOrderA - metricOrderB;
       });
 
-      // Group by meter number
+      // Group by meter number preserving hierarchy order
       const grouped: Record<string, ChartFile[]> = {};
+      const orderedMeterNumbers: string[] = [];
+      
       for (const chart of chartFiles) {
         if (!grouped[chart.meterNumber]) {
           grouped[chart.meterNumber] = [];
+          orderedMeterNumbers.push(chart.meterNumber);
         }
         grouped[chart.meterNumber].push(chart);
       }
 
       setCharts(chartFiles);
       setGroupedCharts(grouped);
+      setMeterOrder(orderedMeterNumbers);
     } catch (err) {
       console.error('Error fetching charts:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch charts');
@@ -213,8 +282,6 @@ export default function ReconciliationChartsDialog({
     toast.success('All charts downloaded');
   };
 
-  const meterNumbers = Object.keys(groupedCharts).sort();
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-5xl max-h-[85vh]">
@@ -226,7 +293,7 @@ export default function ReconciliationChartsDialog({
                 Reconciliation Charts
               </DialogTitle>
               <DialogDescription>
-                Generated charts from reconciliation analysis
+                Generated charts from reconciliation analysis, grouped by meter hierarchy
               </DialogDescription>
             </div>
             <div className="flex items-center gap-2">
@@ -299,28 +366,29 @@ export default function ReconciliationChartsDialog({
               <FolderOpen className="w-12 h-12 text-muted-foreground mb-4" />
               <p className="text-muted-foreground mb-2">No reconciliation charts found</p>
               <p className="text-sm text-muted-foreground">
-                Run a reconciliation with revenue calculation to generate charts
+                Click "Generate Charts" to create charts from reconciliation data
               </p>
             </div>
           ) : (
-            <Accordion type="multiple" defaultValue={meterNumbers} className="space-y-2">
-              {meterNumbers.map((meterNumber) => (
+            <Accordion type="multiple" defaultValue={meterOrder} className="space-y-2">
+              {meterOrder.map((meterNumber, index) => (
                 <AccordionItem key={meterNumber} value={meterNumber} className="border rounded-lg px-4">
                   <AccordionTrigger className="hover:no-underline">
                     <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground w-6">{index + 1}.</span>
                       <span className="font-semibold">{meterNumber}</span>
                       <span className="text-sm text-muted-foreground">
-                        ({groupedCharts[meterNumber].length} charts)
+                        ({groupedCharts[meterNumber]?.length || 0} charts)
                       </span>
                     </div>
                   </AccordionTrigger>
                   <AccordionContent>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-4">
-                      {groupedCharts[meterNumber].map((chart) => (
+                      {groupedCharts[meterNumber]?.map((chart) => (
                         <Card key={chart.name} className="overflow-hidden">
                           <div className="aspect-[5/3] bg-muted relative">
                             <img
-                              src={chart.url}
+                              src={`${chart.url}?t=${Date.now()}`}
                               alt={`${chart.meterNumber} - ${chart.metricLabel}`}
                               className="w-full h-full object-contain"
                               loading="lazy"
