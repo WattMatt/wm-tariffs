@@ -181,14 +181,26 @@ export default function ReconciliationChartsDialog({
         if (!file.name.endsWith('.png')) continue;
         
         // Parse filename: {meter_number}-{metric}.png
+        // Must match against known metrics since metrics can contain dashes (e.g., kva-charge)
         const nameWithoutExt = file.name.replace('.png', '');
-        const lastDashIndex = nameWithoutExt.lastIndexOf('-');
         
-        if (lastDashIndex === -1) continue;
+        let foundMetric = '';
+        let foundMeterNumber = '';
         
-        const meterNumber = nameWithoutExt.substring(0, lastDashIndex);
-        const metric = nameWithoutExt.substring(lastDashIndex + 1);
-        const metricLabel = METRIC_LABELS[metric] || metric;
+        // Check each known metric suffix (try longer ones first)
+        for (const metric of METRIC_ORDER) {
+          const suffix = `-${metric}`;
+          if (nameWithoutExt.endsWith(suffix)) {
+            foundMetric = metric;
+            foundMeterNumber = nameWithoutExt.slice(0, -suffix.length);
+            break;
+          }
+        }
+        
+        // Skip if no known metric found
+        if (!foundMetric || !foundMeterNumber) continue;
+        
+        const metricLabel = METRIC_LABELS[foundMetric] || foundMetric;
         
         const filePath = `${graphsPath}/${file.name}`;
         
@@ -201,8 +213,8 @@ export default function ReconciliationChartsDialog({
           name: file.name,
           path: filePath,
           url: urlData.publicUrl,
-          meterNumber,
-          metric,
+          meterNumber: foundMeterNumber,
+          metric: foundMetric,
           metricLabel,
         });
       }
