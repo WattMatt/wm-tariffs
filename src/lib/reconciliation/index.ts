@@ -48,16 +48,11 @@ export {
 // Chart Generation
 export {
   CHART_METRICS,
-  getMetersOnSchematic,
-  getDocumentsForMeter,
-  getReconciliationCostsForMeter,
-  prepareRechartsData,
-  prepareMeterChartData,
   dataURLtoBlob,
   saveChartToStorage,
 } from './chartGeneration';
 
-export type { ChartMetricKey, RechartsDataPoint } from './chartGeneration';
+export type { ChartMetricKey } from './chartGeneration';
 
 // Re-export hook types for convenience
 export type { MeterConnection, HierarchicalCsvResult, DateRange, DocumentDateRange } from './types';
