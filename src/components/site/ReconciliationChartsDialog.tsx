@@ -18,6 +18,8 @@ export interface MeterCaptureStatus {
   failedMetrics: string[];
 }
 
+export type CaptureMode = 'all' | 'resume' | 'retryFailed';
+
 interface BulkCaptureProgress {
   currentMeter: number;
   totalMeters: number;
@@ -31,7 +33,7 @@ interface ReconciliationChartsDialogProps {
   siteId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onBulkCapture?: (resumeFromIncomplete?: boolean) => void;
+  onBulkCapture?: (mode: CaptureMode) => void;
   onCancelBulkCapture?: () => void;
   isBulkCapturing?: boolean;
   bulkCaptureProgress?: BulkCaptureProgress | null;
@@ -91,10 +93,12 @@ export default function ReconciliationChartsDialog({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Calculate incomplete meters for resume button
+  // Calculate meter categories for buttons
   const incompleteMeters = meterCaptureStatuses.filter(m => m.status !== 'complete');
   const completeMeters = meterCaptureStatuses.filter(m => m.status === 'complete');
+  const failedMeters = meterCaptureStatuses.filter(m => m.status === 'failed' || m.status === 'partial');
   const hasIncomplete = incompleteMeters.length > 0 && completeMeters.length > 0;
+  const hasFailed = failedMeters.length > 0;
 
   // Get status for a meter
   const getMeterStatus = (meterNumber: string): MeterCaptureStatus | undefined => {
@@ -354,14 +358,25 @@ export default function ReconciliationChartsDialog({
                 Charts captured from meter analysis. To capture new charts, click on a meter in the Comparison tab and use "Capture All Charts".
               </DialogDescription>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               {onBulkCapture && (
                 <>
+                  {hasFailed && (
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => onBulkCapture('retryFailed')}
+                      disabled={isBackgroundCapturing || isLoading}
+                    >
+                      <RefreshCw className="w-4 h-4 mr-2" />
+                      Retry Failed ({failedMeters.length})
+                    </Button>
+                  )}
                   {hasIncomplete && (
                     <Button
                       variant="secondary"
                       size="sm"
-                      onClick={() => onBulkCapture(true)}
+                      onClick={() => onBulkCapture('resume')}
                       disabled={isBackgroundCapturing || isLoading}
                     >
                       <Play className="w-4 h-4 mr-2" />
@@ -371,18 +386,18 @@ export default function ReconciliationChartsDialog({
                   <Button
                     variant="default"
                     size="sm"
-                    onClick={() => onBulkCapture(false)}
+                    onClick={() => onBulkCapture('all')}
                     disabled={isBackgroundCapturing || isLoading}
                   >
                     {isBackgroundCapturing ? (
                       <>
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Capturing in background...
+                        Capturing...
                       </>
                     ) : (
                       <>
                         <Camera className="w-4 h-4 mr-2" />
-                        {completeMeters.length > 0 ? 'Restart All' : 'Capture All Charts'}
+                        {completeMeters.length > 0 ? 'Restart All' : 'Capture All'}
                       </>
                     )}
                   </Button>

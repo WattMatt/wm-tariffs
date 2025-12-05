@@ -10,7 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { FileCheck2, AlertCircle, CheckCircle2, DollarSign, Eye, FileText, ArrowUpDown, ArrowUp, ArrowDown, Eraser, Scale, Check, X, ChevronDown, Filter, ImageIcon, Camera, Loader2 } from "lucide-react";
-import ReconciliationChartsDialog, { MeterCaptureStatus } from "./ReconciliationChartsDialog";
+import ReconciliationChartsDialog, { MeterCaptureStatus, CaptureMode } from "./ReconciliationChartsDialog";
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Legend } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
@@ -1183,7 +1183,7 @@ export default function TariffAssignmentTab({
   };
 
   // Bulk capture all charts for all meters with documents (background version)
-  const bulkCaptureAllMeters = (resumeFromIncomplete: boolean = false) => {
+  const bulkCaptureAllMeters = (mode: CaptureMode = 'all') => {
     // Reset cancel and pause flags
     cancelBulkCaptureRef.current = false;
     pauseBulkCaptureRef.current = false;
@@ -1202,9 +1202,12 @@ export default function TariffAssignmentTab({
       return;
     }
 
-    // If resuming, filter to only incomplete meters
+    // Filter meters based on mode
     let metersToProcess = metersWithDocs;
-    if (resumeFromIncomplete && meterCaptureResults.length > 0) {
+    let toastMessage = '';
+    
+    if (mode === 'resume' && meterCaptureResults.length > 0) {
+      // Resume: only incomplete meters (not yet attempted or not fully successful)
       const completedMeterIds = new Set(
         meterCaptureResults
           .filter(r => r.chartsFailed === 0)
@@ -1218,10 +1221,26 @@ export default function TariffAssignmentTab({
         return;
       }
       
-      toast.info(`Resuming capture for ${metersToProcess.length} remaining meters`);
+      toastMessage = `Resuming capture for ${metersToProcess.length} remaining meters`;
+    } else if (mode === 'retryFailed' && meterCaptureResults.length > 0) {
+      // Retry Failed: only meters that had failures (partial or failed status)
+      const failedMeterIds = new Set(
+        meterCaptureResults
+          .filter(r => r.chartsFailed > 0)
+          .map(r => r.meterId)
+      );
+      metersToProcess = metersWithDocs.filter(m => failedMeterIds.has(m.meter.id));
+      
+      if (metersToProcess.length === 0) {
+        toast.success('No failed meters to retry!');
+        return;
+      }
+      
+      toastMessage = `Retrying ${metersToProcess.length} failed meters`;
     } else {
       // Starting fresh - clear previous results
       setMeterCaptureResults([]);
+      toastMessage = `Starting chart capture for ${metersWithDocs.length} meters`;
     }
     
     // Build the capture queue
@@ -1250,10 +1269,9 @@ export default function TariffAssignmentTab({
     setIsBulkCapturingCharts(true);
     
     // Show persistent toast
+    toast.info(toastMessage);
     backgroundCaptureToastRef.current = toast.loading(
-      resumeFromIncomplete 
-        ? `Resuming capture for ${totalMeters} meters (${totalCharts} charts)...`
-        : `Starting chart capture for ${totalMeters} meters (${totalCharts} charts)...`,
+      `${toastMessage} (${totalCharts} charts)...`,
       {
         action: {
           label: 'Cancel',
