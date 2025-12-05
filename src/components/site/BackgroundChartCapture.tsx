@@ -57,13 +57,16 @@ interface BackgroundChartCaptureProps {
   queue: CaptureQueueItem[];
   onProgress: (current: number, total: number, meterNumber: string, metric: string, batchInfo?: string) => void;
   onComplete: (success: number, failed: number, cancelled: boolean) => void;
+  onPauseStateChange?: (isPaused: boolean) => void;
   cancelRef: React.MutableRefObject<boolean>;
+  pauseRef: React.MutableRefObject<boolean>;
   isActive: boolean;
 }
 
 // Process in batches to prevent browser overload
 const BATCH_SIZE = 10;
 const BATCH_DELAY_MS = 2000; // Pause between batches
+const PAUSE_CHECK_INTERVAL_MS = 500; // Check pause state every 500ms
 
 // Helper to extract metric value from document
 const extractMetricValue = (doc: DocumentShopNumber | undefined, metric: string): number | null => {
@@ -199,7 +202,9 @@ export default function BackgroundChartCapture({
   queue,
   onProgress,
   onComplete,
+  onPauseStateChange,
   cancelRef,
+  pauseRef,
   isActive,
 }: BackgroundChartCaptureProps) {
   const chartRef = useRef<HTMLDivElement>(null);
@@ -215,6 +220,14 @@ export default function BackgroundChartCapture({
   useEffect(() => {
     if (!isActive || queue.length === 0 || processingRef.current) return;
 
+    const waitWhilePaused = async () => {
+      while (pauseRef.current && !cancelRef.current) {
+        onPauseStateChange?.(true);
+        await new Promise(resolve => setTimeout(resolve, PAUSE_CHECK_INTERVAL_MS));
+      }
+      onPauseStateChange?.(false);
+    };
+
     const processQueue = async () => {
       processingRef.current = true;
       currentIndexRef.current = 0;
@@ -224,6 +237,18 @@ export default function BackgroundChartCapture({
       const totalBatches = Math.ceil(queue.length / BATCH_SIZE);
 
       for (let i = 0; i < queue.length; i++) {
+        // Check for cancel
+        if (cancelRef.current) {
+          onComplete(successCountRef.current, failCountRef.current, true);
+          processingRef.current = false;
+          setCurrentItem(null);
+          return;
+        }
+
+        // Wait if paused
+        await waitWhilePaused();
+
+        // Check cancel again after unpause
         if (cancelRef.current) {
           onComplete(successCountRef.current, failCountRef.current, true);
           processingRef.current = false;

@@ -144,6 +144,8 @@ export default function TariffAssignmentTab({
   } | null>(null);
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const cancelBulkCaptureRef = useRef(false);
+  const pauseBulkCaptureRef = useRef(false);
+  const [isBulkCapturePaused, setIsBulkCapturePaused] = useState(false);
   
   // Background capture queue
   const [backgroundCaptureQueue, setBackgroundCaptureQueue] = useState<Array<{
@@ -1056,22 +1058,35 @@ export default function TariffAssignmentTab({
   // Cancel bulk capture
   const cancelBulkCapture = () => {
     cancelBulkCaptureRef.current = true;
+    pauseBulkCaptureRef.current = false;
+    setIsBulkCapturePaused(false);
     if (backgroundCaptureToastRef.current) {
       toast.dismiss(backgroundCaptureToastRef.current);
     }
     toast.info('Cancelling bulk capture...');
   };
 
+  // Toggle pause bulk capture
+  const togglePauseBulkCapture = () => {
+    pauseBulkCaptureRef.current = !pauseBulkCaptureRef.current;
+    setIsBulkCapturePaused(pauseBulkCaptureRef.current);
+  };
+
   // Background capture progress handler
   const handleBackgroundCaptureProgress = (current: number, total: number, meterNumber: string, metric: string, batchInfo?: string) => {
     const progress = Math.round((current / total) * 100);
     const batchStr = batchInfo ? ` [${batchInfo}]` : '';
+    const pauseStatus = isBulkCapturePaused ? ' (PAUSED)' : '';
     
     // Update or create persistent toast
     if (backgroundCaptureToastRef.current) {
-      toast.loading(`Capturing charts${batchStr}: ${current}/${total} (${progress}%) - ${meterNumber}`, {
+      toast.loading(`Capturing charts${batchStr}${pauseStatus}: ${current}/${total} (${progress}%) - ${meterNumber}`, {
         id: backgroundCaptureToastRef.current,
         action: {
+          label: isBulkCapturePaused ? '▶ Resume' : '⏸ Pause',
+          onClick: () => togglePauseBulkCapture(),
+        },
+        cancel: {
           label: 'Cancel',
           onClick: () => cancelBulkCapture(),
         },
@@ -1116,8 +1131,10 @@ export default function TariffAssignmentTab({
 
   // Bulk capture all charts for all meters with documents (background version)
   const bulkCaptureAllMeters = () => {
-    // Reset cancel flag
+    // Reset cancel and pause flags
     cancelBulkCaptureRef.current = false;
+    pauseBulkCaptureRef.current = false;
+    setIsBulkCapturePaused(false);
     
     // Get all meters that have document data
     const metersWithDocs = meters
@@ -4359,7 +4376,9 @@ export default function TariffAssignmentTab({
         queue={backgroundCaptureQueue}
         onProgress={handleBackgroundCaptureProgress}
         onComplete={handleBackgroundCaptureComplete}
+        onPauseStateChange={setIsBulkCapturePaused}
         cancelRef={cancelBulkCaptureRef}
+        pauseRef={pauseBulkCaptureRef}
         isActive={isBackgroundCapturing}
       />
     </div>
