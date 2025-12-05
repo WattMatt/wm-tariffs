@@ -142,6 +142,7 @@ export default function TariffAssignmentTab({
     metric: string;
   } | null>(null);
   const chartContainerRef = useRef<HTMLDivElement>(null);
+  const cancelBulkCaptureRef = useRef(false);
 
   // Handle legend click to toggle data series
   const handleLegendClick = (dataKey: string) => {
@@ -1041,8 +1042,17 @@ export default function TariffAssignmentTab({
     }
   };
 
+  // Cancel bulk capture
+  const cancelBulkCapture = () => {
+    cancelBulkCaptureRef.current = true;
+    toast.info('Cancelling bulk capture...');
+  };
+
   // Bulk capture all charts for all meters with documents
   const bulkCaptureAllMeters = async () => {
+    // Reset cancel flag
+    cancelBulkCaptureRef.current = false;
+    
     // Get all meters that have document data
     const metersWithDocs = meters
       .map(meter => ({
@@ -1062,10 +1072,17 @@ export default function TariffAssignmentTab({
     const totalMetrics = metrics.length;
     let totalSuccess = 0;
     let totalErrors = 0;
+    let wasCancelled = false;
     
     toast.info(`Starting bulk capture for ${totalMeters} meters (${totalMeters * totalMetrics} charts)...`);
     
     for (let meterIdx = 0; meterIdx < metersWithDocs.length; meterIdx++) {
+      // Check for cancellation
+      if (cancelBulkCaptureRef.current) {
+        wasCancelled = true;
+        break;
+      }
+      
       const { meter, docs } = metersWithDocs[meterIdx];
       
       // Open the chart dialog for this meter
@@ -1076,6 +1093,12 @@ export default function TariffAssignmentTab({
       
       // Capture all 6 metrics for this meter
       for (let metricIdx = 0; metricIdx < metrics.length; metricIdx++) {
+        // Check for cancellation
+        if (cancelBulkCaptureRef.current) {
+          wasCancelled = true;
+          break;
+        }
+        
         const metric = metrics[metricIdx];
         const metricInfo = CHART_METRICS.find(m => m.key === metric);
         
@@ -1128,7 +1151,9 @@ export default function TariffAssignmentTab({
     
     // Report results
     const totalCharts = metersWithDocs.length * metrics.length;
-    if (totalErrors === 0) {
+    if (wasCancelled) {
+      toast.info(`Bulk capture cancelled. Captured ${totalSuccess}/${totalCharts} charts.`);
+    } else if (totalErrors === 0) {
       toast.success(`Successfully captured ${totalSuccess} charts for ${totalMeters} meters`);
     } else {
       toast.warning(`Captured ${totalSuccess}/${totalCharts} charts. ${totalErrors} failed.`);
@@ -4313,6 +4338,7 @@ export default function TariffAssignmentTab({
         open={chartsDialogOpen}
         onOpenChange={setChartsDialogOpen}
         onBulkCapture={bulkCaptureAllMeters}
+        onCancelBulkCapture={cancelBulkCapture}
         isBulkCapturing={isBulkCapturingCharts}
         bulkCaptureProgress={bulkCaptureProgress}
       />
