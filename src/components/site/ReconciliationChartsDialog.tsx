@@ -4,11 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Download, RefreshCw, ImageIcon, Loader2, FolderOpen, Sparkles } from "lucide-react";
-import { ChartCaptureContainer } from "./ChartCapture";
+import { Download, RefreshCw, ImageIcon, Loader2, FolderOpen } from "lucide-react";
 import { buildConnectionsMap, getHierarchyDepth } from '@/lib/reconciliation/hierarchyUtils';
 
 interface ReconciliationChartsDialogProps {
@@ -62,33 +60,6 @@ export default function ReconciliationChartsDialog({
   const [meterOrder, setMeterOrder] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [generateTrigger, setGenerateTrigger] = useState(false);
-  const [generateProgress, setGenerateProgress] = useState({ current: 0, total: 0, meterNumber: '' });
-
-  const handleGenerateComplete = (result: { success: boolean; totalCharts: number; errors: string[] }) => {
-    setIsGenerating(false);
-    setGenerateTrigger(false);
-    
-    if (result.success && result.totalCharts > 0) {
-      toast.success(`Successfully generated ${result.totalCharts} charts`);
-      fetchCharts(); // Refresh the list
-    } else if (result.totalCharts === 0) {
-      toast.info('No charts were generated. Make sure meters have reconciliation data.');
-    } else {
-      toast.error(`Chart generation completed with ${result.errors.length} errors`);
-    }
-  };
-
-  const handleGenerateProgress = (current: number, total: number, meterNumber: string) => {
-    setGenerateProgress({ current, total, meterNumber });
-  };
-
-  const startGeneration = () => {
-    setIsGenerating(true);
-    setGenerateProgress({ current: 0, total: 0, meterNumber: '' });
-    setGenerateTrigger(true);
-  };
 
   // Fetch meter hierarchy order
   const fetchMeterHierarchy = async (): Promise<MeterWithHierarchy[]> => {
@@ -305,28 +276,15 @@ export default function ReconciliationChartsDialog({
                 Reconciliation Charts
               </DialogTitle>
               <DialogDescription>
-                Generated charts from reconciliation analysis, grouped by meter hierarchy
+                Charts captured from meter analysis. To capture new charts, click on a meter in the Comparison tab and use "Capture All Charts".
               </DialogDescription>
             </div>
             <div className="flex items-center gap-2">
               <Button
                 variant="outline"
                 size="sm"
-                onClick={startGeneration}
-                disabled={isLoading || isGenerating}
-              >
-                {isGenerating ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <Sparkles className="w-4 h-4 mr-2" />
-                )}
-                {isGenerating ? 'Generating...' : 'Generate Charts'}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
                 onClick={fetchCharts}
-                disabled={isLoading || isGenerating}
+                disabled={isLoading}
               >
                 <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
                 Refresh
@@ -336,7 +294,6 @@ export default function ReconciliationChartsDialog({
                   variant="default"
                   size="sm"
                   onClick={downloadAllCharts}
-                  disabled={isGenerating}
                 >
                   <Download className="w-4 h-4 mr-2" />
                   Download All ({charts.length})
@@ -345,21 +302,6 @@ export default function ReconciliationChartsDialog({
             </div>
           </div>
         </DialogHeader>
-
-        {/* Generation Progress */}
-        {isGenerating && generateProgress.total > 0 && (
-          <div className="px-1 py-2 space-y-2">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">
-                Generating chart for {generateProgress.meterNumber}...
-              </span>
-              <span className="text-muted-foreground">
-                {generateProgress.current}/{generateProgress.total}
-              </span>
-            </div>
-            <Progress value={(generateProgress.current / generateProgress.total) * 100} />
-          </div>
-        )}
 
         <ScrollArea className="h-[calc(85vh-140px)]">
           {isLoading ? (
@@ -378,7 +320,7 @@ export default function ReconciliationChartsDialog({
               <FolderOpen className="w-12 h-12 text-muted-foreground mb-4" />
               <p className="text-muted-foreground mb-2">No reconciliation charts found</p>
               <p className="text-sm text-muted-foreground">
-                Click "Generate Charts" to create charts from reconciliation data
+                To capture charts, go to the Comparison tab, click on a meter, and use "Capture All Charts"
               </p>
             </div>
           ) : (
@@ -431,14 +373,6 @@ export default function ReconciliationChartsDialog({
           )}
         </ScrollArea>
       </DialogContent>
-
-      {/* Hidden chart capture container */}
-      <ChartCaptureContainer
-        siteId={siteId}
-        trigger={generateTrigger}
-        onComplete={handleGenerateComplete}
-        onProgress={handleGenerateProgress}
-      />
     </Dialog>
   );
 }
