@@ -433,11 +433,11 @@ export default function ReconciliationChartsDialog({
                     <div className="grid grid-cols-3 gap-4 pb-4">
                       {groupedCharts[meterNumber]?.map((chart) => (
                         <Card key={chart.name} className="overflow-hidden group">
-                          <div className="aspect-[50/30] bg-white relative border-b">
+                          <div className="bg-white relative border-b" style={{ aspectRatio: '50 / 30' }}>
                             <img
                               src={`${chart.url}?t=${Date.now()}`}
                               alt={`${chart.meterNumber} - ${chart.metricLabel}`}
-                              className="w-full h-full object-cover"
+                              className="w-full h-full object-contain"
                               loading="lazy"
                             />
                           </div>
