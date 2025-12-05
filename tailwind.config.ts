@@ -84,10 +84,51 @@ export default {
             height: "0",
           },
         },
+        "confetti-fall": {
+          "0%": {
+            transform: "translateY(0) rotate(0deg)",
+            opacity: "1",
+          },
+          "100%": {
+            transform: "translateY(100vh) rotate(720deg)",
+            opacity: "0",
+          },
+        },
+        "sparkle-burst": {
+          "0%": {
+            transform: "rotate(var(--tw-rotate)) scaleY(0)",
+            opacity: "0",
+          },
+          "50%": {
+            transform: "rotate(var(--tw-rotate)) scaleY(1)",
+            opacity: "1",
+          },
+          "100%": {
+            transform: "rotate(var(--tw-rotate)) scaleY(0) translateY(-50px)",
+            opacity: "0",
+          },
+        },
+        "celebration-text": {
+          "0%": {
+            transform: "translate(-50%, -50%) scale(0)",
+            opacity: "0",
+          },
+          "50%": {
+            transform: "translate(-50%, -50%) scale(1.2)",
+            opacity: "1",
+          },
+          "100%": {
+            transform: "translate(-50%, -50%) scale(1)",
+            opacity: "1",
+          },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "confetti-fall": "confetti-fall 2.5s ease-in forwards",
+        "sparkle-burst": "sparkle-burst 1s ease-out forwards",
+        "celebration-text": "celebration-text 0.5s ease-out forwards",
       },
     },
   },

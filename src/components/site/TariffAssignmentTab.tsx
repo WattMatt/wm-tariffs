@@ -26,6 +26,7 @@ import { calculateMeterCost } from "@/lib/costCalculation";
 import html2canvas from "html2canvas";
 import { saveChartToStorage, CHART_METRICS, ChartMetricKey } from "@/lib/reconciliation/chartGeneration";
 import BackgroundChartCapture, { CaptureLogEntry, MeterCaptureResult } from "./BackgroundChartCapture";
+import Celebration from "@/components/ui/celebration";
 
 interface TariffAssignmentTabProps {
   siteId: string;
@@ -157,6 +158,7 @@ export default function TariffAssignmentTab({
   const [isBackgroundCapturing, setIsBackgroundCapturing] = useState(false);
   const [captureLog, setCaptureLog] = useState<CaptureLogEntry[]>([]);
   const [showCaptureLog, setShowCaptureLog] = useState(false);
+  const [showCelebration, setShowCelebration] = useState(false);
   const backgroundCaptureToastRef = useRef<string | number | null>(null);
 
   // Handle legend click to toggle data series
@@ -1141,7 +1143,9 @@ export default function TariffAssignmentTab({
         duration: 10000,
       });
     } else if (failed === 0) {
-      toast.success(`All ${totalMeters} meters captured successfully (${success} charts)`, {
+      // Trigger celebration for full success!
+      setShowCelebration(true);
+      toast.success(`🎉 All ${totalMeters} meters captured successfully (${success} charts)!`, {
         action: {
           label: 'View Log',
           onClick: () => setShowCaptureLog(true),
@@ -4548,6 +4552,13 @@ export default function TariffAssignmentTab({
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Celebration Effect */}
+      <Celebration 
+        isActive={showCelebration} 
+        onComplete={() => setShowCelebration(false)}
+        duration={3500}
+      />
     </div>
   );
 }
