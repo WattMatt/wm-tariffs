@@ -433,7 +433,7 @@ export default function ReconciliationChartsDialog({
                     <div className="grid grid-cols-3 gap-4 pb-4">
                       {groupedCharts[meterNumber]?.map((chart) => (
                         <Card key={chart.name} className="overflow-hidden group relative">
-                          <div className="bg-white relative border-b h-24 cursor-zoom-in transition-all duration-300 hover:scale-[2.5] hover:z-50 hover:shadow-xl hover:rounded-md origin-center">
+                          <div className="bg-white relative border-b h-24 cursor-zoom-in transition-all duration-300 hover:scale-[4] hover:z-50 hover:shadow-xl hover:rounded-md origin-center">
                             <img
                               src={`${chart.url}?t=${Date.now()}`}
                               alt={`${chart.meterNumber} - ${chart.metricLabel}`}
