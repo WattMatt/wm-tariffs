@@ -524,6 +524,33 @@ export default function ReconciliationChartsDialog({
               </span>
             </div>
           )}
+          
+          {/* Confirmation summary bar */}
+          {charts.length > 0 && (
+            <div className="mt-4 p-3 bg-muted/30 rounded-lg flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-green-500" />
+                  <span className="text-sm font-medium">{confirmedCharts.size} Confirmed</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-destructive/50" />
+                  <span className="text-sm font-medium">{charts.length - confirmedCharts.size} Unconfirmed</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-32 h-2 bg-muted rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-green-500 transition-all duration-300"
+                    style={{ width: `${charts.length > 0 ? (confirmedCharts.size / charts.length) * 100 : 0}%` }}
+                  />
+                </div>
+                <span className="text-xs text-muted-foreground">
+                  {charts.length > 0 ? Math.round((confirmedCharts.size / charts.length) * 100) : 0}%
+                </span>
+              </div>
+            </div>
+          )}
         </DialogHeader>
 
         <ScrollArea className="h-[calc(85vh-140px)]">
