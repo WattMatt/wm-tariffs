@@ -6,7 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Download, RefreshCw, ImageIcon, Loader2, FolderOpen, Camera } from "lucide-react";
+import { Download, RefreshCw, ImageIcon, Loader2, FolderOpen, Camera, X } from "lucide-react";
 import { buildConnectionsMap, getHierarchyDepth } from '@/lib/reconciliation/hierarchyUtils';
 
 interface BulkCaptureProgress {
@@ -23,6 +23,7 @@ interface ReconciliationChartsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onBulkCapture?: () => void;
+  onCancelBulkCapture?: () => void;
   isBulkCapturing?: boolean;
   bulkCaptureProgress?: BulkCaptureProgress | null;
 }
@@ -67,6 +68,7 @@ export default function ReconciliationChartsDialog({
   open, 
   onOpenChange,
   onBulkCapture,
+  onCancelBulkCapture,
   isBulkCapturing = false,
   bulkCaptureProgress
 }: ReconciliationChartsDialogProps) {
@@ -316,7 +318,17 @@ export default function ReconciliationChartsDialog({
                       <Camera className="w-4 h-4 mr-2" />
                       Capture All Charts
                     </>
-                  )}
+              )}
+              {isBulkCapturing && onCancelBulkCapture && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={onCancelBulkCapture}
+                >
+                  <X className="w-4 h-4 mr-2" />
+                  Cancel
+                </Button>
+              )}
                 </Button>
               )}
               <Button
