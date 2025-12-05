@@ -8,7 +8,6 @@ import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Download, RefreshCw, ImageIcon, Loader2, FolderOpen, Camera, X } from "lucide-react";
-import { buildConnectionsMap, getHierarchyDepth } from '@/lib/reconciliation/hierarchyUtils';
 
 interface BulkCaptureProgress {
   currentMeter: number;
@@ -79,9 +78,16 @@ export default function ReconciliationChartsDialog({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch meter hierarchy order
-  const fetchMeterHierarchy = async (): Promise<MeterWithHierarchy[]> => {
+  // Fetch meter order from site_reconciliation_settings
+  const fetchMeterOrder = async (): Promise<MeterWithHierarchy[]> => {
     try {
+      // Get site reconciliation settings with saved meter order
+      const { data: settings } = await supabase
+        .from('site_reconciliation_settings')
+        .select('meter_order')
+        .eq('site_id', siteId)
+        .single();
+
       // Get all meters for the site
       const { data: meters, error: metersError } = await supabase
         .from('meters')
@@ -90,29 +96,57 @@ export default function ReconciliationChartsDialog({
 
       if (metersError || !meters) return [];
 
-      // Get meter connections
-      const { data: connections } = await supabase
-        .from('meter_connections')
-        .select('parent_meter_id, child_meter_id')
-        .or(`parent_meter_id.in.(${meters.map(m => m.id).join(',')}),child_meter_id.in.(${meters.map(m => m.id).join(',')})`);
+      // Create a map of meter_id to meter_number
+      const meterIdToNumber = new Map<string, string>();
+      meters.forEach(m => meterIdToNumber.set(m.id, m.meter_number));
 
-      const connectionsMap = buildConnectionsMap(connections || []);
+      // If we have a saved meter_order, use it
+      const savedOrder = settings?.meter_order as string[] | null;
+      
+      if (savedOrder && savedOrder.length > 0) {
+        // Build ordered list based on saved meter_order (which contains meter IDs)
+        const orderedMeters: MeterWithHierarchy[] = [];
+        
+        savedOrder.forEach((meterId, idx) => {
+          const meterNumber = meterIdToNumber.get(meterId);
+          if (meterNumber) {
+            orderedMeters.push({
+              id: meterId,
+              meter_number: meterNumber,
+              depth: 0,
+              order: idx
+            });
+          }
+        });
 
-      // Calculate hierarchy depth for each meter
-      const metersWithDepth = meters.map(meter => ({
-        ...meter,
-        depth: getHierarchyDepth(meter.id, connectionsMap),
+        // Add any meters not in the saved order at the end
+        meters.forEach(m => {
+          if (!savedOrder.includes(m.id)) {
+            orderedMeters.push({
+              id: m.id,
+              meter_number: m.meter_number,
+              depth: 0,
+              order: orderedMeters.length
+            });
+          }
+        });
+
+        return orderedMeters;
+      }
+
+      // Fallback: sort by meter number
+      const sortedMeters = [...meters].sort((a, b) => 
+        a.meter_number.localeCompare(b.meter_number)
+      );
+      
+      return sortedMeters.map((m, idx) => ({ 
+        id: m.id, 
+        meter_number: m.meter_number, 
+        depth: 0, 
+        order: idx 
       }));
-
-      // Sort: shallowest first (parents before children), then by meter number
-      metersWithDepth.sort((a, b) => {
-        if (a.depth !== b.depth) return a.depth - b.depth;
-        return a.meter_number.localeCompare(b.meter_number);
-      });
-
-      return metersWithDepth.map((m, idx) => ({ ...m, order: idx }));
     } catch (err) {
-      console.error('Error fetching meter hierarchy:', err);
+      console.error('Error fetching meter order:', err);
       return [];
     }
   };
@@ -122,9 +156,9 @@ export default function ReconciliationChartsDialog({
     setError(null);
     
     try {
-      // Fetch meter hierarchy and chart files in parallel
-      const [metersWithHierarchy, siteData] = await Promise.all([
-        fetchMeterHierarchy(),
+      // Fetch meter order and chart files in parallel
+      const [metersWithOrder, siteData] = await Promise.all([
+        fetchMeterOrder(),
         supabase
           .from('sites')
           .select('name, clients(name)')
@@ -139,7 +173,7 @@ export default function ReconciliationChartsDialog({
 
       // Build meter order map
       const meterOrderMap = new Map<string, number>();
-      metersWithHierarchy.forEach(m => {
+      metersWithOrder.forEach(m => {
         meterOrderMap.set(m.meter_number, m.order);
       });
 
