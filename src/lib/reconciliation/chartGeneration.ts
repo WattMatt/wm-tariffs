@@ -1,6 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import { generateStoragePath } from '@/lib/storagePaths';
-import { formatDateStringToMonthYear, getMonthFromDateString } from '@/lib/utils';
+import { formatDateStringToMonthYear } from '@/lib/utils';
 
 // Chart metrics configuration
 export const CHART_METRICS = [
@@ -44,11 +44,15 @@ interface ReconciliationCostData {
   total_kwh: number;
 }
 
-// Chart data format for Recharts rendering
+// Chart data format for Recharts rendering - matches MeterChartDataPoint
 export interface RechartsDataPoint {
   period: string;
   amount: number;
   documentAmount?: number;
+  meterReading?: number;
+  isDiscontinuous?: boolean;
+  // Index signature for seasonal average segments
+  [key: string]: number | string | boolean | undefined;
 }
 
 /**

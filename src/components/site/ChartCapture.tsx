@@ -1,15 +1,15 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import html2canvas from 'html2canvas';
-import { ComposedChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
+import { MeterAnalysisChart, type MeterChartDataPoint } from './MeterAnalysisChart';
 import { 
   getMetersOnSchematic, 
   prepareMeterChartData, 
   CHART_METRICS,
   saveChartToStorage,
   type ChartMetricKey,
-  type RechartsDataPoint
 } from '@/lib/reconciliation';
+import { supabase } from '@/integrations/supabase/client';
+import { buildConnectionsMap, getHierarchyDepth } from '@/lib/reconciliation/hierarchyUtils';
 
 interface ChartCaptureContainerProps {
   siteId: string;
@@ -24,12 +24,52 @@ interface ChartToRender {
   metricKey: ChartMetricKey;
   metricFilename: string;
   title: string;
-  data: RechartsDataPoint[];
+  data: MeterChartDataPoint[];
+  isConsumptionMetric: boolean;
+  isKvaMetric: boolean;
+}
+
+interface MeterWithOrder {
+  id: string;
+  meter_number: string;
+  depth: number;
+  order: number;
 }
 
 /**
- * Hidden container that renders and captures Recharts charts
- * Use the `trigger` prop to start the capture process
+ * Get meters sorted by hierarchy order (Council -> Bulk -> Check -> Tenant)
+ */
+async function getMetersInHierarchyOrder(siteId: string): Promise<MeterWithOrder[]> {
+  // Get all meters on schematic
+  const meters = await getMetersOnSchematic(siteId);
+  if (meters.length === 0) return [];
+
+  // Get meter connections
+  const { data: connections } = await supabase
+    .from('meter_connections')
+    .select('parent_meter_id, child_meter_id')
+    .or(`parent_meter_id.in.(${meters.map(m => m.id).join(',')}),child_meter_id.in.(${meters.map(m => m.id).join(',')})`);
+
+  const connectionsMap = buildConnectionsMap(connections || []);
+
+  // Calculate hierarchy depth for each meter (higher depth = deeper in hierarchy)
+  const metersWithDepth = meters.map(meter => ({
+    ...meter,
+    depth: getHierarchyDepth(meter.id, connectionsMap),
+  }));
+
+  // Sort: shallowest first (parents before children), then by meter number
+  metersWithDepth.sort((a, b) => {
+    if (a.depth !== b.depth) return a.depth - b.depth;
+    return a.meter_number.localeCompare(b.meter_number);
+  });
+
+  return metersWithDepth.map((m, idx) => ({ ...m, order: idx }));
+}
+
+/**
+ * Chart capture container that renders charts using the exact same component
+ * as TariffAssignmentTab and captures them as images.
  */
 export function ChartCaptureContainer({ 
   siteId, 
@@ -40,7 +80,7 @@ export function ChartCaptureContainer({
   const [charts, setCharts] = useState<ChartToRender[]>([]);
   const [currentIndex, setCurrentIndex] = useState(-1);
   const [isProcessing, setIsProcessing] = useState(false);
-  const chartRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const chartRef = useRef<HTMLDivElement>(null);
   const savedCount = useRef(0);
   const errors = useRef<string[]>([]);
 
@@ -54,7 +94,8 @@ export function ChartCaptureContainer({
       errors.current = [];
 
       try {
-        const meters = await getMetersOnSchematic(siteId);
+        // Get meters in hierarchy order
+        const meters = await getMetersInHierarchyOrder(siteId);
         
         if (meters.length === 0) {
           onComplete?.({ success: true, totalCharts: 0, errors: [] });
@@ -70,6 +111,9 @@ export function ChartCaptureContainer({
           for (const metric of CHART_METRICS) {
             const chartInfo = chartDataMap.get(metric.key);
             if (chartInfo && chartInfo.data.length > 0) {
+              const isConsumptionMetric = metric.key.includes('consumption');
+              const isKvaMetric = metric.key.includes('kva');
+              
               chartsToRender.push({
                 meterNumber: meter.meter_number,
                 meterId: meter.id,
@@ -77,6 +121,8 @@ export function ChartCaptureContainer({
                 metricFilename: metric.filename,
                 title: chartInfo.title,
                 data: chartInfo.data,
+                isConsumptionMetric,
+                isKvaMetric,
               });
             }
           }
@@ -100,21 +146,27 @@ export function ChartCaptureContainer({
 
     const captureCurrentChart = async () => {
       const chart = charts[currentIndex];
-      const key = `${chart.meterNumber}-${chart.metricKey}`;
-      const element = chartRefs.current.get(key);
 
       onProgress?.(currentIndex + 1, charts.length, chart.meterNumber);
 
-      if (element) {
-        // Wait for chart to fully render
-        await new Promise(resolve => setTimeout(resolve, 300));
+      // Wait for chart to fully render (Recharts animations)
+      await new Promise(resolve => setTimeout(resolve, 500));
 
+      if (chartRef.current) {
         try {
-          const canvas = await html2canvas(element, {
+          const canvas = await html2canvas(chartRef.current, {
             backgroundColor: '#ffffff',
-            scale: 2,
+            scale: 3, // Higher resolution for quality
             logging: false,
             useCORS: true,
+            allowTaint: true,
+            // Ensure SVG elements are captured properly
+            onclone: (clonedDoc) => {
+              const charts = clonedDoc.querySelectorAll('.recharts-wrapper');
+              charts.forEach(chart => {
+                (chart as HTMLElement).style.overflow = 'visible';
+              });
+            },
           });
 
           const dataUrl = canvas.toDataURL('image/png');
@@ -131,7 +183,7 @@ export function ChartCaptureContainer({
             errors.current.push(`Failed to save ${chart.meterNumber}-${chart.metricFilename}`);
           }
         } catch (error) {
-          console.error(`Failed to capture chart ${key}:`, error);
+          console.error(`Failed to capture chart:`, error);
           errors.current.push(`Failed to capture ${chart.meterNumber}-${chart.metricFilename}`);
         }
       }
@@ -154,86 +206,68 @@ export function ChartCaptureContainer({
     captureCurrentChart();
   }, [currentIndex, charts, siteId, onComplete, onProgress, isProcessing]);
 
-  if (!isProcessing || charts.length === 0) {
+  if (!isProcessing || charts.length === 0 || currentIndex < 0) {
     return null;
   }
 
-  // Only render the current chart to save memory
   const currentChart = charts[currentIndex];
   if (!currentChart) return null;
 
-  const key = `${currentChart.meterNumber}-${currentChart.metricKey}`;
+  // Get metric label
+  const metricLabels: Record<string, string> = {
+    'total': 'Total Amount',
+    'basic': 'Basic Charge',
+    'kva-charge': 'kVA Charge',
+    'kwh-charge': 'kWh Charge',
+    'kva-consumption': 'kVA Consumption',
+    'kwh-consumption': 'kWh Consumption',
+  };
 
   return (
-    <div 
+    <div
       style={{
         position: 'fixed',
-        left: '-9999px',
         top: 0,
-        width: '600px',
-        zIndex: -1,
+        left: 0,
+        width: '800px',
+        height: '500px',
+        zIndex: 9999,
+        visibility: 'hidden', // Hidden but properly laid out for SVG rendering
         pointerEvents: 'none',
       }}
     >
-      <div 
-        ref={(el) => {
-          if (el) chartRefs.current.set(key, el);
-        }}
+      <div
+        ref={chartRef}
         style={{
-          width: '600px',
-          height: '400px',
+          width: '800px',
+          height: '500px',
           backgroundColor: '#ffffff',
-          padding: '16px',
+          padding: '20px',
           fontFamily: 'system-ui, -apple-system, sans-serif',
         }}
       >
-        <div style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px', color: '#000' }}>
-          {currentChart.title}
+        {/* Chart Title */}
+        <div style={{ 
+          fontSize: '16px', 
+          fontWeight: 600, 
+          marginBottom: '16px', 
+          color: '#1f2937',
+          textAlign: 'center',
+        }}>
+          {currentChart.meterNumber} - {metricLabels[currentChart.metricKey] || currentChart.metricKey}
         </div>
-        <ChartContainer
-          config={{
-            amount: {
-              label: "Reconciliation Cost",
-              color: "hsl(220 13% 69%)",
-            },
-            documentAmount: {
-              label: "Document Billed",
-              color: "hsl(221.2 83.2% 53.3%)",
-            },
-          }}
-          className="h-[340px] w-full"
-        >
-          <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={currentChart.data} margin={{ top: 10, right: 20, left: 10, bottom: 70 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis 
-                dataKey="period" 
-                angle={-45}
-                textAnchor="end"
-                height={70}
-                tick={{ fontSize: 11, fill: '#374151' }}
-              />
-              <YAxis 
-                tickFormatter={(value) => `R ${value.toLocaleString()}`}
-                tick={{ fontSize: 11, fill: '#374151' }}
-                width={80}
-              />
-              <ChartTooltip content={<ChartTooltipContent />} />
-              <Bar 
-                dataKey="amount" 
-                fill="#9ca3af"
-                radius={[4, 4, 0, 0]}
-                name="Reconciliation Cost"
-              />
-              <Bar 
-                dataKey="documentAmount" 
-                fill="#3b82f6"
-                radius={[4, 4, 0, 0]}
-                name="Document Billed"
-              />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </ChartContainer>
+        
+        {/* Chart Component - exact same as UI */}
+        <MeterAnalysisChart
+          data={currentChart.data}
+          metricLabel={metricLabels[currentChart.metricKey] || currentChart.metricKey}
+          meterNumber={currentChart.meterNumber}
+          height={420}
+          showLegend={true}
+          showSeasonalAverages={false}
+          isConsumptionMetric={currentChart.isConsumptionMetric}
+          isKvaMetric={currentChart.isKvaMetric}
+        />
       </div>
     </div>
   );
