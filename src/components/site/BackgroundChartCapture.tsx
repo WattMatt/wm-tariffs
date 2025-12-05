@@ -55,11 +55,15 @@ interface CaptureQueueItem {
 interface BackgroundChartCaptureProps {
   siteId: string;
   queue: CaptureQueueItem[];
-  onProgress: (current: number, total: number, meterNumber: string, metric: string) => void;
+  onProgress: (current: number, total: number, meterNumber: string, metric: string, batchInfo?: string) => void;
   onComplete: (success: number, failed: number, cancelled: boolean) => void;
   cancelRef: React.MutableRefObject<boolean>;
   isActive: boolean;
 }
+
+// Process in batches to prevent browser overload
+const BATCH_SIZE = 10;
+const BATCH_DELAY_MS = 2000; // Pause between batches
 
 // Helper to extract metric value from document
 const extractMetricValue = (doc: DocumentShopNumber | undefined, metric: string): number | null => {
@@ -207,7 +211,7 @@ export default function BackgroundChartCapture({
   const successCountRef = useRef(0);
   const failCountRef = useRef(0);
 
-  // Process the queue
+  // Process the queue in batches
   useEffect(() => {
     if (!isActive || queue.length === 0 || processingRef.current) return;
 
@@ -216,6 +220,8 @@ export default function BackgroundChartCapture({
       currentIndexRef.current = 0;
       successCountRef.current = 0;
       failCountRef.current = 0;
+
+      const totalBatches = Math.ceil(queue.length / BATCH_SIZE);
 
       for (let i = 0; i < queue.length; i++) {
         if (cancelRef.current) {
@@ -228,7 +234,10 @@ export default function BackgroundChartCapture({
         currentIndexRef.current = i;
         const item = queue[i];
         
-        onProgress(i + 1, queue.length, item.meter.meter_number, item.metricInfo.title);
+        const currentBatch = Math.floor(i / BATCH_SIZE) + 1;
+        const batchInfo = `Batch ${currentBatch}/${totalBatches}`;
+        
+        onProgress(i + 1, queue.length, item.meter.meter_number, item.metricInfo.title, batchInfo);
 
         // Prepare chart data
         const data = await prepareChartData(item.meter.id, item.docs, item.metric);
@@ -237,9 +246,9 @@ export default function BackgroundChartCapture({
         setIsRendered(false);
 
         // Wait for chart to render
-        await new Promise(resolve => setTimeout(resolve, 600));
+        await new Promise(resolve => setTimeout(resolve, 500));
         setIsRendered(true);
-        await new Promise(resolve => setTimeout(resolve, 400));
+        await new Promise(resolve => setTimeout(resolve, 300));
 
         // Capture
         try {
@@ -268,6 +277,12 @@ export default function BackgroundChartCapture({
         } catch (error) {
           console.error(`Error capturing ${item.metric} for ${item.meter.meter_number}:`, error);
           failCountRef.current++;
+        }
+
+        // Add delay between batches to prevent browser overload
+        if ((i + 1) % BATCH_SIZE === 0 && i + 1 < queue.length) {
+          console.log(`Completed batch ${currentBatch}/${totalBatches}, pausing...`);
+          await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
         }
       }
 
