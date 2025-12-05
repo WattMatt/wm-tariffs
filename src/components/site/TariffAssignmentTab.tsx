@@ -9,7 +9,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { FileCheck2, AlertCircle, CheckCircle2, DollarSign, Eye, FileText, ArrowUpDown, ArrowUp, ArrowDown, Eraser, Scale, Check, X, ChevronDown, Filter } from "lucide-react";
+import { FileCheck2, AlertCircle, CheckCircle2, DollarSign, Eye, FileText, ArrowUpDown, ArrowUp, ArrowDown, Eraser, Scale, Check, X, ChevronDown, Filter, ImageIcon } from "lucide-react";
+import ReconciliationChartsDialog from "./ReconciliationChartsDialog";
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Legend } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
@@ -126,6 +127,7 @@ export default function TariffAssignmentTab({
   const [selectedChartMetric, setSelectedChartMetric] = useState<string>('total');
   const [meterDiscontinuities, setMeterDiscontinuities] = useState<any[]>([]);
   const [hiddenDataKeys, setHiddenDataKeys] = useState<Set<string>>(new Set());
+  const [chartsDialogOpen, setChartsDialogOpen] = useState(false);
 
   // Handle legend click to toggle data series
   const handleLegendClick = (dataKey: string) => {
@@ -2181,16 +2183,38 @@ export default function TariffAssignmentTab({
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <DollarSign className="w-5 h-5" />
-            {showDocumentCharts ? 'Tariff Analysis' : 'Tariff Assignment'}
-          </CardTitle>
-          <CardDescription>
-            {showDocumentCharts 
-              ? 'Analyze billing costs and tariff performance for your meters'
-              : `Assign tariff structures from ${site.supply_authorities?.name} to your meters`
-            }
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <DollarSign className="w-5 h-5" />
+                {showDocumentCharts ? 'Tariff Analysis' : 'Tariff Assignment'}
+              </CardTitle>
+              <CardDescription>
+                {showDocumentCharts 
+                  ? 'Analyze billing costs and tariff performance for your meters'
+                  : `Assign tariff structures from ${site.supply_authorities?.name} to your meters`
+                }
+              </CardDescription>
+            </div>
+            {showDocumentCharts && hideSeasonalAverages && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => setChartsDialogOpen(true)}
+                    >
+                      <ImageIcon className="w-4 h-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>View Reconciliation Charts</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="space-y-6">
           {!hideLocationInfo && (
@@ -4054,6 +4078,13 @@ export default function TariffAssignmentTab({
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Reconciliation Charts Dialog */}
+      <ReconciliationChartsDialog
+        siteId={siteId}
+        open={chartsDialogOpen}
+        onOpenChange={setChartsDialogOpen}
+      />
     </div>
   );
 }
