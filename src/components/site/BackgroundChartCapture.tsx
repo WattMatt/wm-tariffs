@@ -1,9 +1,8 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Legend } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import html2canvas from "html2canvas";
 import { saveChartToStorage, CHART_METRICS, ChartMetricKey } from "@/lib/reconciliation/chartGeneration";
-import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
 interface DocumentShopNumber {
@@ -52,21 +51,37 @@ interface CaptureQueueItem {
   metricInfo: typeof CHART_METRICS[number];
 }
 
+export interface CaptureLogEntry {
+  timestamp: string;
+  meterNumber: string;
+  metricKey: string;
+  metricLabel: string;
+  status: 'pending' | 'rendering' | 'capturing' | 'success' | 'failed' | 'retrying';
+  attempt: number;
+  error?: string;
+  duration?: number;
+}
+
 interface BackgroundChartCaptureProps {
   siteId: string;
   queue: CaptureQueueItem[];
   onProgress: (current: number, total: number, meterNumber: string, metric: string, batchInfo?: string) => void;
-  onComplete: (success: number, failed: number, cancelled: boolean) => void;
+  onComplete: (success: number, failed: number, cancelled: boolean, log: CaptureLogEntry[]) => void;
   onPauseStateChange?: (isPaused: boolean) => void;
+  onLogUpdate?: (log: CaptureLogEntry[]) => void;
   cancelRef: React.MutableRefObject<boolean>;
   pauseRef: React.MutableRefObject<boolean>;
   isActive: boolean;
 }
 
-// Process in batches to prevent browser overload
-const BATCH_SIZE = 10;
-const BATCH_DELAY_MS = 2000; // Pause between batches
-const PAUSE_CHECK_INTERVAL_MS = 500; // Check pause state every 500ms
+// Configuration
+const BATCH_SIZE = 5; // Smaller batches for more stability
+const BATCH_DELAY_MS = 1500;
+const PAUSE_CHECK_INTERVAL_MS = 500;
+const RENDER_SETUP_DELAY_MS = 800; // Time to set up chart
+const RENDER_VERIFY_DELAY_MS = 400; // Time to verify render
+const MAX_RETRY_ATTEMPTS = 3;
+const RETRY_DELAY_MS = 1000;
 
 // Helper to extract metric value from document
 const extractMetricValue = (doc: DocumentShopNumber | undefined, metric: string): number | null => {
@@ -102,26 +117,12 @@ const extractMetricValue = (doc: DocumentShopNumber | undefined, metric: string)
   }
 };
 
-// Helper to get metric label
-const getMetricLabel = (metric: string): string => {
-  switch(metric) {
-    case 'total': return 'Total Amount';
-    case 'basic': return 'Basic Charge';
-    case 'kva-charge': return 'kVA Charge';
-    case 'kwh-charge': return 'kWh Charge';
-    case 'kva-consumption': return 'kVA Consumption';
-    case 'kwh-consumption': return 'kWh Consumption';
-    default: return 'Total Amount';
-  }
-};
-
 // Prepare chart data for a meter and metric
 const prepareChartData = async (
   meterId: string,
   docs: DocumentShopNumber[], 
   metric: string
 ) => {
-  // Fetch reconciliation costs for this meter
   const { data: reconciliationData } = await supabase
     .from('reconciliation_meter_results')
     .select(`
@@ -180,7 +181,6 @@ const prepareChartData = async (
     });
   }
 
-  // Sort docs by period
   const sortedDocs = [...docs].sort((a, b) => a.periodEnd.localeCompare(b.periodEnd));
   
   return sortedDocs.map(doc => {
@@ -203,6 +203,7 @@ export default function BackgroundChartCapture({
   onProgress,
   onComplete,
   onPauseStateChange,
+  onLogUpdate,
   cancelRef,
   pauseRef,
   isActive,
@@ -210,13 +211,184 @@ export default function BackgroundChartCapture({
   const chartRef = useRef<HTMLDivElement>(null);
   const [currentItem, setCurrentItem] = useState<CaptureQueueItem | null>(null);
   const [chartData, setChartData] = useState<any[]>([]);
-  const [isRendered, setIsRendered] = useState(false);
+  const [renderReady, setRenderReady] = useState(false);
   const processingRef = useRef(false);
-  const currentIndexRef = useRef(0);
-  const successCountRef = useRef(0);
-  const failCountRef = useRef(0);
+  const captureLogRef = useRef<CaptureLogEntry[]>([]);
 
-  // Process the queue in batches
+  // Add log entry
+  const addLogEntry = useCallback((entry: Omit<CaptureLogEntry, 'timestamp'>) => {
+    const fullEntry: CaptureLogEntry = {
+      ...entry,
+      timestamp: new Date().toISOString(),
+    };
+    captureLogRef.current = [...captureLogRef.current, fullEntry];
+    onLogUpdate?.(captureLogRef.current);
+    console.log(`[ChartCapture] ${entry.status.toUpperCase()}: ${entry.meterNumber} - ${entry.metricLabel} (Attempt ${entry.attempt})${entry.error ? ` - ${entry.error}` : ''}`);
+  }, [onLogUpdate]);
+
+  // Verify chart element is rendered and has content
+  const verifyChartRendered = useCallback((): boolean => {
+    const chartElement = chartRef.current?.querySelector('.recharts-responsive-container');
+    if (!chartElement) {
+      console.log('[ChartCapture] Chart container not found');
+      return false;
+    }
+    
+    const svg = chartElement.querySelector('svg');
+    if (!svg) {
+      console.log('[ChartCapture] SVG element not found');
+      return false;
+    }
+    
+    const bars = svg.querySelectorAll('.recharts-bar-rectangle');
+    const lines = svg.querySelectorAll('.recharts-line-curve');
+    
+    if (bars.length === 0 && lines.length === 0) {
+      console.log('[ChartCapture] No chart elements (bars/lines) found');
+      return false;
+    }
+    
+    console.log(`[ChartCapture] Chart verified: ${bars.length} bars, ${lines.length} lines`);
+    return true;
+  }, []);
+
+  // Capture a single chart with forced setup and verification
+  const captureChart = useCallback(async (
+    item: CaptureQueueItem,
+    attempt: number
+  ): Promise<{ success: boolean; error?: string }> => {
+    const startTime = Date.now();
+    
+    try {
+      // Step 1: Prepare chart data
+      addLogEntry({
+        meterNumber: item.meter.meter_number,
+        metricKey: item.metric,
+        metricLabel: item.metricInfo.title,
+        status: 'rendering',
+        attempt,
+      });
+
+      const data = await prepareChartData(item.meter.id, item.docs, item.metric);
+      
+      if (!data || data.length === 0) {
+        throw new Error('No chart data available');
+      }
+
+      // Step 2: Set chart data and force render setup
+      setChartData(data);
+      setCurrentItem(item);
+      setRenderReady(false);
+      
+      // Wait for React to process state updates
+      await new Promise(resolve => setTimeout(resolve, RENDER_SETUP_DELAY_MS));
+      
+      // Signal render is ready
+      setRenderReady(true);
+      
+      // Wait for chart to fully render
+      await new Promise(resolve => setTimeout(resolve, RENDER_VERIFY_DELAY_MS));
+
+      // Step 3: Verify chart is actually rendered
+      let verified = false;
+      let verifyAttempts = 0;
+      const maxVerifyAttempts = 5;
+      
+      while (!verified && verifyAttempts < maxVerifyAttempts) {
+        verified = verifyChartRendered();
+        if (!verified) {
+          verifyAttempts++;
+          console.log(`[ChartCapture] Render verification attempt ${verifyAttempts}/${maxVerifyAttempts}`);
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+      }
+      
+      if (!verified) {
+        throw new Error('Chart failed to render after multiple verification attempts');
+      }
+
+      // Step 4: Capture the chart
+      addLogEntry({
+        meterNumber: item.meter.meter_number,
+        metricKey: item.metric,
+        metricLabel: item.metricInfo.title,
+        status: 'capturing',
+        attempt,
+      });
+
+      const chartElement = chartRef.current?.querySelector('.recharts-responsive-container');
+      if (!chartElement) {
+        throw new Error('Chart container not found for capture');
+      }
+
+      const canvas = await html2canvas(chartElement as HTMLElement, {
+        backgroundColor: '#ffffff',
+        scale: 2,
+        logging: false,
+        useCORS: true,
+        allowTaint: true,
+        removeContainer: false,
+      });
+
+      // Verify canvas has content (not just white)
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const hasContent = imageData.data.some((value, index) => {
+          // Check non-alpha channels for non-white values
+          if (index % 4 !== 3) return value !== 255;
+          return false;
+        });
+        
+        if (!hasContent) {
+          throw new Error('Captured canvas appears to be empty');
+        }
+      }
+
+      // Step 5: Save to storage
+      const dataUrl = canvas.toDataURL('image/png');
+      const saved = await saveChartToStorage(
+        siteId, 
+        item.meter.meter_number, 
+        item.metricInfo.filename, 
+        dataUrl
+      );
+      
+      if (!saved) {
+        throw new Error('Failed to save chart to storage');
+      }
+
+      const duration = Date.now() - startTime;
+      addLogEntry({
+        meterNumber: item.meter.meter_number,
+        metricKey: item.metric,
+        metricLabel: item.metricInfo.title,
+        status: 'success',
+        attempt,
+        duration,
+      });
+
+      return { success: true };
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const duration = Date.now() - startTime;
+      
+      addLogEntry({
+        meterNumber: item.meter.meter_number,
+        metricKey: item.metric,
+        metricLabel: item.metricInfo.title,
+        status: 'failed',
+        attempt,
+        error: errorMessage,
+        duration,
+      });
+
+      return { success: false, error: errorMessage };
+    }
+  }, [siteId, addLogEntry, verifyChartRendered]);
+
+  // Process queue with retry logic
   useEffect(() => {
     if (!isActive || queue.length === 0 || processingRef.current) return;
 
@@ -230,94 +402,125 @@ export default function BackgroundChartCapture({
 
     const processQueue = async () => {
       processingRef.current = true;
-      currentIndexRef.current = 0;
-      successCountRef.current = 0;
-      failCountRef.current = 0;
-
+      captureLogRef.current = [];
+      
+      let successCount = 0;
+      let failCount = 0;
+      const failedItems: { item: CaptureQueueItem; index: number }[] = [];
+      
       const totalBatches = Math.ceil(queue.length / BATCH_SIZE);
 
+      console.log(`[ChartCapture] Starting capture of ${queue.length} charts in ${totalBatches} batches`);
+
+      // First pass: process all items
       for (let i = 0; i < queue.length; i++) {
-        // Check for cancel
         if (cancelRef.current) {
-          onComplete(successCountRef.current, failCountRef.current, true);
+          onComplete(successCount, failCount + failedItems.length, true, captureLogRef.current);
           processingRef.current = false;
           setCurrentItem(null);
           return;
         }
 
-        // Wait if paused
         await waitWhilePaused();
 
-        // Check cancel again after unpause
         if (cancelRef.current) {
-          onComplete(successCountRef.current, failCountRef.current, true);
+          onComplete(successCount, failCount + failedItems.length, true, captureLogRef.current);
           processingRef.current = false;
           setCurrentItem(null);
           return;
         }
 
-        currentIndexRef.current = i;
         const item = queue[i];
-        
         const currentBatch = Math.floor(i / BATCH_SIZE) + 1;
         const batchInfo = `Batch ${currentBatch}/${totalBatches}`;
         
         onProgress(i + 1, queue.length, item.meter.meter_number, item.metricInfo.title, batchInfo);
 
-        // Prepare chart data
-        const data = await prepareChartData(item.meter.id, item.docs, item.metric);
-        setChartData(data);
-        setCurrentItem(item);
-        setIsRendered(false);
-
-        // Wait for chart to render
-        await new Promise(resolve => setTimeout(resolve, 500));
-        setIsRendered(true);
-        await new Promise(resolve => setTimeout(resolve, 300));
-
-        // Capture
-        try {
-          const chartElement = chartRef.current?.querySelector('.recharts-responsive-container');
-          if (chartElement) {
-            const canvas = await html2canvas(chartElement as HTMLElement, {
-              backgroundColor: '#ffffff',
-              scale: 2,
-              logging: false,
-              useCORS: true,
+        // Attempt capture with retry
+        let success = false;
+        for (let attempt = 1; attempt <= MAX_RETRY_ATTEMPTS && !success; attempt++) {
+          if (attempt > 1) {
+            addLogEntry({
+              meterNumber: item.meter.meter_number,
+              metricKey: item.metric,
+              metricLabel: item.metricInfo.title,
+              status: 'retrying',
+              attempt,
             });
-            
-            const dataUrl = canvas.toDataURL('image/png');
-            const saved = await saveChartToStorage(
-              siteId, 
-              item.meter.meter_number, 
-              item.metricInfo.filename, 
-              dataUrl
-            );
-            
-            if (saved) successCountRef.current++;
-            else failCountRef.current++;
-          } else {
-            failCountRef.current++;
+            await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
           }
-        } catch (error) {
-          console.error(`Error capturing ${item.metric} for ${item.meter.meter_number}:`, error);
-          failCountRef.current++;
+
+          const result = await captureChart(item, attempt);
+          success = result.success;
         }
 
-        // Add delay between batches to prevent browser overload
+        if (success) {
+          successCount++;
+        } else {
+          failedItems.push({ item, index: i });
+        }
+
+        // Batch delay
         if ((i + 1) % BATCH_SIZE === 0 && i + 1 < queue.length) {
-          console.log(`Completed batch ${currentBatch}/${totalBatches}, pausing...`);
+          console.log(`[ChartCapture] Completed batch ${currentBatch}/${totalBatches}, pausing...`);
           await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
         }
       }
 
-      onComplete(successCountRef.current, failCountRef.current, false);
+      // Retry pass: re-attempt all failed items
+      if (failedItems.length > 0 && !cancelRef.current) {
+        console.log(`[ChartCapture] Starting retry pass for ${failedItems.length} failed items`);
+        
+        for (const { item, index } of failedItems) {
+          if (cancelRef.current) break;
+          await waitWhilePaused();
+          if (cancelRef.current) break;
+
+          onProgress(
+            queue.length, 
+            queue.length, 
+            item.meter.meter_number, 
+            item.metricInfo.title, 
+            `Retry pass (${failedItems.indexOf({ item, index }) + 1}/${failedItems.length})`
+          );
+
+          // Extra retry attempts for previously failed items
+          let success = false;
+          for (let attempt = MAX_RETRY_ATTEMPTS + 1; attempt <= MAX_RETRY_ATTEMPTS + 2 && !success; attempt++) {
+            addLogEntry({
+              meterNumber: item.meter.meter_number,
+              metricKey: item.metric,
+              metricLabel: item.metricInfo.title,
+              status: 'retrying',
+              attempt,
+            });
+            
+            // Longer delay before final retries
+            await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS * 2));
+            
+            const result = await captureChart(item, attempt);
+            success = result.success;
+          }
+
+          if (success) {
+            successCount++;
+            // Remove from fail count since we had counted it earlier
+          } else {
+            failCount++;
+          }
+        }
+      } else {
+        failCount = failedItems.length;
+      }
+
+      console.log(`[ChartCapture] Complete: ${successCount} success, ${failCount} failed`);
+      onComplete(successCount, failCount, false, captureLogRef.current);
       processingRef.current = false;
       setCurrentItem(null);
     };
 
     processQueue();
-  }, [isActive, queue]);
+  }, [isActive, queue, captureChart, addLogEntry, onProgress, onComplete, onPauseStateChange, cancelRef, pauseRef]);
 
   if (!isActive || !currentItem) return null;
 
@@ -333,67 +536,70 @@ export default function BackgroundChartCapture({
         height: '500px',
         backgroundColor: '#ffffff',
         pointerEvents: 'none',
+        visibility: renderReady ? 'visible' : 'hidden',
       }}
     >
-      <div ref={chartRef}>
-        <ChartContainer
-          config={{
-            amount: {
-              label: "Reconciliation",
-              color: "hsl(var(--primary))",
-            },
-            documentAmount: {
-              label: "Document Billed",
-              color: "hsl(var(--muted-foreground))",
-            },
-          }}
-          className="h-[500px] w-[900px]"
-        >
-          <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart 
-              data={chartData}
-              margin={{ top: 20, right: 80, left: 60, bottom: 80 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis 
-                dataKey="period" 
-                tick={{ fontSize: 11 }}
-                angle={-45}
-                textAnchor="end"
-                height={80}
-              />
-              <YAxis 
-                tick={{ fontSize: 11 }}
-                tickFormatter={(value) => {
-                  if (isConsumptionMetric) {
-                    return value.toLocaleString();
-                  }
-                  return `R${(value / 1000).toFixed(0)}k`;
-                }}
-              />
-              <ChartTooltip content={<ChartTooltipContent />} />
-              <Legend 
-                verticalAlign="top"
-                height={36}
-              />
-              <Bar 
-                dataKey="documentAmount" 
-                fill="hsl(var(--muted-foreground))"
-                name="Document Billed"
-                radius={[4, 4, 0, 0]}
-              />
-              <Line 
-                type="monotone" 
-                dataKey="amount" 
-                stroke="hsl(var(--primary))"
-                strokeWidth={2}
-                dot={{ fill: "hsl(var(--primary))", strokeWidth: 2 }}
-                name="Reconciliation"
-                connectNulls={false}
-              />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </ChartContainer>
+      <div ref={chartRef} style={{ width: '900px', height: '500px' }}>
+        {chartData.length > 0 && (
+          <ChartContainer
+            config={{
+              amount: {
+                label: "Reconciliation",
+                color: "hsl(var(--primary))",
+              },
+              documentAmount: {
+                label: "Document Billed",
+                color: "hsl(var(--muted-foreground))",
+              },
+            }}
+            className="h-[500px] w-[900px]"
+          >
+            <ResponsiveContainer width={900} height={500}>
+              <ComposedChart 
+                data={chartData}
+                margin={{ top: 20, right: 80, left: 60, bottom: 80 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis 
+                  dataKey="period" 
+                  tick={{ fontSize: 11 }}
+                  angle={-45}
+                  textAnchor="end"
+                  height={80}
+                />
+                <YAxis 
+                  tick={{ fontSize: 11 }}
+                  tickFormatter={(value) => {
+                    if (isConsumptionMetric) {
+                      return value.toLocaleString();
+                    }
+                    return `R${(value / 1000).toFixed(0)}k`;
+                  }}
+                />
+                <ChartTooltip content={<ChartTooltipContent />} />
+                <Legend 
+                  verticalAlign="top"
+                  height={36}
+                />
+                <Bar 
+                  dataKey="documentAmount" 
+                  fill="hsl(var(--muted-foreground))"
+                  name="Document Billed"
+                  radius={[4, 4, 0, 0]}
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="amount" 
+                  stroke="hsl(var(--primary))"
+                  strokeWidth={2}
+                  dot={{ fill: "hsl(var(--primary))", strokeWidth: 2 }}
+                  name="Reconciliation"
+                  connectNulls={false}
+                />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </ChartContainer>
+        )}
       </div>
     </div>
   );

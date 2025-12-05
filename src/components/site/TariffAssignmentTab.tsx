@@ -25,7 +25,7 @@ import { cn, formatDateString, formatDateStringToLong, formatDateStringToMonthYe
 import { calculateMeterCost } from "@/lib/costCalculation";
 import html2canvas from "html2canvas";
 import { saveChartToStorage, CHART_METRICS, ChartMetricKey } from "@/lib/reconciliation/chartGeneration";
-import BackgroundChartCapture from "./BackgroundChartCapture";
+import BackgroundChartCapture, { CaptureLogEntry } from "./BackgroundChartCapture";
 
 interface TariffAssignmentTabProps {
   siteId: string;
@@ -155,6 +155,8 @@ export default function TariffAssignmentTab({
     metricInfo: typeof CHART_METRICS[number];
   }>>([]);
   const [isBackgroundCapturing, setIsBackgroundCapturing] = useState(false);
+  const [captureLog, setCaptureLog] = useState<CaptureLogEntry[]>([]);
+  const [showCaptureLog, setShowCaptureLog] = useState(false);
   const backgroundCaptureToastRef = useRef<string | number | null>(null);
 
   // Handle legend click to toggle data series
@@ -1105,12 +1107,15 @@ export default function TariffAssignmentTab({
   };
 
   // Background capture complete handler
-  const handleBackgroundCaptureComplete = (success: number, failed: number, cancelled: boolean) => {
+  const handleBackgroundCaptureComplete = (success: number, failed: number, cancelled: boolean, log: CaptureLogEntry[]) => {
     // Dismiss progress toast
     if (backgroundCaptureToastRef.current) {
       toast.dismiss(backgroundCaptureToastRef.current);
       backgroundCaptureToastRef.current = null;
     }
+    
+    // Store the log
+    setCaptureLog(log);
     
     // Reset state
     setIsBackgroundCapturing(false);
@@ -1118,14 +1123,37 @@ export default function TariffAssignmentTab({
     setBulkCaptureProgress(null);
     setBackgroundCaptureQueue([]);
     
-    // Show result
+    // Show result with option to view log
     const total = success + failed;
+    const failedEntries = log.filter(e => e.status === 'failed');
+    
     if (cancelled) {
-      toast.info(`Bulk capture cancelled. Captured ${success}/${total} charts.`);
+      toast.info(`Bulk capture cancelled. Captured ${success}/${total} charts.`, {
+        action: {
+          label: 'View Log',
+          onClick: () => setShowCaptureLog(true),
+        },
+        duration: 10000,
+      });
     } else if (failed === 0) {
-      toast.success(`Successfully captured ${success} charts`);
+      toast.success(`Successfully captured all ${success} charts`, {
+        action: {
+          label: 'View Log',
+          onClick: () => setShowCaptureLog(true),
+        },
+        duration: 5000,
+      });
     } else {
-      toast.warning(`Captured ${success}/${total} charts. ${failed} failed.`);
+      toast.warning(`Captured ${success}/${total} charts. ${failed} failed.`, {
+        action: {
+          label: 'View Log',
+          onClick: () => setShowCaptureLog(true),
+        },
+        duration: 15000,
+      });
+      
+      // Log failed items for debugging
+      console.log('[ChartCapture] Failed captures:', failedEntries);
     }
   };
 
@@ -4380,7 +4408,82 @@ export default function TariffAssignmentTab({
         cancelRef={cancelBulkCaptureRef}
         pauseRef={pauseBulkCaptureRef}
         isActive={isBackgroundCapturing}
+        onLogUpdate={setCaptureLog}
       />
+
+      {/* Capture Log Dialog */}
+      <Dialog open={showCaptureLog} onOpenChange={setShowCaptureLog}>
+        <DialogContent className="max-w-4xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle>Chart Capture Log</DialogTitle>
+            <DialogDescription>
+              Detailed log of all capture attempts with status and timing information
+            </DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="h-[60vh]">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[140px]">Time</TableHead>
+                  <TableHead>Meter</TableHead>
+                  <TableHead>Metric</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="w-[80px]">Attempt</TableHead>
+                  <TableHead className="w-[80px]">Duration</TableHead>
+                  <TableHead>Error</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {captureLog.map((entry, index) => (
+                  <TableRow key={`${entry.timestamp}-${index}`} className={cn(
+                    entry.status === 'failed' && 'bg-destructive/10',
+                    entry.status === 'success' && 'bg-green-500/10',
+                    entry.status === 'retrying' && 'bg-amber-500/10'
+                  )}>
+                    <TableCell className="text-xs font-mono">
+                      {new Date(entry.timestamp).toLocaleTimeString()}
+                    </TableCell>
+                    <TableCell className="font-medium">{entry.meterNumber}</TableCell>
+                    <TableCell>{entry.metricLabel}</TableCell>
+                    <TableCell>
+                      <Badge variant={
+                        entry.status === 'success' ? 'default' :
+                        entry.status === 'failed' ? 'destructive' :
+                        entry.status === 'retrying' ? 'secondary' :
+                        'outline'
+                      } className="text-xs">
+                        {entry.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-center">{entry.attempt}</TableCell>
+                    <TableCell className="text-xs">
+                      {entry.duration ? `${entry.duration}ms` : '-'}
+                    </TableCell>
+                    <TableCell className="text-xs text-destructive max-w-[200px] truncate" title={entry.error}>
+                      {entry.error || '-'}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            {captureLog.length === 0 && (
+              <div className="text-center py-8 text-muted-foreground">
+                No capture log entries yet
+              </div>
+            )}
+          </ScrollArea>
+          <div className="flex justify-between items-center pt-4 border-t">
+            <div className="text-sm text-muted-foreground">
+              Total: {captureLog.length} entries | 
+              Success: {captureLog.filter(e => e.status === 'success').length} | 
+              Failed: {captureLog.filter(e => e.status === 'failed').length}
+            </div>
+            <Button variant="outline" onClick={() => setShowCaptureLog(false)}>
+              Close
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
