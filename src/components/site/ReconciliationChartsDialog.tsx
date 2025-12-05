@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Download, RefreshCw, ImageIcon, Loader2, FolderOpen, Camera, X } from "lucide-react";
@@ -26,6 +25,7 @@ interface ReconciliationChartsDialogProps {
   onCancelBulkCapture?: () => void;
   isBulkCapturing?: boolean;
   bulkCaptureProgress?: BulkCaptureProgress | null;
+  isBackgroundCapturing?: boolean;
 }
 
 interface ChartFile {
@@ -70,7 +70,8 @@ export default function ReconciliationChartsDialog({
   onBulkCapture,
   onCancelBulkCapture,
   isBulkCapturing = false,
-  bulkCaptureProgress
+  bulkCaptureProgress,
+  isBackgroundCapturing = false
 }: ReconciliationChartsDialogProps) {
   const [charts, setCharts] = useState<ChartFile[]>([]);
   const [groupedCharts, setGroupedCharts] = useState<Record<string, ChartFile[]>>({});
@@ -337,16 +338,12 @@ export default function ReconciliationChartsDialog({
                   variant="default"
                   size="sm"
                   onClick={onBulkCapture}
-                  disabled={isBulkCapturing || isLoading}
+                  disabled={isBackgroundCapturing || isLoading}
                 >
-                  {isBulkCapturing ? (
+                  {isBackgroundCapturing ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      {bulkCaptureProgress ? (
-                        `${bulkCaptureProgress.meterNumber} (${bulkCaptureProgress.currentMeter}/${bulkCaptureProgress.totalMeters})`
-                      ) : (
-                        'Capturing...'
-                      )}
+                      Capturing in background...
                     </>
                   ) : (
                     <>
@@ -356,7 +353,7 @@ export default function ReconciliationChartsDialog({
                   )}
                 </Button>
               )}
-              {isBulkCapturing && onCancelBulkCapture && (
+              {isBackgroundCapturing && onCancelBulkCapture && (
                 <Button
                   variant="destructive"
                   size="sm"
@@ -370,7 +367,7 @@ export default function ReconciliationChartsDialog({
                 variant="outline"
                 size="sm"
                 onClick={fetchCharts}
-                disabled={isLoading || isBulkCapturing}
+                disabled={isLoading}
               >
                 <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
                 Refresh
@@ -380,7 +377,6 @@ export default function ReconciliationChartsDialog({
                   variant="outline"
                   size="sm"
                   onClick={downloadAllCharts}
-                  disabled={isBulkCapturing}
                 >
                   <Download className="w-4 h-4 mr-2" />
                   Download All ({charts.length})
@@ -389,24 +385,13 @@ export default function ReconciliationChartsDialog({
             </div>
           </div>
           
-          {/* Progress bar for bulk capture */}
-          {isBulkCapturing && bulkCaptureProgress && (
-            <div className="mt-4 space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">
-                  Capturing {bulkCaptureProgress.metric} for meter {bulkCaptureProgress.meterNumber}
-                </span>
-                <span className="font-medium">
-                  {Math.round(((bulkCaptureProgress.currentMeter - 1) * bulkCaptureProgress.totalMetrics + bulkCaptureProgress.currentMetric) / (bulkCaptureProgress.totalMeters * bulkCaptureProgress.totalMetrics) * 100)}%
-                </span>
-              </div>
-              <Progress 
-                value={((bulkCaptureProgress.currentMeter - 1) * bulkCaptureProgress.totalMetrics + bulkCaptureProgress.currentMetric) / (bulkCaptureProgress.totalMeters * bulkCaptureProgress.totalMetrics) * 100} 
-                className="h-2"
-              />
-              <p className="text-xs text-muted-foreground">
-                Chart {(bulkCaptureProgress.currentMeter - 1) * bulkCaptureProgress.totalMetrics + bulkCaptureProgress.currentMetric} of {bulkCaptureProgress.totalMeters * bulkCaptureProgress.totalMetrics}
-              </p>
+          {/* Background capture indicator */}
+          {isBackgroundCapturing && (
+            <div className="mt-4 p-3 bg-muted/50 rounded-lg flex items-center gap-3">
+              <Loader2 className="w-4 h-4 animate-spin text-primary" />
+              <span className="text-sm text-muted-foreground">
+                Charts are being captured in the background. You can close this dialog and continue working. Check the toast notification for progress.
+              </span>
             </div>
           )}
         </DialogHeader>
