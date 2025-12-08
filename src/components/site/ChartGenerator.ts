@@ -802,3 +802,276 @@ export const generateReconciliationVsDocumentChart = (
   
   return canvas.toDataURL('image/png');
 };
+
+// Interface for reconciliation chart data
+export interface ReconciliationChartDataPoint {
+  period: string;
+  amount: number | null;        // Reconciliation cost
+  documentAmount: number | null; // Document billed
+  meterReading: number | null;   // Meter reading value
+}
+
+/**
+ * Generate a reconciliation meter chart using Canvas API (fast, no DOM rendering)
+ * Creates a clustered bar chart with bars for Reconciliation Cost and Document Billed,
+ * plus a line for Meter Reading on a secondary Y-axis.
+ */
+export const generateReconciliationMeterChart = (
+  title: string,
+  unit: string,
+  data: ReconciliationChartDataPoint[],
+  width: number = 900,
+  height: number = 500,
+  scaleFactor: number = 2
+): string => {
+  const scaledWidth = width * scaleFactor;
+  const scaledHeight = height * scaleFactor;
+  
+  const canvas = document.createElement('canvas');
+  canvas.width = scaledWidth;
+  canvas.height = scaledHeight;
+  const ctx = canvas.getContext('2d');
+  
+  if (!ctx || data.length === 0) return '';
+  
+  // Clear canvas with white background
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, scaledWidth, scaledHeight);
+  
+  // Colors matching the UI
+  const reconciliationColor = 'rgba(156, 163, 175, 0.5)';  // Gray with opacity for Reconciliation Cost
+  const documentColor = '#3b82f6';  // Primary blue for Document Billed
+  const meterReadingColor = '#22c55e';  // Green for Meter Reading line
+  
+  // Chart dimensions
+  const padding = 60 * scaleFactor;
+  const rightPadding = 80 * scaleFactor;
+  const bottomPadding = 100 * scaleFactor;
+  const topPadding = 70 * scaleFactor;
+  const chartWidth = scaledWidth - padding - rightPadding;
+  const chartHeight = scaledHeight - topPadding - bottomPadding;
+  
+  // Draw title
+  ctx.fillStyle = '#000000';
+  ctx.font = `bold ${14 * scaleFactor}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.fillText(title, scaledWidth / 2, 25 * scaleFactor);
+  
+  // Draw unit
+  if (unit && unit.trim()) {
+    ctx.font = `${11 * scaleFactor}px sans-serif`;
+    ctx.fillText(`(${unit})`, scaledWidth / 2, 42 * scaleFactor);
+  }
+  
+  // Draw legend
+  const legendY = 55 * scaleFactor;
+  const legendSpacing = 140 * scaleFactor;
+  let legendX = scaledWidth / 2 - legendSpacing * 1.2;
+  
+  // Reconciliation Cost legend
+  ctx.fillStyle = reconciliationColor;
+  ctx.fillRect(legendX, legendY, 14 * scaleFactor, 14 * scaleFactor);
+  ctx.fillStyle = '#000000';
+  ctx.font = `${10 * scaleFactor}px sans-serif`;
+  ctx.textAlign = 'left';
+  ctx.fillText('Reconciliation Cost', legendX + 18 * scaleFactor, legendY + 11 * scaleFactor);
+  
+  // Document Billed legend
+  legendX += legendSpacing;
+  ctx.fillStyle = documentColor;
+  ctx.fillRect(legendX, legendY, 14 * scaleFactor, 14 * scaleFactor);
+  ctx.fillStyle = '#000000';
+  ctx.fillText('Document Billed', legendX + 18 * scaleFactor, legendY + 11 * scaleFactor);
+  
+  // Meter Reading legend (line)
+  legendX += legendSpacing;
+  ctx.strokeStyle = meterReadingColor;
+  ctx.lineWidth = 2 * scaleFactor;
+  ctx.beginPath();
+  ctx.moveTo(legendX, legendY + 7 * scaleFactor);
+  ctx.lineTo(legendX + 14 * scaleFactor, legendY + 7 * scaleFactor);
+  ctx.stroke();
+  ctx.fillStyle = meterReadingColor;
+  ctx.beginPath();
+  ctx.arc(legendX + 7 * scaleFactor, legendY + 7 * scaleFactor, 3 * scaleFactor, 0, 2 * Math.PI);
+  ctx.fill();
+  ctx.fillStyle = '#000000';
+  ctx.fillText('Meter Reading', legendX + 18 * scaleFactor, legendY + 11 * scaleFactor);
+  
+  // Calculate scales
+  const barValues = data.map(d => Math.max(d.amount || 0, d.documentAmount || 0));
+  const maxBarValue = Math.max(...barValues, 1);
+  
+  const meterReadings = data.map(d => d.meterReading).filter(v => v !== null) as number[];
+  const maxMeterReading = meterReadings.length > 0 ? Math.max(...meterReadings) : 1;
+  
+  const clusterWidth = chartWidth / data.length;
+  const barWidth = Math.max((clusterWidth - 12 * scaleFactor) / 2, 20 * scaleFactor);
+  
+  // Draw gridlines
+  ctx.strokeStyle = '#e5e7eb';
+  ctx.lineWidth = 1;
+  const numGridLines = 5;
+  for (let i = 0; i <= numGridLines; i++) {
+    const y = topPadding + (chartHeight * i / numGridLines);
+    ctx.setLineDash([3 * scaleFactor, 3 * scaleFactor]);
+    ctx.beginPath();
+    ctx.moveTo(padding, y);
+    ctx.lineTo(padding + chartWidth, y);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  
+  // Draw clustered bars
+  data.forEach((item, index) => {
+    const clusterX = padding + index * clusterWidth;
+    
+    // Reconciliation bar (left)
+    const reconValue = item.amount || 0;
+    const reconBarHeight = maxBarValue > 0 ? (reconValue / maxBarValue) * chartHeight : 0;
+    const reconY = topPadding + chartHeight - reconBarHeight;
+    ctx.fillStyle = reconciliationColor;
+    
+    // Draw bar with rounded top corners
+    const barRadius = 4 * scaleFactor;
+    const reconBarX = clusterX + 4 * scaleFactor;
+    ctx.beginPath();
+    ctx.moveTo(reconBarX, reconY + barRadius);
+    ctx.arcTo(reconBarX, reconY, reconBarX + barRadius, reconY, barRadius);
+    ctx.arcTo(reconBarX + barWidth, reconY, reconBarX + barWidth, reconY + barRadius, barRadius);
+    ctx.lineTo(reconBarX + barWidth, topPadding + chartHeight);
+    ctx.lineTo(reconBarX, topPadding + chartHeight);
+    ctx.closePath();
+    ctx.fill();
+    
+    // Document bar (right)
+    const docValue = item.documentAmount || 0;
+    const docBarHeight = maxBarValue > 0 ? (docValue / maxBarValue) * chartHeight : 0;
+    const docY = topPadding + chartHeight - docBarHeight;
+    ctx.fillStyle = documentColor;
+    
+    const docBarX = clusterX + barWidth + 8 * scaleFactor;
+    ctx.beginPath();
+    ctx.moveTo(docBarX, docY + barRadius);
+    ctx.arcTo(docBarX, docY, docBarX + barRadius, docY, barRadius);
+    ctx.arcTo(docBarX + barWidth, docY, docBarX + barWidth, docY + barRadius, barRadius);
+    ctx.lineTo(docBarX + barWidth, topPadding + chartHeight);
+    ctx.lineTo(docBarX, topPadding + chartHeight);
+    ctx.closePath();
+    ctx.fill();
+  });
+  
+  // Draw meter reading line
+  ctx.strokeStyle = meterReadingColor;
+  ctx.lineWidth = 2 * scaleFactor;
+  ctx.beginPath();
+  let isFirstPoint = true;
+  
+  data.forEach((item, index) => {
+    if (item.meterReading !== null) {
+      const clusterX = padding + index * clusterWidth + clusterWidth / 2;
+      const y = topPadding + chartHeight - (item.meterReading / maxMeterReading) * chartHeight;
+      
+      if (isFirstPoint) {
+        ctx.moveTo(clusterX, y);
+        isFirstPoint = false;
+      } else {
+        ctx.lineTo(clusterX, y);
+      }
+    }
+  });
+  ctx.stroke();
+  
+  // Draw meter reading dots
+  ctx.fillStyle = meterReadingColor;
+  data.forEach((item, index) => {
+    if (item.meterReading !== null) {
+      const clusterX = padding + index * clusterWidth + clusterWidth / 2;
+      const y = topPadding + chartHeight - (item.meterReading / maxMeterReading) * chartHeight;
+      ctx.beginPath();
+      ctx.arc(clusterX, y, 4 * scaleFactor, 0, 2 * Math.PI);
+      ctx.fill();
+    }
+  });
+  
+  // Draw left Y-axis (values)
+  ctx.strokeStyle = '#374151';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(padding, topPadding);
+  ctx.lineTo(padding, topPadding + chartHeight);
+  ctx.lineTo(padding + chartWidth, topPadding + chartHeight);
+  ctx.stroke();
+  
+  // Left Y-axis labels
+  ctx.fillStyle = '#374151';
+  ctx.font = `${10 * scaleFactor}px sans-serif`;
+  ctx.textAlign = 'right';
+  for (let i = 0; i <= numGridLines; i++) {
+    const value = maxBarValue * (1 - i / numGridLines);
+    const y = topPadding + (chartHeight * i / numGridLines);
+    const label = value >= 1000 ? `R${(value / 1000).toFixed(0)}k` : `R${value.toFixed(0)}`;
+    ctx.fillText(label, padding - 8 * scaleFactor, y + 4 * scaleFactor);
+  }
+  
+  // Right Y-axis labels (meter reading)
+  ctx.textAlign = 'left';
+  for (let i = 0; i <= numGridLines; i++) {
+    const value = maxMeterReading * (1 - i / numGridLines);
+    const y = topPadding + (chartHeight * i / numGridLines);
+    ctx.fillText(value.toLocaleString(), padding + chartWidth + 10 * scaleFactor, y + 4 * scaleFactor);
+  }
+  
+  // X-axis labels (rotated)
+  ctx.save();
+  ctx.fillStyle = '#374151';
+  ctx.font = `${9 * scaleFactor}px sans-serif`;
+  ctx.textAlign = 'right';
+  data.forEach((item, index) => {
+    const x = padding + index * clusterWidth + clusterWidth / 2;
+    const y = topPadding + chartHeight + 15 * scaleFactor;
+    ctx.translate(x, y);
+    ctx.rotate(-Math.PI / 4);
+    ctx.fillText(item.period, 0, 0);
+    ctx.rotate(Math.PI / 4);
+    ctx.translate(-x, -y);
+  });
+  ctx.restore();
+  
+  return canvas.toDataURL('image/png');
+};
+
+/**
+ * Generate all 6 metric charts for a meter (fast, synchronous)
+ */
+export const generateAllMeterCharts = (
+  meterNumber: string,
+  chartDataByMetric: Map<string, ReconciliationChartDataPoint[]>
+): Map<string, string> => {
+  const result = new Map<string, string>();
+  
+  const metrics = [
+    { key: 'total', title: 'Total Amount', unit: 'R' },
+    { key: 'basic', title: 'Basic Charge', unit: 'R' },
+    { key: 'kva-charge', title: 'kVA Charge', unit: 'R' },
+    { key: 'kwh-charge', title: 'kWh Charge', unit: 'R' },
+    { key: 'kva-consumption', title: 'kVA Consumption', unit: 'kVA' },
+    { key: 'kwh-consumption', title: 'kWh Consumption', unit: 'kWh' },
+  ];
+  
+  for (const metric of metrics) {
+    const data = chartDataByMetric.get(metric.key);
+    if (data && data.length > 0) {
+      const dataUrl = generateReconciliationMeterChart(
+        `${meterNumber} - ${metric.title}`,
+        metric.unit,
+        data
+      );
+      if (dataUrl) {
+        result.set(metric.key, dataUrl);
+      }
+    }
+  }
+  
+  return result;
+};
