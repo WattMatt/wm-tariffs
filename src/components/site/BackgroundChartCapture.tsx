@@ -130,6 +130,34 @@ const extractMetricValue = (doc: DocumentShopNumber | undefined, metric: string)
   }
 };
 
+// Helper to extract meter readings from document line items
+const extractMeterReadings = (doc: DocumentShopNumber | undefined, metric: string): { previous: number | null, current: number | null } => {
+  if (!doc) return { previous: null, current: null };
+  
+  const lineItems = doc.lineItems || [];
+  let item = null;
+  
+  switch(metric) {
+    case 'basic':
+      item = lineItems.find(i => i.unit === 'Monthly');
+      break;
+    case 'kva-charge':
+    case 'kva-consumption':
+      item = lineItems.find(i => i.unit === 'kVA');
+      break;
+    case 'kwh-charge':
+    case 'kwh-consumption':
+    case 'total':
+      item = lineItems.find(i => i.unit === 'kWh' && i.supply === 'Normal');
+      break;
+  }
+  
+  return {
+    previous: item?.previous_reading ?? null,
+    current: item?.current_reading ?? null
+  };
+};
+
 // Prepare chart data for a meter and metric
 const prepareChartData = async (
   meterId: string,
@@ -199,6 +227,7 @@ const prepareChartData = async (
   return sortedDocs.map(doc => {
     const documentValue = extractMetricValue(doc, metric);
     const reconValue = reconCostsMap[doc.documentId];
+    const readings = extractMeterReadings(doc, metric);
     const periodDate = new Date(doc.periodEnd);
     const period = periodDate.toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' });
     
@@ -206,6 +235,7 @@ const prepareChartData = async (
       period,
       documentAmount: documentValue,
       amount: reconValue ?? null,
+      meterReading: readings.current,
     };
   });
 };
