@@ -34,7 +34,7 @@ interface ReconciliationChartsDialogProps {
   siteId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onBulkCapture?: (mode: CaptureMode) => void;
+  onBulkCapture?: (mode: CaptureMode, confirmedChartPaths?: Set<string>) => void;
   onCancelBulkCapture?: () => void;
   isBulkCapturing?: boolean;
   bulkCaptureProgress?: BulkCaptureProgress | null;
@@ -434,7 +434,7 @@ export default function ReconciliationChartsDialog({
                     <Button
                       variant="destructive"
                       size="sm"
-                      onClick={() => onBulkCapture('retryFailed')}
+                      onClick={() => onBulkCapture('retryFailed', confirmedCharts)}
                       disabled={isBackgroundCapturing || isLoading}
                     >
                       <RefreshCw className="w-4 h-4 mr-2" />
@@ -445,7 +445,7 @@ export default function ReconciliationChartsDialog({
                     <Button
                       variant="secondary"
                       size="sm"
-                      onClick={() => onBulkCapture('resume')}
+                      onClick={() => onBulkCapture('resume', confirmedCharts)}
                       disabled={isBackgroundCapturing || isLoading}
                     >
                       <Play className="w-4 h-4 mr-2" />
@@ -455,7 +455,7 @@ export default function ReconciliationChartsDialog({
                   <Button
                     variant="default"
                     size="sm"
-                    onClick={() => onBulkCapture('all')}
+                    onClick={() => onBulkCapture('all', confirmedCharts)}
                     disabled={isBackgroundCapturing || isLoading}
                   >
                     {isBackgroundCapturing ? (

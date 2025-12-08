@@ -25,6 +25,7 @@ import { cn, formatDateString, formatDateStringToLong, formatDateStringToMonthYe
 import { calculateMeterCost } from "@/lib/costCalculation";
 import html2canvas from "html2canvas";
 import { saveChartToStorage, CHART_METRICS, ChartMetricKey } from "@/lib/reconciliation/chartGeneration";
+import { sanitizeName } from "@/lib/storagePaths";
 import BackgroundChartCapture, { CaptureLogEntry, MeterCaptureResult } from "./BackgroundChartCapture";
 import Celebration from "@/components/ui/celebration";
 
@@ -43,6 +44,9 @@ interface Site {
     id: string;
     name: string;
     region: string;
+  } | null;
+  clients: {
+    name: string;
   } | null;
 }
 
@@ -1183,7 +1187,7 @@ export default function TariffAssignmentTab({
   };
 
   // Bulk capture all charts for all meters with documents (background version)
-  const bulkCaptureAllMeters = (mode: CaptureMode = 'all') => {
+  const bulkCaptureAllMeters = (mode: CaptureMode = 'all', confirmedChartPaths?: Set<string>) => {
     // Reset cancel and pause flags
     cancelBulkCaptureRef.current = false;
     pauseBulkCaptureRef.current = false;
@@ -1243,11 +1247,25 @@ export default function TariffAssignmentTab({
       toastMessage = `Starting chart capture for ${metersWithDocs.length} meters`;
     }
     
-    // Build the capture queue
+    // Build the capture queue - skip charts that are already confirmed
     const queue: typeof backgroundCaptureQueue = [];
+    let skippedCount = 0;
+    
+    // Get site/client names for building chart paths
+    const clientName = sanitizeName(site?.clients?.name || '');
+    const siteName = sanitizeName(site?.name || '');
     
     for (const { meter, docs } of metersToProcess) {
       for (const metricInfo of CHART_METRICS) {
+        // Build the expected chart path for this meter/metric
+        const chartPath = `${clientName}/${siteName}/Metering/Reconciliations/Graphs/${meter.meter_number}-${metricInfo.filename}.png`;
+        
+        // Skip if this chart is already confirmed
+        if (confirmedChartPaths?.has(chartPath)) {
+          skippedCount++;
+          continue;
+        }
+        
         queue.push({
           meter,
           docs,
@@ -1255,6 +1273,16 @@ export default function TariffAssignmentTab({
           metricInfo,
         });
       }
+    }
+    
+    // If all charts were skipped (all confirmed), notify and exit
+    if (queue.length === 0) {
+      toast.success(`All ${skippedCount} charts already confirmed!`);
+      return;
+    }
+    
+    if (skippedCount > 0) {
+      toastMessage += ` (skipping ${skippedCount} confirmed charts)`;
     }
     
     const totalMeters = metersToProcess.length;
@@ -1587,7 +1615,7 @@ export default function TariffAssignmentTab({
   const fetchSiteData = async () => {
     const { data, error } = await supabase
       .from("sites")
-      .select("*, supply_authorities(id, name, region)")
+      .select("*, supply_authorities(id, name, region), clients(name)")
       .eq("id", siteId)
       .single();
 
