@@ -87,7 +87,7 @@ interface BackgroundChartCaptureProps {
 
 // Configuration - much faster now with Canvas generation
 const PAUSE_CHECK_INTERVAL_MS = 100;
-const BETWEEN_METERS_DELAY_MS = 50; // Minimal delay between meters
+const PARALLEL_METER_COUNT = 3; // Process 3 meters simultaneously
 
 // Helper to extract metric value from document
 const extractMetricValue = (doc: DocumentShopNumber | undefined, metric: string): number | null => {
@@ -458,7 +458,7 @@ export default function BackgroundChartCapture({
     return result;
   }, [generateAndSaveChart, addLogEntry, onProgress, onPauseStateChange, cancelRef, pauseRef]);
 
-  // Process queue meter by meter
+  // Process queue with parallel meter processing
   useEffect(() => {
     if (!isActive || queue.length === 0 || processingRef.current) return;
 
@@ -471,34 +471,44 @@ export default function BackgroundChartCapture({
       const meterGroups = groupByMeter(queue);
       const totalMeters = meterGroups.length;
       
-      console.log(`[ChartCapture] Starting fast Canvas capture: ${totalMeters} meters, ${queue.length} total charts`);
+      console.log(`[ChartCapture] Starting parallel Canvas capture: ${totalMeters} meters, ${queue.length} total charts (${PARALLEL_METER_COUNT} meters at a time)`);
 
       let totalSuccess = 0;
       let totalFailed = 0;
+      let processedCount = 0;
 
-      for (let meterIndex = 0; meterIndex < meterGroups.length; meterIndex++) {
+      // Process meters in parallel batches
+      for (let batchStart = 0; batchStart < meterGroups.length; batchStart += PARALLEL_METER_COUNT) {
         if (cancelRef.current) {
           console.log('[ChartCapture] Capture cancelled by user');
           break;
         }
 
-        const meterGroup = meterGroups[meterIndex];
+        // Get batch of meters to process in parallel
+        const batchEnd = Math.min(batchStart + PARALLEL_METER_COUNT, meterGroups.length);
+        const batch = meterGroups.slice(batchStart, batchEnd);
         
-        // Process all charts for this meter
-        const meterResult = await processMeterCharts(meterGroup, meterIndex, totalMeters);
-        
-        // Store result
-        meterResultsRef.current = [...meterResultsRef.current, meterResult];
-        totalSuccess += meterResult.chartsSuccessful;
-        totalFailed += meterResult.chartsFailed;
+        console.log(`[ChartCapture] Processing batch: meters ${batchStart + 1}-${batchEnd} of ${totalMeters}`);
 
-        // Notify about meter completion
-        onMeterComplete?.(meterResult);
+        // Process all meters in this batch simultaneously
+        const batchPromises = batch.map((meterGroup, batchIndex) => 
+          processMeterCharts(meterGroup, batchStart + batchIndex, totalMeters)
+        );
 
-        // Minimal delay before next meter
-        if (meterIndex < meterGroups.length - 1 && !cancelRef.current) {
-          await new Promise(resolve => setTimeout(resolve, BETWEEN_METERS_DELAY_MS));
+        const batchResults = await Promise.all(batchPromises);
+
+        // Process results from this batch
+        for (const meterResult of batchResults) {
+          meterResultsRef.current = [...meterResultsRef.current, meterResult];
+          totalSuccess += meterResult.chartsSuccessful;
+          totalFailed += meterResult.chartsFailed;
+          processedCount++;
+
+          // Notify about meter completion
+          onMeterComplete?.(meterResult);
         }
+
+        console.log(`[ChartCapture] Batch complete: ${processedCount}/${totalMeters} meters processed`);
       }
 
       console.log(`[ChartCapture] All meters complete: ${totalSuccess} success, ${totalFailed} failed`);
