@@ -1080,15 +1080,14 @@ export default function TariffAssignmentTab({
     setIsBulkCapturePaused(pauseBulkCaptureRef.current);
   };
 
-  // Background capture progress handler
-  const handleBackgroundCaptureProgress = (current: number, total: number, meterNumber: string, metric: string, batchInfo?: string) => {
-    const progress = Math.round((current / total) * 100);
-    const batchStr = batchInfo ? ` [${batchInfo}]` : '';
+  // Background capture batch progress handler (called once per batch, not per chart)
+  const handleBackgroundBatchProgress = (metersComplete: number, totalMeters: number, chartsComplete: number, totalCharts: number) => {
+    const progress = Math.round((metersComplete / totalMeters) * 100);
     const pauseStatus = isBulkCapturePaused ? ' (PAUSED)' : '';
     
     // Update or create persistent toast
     if (backgroundCaptureToastRef.current) {
-      toast.loading(`Capturing charts${batchStr}${pauseStatus}: ${current}/${total} (${progress}%) - ${meterNumber}`, {
+      toast.loading(`Capturing charts${pauseStatus}: ${metersComplete}/${totalMeters} meters (${chartsComplete} charts - ${progress}%)`, {
         id: backgroundCaptureToastRef.current,
         action: {
           label: isBulkCapturePaused ? '▶ Resume' : '⏸ Pause',
@@ -1103,12 +1102,12 @@ export default function TariffAssignmentTab({
     
     // Update progress state for dialog if open
     setBulkCaptureProgress({
-      currentMeter: Math.ceil(current / CHART_METRICS.length),
-      totalMeters: Math.ceil(total / CHART_METRICS.length),
-      meterNumber,
-      currentMetric: ((current - 1) % CHART_METRICS.length) + 1,
+      currentMeter: metersComplete,
+      totalMeters: totalMeters,
+      meterNumber: `Batch ${Math.ceil(metersComplete / 3)}`,
+      currentMetric: chartsComplete % CHART_METRICS.length || CHART_METRICS.length,
       totalMetrics: CHART_METRICS.length,
-      metric,
+      metric: 'Processing...',
     });
   };
 
@@ -4511,7 +4510,7 @@ export default function TariffAssignmentTab({
       <BackgroundChartCapture
         siteId={siteId}
         queue={backgroundCaptureQueue}
-        onProgress={handleBackgroundCaptureProgress}
+        onBatchProgress={handleBackgroundBatchProgress}
         onComplete={handleBackgroundCaptureComplete}
         onPauseStateChange={setIsBulkCapturePaused}
         onMeterComplete={handleMeterCaptureComplete}

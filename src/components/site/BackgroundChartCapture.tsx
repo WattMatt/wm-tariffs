@@ -75,7 +75,8 @@ export interface MeterCaptureResult {
 interface BackgroundChartCaptureProps {
   siteId: string;
   queue: CaptureQueueItem[];
-  onProgress: (current: number, total: number, meterNumber: string, metric: string, batchInfo?: string) => void;
+  onProgress?: (current: number, total: number, meterNumber: string, metric: string, batchInfo?: string) => void;
+  onBatchProgress?: (metersComplete: number, totalMeters: number, chartsComplete: number, totalCharts: number) => void;
   onComplete: (success: number, failed: number, cancelled: boolean, log: CaptureLogEntry[], meterResults: MeterCaptureResult[]) => void;
   onPauseStateChange?: (isPaused: boolean) => void;
   onLogUpdate?: (log: CaptureLogEntry[]) => void;
@@ -261,6 +262,7 @@ export default function BackgroundChartCapture({
   siteId,
   queue,
   onProgress,
+  onBatchProgress,
   onComplete,
   onPauseStateChange,
   onLogUpdate,
@@ -508,6 +510,9 @@ export default function BackgroundChartCapture({
           onMeterComplete?.(meterResult);
         }
 
+        // Report batch progress (stable, non-jumping updates)
+        onBatchProgress?.(processedCount, totalMeters, totalSuccess + totalFailed, queue.length);
+        
         console.log(`[ChartCapture] Batch complete: ${processedCount}/${totalMeters} meters processed`);
       }
 
@@ -517,7 +522,7 @@ export default function BackgroundChartCapture({
     };
 
     processAllMeters();
-  }, [isActive, queue, processMeterCharts, onComplete, onMeterComplete, cancelRef]);
+  }, [isActive, queue, processMeterCharts, onComplete, onBatchProgress, onMeterComplete, cancelRef]);
 
   // No DOM rendering needed - Canvas generation is entirely off-screen
   return null;
