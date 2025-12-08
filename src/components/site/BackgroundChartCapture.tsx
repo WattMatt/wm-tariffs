@@ -617,6 +617,8 @@ export default function BackgroundChartCapture({
   if (!isActive || !currentItem) return null;
 
   const isConsumptionMetric = currentItem.metric.includes('consumption');
+  const isKvaMetric = currentItem.metric.includes('kva');
+  const metricLabel = currentItem.metricInfo.title;
 
   return (
     <div 
@@ -636,12 +638,16 @@ export default function BackgroundChartCapture({
           <ChartContainer
             config={{
               amount: {
-                label: "Reconciliation",
-                color: "hsl(var(--primary))",
+                label: "Reconciliation Cost",
+                color: "hsl(var(--muted-foreground))",
               },
               documentAmount: {
                 label: "Document Billed",
-                color: "hsl(var(--muted-foreground))",
+                color: "hsl(var(--primary))",
+              },
+              meterReading: {
+                label: "Meter Reading",
+                color: "hsl(var(--chart-3))",
               },
             }}
             className="h-[500px] w-[900px]"
@@ -649,7 +655,7 @@ export default function BackgroundChartCapture({
             <ResponsiveContainer width={900} height={500}>
               <ComposedChart 
                 data={chartData}
-                margin={{ top: 20, right: 80, left: 60, bottom: 80 }}
+                margin={{ top: 10, right: 80, left: 50, bottom: 70 }}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                 <XAxis 
@@ -657,10 +663,28 @@ export default function BackgroundChartCapture({
                   tick={{ fontSize: 11 }}
                   angle={-45}
                   textAnchor="end"
-                  height={80}
+                  height={70}
+                  label={{
+                    value: 'Period',
+                    position: 'insideBottom',
+                    offset: -5,
+                    style: { fontSize: 11 },
+                  }}
                 />
                 <YAxis 
+                  yAxisId="left"
                   tick={{ fontSize: 11 }}
+                  label={{
+                    value: metricLabel,
+                    angle: -90,
+                    position: 'insideLeft',
+                    style: {
+                      fontSize: 12,
+                      fontWeight: 600,
+                      fill: 'hsl(var(--foreground))',
+                      textAnchor: 'middle',
+                    },
+                  }}
                   tickFormatter={(value) => {
                     if (isConsumptionMetric) {
                       return value.toLocaleString();
@@ -668,25 +692,56 @@ export default function BackgroundChartCapture({
                     return `R${(value / 1000).toFixed(0)}k`;
                   }}
                 />
+                <YAxis 
+                  yAxisId="right"
+                  orientation="right"
+                  tick={{ fontSize: 11 }}
+                  label={{
+                    value: isKvaMetric ? 'Meter Reading (kVA)' : 'Meter Reading (kWh)',
+                    angle: 90,
+                    position: 'insideRight',
+                    offset: -15,
+                    style: {
+                      fontSize: 12,
+                      fontWeight: 600,
+                      fill: 'hsl(var(--foreground))',
+                      textAnchor: 'middle',
+                    },
+                  }}
+                  tickFormatter={(value) => value.toLocaleString()}
+                />
                 <ChartTooltip content={<ChartTooltipContent />} />
                 <Legend 
-                  verticalAlign="top"
-                  height={36}
+                  wrapperStyle={{ paddingTop: '15px' }}
+                  iconType="line"
                 />
+                {/* Reconciliation cost bar - gray with opacity */}
                 <Bar 
-                  dataKey="documentAmount" 
+                  yAxisId="left"
+                  dataKey="amount" 
                   fill="hsl(var(--muted-foreground))"
+                  name="Reconciliation Cost"
+                  radius={[4, 4, 0, 0]}
+                  opacity={0.5}
+                />
+                {/* Document billed bar - primary color */}
+                <Bar 
+                  yAxisId="left"
+                  dataKey="documentAmount" 
+                  fill="hsl(var(--primary))"
                   name="Document Billed"
                   radius={[4, 4, 0, 0]}
                 />
+                {/* Meter reading line on right axis */}
                 <Line 
+                  yAxisId="right"
                   type="monotone" 
-                  dataKey="amount" 
-                  stroke="hsl(var(--primary))"
+                  dataKey="meterReading" 
+                  stroke="hsl(var(--chart-3))"
                   strokeWidth={2}
-                  dot={{ fill: "hsl(var(--primary))", strokeWidth: 2 }}
-                  name="Reconciliation"
+                  name="Meter Reading"
                   connectNulls={false}
+                  dot={{ r: 3, fill: "hsl(var(--chart-3))" }}
                 />
               </ComposedChart>
             </ResponsiveContainer>
