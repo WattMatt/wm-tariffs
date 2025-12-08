@@ -1085,9 +1085,14 @@ export default function TariffAssignmentTab({
     const progress = Math.round((metersComplete / totalMeters) * 100);
     const pauseStatus = isBulkCapturePaused ? ' (PAUSED)' : '';
     
+    // Calculate batch info (processing 3 meters at a time)
+    const BATCH_SIZE = 3;
+    const currentBatch = Math.ceil(metersComplete / BATCH_SIZE) || 1;
+    const totalBatches = Math.ceil(totalMeters / BATCH_SIZE);
+    
     // Update or create persistent toast
     if (backgroundCaptureToastRef.current) {
-      toast.loading(`Capturing charts${pauseStatus}: ${metersComplete}/${totalMeters} meters (${chartsComplete} charts - ${progress}%)`, {
+      toast.loading(`Capturing charts${pauseStatus}: Batch ${currentBatch}/${totalBatches} (${metersComplete}/${totalMeters} meters - ${progress}%)`, {
         id: backgroundCaptureToastRef.current,
         action: {
           label: isBulkCapturePaused ? '▶ Resume' : '⏸ Pause',

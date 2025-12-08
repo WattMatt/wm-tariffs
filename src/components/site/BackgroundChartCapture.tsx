@@ -414,7 +414,7 @@ export default function BackgroundChartCapture({
       // Update progress
       const overallProgress = (meterIndex * 6) + chartIndex + 1;
       const totalCharts = totalMeters * 6;
-      onProgress(
+      onProgress?.(
         overallProgress, 
         totalCharts, 
         meter.meter_number, 
