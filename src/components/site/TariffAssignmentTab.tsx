@@ -583,15 +583,30 @@ export default function TariffAssignmentTab({
       }
     });
     
-    return sortedDocs.map((doc) => {
+    return sortedDocs.map((doc, index) => {
       // Use reconciliation dates if available, otherwise fall back to document dates
       const displayDateEnd = doc.reconciliationDateTo || doc.periodEnd;
+      
+      // Extract meter readings for the current metric
+      const readings = extractMeterReadings(doc, metric);
+      
+      // Check if current reading matches next period's previous reading (discontinuity detection)
+      const nextDoc = index < sortedDocs.length - 1 ? sortedDocs[index + 1] : null;
+      const nextReadings = nextDoc ? extractMeterReadings(nextDoc, metric) : null;
+      const isDiscontinuous = nextReadings && 
+                             readings.current !== null && 
+                             nextReadings.previous !== null && 
+                             readings.current !== nextReadings.previous;
       
       const dataPoint: any = {
         period: formatDateStringToMonthYear(displayDateEnd),
         amount: reconciliationCostsMap[doc.documentId] !== undefined ? reconciliationCostsMap[doc.documentId] : null,
         documentAmount: extractMetricValue(doc, metric),
         documentId: doc.documentId,
+        meterReading: readings.current,
+        consumption: readings.current !== null && readings.previous !== null ? 
+                    readings.current - readings.previous : null,
+        isDiscontinuous,
       };
 
       console.log(`📈 Comparison data point for ${dataPoint.period}:`, {
@@ -600,7 +615,9 @@ export default function TariffAssignmentTab({
         reconciliationAmount: reconciliationCostsMap[doc.documentId],
         documentAmount: doc.totalAmountExcludingEmergency ?? doc.totalAmount,
         finalAmount: dataPoint.amount,
-        usingReconDate: !!doc.reconciliationDateTo
+        usingReconDate: !!doc.reconciliationDateTo,
+        meterReading: readings.current,
+        isDiscontinuous
       });
       
       const matchingSegment = segments.find(seg => 
