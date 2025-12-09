@@ -1,17 +1,23 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, FileText, Eye, Trash2, Pencil, Clock, RefreshCw, ArrowUpDown, ArrowUp, ArrowDown, ChevronDown } from "lucide-react";
+import { Plus, FileText, Eye, Trash2, Pencil, Clock, RefreshCw, ArrowUpDown, ArrowUp, ArrowDown, ChevronDown, BarChart3 } from "lucide-react";
 import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import TariffEditDialog from "./TariffEditDialog";
 import TariffStructureForm from "./TariffStructureForm";
 import TariffPeriodComparisonDialog from "./TariffPeriodComparisonDialog";
+import { useCaptureProgressToast } from "@/hooks/useCaptureProgressToast";
+import { 
+  TARIFF_CHART_METRICS, 
+  fetchTariffCharges, 
+  captureTariffGroupCharts 
+} from "@/lib/charts/tariffChartGeneration";
 
 interface TariffStructure {
   id: string;
@@ -38,19 +44,17 @@ interface SupplyAuthority {
 interface TariffStructuresTabProps {
   supplyAuthorityId: string;
   supplyAuthorityName: string;
+  province?: string;
 }
 
-interface TariffStructuresTabProps {
-  supplyAuthorityId: string;
-  supplyAuthorityName: string;
-}
-
-export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthorityName }: TariffStructuresTabProps) {
+export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthorityName, province }: TariffStructuresTabProps) {
   const [structures, setStructures] = useState<TariffStructure[]>([]);
   const [selectedTariffs, setSelectedTariffs] = useState<Set<string>>(new Set());
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isCapturing, setIsCapturing] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const [sortConfig, setSortConfig] = useState<{
     column: string | null;
     direction: 'asc' | 'desc' | null;
@@ -58,6 +62,15 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
   const [selectedTariffForEdit, setSelectedTariffForEdit] = useState<{ id: string; name: string; mode: "view" | "edit" } | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
   const [comparisonDialogOpen, setComparisonDialogOpen] = useState<string | null>(null);
+
+  const { showProgress, showComplete, showError, dismiss } = useCaptureProgressToast({
+    onPause: () => setIsPaused(true),
+    onResume: () => setIsPaused(false),
+    onCancel: () => {
+      setIsCapturing(false);
+      setIsPaused(false);
+    },
+  });
 
   useEffect(() => {
     if (supplyAuthorityId) {
@@ -150,7 +163,7 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
     });
   };
 
-  const getGroupedStructures = () => {
+  const getGroupedStructures = useCallback(() => {
     const sorted = getSortedStructures();
     const grouped = new Map<string, TariffStructure[]>();
     
@@ -161,6 +174,101 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
     });
     
     return grouped;
+  }, [structures, sortConfig]);
+
+  // Capture all tariff charts
+  const handleCaptureAllCharts = async () => {
+    if (!province) {
+      toast.error("Province information is required to capture charts");
+      return;
+    }
+
+    const grouped = getGroupedStructures();
+    const tariffGroups = Array.from(grouped.entries());
+    
+    if (tariffGroups.length === 0) {
+      toast.error("No tariffs to capture");
+      return;
+    }
+
+    setIsCapturing(true);
+    setIsPaused(false);
+
+    let successCount = 0;
+    let failedCount = 0;
+    const totalCharts = tariffGroups.length * TARIFF_CHART_METRICS.length;
+    let processedCharts = 0;
+
+    try {
+      // Fetch all charges for all structures upfront
+      const allStructureIds = structures.map(s => s.id);
+      const allCharges = await fetchTariffCharges(allStructureIds);
+
+      for (let i = 0; i < tariffGroups.length; i++) {
+        // Check if cancelled
+        if (!isCapturing) break;
+
+        // Wait while paused
+        while (isPaused && isCapturing) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+
+        const [tariffName, groupStructures] = tariffGroups[i];
+
+        // Filter charges for this group
+        const groupStructureIds = new Set(groupStructures.map(s => s.id));
+        const groupCharges = allCharges.filter(c => groupStructureIds.has(c.tariff_structure_id));
+
+        // Update progress
+        showProgress({
+          currentItem: i + 1,
+          totalItems: tariffGroups.length,
+          currentChart: processedCharts,
+          totalCharts,
+          currentBatch: i + 1,
+          totalBatches: tariffGroups.length,
+          percentComplete: Math.round((i / tariffGroups.length) * 100),
+          isPaused,
+          currentItemLabel: tariffName,
+          currentMetricLabel: '',
+        });
+
+        // Capture charts for this tariff group
+        const results = await captureTariffGroupCharts(
+          province,
+          supplyAuthorityName,
+          tariffName,
+          groupStructures.map(s => ({
+            id: s.id,
+            name: s.name,
+            effective_from: s.effective_from,
+            effective_to: s.effective_to,
+          })),
+          groupCharges
+        );
+
+        // Count results
+        results.forEach(r => {
+          processedCharts++;
+          if (r.success) {
+            successCount++;
+          } else {
+            failedCount++;
+          }
+        });
+
+        // Small delay between tariffs
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+
+      showComplete(successCount, failedCount, !isCapturing);
+    } catch (error: any) {
+      console.error("Error capturing tariff charts:", error);
+      showError(error.message || "Failed to capture charts");
+    } finally {
+      setIsCapturing(false);
+      setIsPaused(false);
+    }
   };
 
   const handleSelectGroup = (groupName: string, checked: boolean) => {
@@ -468,11 +576,22 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
         </Card>
       ) : (
         <Card className="border-border/50">
-          <CardHeader>
-            <CardTitle>All Tariff Structures</CardTitle>
-            <CardDescription>
-              {getGroupedStructures().size} unique tariff{getGroupedStructures().size !== 1 ? "s" : ""} • {structures.length} total period{structures.length !== 1 ? "s" : ""}
-            </CardDescription>
+          <CardHeader className="flex flex-row items-start justify-between space-y-0">
+            <div>
+              <CardTitle>All Tariff Structures</CardTitle>
+              <CardDescription>
+                {getGroupedStructures().size} unique tariff{getGroupedStructures().size !== 1 ? "s" : ""} • {structures.length} total period{structures.length !== 1 ? "s" : ""}
+              </CardDescription>
+            </div>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handleCaptureAllCharts}
+              disabled={isCapturing || !province}
+              title={!province ? "Province information required" : "Capture all tariff charts"}
+            >
+              <BarChart3 className="w-4 h-4" />
+            </Button>
           </CardHeader>
           <CardContent>
             <Accordion type="multiple" value={expandedGroups} onValueChange={setExpandedGroups}>

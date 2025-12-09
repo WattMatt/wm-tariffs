@@ -177,6 +177,7 @@ export default function Tariffs() {
           <TariffStructuresTab 
             supplyAuthorityId={selectedAuthority}
             supplyAuthorityName={selectedAuthorityData?.name || ""}
+            province={selectedAuthorityData?.region || ""}
           />
         ) : (
           <Card className="border-border/50">
