@@ -1,8 +1,11 @@
-import React, { useEffect, useRef, useCallback } from "react";
-import { saveChartToStorage, CHART_METRICS, ChartMetricKey } from "@/lib/reconciliation/chartGeneration";
+import React, { useEffect, useCallback, useRef } from "react";
+import { CHART_METRICS, ChartMetricKey, generateReconciliationChartPath } from "@/lib/reconciliation/chartGeneration";
 import { generateReconciliationMeterChart, ReconciliationChartDataPoint } from "./ChartGenerator";
 import { supabase } from "@/integrations/supabase/client";
+import { useBackgroundChartCapture, type CaptureItem } from "@/hooks/useBackgroundChartCapture";
+import type { ChartMetric, CaptureLogEntry as GenericLogEntry, ItemCaptureResult } from "@/lib/charts/types";
 
+// Document interface for reconciliation charts
 interface DocumentShopNumber {
   documentId: string;
   fileName: string;
@@ -30,6 +33,7 @@ interface DocumentShopNumber {
   }>;
 }
 
+// Meter interface
 interface Meter {
   id: string;
   meter_number: string;
@@ -42,6 +46,7 @@ interface Meter {
   rating: string | null;
 }
 
+// Queue item from parent component
 interface CaptureQueueItem {
   meter: Meter;
   docs: DocumentShopNumber[];
@@ -49,6 +54,7 @@ interface CaptureQueueItem {
   metricInfo: typeof CHART_METRICS[number];
 }
 
+// Legacy log entry format for backwards compatibility
 export interface CaptureLogEntry {
   timestamp: string;
   meterNumber: string;
@@ -62,6 +68,7 @@ export interface CaptureLogEntry {
   totalMeters?: number;
 }
 
+// Legacy result format for backwards compatibility
 export interface MeterCaptureResult {
   meterNumber: string;
   meterId: string;
@@ -86,9 +93,7 @@ interface BackgroundChartCaptureProps {
   isActive: boolean;
 }
 
-// Configuration - much faster now with Canvas generation
-const PAUSE_CHECK_INTERVAL_MS = 100;
-const PARALLEL_METER_COUNT = 3; // Process 3 meters simultaneously
+// ============ Reconciliation-specific data preparation ============
 
 // Helper to extract metric value from document
 const extractMetricValue = (doc: DocumentShopNumber | undefined, metric: string): number | null => {
@@ -234,29 +239,55 @@ const prepareChartData = async (
   });
 };
 
-// Group queue items by meter
-interface MeterGroup {
-  meter: Meter;
-  items: CaptureQueueItem[];
-}
+// ============ Component ============
 
-const groupByMeter = (queue: CaptureQueueItem[]): MeterGroup[] => {
-  const meterMap = new Map<string, MeterGroup>();
+// Transform queue to capture items format
+function transformQueueToCaptureItems(queue: CaptureQueueItem[]): CaptureItem<Meter>[] {
+  // Group by meter
+  const meterMap = new Map<string, { meter: Meter; docs: DocumentShopNumber[] }>();
   
   queue.forEach(item => {
-    const existing = meterMap.get(item.meter.id);
-    if (existing) {
-      existing.items.push(item);
-    } else {
-      meterMap.set(item.meter.id, {
-        meter: item.meter,
-        items: [item],
-      });
+    if (!meterMap.has(item.meter.id)) {
+      meterMap.set(item.meter.id, { meter: item.meter, docs: item.docs });
     }
   });
   
-  return Array.from(meterMap.values());
-};
+  return Array.from(meterMap.values()).map(({ meter, docs }) => ({
+    item: meter,
+    itemId: meter.id,
+    itemLabel: meter.meter_number,
+    docs,
+  }));
+}
+
+// Convert generic log entries to legacy format
+function convertLogEntry(entry: GenericLogEntry): CaptureLogEntry {
+  return {
+    timestamp: entry.timestamp,
+    meterNumber: entry.itemLabel,
+    metricKey: entry.metricKey,
+    metricLabel: entry.metricLabel,
+    status: entry.status === 'item_complete' ? 'meter_complete' : entry.status,
+    attempt: entry.attempt,
+    error: entry.error,
+    duration: entry.duration,
+    meterIndex: entry.itemIndex,
+    totalMeters: entry.totalItems,
+  };
+}
+
+// Convert generic result to legacy format
+function convertItemResult(result: ItemCaptureResult): MeterCaptureResult {
+  return {
+    meterNumber: result.itemLabel,
+    meterId: result.itemId,
+    chartsAttempted: result.chartsAttempted,
+    chartsSuccessful: result.chartsSuccessful,
+    chartsFailed: result.chartsFailed,
+    failedMetrics: result.failedMetrics,
+    duration: result.duration,
+  };
+}
 
 export default function BackgroundChartCapture({
   siteId,
@@ -271,258 +302,134 @@ export default function BackgroundChartCapture({
   pauseRef,
   isActive,
 }: BackgroundChartCaptureProps) {
-  const processingRef = useRef(false);
-  const captureLogRef = useRef<CaptureLogEntry[]>([]);
-  const meterResultsRef = useRef<MeterCaptureResult[]>([]);
-
-  // Add log entry
-  const addLogEntry = useCallback((entry: Omit<CaptureLogEntry, 'timestamp'>) => {
-    const fullEntry: CaptureLogEntry = {
-      ...entry,
-      timestamp: new Date().toISOString(),
-    };
-    captureLogRef.current = [...captureLogRef.current, fullEntry];
-    onLogUpdate?.(captureLogRef.current);
-    console.log(`[ChartCapture] ${entry.status.toUpperCase()}: ${entry.meterNumber} - ${entry.metricLabel} (Attempt ${entry.attempt})${entry.error ? ` - ${entry.error}` : ''}`);
-  }, [onLogUpdate]);
-
-  // Generate and save a single chart using Canvas (fast, no DOM)
-  const generateAndSaveChart = useCallback(async (
-    item: CaptureQueueItem,
-    meterIndex: number,
-    totalMeters: number
-  ): Promise<{ success: boolean; error?: string }> => {
-    const startTime = Date.now();
-    
-    try {
-      addLogEntry({
-        meterNumber: item.meter.meter_number,
-        metricKey: item.metric,
-        metricLabel: item.metricInfo.title,
-        status: 'rendering',
-        attempt: 1,
-        meterIndex,
-        totalMeters,
-      });
-
-      // Prepare chart data
-      const data = await prepareChartData(item.meter.id, item.docs, item.metric);
-      
-      if (!data || data.length === 0) {
-        throw new Error('No chart data available');
-      }
-
-      addLogEntry({
-        meterNumber: item.meter.meter_number,
-        metricKey: item.metric,
-        metricLabel: item.metricInfo.title,
-        status: 'capturing',
-        attempt: 1,
-        meterIndex,
-        totalMeters,
-      });
-
-      // Generate chart using Canvas API (fast, synchronous)
-      const dataUrl = generateReconciliationMeterChart(
-        `${item.meter.meter_number} - ${item.metricInfo.title}`,
-        item.metricInfo.unit,
-        data
-      );
-      
-      if (!dataUrl) {
-        throw new Error('Failed to generate chart image');
-      }
-
-      // Save to storage
-      const saved = await saveChartToStorage(
-        siteId, 
-        item.meter.meter_number, 
-        item.metricInfo.filename, 
-        dataUrl
-      );
-      
-      if (!saved) {
-        throw new Error('Failed to save chart to storage');
-      }
-
-      const duration = Date.now() - startTime;
-      addLogEntry({
-        meterNumber: item.meter.meter_number,
-        metricKey: item.metric,
-        metricLabel: item.metricInfo.title,
-        status: 'success',
-        attempt: 1,
-        duration,
-        meterIndex,
-        totalMeters,
-      });
-
-      return { success: true };
-
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      const duration = Date.now() - startTime;
-      
-      addLogEntry({
-        meterNumber: item.meter.meter_number,
-        metricKey: item.metric,
-        metricLabel: item.metricInfo.title,
-        status: 'failed',
-        attempt: 1,
-        error: errorMessage,
-        duration,
-        meterIndex,
-        totalMeters,
-      });
-
-      return { success: false, error: errorMessage };
-    }
-  }, [siteId, addLogEntry]);
-
-  // Process all charts for a single meter
-  const processMeterCharts = useCallback(async (
-    meterGroup: MeterGroup,
-    meterIndex: number,
-    totalMeters: number
-  ): Promise<MeterCaptureResult> => {
-    const startTime = Date.now();
-    const { meter, items } = meterGroup;
-    let successCount = 0;
-    const failedMetrics: string[] = [];
-
-    console.log(`[ChartCapture] Processing meter ${meterIndex + 1}/${totalMeters}: ${meter.meter_number} (${items.length} charts)`);
-
-    for (let chartIndex = 0; chartIndex < items.length; chartIndex++) {
-      const item = items[chartIndex];
-      
-      // Check for cancel
-      if (cancelRef.current) {
-        break;
-      }
-
-      // Check for pause
-      while (pauseRef.current && !cancelRef.current) {
-        onPauseStateChange?.(true);
-        await new Promise(resolve => setTimeout(resolve, PAUSE_CHECK_INTERVAL_MS));
-      }
-      onPauseStateChange?.(false);
-
-      if (cancelRef.current) {
-        break;
-      }
-
-      // Update progress
-      const overallProgress = (meterIndex * 6) + chartIndex + 1;
-      const totalCharts = totalMeters * 6;
-      onProgress?.(
-        overallProgress, 
-        totalCharts, 
-        meter.meter_number, 
-        item.metricInfo.title,
-        `Meter ${meterIndex + 1}/${totalMeters} - Chart ${chartIndex + 1}/6`
-      );
-
-      // Generate and save chart (Canvas-based, very fast)
-      const result = await generateAndSaveChart(item, meterIndex, totalMeters);
-      
-      if (result.success) {
-        successCount++;
-      } else {
-        failedMetrics.push(item.metricInfo.title);
-      }
-    }
-
-    const duration = Date.now() - startTime;
-    const result: MeterCaptureResult = {
-      meterNumber: meter.meter_number,
-      meterId: meter.id,
-      chartsAttempted: items.length,
-      chartsSuccessful: successCount,
-      chartsFailed: failedMetrics.length,
-      failedMetrics,
-      duration,
-    };
-
-    // Log meter completion
-    addLogEntry({
-      meterNumber: meter.meter_number,
-      metricKey: 'all',
-      metricLabel: `All charts (${successCount}/${items.length} successful)`,
-      status: 'meter_complete',
-      attempt: 1,
-      duration,
-      meterIndex,
-      totalMeters,
-    });
-
-    console.log(`[ChartCapture] Meter ${meter.meter_number} complete: ${successCount}/${items.length} charts in ${(duration / 1000).toFixed(1)}s`);
-
-    return result;
-  }, [generateAndSaveChart, addLogEntry, onProgress, onPauseStateChange, cancelRef, pauseRef]);
-
-  // Process queue with parallel meter processing
+  const hasStartedRef = useRef(false);
+  const docsMapRef = useRef<Map<string, DocumentShopNumber[]>>(new Map());
+  
+  // Build docs map from queue
   useEffect(() => {
-    if (!isActive || queue.length === 0 || processingRef.current) return;
-
-    const processAllMeters = async () => {
-      processingRef.current = true;
-      captureLogRef.current = [];
-      meterResultsRef.current = [];
-      
-      // Group queue by meter
-      const meterGroups = groupByMeter(queue);
-      const totalMeters = meterGroups.length;
-      
-      console.log(`[ChartCapture] Starting parallel Canvas capture: ${totalMeters} meters, ${queue.length} total charts (${PARALLEL_METER_COUNT} meters at a time)`);
-
-      let totalSuccess = 0;
-      let totalFailed = 0;
-      let processedCount = 0;
-
-      // Process meters in parallel batches
-      for (let batchStart = 0; batchStart < meterGroups.length; batchStart += PARALLEL_METER_COUNT) {
-        if (cancelRef.current) {
-          console.log('[ChartCapture] Capture cancelled by user');
-          break;
-        }
-
-        // Get batch of meters to process in parallel
-        const batchEnd = Math.min(batchStart + PARALLEL_METER_COUNT, meterGroups.length);
-        const batch = meterGroups.slice(batchStart, batchEnd);
-        
-        console.log(`[ChartCapture] Processing batch: meters ${batchStart + 1}-${batchEnd} of ${totalMeters}`);
-
-        // Process all meters in this batch simultaneously
-        const batchPromises = batch.map((meterGroup, batchIndex) => 
-          processMeterCharts(meterGroup, batchStart + batchIndex, totalMeters)
-        );
-
-        const batchResults = await Promise.all(batchPromises);
-
-        // Process results from this batch
-        for (const meterResult of batchResults) {
-          meterResultsRef.current = [...meterResultsRef.current, meterResult];
-          totalSuccess += meterResult.chartsSuccessful;
-          totalFailed += meterResult.chartsFailed;
-          processedCount++;
-
-          // Notify about meter completion
-          onMeterComplete?.(meterResult);
-        }
-
-        // Report batch progress (stable, non-jumping updates)
-        onBatchProgress?.(processedCount, totalMeters, totalSuccess + totalFailed, queue.length);
-        
-        console.log(`[ChartCapture] Batch complete: ${processedCount}/${totalMeters} meters processed`);
+    const map = new Map<string, DocumentShopNumber[]>();
+    queue.forEach(item => {
+      if (!map.has(item.meter.id)) {
+        map.set(item.meter.id, item.docs);
       }
+    });
+    docsMapRef.current = map;
+  }, [queue]);
 
-      console.log(`[ChartCapture] All meters complete: ${totalSuccess} success, ${totalFailed} failed`);
-      onComplete(totalSuccess, totalFailed, cancelRef.current, captureLogRef.current, meterResultsRef.current);
-      processingRef.current = false;
+  // Render function for reconciliation charts
+  const renderChart = useCallback(async (
+    meter: Meter,
+    metric: ChartMetric,
+    docs: unknown[]
+  ): Promise<string> => {
+    const typedDocs = docs as DocumentShopNumber[];
+    const data = await prepareChartData(meter.id, typedDocs, metric.key);
+    
+    if (!data || data.length === 0) {
+      throw new Error('No chart data available');
+    }
+
+    const dataUrl = generateReconciliationMeterChart(
+      `${meter.meter_number} - ${metric.title}`,
+      metric.unit,
+      data
+    );
+    
+    if (!dataUrl) {
+      throw new Error('Failed to generate chart image');
+    }
+
+    return dataUrl;
+  }, []);
+
+  // Use the generic hook
+  const {
+    isCapturing,
+    isPaused,
+    progress,
+    log,
+    results,
+    startCapture,
+    pause,
+    resume,
+    cancel,
+  } = useBackgroundChartCapture<Meter>({
+    siteId,
+    config: {
+      metrics: CHART_METRICS.map(m => ({ ...m })),
+      storagePathGenerator: async (siteId, itemId, metricFilename) => {
+        // Find meter number from results or queue
+        const meter = queue.find(q => q.meter.id === itemId)?.meter;
+        const meterNumber = meter?.meter_number || itemId;
+        return generateReconciliationChartPath(siteId, meterNumber, metricFilename);
+      },
+      parallelBatchSize: 3,
+      pauseCheckInterval: 100,
+    },
+    renderChart,
+    onProgress: (prog) => {
+      onProgress?.(
+        prog.currentChart,
+        prog.totalCharts,
+        prog.currentItemLabel,
+        prog.currentMetricLabel,
+        `Meter ${prog.currentItem}/${prog.totalItems} - Chart ${(prog.currentChart - 1) % 6 + 1}/6`
+      );
+      onBatchProgress?.(prog.currentItem, prog.totalItems, prog.currentChart, prog.totalCharts);
+    },
+    onItemComplete: (result) => {
+      onMeterComplete?.(convertItemResult(result));
+    },
+    onLogUpdate: (genericLog) => {
+      onLogUpdate?.(genericLog.map(convertLogEntry));
+    },
+  });
+
+  // Sync pause state with refs
+  useEffect(() => {
+    if (pauseRef.current && !isPaused) {
+      pause();
+    } else if (!pauseRef.current && isPaused) {
+      resume();
+    }
+  }, [pauseRef.current, isPaused, pause, resume]);
+
+  // Handle cancel from ref
+  useEffect(() => {
+    if (cancelRef.current && isCapturing) {
+      cancel();
+    }
+  }, [cancelRef.current, isCapturing, cancel]);
+
+  // Notify pause state changes
+  useEffect(() => {
+    onPauseStateChange?.(isPaused);
+  }, [isPaused, onPauseStateChange]);
+
+  // Start capture when active
+  useEffect(() => {
+    if (!isActive || queue.length === 0 || hasStartedRef.current || isCapturing) return;
+
+    const runCapture = async () => {
+      hasStartedRef.current = true;
+      
+      const captureItems = transformQueueToCaptureItems(queue);
+      const result = await startCapture(captureItems);
+      
+      // Call onComplete with legacy format
+      onComplete(
+        result.success,
+        result.failed,
+        result.cancelled,
+        log.map(convertLogEntry),
+        results.map(convertItemResult)
+      );
+      
+      hasStartedRef.current = false;
     };
 
-    processAllMeters();
-  }, [isActive, queue, processMeterCharts, onComplete, onBatchProgress, onMeterComplete, cancelRef]);
+    runCapture();
+  }, [isActive, queue, isCapturing, startCapture, onComplete, log, results]);
 
   // No DOM rendering needed - Canvas generation is entirely off-screen
   return null;
