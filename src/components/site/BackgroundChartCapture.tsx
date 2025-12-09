@@ -512,10 +512,16 @@ export default function BackgroundChartCapture({
         prog.currentMetricLabel,
         `Meter ${prog.currentItem}/${prog.totalItems} - Chart ${(prog.currentChart - 1) % 6 + 1}/6`
       );
-      onBatchProgress?.(prog.currentItem, prog.totalItems, prog.currentChart, prog.totalCharts);
+      // Note: onBatchProgress is now called from onItemComplete for stable progress
     },
     onItemComplete: (result) => {
       onMeterComplete?.(convertItemResult(result));
+      // Call batch progress with completed meter count (results.length + 1 since this result isn't in results yet)
+      const completedMeters = results.length + 1;
+      const totalMeters = queue.length > 0 ? new Set(queue.map(q => q.meter.id)).size : 0;
+      const totalCharts = totalMeters * CHART_METRICS.length;
+      const completedCharts = completedMeters * CHART_METRICS.length;
+      onBatchProgress?.(completedMeters, totalMeters, completedCharts, totalCharts);
     },
     onLogUpdate: (genericLog) => {
       onLogUpdate?.(genericLog.map(convertLogEntry));
