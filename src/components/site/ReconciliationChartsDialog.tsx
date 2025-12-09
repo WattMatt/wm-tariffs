@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
@@ -94,6 +94,7 @@ export default function ReconciliationChartsDialog({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmedCharts, setConfirmedCharts] = useState<Set<string>>(new Set());
+  const [selectedMeter, setSelectedMeter] = useState<string | null>(null);
 
   // Calculate meter status based on confirmation - unconfirmed = failed
   const getMeterConfirmationStatus = (meterNumber: string): 'complete' | 'partial' | 'pending' => {
@@ -379,6 +380,13 @@ export default function ReconciliationChartsDialog({
     }
   }, [open, siteId]);
 
+  // Auto-select first meter when data loads
+  useEffect(() => {
+    if (meterOrder.length > 0 && !selectedMeter) {
+      setSelectedMeter(meterOrder[0]);
+    }
+  }, [meterOrder, selectedMeter]);
+
   const downloadChart = async (chart: ChartFile) => {
     try {
       const { data, error } = await supabase.storage
@@ -550,149 +558,187 @@ export default function ReconciliationChartsDialog({
           )}
         </DialogHeader>
 
-        <ScrollArea className="h-[calc(85vh-140px)]">
-          {isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-            </div>
-          ) : error ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <p className="text-destructive mb-2">{error}</p>
-              <Button variant="outline" onClick={fetchCharts}>
-                Try Again
-              </Button>
-            </div>
-          ) : charts.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <FolderOpen className="w-12 h-12 text-muted-foreground mb-4" />
-              <p className="text-muted-foreground mb-2">No reconciliation charts found</p>
-              <p className="text-sm text-muted-foreground">
-                To capture charts, go to the Comparison tab, click on a meter, and use "Capture All Charts"
-              </p>
-            </div>
-          ) : (
-            <Accordion type="multiple" defaultValue={meterOrder} className="space-y-2">
-              {meterOrder.map((meterNumber, index) => {
-                const status = getMeterStatus(meterNumber);
-                const confirmStatus = getMeterConfirmationStatus(meterNumber);
-                const meterCharts = groupedCharts[meterNumber] || [];
-                const confirmedCount = meterCharts.filter(c => confirmedCharts.has(c.path)).length;
-                const allConfirmed = confirmedCount === meterCharts.length && meterCharts.length > 0;
-                
-                return (
-                  <AccordionItem key={meterNumber} value={meterNumber} className="border rounded-lg px-4">
-                    <AccordionTrigger className="hover:no-underline">
-                      <div className="flex items-center gap-2 flex-1">
-                        <span className="text-xs text-muted-foreground w-6">{index + 1}.</span>
-                        <span className="font-semibold">{meterNumber}</span>
-                        <span className="text-sm text-muted-foreground">
-                          ({meterCharts.length} charts)
-                        </span>
-                        {/* Capture status badge */}
-                        {status && (
-                          <Badge 
-                            variant={
-                              status.status === 'complete' ? 'default' : 
-                              status.status === 'partial' ? 'secondary' :
-                              status.status === 'failed' ? 'destructive' : 'outline'
-                            }
-                            className="text-xs"
-                          >
-                            {status.status === 'complete' && <CheckCircle2 className="w-3 h-3 mr-1" />}
-                            {status.status === 'failed' && <AlertCircle className="w-3 h-3 mr-1" />}
-                            {status.status === 'complete' ? 'Captured' : 
-                             status.status === 'partial' ? `${status.chartsComplete}/${status.chartsTotal}` :
-                             status.status === 'failed' ? 'Failed' : 'Pending'}
-                          </Badge>
-                        )}
-                        {/* Confirmation status badge */}
-                        {meterCharts.length > 0 && (
-                          <Badge 
-                            variant={
-                              confirmStatus === 'complete' ? 'default' : 
-                              confirmStatus === 'partial' ? 'secondary' : 'outline'
-                            }
-                            className={`text-xs ${confirmStatus === 'complete' ? 'bg-green-600' : ''}`}
-                          >
-                            {confirmStatus === 'complete' && <Check className="w-3 h-3 mr-1" />}
-                            {confirmStatus === 'complete' ? 'Confirmed' : 
-                             confirmStatus === 'partial' ? `${confirmedCount}/${meterCharts.length} Confirmed` : 
-                             'Unconfirmed'}
-                          </Badge>
-                        )}
+        {/* Two-column layout: Left sidebar (1/5) + Right detail panel (4/5) */}
+        <div className="flex h-[calc(85vh-180px)] border rounded-lg overflow-hidden">
+          {/* Left sidebar - Meter list */}
+          <div className="w-1/5 min-w-[180px] border-r bg-muted/20">
+            <ScrollArea className="h-full">
+              <div className="p-2 space-y-1">
+                {isLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : meterOrder.length === 0 ? (
+                  <div className="text-center py-8 text-sm text-muted-foreground">
+                    No meters found
+                  </div>
+                ) : (
+                  meterOrder.map((meterNumber, index) => {
+                    const meterCharts = groupedCharts[meterNumber] || [];
+                    const confirmStatus = getMeterConfirmationStatus(meterNumber);
+                    const confirmedCount = meterCharts.filter(c => confirmedCharts.has(c.path)).length;
+                    const allConfirmed = confirmedCount === meterCharts.length && meterCharts.length > 0;
+                    const isSelected = selectedMeter === meterNumber;
+                    
+                    return (
+                      <div
+                        key={meterNumber}
+                        className={`p-2 rounded-md cursor-pointer transition-all ${
+                          isSelected 
+                            ? 'bg-primary/10 border border-primary/30' 
+                            : 'hover:bg-muted/50'
+                        }`}
+                        onClick={() => setSelectedMeter(meterNumber)}
+                      >
+                        <div className="flex items-center gap-2">
+                          {/* Meter confirmation checkbox */}
+                          <Checkbox
+                            id={`sidebar-confirm-${meterNumber}`}
+                            checked={allConfirmed}
+                            onCheckedChange={(checked) => {
+                              confirmAllMeterCharts(meterNumber, !!checked);
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1">
+                              <span className="text-xs text-muted-foreground">{index + 1}.</span>
+                              <span className="text-sm font-medium truncate">{meterNumber}</span>
+                            </div>
+                            <div className="flex items-center gap-1 mt-0.5">
+                              <span className="text-xs text-muted-foreground">
+                                {meterCharts.length} charts
+                              </span>
+                              {confirmStatus === 'complete' && (
+                                <Check className="w-3 h-3 text-green-500" />
+                              )}
+                              {confirmStatus === 'partial' && (
+                                <span className="text-xs text-amber-500">
+                                  ({confirmedCount}/{meterCharts.length})
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                    </AccordionTrigger>
-                    <AccordionContent className="overflow-hidden">
-                      {/* Confirm all toggle for meter */}
-                      <div className="flex items-center gap-2 mb-3 pb-2 border-b">
-                        <Checkbox
-                          id={`confirm-all-${meterNumber}`}
-                          checked={allConfirmed}
-                          onCheckedChange={(checked) => confirmAllMeterCharts(meterNumber, !!checked)}
-                        />
-                        <label 
-                          htmlFor={`confirm-all-${meterNumber}`}
-                          className="text-sm font-medium cursor-pointer"
+                    );
+                  })
+                )}
+              </div>
+            </ScrollArea>
+          </div>
+
+          {/* Right detail panel - Charts for selected meter */}
+          <div className="w-4/5 bg-background">
+            <ScrollArea className="h-full">
+              {isLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : error ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center px-4">
+                  <p className="text-destructive mb-2">{error}</p>
+                  <Button variant="outline" onClick={fetchCharts}>
+                    Try Again
+                  </Button>
+                </div>
+              ) : !selectedMeter ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <FolderOpen className="w-12 h-12 text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground">Select a meter from the list to view charts</p>
+                </div>
+              ) : charts.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <FolderOpen className="w-12 h-12 text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground mb-2">No reconciliation charts found</p>
+                  <p className="text-sm text-muted-foreground">
+                    Use "Capture All" to generate charts
+                  </p>
+                </div>
+              ) : (
+                <div className="p-4">
+                  {/* Selected meter header */}
+                  <div className="flex items-center justify-between mb-4 pb-3 border-b">
+                    <div>
+                      <h3 className="font-semibold text-lg">{selectedMeter}</h3>
+                      <p className="text-sm text-muted-foreground">
+                        {groupedCharts[selectedMeter]?.length || 0} charts
+                      </p>
+                    </div>
+                    {/* Confirmation status for selected meter */}
+                    {(() => {
+                      const meterCharts = groupedCharts[selectedMeter] || [];
+                      const confirmedCount = meterCharts.filter(c => confirmedCharts.has(c.path)).length;
+                      const confirmStatus = getMeterConfirmationStatus(selectedMeter);
+                      return (
+                        <Badge 
+                          variant={confirmStatus === 'complete' ? 'default' : confirmStatus === 'partial' ? 'secondary' : 'outline'}
+                          className={confirmStatus === 'complete' ? 'bg-green-600' : ''}
                         >
-                          Confirm all charts for this meter
-                        </label>
-                      </div>
-                      <div className="grid grid-cols-3 gap-4 pb-4 overflow-hidden">
-                        {meterCharts.map((chart) => {
-                          const isConfirmed = confirmedCharts.has(chart.path);
-                          return (
-                            <Card 
-                              key={chart.name} 
-                              className={`overflow-hidden group relative transition-all ${isConfirmed ? 'ring-2 ring-green-500' : 'ring-1 ring-destructive/30'}`}
-                            >
-                              <div className="bg-white relative border-b h-24 cursor-zoom-in transition-all duration-300 hover:scale-150 hover:z-50 hover:shadow-xl hover:rounded-md origin-center">
-                                <img
-                                  src={`${chart.url}?t=${Date.now()}`}
-                                  alt={`${chart.meterNumber} - ${chart.metricLabel}`}
-                                  className="w-full h-full object-contain"
-                                  loading="lazy"
-                                />
-                                {/* Confirmation indicator overlay */}
-                                {isConfirmed && (
-                                  <div className="absolute top-1 right-1 bg-green-500 rounded-full p-1">
-                                    <Check className="w-3 h-3 text-white" />
-                                  </div>
-                                )}
+                          {confirmStatus === 'complete' && <Check className="w-3 h-3 mr-1" />}
+                          {confirmStatus === 'complete' ? 'All Confirmed' : 
+                           confirmStatus === 'partial' ? `${confirmedCount}/${meterCharts.length} Confirmed` : 
+                           'Unconfirmed'}
+                        </Badge>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Charts grid */}
+                  <div className="grid grid-cols-3 gap-4 overflow-hidden">
+                    {(groupedCharts[selectedMeter] || []).map((chart) => {
+                      const isConfirmed = confirmedCharts.has(chart.path);
+                      return (
+                        <Card 
+                          key={chart.name} 
+                          className={`overflow-hidden group relative transition-all ${isConfirmed ? 'ring-2 ring-green-500' : 'ring-1 ring-destructive/30'}`}
+                        >
+                          <div className="bg-white relative border-b h-32 cursor-zoom-in transition-all duration-300 hover:scale-150 hover:z-50 hover:shadow-xl hover:rounded-md origin-center">
+                            <img
+                              src={`${chart.url}?t=${Date.now()}`}
+                              alt={`${chart.meterNumber} - ${chart.metricLabel}`}
+                              className="w-full h-full object-contain"
+                              loading="lazy"
+                            />
+                            {/* Confirmation indicator overlay */}
+                            {isConfirmed && (
+                              <div className="absolute top-1 right-1 bg-green-500 rounded-full p-1">
+                                <Check className="w-3 h-3 text-white" />
                               </div>
-                              <CardContent className="p-2">
-                                <div className="flex items-center gap-2">
-                                  <Checkbox
-                                    id={`confirm-${chart.path}`}
-                                    checked={isConfirmed}
-                                    onCheckedChange={() => toggleChartConfirmation(chart.path)}
-                                  />
-                                  <label 
-                                    htmlFor={`confirm-${chart.path}`}
-                                    className="text-xs font-medium truncate flex-1 cursor-pointer"
-                                  >
-                                    {chart.metricLabel}
-                                  </label>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                                    onClick={() => downloadChart(chart)}
-                                  >
-                                    <Download className="w-3 h-3" />
-                                  </Button>
-                                </div>
-                              </CardContent>
-                            </Card>
-                          );
-                        })}
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-                );
-              })}
-            </Accordion>
-          )}
-        </ScrollArea>
+                            )}
+                          </div>
+                          <CardContent className="p-2">
+                            <div className="flex items-center gap-2">
+                              <Checkbox
+                                id={`confirm-${chart.path}`}
+                                checked={isConfirmed}
+                                onCheckedChange={() => toggleChartConfirmation(chart.path)}
+                              />
+                              <label 
+                                htmlFor={`confirm-${chart.path}`}
+                                className="text-xs font-medium truncate flex-1 cursor-pointer"
+                              >
+                                {chart.metricLabel}
+                              </label>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                                onClick={() => downloadChart(chart)}
+                              >
+                                <Download className="w-3 h-3" />
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </ScrollArea>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );
