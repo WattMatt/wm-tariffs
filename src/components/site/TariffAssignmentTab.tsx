@@ -213,15 +213,27 @@ export default function TariffAssignmentTab({
 
   // Filter and fill missing months in data
   const getFilteredAndFilledData = (shops: DocumentShopNumber[]) => {
-    // If no filter is active, return original data
-    if (!activeFilterFrom || !activeFilterTo) {
-      return shops;
-    }
-
-    // Create array of all months in the range
-    const start = new Date(activeFilterFrom.getFullYear(), activeFilterFrom.getMonth(), 1);
-    const end = new Date(activeFilterTo.getFullYear(), activeFilterTo.getMonth(), 1);
+    if (shops.length === 0) return shops;
     
+    // Determine date range: use filter if active, otherwise derive from data
+    let start: Date;
+    let end: Date;
+    
+    if (activeFilterFrom && activeFilterTo) {
+      start = new Date(activeFilterFrom.getFullYear(), activeFilterFrom.getMonth(), 1);
+      end = new Date(activeFilterTo.getFullYear(), activeFilterTo.getMonth(), 1);
+    } else {
+      // Find min/max dates from the actual data
+      const dates = shops.map(s => new Date(s.periodEnd)).filter(d => !isNaN(d.getTime()));
+      if (dates.length === 0) return shops;
+      
+      const minDate = new Date(Math.min(...dates.map(d => d.getTime())));
+      const maxDate = new Date(Math.max(...dates.map(d => d.getTime())));
+      start = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
+      end = new Date(maxDate.getFullYear(), maxDate.getMonth(), 1);
+    }
+    
+    // Create array of all months in the range
     const allMonths: Array<{ month: Date; data: DocumentShopNumber | null }> = [];
     const current = new Date(start);
     
@@ -2844,6 +2856,10 @@ export default function TariffAssignmentTab({
                                   label: "Document Billed",
                                   color: "hsl(var(--muted-foreground))",
                                 },
+                                meterReading: {
+                                  label: "Meter Reading",
+                                  color: "#22c55e",
+                                },
                                 winterAvg: {
                                   label: "Winter Average",
                                   color: "hsl(200 100% 40%)",
@@ -2856,7 +2872,7 @@ export default function TariffAssignmentTab({
                               className="h-[250px] w-full"
                             >
                               <ResponsiveContainer width="100%" height="100%">
-                                <ComposedChart data={chartData} margin={{ top: 5, right: 5, left: 0, bottom: 20 }}>
+                                <ComposedChart data={chartData} margin={{ top: 5, right: hideSeasonalAverages ? 40 : 5, left: 0, bottom: 20 }}>
                                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                                   <XAxis 
                                     dataKey="period" 
@@ -2866,9 +2882,18 @@ export default function TariffAssignmentTab({
                                     height={60}
                                   />
                                   <YAxis 
+                                    yAxisId="left"
                                     tick={{ fontSize: 10 }}
                                     tickFormatter={(value) => `R${(value / 1000).toFixed(0)}k`}
                                   />
+                                  {hideSeasonalAverages && (
+                                    <YAxis 
+                                      yAxisId="right"
+                                      orientation="right"
+                                      tick={{ fontSize: 10 }}
+                                      tickFormatter={(value) => value?.toLocaleString()}
+                                    />
+                                  )}
                                   <ChartTooltip 
                                     content={<ChartTooltipContent />}
                                   />
@@ -2899,6 +2924,7 @@ export default function TariffAssignmentTab({
                                           strokeWidth={3}
                                           dot={{ r: 4, fill: color }}
                                           connectNulls={false}
+                                          yAxisId="left"
                                         />
                                       );
                                     });
@@ -2909,6 +2935,7 @@ export default function TariffAssignmentTab({
                                     radius={[4, 4, 0, 0]}
                                     name={hideSeasonalAverages ? "Reconciliation Cost" : (showDocumentCharts ? "Document Amount" : "Calculated Cost")}
                                     opacity={0.5}
+                                    yAxisId="left"
                                   />
                                   {hideSeasonalAverages && (
                                     <Bar 
@@ -2916,6 +2943,26 @@ export default function TariffAssignmentTab({
                                       fill="hsl(var(--primary))"
                                       radius={[4, 4, 0, 0]}
                                       name="Document Billed"
+                                      yAxisId="left"
+                                    />
+                                  )}
+                                  {hideSeasonalAverages && (
+                                    <Line
+                                      yAxisId="right"
+                                      type="monotone"
+                                      dataKey="meterReading"
+                                      stroke="#22c55e"
+                                      strokeWidth={2}
+                                      name="Meter Reading"
+                                      connectNulls={false}
+                                      dot={(props: any) => {
+                                        const { payload, cx, cy } = props;
+                                        if (cx === undefined || cy === undefined) return null;
+                                        if (payload?.isDiscontinuous) {
+                                          return <circle cx={cx} cy={cy} r={3} fill="hsl(var(--destructive))" stroke="white" strokeWidth={1} />;
+                                        }
+                                        return <circle cx={cx} cy={cy} r={2} fill="#22c55e" />;
+                                      }}
                                     />
                                   )}
                                 </ComposedChart>
