@@ -1041,17 +1041,20 @@ export const generateReconciliationMeterChart = (
   return canvas.toDataURL('image/png');
 };
 
-// Interface for analysis chart data (Document Amount with Winter/Summer averages)
+// Interface for analysis chart data (Document Amount with segment-based Winter/Summer averages)
 export interface AnalysisChartDataPoint {
   period: string;
   documentAmount: number | null;
-  winterAvg: number | null;
-  summerAvg: number | null;
+  isWinter?: boolean;
+  isSummer?: boolean;
+  // Dynamic segment keys: winterAvg_0, winterAvg_1, summerAvg_0, etc.
+  [key: string]: string | number | boolean | null | undefined;
 }
 
 /**
  * Generate an analysis meter chart using Canvas API (fast, no DOM rendering)
- * Creates a bar chart with Document Amount bars plus Winter and Summer average lines.
+ * Creates a bar chart with Document Amount bars plus segmented Winter and Summer average lines
+ * that connect only consecutive months of the same season (matching the UI).
  */
 export const generateAnalysisMeterChart = (
   title: string,
@@ -1113,7 +1116,7 @@ export const generateAnalysisMeterChart = (
   ctx.textAlign = 'left';
   ctx.fillText('Document Amount', legendX + 18 * scaleFactor, legendY + 11 * scaleFactor);
   
-  // Winter Average legend (line)
+  // Winter Average legend (line with marker)
   legendX += legendSpacing;
   ctx.strokeStyle = winterColor;
   ctx.lineWidth = 2 * scaleFactor;
@@ -1123,10 +1126,15 @@ export const generateAnalysisMeterChart = (
   ctx.lineTo(legendX + 14 * scaleFactor, legendY + 7 * scaleFactor);
   ctx.stroke();
   ctx.setLineDash([]);
+  // Add marker
+  ctx.beginPath();
+  ctx.arc(legendX + 7 * scaleFactor, legendY + 7 * scaleFactor, 3 * scaleFactor, 0, Math.PI * 2);
+  ctx.fillStyle = winterColor;
+  ctx.fill();
   ctx.fillStyle = '#000000';
   ctx.fillText('Winter Avg', legendX + 18 * scaleFactor, legendY + 11 * scaleFactor);
   
-  // Summer Average legend (line)
+  // Summer Average legend (line with marker)
   legendX += legendSpacing;
   ctx.strokeStyle = summerColor;
   ctx.lineWidth = 2 * scaleFactor;
@@ -1136,14 +1144,30 @@ export const generateAnalysisMeterChart = (
   ctx.lineTo(legendX + 14 * scaleFactor, legendY + 7 * scaleFactor);
   ctx.stroke();
   ctx.setLineDash([]);
+  // Add marker
+  ctx.beginPath();
+  ctx.arc(legendX + 7 * scaleFactor, legendY + 7 * scaleFactor, 3 * scaleFactor, 0, Math.PI * 2);
+  ctx.fillStyle = summerColor;
+  ctx.fill();
   ctx.fillStyle = '#000000';
   ctx.fillText('Summer Avg', legendX + 18 * scaleFactor, legendY + 11 * scaleFactor);
   
+  // Find all segment keys and their max values for scale calculation
+  const allSegmentKeys = new Set<string>();
+  let maxSegmentAvg = 0;
+  data.forEach(d => {
+    Object.keys(d).forEach(key => {
+      if (key.startsWith('winterAvg_') || key.startsWith('summerAvg_')) {
+        allSegmentKeys.add(key);
+        const val = d[key] as number;
+        if (val > maxSegmentAvg) maxSegmentAvg = val;
+      }
+    });
+  });
+  
   // Calculate scales
   const allValues = data.map(d => d.documentAmount || 0);
-  const winterAvg = data[0]?.winterAvg || 0;
-  const summerAvg = data[0]?.summerAvg || 0;
-  const maxValue = Math.max(...allValues, winterAvg, summerAvg, 1);
+  const maxValue = Math.max(...allValues, maxSegmentAvg, 1);
   
   const barWidth = Math.max((chartWidth / data.length) - 8 * scaleFactor, 20 * scaleFactor);
   const barSpacing = chartWidth / data.length;
@@ -1183,31 +1207,58 @@ export const generateAnalysisMeterChart = (
     ctx.fill();
   });
   
-  // Draw Winter Average line (dashed horizontal)
-  if (winterAvg > 0) {
-    const winterY = topPadding + chartHeight - (winterAvg / maxValue) * chartHeight;
-    ctx.strokeStyle = winterColor;
-    ctx.lineWidth = 2 * scaleFactor;
-    ctx.setLineDash([6 * scaleFactor, 3 * scaleFactor]);
-    ctx.beginPath();
-    ctx.moveTo(padding, winterY);
-    ctx.lineTo(padding + chartWidth, winterY);
-    ctx.stroke();
-    ctx.setLineDash([]);
-  }
+  // Draw segmented seasonal average lines with markers
+  // Group data points by segment key
+  const segmentGroups = new Map<string, Array<{ index: number; value: number }>>();
+  data.forEach((item, index) => {
+    Object.keys(item).forEach(key => {
+      if (key.startsWith('winterAvg_') || key.startsWith('summerAvg_')) {
+        const value = item[key] as number;
+        if (value && value > 0) {
+          if (!segmentGroups.has(key)) {
+            segmentGroups.set(key, []);
+          }
+          segmentGroups.get(key)!.push({ index, value });
+        }
+      }
+    });
+  });
   
-  // Draw Summer Average line (dashed horizontal)
-  if (summerAvg > 0) {
-    const summerY = topPadding + chartHeight - (summerAvg / maxValue) * chartHeight;
-    ctx.strokeStyle = summerColor;
+  // Draw each segment as a connected line with markers
+  segmentGroups.forEach((points, key) => {
+    if (points.length === 0) return;
+    
+    const isWinter = key.startsWith('winterAvg_');
+    const color = isWinter ? winterColor : summerColor;
+    const avgValue = points[0].value;  // All points in segment have same average
+    const y = topPadding + chartHeight - (avgValue / maxValue) * chartHeight;
+    
+    // Draw dashed line connecting the segment points
+    ctx.strokeStyle = color;
     ctx.lineWidth = 2 * scaleFactor;
     ctx.setLineDash([6 * scaleFactor, 3 * scaleFactor]);
     ctx.beginPath();
-    ctx.moveTo(padding, summerY);
-    ctx.lineTo(padding + chartWidth, summerY);
+    
+    points.forEach((pt, ptIndex) => {
+      const x = padding + pt.index * barSpacing + barSpacing / 2;
+      if (ptIndex === 0) {
+        ctx.moveTo(x, y);
+      } else {
+        ctx.lineTo(x, y);
+      }
+    });
     ctx.stroke();
     ctx.setLineDash([]);
-  }
+    
+    // Draw markers on each point
+    ctx.fillStyle = color;
+    points.forEach(pt => {
+      const x = padding + pt.index * barSpacing + barSpacing / 2;
+      ctx.beginPath();
+      ctx.arc(x, y, 4 * scaleFactor, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  });
   
   // Draw axes
   ctx.strokeStyle = '#374151';
