@@ -1092,7 +1092,7 @@ export default function TariffAssignmentTab({
     
     // Update or create persistent toast
     if (backgroundCaptureToastRef.current) {
-      toast.loading(`Capturing charts${pauseStatus}: Batch ${currentBatch}/${totalBatches} (${metersComplete}/${totalMeters} meters - ${progress}%)`, {
+      toast.loading(`Capturing charts${pauseStatus}: Batch ${currentBatch}/${totalBatches} (${progress}%)`, {
         id: backgroundCaptureToastRef.current,
         action: {
           label: isBulkCapturePaused ? '▶ Resume' : '⏸ Pause',
