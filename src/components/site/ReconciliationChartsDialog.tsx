@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -415,7 +415,7 @@ export default function ReconciliationChartsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl max-h-[85vh]">
+      <DialogContent className="max-w-5xl max-h-[85vh] overflow-hidden">
         <DialogHeader>
           <div className="flex items-center justify-between pr-8">
             <div>
@@ -423,11 +423,8 @@ export default function ReconciliationChartsDialog({
                 <ImageIcon className="w-5 h-5" />
                 Reconciliation Charts
               </DialogTitle>
-              <DialogDescription>
-                Charts captured from meter analysis. To capture new charts, click on a meter in the Comparison tab and use "Capture All Charts".
-              </DialogDescription>
             </div>
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2 flex-nowrap shrink-0">
               {onBulkCapture && (
                 <>
                   {hasFailed && (
@@ -625,7 +622,7 @@ export default function ReconciliationChartsDialog({
                         )}
                       </div>
                     </AccordionTrigger>
-                    <AccordionContent>
+                    <AccordionContent className="overflow-hidden">
                       {/* Confirm all toggle for meter */}
                       <div className="flex items-center gap-2 mb-3 pb-2 border-b">
                         <Checkbox
@@ -640,7 +637,7 @@ export default function ReconciliationChartsDialog({
                           Confirm all charts for this meter
                         </label>
                       </div>
-                      <div className="grid grid-cols-3 gap-4 pb-4">
+                      <div className="grid grid-cols-3 gap-4 pb-4 overflow-hidden">
                         {meterCharts.map((chart) => {
                           const isConfirmed = confirmedCharts.has(chart.path);
                           return (
@@ -648,7 +645,7 @@ export default function ReconciliationChartsDialog({
                               key={chart.name} 
                               className={`overflow-hidden group relative transition-all ${isConfirmed ? 'ring-2 ring-green-500' : 'ring-1 ring-destructive/30'}`}
                             >
-                              <div className="bg-white relative border-b h-24 cursor-zoom-in transition-all duration-300 hover:scale-[4] hover:z-50 hover:shadow-xl hover:rounded-md origin-center">
+                              <div className="bg-white relative border-b h-24 cursor-zoom-in transition-all duration-300 hover:scale-150 hover:z-50 hover:shadow-xl hover:rounded-md origin-center">
                                 <img
                                   src={`${chart.url}?t=${Date.now()}`}
                                   alt={`${chart.meterNumber} - ${chart.metricLabel}`}
