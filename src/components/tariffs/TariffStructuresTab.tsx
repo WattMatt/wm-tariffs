@@ -794,6 +794,12 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
         province={province || ''}
         open={chartsDialogOpen}
         onOpenChange={setChartsDialogOpen}
+        onBulkCapture={(mode) => {
+          setChartsDialogOpen(false);
+          handleCaptureAllCharts();
+        }}
+        onCancelBulkCapture={handleCancelCapture}
+        isBackgroundCapturing={isCapturing}
       />
     </div>
   );
