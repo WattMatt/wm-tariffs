@@ -48,8 +48,14 @@ export function generateTariffChartPath(
   tariffName: string,
   metricFilename: string
 ): StoragePath {
-  // Sanitize names for file paths
-  const sanitize = (str: string) => str.replace(/[/\\?%*:|"<>]/g, '-').trim();
+  // Sanitize names for file paths - handle special Unicode characters
+  const sanitize = (str: string) => str
+    .replace(/≥/g, 'gte')           // greater than or equal
+    .replace(/≤/g, 'lte')           // less than or equal
+    .replace(/&/g, 'and')           // ampersand
+    .replace(/[/\\?%*:|"<>]/g, '-') // standard invalid chars
+    .replace(/[^\x00-\x7F]/g, '')   // remove any remaining non-ASCII
+    .trim();
   
   return {
     bucket: 'tariff-files',
