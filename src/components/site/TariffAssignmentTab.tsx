@@ -24,7 +24,7 @@ import { format } from "date-fns";
 import { cn, formatDateString, formatDateStringToLong, formatDateStringToMonthYear, getMonthFromDateString, daysBetweenDateStrings, extractDateFromTimestamp } from "@/lib/utils";
 import { calculateMeterCost } from "@/lib/costCalculation";
 import html2canvas from "html2canvas";
-import { saveChartToStorage, CHART_METRICS, ChartMetricKey } from "@/lib/reconciliation/chartGeneration";
+import { saveChartToStorage, CHART_METRICS, ChartMetricKey, ChartType } from "@/lib/reconciliation/chartGeneration";
 import { sanitizeName } from "@/lib/storagePaths";
 import BackgroundChartCapture, { CaptureLogEntry, MeterCaptureResult } from "./BackgroundChartCapture";
 import Celebration from "@/components/ui/celebration";
@@ -2588,7 +2588,7 @@ export default function TariffAssignmentTab({
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p>View Reconciliation Charts</p>
+                    <p>{hideSeasonalAverages ? 'View Reconciliation Charts' : 'View Analysis Charts'}</p>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -4503,6 +4503,7 @@ export default function TariffAssignmentTab({
         siteId={siteId}
         open={chartsDialogOpen}
         onOpenChange={setChartsDialogOpen}
+        chartType={hideSeasonalAverages ? 'comparison' : 'analysis'}
         onBulkCapture={bulkCaptureAllMeters}
         onCancelBulkCapture={cancelBulkCapture}
         isBulkCapturing={isBulkCapturingCharts}
@@ -4515,6 +4516,7 @@ export default function TariffAssignmentTab({
       <BackgroundChartCapture
         siteId={siteId}
         queue={backgroundCaptureQueue}
+        chartType={hideSeasonalAverages ? 'comparison' : 'analysis'}
         onBatchProgress={handleBackgroundBatchProgress}
         onComplete={handleBackgroundCaptureComplete}
         onPauseStateChange={setIsBulkCapturePaused}

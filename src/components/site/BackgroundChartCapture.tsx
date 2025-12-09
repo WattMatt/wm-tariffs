@@ -1,5 +1,5 @@
 import React, { useEffect, useCallback, useRef } from "react";
-import { CHART_METRICS, ChartMetricKey, generateReconciliationChartPath } from "@/lib/reconciliation/chartGeneration";
+import { CHART_METRICS, ChartMetricKey, generateChartPath, ChartType } from "@/lib/reconciliation/chartGeneration";
 import { generateReconciliationMeterChart, ReconciliationChartDataPoint } from "./ChartGenerator";
 import { supabase } from "@/integrations/supabase/client";
 import { useBackgroundChartCapture, type CaptureItem } from "@/hooks/useBackgroundChartCapture";
@@ -82,6 +82,7 @@ export interface MeterCaptureResult {
 interface BackgroundChartCaptureProps {
   siteId: string;
   queue: CaptureQueueItem[];
+  chartType?: ChartType;
   onProgress?: (current: number, total: number, meterNumber: string, metric: string, batchInfo?: string) => void;
   onBatchProgress?: (metersComplete: number, totalMeters: number, chartsComplete: number, totalCharts: number) => void;
   onComplete: (success: number, failed: number, cancelled: boolean, log: CaptureLogEntry[], meterResults: MeterCaptureResult[]) => void;
@@ -292,6 +293,7 @@ function convertItemResult(result: ItemCaptureResult): MeterCaptureResult {
 export default function BackgroundChartCapture({
   siteId,
   queue,
+  chartType = 'comparison',
   onProgress,
   onBatchProgress,
   onComplete,
@@ -361,7 +363,7 @@ export default function BackgroundChartCapture({
         // Find meter number from results or queue
         const meter = queue.find(q => q.meter.id === itemId)?.meter;
         const meterNumber = meter?.meter_number || itemId;
-        return generateReconciliationChartPath(siteId, meterNumber, metricFilename);
+        return generateChartPath(siteId, meterNumber, metricFilename, chartType);
       },
       parallelBatchSize: 3,
       pauseCheckInterval: 100,

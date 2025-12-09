@@ -30,10 +30,14 @@ interface BulkCaptureProgress {
   metric: string;
 }
 
+// Chart type determines storage path
+export type ChartDialogType = 'analysis' | 'comparison';
+
 interface ReconciliationChartsDialogProps {
   siteId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  chartType?: ChartDialogType;
   onBulkCapture?: (mode: CaptureMode, confirmedChartPaths?: Set<string>) => void;
   onCancelBulkCapture?: () => void;
   isBulkCapturing?: boolean;
@@ -77,10 +81,17 @@ const sanitizeName = (name: string): string => {
     .trim();
 };
 
+// Storage subfolder paths for each chart type
+const CHART_STORAGE_PATHS = {
+  analysis: 'Analysis/Graphs',
+  comparison: 'Reconciliations/Graphs',
+} as const;
+
 export default function ReconciliationChartsDialog({ 
   siteId, 
   open, 
   onOpenChange,
+  chartType = 'comparison',
   onBulkCapture,
   onCancelBulkCapture,
   isBulkCapturing = false,
@@ -276,7 +287,8 @@ export default function ReconciliationChartsDialog({
 
       const clientName = sanitizeName((siteData.clients as any)?.name || '');
       const siteName = sanitizeName(siteData.name);
-      const graphsPath = `${clientName}/${siteName}/Metering/Reconciliations/Graphs`;
+      const subPath = CHART_STORAGE_PATHS[chartType];
+      const graphsPath = `${clientName}/${siteName}/Metering/${subPath}`;
 
       // List all files in Graphs folder
       const { data: files, error: listError } = await supabase.storage
@@ -378,7 +390,7 @@ export default function ReconciliationChartsDialog({
     if (open) {
       fetchCharts();
     }
-  }, [open, siteId]);
+  }, [open, siteId, chartType]);
 
   // Auto-select first meter when data loads
   useEffect(() => {
@@ -429,7 +441,7 @@ export default function ReconciliationChartsDialog({
             <div>
               <DialogTitle className="flex items-center gap-2">
                 <ImageIcon className="w-5 h-5" />
-                Reconciliation Charts
+                {chartType === 'analysis' ? 'Analysis Charts' : 'Reconciliation Charts'}
               </DialogTitle>
             </div>
             <div className="flex items-center gap-2 flex-nowrap shrink-0">
