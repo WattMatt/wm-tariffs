@@ -1,7 +1,7 @@
-import { supabase } from '@/integrations/supabase/client';
+import { uploadChartImage, type StoragePath } from '@/lib/charts';
 import { generateStoragePath } from '@/lib/storagePaths';
 
-// Chart metrics configuration
+// Re-export chart metrics for reconciliation - using generic chart infrastructure
 export const CHART_METRICS = [
   { key: 'total', title: 'Total Amount', unit: 'R', filename: 'total' },
   { key: 'basic', title: 'Basic Charge', unit: 'R', filename: 'basic' },
@@ -14,22 +14,24 @@ export const CHART_METRICS = [
 export type ChartMetricKey = typeof CHART_METRICS[number]['key'];
 
 /**
- * Convert base64 data URL to Blob
+ * Generate storage path for reconciliation chart
  */
-export function dataURLtoBlob(dataURL: string): Blob {
-  const arr = dataURL.split(',');
-  const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/png';
-  const bstr = atob(arr[1]);
-  let n = bstr.length;
-  const u8arr = new Uint8Array(n);
-  while (n--) {
-    u8arr[n] = bstr.charCodeAt(n);
-  }
-  return new Blob([u8arr], { type: mime });
+export async function generateReconciliationChartPath(
+  siteId: string,
+  meterNumber: string,
+  metricFilename: string
+): Promise<StoragePath> {
+  const fileName = `${meterNumber}-${metricFilename}.png`;
+  return await generateStoragePath(
+    siteId,
+    'Metering',
+    'Reconciliations/Graphs',
+    fileName
+  );
 }
 
 /**
- * Save a single chart image to storage
+ * Save a single chart image to storage (legacy wrapper using new infrastructure)
  */
 export async function saveChartToStorage(
   siteId: string,
@@ -38,25 +40,11 @@ export async function saveChartToStorage(
   chartDataUrl: string
 ): Promise<boolean> {
   try {
-    const fileName = `${meterNumber}-${metricFilename}.png`;
-    const { bucket, path } = await generateStoragePath(
-      siteId,
-      'Metering',
-      'Reconciliations/Graphs',
-      fileName
-    );
-
-    const blob = dataURLtoBlob(chartDataUrl);
-
-    const { error } = await supabase.storage
-      .from(bucket)
-      .upload(path, blob, {
-        contentType: 'image/png',
-        upsert: true,
-      });
-
-    if (error) {
-      console.error(`Failed to save chart ${fileName}:`, error);
+    const storagePath = await generateReconciliationChartPath(siteId, meterNumber, metricFilename);
+    const result = await uploadChartImage(storagePath, chartDataUrl);
+    
+    if (!result.success) {
+      console.error(`Failed to save chart ${meterNumber}-${metricFilename}:`, result.error);
       return false;
     }
     
