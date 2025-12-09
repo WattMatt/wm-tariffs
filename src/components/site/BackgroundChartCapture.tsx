@@ -1,6 +1,6 @@
 import React, { useEffect, useCallback, useRef } from "react";
 import { CHART_METRICS, ChartMetricKey, generateChartPath, ChartType } from "@/lib/reconciliation/chartGeneration";
-import { generateReconciliationMeterChart, ReconciliationChartDataPoint } from "./ChartGenerator";
+import { generateReconciliationMeterChart, generateAnalysisMeterChart, ReconciliationChartDataPoint, AnalysisChartDataPoint } from "./ChartGenerator";
 import { supabase } from "@/integrations/supabase/client";
 import { useBackgroundChartCapture, type CaptureItem } from "@/hooks/useBackgroundChartCapture";
 import type { ChartMetric, CaptureLogEntry as GenericLogEntry, ItemCaptureResult } from "@/lib/charts/types";
@@ -240,6 +240,48 @@ const prepareChartData = async (
   });
 };
 
+// Prepare analysis chart data (with winter/summer averages)
+const prepareAnalysisChartData = async (
+  meterId: string,
+  docs: DocumentShopNumber[], 
+  metric: string
+): Promise<AnalysisChartDataPoint[]> => {
+  const sortedDocs = [...docs].sort((a, b) => a.periodEnd.localeCompare(b.periodEnd));
+  
+  // Winter months: May-Aug (5, 6, 7, 8)
+  const winterMonths = [5, 6, 7, 8];
+  
+  // Calculate averages
+  const winterDocs = sortedDocs.filter(doc => {
+    const month = new Date(doc.periodEnd).getMonth() + 1;
+    return winterMonths.includes(month);
+  });
+  const summerDocs = sortedDocs.filter(doc => {
+    const month = new Date(doc.periodEnd).getMonth() + 1;
+    return !winterMonths.includes(month);
+  });
+  
+  const winterValues = winterDocs.map(doc => extractMetricValue(doc, metric)).filter(v => v !== null) as number[];
+  const summerValues = summerDocs.map(doc => extractMetricValue(doc, metric)).filter(v => v !== null) as number[];
+  
+  const winterAvg = winterValues.length > 0 
+    ? winterValues.reduce((sum, v) => sum + v, 0) / winterValues.length
+    : null;
+  const summerAvg = summerValues.length > 0
+    ? summerValues.reduce((sum, v) => sum + v, 0) / summerValues.length
+    : null;
+  
+  return sortedDocs.map(doc => {
+    const periodDate = new Date(doc.periodEnd);
+    return {
+      period: periodDate.toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }),
+      documentAmount: extractMetricValue(doc, metric),
+      winterAvg,
+      summerAvg,
+    };
+  });
+};
+
 // ============ Component ============
 
 // Transform queue to capture items format
@@ -318,31 +360,50 @@ export default function BackgroundChartCapture({
     docsMapRef.current = map;
   }, [queue]);
 
-  // Render function for reconciliation charts
+  // Render function for charts - handles both analysis and comparison types
   const renderChart = useCallback(async (
     meter: Meter,
     metric: ChartMetric,
     docs: unknown[]
   ): Promise<string> => {
     const typedDocs = docs as DocumentShopNumber[];
-    const data = await prepareChartData(meter.id, typedDocs, metric.key);
     
-    if (!data || data.length === 0) {
-      throw new Error('No chart data available');
+    let dataUrl: string;
+    
+    if (chartType === 'analysis') {
+      // Analysis chart: Document Amount bars with Winter/Summer average lines
+      const data = await prepareAnalysisChartData(meter.id, typedDocs, metric.key);
+      
+      if (!data || data.length === 0) {
+        throw new Error('No analysis chart data available');
+      }
+      
+      dataUrl = generateAnalysisMeterChart(
+        `${meter.meter_number} - ${metric.title}`,
+        metric.unit,
+        data
+      );
+    } else {
+      // Comparison chart: Reconciliation Cost + Document Billed bars + Meter Reading line
+      const data = await prepareChartData(meter.id, typedDocs, metric.key);
+      
+      if (!data || data.length === 0) {
+        throw new Error('No chart data available');
+      }
+      
+      dataUrl = generateReconciliationMeterChart(
+        `${meter.meter_number} - ${metric.title}`,
+        metric.unit,
+        data
+      );
     }
-
-    const dataUrl = generateReconciliationMeterChart(
-      `${meter.meter_number} - ${metric.title}`,
-      metric.unit,
-      data
-    );
     
     if (!dataUrl) {
       throw new Error('Failed to generate chart image');
     }
 
     return dataUrl;
-  }, []);
+  }, [chartType]);
 
   // Use the generic hook
   const {

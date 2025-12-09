@@ -1041,6 +1041,218 @@ export const generateReconciliationMeterChart = (
   return canvas.toDataURL('image/png');
 };
 
+// Interface for analysis chart data (Document Amount with Winter/Summer averages)
+export interface AnalysisChartDataPoint {
+  period: string;
+  documentAmount: number | null;
+  winterAvg: number | null;
+  summerAvg: number | null;
+}
+
+/**
+ * Generate an analysis meter chart using Canvas API (fast, no DOM rendering)
+ * Creates a bar chart with Document Amount bars plus Winter and Summer average lines.
+ */
+export const generateAnalysisMeterChart = (
+  title: string,
+  unit: string,
+  data: AnalysisChartDataPoint[],
+  width: number = 900,
+  height: number = 500,
+  scaleFactor: number = 2
+): string => {
+  const scaledWidth = width * scaleFactor;
+  const scaledHeight = height * scaleFactor;
+  
+  const canvas = document.createElement('canvas');
+  canvas.width = scaledWidth;
+  canvas.height = scaledHeight;
+  const ctx = canvas.getContext('2d');
+  
+  if (!ctx || data.length === 0) return '';
+  
+  // Clear canvas with white background
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, scaledWidth, scaledHeight);
+  
+  // Colors matching the UI
+  const documentColor = 'rgba(156, 163, 175, 0.6)';  // Gray for Document Amount
+  const winterColor = '#3b82f6';  // Blue for Winter Average
+  const summerColor = '#f97316';  // Orange for Summer Average
+  
+  // Chart dimensions
+  const padding = 60 * scaleFactor;
+  const rightPadding = 40 * scaleFactor;
+  const bottomPadding = 100 * scaleFactor;
+  const topPadding = 70 * scaleFactor;
+  const chartWidth = scaledWidth - padding - rightPadding;
+  const chartHeight = scaledHeight - topPadding - bottomPadding;
+  
+  // Draw title
+  ctx.fillStyle = '#000000';
+  ctx.font = `bold ${14 * scaleFactor}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.fillText(title, scaledWidth / 2, 25 * scaleFactor);
+  
+  // Draw unit
+  if (unit && unit.trim()) {
+    ctx.font = `${11 * scaleFactor}px sans-serif`;
+    ctx.fillText(`(${unit})`, scaledWidth / 2, 42 * scaleFactor);
+  }
+  
+  // Draw legend
+  const legendY = 55 * scaleFactor;
+  const legendSpacing = 130 * scaleFactor;
+  let legendX = scaledWidth / 2 - legendSpacing * 1.1;
+  
+  // Document Amount legend
+  ctx.fillStyle = documentColor;
+  ctx.fillRect(legendX, legendY, 14 * scaleFactor, 14 * scaleFactor);
+  ctx.fillStyle = '#000000';
+  ctx.font = `${10 * scaleFactor}px sans-serif`;
+  ctx.textAlign = 'left';
+  ctx.fillText('Document Amount', legendX + 18 * scaleFactor, legendY + 11 * scaleFactor);
+  
+  // Winter Average legend (line)
+  legendX += legendSpacing;
+  ctx.strokeStyle = winterColor;
+  ctx.lineWidth = 2 * scaleFactor;
+  ctx.setLineDash([6 * scaleFactor, 3 * scaleFactor]);
+  ctx.beginPath();
+  ctx.moveTo(legendX, legendY + 7 * scaleFactor);
+  ctx.lineTo(legendX + 14 * scaleFactor, legendY + 7 * scaleFactor);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = '#000000';
+  ctx.fillText('Winter Avg', legendX + 18 * scaleFactor, legendY + 11 * scaleFactor);
+  
+  // Summer Average legend (line)
+  legendX += legendSpacing;
+  ctx.strokeStyle = summerColor;
+  ctx.lineWidth = 2 * scaleFactor;
+  ctx.setLineDash([6 * scaleFactor, 3 * scaleFactor]);
+  ctx.beginPath();
+  ctx.moveTo(legendX, legendY + 7 * scaleFactor);
+  ctx.lineTo(legendX + 14 * scaleFactor, legendY + 7 * scaleFactor);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = '#000000';
+  ctx.fillText('Summer Avg', legendX + 18 * scaleFactor, legendY + 11 * scaleFactor);
+  
+  // Calculate scales
+  const allValues = data.map(d => d.documentAmount || 0);
+  const winterAvg = data[0]?.winterAvg || 0;
+  const summerAvg = data[0]?.summerAvg || 0;
+  const maxValue = Math.max(...allValues, winterAvg, summerAvg, 1);
+  
+  const barWidth = Math.max((chartWidth / data.length) - 8 * scaleFactor, 20 * scaleFactor);
+  const barSpacing = chartWidth / data.length;
+  
+  // Draw gridlines
+  ctx.strokeStyle = '#e5e7eb';
+  ctx.lineWidth = 1;
+  const numGridLines = 5;
+  for (let i = 0; i <= numGridLines; i++) {
+    const y = topPadding + (chartHeight * i / numGridLines);
+    ctx.setLineDash([3 * scaleFactor, 3 * scaleFactor]);
+    ctx.beginPath();
+    ctx.moveTo(padding, y);
+    ctx.lineTo(padding + chartWidth, y);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  
+  // Draw bars
+  data.forEach((item, index) => {
+    const barX = padding + index * barSpacing + (barSpacing - barWidth) / 2;
+    const value = item.documentAmount || 0;
+    const barHeight = maxValue > 0 ? (value / maxValue) * chartHeight : 0;
+    const barY = topPadding + chartHeight - barHeight;
+    
+    ctx.fillStyle = documentColor;
+    
+    // Draw bar with rounded top corners
+    const barRadius = 4 * scaleFactor;
+    ctx.beginPath();
+    ctx.moveTo(barX, barY + barRadius);
+    ctx.arcTo(barX, barY, barX + barRadius, barY, barRadius);
+    ctx.arcTo(barX + barWidth, barY, barX + barWidth, barY + barRadius, barRadius);
+    ctx.lineTo(barX + barWidth, topPadding + chartHeight);
+    ctx.lineTo(barX, topPadding + chartHeight);
+    ctx.closePath();
+    ctx.fill();
+  });
+  
+  // Draw Winter Average line (dashed horizontal)
+  if (winterAvg > 0) {
+    const winterY = topPadding + chartHeight - (winterAvg / maxValue) * chartHeight;
+    ctx.strokeStyle = winterColor;
+    ctx.lineWidth = 2 * scaleFactor;
+    ctx.setLineDash([6 * scaleFactor, 3 * scaleFactor]);
+    ctx.beginPath();
+    ctx.moveTo(padding, winterY);
+    ctx.lineTo(padding + chartWidth, winterY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  
+  // Draw Summer Average line (dashed horizontal)
+  if (summerAvg > 0) {
+    const summerY = topPadding + chartHeight - (summerAvg / maxValue) * chartHeight;
+    ctx.strokeStyle = summerColor;
+    ctx.lineWidth = 2 * scaleFactor;
+    ctx.setLineDash([6 * scaleFactor, 3 * scaleFactor]);
+    ctx.beginPath();
+    ctx.moveTo(padding, summerY);
+    ctx.lineTo(padding + chartWidth, summerY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  
+  // Draw axes
+  ctx.strokeStyle = '#374151';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(padding, topPadding);
+  ctx.lineTo(padding, topPadding + chartHeight);
+  ctx.lineTo(padding + chartWidth, topPadding + chartHeight);
+  ctx.stroke();
+  
+  // Y-axis labels
+  ctx.fillStyle = '#374151';
+  ctx.font = `${10 * scaleFactor}px sans-serif`;
+  ctx.textAlign = 'right';
+  for (let i = 0; i <= numGridLines; i++) {
+    const value = maxValue * (1 - i / numGridLines);
+    const y = topPadding + (chartHeight * i / numGridLines);
+    let label: string;
+    if (unit === 'R') {
+      label = value >= 1000 ? `R${(value / 1000).toFixed(0)}k` : `R${value.toFixed(0)}`;
+    } else {
+      label = value.toLocaleString();
+    }
+    ctx.fillText(label, padding - 8 * scaleFactor, y + 4 * scaleFactor);
+  }
+  
+  // X-axis labels (rotated)
+  ctx.save();
+  ctx.fillStyle = '#374151';
+  ctx.font = `${9 * scaleFactor}px sans-serif`;
+  ctx.textAlign = 'right';
+  data.forEach((item, index) => {
+    const x = padding + index * barSpacing + barSpacing / 2;
+    const y = topPadding + chartHeight + 15 * scaleFactor;
+    ctx.translate(x, y);
+    ctx.rotate(-Math.PI / 4);
+    ctx.fillText(item.period, 0, 0);
+    ctx.rotate(Math.PI / 4);
+    ctx.translate(-x, -y);
+  });
+  ctx.restore();
+  
+  return canvas.toDataURL('image/png');
+};
+
 /**
  * Generate all 6 metric charts for a meter (fast, synchronous)
  */
