@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -63,13 +63,30 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
   const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
   const [comparisonDialogOpen, setComparisonDialogOpen] = useState<string | null>(null);
 
+  // Refs for async loop control (prevents stale closure issues)
+  const cancelRef = useRef(false);
+  const pauseRef = useRef(false);
+
+  const handlePauseCapture = useCallback(() => {
+    pauseRef.current = true;
+    setIsPaused(true);
+  }, []);
+
+  const handleResumeCapture = useCallback(() => {
+    pauseRef.current = false;
+    setIsPaused(false);
+  }, []);
+
+  const handleCancelCapture = useCallback(() => {
+    cancelRef.current = true;
+    setIsCapturing(false);
+    setIsPaused(false);
+  }, []);
+
   const { showProgress, showComplete, showError, dismiss } = useCaptureProgressToast({
-    onPause: () => setIsPaused(true),
-    onResume: () => setIsPaused(false),
-    onCancel: () => {
-      setIsCapturing(false);
-      setIsPaused(false);
-    },
+    onPause: handlePauseCapture,
+    onResume: handleResumeCapture,
+    onCancel: handleCancelCapture,
   });
 
   useEffect(() => {
@@ -193,6 +210,8 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
 
     setIsCapturing(true);
     setIsPaused(false);
+    cancelRef.current = false;
+    pauseRef.current = false;
 
     let successCount = 0;
     let failedCount = 0;
@@ -205,13 +224,16 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
       const allCharges = await fetchTariffCharges(allStructureIds);
 
       for (let i = 0; i < tariffGroups.length; i++) {
-        // Check if cancelled
-        if (!isCapturing) break;
+        // Check if cancelled using ref
+        if (cancelRef.current) break;
 
-        // Wait while paused
-        while (isPaused && isCapturing) {
+        // Wait while paused using ref
+        while (pauseRef.current && !cancelRef.current) {
           await new Promise(resolve => setTimeout(resolve, 100));
         }
+
+        // Check again after pause loop
+        if (cancelRef.current) break;
 
         const [tariffName, groupStructures] = tariffGroups[i];
 
@@ -228,7 +250,7 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
           currentBatch: i + 1,
           totalBatches: tariffGroups.length,
           percentComplete: Math.round((i / tariffGroups.length) * 100),
-          isPaused,
+          isPaused: pauseRef.current,
           currentItemLabel: tariffName,
           currentMetricLabel: '',
         });
@@ -261,7 +283,7 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
         await new Promise(resolve => setTimeout(resolve, 50));
       }
 
-      showComplete(successCount, failedCount, !isCapturing);
+      showComplete(successCount, failedCount, cancelRef.current);
     } catch (error: any) {
       console.error("Error capturing tariff charts:", error);
       showError(error.message || "Failed to capture charts");
