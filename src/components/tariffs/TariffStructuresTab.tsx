@@ -12,6 +12,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import TariffEditDialog from "./TariffEditDialog";
 import TariffStructureForm from "./TariffStructureForm";
 import TariffPeriodComparisonDialog from "./TariffPeriodComparisonDialog";
+import TariffChartsDialog from "./TariffChartsDialog";
 import { useCaptureProgressToast } from "@/hooks/useCaptureProgressToast";
 import { 
   TARIFF_CHART_METRICS, 
@@ -62,6 +63,7 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
   const [selectedTariffForEdit, setSelectedTariffForEdit] = useState<{ id: string; name: string; mode: "view" | "edit" } | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
   const [comparisonDialogOpen, setComparisonDialogOpen] = useState<string | null>(null);
+  const [chartsDialogOpen, setChartsDialogOpen] = useState(false);
 
   // Refs for async loop control (prevents stale closure issues)
   const cancelRef = useRef(false);
@@ -616,15 +618,26 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
                 {getGroupedStructures().size} unique tariff{getGroupedStructures().size !== 1 ? "s" : ""} • {structures.length} total period{structures.length !== 1 ? "s" : ""}
               </CardDescription>
             </div>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={handleCaptureAllCharts}
-              disabled={isCapturing || !province}
-              title={!province ? "Province information required" : "Capture all tariff charts"}
-            >
-              <BarChart3 className="w-4 h-4" />
-            </Button>
+            <div className="flex gap-1">
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setChartsDialogOpen(true)}
+                disabled={!province}
+                title={!province ? "Province information required" : "View captured charts"}
+              >
+                <Eye className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={handleCaptureAllCharts}
+                disabled={isCapturing || !province}
+                title={!province ? "Province information required" : "Capture all tariff charts"}
+              >
+                <BarChart3 className="w-4 h-4" />
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             <Accordion type="multiple" value={expandedGroups} onValueChange={setExpandedGroups}>
@@ -775,6 +788,13 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
           tariffStructures={getGroupedStructures().get(comparisonDialogOpen) || []}
         />
       )}
+
+      <TariffChartsDialog
+        supplyAuthorityName={supplyAuthorityName}
+        province={province || ''}
+        open={chartsDialogOpen}
+        onOpenChange={setChartsDialogOpen}
+      />
     </div>
   );
 }
