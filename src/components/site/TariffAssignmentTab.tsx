@@ -2872,7 +2872,7 @@ export default function TariffAssignmentTab({
                               className="h-[290px] w-full"
                             >
                               <ResponsiveContainer width="100%" height="100%">
-                                <ComposedChart data={chartData} margin={{ top: 5, right: hideSeasonalAverages ? 10 : 5, left: -35, bottom: 5 }}>
+                                <ComposedChart data={chartData} margin={{ top: 5, right: 5, left: -10, bottom: 5 }}>
                                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                                   <XAxis 
                                     dataKey="period" 
