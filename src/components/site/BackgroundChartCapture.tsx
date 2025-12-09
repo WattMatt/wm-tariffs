@@ -240,44 +240,118 @@ const prepareChartData = async (
   });
 };
 
-// Prepare analysis chart data (with winter/summer averages)
+// Helper: Extract month from date string without timezone conversion
+const getMonthFromDateString = (dateString: string): number => {
+  const [, month] = dateString.split('-');
+  return parseInt(month);
+};
+
+// Prepare analysis chart data (with segment-based winter/summer averages)
 const prepareAnalysisChartData = async (
   meterId: string,
   docs: DocumentShopNumber[], 
   metric: string
 ): Promise<AnalysisChartDataPoint[]> => {
+  // South African electricity seasons - matches TariffAssignmentTab.tsx exactly
+  const winterMonths = [6, 7, 8];  // June, July, August
+  const summerMonths = [1, 2, 3, 4, 5, 9, 10, 11, 12];  // All other months
+  
   const sortedDocs = [...docs].sort((a, b) => a.periodEnd.localeCompare(b.periodEnd));
   
-  // Winter months: May-Aug (5, 6, 7, 8)
-  const winterMonths = [5, 6, 7, 8];
+  // Build segments for consecutive months of same season
+  interface Segment {
+    season: 'winter' | 'summer';
+    segmentIndex: number;
+    docIds: string[];
+    average: number;
+  }
   
-  // Calculate averages
-  const winterDocs = sortedDocs.filter(doc => {
-    const month = new Date(doc.periodEnd).getMonth() + 1;
-    return winterMonths.includes(month);
+  const segments: Segment[] = [];
+  let winterSegment = -1;
+  let summerSegment = -1;
+  let lastSeason: 'winter' | 'summer' | null = null;
+  let currentSegmentDocs: DocumentShopNumber[] = [];
+  
+  sortedDocs.forEach((doc, index) => {
+    const month = getMonthFromDateString(doc.periodEnd);
+    const isWinter = winterMonths.includes(month);
+    const isSummer = summerMonths.includes(month);
+    const currentSeason = isWinter ? 'winter' : isSummer ? 'summer' : null;
+    
+    if (!currentSeason) return;
+    
+    // Season changed - finalize previous segment
+    if (lastSeason !== currentSeason) {
+      if (lastSeason && currentSegmentDocs.length > 0) {
+        const segmentIndex = lastSeason === 'winter' ? winterSegment : summerSegment;
+        const values = currentSegmentDocs
+          .map(d => extractMetricValue(d, metric))
+          .filter(v => v !== null && v > 0) as number[];
+        
+        if (values.length > 0) {
+          const average = values.reduce((sum, val) => sum + val, 0) / values.length;
+          segments.push({
+            season: lastSeason,
+            segmentIndex,
+            docIds: currentSegmentDocs.map(d => d.documentId),
+            average
+          });
+        }
+      }
+      
+      currentSegmentDocs = [];
+      if (currentSeason === 'winter') winterSegment++;
+      if (currentSeason === 'summer') summerSegment++;
+    }
+    
+    currentSegmentDocs.push(doc);
+    lastSeason = currentSeason;
+    
+    // Handle last document
+    if (index === sortedDocs.length - 1 && currentSegmentDocs.length > 0) {
+      const segmentIndex = currentSeason === 'winter' ? winterSegment : summerSegment;
+      const values = currentSegmentDocs
+        .map(d => extractMetricValue(d, metric))
+        .filter(v => v !== null && v > 0) as number[];
+      
+      if (values.length > 0) {
+        const average = values.reduce((sum, val) => sum + val, 0) / values.length;
+        segments.push({
+          season: currentSeason,
+          segmentIndex,
+          docIds: currentSegmentDocs.map(d => d.documentId),
+          average
+        });
+      }
+    }
   });
-  const summerDocs = sortedDocs.filter(doc => {
-    const month = new Date(doc.periodEnd).getMonth() + 1;
-    return !winterMonths.includes(month);
-  });
   
-  const winterValues = winterDocs.map(doc => extractMetricValue(doc, metric)).filter(v => v !== null) as number[];
-  const summerValues = summerDocs.map(doc => extractMetricValue(doc, metric)).filter(v => v !== null) as number[];
-  
-  const winterAvg = winterValues.length > 0 
-    ? winterValues.reduce((sum, v) => sum + v, 0) / winterValues.length
-    : null;
-  const summerAvg = summerValues.length > 0
-    ? summerValues.reduce((sum, v) => sum + v, 0) / summerValues.length
-    : null;
-  
+  // Build chart data with segment-specific averages
   return sortedDocs.map(doc => {
     const periodDate = new Date(doc.periodEnd);
+    const month = getMonthFromDateString(doc.periodEnd);
+    const isWinter = winterMonths.includes(month);
+    const isSummer = summerMonths.includes(month);
+    
+    // Find matching segment for this document
+    const matchingSegment = segments.find(seg => seg.docIds.includes(doc.documentId));
+    
+    // Build dynamic segment keys
+    const segmentData: Record<string, number> = {};
+    if (matchingSegment) {
+      if (matchingSegment.season === 'winter') {
+        segmentData[`winterAvg_${matchingSegment.segmentIndex}`] = matchingSegment.average;
+      } else {
+        segmentData[`summerAvg_${matchingSegment.segmentIndex}`] = matchingSegment.average;
+      }
+    }
+    
     return {
       period: periodDate.toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }),
       documentAmount: extractMetricValue(doc, metric),
-      winterAvg,
-      summerAvg,
+      isWinter,
+      isSummer,
+      ...segmentData,
     };
   });
 };
