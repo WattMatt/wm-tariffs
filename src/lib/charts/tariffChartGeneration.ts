@@ -103,22 +103,26 @@ export function processTariffComparisonData(
     const basicCharge = structureCharges.find(c => c.charge_type === 'basic_charge');
     dataPoint.basic_charge = basicCharge?.charge_amount ?? null;
 
-    // Energy charges (seasonal)
+    // Energy charges - support both explicit and legacy formats
     const energyLow = structureCharges.find(
-      c => c.charge_type === 'seasonal_energy' && c.description?.toLowerCase().includes('low')
+      c => c.charge_type === 'energy_low_season' || 
+           (c.charge_type === 'seasonal_energy' && c.description?.toLowerCase().includes('low'))
     );
     const energyHigh = structureCharges.find(
-      c => c.charge_type === 'seasonal_energy' && c.description?.toLowerCase().includes('high')
+      c => c.charge_type === 'energy_high_season' || 
+           (c.charge_type === 'seasonal_energy' && c.description?.toLowerCase().includes('high'))
     );
     dataPoint.energy_low_season = energyLow?.charge_amount ?? null;
     dataPoint.energy_high_season = energyHigh?.charge_amount ?? null;
 
-    // Demand charges (seasonal)
+    // Demand charges - support both explicit and legacy formats
     const demandLow = structureCharges.find(
-      c => c.charge_type === 'demand_charge' && c.description?.toLowerCase().includes('low')
+      c => c.charge_type === 'demand_low_season' || 
+           (c.charge_type === 'demand_charge' && c.description?.toLowerCase().includes('low'))
     );
     const demandHigh = structureCharges.find(
-      c => c.charge_type === 'demand_charge' && c.description?.toLowerCase().includes('high')
+      c => c.charge_type === 'demand_high_season' || 
+           (c.charge_type === 'demand_charge' && c.description?.toLowerCase().includes('high'))
     );
     dataPoint.demand_low_season = demandLow?.charge_amount ?? null;
     dataPoint.demand_high_season = demandHigh?.charge_amount ?? null;
