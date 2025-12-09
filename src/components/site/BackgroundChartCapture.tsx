@@ -479,6 +479,10 @@ export default function BackgroundChartCapture({
     return dataUrl;
   }, [chartType]);
 
+  // Track completed meters with refs to avoid stale closures
+  const completedMetersRef = useRef(0);
+  const totalMetersRef = useRef(0);
+
   // Use the generic hook
   const {
     isCapturing,
@@ -516,9 +520,10 @@ export default function BackgroundChartCapture({
     },
     onItemComplete: (result) => {
       onMeterComplete?.(convertItemResult(result));
-      // Call batch progress with completed meter count (results.length + 1 since this result isn't in results yet)
-      const completedMeters = results.length + 1;
-      const totalMeters = queue.length > 0 ? new Set(queue.map(q => q.meter.id)).size : 0;
+      // Increment completed count using ref to avoid stale closure
+      completedMetersRef.current += 1;
+      const completedMeters = completedMetersRef.current;
+      const totalMeters = totalMetersRef.current;
       const totalCharts = totalMeters * CHART_METRICS.length;
       const completedCharts = completedMeters * CHART_METRICS.length;
       onBatchProgress?.(completedMeters, totalMeters, completedCharts, totalCharts);
@@ -555,6 +560,10 @@ export default function BackgroundChartCapture({
 
     const runCapture = async () => {
       hasStartedRef.current = true;
+      
+      // Reset progress refs for new capture session
+      completedMetersRef.current = 0;
+      totalMetersRef.current = new Set(queue.map(q => q.meter.id)).size;
       
       const captureItems = transformQueueToCaptureItems(queue);
       const result = await startCapture(captureItems);
