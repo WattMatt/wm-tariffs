@@ -28,6 +28,7 @@ import { saveChartToStorage, CHART_METRICS, ChartMetricKey, ChartType } from "@/
 import { sanitizeName } from "@/lib/storagePaths";
 import BackgroundChartCapture, { CaptureLogEntry, MeterCaptureResult } from "./BackgroundChartCapture";
 import Celebration from "@/components/ui/celebration";
+import { useCaptureProgressToast } from "@/hooks/useCaptureProgressToast";
 
 interface TariffAssignmentTabProps {
   siteId: string;
@@ -163,7 +164,6 @@ export default function TariffAssignmentTab({
   const [captureLog, setCaptureLog] = useState<CaptureLogEntry[]>([]);
   const [showCaptureLog, setShowCaptureLog] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
-  const backgroundCaptureToastRef = useRef<string | number | null>(null);
 
   // Handle legend click to toggle data series
   const handleLegendClick = (dataKey: string) => {
@@ -1097,10 +1097,7 @@ export default function TariffAssignmentTab({
     cancelBulkCaptureRef.current = true;
     pauseBulkCaptureRef.current = false;
     setIsBulkCapturePaused(false);
-    if (backgroundCaptureToastRef.current) {
-      toast.dismiss(backgroundCaptureToastRef.current);
-    }
-    toast.info('Cancelling bulk capture...');
+    captureToast.dismiss();
   };
 
   // Toggle pause bulk capture
@@ -1109,30 +1106,35 @@ export default function TariffAssignmentTab({
     setIsBulkCapturePaused(pauseBulkCaptureRef.current);
   };
 
+  // Initialize the unified capture progress toast hook
+  const captureToast = useCaptureProgressToast({
+    onPause: () => togglePauseBulkCapture(),
+    onResume: () => togglePauseBulkCapture(),
+    onCancel: () => cancelBulkCapture(),
+  });
+
   // Background capture batch progress handler (called once per batch, not per chart)
   const handleBackgroundBatchProgress = (metersComplete: number, totalMeters: number, chartsComplete: number, totalCharts: number) => {
     const progress = Math.round((metersComplete / totalMeters) * 100);
-    const pauseStatus = isBulkCapturePaused ? ' (PAUSED)' : '';
     
     // Calculate batch info (processing 3 meters at a time)
     const BATCH_SIZE = 3;
     const currentBatch = Math.ceil(metersComplete / BATCH_SIZE) || 1;
     const totalBatches = Math.ceil(totalMeters / BATCH_SIZE);
     
-    // Update or create persistent toast
-    if (backgroundCaptureToastRef.current) {
-      toast.loading(`Capturing charts${pauseStatus}: Batch ${currentBatch}/${totalBatches} (${progress}%)`, {
-        id: backgroundCaptureToastRef.current,
-        action: {
-          label: isBulkCapturePaused ? '▶ Resume' : '⏸ Pause',
-          onClick: () => togglePauseBulkCapture(),
-        },
-        cancel: {
-          label: 'Cancel',
-          onClick: () => cancelBulkCapture(),
-        },
-      });
-    }
+    // Use unified toast hook
+    captureToast.showProgress({
+      currentItem: metersComplete,
+      totalItems: totalMeters,
+      currentChart: chartsComplete,
+      totalCharts,
+      currentBatch,
+      totalBatches,
+      percentComplete: progress,
+      isPaused: isBulkCapturePaused,
+      currentItemLabel: '',
+      currentMetricLabel: '',
+    });
     
     // Update progress state for dialog if open
     setBulkCaptureProgress({
@@ -1150,12 +1152,6 @@ export default function TariffAssignmentTab({
 
   // Background capture complete handler
   const handleBackgroundCaptureComplete = (success: number, failed: number, cancelled: boolean, log: CaptureLogEntry[], meterResults: MeterCaptureResult[]) => {
-    // Dismiss progress toast
-    if (backgroundCaptureToastRef.current) {
-      toast.dismiss(backgroundCaptureToastRef.current);
-      backgroundCaptureToastRef.current = null;
-    }
-    
     // Store the log and meter results
     setCaptureLog(log);
     setMeterCaptureResults(meterResults);
@@ -1166,39 +1162,17 @@ export default function TariffAssignmentTab({
     setBulkCaptureProgress(null);
     setBackgroundCaptureQueue([]);
     
-    // Calculate meter-level stats
-    const totalMeters = meterResults.length;
-    const metersFullySuccessful = meterResults.filter(m => m.chartsFailed === 0).length;
-    const metersWithFailures = meterResults.filter(m => m.chartsFailed > 0);
+    // Use unified toast hook for completion
+    captureToast.showComplete(success, failed, cancelled);
     
-    if (cancelled) {
-      toast.info(`Capture cancelled. Completed ${meterResults.length} meters (${success} charts).`, {
-        action: {
-          label: 'View Log',
-          onClick: () => setShowCaptureLog(true),
-        },
-        duration: 10000,
-      });
-    } else if (failed === 0) {
-      // Trigger celebration for full success!
+    // Show celebration for full success
+    if (!cancelled && failed === 0) {
       setShowCelebration(true);
-      toast.success(`🎉 All ${totalMeters} meters captured successfully (${success} charts)!`, {
-        action: {
-          label: 'View Log',
-          onClick: () => setShowCaptureLog(true),
-        },
-        duration: 5000,
-      });
-    } else {
-      toast.warning(`${metersFullySuccessful}/${totalMeters} meters fully captured. ${failed} charts failed across ${metersWithFailures.length} meters.`, {
-        action: {
-          label: 'View Log',
-          onClick: () => setShowCaptureLog(true),
-        },
-        duration: 15000,
-      });
-      
-      // Log failed meters for debugging
+    }
+    
+    // Log failed meters for debugging
+    if (failed > 0) {
+      const metersWithFailures = meterResults.filter(m => m.chartsFailed > 0);
       console.log('[ChartCapture] Meters with failures:', metersWithFailures);
     }
   };
@@ -1329,17 +1303,20 @@ export default function TariffAssignmentTab({
     setIsBackgroundCapturing(true);
     setIsBulkCapturingCharts(true);
     
-    // Show persistent toast
-    toast.info(toastMessage);
-    backgroundCaptureToastRef.current = toast.loading(
-      `${toastMessage} (${totalCharts} charts)...`,
-      {
-        action: {
-          label: 'Cancel',
-          onClick: () => cancelBulkCapture(),
-        },
-      }
-    );
+    // Show initial progress toast using unified hook
+    const BATCH_SIZE = 3;
+    captureToast.showProgress({
+      currentItem: 0,
+      totalItems: totalMeters,
+      currentChart: 0,
+      totalCharts,
+      currentBatch: 1,
+      totalBatches: Math.ceil(totalMeters / BATCH_SIZE),
+      percentComplete: 0,
+      isPaused: false,
+      currentItemLabel: '',
+      currentMetricLabel: 'Starting...',
+    });
   };
 
   // Compute meter capture statuses from results
