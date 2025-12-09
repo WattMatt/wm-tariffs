@@ -28,7 +28,7 @@ export function useCaptureProgressToast(
 
   const showProgress = useCallback((progress: ChartCaptureProgress) => {
     const pauseStatus = progress.isPaused ? ' (PAUSED)' : '';
-    const message = `Capturing charts${pauseStatus}: Batch ${progress.currentBatch}/${progress.totalBatches} (${progress.currentItem}/${progress.totalItems} items - ${progress.percentComplete}%)`;
+    const message = `Capturing charts${pauseStatus}: Batch ${progress.currentBatch}/${progress.totalBatches} (${progress.percentComplete}%)`;
 
     const toastOptions = {
       id: toastRef.current,
