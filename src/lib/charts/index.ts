@@ -60,3 +60,14 @@ export {
   type UploadResult,
   type BatchUploadResult,
 } from './storage';
+
+// Tariff chart generation
+export {
+  TARIFF_CHART_METRICS,
+  generateTariffChartPath,
+  fetchTariffCharges,
+  processTariffComparisonData,
+  generateTariffComparisonChart,
+  captureTariffGroupCharts,
+  type TariffCaptureResult,
+} from './tariffChartGeneration';
