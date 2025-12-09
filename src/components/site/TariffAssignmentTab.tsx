@@ -2575,7 +2575,7 @@ export default function TariffAssignmentTab({
                 }
               </CardDescription>
             </div>
-            {showDocumentCharts && hideSeasonalAverages && (
+            {showDocumentCharts && (
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
