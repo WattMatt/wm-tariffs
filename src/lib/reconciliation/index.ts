@@ -48,11 +48,14 @@ export {
 // Chart Generation
 export {
   CHART_METRICS,
-  dataURLtoBlob,
   saveChartToStorage,
+  generateReconciliationChartPath,
 } from './chartGeneration';
 
 export type { ChartMetricKey } from './chartGeneration';
+
+// Re-export from generic chart infrastructure
+export { dataURLtoBlob } from '@/lib/charts';
 
 // Re-export hook types for convenience
 export type { MeterConnection, HierarchicalCsvResult, DateRange, DocumentDateRange } from './types';
