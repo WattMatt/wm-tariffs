@@ -3931,7 +3931,7 @@ export default function TariffAssignmentTab({
                               yAxisId="right"
                               type="monotone"
                               dataKey="meterReading"
-                              stroke="hsl(var(--chart-3))"
+                              stroke="#22c55e"
                               strokeWidth={3}
                               name="Meter Reading"
                               connectNulls={false}
@@ -3950,7 +3950,7 @@ export default function TariffAssignmentTab({
                                     />
                                   );
                                 }
-                                return <circle cx={cx} cy={cy} r={4} fill="hsl(var(--chart-3))" />;
+                                return <circle cx={cx} cy={cy} r={4} fill="#22c55e" />;
                               }}
                             />
                           </ComposedChart>
