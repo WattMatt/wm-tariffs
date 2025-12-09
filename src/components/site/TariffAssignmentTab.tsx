@@ -2835,9 +2835,9 @@ export default function TariffAssignmentTab({
                           className="cursor-pointer hover:shadow-lg transition-shadow overflow-hidden"
                           onClick={() => setSelectedChartMeter({ meter, docs: matchingShops })}
                         >
-                          <CardHeader className="pb-2 px-4 pt-4">
+                          <CardHeader className="pb-1 px-3 pt-2">
                             <div className="flex items-center justify-between">
-                              <CardTitle className="text-lg">
+                              <CardTitle className="text-base">
                                 {meter.meter_number}
                               </CardTitle>
                               <Badge variant="secondary" className="text-xs">
@@ -2845,7 +2845,7 @@ export default function TariffAssignmentTab({
                               </Badge>
                             </div>
                           </CardHeader>
-                          <CardContent className="pt-0 pb-4 px-2">
+                          <CardContent className="pt-0 pb-1 px-1">
                             <ChartContainer
                               config={{
                                 amount: {
@@ -2869,28 +2869,28 @@ export default function TariffAssignmentTab({
                                   color: "hsl(25 100% 50%)",
                                 },
                               }}
-                              className="h-[250px] w-full"
+                              className="h-[290px] w-full"
                             >
                               <ResponsiveContainer width="100%" height="100%">
-                                <ComposedChart data={chartData} margin={{ top: 5, right: hideSeasonalAverages ? 40 : 5, left: 0, bottom: 20 }}>
+                                <ComposedChart data={chartData} margin={{ top: 5, right: hideSeasonalAverages ? 35 : 5, left: -10, bottom: 5 }}>
                                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                                   <XAxis 
                                     dataKey="period" 
-                                    tick={{ fontSize: 10 }}
+                                    tick={{ fontSize: 9 }}
                                     angle={-45}
                                     textAnchor="end"
-                                    height={60}
+                                    height={50}
                                   />
                                   <YAxis 
                                     yAxisId="left"
-                                    tick={{ fontSize: 10 }}
+                                    tick={{ fontSize: 9 }}
                                     tickFormatter={(value) => `R${(value / 1000).toFixed(0)}k`}
                                   />
                                   {hideSeasonalAverages && (
                                     <YAxis 
                                       yAxisId="right"
                                       orientation="right"
-                                      tick={{ fontSize: 10 }}
+                                      tick={{ fontSize: 9 }}
                                       tickFormatter={(value) => value?.toLocaleString()}
                                       domain={['auto', 'auto']}
                                       allowDataOverflow={false}
