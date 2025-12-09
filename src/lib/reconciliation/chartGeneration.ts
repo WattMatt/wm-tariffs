@@ -18,8 +18,8 @@ export type ChartMetricKey = typeof CHART_METRICS[number]['key'];
 
 // Storage subfolder paths for each chart type
 const CHART_STORAGE_PATHS = {
-  analysis: 'Analysis/Graphs',
-  comparison: 'Reconciliations/Graphs',
+  analysis: 'Reconciliations/Graphs/Analysis',
+  comparison: 'Reconciliations/Graphs/Comparison',
 } as const;
 
 /**

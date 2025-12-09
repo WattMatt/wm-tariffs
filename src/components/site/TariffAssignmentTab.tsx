@@ -1265,7 +1265,8 @@ export default function TariffAssignmentTab({
     for (const { meter, docs } of metersToProcess) {
       for (const metricInfo of CHART_METRICS) {
         // Build the expected chart path for this meter/metric
-        const chartPath = `${clientName}/${siteName}/Metering/Reconciliations/Graphs/${meter.meter_number}-${metricInfo.filename}.png`;
+        const chartSubfolder = hideSeasonalAverages ? 'Comparison' : 'Analysis';
+        const chartPath = `${clientName}/${siteName}/Metering/Reconciliations/Graphs/${chartSubfolder}/${meter.meter_number}-${metricInfo.filename}.png`;
         
         // Skip if this chart is already confirmed
         if (confirmedChartPaths?.has(chartPath)) {
