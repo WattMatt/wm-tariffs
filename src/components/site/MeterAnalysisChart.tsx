@@ -71,7 +71,7 @@ export function MeterAnalysisChart({
     },
     meterReading: {
       label: "Meter Reading",
-      color: "hsl(var(--chart-3))",
+      color: "#22c55e",
     },
     winterAvg: {
       label: "Winter Average",
@@ -197,7 +197,7 @@ export function MeterAnalysisChart({
             yAxisId="right"
             type="monotone"
             dataKey="meterReading"
-            stroke="hsl(var(--chart-3))"
+            stroke="#22c55e"
             strokeWidth={2}
             name="Meter Reading"
             connectNulls={false}
@@ -215,7 +215,7 @@ export function MeterAnalysisChart({
                   />
                 );
               }
-              return <circle cx={cx} cy={cy} r={3} fill="hsl(var(--chart-3))" />;
+              return <circle cx={cx} cy={cy} r={3} fill="#22c55e" />;
             }}
           />
         </ComposedChart>
