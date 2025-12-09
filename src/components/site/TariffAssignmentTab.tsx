@@ -2793,7 +2793,7 @@ export default function TariffAssignmentTab({
                   <h3 className="text-lg font-semibold">Meter Analysis</h3>
                   
                   {/* Grid of charts - 3 per row */}
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {meters.map((meter) => {
                       const matchingShops = getMatchingShopNumbers(meter);
                       
