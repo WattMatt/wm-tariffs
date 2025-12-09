@@ -214,6 +214,7 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
     pauseRef.current = false;
 
     let successCount = 0;
+    let skippedCount = 0;
     let failedCount = 0;
     const totalCharts = tariffGroups.length * TARIFF_CHART_METRICS.length;
     let processedCharts = 0;
@@ -269,11 +270,13 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
           groupCharges
         );
 
-        // Count results
+        // Count results - differentiate skipped from actual failures
         results.forEach(r => {
           processedCharts++;
           if (r.success) {
             successCount++;
+          } else if (r.skipped) {
+            skippedCount++;
           } else {
             failedCount++;
           }
@@ -283,7 +286,15 @@ export default function TariffStructuresTab({ supplyAuthorityId, supplyAuthority
         await new Promise(resolve => setTimeout(resolve, 50));
       }
 
-      showComplete(successCount, failedCount, cancelRef.current);
+      // Show completion with skipped count - only show failed count for actual errors
+      if (cancelRef.current) {
+        toast.warning(`Chart capture cancelled. ${successCount} saved, ${skippedCount} skipped (no data), ${failedCount} failed.`);
+      } else if (failedCount > 0) {
+        toast.warning(`Chart capture complete. ${successCount} saved, ${skippedCount} skipped (no data), ${failedCount} failed.`);
+      } else {
+        toast.success(`Chart capture complete! ${successCount} saved, ${skippedCount} skipped (no data).`);
+      }
+      dismiss();
     } catch (error: any) {
       console.error("Error capturing tariff charts:", error);
       showError(error.message || "Failed to capture charts");

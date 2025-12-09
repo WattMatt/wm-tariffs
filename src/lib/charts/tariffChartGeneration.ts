@@ -182,6 +182,7 @@ export interface TariffCaptureResult {
   tariffName: string;
   metricKey: string;
   success: boolean;
+  skipped?: boolean;  // True when no data available (not an error)
   error?: string;
 }
 
@@ -201,11 +202,12 @@ export async function captureTariffGroupCharts(
   const comparisonData = processTariffComparisonData(structures, charges);
   
   if (comparisonData.length < 2) {
-    // Need at least 2 periods for comparison
+    // Need at least 2 periods for comparison - mark as skipped, not failed
     return TARIFF_CHART_METRICS.map(metric => ({
       tariffName,
       metricKey: metric.key,
       success: false,
+      skipped: true,
       error: 'Less than 2 periods available',
     }));
   }
@@ -220,6 +222,7 @@ export async function captureTariffGroupCharts(
           tariffName,
           metricKey: metric.key,
           success: false,
+          skipped: true,  // No data is expected, not an error
           error: 'No data available for this metric',
         });
         continue;
