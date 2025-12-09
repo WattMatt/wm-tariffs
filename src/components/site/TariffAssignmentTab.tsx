@@ -2813,7 +2813,7 @@ export default function TariffAssignmentTab({
                         const costsMap = getReconciliationCostsMap(meter.id, filteredShops, selectedChartMetric);
                         console.log(`   Costs map result:`, costsMap);
                         console.log(`   Mapped ${Object.keys(costsMap).length} documents to costs`);
-                        chartData = prepareComparisonData(filteredShops, costsMap);
+                        chartData = prepareComparisonData(filteredShops, costsMap, selectedChartMetric);
                       } else if (showDocumentCharts) {
                         // Analysis tab: always use document amounts (returns object with chartData property)
                         const analysisResult = prepareAnalysisData(filteredShops);
@@ -2892,6 +2892,8 @@ export default function TariffAssignmentTab({
                                       orientation="right"
                                       tick={{ fontSize: 10 }}
                                       tickFormatter={(value) => value?.toLocaleString()}
+                                      domain={['auto', 'auto']}
+                                      allowDataOverflow={false}
                                     />
                                   )}
                                   <ChartTooltip 
