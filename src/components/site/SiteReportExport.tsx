@@ -19,7 +19,7 @@ import { SplitViewReportEditor } from "./SplitViewReportEditor";
 import SaveReportDialog from "./SaveReportDialog";
 import SavedReportsList from "./SavedReportsList";
 import { ReportGenerationProgress } from "./ReportGenerationProgress";
-import { generateMeterTypeChart, generateConsumptionChart, generateTariffComparisonChart, generateClusteredTariffChart, generateDocumentVsAssignedChart, generateTariffAnalysisChart, generateReconciliationVsDocumentChart } from "./ChartGenerator";
+import { generateMeterTypeChart, generateConsumptionChart, generateDocumentVsAssignedChart, generateTariffAnalysisChart, generateReconciliationVsDocumentChart } from "./ChartGenerator";
 
 interface BatchStatus {
   batchNumber: number;
@@ -1150,17 +1150,18 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           return type.charAt(0).toUpperCase() + type.slice(1);
         };
         
-        // Render tariff charts and tables interleaved
+        // Render tariff charts and tables - 2 tariffs per page
         const tariffChartImages = (previewData as any).tariffChartImages;
         const tariffsByName = (previewData as any).tariffsByName || {};
         
         if (tariffChartImages && Object.keys(tariffChartImages).length > 0) {
           const contentWidth = pageWidth - leftMargin - rightMargin;
-          const chartGap = 0;
-          const chartWidth = contentWidth / 3; // True one-third widths
-          const chartHeight = chartWidth * 0.75;
+          const chartWidth = contentWidth / 3;
+          const chartHeight = chartWidth * 0.55; // More compact height for 2 per page
+          const tariffBlockHeight = chartHeight + 55; // Estimate for one tariff block
           
-          let isFirstTariff = true;
+          let tariffCountOnPage = 0;
+          const tariffsPerPage = 2;
           
           for (const tariffName of Object.keys(tariffChartImages)) {
             const charts = tariffChartImages[tariffName];
@@ -1169,28 +1170,27 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             
             if (!charts && !latestPeriod) continue;
             
-            // Force new page for each tariff (except the first one)
-            if (!isFirstTariff) {
+            // Check if we need a new page (after 2 tariffs or not enough space)
+            if (tariffCountOnPage >= tariffsPerPage || yPos > pageHeight - bottomMargin - tariffBlockHeight) {
               addFooter();
               addPageNumber();
               pdf.addPage();
               yPos = topMargin;
+              tariffCountOnPage = 0;
             }
-            isFirstTariff = false;
+            
+            // Add horizontal separator if not first tariff on page
+            if (tariffCountOnPage > 0) {
+              pdf.setDrawColor(200, 200, 200);
+              pdf.line(leftMargin, yPos, pageWidth - rightMargin, yPos);
+              yPos += 5;
+            }
             
             // Add tariff subheading
             addSubsectionHeading(tariffName);
             
-            // Render 3 charts horizontally with equal spacing
-            if (charts) {
-              // Check if we need a new page for charts
-              if (yPos > pageHeight - bottomMargin - chartHeight - 10) {
-                addFooter();
-                addPageNumber();
-                pdf.addPage();
-                yPos = topMargin;
-              }
-              
+            // Render 3 charts horizontally (compact)
+            if (charts && (charts.basic || charts.energy || charts.demand)) {
               const chart1X = leftMargin;
               const chart2X = leftMargin + chartWidth;
               const chart3X = leftMargin + (2 * chartWidth);
@@ -1219,43 +1219,51 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
                 }
               }
               
-              yPos += chartHeight + 10;
+              yPos += chartHeight + 4;
             }
             
-            // Render tariff details tables
+            // Render compact tariff details tables side by side
             if (latestPeriod) {
-              addTable(
-                ["Attribute", "Value"],
-                [
-                  ["Type / Config", `${formatTariffType(latestPeriod.tariff_type || 'N/A')} / ${latestPeriod.meter_configuration || 'N/A'}`],
-                  ["Voltage / Zone", `${latestPeriod.voltage_level || 'N/A'} / ${latestPeriod.transmission_zone || 'N/A'}`],
-                  ["Effective Period", `${format(new Date(latestPeriod.effective_from), "dd MMM yyyy")} - ${latestPeriod.effective_to ? format(new Date(latestPeriod.effective_to), "dd MMM yyyy") : 'Current'}`],
-                  ["Uses TOU", latestPeriod.uses_tou ? 'Yes' : 'No']
-                ],
-                [55, 85],
-                "Tariff Overview"
-              );
+              const tableWidth = (contentWidth - 5) / 2;
+              const startX = leftMargin;
               
-              addSpacer(4);
+              // Overview table on left
+              pdf.setFontSize(8);
+              pdf.setFont("helvetica", "bold");
+              pdf.text("Tariff Overview", startX, yPos);
+              yPos += 3;
               
-              // Render charges table
+              pdf.setFontSize(7);
+              pdf.setFont("helvetica", "normal");
+              const overviewData = [
+                [`Type: ${formatTariffType(latestPeriod.tariff_type || 'N/A')} / ${latestPeriod.meter_configuration || 'N/A'}`],
+                [`Voltage: ${latestPeriod.voltage_level || 'N/A'} / Zone: ${latestPeriod.transmission_zone || 'N/A'}`],
+                [`Period: ${format(new Date(latestPeriod.effective_from), "dd MMM yy")} - ${latestPeriod.effective_to ? format(new Date(latestPeriod.effective_to), "dd MMM yy") : 'Current'}`],
+              ];
+              
+              overviewData.forEach((row, idx) => {
+                pdf.text(row[0], startX, yPos + (idx * 3.5));
+              });
+              
+              // Charges on right side (compact)
               const charges = latestPeriod.tariff_charges || [];
               if (charges.length > 0) {
-                addTable(
-                  ["Type", "Description", "Amount", "Unit"],
-                  charges.map((charge: any) => [
-                    formatChargeType(charge.charge_type),
-                    charge.description || '—',
-                    formatNumber(charge.charge_amount),
-                    charge.unit
-                  ]),
-                  [38, 52, 28, 22],
-                  "Charges (Current Period)"
-                );
+                const chargesX = startX + tableWidth + 5;
+                pdf.setFont("helvetica", "bold");
+                pdf.text("Current Charges", chargesX, yPos - 3);
+                pdf.setFont("helvetica", "normal");
+                
+                charges.slice(0, 4).forEach((charge: any, idx: number) => {
+                  const chargeText = `${formatChargeType(charge.charge_type)}: ${formatNumber(charge.charge_amount)} ${charge.unit}`;
+                  pdf.text(chargeText.substring(0, 45), chargesX, yPos + (idx * 3.5));
+                });
               }
+              
+              yPos += 16; // Space for the compact tables
             }
             
-            addSpacer(10); // Space before next tariff
+            yPos += 6; // Space before next tariff
+            tariffCountOnPage++;
           }
         } else {
           // Fallback if no charts - render the markdown section
@@ -2506,68 +2514,62 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         serialNumber: m.serial_number
       }));
 
-      // Generate tariff comparison chart images
+      // Fetch pre-captured tariff charts from storage instead of generating
       const tariffChartImages: Record<string, { basic?: string; energy?: string; demand?: string }> = {};
       
-      for (const tariffName of uniqueTariffNames) {
-        const periods = tariffsByName[tariffName] || [];
-        if (periods.length >= 1) {
-          const basicChargeData = periods.map(p => ({
-            label: formatPeriodLabel(p.effective_from),
-            value: Math.round(p.tariff_charges?.find((c: any) => c.charge_type === 'basic_charge')?.charge_amount || 0)
-          }));
+      // Helper to convert blob to base64 data URL
+      const blobToBase64 = (blob: Blob): Promise<string> => {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+      };
 
-          // For Energy Chart - extract winter and summer separately
-            const energyWinterData = periods.map(p => {
-              const charges = p.tariff_charges || [];
-              const highSeason = charges.find((c: any) => c.charge_type === 'energy_high_season')?.charge_amount;
-              const bothSeasons = charges.find((c: any) => c.charge_type === 'energy_both_seasons')?.charge_amount;
-              return {
-                label: formatPeriodLabel(p.effective_from),
-                value: Math.round(highSeason ?? bothSeasons ?? 0)
-              };
-            });
+      // Sanitize names for file paths
+      const sanitizeForPath = (str: string) => str
+        .replace(/≥/g, 'gte')
+        .replace(/≤/g, 'lte')
+        .replace(/&/g, 'and')
+        .replace(/[/\\?%*:|"<>]/g, '-')
+        .replace(/[^\x00-\x7F]/g, '')
+        .trim();
 
-            const energySummerData = periods.map(p => {
-              const charges = p.tariff_charges || [];
-              const lowSeason = charges.find((c: any) => c.charge_type === 'energy_low_season')?.charge_amount;
-              const bothSeasons = charges.find((c: any) => c.charge_type === 'energy_both_seasons')?.charge_amount;
-              return {
-                label: formatPeriodLabel(p.effective_from),
-                value: Math.round(lowSeason ?? bothSeasons ?? 0)
-              };
-            });
+      const supplyAuthorityName = siteDetails.supplyAuthorityName || '';
+      const supplyAuthorityRegion = siteDetails.supplyAuthorityRegion || '';
 
-          // For Demand Chart - extract winter and summer separately
-          const demandWinterData = periods.map(p => {
-            const charges = p.tariff_charges || [];
-            const highSeason = charges.find((c: any) => c.charge_type === 'demand_high_season')?.charge_amount;
-            const bothSeasons = charges.find((c: any) => 
-              c.charge_type === 'demand_both_seasons' || c.charge_type === 'demand_charge'
-            )?.charge_amount;
-            return {
-              label: formatPeriodLabel(p.effective_from),
-              value: Math.round(highSeason ?? bothSeasons ?? 0)
-            };
-          });
+      if (supplyAuthorityName && supplyAuthorityRegion && uniqueTariffNames.length > 0) {
+        const sanitizedProvince = sanitizeForPath(supplyAuthorityRegion);
+        const sanitizedMunicipality = sanitizeForPath(supplyAuthorityName);
+        const basePath = `Tariffs/${sanitizedProvince}/${sanitizedMunicipality}`;
 
-          const demandSummerData = periods.map(p => {
-            const charges = p.tariff_charges || [];
-            const lowSeason = charges.find((c: any) => c.charge_type === 'demand_low_season')?.charge_amount;
-            const bothSeasons = charges.find((c: any) => 
-              c.charge_type === 'demand_both_seasons' || c.charge_type === 'demand_charge'
-            )?.charge_amount;
-            return {
-              label: formatPeriodLabel(p.effective_from),
-              value: Math.round(lowSeason ?? bothSeasons ?? 0)
-            };
-          });
+        // Chart types to fetch (use high season for energy/demand)
+        const chartTypes = [
+          { key: 'basic', filename: 'basic-charge' },
+          { key: 'energy', filename: 'energy-high-season' },
+          { key: 'demand', filename: 'demand-high-season' },
+        ];
 
-          tariffChartImages[tariffName] = {
-            basic: generateTariffComparisonChart("Basic Charge", "R/month", basicChargeData),
-            energy: generateClusteredTariffChart("Energy Charge", "c/kWh", energyWinterData, energySummerData),
-            demand: generateClusteredTariffChart("Demand Charge", "R/kVA", demandWinterData, demandSummerData)
-          };
+        for (const tariffName of uniqueTariffNames) {
+          const sanitizedTariff = sanitizeForPath(tariffName);
+          tariffChartImages[tariffName] = {};
+
+          for (const { key, filename } of chartTypes) {
+            try {
+              const filePath = `${basePath}/${sanitizedTariff}-${filename}.png`;
+              const { data, error } = await supabase.storage
+                .from('tariff-files')
+                .download(filePath);
+
+              if (data && !error) {
+                const base64 = await blobToBase64(data);
+                (tariffChartImages[tariffName] as any)[key] = base64;
+              }
+            } catch (e) {
+              console.log(`Chart not found: ${tariffName} - ${filename}`);
+            }
+          }
         }
       }
 
