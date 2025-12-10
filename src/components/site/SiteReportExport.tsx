@@ -1159,8 +1159,9 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           const contentHeight = pageHeight - topMargin - bottomMargin;
           const halfPageHeight = contentHeight / 2;
           
-          const chartWidth = contentWidth / 3;
-          const chartHeight = chartWidth * 0.75; // Larger charts for half-page layout
+          // Larger charts - use more horizontal space with better aspect ratio
+          const chartWidth = (contentWidth - 8) / 3; // Small gap between charts
+          const chartHeight = chartWidth * 0.85; // Taller aspect ratio for better quality
           
           let tariffCountOnPage = 0;
           const tariffsPerPage = 2;
