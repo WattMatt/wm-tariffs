@@ -132,7 +132,7 @@ export default function TariffChartsDialog({
     try {
       const sanitizedProvince = sanitizeName(province);
       const sanitizedMunicipality = sanitizeName(supplyAuthorityName);
-      const chartsPath = `Tariffs/${sanitizedProvince}/${sanitizedMunicipality}`;
+      const chartsPath = `Graphs/${sanitizedProvince}/${sanitizedMunicipality}`;
 
       // List all files in the tariff charts folder
       const { data: files, error: listError } = await supabase.storage
@@ -150,14 +150,14 @@ export default function TariffChartsDialog({
         return;
       }
 
-      // Filter for PNG files and parse names
+      // Filter for SVG files and parse names
       const chartFiles: ChartFile[] = [];
       
       for (const file of files) {
-        if (!file.name.endsWith('.png')) continue;
+        if (!file.name.endsWith('.svg')) continue;
         
-        // Parse filename: {tariff_name}-{metric}.png
-        const nameWithoutExt = file.name.replace('.png', '');
+        // Parse filename: {tariff_name}-{metric}.svg
+        const nameWithoutExt = file.name.replace('.svg', '');
         
         let foundMetric = '';
         let foundTariffName = '';
