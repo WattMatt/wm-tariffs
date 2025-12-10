@@ -189,10 +189,25 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         const uniqueFolders = Array.from(folderCounts.keys())
           .filter(path => (folderCounts.get(path) || 0) > 0)
           .sort((a, b) => {
-            // Sort alphabetically
-            const aName = a || "Root";
-            const bName = b || "Root";
-            return aName.localeCompare(bName);
+            // Sort chronologically by parsing month-year format (e.g., "February 2025")
+            const parseMonthYear = (path: string) => {
+              const months = ['january', 'february', 'march', 'april', 'may', 'june', 
+                              'july', 'august', 'september', 'october', 'november', 'december'];
+              const lower = (path || '').toLowerCase().trim();
+              const parts = lower.split(' ');
+              if (parts.length >= 2) {
+                const monthIndex = months.indexOf(parts[0]);
+                const year = parseInt(parts[1]);
+                if (monthIndex >= 0 && !isNaN(year)) {
+                  return new Date(year, monthIndex, 1);
+                }
+              }
+              return new Date(0); // fallback for non-date folders
+            };
+            
+            const aDate = parseMonthYear(a);
+            const bDate = parseMonthYear(b);
+            return aDate.getTime() - bDate.getTime(); // Ascending (earliest first)
           });
           
         setAvailableFolders(uniqueFolders.map(path => ({ 
@@ -207,7 +222,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           .from("reconciliation_runs")
           .select("id, run_name, run_date, date_from, date_to")
           .eq("site_id", siteId)
-          .order("run_date", { ascending: false });
+          .order("run_date", { ascending: true });
 
         if (reconciliationsError) throw reconciliationsError;
         setAvailableReconciliations(reconciliations || []);
