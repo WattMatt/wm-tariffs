@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { FileText, Loader2, Download, CalendarIcon, Eye, Edit, ChevronDown } from "lucide-react";
 import { format } from "date-fns";
 import jsPDF from "jspdf";
+import { svg2pdf } from "svg2pdf.js";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
@@ -404,12 +405,12 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
   };
 
   const generatePdfPreview = async (sections: PdfSection[]): Promise<string> => {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        if (!previewData) {
-          resolve('');
-          return;
-        }
+    // Use a small delay to allow UI to update before heavy PDF generation
+    await new Promise(resolve => setTimeout(resolve, 0));
+    
+    if (!previewData) {
+      return '';
+    }
 
         const pdf = new jsPDF({
           compress: true // Enable PDF compression
@@ -1197,35 +1198,37 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             // Add tariff subheading
             addSubsectionHeading(tariffName);
             
-            // Render 3 charts horizontally (compact)
+            // Render 3 charts horizontally (compact) - supports both SVG and PNG
             if (charts && (charts.basic || charts.energy || charts.demand)) {
               const chart1X = leftMargin;
               const chart2X = leftMargin + chartWidth + chartSpacing;
               const chart3X = leftMargin + (2 * chartWidth) + (2 * chartSpacing);
               
-              if (charts.basic) {
+              // Helper to add chart (handles both SVG and PNG)
+              const addChartToPdf = async (chartData: any, x: number) => {
+                if (!chartData) return;
+                
                 try {
-                  pdf.addImage(charts.basic, 'PNG', chart1X, yPos, chartWidth, chartHeight);
+                  if (chartData.type === 'svg') {
+                    // Parse SVG and embed using svg2pdf
+                    const parser = new DOMParser();
+                    const svgDoc = parser.parseFromString(chartData.content, 'image/svg+xml');
+                    const svgElement = svgDoc.documentElement;
+                    await svg2pdf(svgElement, pdf, { x, y: yPos, width: chartWidth, height: chartHeight });
+                  } else if (chartData.type === 'png' || typeof chartData === 'string') {
+                    // Legacy PNG support (chartData is base64 string or has content property)
+                    const imgData = typeof chartData === 'string' ? chartData : chartData.content;
+                    pdf.addImage(imgData, 'PNG', x, yPos, chartWidth, chartHeight);
+                  }
                 } catch (err) {
-                  console.error("Error adding basic charge chart:", err);
+                  console.error("Error adding chart:", err);
                 }
-              }
+              };
               
-              if (charts.energy) {
-                try {
-                  pdf.addImage(charts.energy, 'PNG', chart2X, yPos, chartWidth, chartHeight);
-                } catch (err) {
-                  console.error("Error adding energy charge chart:", err);
-                }
-              }
-              
-              if (charts.demand) {
-                try {
-                  pdf.addImage(charts.demand, 'PNG', chart3X, yPos, chartWidth, chartHeight);
-                } catch (err) {
-                  console.error("Error adding demand charge chart:", err);
-                }
-              }
+              // Add charts (await for SVG support)
+              await addChartToPdf(charts.basic, chart1X);
+              await addChartToPdf(charts.energy, chart2X);
+              await addChartToPdf(charts.demand, chart3X);
               
               yPos += chartHeight + 6;
             }
@@ -1681,9 +1684,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         
         const pdfBlob = pdf.output('blob');
         const url = URL.createObjectURL(pdfBlob);
-        resolve(url);
-      }, 100);
-    });
+        return url;
   };
 
   const generateMarkdownPreview = async () => {
@@ -2522,9 +2523,6 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         serialNumber: m.serial_number
       }));
 
-      // Fetch pre-captured tariff charts from storage instead of generating
-      const tariffChartImages: Record<string, { basic?: string; energy?: string; demand?: string }> = {};
-      
       // Helper to convert blob to base64 data URL
       const blobToBase64 = (blob: Blob): Promise<string> => {
         return new Promise((resolve, reject) => {
@@ -2534,6 +2532,9 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           reader.readAsDataURL(blob);
         });
       };
+
+      // Fetch pre-captured tariff charts from storage (SVG format)
+      const tariffChartImages: Record<string, { basic?: string; energy?: string; demand?: string }> = {};
 
       // Sanitize names for file paths
       const sanitizeForPath = (str: string) => str
@@ -2552,7 +2553,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         const sanitizedMunicipality = sanitizeForPath(supplyAuthorityName);
         const basePath = `Tariffs/${sanitizedProvince}/${sanitizedMunicipality}`;
 
-        // Chart types to fetch (use high season for energy/demand)
+        // Chart types to fetch (use high season for energy/demand) - now SVG format
         const chartTypes = [
           { key: 'basic', filename: 'basic-charge' },
           { key: 'energy', filename: 'energy-high-season' },
@@ -2565,14 +2566,31 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
 
           for (const { key, filename } of chartTypes) {
             try {
-              const filePath = `${basePath}/${sanitizedTariff}-${filename}.png`;
-              const { data, error } = await supabase.storage
+              // Try SVG first, fall back to PNG for backwards compatibility
+              let filePath = `${basePath}/${sanitizedTariff}-${filename}.svg`;
+              let { data, error } = await supabase.storage
                 .from('tariff-files')
                 .download(filePath);
 
+              // Fallback to PNG if SVG not found
+              if (error || !data) {
+                filePath = `${basePath}/${sanitizedTariff}-${filename}.png`;
+                const fallbackResult = await supabase.storage
+                  .from('tariff-files')
+                  .download(filePath);
+                data = fallbackResult.data;
+                error = fallbackResult.error;
+              }
+
               if (data && !error) {
-                const base64 = await blobToBase64(data);
-                (tariffChartImages[tariffName] as any)[key] = base64;
+                // For SVG, store as text; for PNG, convert to base64
+                if (filePath.endsWith('.svg')) {
+                  const svgText = await data.text();
+                  (tariffChartImages[tariffName] as any)[key] = { type: 'svg', content: svgText };
+                } else {
+                  const base64 = await blobToBase64(data);
+                  (tariffChartImages[tariffName] as any)[key] = { type: 'png', content: base64 };
+                }
               }
             } catch (e) {
               console.log(`Chart not found: ${tariffName} - ${filename}`);

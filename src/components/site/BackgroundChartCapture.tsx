@@ -1,6 +1,7 @@
 import React, { useEffect, useCallback, useRef } from "react";
 import { CHART_METRICS, ChartMetricKey, generateChartPath, ChartType } from "@/lib/reconciliation/chartGeneration";
-import { generateReconciliationMeterChart, generateAnalysisMeterChart, ReconciliationChartDataPoint, AnalysisChartDataPoint } from "./ChartGenerator";
+import { generateReconciliationMeterChartSVG, generateAnalysisMeterChartSVG } from "@/lib/charts/svgRenderer";
+import type { ReconciliationChartDataPoint, AnalysisChartDataPoint } from "./ChartGenerator";
 import { supabase } from "@/integrations/supabase/client";
 import { useBackgroundChartCapture, type CaptureItem } from "@/hooks/useBackgroundChartCapture";
 import type { ChartMetric, CaptureLogEntry as GenericLogEntry, ItemCaptureResult } from "@/lib/charts/types";
@@ -435,6 +436,7 @@ export default function BackgroundChartCapture({
   }, [queue]);
 
   // Render function for charts - handles both analysis and comparison types
+  // Now returns SVG string instead of canvas data URL
   const renderChart = useCallback(async (
     meter: Meter,
     metric: ChartMetric,
@@ -442,7 +444,7 @@ export default function BackgroundChartCapture({
   ): Promise<string> => {
     const typedDocs = docs as DocumentShopNumber[];
     
-    let dataUrl: string;
+    let svgContent: string;
     
     if (chartType === 'analysis') {
       // Analysis chart: Document Amount bars with Winter/Summer average lines
@@ -452,7 +454,7 @@ export default function BackgroundChartCapture({
         throw new Error('No analysis chart data available');
       }
       
-      dataUrl = generateAnalysisMeterChart(
+      svgContent = generateAnalysisMeterChartSVG(
         `${meter.meter_number} - ${metric.title}`,
         metric.unit,
         data
@@ -465,18 +467,18 @@ export default function BackgroundChartCapture({
         throw new Error('No chart data available');
       }
       
-      dataUrl = generateReconciliationMeterChart(
+      svgContent = generateReconciliationMeterChartSVG(
         `${meter.meter_number} - ${metric.title}`,
         metric.unit,
         data
       );
     }
     
-    if (!dataUrl) {
-      throw new Error('Failed to generate chart image');
+    if (!svgContent) {
+      throw new Error('Failed to generate chart SVG');
     }
 
-    return dataUrl;
+    return svgContent;
   }, [chartType]);
 
   // Track completed meters with refs to avoid stale closures
