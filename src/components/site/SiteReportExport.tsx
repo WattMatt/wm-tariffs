@@ -1156,9 +1156,11 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         
         if (tariffChartImages && Object.keys(tariffChartImages).length > 0) {
           const contentWidth = pageWidth - leftMargin - rightMargin;
+          const contentHeight = pageHeight - topMargin - bottomMargin;
+          const halfPageHeight = contentHeight / 2;
+          
           const chartWidth = contentWidth / 3;
-          const chartHeight = chartWidth * 0.55; // More compact height for 2 per page
-          const tariffBlockHeight = chartHeight + 55; // Estimate for one tariff block
+          const chartHeight = chartWidth * 0.75; // Larger charts for half-page layout
           
           let tariffCountOnPage = 0;
           const tariffsPerPage = 2;
@@ -1170,20 +1172,22 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             
             if (!charts && !latestPeriod) continue;
             
-            // Check if we need a new page (after 2 tariffs or not enough space)
-            if (tariffCountOnPage >= tariffsPerPage || yPos > pageHeight - bottomMargin - tariffBlockHeight) {
+            // Check if we need a new page (after 2 tariffs)
+            if (tariffCountOnPage >= tariffsPerPage) {
               addFooter();
               addPageNumber();
               pdf.addPage();
-              yPos = topMargin;
               tariffCountOnPage = 0;
             }
             
-            // Add horizontal separator if not first tariff on page
-            if (tariffCountOnPage > 0) {
+            // Calculate fixed yPos based on which half of the page
+            const tariffStartY = topMargin + (tariffCountOnPage * halfPageHeight);
+            yPos = tariffStartY;
+            
+            // Add horizontal separator before second tariff
+            if (tariffCountOnPage === 1) {
               pdf.setDrawColor(200, 200, 200);
-              pdf.line(leftMargin, yPos, pageWidth - rightMargin, yPos);
-              yPos += 5;
+              pdf.line(leftMargin, yPos - 3, pageWidth - rightMargin, yPos - 3);
             }
             
             // Add tariff subheading
@@ -1219,21 +1223,21 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
                 }
               }
               
-              yPos += chartHeight + 4;
+              yPos += chartHeight + 6;
             }
             
-            // Render compact tariff details tables side by side
+            // Render tariff details tables side by side
             if (latestPeriod) {
-              const tableWidth = (contentWidth - 5) / 2;
+              const tableWidth = (contentWidth - 10) / 2;
               const startX = leftMargin;
               
               // Overview table on left
-              pdf.setFontSize(8);
+              pdf.setFontSize(9);
               pdf.setFont("helvetica", "bold");
               pdf.text("Tariff Overview", startX, yPos);
-              yPos += 3;
+              yPos += 4;
               
-              pdf.setFontSize(7);
+              pdf.setFontSize(8);
               pdf.setFont("helvetica", "normal");
               const overviewData = [
                 [`Type: ${formatTariffType(latestPeriod.tariff_type || 'N/A')} / ${latestPeriod.meter_configuration || 'N/A'}`],
@@ -1242,29 +1246,29 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
               ];
               
               overviewData.forEach((row, idx) => {
-                pdf.text(row[0], startX, yPos + (idx * 3.5));
+                pdf.text(row[0], startX, yPos + (idx * 4));
               });
               
-              // Charges on right side (compact)
+              // Charges on right side
               const charges = latestPeriod.tariff_charges || [];
               if (charges.length > 0) {
-                const chargesX = startX + tableWidth + 5;
+                const chargesX = startX + tableWidth + 10;
                 pdf.setFont("helvetica", "bold");
-                pdf.text("Current Charges", chargesX, yPos - 3);
+                pdf.text("Current Charges", chargesX, yPos - 4);
                 pdf.setFont("helvetica", "normal");
                 
-                charges.slice(0, 4).forEach((charge: any, idx: number) => {
+                charges.slice(0, 5).forEach((charge: any, idx: number) => {
                   const chargeText = `${formatChargeType(charge.charge_type)}: ${formatNumber(charge.charge_amount)} ${charge.unit}`;
-                  pdf.text(chargeText.substring(0, 45), chargesX, yPos + (idx * 3.5));
+                  pdf.text(chargeText.substring(0, 50), chargesX, yPos + (idx * 4));
                 });
               }
-              
-              yPos += 16; // Space for the compact tables
             }
             
-            yPos += 6; // Space before next tariff
             tariffCountOnPage++;
           }
+          
+          // Reset yPos to end of current page content
+          yPos = topMargin + (tariffCountOnPage * halfPageHeight);
         } else {
           // Fallback if no charts - render the markdown section
           renderSection('tariff-configuration');
