@@ -59,7 +59,7 @@ export function generateTariffChartPath(
   
   return {
     bucket: 'tariff-files',
-    path: `Tariffs/${sanitize(province)}/${sanitize(municipality)}/${sanitize(tariffName)}-${metricFilename}.svg`,
+    path: `Tariffs/Graphs/${sanitize(province)}/${sanitize(municipality)}/${sanitize(tariffName)}-${metricFilename}.svg`,
   };
 }
 
