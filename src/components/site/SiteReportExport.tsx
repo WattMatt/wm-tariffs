@@ -7,13 +7,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { FileText, Loader2, Download, CalendarIcon, Eye, Edit } from "lucide-react";
+import { FileText, Loader2, Download, CalendarIcon, Eye, Edit, ChevronDown } from "lucide-react";
 import { format } from "date-fns";
 import jsPDF from "jspdf";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { SplitViewReportEditor } from "./SplitViewReportEditor";
 import SaveReportDialog from "./SaveReportDialog";
 import SavedReportsList from "./SavedReportsList";
@@ -107,6 +108,7 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
   const [reconciliationDateTo, setReconciliationDateTo] = useState<string>("");
   const [batchStatuses, setBatchStatuses] = useState<BatchStatus[]>([]);
   const [currentBatch, setCurrentBatch] = useState<number | undefined>();
+  const [selectionsExpanded, setSelectionsExpanded] = useState(true);
 
   // Fetch available options on mount
   useEffect(() => {
@@ -3473,6 +3475,7 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
       setEditableSections(sections);
       setIsEditingContent(true); // Go directly to editor
       setCurrentPage(1); // Reset to first page
+      setSelectionsExpanded(false); // Collapse selections after generating preview
 
       setGenerationProgress(100);
       setGenerationStatus("Complete!");
@@ -3637,143 +3640,151 @@ ${anomalies.length > 0 ? `- ${anomalies.length} anomal${anomalies.length === 1 ?
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Required Selections */}
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="snippet-select">Select Schematic Snippet *</Label>
-            <Select 
-              value={selectedSchematicId} 
-              onValueChange={setSelectedSchematicId}
-              disabled={isLoadingOptions}
-            >
-              <SelectTrigger id="snippet-select">
-                <SelectValue placeholder="Choose a schematic snippet for the report" />
-              </SelectTrigger>
-              <SelectContent className="bg-background">
-                {availableSnippets.length === 0 ? (
-                  <SelectItem value="no-snippets" disabled>No schematic snippets available</SelectItem>
-                ) : (
-                  availableSnippets.map((snippet) => (
-                    <SelectItem key={snippet.id} value={snippet.id}>
-                      {snippet.name} {snippet.total_pages > 1 ? `(Page ${snippet.page_number}/${snippet.total_pages})` : ''}
-                    </SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Select Document Folders *</Label>
-            <div className="border rounded-lg p-3 max-h-64 overflow-y-auto bg-background">
-              <div className="flex justify-between items-center mb-3 pb-2 border-b">
-                <span className="text-sm text-muted-foreground font-medium">
-                  {selectedFolderPaths.length} of {availableFolders.length} selected
-                </span>
-                <div className="space-x-2">
-                  <Button 
-                    variant="ghost" 
-                    size="sm"
-                    onClick={() => setSelectedFolderPaths(availableFolders.map((f: any) => f.path))}
-                  >
-                    Select All
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="sm"
-                    onClick={() => setSelectedFolderPaths([])}
-                  >
-                    Clear
-                  </Button>
-                </div>
-              </div>
-              <div className="space-y-2">
-                {availableFolders.map((folder: any) => (
-                  <div key={folder.path} className="flex items-center space-x-2 p-2 rounded hover:bg-accent">
-                    <Checkbox 
-                      id={`folder-${folder.path}`}
-                      checked={selectedFolderPaths.includes(folder.path)}
-                      onCheckedChange={(checked) => {
-                        if (checked) {
-                          setSelectedFolderPaths([...selectedFolderPaths, folder.path]);
-                        } else {
-                          setSelectedFolderPaths(selectedFolderPaths.filter(p => p !== folder.path));
-                        }
-                      }}
-                    />
-                    <Label htmlFor={`folder-${folder.path}`} className="flex-1 cursor-pointer">
-                      {folder.name}
-                      <span className="ml-2 text-xs text-muted-foreground">
-                        ({folder.count} {folder.count === 1 ? 'doc' : 'docs'})
-                      </span>
-                    </Label>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {!reconciliationRun && (
+        {/* Required Selections - Collapsible */}
+        <Collapsible open={selectionsExpanded} onOpenChange={setSelectionsExpanded}>
+          <CollapsibleTrigger asChild>
+            <Button variant="ghost" className="w-full justify-between mb-2 hover:bg-muted/50">
+              <span className="font-medium">Report Selections</span>
+              <ChevronDown className={cn("h-4 w-4 transition-transform", selectionsExpanded && "rotate-180")} />
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="space-y-4">
             <div className="space-y-2">
-              <Label>Select Reconciliation Runs *</Label>
+              <Label htmlFor="snippet-select">Select Schematic Snippet *</Label>
+              <Select 
+                value={selectedSchematicId} 
+                onValueChange={setSelectedSchematicId}
+                disabled={isLoadingOptions}
+              >
+                <SelectTrigger id="snippet-select">
+                  <SelectValue placeholder="Choose a schematic snippet for the report" />
+                </SelectTrigger>
+                <SelectContent className="bg-background">
+                  {availableSnippets.length === 0 ? (
+                    <SelectItem value="no-snippets" disabled>No schematic snippets available</SelectItem>
+                  ) : (
+                    availableSnippets.map((snippet) => (
+                      <SelectItem key={snippet.id} value={snippet.id}>
+                        {snippet.name} {snippet.total_pages > 1 ? `(Page ${snippet.page_number}/${snippet.total_pages})` : ''}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Select Document Folders *</Label>
               <div className="border rounded-lg p-3 max-h-64 overflow-y-auto bg-background">
                 <div className="flex justify-between items-center mb-3 pb-2 border-b">
                   <span className="text-sm text-muted-foreground font-medium">
-                    {selectedReconciliationIds.length} of {availableReconciliations.length} selected
+                    {selectedFolderPaths.length} of {availableFolders.length} selected
                   </span>
                   <div className="space-x-2">
                     <Button 
                       variant="ghost" 
                       size="sm"
-                      onClick={() => setSelectedReconciliationIds(availableReconciliations.map(r => r.id))}
+                      onClick={() => setSelectedFolderPaths(availableFolders.map((f: any) => f.path))}
                     >
                       Select All
                     </Button>
                     <Button 
                       variant="ghost" 
                       size="sm"
-                      onClick={() => setSelectedReconciliationIds([])}
+                      onClick={() => setSelectedFolderPaths([])}
                     >
                       Clear
                     </Button>
                   </div>
                 </div>
                 <div className="space-y-2">
-                  {availableReconciliations.map((run) => (
-                    <div key={run.id} className="flex items-center space-x-2 p-2 rounded hover:bg-accent">
+                  {availableFolders.map((folder: any) => (
+                    <div key={folder.path} className="flex items-center space-x-2 p-2 rounded hover:bg-accent">
                       <Checkbox 
-                        id={`run-${run.id}`}
-                        checked={selectedReconciliationIds.includes(run.id)}
+                        id={`folder-${folder.path}`}
+                        checked={selectedFolderPaths.includes(folder.path)}
                         onCheckedChange={(checked) => {
                           if (checked) {
-                            setSelectedReconciliationIds([...selectedReconciliationIds, run.id]);
+                            setSelectedFolderPaths([...selectedFolderPaths, folder.path]);
                           } else {
-                            setSelectedReconciliationIds(selectedReconciliationIds.filter(id => id !== run.id));
+                            setSelectedFolderPaths(selectedFolderPaths.filter(p => p !== folder.path));
                           }
                         }}
                       />
-                      <Label htmlFor={`run-${run.id}`} className="flex-1 cursor-pointer">
-                        <div className="font-medium">{run.run_name}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {format(new Date(run.date_from), 'PP')} to {format(new Date(run.date_to), 'PP')}
-                        </div>
+                      <Label htmlFor={`folder-${folder.path}`} className="flex-1 cursor-pointer">
+                        {folder.name}
+                        <span className="ml-2 text-xs text-muted-foreground">
+                          ({folder.count} {folder.count === 1 ? 'doc' : 'docs'})
+                        </span>
                       </Label>
                     </div>
                   ))}
                 </div>
               </div>
             </div>
-          )}
 
-          {reconciliationRun && (
-            <div className="p-4 border rounded-lg bg-muted/30">
-              <p className="text-sm font-medium mb-2">Using Reconciliation:</p>
-              <p className="text-sm text-muted-foreground">
-                {reconciliationRun.run_name} - {format(new Date(reconciliationRun.run_date), "dd MMM yyyy")}
-              </p>
-            </div>
-          )}
-        </div>
+            {!reconciliationRun && (
+              <div className="space-y-2">
+                <Label>Select Reconciliation Runs *</Label>
+                <div className="border rounded-lg p-3 max-h-64 overflow-y-auto bg-background">
+                  <div className="flex justify-between items-center mb-3 pb-2 border-b">
+                    <span className="text-sm text-muted-foreground font-medium">
+                      {selectedReconciliationIds.length} of {availableReconciliations.length} selected
+                    </span>
+                    <div className="space-x-2">
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => setSelectedReconciliationIds(availableReconciliations.map(r => r.id))}
+                      >
+                        Select All
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => setSelectedReconciliationIds([])}
+                      >
+                        Clear
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    {availableReconciliations.map((run) => (
+                      <div key={run.id} className="flex items-center space-x-2 p-2 rounded hover:bg-accent">
+                        <Checkbox 
+                          id={`run-${run.id}`}
+                          checked={selectedReconciliationIds.includes(run.id)}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setSelectedReconciliationIds([...selectedReconciliationIds, run.id]);
+                            } else {
+                              setSelectedReconciliationIds(selectedReconciliationIds.filter(id => id !== run.id));
+                            }
+                          }}
+                        />
+                        <Label htmlFor={`run-${run.id}`} className="flex-1 cursor-pointer">
+                          <div className="font-medium">{run.run_name}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {format(new Date(run.date_from), 'PP')} to {format(new Date(run.date_to), 'PP')}
+                          </div>
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {reconciliationRun && (
+              <div className="p-4 border rounded-lg bg-muted/30">
+                <p className="text-sm font-medium mb-2">Using Reconciliation:</p>
+                <p className="text-sm text-muted-foreground">
+                  {reconciliationRun.run_name} - {format(new Date(reconciliationRun.run_date), "dd MMM yyyy")}
+                </p>
+              </div>
+            )}
+          </CollapsibleContent>
+        </Collapsible>
 
         <Separator />
 
