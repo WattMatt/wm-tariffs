@@ -1,10 +1,12 @@
 /**
- * Chart storage utilities for uploading chart images
+ * Chart storage utilities for uploading chart images (PNG or SVG)
  */
 
 import { supabase } from '@/integrations/supabase/client';
 import { dataURLtoBlob } from './canvasRenderer';
 import type { StoragePath } from './types';
+
+export type ChartFormat = 'png' | 'svg';
 
 export interface UploadResult {
   success: boolean;
@@ -21,18 +23,31 @@ export interface BatchUploadResult {
 
 /**
  * Upload a single chart image to Supabase storage
+ * Supports both PNG (data URL) and SVG (raw string) formats
  */
 export async function uploadChartImage(
   storagePath: StoragePath,
-  dataUrl: string
+  content: string,
+  format: ChartFormat = 'png'
 ): Promise<UploadResult> {
   try {
-    const blob = dataURLtoBlob(dataUrl);
+    let blob: Blob;
+    let contentType: string;
+
+    if (format === 'svg') {
+      // SVG: content is raw SVG string
+      blob = new Blob([content], { type: 'image/svg+xml' });
+      contentType = 'image/svg+xml';
+    } else {
+      // PNG: content is data URL
+      blob = dataURLtoBlob(content);
+      contentType = 'image/png';
+    }
 
     const { error } = await supabase.storage
       .from(storagePath.bucket)
       .upload(storagePath.path, blob, {
-        contentType: 'image/png',
+        contentType,
         upsert: true,
       });
 
@@ -53,10 +68,10 @@ export async function uploadChartImage(
  * Upload multiple chart images in parallel
  */
 export async function uploadChartBatch(
-  charts: Array<{ storagePath: StoragePath; dataUrl: string }>
+  charts: Array<{ storagePath: StoragePath; content: string; format?: ChartFormat }>
 ): Promise<BatchUploadResult> {
   const results = await Promise.all(
-    charts.map(({ storagePath, dataUrl }) => uploadChartImage(storagePath, dataUrl))
+    charts.map(({ storagePath, content, format = 'png' }) => uploadChartImage(storagePath, content, format))
   );
 
   const successful = results.filter(r => r.success).length;

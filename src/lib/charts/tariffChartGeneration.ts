@@ -3,7 +3,7 @@
  * Generates comparison charts for tariff structures across periods
  */
 
-import { generateBarChart, type BarChartOptions } from './canvasRenderer';
+import { generateBarChartSVG, type BarChartSVGOptions } from './svgRenderer';
 import { uploadChartImage } from './storage';
 import { supabase } from '@/integrations/supabase/client';
 import type { ChartDataPoint, StoragePath, ChartMetric } from './types';
@@ -40,7 +40,7 @@ interface TariffComparisonData {
 }
 
 /**
- * Generate storage path for a tariff chart
+ * Generate storage path for a tariff chart (now .svg)
  */
 export function generateTariffChartPath(
   province: string,
@@ -59,7 +59,7 @@ export function generateTariffChartPath(
   
   return {
     bucket: 'tariff-files',
-    path: `Tariffs/${sanitize(province)}/${sanitize(municipality)}/${sanitize(tariffName)}-${metricFilename}.png`,
+    path: `Tariffs/${sanitize(province)}/${sanitize(municipality)}/${sanitize(tariffName)}-${metricFilename}.svg`,
   };
 }
 
@@ -177,7 +177,7 @@ function calculatePercentageChanges(
 }
 
 /**
- * Generate a single tariff comparison chart
+ * Generate a single tariff comparison chart as SVG
  */
 export function generateTariffComparisonChart(
   data: TariffComparisonData[],
@@ -198,7 +198,7 @@ export function generateTariffComparisonChart(
     values: { [metric.key]: d[metric.key] as number },
   }));
 
-  const chartOptions: BarChartOptions = {
+  const chartOptions: BarChartSVGOptions = {
     title: metric.title,
     unit: metric.unit,
     seriesKeys: [metric.key],
@@ -206,7 +206,6 @@ export function generateTariffComparisonChart(
     seriesColors: { [metric.key]: '#9ca3af' },  // Gray to match UI
     width: 600,
     height: 400,
-    scaleFactor: 2,
     showLegend: false,
     showGrid: true,
     showValues: true,
@@ -215,7 +214,7 @@ export function generateTariffComparisonChart(
   };
 
   try {
-    return generateBarChart(chartData, chartOptions);
+    return generateBarChartSVG(chartData, chartOptions);
   } catch (error) {
     console.error(`Error generating chart for ${metric.key}:`, error);
     return null;
@@ -273,7 +272,7 @@ export async function captureTariffGroupCharts(
       }
 
       const storagePath = generateTariffChartPath(province, municipality, tariffName, metric.filename);
-      const uploadResult = await uploadChartImage(storagePath, chartDataUrl);
+      const uploadResult = await uploadChartImage(storagePath, chartDataUrl, 'svg');
 
       results.push({
         tariffName,
