@@ -2591,7 +2591,7 @@ export default function TariffAssignmentTab({
                       size="icon"
                       onClick={() => setChartsDialogOpen(true)}
                     >
-                      <ImageIcon className="w-4 h-4" />
+                      <Eye className="w-4 h-4" />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
