@@ -130,12 +130,12 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           const pathParts = firstSchematicPath.split('/');
           const siteDirectory = pathParts.slice(0, -1).join('/');
           
-          // List all files in the directory
+        // List all files in the directory, sorted by most recent first
           const { data: fileList, error: listError } = await supabase.storage
             .from('client-files')
             .list(siteDirectory, {
               limit: 1000,
-              sortBy: { column: 'name', order: 'asc' }
+              sortBy: { column: 'created_at', order: 'desc' }
             });
           
           console.log('Storage list result:', { fileList, listError, siteDirectory });
@@ -166,6 +166,11 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
         
         console.log('Final snippets:', snippetsWithUrls);
         setAvailableSnippets(snippetsWithUrls);
+        
+        // Auto-select the most recently uploaded snippet
+        if (snippetsWithUrls.length > 0) {
+          setSelectedSchematicId(snippetsWithUrls[0].id);
+        }
 
         // Fetch available folders from document paths with document counts
         // Only include non-folder documents (actual files)
