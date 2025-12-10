@@ -138,6 +138,45 @@ export function processTariffComparisonData(
 }
 
 /**
+ * Calculate percentage changes for a metric
+ */
+function calculatePercentageChanges(
+  data: TariffComparisonData[],
+  metricKey: string
+): { totalChange: number | null; avgYoyChange: number | null } {
+  const values = data
+    .map(d => d[metricKey])
+    .filter((v): v is number => v !== null && v !== undefined);
+  
+  if (values.length < 2) {
+    return { totalChange: null, avgYoyChange: null };
+  }
+  
+  const firstValue = values[0];
+  const lastValue = values[values.length - 1];
+  
+  // Avoid division by zero
+  if (firstValue === 0) {
+    return { totalChange: null, avgYoyChange: null };
+  }
+  
+  const totalChange = ((lastValue - firstValue) / firstValue) * 100;
+  
+  // Calculate average year-on-year change
+  let totalYoyChange = 0;
+  let validYoyCount = 0;
+  for (let i = 1; i < values.length; i++) {
+    if (values[i - 1] !== 0) {
+      totalYoyChange += ((values[i] - values[i - 1]) / values[i - 1]) * 100;
+      validYoyCount++;
+    }
+  }
+  const avgYoyChange = validYoyCount > 0 ? totalYoyChange / validYoyCount : null;
+  
+  return { totalChange, avgYoyChange };
+}
+
+/**
  * Generate a single tariff comparison chart
  */
 export function generateTariffComparisonChart(
@@ -151,6 +190,9 @@ export function generateTariffComparisonChart(
     return null;
   }
 
+  // Calculate percentage changes
+  const { totalChange, avgYoyChange } = calculatePercentageChanges(filteredData, metric.key);
+
   const chartData: ChartDataPoint[] = filteredData.map(d => ({
     label: d.period,
     values: { [metric.key]: d[metric.key] as number },
@@ -161,13 +203,15 @@ export function generateTariffComparisonChart(
     unit: metric.unit,
     seriesKeys: [metric.key],
     seriesLabels: { [metric.key]: metric.title },
-    seriesColors: { [metric.key]: '#3b82f6' },
+    seriesColors: { [metric.key]: '#9ca3af' },  // Gray to match UI
     width: 600,
     height: 400,
     scaleFactor: 2,
     showLegend: false,
     showGrid: true,
     showValues: true,
+    percentChange: totalChange,
+    avgYoyChange: avgYoyChange,
   };
 
   try {

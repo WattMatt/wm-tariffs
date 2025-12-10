@@ -31,6 +31,8 @@ export interface BarChartOptions extends ChartRenderOptions {
   seriesKeys: string[];  // Which keys from values to render as bars
   seriesLabels?: Record<string, string>;  // Display labels for series
   seriesColors?: Record<string, string>;  // Colors for series
+  percentChange?: number | null;  // Total period percentage change
+  avgYoyChange?: number | null;   // Average year-on-year change
 }
 
 /**
@@ -53,6 +55,8 @@ export function generateBarChart(
     showLegend = true,
     showGrid = true,
     showValues = true,
+    percentChange,
+    avgYoyChange,
   } = options;
 
   const scaledWidth = width * scaleFactor;
@@ -86,6 +90,46 @@ export function generateBarChart(
     if (unit) {
       ctx.font = `${11 * scaleFactor}px sans-serif`;
       ctx.fillText(`(${unit})`, scaledWidth / 2, 42 * scaleFactor);
+    }
+  }
+
+  // Draw percentage change indicators
+  if (percentChange !== undefined && percentChange !== null) {
+    const changeY = 58 * scaleFactor;
+    const isIncrease = percentChange > 0;
+    
+    // Draw trend arrow + percentage
+    ctx.font = `bold ${11 * scaleFactor}px sans-serif`;
+    ctx.fillStyle = isIncrease ? '#ef4444' : '#22c55e'; // red for increase, green for decrease
+    const arrow = isIncrease ? '↗' : '↘';
+    const sign = isIncrease ? '+' : '';
+    const percentText = `${arrow} ${sign}${percentChange.toFixed(1)}%`;
+    
+    // Center the combined text
+    ctx.textAlign = 'center';
+    let xOffset = scaledWidth / 2;
+    
+    if (avgYoyChange !== undefined && avgYoyChange !== null) {
+      // If we have both, offset the main percentage to the left
+      xOffset = scaledWidth / 2 - 50 * scaleFactor;
+    }
+    
+    ctx.fillText(percentText, xOffset, changeY);
+    
+    // Draw avg YoY next to it
+    if (avgYoyChange !== undefined && avgYoyChange !== null) {
+      const avgXOffset = scaledWidth / 2 + 30 * scaleFactor;
+      const avgIsIncrease = avgYoyChange > 0;
+      
+      ctx.font = `${9 * scaleFactor}px sans-serif`;
+      ctx.fillStyle = '#6b7280'; // muted gray for label
+      ctx.textAlign = 'left';
+      ctx.fillText('Avg YoY:', avgXOffset - 35 * scaleFactor, changeY);
+      
+      ctx.font = `bold ${10 * scaleFactor}px sans-serif`;
+      ctx.fillStyle = avgIsIncrease ? '#ef4444' : '#22c55e';
+      const avgSign = avgIsIncrease ? '+' : '';
+      ctx.fillText(`${avgSign}${avgYoyChange.toFixed(1)}%`, avgXOffset + 10 * scaleFactor, changeY);
     }
   }
 
