@@ -30,14 +30,14 @@ export function getChartStorageSubpath(chartType: ChartType): string {
 }
 
 /**
- * Generate storage path for reconciliation/comparison chart
+ * Generate storage path for reconciliation/comparison chart (now .svg)
  */
 export async function generateReconciliationChartPath(
   siteId: string,
   meterNumber: string,
   metricFilename: string
 ): Promise<StoragePath> {
-  const fileName = `${meterNumber}-${metricFilename}.png`;
+  const fileName = `${meterNumber}-${metricFilename}.svg`;
   return await generateStoragePath(
     siteId,
     'Metering',
@@ -47,14 +47,14 @@ export async function generateReconciliationChartPath(
 }
 
 /**
- * Generate storage path for analysis chart
+ * Generate storage path for analysis chart (now .svg)
  */
 export async function generateAnalysisChartPath(
   siteId: string,
   meterNumber: string,
   metricFilename: string
 ): Promise<StoragePath> {
-  const fileName = `${meterNumber}-${metricFilename}.png`;
+  const fileName = `${meterNumber}-${metricFilename}.svg`;
   return await generateStoragePath(
     siteId,
     'Metering',
@@ -64,7 +64,7 @@ export async function generateAnalysisChartPath(
 }
 
 /**
- * Generate storage path for any chart type
+ * Generate storage path for any chart type (now .svg)
  */
 export async function generateChartPath(
   siteId: string,
@@ -72,7 +72,7 @@ export async function generateChartPath(
   metricFilename: string,
   chartType: ChartType = 'comparison'
 ): Promise<StoragePath> {
-  const fileName = `${meterNumber}-${metricFilename}.png`;
+  const fileName = `${meterNumber}-${metricFilename}.svg`;
   return await generateStoragePath(
     siteId,
     'Metering',

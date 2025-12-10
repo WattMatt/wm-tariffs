@@ -51,6 +51,18 @@ export {
   type ComboChartOptions,
 } from './canvasRenderer';
 
+// SVG rendering
+export {
+  generateBarChartSVG,
+  generateComboChartSVG,
+  generateReconciliationMeterChartSVG,
+  generateAnalysisMeterChartSVG,
+  type BarChartSVGOptions,
+  type ComboChartSVGOptions,
+  type ReconciliationChartDataPointSVG,
+  type AnalysisChartDataPointSVG,
+} from './svgRenderer';
+
 // Storage utilities
 export {
   uploadChartImage,
@@ -59,6 +71,7 @@ export {
   getChartPublicUrl,
   type UploadResult,
   type BatchUploadResult,
+  type ChartFormat,
 } from './storage';
 
 // Tariff chart generation
