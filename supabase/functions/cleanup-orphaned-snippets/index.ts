@@ -52,184 +52,118 @@ Deno.serve(async (req) => {
 
     console.log(`Starting cleanup for folder: ${folderPath} in bucket: ${bucket}`);
 
-    // List all files in the specified folder (recursively)
-    const allFiles: string[] = [];
-    
-    async function listFilesRecursively(path: string) {
-      const { data: items, error } = await supabase.storage
-        .from(bucket)
-        .list(path, {
-          limit: 1000,
-          sortBy: { column: 'name', order: 'asc' }
-        });
+    // Use database function to delete files directly from storage.objects
+    // This is more reliable than using the Storage API list() which can miss files
+    const { data: deleteResult, error: deleteError } = await supabase.rpc('delete_storage_folder', {
+      p_bucket_id: bucket,
+      p_folder_path: folderPath
+    });
 
-      if (error) {
-        console.error(`Error listing path ${path}:`, error);
-        return;
-      }
-
-      for (const item of items || []) {
-        const fullPath = path ? `${path}/${item.name}` : item.name;
-        
-        if (item.id === null) {
-          // It's a folder, recurse
-          await listFilesRecursively(fullPath);
-        } else {
-          // It's a file
-          allFiles.push(fullPath);
-        }
-      }
+    if (deleteError) {
+      console.error('Error deleting storage folder:', deleteError);
+      throw new Error(`Failed to delete storage folder: ${deleteError.message}`);
     }
 
-    await listFilesRecursively(folderPath);
-    
-    console.log(`Found ${allFiles.length} files in ${folderPath}`);
-
-    // Build public URLs for the files to search in database
-    const fileUrls = allFiles.map(filePath => 
-      `${supabaseUrl}/storage/v1/object/public/${bucket}/${filePath}`
-    );
+    const filesDeleted = deleteResult?.[0]?.deleted_count || 0;
+    console.log(`Deleted ${filesDeleted} files from storage using direct database query`);
 
     let databaseReferencesRemoved = 0;
-    const BATCH_SIZE = 100;
 
     // Only clean database references for client-files bucket (tariff-files doesn't have DB refs)
     if (bucket === 'client-files') {
-      // BATCH: Remove references in meters table (scanned_snippet_url)
+      // Build public URLs pattern for searching in database
+      const urlPrefix = `${supabaseUrl}/storage/v1/object/public/${bucket}/${folderPath}`;
+      
+      // Clean meters table references (scanned_snippet_url)
       console.log('Cleaning meters table references...');
-      for (let i = 0; i < fileUrls.length; i += BATCH_SIZE) {
-        const batch = fileUrls.slice(i, i + BATCH_SIZE);
-        const { data, error } = await supabase
-          .from('meters')
-          .update({ scanned_snippet_url: null })
-          .in('scanned_snippet_url', batch)
-          .select('id');
-        
-        if (!error && data) {
-          databaseReferencesRemoved += data.length;
-        }
+      const { data: metersData, error: metersError } = await supabase
+        .from('meters')
+        .update({ scanned_snippet_url: null })
+        .like('scanned_snippet_url', `${urlPrefix}%`)
+        .select('id');
+      
+      if (!metersError && metersData) {
+        databaseReferencesRemoved += metersData.length;
       }
       console.log(`Meters cleaned. Total refs removed so far: ${databaseReferencesRemoved}`);
 
-    // BATCH: Delete from site_documents by file_path
-    console.log('Cleaning site_documents by file_path...');
-    for (let i = 0; i < allFiles.length; i += BATCH_SIZE) {
-      const batch = allFiles.slice(i, i + BATCH_SIZE);
-      const { data, error } = await supabase
+      // Delete from site_documents by file_path
+      console.log('Cleaning site_documents by file_path...');
+      const { data: docsData1, error: docsError1 } = await supabase
         .from('site_documents')
         .delete()
-        .in('file_path', batch)
+        .like('file_path', `${folderPath}%`)
         .select('id');
       
-      if (!error && data) {
-        databaseReferencesRemoved += data.length;
+      if (!docsError1 && docsData1) {
+        databaseReferencesRemoved += docsData1.length;
       }
-    }
 
-    // BATCH: Delete from site_documents by converted_image_path
-    console.log('Cleaning site_documents by converted_image_path...');
-    for (let i = 0; i < allFiles.length; i += BATCH_SIZE) {
-      const batch = allFiles.slice(i, i + BATCH_SIZE);
-      const { data, error } = await supabase
+      // Delete from site_documents by converted_image_path
+      console.log('Cleaning site_documents by converted_image_path...');
+      const { data: docsData2, error: docsError2 } = await supabase
         .from('site_documents')
         .delete()
-        .in('converted_image_path', batch)
+        .like('converted_image_path', `${folderPath}%`)
         .select('id');
       
-      if (!error && data) {
-        databaseReferencesRemoved += data.length;
+      if (!docsError2 && docsData2) {
+        databaseReferencesRemoved += docsData2.length;
       }
-    }
-    console.log(`Site documents cleaned. Total refs removed so far: ${databaseReferencesRemoved}`);
+      console.log(`Site documents cleaned. Total refs removed so far: ${databaseReferencesRemoved}`);
 
-    // BATCH: Delete from schematics by file_path
-    console.log('Cleaning schematics by file_path...');
-    for (let i = 0; i < allFiles.length; i += BATCH_SIZE) {
-      const batch = allFiles.slice(i, i + BATCH_SIZE);
-      const { data, error } = await supabase
+      // Delete from schematics by file_path
+      console.log('Cleaning schematics by file_path...');
+      const { data: schemData1, error: schemError1 } = await supabase
         .from('schematics')
         .delete()
-        .in('file_path', batch)
+        .like('file_path', `${folderPath}%`)
         .select('id');
       
-      if (!error && data) {
-        databaseReferencesRemoved += data.length;
+      if (!schemError1 && schemData1) {
+        databaseReferencesRemoved += schemData1.length;
       }
-    }
 
-    // BATCH: Delete from schematics by converted_image_path
-    console.log('Cleaning schematics by converted_image_path...');
-    for (let i = 0; i < allFiles.length; i += BATCH_SIZE) {
-      const batch = allFiles.slice(i, i + BATCH_SIZE);
-      const { data, error } = await supabase
+      // Delete from schematics by converted_image_path
+      console.log('Cleaning schematics by converted_image_path...');
+      const { data: schemData2, error: schemError2 } = await supabase
         .from('schematics')
         .delete()
-        .in('converted_image_path', batch)
+        .like('converted_image_path', `${folderPath}%`)
         .select('id');
       
-      if (!error && data) {
-        databaseReferencesRemoved += data.length;
+      if (!schemError2 && schemData2) {
+        databaseReferencesRemoved += schemData2.length;
       }
-    }
       console.log(`Schematics cleaned. Total refs removed so far: ${databaseReferencesRemoved}`);
 
-      // BATCH: Nullify references in clients table (logo_url)
+      // Nullify references in clients table (logo_url)
       console.log('Cleaning clients table references...');
-      for (let i = 0; i < fileUrls.length; i += BATCH_SIZE) {
-        const batch = fileUrls.slice(i, i + BATCH_SIZE);
-        const { data, error } = await supabase
-          .from('clients')
-          .update({ logo_url: null })
-          .in('logo_url', batch)
-          .select('id');
-        
-        if (!error && data) {
-          databaseReferencesRemoved += data.length;
-        }
+      const { data: clientsData, error: clientsError } = await supabase
+        .from('clients')
+        .update({ logo_url: null })
+        .like('logo_url', `${urlPrefix}%`)
+        .select('id');
+      
+      if (!clientsError && clientsData) {
+        databaseReferencesRemoved += clientsData.length;
       }
       console.log(`Clients cleaned. Total refs removed so far: ${databaseReferencesRemoved}`);
 
-      // BATCH: Nullify references in settings table (logo_url)
+      // Nullify references in settings table (logo_url)
       console.log('Cleaning settings table references...');
-      for (let i = 0; i < fileUrls.length; i += BATCH_SIZE) {
-        const batch = fileUrls.slice(i, i + BATCH_SIZE);
-        const { data, error } = await supabase
-          .from('settings')
-          .update({ logo_url: null })
-          .in('logo_url', batch)
-          .select('id');
-        
-        if (!error && data) {
-          databaseReferencesRemoved += data.length;
-        }
+      const { data: settingsData, error: settingsError } = await supabase
+        .from('settings')
+        .update({ logo_url: null })
+        .like('logo_url', `${urlPrefix}%`)
+        .select('id');
+      
+      if (!settingsError && settingsData) {
+        databaseReferencesRemoved += settingsData.length;
       }
       console.log(`Settings cleaned. Total refs removed so far: ${databaseReferencesRemoved}`);
     } else {
       console.log(`Skipping database cleanup for ${bucket} bucket (no DB references)`);
-    }
-
-    // Delete all files from storage in batches
-    console.log('Deleting files from storage...');
-    let filesDeleted = 0;
-    
-    if (allFiles.length > 0) {
-      const storageBatchSize = 100;
-      for (let i = 0; i < allFiles.length; i += storageBatchSize) {
-        const batch = allFiles.slice(i, i + storageBatchSize);
-        
-        const { error: deleteError } = await supabase.storage
-          .from(bucket)
-          .remove(batch);
-
-        if (deleteError) {
-          console.error(`Error deleting batch ${i / storageBatchSize + 1}:`, deleteError);
-        } else {
-          filesDeleted += batch.length;
-          if (filesDeleted % 500 === 0 || i + storageBatchSize >= allFiles.length) {
-            console.log(`Deleted ${filesDeleted}/${allFiles.length} files`);
-          }
-        }
-      }
     }
 
     console.log(`Cleanup complete. Bucket: ${bucket}, Files deleted: ${filesDeleted}, DB refs removed: ${databaseReferencesRemoved}`);

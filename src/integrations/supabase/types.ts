@@ -1391,6 +1391,12 @@ export type Database = {
           total_deleted: number
         }[]
       }
+      delete_storage_folder: {
+        Args: { p_bucket_id: string; p_folder_path: string }
+        Returns: {
+          deleted_count: number
+        }[]
+      }
       get_applicable_tariff_periods: {
         Args: {
           p_date_from: string
