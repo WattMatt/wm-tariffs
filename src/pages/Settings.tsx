@@ -15,7 +15,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, Save, Loader2, Trash2, FolderOpen, ChevronDown } from "lucide-react";
+import { Upload, Save, Loader2, Trash2, FolderOpen, ChevronDown, Database } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const Settings = () => {
   const navigate = useNavigate();
@@ -31,6 +32,7 @@ const Settings = () => {
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [currentPath, setCurrentPath] = useState<string>("");
   const [folders, setFolders] = useState<Array<{ name: string; path: string }>>([]);
+  const [selectedBucket, setSelectedBucket] = useState<'client-files' | 'tariff-files'>('client-files');
 
   useEffect(() => {
     checkAuth();
@@ -71,11 +73,11 @@ const Settings = () => {
     }
   };
 
-  const loadFolders = async (path: string) => {
+  const loadFolders = async (path: string, bucket: 'client-files' | 'tariff-files' = selectedBucket) => {
     setIsLoadingFolders(true);
     try {
       const { data, error } = await supabase.storage
-        .from('client-files')
+        .from(bucket)
         .list(path, {
           limit: 100,
           sortBy: { column: 'name', order: 'asc' }
@@ -102,6 +104,12 @@ const Settings = () => {
     } finally {
       setIsLoadingFolders(false);
     }
+  };
+
+  const handleBucketChange = (bucket: 'client-files' | 'tariff-files') => {
+    setSelectedBucket(bucket);
+    setCurrentPath("");
+    loadFolders("", bucket);
   };
 
   const handleFolderClick = (path: string) => {
@@ -242,7 +250,7 @@ const Settings = () => {
       });
 
       const { data, error } = await supabase.functions.invoke('cleanup-orphaned-snippets', {
-        body: { folderPath: currentPath }
+        body: { folderPath: currentPath, bucket: selectedBucket }
       });
 
       if (error) throw error;
@@ -284,7 +292,7 @@ const Settings = () => {
       });
 
       const { data, error } = await supabase.functions.invoke('cleanup-orphaned-snippets', {
-        body: { folderPath: currentPath }
+        body: { folderPath: currentPath, bucket: selectedBucket }
       });
 
       if (error) throw error;
@@ -412,9 +420,22 @@ const Settings = () => {
               <div>
                 <h3 className="text-sm font-medium mb-2">Delete Folder Contents</h3>
                 <p className="text-sm text-muted-foreground mb-4">
-                  Select a folder from the dropdown, then click cleanup to delete all files in that folder 
+                  Select a storage bucket and folder, then click cleanup to delete all files in that folder 
                   and remove all database references to those files. This action cannot be undone.
                 </p>
+                <div className="mb-3">
+                  <Label className="text-sm font-medium mb-2 block">Storage Bucket</Label>
+                  <Select value={selectedBucket} onValueChange={(value: 'client-files' | 'tariff-files') => handleBucketChange(value)}>
+                    <SelectTrigger className="w-full max-w-xs">
+                      <Database className="w-4 h-4 mr-2" />
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="client-files">client-files</SelectItem>
+                      <SelectItem value="tariff-files">tariff-files</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
                 <div className="space-y-3">
                   <div className="w-full max-w-full">
                     <DropdownMenu>

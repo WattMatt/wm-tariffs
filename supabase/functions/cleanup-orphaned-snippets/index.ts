@@ -7,7 +7,10 @@ const corsHeaders = {
 
 interface CleanupRequest {
   folderPath: string;
+  bucket?: 'client-files' | 'tariff-files';
 }
+
+const ALLOWED_BUCKETS = ['client-files', 'tariff-files'] as const;
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -25,7 +28,7 @@ Deno.serve(async (req) => {
       }
     });
 
-    const { folderPath } = await req.json() as CleanupRequest;
+    const { folderPath, bucket = 'client-files' } = await req.json() as CleanupRequest;
 
     if (!folderPath) {
       return new Response(
@@ -37,14 +40,24 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log(`Starting cleanup for folder: ${folderPath}`);
+    if (!ALLOWED_BUCKETS.includes(bucket as typeof ALLOWED_BUCKETS[number])) {
+      return new Response(
+        JSON.stringify({ error: `Invalid bucket. Allowed: ${ALLOWED_BUCKETS.join(', ')}` }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 400 
+        }
+      );
+    }
+
+    console.log(`Starting cleanup for folder: ${folderPath} in bucket: ${bucket}`);
 
     // List all files in the specified folder (recursively)
     const allFiles: string[] = [];
     
     async function listFilesRecursively(path: string) {
       const { data: items, error } = await supabase.storage
-        .from('client-files')
+        .from(bucket)
         .list(path, {
           limit: 1000,
           sortBy: { column: 'name', order: 'asc' }
@@ -74,27 +87,29 @@ Deno.serve(async (req) => {
 
     // Build public URLs for the files to search in database
     const fileUrls = allFiles.map(filePath => 
-      `${supabaseUrl}/storage/v1/object/public/client-files/${filePath}`
+      `${supabaseUrl}/storage/v1/object/public/${bucket}/${filePath}`
     );
 
     let databaseReferencesRemoved = 0;
     const BATCH_SIZE = 100;
 
-    // BATCH: Remove references in meters table (scanned_snippet_url)
-    console.log('Cleaning meters table references...');
-    for (let i = 0; i < fileUrls.length; i += BATCH_SIZE) {
-      const batch = fileUrls.slice(i, i + BATCH_SIZE);
-      const { data, error } = await supabase
-        .from('meters')
-        .update({ scanned_snippet_url: null })
-        .in('scanned_snippet_url', batch)
-        .select('id');
-      
-      if (!error && data) {
-        databaseReferencesRemoved += data.length;
+    // Only clean database references for client-files bucket (tariff-files doesn't have DB refs)
+    if (bucket === 'client-files') {
+      // BATCH: Remove references in meters table (scanned_snippet_url)
+      console.log('Cleaning meters table references...');
+      for (let i = 0; i < fileUrls.length; i += BATCH_SIZE) {
+        const batch = fileUrls.slice(i, i + BATCH_SIZE);
+        const { data, error } = await supabase
+          .from('meters')
+          .update({ scanned_snippet_url: null })
+          .in('scanned_snippet_url', batch)
+          .select('id');
+        
+        if (!error && data) {
+          databaseReferencesRemoved += data.length;
+        }
       }
-    }
-    console.log(`Meters cleaned. Total refs removed so far: ${databaseReferencesRemoved}`);
+      console.log(`Meters cleaned. Total refs removed so far: ${databaseReferencesRemoved}`);
 
     // BATCH: Delete from site_documents by file_path
     console.log('Cleaning site_documents by file_path...');
@@ -156,39 +171,42 @@ Deno.serve(async (req) => {
         databaseReferencesRemoved += data.length;
       }
     }
-    console.log(`Schematics cleaned. Total refs removed so far: ${databaseReferencesRemoved}`);
+      console.log(`Schematics cleaned. Total refs removed so far: ${databaseReferencesRemoved}`);
 
-    // BATCH: Nullify references in clients table (logo_url)
-    console.log('Cleaning clients table references...');
-    for (let i = 0; i < fileUrls.length; i += BATCH_SIZE) {
-      const batch = fileUrls.slice(i, i + BATCH_SIZE);
-      const { data, error } = await supabase
-        .from('clients')
-        .update({ logo_url: null })
-        .in('logo_url', batch)
-        .select('id');
-      
-      if (!error && data) {
-        databaseReferencesRemoved += data.length;
+      // BATCH: Nullify references in clients table (logo_url)
+      console.log('Cleaning clients table references...');
+      for (let i = 0; i < fileUrls.length; i += BATCH_SIZE) {
+        const batch = fileUrls.slice(i, i + BATCH_SIZE);
+        const { data, error } = await supabase
+          .from('clients')
+          .update({ logo_url: null })
+          .in('logo_url', batch)
+          .select('id');
+        
+        if (!error && data) {
+          databaseReferencesRemoved += data.length;
+        }
       }
-    }
-    console.log(`Clients cleaned. Total refs removed so far: ${databaseReferencesRemoved}`);
+      console.log(`Clients cleaned. Total refs removed so far: ${databaseReferencesRemoved}`);
 
-    // BATCH: Nullify references in settings table (logo_url)
-    console.log('Cleaning settings table references...');
-    for (let i = 0; i < fileUrls.length; i += BATCH_SIZE) {
-      const batch = fileUrls.slice(i, i + BATCH_SIZE);
-      const { data, error } = await supabase
-        .from('settings')
-        .update({ logo_url: null })
-        .in('logo_url', batch)
-        .select('id');
-      
-      if (!error && data) {
-        databaseReferencesRemoved += data.length;
+      // BATCH: Nullify references in settings table (logo_url)
+      console.log('Cleaning settings table references...');
+      for (let i = 0; i < fileUrls.length; i += BATCH_SIZE) {
+        const batch = fileUrls.slice(i, i + BATCH_SIZE);
+        const { data, error } = await supabase
+          .from('settings')
+          .update({ logo_url: null })
+          .in('logo_url', batch)
+          .select('id');
+        
+        if (!error && data) {
+          databaseReferencesRemoved += data.length;
+        }
       }
+      console.log(`Settings cleaned. Total refs removed so far: ${databaseReferencesRemoved}`);
+    } else {
+      console.log(`Skipping database cleanup for ${bucket} bucket (no DB references)`);
     }
-    console.log(`Settings cleaned. Total refs removed so far: ${databaseReferencesRemoved}`);
 
     // Delete all files from storage in batches
     console.log('Deleting files from storage...');
@@ -200,7 +218,7 @@ Deno.serve(async (req) => {
         const batch = allFiles.slice(i, i + storageBatchSize);
         
         const { error: deleteError } = await supabase.storage
-          .from('client-files')
+          .from(bucket)
           .remove(batch);
 
         if (deleteError) {
@@ -214,18 +232,19 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`Cleanup complete. Files deleted: ${filesDeleted}, DB refs removed: ${databaseReferencesRemoved}`);
+    console.log(`Cleanup complete. Bucket: ${bucket}, Files deleted: ${filesDeleted}, DB refs removed: ${databaseReferencesRemoved}`);
 
     return new Response(
       JSON.stringify({
         success: true,
+        bucket,
         folderPath,
         filesDeleted,
         databaseReferencesRemoved
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200 
+        status: 200
       }
     );
 
