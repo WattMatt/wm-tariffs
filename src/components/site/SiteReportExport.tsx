@@ -1159,9 +1159,12 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
           const contentHeight = pageHeight - topMargin - bottomMargin;
           const halfPageHeight = contentHeight / 2;
           
-          // Larger charts - use more horizontal space with better aspect ratio
-          const chartWidth = (contentWidth - 8) / 3; // Small gap between charts
-          const chartHeight = chartWidth * 0.85; // Taller aspect ratio for better quality
+          // Much larger charts - maximize the available half-page space
+          const chartSpacing = 4;
+          const chartWidth = (contentWidth - (chartSpacing * 2)) / 3;
+          // Use most of the half-page height for charts (leaving room for title and details)
+          const availableChartHeight = halfPageHeight - 45; // Reserve space for title (~12) and details (~33)
+          const chartHeight = Math.min(availableChartHeight, chartWidth * 1.2); // Taller aspect ratio
           
           let tariffCountOnPage = 0;
           const tariffsPerPage = 2;
@@ -1197,8 +1200,8 @@ export default function SiteReportExport({ siteId, siteName, reconciliationRun }
             // Render 3 charts horizontally (compact)
             if (charts && (charts.basic || charts.energy || charts.demand)) {
               const chart1X = leftMargin;
-              const chart2X = leftMargin + chartWidth;
-              const chart3X = leftMargin + (2 * chartWidth);
+              const chart2X = leftMargin + chartWidth + chartSpacing;
+              const chart3X = leftMargin + (2 * chartWidth) + (2 * chartSpacing);
               
               if (charts.basic) {
                 try {
