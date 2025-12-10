@@ -80,7 +80,14 @@ export function MeterFormFields({
         .order('name');
 
       if (tariffs) {
-        setTariffStructures(tariffs);
+        // Get unique tariff names only (like tariff dashboard groupings)
+        const uniqueTariffNames = new Map<string, TariffStructure>();
+        tariffs.forEach((tariff) => {
+          if (!uniqueTariffNames.has(tariff.name)) {
+            uniqueTariffNames.set(tariff.name, tariff);
+          }
+        });
+        setTariffStructures(Array.from(uniqueTariffNames.values()));
       }
     };
 
@@ -333,16 +340,16 @@ export function MeterFormFields({
             <div className="space-y-2 col-span-2">
               <Label htmlFor={`${idPrefix}_tariff`}>Tariff</Label>
               <Select 
-                name="tariff_structure_id" 
-                defaultValue={defaultValues.tariff_structure_id || 'none'}
+                name="assigned_tariff_name" 
+                defaultValue={defaultValues.tariff || 'none'}
               >
                 <SelectTrigger className="bg-background">
-                  <SelectValue placeholder="Select tariff structure" />
+                  <SelectValue placeholder="Select tariff" />
                 </SelectTrigger>
                 <SelectContent className="bg-background z-50">
                   <SelectItem value="none">No tariff (optional)</SelectItem>
                   {tariffStructures.map((tariff) => (
-                    <SelectItem key={tariff.id} value={tariff.id}>
+                    <SelectItem key={tariff.name} value={tariff.name}>
                       {tariff.name} ({tariff.tariff_type})
                     </SelectItem>
                   ))}
