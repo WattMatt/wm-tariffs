@@ -3,7 +3,7 @@
  */
 
 import { useState, useRef, useCallback } from 'react';
-import { uploadChartImage } from '@/lib/charts/storage';
+import { uploadChartImage, type ChartFormat } from '@/lib/charts/storage';
 import type {
   ChartCaptureConfig,
   ChartMetric,
@@ -23,6 +23,8 @@ export interface CaptureItem<TItem = unknown> {
 export interface UseBackgroundChartCaptureOptions<TItem = unknown> {
   siteId: string;
   config: ChartCaptureConfig<TItem>;
+  /** Chart format - 'svg' for vector or 'png' for raster. Defaults to 'svg' */
+  format?: ChartFormat;
   renderChart: (item: TItem, metric: ChartMetric, docs: unknown[]) => Promise<string> | string;
   onProgress?: (progress: ChartCaptureProgress) => void;
   onItemComplete?: (result: ItemCaptureResult) => void;
@@ -47,7 +49,7 @@ const DEFAULT_PAUSE_CHECK_INTERVAL = 100;
 export function useBackgroundChartCapture<TItem = unknown>(
   options: UseBackgroundChartCaptureOptions<TItem>
 ): UseBackgroundChartCaptureResult<TItem> {
-  const { siteId, config, renderChart, onProgress, onItemComplete, onLogUpdate } = options;
+  const { siteId, config, format = 'svg', renderChart, onProgress, onItemComplete, onLogUpdate } = options;
 
   const [isCapturing, setIsCapturing] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -152,9 +154,9 @@ export function useBackgroundChartCapture<TItem = unknown>(
           totalItems,
         });
 
-        // Get storage path and upload
+        // Get storage path and upload (use SVG format by default)
         const storagePath = await config.storagePathGenerator(siteId, itemId, metric.filename);
-        const result = await uploadChartImage(storagePath as StoragePath, dataUrl);
+        const result = await uploadChartImage(storagePath as StoragePath, dataUrl, format);
 
         if (!result.success) {
           throw new Error(result.error || 'Failed to save chart to storage');
