@@ -2503,9 +2503,8 @@ export default function DocumentsTab({ siteId, onUploadProgressChange }: Documen
                         <TableCell className="text-right pr-2">
                          <TooltipProvider>
                            <div className="flex justify-end gap-2">
-                             {doc.document_extractions?.[0] && (
-                               <Tooltip>
-                                 <TooltipTrigger asChild>
+                             <Tooltip>
+                               <TooltipTrigger asChild>
                                  <Button
                                    variant="ghost"
                                    size="sm"
@@ -2515,10 +2514,9 @@ export default function DocumentsTab({ siteId, onUploadProgressChange }: Documen
                                  </Button>
                                </TooltipTrigger>
                                <TooltipContent>
-                                 <p>View data</p>
+                                 <p>{doc.document_extractions?.[0] ? 'View data' : 'View document'}</p>
                                </TooltipContent>
-                               </Tooltip>
-                             )}
+                             </Tooltip>
                              <Tooltip>
                                <TooltipTrigger asChild>
                                  <Button
