@@ -168,7 +168,17 @@ export default function MetersTab({ siteId }: MetersTabProps) {
       return;
     }
 
-    setTariffStructures(data || []);
+    // Deduplicate by name - keep only first occurrence of each tariff name
+    const seenNames = new Set<string>();
+    const uniqueTariffs = (data || []).filter((tariff) => {
+      if (seenNames.has(tariff.name)) {
+        return false;
+      }
+      seenNames.add(tariff.name);
+      return true;
+    });
+
+    setTariffStructures(uniqueTariffs);
   };
 
   const fetchMeters = async () => {
