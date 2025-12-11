@@ -122,13 +122,17 @@ export function MeterFormFields({
 
       if (tariffs) {
         // Get unique tariff names only (like tariff dashboard groupings)
-        const uniqueTariffNames = new Map<string, TariffStructure>();
-        tariffs.forEach((tariff) => {
-          if (!uniqueTariffNames.has(tariff.name)) {
-            uniqueTariffNames.set(tariff.name, tariff);
+        const seenNames = new Set<string>();
+        const uniqueTariffs = tariffs.filter((tariff) => {
+          if (seenNames.has(tariff.name)) {
+            return false;
           }
+          seenNames.add(tariff.name);
+          return true;
         });
-        setTariffStructures(Array.from(uniqueTariffNames.values()));
+        
+        console.log('MeterFormFields - Raw tariffs:', tariffs.length, 'Unique tariffs:', uniqueTariffs.length);
+        setTariffStructures(uniqueTariffs);
       }
     };
 
