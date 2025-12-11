@@ -764,14 +764,26 @@ export default function DocumentsTab({ siteId, onUploadProgressChange }: Documen
   };
 
 
+  // Filter out hidden files and non-extractable file types
+  const filterValidFiles = (files: File[]): File[] => {
+    const unsupportedExtensions = ['.csv', '.xlsx', '.xls', '.json', '.xml', '.txt', '.zip', '.rar'];
+    return files.filter(file => {
+      const fileName = file.name.toLowerCase();
+      // Filter out hidden/system files
+      if (fileName.startsWith('.') || fileName.includes('.ds_store')) return false;
+      // Warn about non-extractable files but still allow upload
+      const isUnsupported = unsupportedExtensions.some(ext => fileName.endsWith(ext));
+      if (isUnsupported) {
+        console.log(`Note: ${file.name} is a data file and won't be AI-extracted`);
+      }
+      return true; // Allow all files except hidden ones
+    });
+  };
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
-    // Filter out hidden/system files like .DS_Store
-    const validFiles = Array.from(files).filter(file => {
-      const fileName = file.name.toLowerCase();
-      return !fileName.startsWith('.') && !fileName.includes('.ds_store');
-    });
+    const validFiles = filterValidFiles(Array.from(files));
     if (validFiles.length === 0) {
       toast.error("No valid files - hidden or system files were filtered out");
       return;
@@ -782,17 +794,12 @@ export default function DocumentsTab({ siteId, onUploadProgressChange }: Documen
   const handleFolderSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
-
-    // Filter out hidden/system files like .DS_Store
-    const filesArray = Array.from(files).filter(file => {
-      const fileName = file.name.toLowerCase();
-      return !fileName.startsWith('.') && !fileName.includes('.ds_store');
-    });
-    if (filesArray.length === 0) {
+    const validFiles = filterValidFiles(Array.from(files));
+    if (validFiles.length === 0) {
       toast.error("No valid files - hidden or system files were filtered out");
       return;
     }
-    setSelectedFiles(filesArray);
+    setSelectedFiles(validFiles);
   };
 
   const convertPdfToImage = async (pdfFile: File): Promise<Blob> => {
@@ -1190,6 +1197,8 @@ export default function DocumentsTab({ siteId, onUploadProgressChange }: Documen
         return <Badge variant="secondary">Pending</Badge>;
       case 'failed':
         return <Badge variant="destructive">Failed</Badge>;
+      case 'unsupported':
+        return <Badge variant="outline" className="text-muted-foreground">Data File</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }

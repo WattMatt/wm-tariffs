@@ -16,14 +16,38 @@ serve(async (req) => {
     
     console.log(`Processing document ${documentId} of type ${documentType}`);
 
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // Check file extension - skip non-image/document files
+    const unsupportedExtensions = ['.csv', '.xlsx', '.xls', '.ds_store', '.json', '.xml', '.txt', '.zip', '.rar'];
+    const fileUrlLower = (fileUrl || '').toLowerCase();
+    const isUnsupportedFile = unsupportedExtensions.some(ext => fileUrlLower.includes(ext));
+    
+    if (isUnsupportedFile) {
+      console.log(`⚠ Skipping extraction for unsupported file type: ${fileUrl}`);
+      
+      // Update document status to 'unsupported' instead of leaving it pending
+      await supabase
+        .from('site_documents')
+        .update({ extraction_status: 'unsupported' })
+        .eq('id', documentId);
+      
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          skipped: true,
+          message: 'File type not supported for AI extraction (spreadsheet/data file)' 
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
-
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
 
     // Retry logic for AI API calls
     const maxRetries = 3;
