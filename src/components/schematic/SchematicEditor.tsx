@@ -89,7 +89,7 @@ import { Canvas as FabricCanvas, Circle, Line, Text, FabricImage, Rect, Polygon,
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Save, Zap, Link2, Trash2, Upload, Plus, ZoomIn, ZoomOut, Maximize2, Pencil, Scan, Check, Edit, ChevronLeft, ChevronRight, Loader2, ImageIcon, Crop } from "lucide-react";
+import { Save, Zap, Link2, Trash2, Upload, Plus, ZoomIn, ZoomOut, Maximize2, Pencil, Scan, Check, Edit, ChevronLeft, ChevronRight, Loader2, ImageIcon, Crop, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -598,6 +598,20 @@ export default function SchematicEditor({
     };
     loadInitialData();
   }, [schematicId, siteId]);
+
+  // Refresh schematic data without reloading the page
+  const handleRefreshSchematic = async () => {
+    toast.info("Refreshing schematic...");
+    setIsInitialDataLoaded(false);
+    await Promise.all([
+      fetchMeters(),
+      fetchMeterPositions(),
+      fetchMeterConnections(),
+      fetchSchematicLines()
+    ]);
+    setIsInitialDataLoaded(true);
+    toast.success("Schematic refreshed");
+  };
 
   // Real-time subscription for schematic_lines changes
   useEffect(() => {
@@ -5974,6 +5988,9 @@ export default function SchematicEditor({
             </Button>
             <Button variant="outline" size="sm" onClick={handleResetZoom}>
               <Maximize2 className="w-4 h-4" />
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleRefreshSchematic}>
+              <RefreshCw className="w-4 h-4" />
             </Button>
           </div>
         </div>
