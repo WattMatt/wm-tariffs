@@ -501,15 +501,15 @@ export default function MetersTab({ siteId }: MetersTabProps) {
   const getMeterTypeColor = (type: string) => {
     switch (type) {
       case "bulk_meter":
-        return "bg-primary text-primary-foreground";
+        return "bg-[#ef4444] text-white";  // Red - matches schematic
       case "council_meter":
-        return "bg-blue-600 text-white";
+        return "bg-[#ec4899] text-white";  // Pink - matches schematic
       case "check_meter":
-        return "bg-warning text-warning-foreground";
+        return "bg-[#f59e0b] text-white";  // Amber - matches schematic
       case "tenant_meter":
-        return "bg-accent text-accent-foreground";
+        return "bg-[#10b981] text-white";  // Emerald - matches schematic
       case "other":
-        return "bg-muted text-muted-foreground";
+        return "bg-[#3b82f6] text-white";  // Blue - matches schematic
       default:
         return "bg-muted text-muted-foreground";
     }
