@@ -2212,12 +2212,59 @@ export default function DocumentsTab({ siteId, onUploadProgressChange }: Documen
             </div>
           )}
 
+          {/* Persistent Folder Navigation - Always visible */}
+          <div className="border rounded-lg p-3 mb-4 bg-muted/20">
+            <div className="flex items-center justify-between">
+              {/* Folder Navigation Breadcrumbs */}
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setCurrentFolderPath('')}
+                  className="gap-2"
+                >
+                  <Home className="w-4 h-4" />
+                  Documents
+                </Button>
+                {currentFolderPath && (
+                  <>
+                    {currentFolderPath.split('/').map((folder, index, arr) => {
+                      const path = arr.slice(0, index + 1).join('/');
+                      return (
+                        <div key={path} className="flex items-center gap-2">
+                          <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setCurrentFolderPath(path)}
+                          >
+                            {folder}
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
+              </div>
+              {/* New Folder Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsCreatingFolder(true)}
+                className="gap-2"
+              >
+                <FolderPlus className="w-4 h-4" />
+                New Folder
+              </Button>
+            </div>
+          </div>
+
           {isLoading ? (
             <div className="flex justify-center py-8">
               <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
             </div>
           ) : documents.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
+            <div className="text-center py-12 text-muted-foreground border rounded-lg">
               <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
               <p>No documents uploaded yet</p>
               <p className="text-sm mt-1">Upload your first document to get started</p>
@@ -2226,53 +2273,6 @@ export default function DocumentsTab({ siteId, onUploadProgressChange }: Documen
             <div className="border rounded-lg overflow-x-auto">
               <Table className="min-w-[1200px]">
                 <TableHeader>
-                  <TableRow className="bg-muted/30">
-                    <TableHead colSpan={10} className="h-auto py-3">
-                      <div className="flex items-center justify-between">
-                        {/* Folder Navigation */}
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setCurrentFolderPath('')}
-                            className="gap-2"
-                          >
-                            <Home className="w-4 h-4" />
-                            Documents
-                          </Button>
-                          {currentFolderPath && (
-                            <>
-                              {currentFolderPath.split('/').map((folder, index, arr) => {
-                                const path = arr.slice(0, index + 1).join('/');
-                                return (
-                                  <div key={path} className="flex items-center gap-2">
-                                    <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => setCurrentFolderPath(path)}
-                                    >
-                                      {folder}
-                                    </Button>
-                                  </div>
-                                );
-                              })}
-                            </>
-                          )}
-                        </div>
-                        {/* New Folder Button */}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setIsCreatingFolder(true)}
-                          className="gap-2"
-                        >
-                          <FolderPlus className="w-4 h-4" />
-                          New Folder
-                        </Button>
-                      </div>
-                    </TableHead>
-                  </TableRow>
                   <TableRow className="bg-muted/50">
                     <TableHead className="w-12">
                       <Checkbox
