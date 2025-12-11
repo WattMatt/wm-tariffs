@@ -23,6 +23,7 @@ interface MeterFormFieldsProps {
     location?: string;
     tariff?: string;
     tariff_structure_id?: string;
+    assigned_tariff_name?: string;
     confirmation_status?: string;
   };
   showLocationAndTariff?: boolean;
@@ -386,7 +387,7 @@ export function MeterFormFields({
               <Label htmlFor={`${idPrefix}_tariff`}>Tariff</Label>
               <TariffSelectWithHiddenId 
                 idPrefix={idPrefix}
-                defaultValue={defaultValues.tariff || 'none'}
+                defaultValue={defaultValues.assigned_tariff_name || 'none'}
                 tariffStructures={tariffStructures}
               />
             </div>
