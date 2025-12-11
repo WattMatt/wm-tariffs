@@ -4396,7 +4396,9 @@ export default function SchematicEditor({
       zone: formData.get('zone') as string || null,
       location: formData.get('location') as string || null,
       assigned_tariff_name: hasTariff ? assignedTariffName : null,
-      tariff_structure_id: null, // Clear old field since we now use assigned_tariff_name
+      tariff_structure_id: hasTariff 
+        ? (formData.get('tariff_structure_id') as string) || null 
+        : null,
       confirmation_status: 'confirmed', // Automatically approve on save
     };
 

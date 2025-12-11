@@ -35,7 +35,48 @@ interface TariffStructure {
   tariff_type: string;
 }
 
-export function MeterFormFields({ 
+// Helper component that includes hidden field for tariff_structure_id
+function TariffSelectWithHiddenId({ 
+  idPrefix, 
+  defaultValue, 
+  tariffStructures 
+}: { 
+  idPrefix: string; 
+  defaultValue: string; 
+  tariffStructures: TariffStructure[]; 
+}) {
+  const [selectedName, setSelectedName] = useState(defaultValue);
+  const selectedTariff = tariffStructures.find(t => t.name === selectedName);
+
+  return (
+    <>
+      <input 
+        type="hidden" 
+        name="tariff_structure_id" 
+        value={selectedTariff?.id || ''} 
+      />
+      <Select 
+        name="assigned_tariff_name" 
+        value={selectedName}
+        onValueChange={setSelectedName}
+      >
+        <SelectTrigger className="bg-background">
+          <SelectValue placeholder="Select tariff" />
+        </SelectTrigger>
+        <SelectContent className="bg-background z-50">
+          <SelectItem value="none">No tariff (optional)</SelectItem>
+          {tariffStructures.map((tariff) => (
+            <SelectItem key={tariff.name} value={tariff.name}>
+              {tariff.name} ({tariff.tariff_type})
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </>
+  );
+}
+
+export function MeterFormFields({
   idPrefix, 
   defaultValues, 
   showLocationAndTariff = false,
@@ -339,22 +380,11 @@ export function MeterFormFields({
 
             <div className="space-y-2 col-span-2">
               <Label htmlFor={`${idPrefix}_tariff`}>Tariff</Label>
-              <Select 
-                name="assigned_tariff_name" 
+              <TariffSelectWithHiddenId 
+                idPrefix={idPrefix}
                 defaultValue={defaultValues.tariff || 'none'}
-              >
-                <SelectTrigger className="bg-background">
-                  <SelectValue placeholder="Select tariff" />
-                </SelectTrigger>
-                <SelectContent className="bg-background z-50">
-                  <SelectItem value="none">No tariff (optional)</SelectItem>
-                  {tariffStructures.map((tariff) => (
-                    <SelectItem key={tariff.name} value={tariff.name}>
-                      {tariff.name} ({tariff.tariff_type})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                tariffStructures={tariffStructures}
+              />
             </div>
           </>
         )}

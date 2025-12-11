@@ -294,7 +294,9 @@ export default function MetersTab({ siteId }: MetersTabProps) {
       ct_type: formData.get("ct_type") as string,
       tariff: formData.get("tariff") as string,
       assigned_tariff_name: (!assignedTariffName || assignedTariffName === "none" || assignedTariffName === "") ? null : assignedTariffName,
-      tariff_structure_id: null,
+      tariff_structure_id: assignedTariffName && assignedTariffName !== "none" && assignedTariffName !== ""
+        ? tariffStructures.find(t => t.name === assignedTariffName)?.id || null
+        : null,
       is_revenue_critical: isRevenueCritical,
     };
 
