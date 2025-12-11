@@ -2938,6 +2938,7 @@ export default function TariffAssignmentTab({
                                     angle={-45}
                                     textAnchor="end"
                                     height={50}
+                                    interval={0}
                                   />
                                   <YAxis 
                                     yAxisId="left"
