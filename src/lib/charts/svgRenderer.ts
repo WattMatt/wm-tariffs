@@ -482,6 +482,7 @@ export function generateReconciliationMeterChartSVG(
 export interface AnalysisChartDataPointSVG {
   period: string;
   documentAmount: number | null;
+  meterReading?: number | null;
   isWinter?: boolean;
   isSummer?: boolean;
   [key: string]: string | number | boolean | null | undefined;
@@ -503,18 +504,23 @@ export function generateAnalysisMeterChartSVG(
   const documentColor = 'rgba(156, 163, 175, 0.6)';
   const winterColor = '#3b82f6';
   const summerColor = '#f97316';
+  const meterReadingColor = '#22c55e';
 
   // Chart dimensions
   const padding = 60;
-  const rightPadding = 40;
+  const rightPadding = 80; // Increased for right Y-axis
   const bottomPadding = 100;
   const topPadding = 70;
   const chartWidth = width - padding - rightPadding;
   const chartHeight = height - topPadding - bottomPadding;
 
-  // Find max value
+  // Find max values
   const docValues = data.map(d => d.documentAmount || 0);
   const maxValue = Math.max(...docValues, 1);
+  
+  // Meter reading scale (separate right Y-axis)
+  const meterReadings = data.map(d => d.meterReading).filter((v): v is number => v !== null && v !== undefined);
+  const maxMeterReading = meterReadings.length > 0 ? Math.max(...meterReadings) : 1;
 
   const barSpacing = chartWidth / data.length;
   const barWidth = Math.max(barSpacing * 0.6, 20);
@@ -532,8 +538,8 @@ export function generateAnalysisMeterChartSVG(
 
   // Legend
   const legendY = 55;
-  const legendSpacing = 110;
-  let legendX = width / 2 - legendSpacing;
+  const legendSpacing = 100;
+  let legendX = width / 2 - legendSpacing * 1.5;
 
   svg += `<rect x="${legendX}" y="${legendY}" width="12" height="12" fill="${documentColor}"/>`;
   svg += `<text x="${legendX + 16}" y="${legendY + 10}" font-family="sans-serif" font-size="10" fill="#000000">Amount</text>`;
@@ -545,6 +551,14 @@ export function generateAnalysisMeterChartSVG(
   legendX += legendSpacing;
   svg += `<line x1="${legendX}" y1="${legendY + 6}" x2="${legendX + 12}" y2="${legendY + 6}" stroke="${summerColor}" stroke-width="2"/>`;
   svg += `<text x="${legendX + 16}" y="${legendY + 10}" font-family="sans-serif" font-size="10" fill="#000000">Summer Avg</text>`;
+
+  // Meter Reading legend (if data exists)
+  if (meterReadings.length > 0) {
+    legendX += legendSpacing;
+    svg += `<line x1="${legendX}" y1="${legendY + 6}" x2="${legendX + 12}" y2="${legendY + 6}" stroke="${meterReadingColor}" stroke-width="2"/>`;
+    svg += `<circle cx="${legendX + 6}" cy="${legendY + 6}" r="3" fill="${meterReadingColor}"/>`;
+    svg += `<text x="${legendX + 16}" y="${legendY + 10}" font-family="sans-serif" font-size="10" fill="#000000">Meter Reading</text>`;
+  }
 
   // Bars
   data.forEach((item, index) => {
@@ -635,6 +649,40 @@ export function generateAnalysisMeterChartSVG(
       svg += `<circle cx="${x}" cy="${y}" r="3" fill="${summerColor}"/>`;
     });
   });
+
+  // Meter reading line (green, solid)
+  if (meterReadings.length > 0) {
+    let linePath = '';
+    let isFirst = true;
+    data.forEach((item, index) => {
+      if (item.meterReading !== null && item.meterReading !== undefined) {
+        const x = padding + index * barSpacing + barSpacing / 2;
+        const y = topPadding + chartHeight - (item.meterReading / maxMeterReading) * chartHeight;
+        linePath += isFirst ? `M${x},${y}` : ` L${x},${y}`;
+        isFirst = false;
+      }
+    });
+    if (linePath) {
+      svg += `<path d="${linePath}" fill="none" stroke="${meterReadingColor}" stroke-width="2"/>`;
+    }
+
+    // Meter reading dots
+    data.forEach((item, index) => {
+      if (item.meterReading !== null && item.meterReading !== undefined) {
+        const x = padding + index * barSpacing + barSpacing / 2;
+        const y = topPadding + chartHeight - (item.meterReading / maxMeterReading) * chartHeight;
+        svg += `<circle cx="${x}" cy="${y}" r="4" fill="${meterReadingColor}"/>`;
+      }
+    });
+
+    // Right Y-axis labels for meter reading
+    const numLabels = 5;
+    for (let i = 0; i <= numLabels; i++) {
+      const value = (maxMeterReading / numLabels) * (numLabels - i);
+      const y = topPadding + (chartHeight * i / numLabels);
+      svg += `<text x="${padding + chartWidth + 8}" y="${y + 4}" text-anchor="start" font-family="sans-serif" font-size="9" fill="${meterReadingColor}">${abbreviateNumber(value)}</text>`;
+    }
+  }
 
   // X-axis labels (rotated)
   data.forEach((item, index) => {

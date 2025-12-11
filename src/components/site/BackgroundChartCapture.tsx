@@ -375,9 +375,13 @@ const prepareAnalysisChartData = async (
       }
     }
     
+    // Extract meter reading for this document
+    const readings = extractMeterReadings(doc, metric);
+    
     return {
       period: periodDate.toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }),
       documentAmount: extractMetricValue(doc, metric),
+      meterReading: readings.current,
       isWinter,
       isSummer,
       ...segmentData,
