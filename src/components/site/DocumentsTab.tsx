@@ -1428,9 +1428,29 @@ export default function DocumentsTab({ siteId, onUploadProgressChange }: Documen
     }
   };
 
+  const handleRescanDocument = async () => {
+    if (!viewingDocument) return;
+    setIsExtracting(true);
+    try {
+      const { error } = await supabase.functions.invoke('extract-document-data', {
+        body: { documentId: viewingDocument.id }
+      });
+      if (error) throw error;
+      toast.success("Document extraction started");
+      fetchDocuments();
+      handleCloseDialog();
+    } catch (error) {
+      console.error("Error rescanning document:", error);
+      toast.error("Failed to rescan document");
+    } finally {
+      setIsExtracting(false);
+    }
+  };
+
   const handleViewDocument = async (doc: SiteDocument) => {
     setViewingDocument(doc);
     setViewingExtraction(doc.document_extractions?.[0] || null);
+    setEditedData(null); // Reset first
     
     if (doc.document_extractions?.[0]) {
       setEditedData({ ...doc.document_extractions[0] });
@@ -2591,14 +2611,22 @@ export default function DocumentsTab({ siteId, onUploadProgressChange }: Documen
               )}
             </div>
           </DialogHeader>
-          {viewingDocument && editedData && (
+          {viewingDocument && (
             <>
-              <div className="grid grid-cols-2 gap-6 flex-1 overflow-hidden">
+              {/* Document Image Viewer - always shown */}
+              <div className={editedData ? "grid grid-cols-2 gap-6 flex-1 overflow-hidden" : "flex-1 overflow-hidden"}>
                 {/* Left side - Document Image with Fabric.js Canvas */}
                 <div className="border rounded-lg bg-muted/30 flex flex-col overflow-hidden">
                   {/* Top Controls */}
-                  <div className="p-2 border-b bg-background/80 flex items-center justify-end gap-2 flex-shrink-0">
-                    <div className="flex items-center gap-2">
+                  <div className="p-2 border-b bg-background/80 flex items-center justify-between gap-2 flex-shrink-0">
+                    {!editedData && (
+                      <div className="flex items-center gap-2">
+                        <Badge variant={viewingDocument.extraction_status === 'error' ? 'destructive' : 'secondary'}>
+                          {viewingDocument.extraction_status === 'error' ? 'Extraction Failed' : 'Pending Extraction'}
+                        </Badge>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2 ml-auto">
                       <Button
                         variant="outline"
                         size="sm"
@@ -2630,6 +2658,16 @@ export default function DocumentsTab({ siteId, onUploadProgressChange }: Documen
                       >
                         <span className="text-lg">+</span>
                       </Button>
+                      {!editedData && (
+                        <Button
+                          onClick={handleRescanDocument}
+                          disabled={isExtracting}
+                          size="sm"
+                        >
+                          {isExtracting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Sparkles className="w-4 h-4 mr-2" />}
+                          {isExtracting ? 'Extracting...' : 'Rescan'}
+                        </Button>
+                      )}
                     </div>
                   </div>
                   
@@ -2646,7 +2684,8 @@ export default function DocumentsTab({ siteId, onUploadProgressChange }: Documen
                   </div>
                 </div>
 
-                {/* Right side - Editable Data */}
+                {/* Right side - Editable Data (only shown when extraction data exists) */}
+                {editedData && (
                 <div className="overflow-y-auto space-y-4 pr-2">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -3076,8 +3115,9 @@ export default function DocumentsTab({ siteId, onUploadProgressChange }: Documen
                     </div>
                   </div>
                 )}
+                  </div>
+                )}
               </div>
-            </div>
           </>
           )}
           
