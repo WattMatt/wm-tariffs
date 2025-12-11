@@ -305,6 +305,7 @@ Return the data in a structured format with all line items in an array.`;
     if (!aiResponse.ok) {
       const errorText = await aiResponse.text();
       console.error("AI API error:", aiResponse.status, errorText);
+      console.error("Failed image URL:", fileUrl);
       
       if (aiResponse.status === 503) {
         throw new Error("AI service is temporarily unavailable. Please try again in a few moments.");
@@ -312,9 +313,13 @@ Return the data in a structured format with all line items in an array.`;
         throw new Error("Rate limit exceeded. Please wait a moment and try again.");
       } else if (aiResponse.status === 402) {
         throw new Error("AI credits depleted. Please add credits to your workspace.");
+      } else if (aiResponse.status === 400) {
+        // 400 typically means bad request - image might be inaccessible or too large
+        console.error("400 Bad Request - possible causes: image URL inaccessible, image too large, or invalid format");
+        throw new Error(`AI extraction failed: 400 - The image may be inaccessible, too large, or in an unsupported format. Details: ${errorText}`);
       }
       
-      throw new Error(`AI extraction failed: ${aiResponse.status}`);
+      throw new Error(`AI extraction failed: ${aiResponse.status} - ${errorText}`);
     }
 
     const aiData = await aiResponse.json();
