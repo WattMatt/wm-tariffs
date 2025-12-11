@@ -97,6 +97,7 @@ export function MeterAnalysisChart({
             angle={-45}
             textAnchor="end"
             height={70}
+            interval={0}
             label={{
               value: 'Period',
               position: 'insideBottom',
