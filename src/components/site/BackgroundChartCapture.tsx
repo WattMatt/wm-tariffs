@@ -84,6 +84,7 @@ interface BackgroundChartCaptureProps {
   siteId: string;
   queue: CaptureQueueItem[];
   chartType?: ChartType;
+  globalPeriods?: string[];
   onProgress?: (current: number, total: number, meterNumber: string, metric: string, batchInfo?: string) => void;
   onBatchProgress?: (metersComplete: number, totalMeters: number, chartsComplete: number, totalCharts: number) => void;
   onComplete: (success: number, failed: number, cancelled: boolean, log: CaptureLogEntry[], meterResults: MeterCaptureResult[]) => void;
@@ -159,11 +160,35 @@ const extractMeterReadings = (doc: DocumentShopNumber | undefined, metric: strin
   };
 };
 
+// Helper to normalize chart data to global periods
+const normalizeToGlobalPeriods = <T extends { period: string }>(
+  chartData: T[],
+  globalPeriods?: string[]
+): T[] => {
+  if (!globalPeriods || globalPeriods.length === 0) return chartData;
+  
+  const dataByPeriod = new Map<string, T>();
+  chartData.forEach(d => dataByPeriod.set(d.period, d));
+  
+  return globalPeriods.map(period => {
+    if (dataByPeriod.has(period)) {
+      return dataByPeriod.get(period)!;
+    }
+    return {
+      period,
+      amount: null,
+      documentAmount: null,
+      meterReading: null,
+    } as unknown as T;
+  });
+};
+
 // Prepare chart data for a meter and metric
 const prepareChartData = async (
   meterId: string,
   docs: DocumentShopNumber[], 
-  metric: string
+  metric: string,
+  globalPeriods?: string[]
 ): Promise<ReconciliationChartDataPoint[]> => {
   const { data: reconciliationData } = await supabase
     .from('reconciliation_meter_results')
@@ -225,7 +250,7 @@ const prepareChartData = async (
 
   const sortedDocs = [...docs].sort((a, b) => a.periodEnd.localeCompare(b.periodEnd));
   
-  return sortedDocs.map(doc => {
+  const chartData = sortedDocs.map(doc => {
     const documentValue = extractMetricValue(doc, metric);
     const reconValue = reconCostsMap[doc.documentId];
     const readings = extractMeterReadings(doc, metric);
@@ -239,6 +264,8 @@ const prepareChartData = async (
       meterReading: readings.current,
     };
   });
+  
+  return normalizeToGlobalPeriods(chartData, globalPeriods);
 };
 
 // Helper: Extract month from date string without timezone conversion
@@ -251,7 +278,8 @@ const getMonthFromDateString = (dateString: string): number => {
 const prepareAnalysisChartData = async (
   meterId: string,
   docs: DocumentShopNumber[], 
-  metric: string
+  metric: string,
+  globalPeriods?: string[]
 ): Promise<AnalysisChartDataPoint[]> => {
   // South African electricity seasons - matches TariffAssignmentTab.tsx exactly
   const winterMonths = [6, 7, 8];  // June, July, August
@@ -328,7 +356,7 @@ const prepareAnalysisChartData = async (
   });
   
   // Build chart data with segment-specific averages
-  return sortedDocs.map(doc => {
+  const chartData = sortedDocs.map(doc => {
     const periodDate = new Date(doc.periodEnd);
     const month = getMonthFromDateString(doc.periodEnd);
     const isWinter = winterMonths.includes(month);
@@ -355,6 +383,8 @@ const prepareAnalysisChartData = async (
       ...segmentData,
     };
   });
+  
+  return normalizeToGlobalPeriods(chartData, globalPeriods);
 };
 
 // ============ Component ============
@@ -411,6 +441,7 @@ export default function BackgroundChartCapture({
   siteId,
   queue,
   chartType = 'comparison',
+  globalPeriods,
   onProgress,
   onBatchProgress,
   onComplete,
@@ -423,6 +454,12 @@ export default function BackgroundChartCapture({
 }: BackgroundChartCaptureProps) {
   const hasStartedRef = useRef(false);
   const docsMapRef = useRef<Map<string, DocumentShopNumber[]>>(new Map());
+  const globalPeriodsRef = useRef<string[]>([]);
+  
+  // Keep globalPeriods in a ref for use in callbacks
+  useEffect(() => {
+    globalPeriodsRef.current = globalPeriods || [];
+  }, [globalPeriods]);
   
   // Build docs map from queue
   useEffect(() => {
@@ -443,12 +480,13 @@ export default function BackgroundChartCapture({
     docs: unknown[]
   ): Promise<string> => {
     const typedDocs = docs as DocumentShopNumber[];
+    const periods = globalPeriodsRef.current;
     
     let svgContent: string;
     
     if (chartType === 'analysis') {
       // Analysis chart: Document Amount bars with Winter/Summer average lines
-      const data = await prepareAnalysisChartData(meter.id, typedDocs, metric.key);
+      const data = await prepareAnalysisChartData(meter.id, typedDocs, metric.key, periods);
       
       if (!data || data.length === 0) {
         throw new Error('No analysis chart data available');
@@ -461,7 +499,7 @@ export default function BackgroundChartCapture({
       );
     } else {
       // Comparison chart: Reconciliation Cost + Document Billed bars + Meter Reading line
-      const data = await prepareChartData(meter.id, typedDocs, metric.key);
+      const data = await prepareChartData(meter.id, typedDocs, metric.key, periods);
       
       if (!data || data.length === 0) {
         throw new Error('No chart data available');
