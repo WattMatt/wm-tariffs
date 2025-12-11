@@ -42,6 +42,7 @@ interface Meter {
   ct_type: string | null;
   tariff: string | null;
   tariff_structure_id: string | null;
+  assigned_tariff_name: string | null;
   is_revenue_critical: boolean;
   created_at: string;
   has_uploaded_csv?: boolean;
@@ -280,7 +281,7 @@ export default function MetersTab({ siteId }: MetersTabProps) {
     setIsLoading(true);
 
     const formData = new FormData(e.currentTarget);
-    const tariffStructureId = formData.get("tariff_structure_id") as string;
+    const assignedTariffName = formData.get("assigned_tariff_name") as string;
     const meterData = {
       meter_number: formData.get("meter_number") as string,
       meter_type: formData.get("meter_type") as string,
@@ -292,7 +293,8 @@ export default function MetersTab({ siteId }: MetersTabProps) {
       serial_number: formData.get("serial_number") as string,
       ct_type: formData.get("ct_type") as string,
       tariff: formData.get("tariff") as string,
-      tariff_structure_id: (!tariffStructureId || tariffStructureId === "none" || tariffStructureId === "") ? null : tariffStructureId,
+      assigned_tariff_name: (!assignedTariffName || assignedTariffName === "none" || assignedTariffName === "") ? null : assignedTariffName,
+      tariff_structure_id: null,
       is_revenue_critical: isRevenueCritical,
     };
 
@@ -912,15 +914,15 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                 </div>
 
                 <div className="space-y-2 col-span-2">
-                  <Label htmlFor="tariff_structure_id">Tariff Structure</Label>
-                  <Select name="tariff_structure_id" defaultValue={editingMeter?.tariff_structure_id || "none"}>
+                  <Label htmlFor="assigned_tariff_name">Tariff Structure</Label>
+                  <Select name="assigned_tariff_name" defaultValue={editingMeter?.assigned_tariff_name || "none"}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select tariff structure (optional)" />
                     </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">None</SelectItem>
                     {tariffStructures.map((tariff) => (
-                        <SelectItem key={tariff.id} value={tariff.id}>
+                        <SelectItem key={tariff.name} value={tariff.name}>
                           <div className="flex flex-col">
                             <span>{tariff.name} ({tariff.tariff_type})</span>
                             {tariff.description && (
