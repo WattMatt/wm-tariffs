@@ -933,6 +933,68 @@ export default function TariffAssignmentTab({
     });
   }, [reconciliationCosts]);
 
+  // Calculate global periods across all meters for unified X-axis
+  const globalPeriods = React.useMemo(() => {
+    const allDates: Date[] = [];
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    
+    const parseMonthYear = (str: string): Date => {
+      const [month, year] = str.split(' ');
+      const monthMap: Record<string, number> = {
+        Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5,
+        Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11
+      };
+      return new Date(parseInt(year), monthMap[month] || 0);
+    };
+    
+    // Collect all dates from all meters
+    const docsSource = hideSeasonalAverages ? enrichedDocuments : documentShopNumbers;
+    meters.forEach(meter => {
+      const meterDocs = docsSource.filter(doc => doc.meterId === meter.id);
+      meterDocs.forEach(doc => {
+        const dateStr = doc.reconciliationDateTo || doc.periodEnd;
+        if (dateStr) {
+          const monthYear = formatDateStringToMonthYear(dateStr);
+          allDates.push(parseMonthYear(monthYear));
+        }
+      });
+    });
+    
+    if (allDates.length === 0) return [];
+    
+    const minDate = new Date(Math.min(...allDates.map(d => d.getTime())));
+    const maxDate = new Date(Math.max(...allDates.map(d => d.getTime())));
+    
+    const periods: string[] = [];
+    const current = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
+    
+    while (current <= maxDate) {
+      periods.push(`${monthNames[current.getMonth()]} ${current.getFullYear()}`);
+      current.setMonth(current.getMonth() + 1);
+    }
+    
+    return periods;
+  }, [meters, documentShopNumbers, enrichedDocuments, hideSeasonalAverages]);
+
+  // Helper to normalize chart data to global periods
+  const normalizeToGlobalPeriods = React.useCallback((chartData: any[]): any[] => {
+    if (globalPeriods.length === 0) return chartData;
+    
+    const dataByPeriod = new Map(chartData.map(d => [d.period, d]));
+    
+    return globalPeriods.map(period => {
+      if (dataByPeriod.has(period)) {
+        return dataByPeriod.get(period);
+      }
+      return {
+        period,
+        amount: null,
+        documentAmount: null,
+        meterReading: null,
+      };
+    });
+  }, [globalPeriods]);
+
   // Fetch chart data when dialog opens or metric changes
   useEffect(() => {
     if (!selectedChartMeter) {
@@ -942,18 +1004,20 @@ export default function TariffAssignmentTab({
     }
 
     // Calculate chart data based on the mode
+    let data: any[] = [];
     if (hideSeasonalAverages) {
       const costsMap = getReconciliationCostsMap(selectedChartMeter.meter.id, selectedChartMeter.docs, selectedChartMetric);
-      const data = prepareComparisonData(selectedChartMeter.docs, costsMap, selectedChartMetric);
-      setChartData(data);
+      data = prepareComparisonData(selectedChartMeter.docs, costsMap, selectedChartMetric);
     } else if (showDocumentCharts) {
       const result = prepareAnalysisData(selectedChartMeter.docs, selectedChartMetric);
-      setChartData(result.chartData);
+      data = result.chartData;
       setMeterDiscontinuities(result.discontinuities);
     } else {
-      const data = prepareAssignmentsData(selectedChartMeter.docs, chartDialogCalculations);
-      setChartData(data);
+      data = prepareAssignmentsData(selectedChartMeter.docs, chartDialogCalculations);
     }
+    
+    // Normalize to global periods for unified X-axis
+    setChartData(normalizeToGlobalPeriods(data));
 
     // Fetch calculations when dialog opens
     if (Object.keys(chartDialogCalculations).length === 0) {
@@ -1029,7 +1093,7 @@ export default function TariffAssignmentTab({
           });
       }
     }
-  }, [selectedChartMeter, selectedChartMetric, hideSeasonalAverages, showDocumentCharts, chartDialogCalculations]);
+  }, [selectedChartMeter, selectedChartMetric, hideSeasonalAverages, showDocumentCharts, chartDialogCalculations, normalizeToGlobalPeriods]);
 
   // Capture all charts for the current meter
   const captureAllChartsForMeter = async () => {
@@ -3914,6 +3978,7 @@ export default function TariffAssignmentTab({
                               angle={-45}
                               textAnchor="end"
                               height={80}
+                              interval={0}
                               label={{ value: 'Period', position: 'insideBottom', offset: -5, style: { fontSize: 12 } }}
                             />
                             <YAxis 
@@ -4643,6 +4708,7 @@ export default function TariffAssignmentTab({
         siteId={siteId}
         queue={backgroundCaptureQueue}
         chartType={hideSeasonalAverages ? 'comparison' : 'analysis'}
+        globalPeriods={globalPeriods}
         onBatchProgress={handleBackgroundBatchProgress}
         onComplete={handleBackgroundCaptureComplete}
         onPauseStateChange={setIsBulkCapturePaused}
