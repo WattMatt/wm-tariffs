@@ -2776,7 +2776,58 @@ export default function TariffAssignmentTab({
 
           {!isLoading && tariffStructures.length > 0 && meters.length > 0 && (
             <>
-              {showDocumentCharts ? (
+              {showDocumentCharts ? (() => {
+                // Calculate global period range across all meters for unified X-axis
+                const getAllGlobalPeriods = (): string[] => {
+                  const allPeriods = new Set<string>();
+                  
+                  meters.forEach((meter) => {
+                    const matchingShops = getMatchingShopNumbers(meter);
+                    const filteredShops = getFilteredAndFilledData(matchingShops);
+                    
+                    filteredShops.forEach((doc) => {
+                      const displayDateEnd = doc.reconciliationDateTo || doc.periodEnd;
+                      if (displayDateEnd) {
+                        allPeriods.add(formatDateStringToMonthYear(displayDateEnd));
+                      }
+                    });
+                  });
+                  
+                  // Sort periods chronologically
+                  return Array.from(allPeriods).sort((a, b) => {
+                    const parseDate = (str: string) => {
+                      const [month, year] = str.split(' ');
+                      const monthMap: Record<string, number> = {
+                        Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5,
+                        Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11
+                      };
+                      return new Date(parseInt(year), monthMap[month] || 0);
+                    };
+                    return parseDate(a).getTime() - parseDate(b).getTime();
+                  });
+                };
+                
+                const globalPeriods = getAllGlobalPeriods();
+                
+                // Normalize chart data to include all global periods with null for missing data
+                const normalizeChartDataToPeriods = (chartData: any[], globalPeriods: string[]): any[] => {
+                  const dataByPeriod = new Map(chartData.map(d => [d.period, d]));
+                  
+                  return globalPeriods.map(period => {
+                    if (dataByPeriod.has(period)) {
+                      return dataByPeriod.get(period);
+                    }
+                    // Return empty data point for missing periods
+                    return {
+                      period,
+                      amount: null,
+                      documentAmount: null,
+                      meterReading: null,
+                    };
+                  });
+                };
+                
+                return (
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold">Meter Analysis</h3>
                   
@@ -2816,6 +2867,9 @@ export default function TariffAssignmentTab({
                         console.warn('chartData is not an array, defaulting to empty array');
                         chartData = [];
                       }
+                      
+                      // Normalize chart data to include all global periods for unified X-axis
+                      chartData = normalizeChartDataToPeriods(chartData, globalPeriods);
                       
                       return (
                         <Card 
@@ -2964,7 +3018,8 @@ export default function TariffAssignmentTab({
                     })}
                   </div>
                 </div>
-              ) : (
+              );
+              })() : (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <h3 className="text-lg font-semibold">Meter Tariff Assignments</h3>
