@@ -2779,8 +2779,19 @@ export default function TariffAssignmentTab({
               {showDocumentCharts ? (() => {
                 // Calculate global period range across all meters for unified X-axis
                 const getAllGlobalPeriods = (): string[] => {
-                  const allPeriods = new Set<string>();
+                  const allDates: Date[] = [];
+                  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
                   
+                  const parseMonthYear = (str: string): Date => {
+                    const [month, year] = str.split(' ');
+                    const monthMap: Record<string, number> = {
+                      Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5,
+                      Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11
+                    };
+                    return new Date(parseInt(year), monthMap[month] || 0);
+                  };
+                  
+                  // Collect all existing period dates to find min/max
                   meters.forEach((meter) => {
                     const matchingShops = getMatchingShopNumbers(meter);
                     const filteredShops = getFilteredAndFilledData(matchingShops);
@@ -2788,23 +2799,28 @@ export default function TariffAssignmentTab({
                     filteredShops.forEach((doc) => {
                       const displayDateEnd = doc.reconciliationDateTo || doc.periodEnd;
                       if (displayDateEnd) {
-                        allPeriods.add(formatDateStringToMonthYear(displayDateEnd));
+                        const monthYear = formatDateStringToMonthYear(displayDateEnd);
+                        allDates.push(parseMonthYear(monthYear));
                       }
                     });
                   });
                   
-                  // Sort periods chronologically
-                  return Array.from(allPeriods).sort((a, b) => {
-                    const parseDate = (str: string) => {
-                      const [month, year] = str.split(' ');
-                      const monthMap: Record<string, number> = {
-                        Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5,
-                        Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11
-                      };
-                      return new Date(parseInt(year), monthMap[month] || 0);
-                    };
-                    return parseDate(a).getTime() - parseDate(b).getTime();
-                  });
+                  if (allDates.length === 0) return [];
+                  
+                  // Find earliest and latest dates
+                  const minDate = new Date(Math.min(...allDates.map(d => d.getTime())));
+                  const maxDate = new Date(Math.max(...allDates.map(d => d.getTime())));
+                  
+                  // Generate all months between min and max (inclusive)
+                  const periods: string[] = [];
+                  const current = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
+                  
+                  while (current <= maxDate) {
+                    periods.push(`${monthNames[current.getMonth()]} ${current.getFullYear()}`);
+                    current.setMonth(current.getMonth() + 1);
+                  }
+                  
+                  return periods;
                 };
                 
                 const globalPeriods = getAllGlobalPeriods();
