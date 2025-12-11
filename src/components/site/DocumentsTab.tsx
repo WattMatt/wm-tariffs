@@ -1962,32 +1962,6 @@ export default function DocumentsTab({ siteId, onUploadProgressChange }: Documen
             </CardDescription>
           </CardHeader>
         <CardContent className="space-y-4">
-          {/* New Folder Dialog - Inline */}
-          {isCreatingFolder && (
-            <div className="flex items-center gap-2 p-3 border rounded-lg bg-primary/5">
-              <Input
-                placeholder="Folder name"
-                value={newFolderName}
-                onChange={(e) => setNewFolderName(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleCreateFolder()}
-                autoFocus
-              />
-              <Button onClick={() => handleCreateFolder()} size="sm">
-                Create
-              </Button>
-              <Button
-                onClick={() => {
-                  setIsCreatingFolder(false);
-                  setNewFolderName('');
-                }}
-                variant="ghost"
-                size="sm"
-              >
-                Cancel
-              </Button>
-            </div>
-          )}
-
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 border rounded-lg bg-muted/30">
             <div className="space-y-2">
               <Label htmlFor="document-type">Document Type</Label>
@@ -2246,16 +2220,42 @@ export default function DocumentsTab({ siteId, onUploadProgressChange }: Documen
                   </>
                 )}
               </div>
-              {/* New Folder Button */}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsCreatingFolder(true)}
-                className="gap-2"
-              >
-                <FolderPlus className="w-4 h-4" />
-                New Folder
-              </Button>
+              {/* New Folder Button / Inline Input */}
+              {isCreatingFolder ? (
+                <div className="flex items-center gap-2">
+                  <Input
+                    placeholder="Folder name"
+                    value={newFolderName}
+                    onChange={(e) => setNewFolderName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleCreateFolder()}
+                    className="w-48 h-8"
+                    autoFocus
+                  />
+                  <Button onClick={() => handleCreateFolder()} size="sm">
+                    Create
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      setIsCreatingFolder(false);
+                      setNewFolderName('');
+                    }}
+                    variant="ghost"
+                    size="sm"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsCreatingFolder(true)}
+                  className="gap-2"
+                >
+                  <FolderPlus className="w-4 h-4" />
+                  New Folder
+                </Button>
+              )}
             </div>
           </div>
 
