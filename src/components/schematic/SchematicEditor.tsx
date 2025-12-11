@@ -4366,9 +4366,9 @@ export default function SchematicEditor({
       return;
     }
     
-    // Get tariff_structure_id and ensure it's valid UUID or null
-    const tariffValue = formData.get('tariff_structure_id') as string;
-    const isValidUUID = tariffValue && tariffValue !== 'none' && tariffValue.length === 36 && tariffValue.includes('-');
+    // Get assigned_tariff_name (stores tariff name, not UUID)
+    const assignedTariffName = formData.get('assigned_tariff_name') as string;
+    const hasTariff = assignedTariffName && assignedTariffName !== 'none';
     
     const updatedData = {
       meter_number: meterNumber,
@@ -4381,7 +4381,8 @@ export default function SchematicEditor({
       meter_type: formData.get('meter_type') as string,
       zone: formData.get('zone') as string || null,
       location: formData.get('location') as string || null,
-      tariff_structure_id: isValidUUID ? tariffValue : null,
+      assigned_tariff_name: hasTariff ? assignedTariffName : null,
+      tariff_structure_id: null, // Clear old field since we now use assigned_tariff_name
       confirmation_status: 'confirmed', // Automatically approve on save
     };
 
