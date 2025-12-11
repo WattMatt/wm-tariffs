@@ -876,6 +876,25 @@ export default function TariffAssignmentTab({
     }
   }, [site?.supply_authority_id]);
 
+  // Initialize selected tariffs from assigned_tariff_name once structures are loaded
+  useEffect(() => {
+    if (meters.length > 0 && tariffStructures.length > 0) {
+      const tariffMap: { [meterId: string]: string } = {};
+      meters.forEach((meter) => {
+        // Prioritize assigned_tariff_name, fallback to tariff_structure_id
+        if (meter.assigned_tariff_name) {
+          const matchingTariff = tariffStructures.find(t => t.name === meter.assigned_tariff_name);
+          if (matchingTariff) {
+            tariffMap[meter.id] = matchingTariff.id;
+          }
+        } else if (meter.tariff_structure_id) {
+          tariffMap[meter.id] = meter.tariff_structure_id;
+        }
+      });
+      setSelectedTariffs(tariffMap);
+    }
+  }, [meters, tariffStructures]);
+
   // Load calculated costs when documents are available
   useEffect(() => {
     if (documentShopNumbers.length > 0 && meters.length > 0) {
@@ -1681,15 +1700,6 @@ export default function TariffAssignmentTab({
     }
 
     setMeters(data || []);
-    
-    // Initialize selected tariffs from existing data
-    const tariffMap: { [meterId: string]: string } = {};
-    data?.forEach((meter) => {
-      if (meter.tariff_structure_id) {
-        tariffMap[meter.id] = meter.tariff_structure_id;
-      }
-    });
-    setSelectedTariffs(tariffMap);
   };
 
   const fetchDocumentShopNumbers = async () => {
