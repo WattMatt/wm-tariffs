@@ -767,14 +767,31 @@ export default function DocumentsTab({ siteId, onUploadProgressChange }: Documen
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
-    setSelectedFiles(Array.from(files));
+    // Filter out hidden/system files like .DS_Store
+    const validFiles = Array.from(files).filter(file => {
+      const fileName = file.name.toLowerCase();
+      return !fileName.startsWith('.') && !fileName.includes('.ds_store');
+    });
+    if (validFiles.length === 0) {
+      toast.error("No valid files - hidden or system files were filtered out");
+      return;
+    }
+    setSelectedFiles(validFiles);
   };
 
   const handleFolderSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    const filesArray = Array.from(files);
+    // Filter out hidden/system files like .DS_Store
+    const filesArray = Array.from(files).filter(file => {
+      const fileName = file.name.toLowerCase();
+      return !fileName.startsWith('.') && !fileName.includes('.ds_store');
+    });
+    if (filesArray.length === 0) {
+      toast.error("No valid files - hidden or system files were filtered out");
+      return;
+    }
     setSelectedFiles(filesArray);
   };
 
