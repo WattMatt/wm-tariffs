@@ -306,15 +306,15 @@ export default function ReconciliationChartsDialog({
         return;
       }
 
-      // Filter for PNG files and parse names
+      // Filter for SVG files and parse names
       const chartFiles: ChartFile[] = [];
       
       for (const file of files) {
-        if (!file.name.endsWith('.png')) continue;
+        if (!file.name.endsWith('.svg')) continue;
         
-        // Parse filename: {meter_number}-{metric}.png
+        // Parse filename: {meter_number}-{metric}.svg
         // Must match against known metrics since metrics can contain dashes (e.g., kva-charge)
-        const nameWithoutExt = file.name.replace('.png', '');
+        const nameWithoutExt = file.name.replace('.svg', '');
         
         let foundMetric = '';
         let foundMeterNumber = '';
