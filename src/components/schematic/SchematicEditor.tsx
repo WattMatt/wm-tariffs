@@ -575,6 +575,7 @@ export default function SchematicEditor({
   
   // Legend visibility toggles
   const [legendVisibility, setLegendVisibility] = useState({
+    council_meter: true,
     bulk_meter: true,
     check_meter: true,
     main_board_zone: true,
@@ -3182,7 +3183,9 @@ export default function SchematicEditor({
       
       // Determine meter type category
       let meterTypeCategory: string = 'other';
-      if (meterType.includes('bulk')) {
+      if (meterType.includes('council')) {
+        meterTypeCategory = 'council_meter';
+      } else if (meterType.includes('bulk')) {
         meterTypeCategory = 'bulk_meter';
       } else if (meterType.includes('check')) {
         meterTypeCategory = 'check_meter';
@@ -5608,12 +5611,13 @@ export default function SchematicEditor({
               onClick={() => setLegendVisibility(prev => ({ ...prev, council_connection_zone: !prev.council_connection_zone }))}
               onDoubleClick={() => {
                 const isOnlyActive = legendVisibility.council_connection_zone && 
-                  !legendVisibility.bulk_meter && !legendVisibility.check_meter && 
+                  !legendVisibility.council_meter && !legendVisibility.bulk_meter && !legendVisibility.check_meter && 
                   !legendVisibility.main_board_zone && !legendVisibility.mini_sub_zone && 
                   !legendVisibility.tenant_meter && !legendVisibility.other;
                 
                 if (isOnlyActive) {
                   setLegendVisibility({
+                    council_meter: true,
                     bulk_meter: true,
                     check_meter: true,
                     main_board_zone: true,
@@ -5624,6 +5628,7 @@ export default function SchematicEditor({
                   });
                 } else {
                   setLegendVisibility({
+                    council_meter: false,
                     bulk_meter: false,
                     check_meter: false,
                     main_board_zone: false,
@@ -5645,12 +5650,13 @@ export default function SchematicEditor({
               onClick={() => setLegendVisibility(prev => ({ ...prev, mini_sub_zone: !prev.mini_sub_zone }))}
               onDoubleClick={() => {
                 const isOnlyActive = legendVisibility.mini_sub_zone && 
-                  !legendVisibility.bulk_meter && !legendVisibility.check_meter && 
+                  !legendVisibility.council_meter && !legendVisibility.bulk_meter && !legendVisibility.check_meter && 
                   !legendVisibility.main_board_zone && !legendVisibility.council_connection_zone && 
                   !legendVisibility.tenant_meter && !legendVisibility.other;
                 
                 if (isOnlyActive) {
                   setLegendVisibility({
+                    council_meter: true,
                     bulk_meter: true,
                     check_meter: true,
                     main_board_zone: true,
@@ -5661,6 +5667,7 @@ export default function SchematicEditor({
                   });
                 } else {
                   setLegendVisibility({
+                    council_meter: false,
                     bulk_meter: false,
                     check_meter: false,
                     main_board_zone: false,
@@ -5682,12 +5689,13 @@ export default function SchematicEditor({
               onClick={() => setLegendVisibility(prev => ({ ...prev, main_board_zone: !prev.main_board_zone }))}
               onDoubleClick={() => {
                 const isOnlyActive = legendVisibility.main_board_zone && 
-                  !legendVisibility.bulk_meter && !legendVisibility.check_meter && 
+                  !legendVisibility.council_meter && !legendVisibility.bulk_meter && !legendVisibility.check_meter && 
                   !legendVisibility.mini_sub_zone && !legendVisibility.council_connection_zone && 
                   !legendVisibility.tenant_meter && !legendVisibility.other;
                 
                 if (isOnlyActive) {
                   setLegendVisibility({
+                    council_meter: true,
                     bulk_meter: true,
                     check_meter: true,
                     main_board_zone: true,
@@ -5698,6 +5706,7 @@ export default function SchematicEditor({
                   });
                 } else {
                   setLegendVisibility({
+                    council_meter: false,
                     bulk_meter: false,
                     check_meter: false,
                     main_board_zone: true,
@@ -5718,16 +5727,17 @@ export default function SchematicEditor({
             {/* Meters */}
             <Badge 
               variant="outline" 
-              className={`cursor-pointer transition-all hover:scale-105 select-none ${!legendVisibility.bulk_meter ? 'opacity-40' : ''}`}
-              onClick={() => setLegendVisibility(prev => ({ ...prev, bulk_meter: !prev.bulk_meter }))}
+              className={`cursor-pointer transition-all hover:scale-105 select-none ${!legendVisibility.council_meter ? 'opacity-40' : ''}`}
+              onClick={() => setLegendVisibility(prev => ({ ...prev, council_meter: !prev.council_meter }))}
               onDoubleClick={() => {
-                const isOnlyActive = legendVisibility.bulk_meter && 
-                  !legendVisibility.check_meter && !legendVisibility.main_board_zone && 
-                  !legendVisibility.mini_sub_zone && !legendVisibility.council_connection_zone && 
-                  !legendVisibility.tenant_meter && !legendVisibility.other;
+                const isOnlyActive = legendVisibility.council_meter && 
+                  !legendVisibility.bulk_meter && !legendVisibility.check_meter && 
+                  !legendVisibility.main_board_zone && !legendVisibility.mini_sub_zone && 
+                  !legendVisibility.council_connection_zone && !legendVisibility.tenant_meter && !legendVisibility.other;
                 
                 if (isOnlyActive) {
                   setLegendVisibility({
+                    council_meter: true,
                     bulk_meter: true,
                     check_meter: true,
                     main_board_zone: true,
@@ -5738,6 +5748,46 @@ export default function SchematicEditor({
                   });
                 } else {
                   setLegendVisibility({
+                    council_meter: true,
+                    bulk_meter: false,
+                    check_meter: false,
+                    main_board_zone: false,
+                    mini_sub_zone: false,
+                    council_connection_zone: false,
+                    tenant_meter: false,
+                    other: false
+                  });
+                }
+              }}
+            >
+              <div className="w-3 h-3 rounded-full bg-[#ec4899] mr-2" />
+              Council Meter
+            </Badge>
+            
+            <Badge 
+              variant="outline" 
+              className={`cursor-pointer transition-all hover:scale-105 select-none ${!legendVisibility.bulk_meter ? 'opacity-40' : ''}`}
+              onClick={() => setLegendVisibility(prev => ({ ...prev, bulk_meter: !prev.bulk_meter }))}
+              onDoubleClick={() => {
+                const isOnlyActive = legendVisibility.bulk_meter && 
+                  !legendVisibility.council_meter && !legendVisibility.check_meter && 
+                  !legendVisibility.main_board_zone && !legendVisibility.mini_sub_zone && 
+                  !legendVisibility.council_connection_zone && !legendVisibility.tenant_meter && !legendVisibility.other;
+                
+                if (isOnlyActive) {
+                  setLegendVisibility({
+                    council_meter: true,
+                    bulk_meter: true,
+                    check_meter: true,
+                    main_board_zone: true,
+                    mini_sub_zone: true,
+                    council_connection_zone: true,
+                    tenant_meter: true,
+                    other: true
+                  });
+                } else {
+                  setLegendVisibility({
+                    council_meter: false,
                     bulk_meter: true,
                     check_meter: false,
                     main_board_zone: false,
@@ -5759,12 +5809,13 @@ export default function SchematicEditor({
               onClick={() => setLegendVisibility(prev => ({ ...prev, check_meter: !prev.check_meter }))}
               onDoubleClick={() => {
                 const isOnlyActive = legendVisibility.check_meter && 
-                  !legendVisibility.bulk_meter && !legendVisibility.main_board_zone && 
+                  !legendVisibility.council_meter && !legendVisibility.bulk_meter && !legendVisibility.main_board_zone && 
                   !legendVisibility.mini_sub_zone && !legendVisibility.council_connection_zone && 
                   !legendVisibility.tenant_meter && !legendVisibility.other;
                 
                 if (isOnlyActive) {
                   setLegendVisibility({
+                    council_meter: true,
                     bulk_meter: true,
                     check_meter: true,
                     main_board_zone: true,
@@ -5775,6 +5826,7 @@ export default function SchematicEditor({
                   });
                 } else {
                   setLegendVisibility({
+                    council_meter: false,
                     bulk_meter: false,
                     check_meter: true,
                     main_board_zone: false,
@@ -5802,6 +5854,7 @@ export default function SchematicEditor({
                 
                 if (isOnlyActive) {
                   setLegendVisibility({
+                    council_meter: true,
                     bulk_meter: true,
                     check_meter: true,
                     main_board_zone: true,
@@ -5812,6 +5865,7 @@ export default function SchematicEditor({
                   });
                 } else {
                   setLegendVisibility({
+                    council_meter: false,
                     bulk_meter: false,
                     check_meter: false,
                     main_board_zone: false,
@@ -5833,12 +5887,13 @@ export default function SchematicEditor({
               onClick={() => setLegendVisibility(prev => ({ ...prev, other: !prev.other }))}
               onDoubleClick={() => {
                 const isOnlyActive = legendVisibility.other && 
-                  !legendVisibility.bulk_meter && !legendVisibility.check_meter && 
+                  !legendVisibility.council_meter && !legendVisibility.bulk_meter && !legendVisibility.check_meter && 
                   !legendVisibility.main_board_zone && !legendVisibility.mini_sub_zone && 
                   !legendVisibility.council_connection_zone && !legendVisibility.tenant_meter;
                 
                 if (isOnlyActive) {
                   setLegendVisibility({
+                    council_meter: true,
                     bulk_meter: true,
                     check_meter: true,
                     main_board_zone: true,
@@ -5849,6 +5904,7 @@ export default function SchematicEditor({
                   });
                 } else {
                   setLegendVisibility({
+                    council_meter: false,
                     bulk_meter: false,
                     check_meter: false,
                     main_board_zone: false,
