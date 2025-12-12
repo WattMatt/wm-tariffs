@@ -134,74 +134,9 @@ export function useMeterHierarchy({ siteId }: UseMeterHierarchyOptions) {
         })
       );
       
-      // ========== PRIORITY: Check for saved hierarchy settings first ==========
-      const { data: savedSettings } = await supabase
-        .from('site_reconciliation_settings')
-        .select('meter_order, meter_associations')
-        .eq('site_id', siteId)
-        .maybeSingle();
-      
-      // If saved meter_order exists, use it as the source of truth
-      if (savedSettings?.meter_order && savedSettings.meter_order.length > 0) {
-        console.log('Using saved meter order from site_reconciliation_settings');
-        
-        // Order meters according to saved order
-        const orderedMeters: typeof metersWithData = [];
-        const metersById = new Map(metersWithData.map(m => [m.id, m]));
-        
-        savedSettings.meter_order.forEach((meterId: string) => {
-          const meter = metersById.get(meterId);
-          if (meter) {
-            orderedMeters.push(meter);
-            metersById.delete(meterId);
-          }
-        });
-        
-        // Add any new meters not in saved order
-        metersById.forEach(meter => orderedMeters.push(meter));
-        
-        setAvailableMeters(orderedMeters);
-        
-        // Use saved indent levels from localStorage (these are the user's configuration)
-        const savedIndentLevels = loadIndentLevelsFromStorage();
-        if (savedIndentLevels.size > 0) {
-          setMeterIndentLevels(savedIndentLevels);
-          
-          // Derive connections from saved indent levels
-          const derivedConnections = deriveConnectionsFromIndentsUtil(orderedMeters, savedIndentLevels);
-          const connectionsMap = new Map<string, string[]>();
-          const parentInfoMap = new Map<string, string>();
-          
-          derivedConnections.forEach(conn => {
-            if (!connectionsMap.has(conn.parent_meter_id)) {
-              connectionsMap.set(conn.parent_meter_id, []);
-            }
-            connectionsMap.get(conn.parent_meter_id)!.push(conn.child_meter_id);
-            
-            const parentMeter = orderedMeters.find(m => m.id === conn.parent_meter_id);
-            if (parentMeter) {
-              parentInfoMap.set(conn.child_meter_id, parentMeter.meter_number);
-            }
-          });
-          
-          setMeterConnectionsMap(connectionsMap);
-          setMeterParentInfo(parentInfoMap);
-          setExpandedMeters(new Set(connectionsMap.keys()));
-        }
-        
-        // Auto-select first bulk meter
-        const bulkMeter = orderedMeters.find(m => m.meter_type === "bulk_meter");
-        if (bulkMeter) {
-          setSelectedMeterId(bulkMeter.id);
-        } else if (orderedMeters.length > 0) {
-          setSelectedMeterId(orderedMeters[0].id);
-        }
-        
-        return;
-      }
-      
-      // ========== No saved settings: Build hierarchy from schematic/connections ==========
-      console.log('No saved meter order, building hierarchy from schematic/connections');
+      // ========== ALWAYS build hierarchy from schematic_lines (authoritative source) ==========
+      // This ensures hierarchy is always correct, matching what Reset does
+      console.log('Building hierarchy from schematic_lines (authoritative source)');
       
       // Fetch parent-child relationships - schematic_lines is authoritative source (per memory)
       const schematicConnections = await fetchSchematicConnectionsFromDb(siteId);
@@ -285,7 +220,7 @@ export function useMeterHierarchy({ siteId }: UseMeterHierarchyOptions) {
     } finally {
       setIsLoadingMeters(false);
     }
-  }, [siteId, loadIndentLevelsFromStorage]);
+  }, [siteId]);
 
   // Fetch date ranges
   const fetchDateRanges = useCallback(async () => {
