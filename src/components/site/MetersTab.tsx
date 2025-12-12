@@ -358,17 +358,67 @@ export default function MetersTab({ siteId }: MetersTabProps) {
   const handleDelete = async () => {
     if (!deletingMeterId) return;
 
-    const { error } = await supabase
-      .from("meters")
-      .delete()
-      .eq("id", deletingMeterId);
+    try {
+      // 1. Delete schematic lines where this meter is referenced in metadata
+      const { data: schematicLines } = await supabase
+        .from('schematic_lines')
+        .select('id, metadata');
+      
+      if (schematicLines?.length) {
+        const linesToDelete = schematicLines.filter(line => {
+          const metadata = line.metadata as any;
+          return metadata?.parent_meter_id === deletingMeterId || 
+                 metadata?.child_meter_id === deletingMeterId;
+        });
+        
+        if (linesToDelete.length > 0) {
+          await supabase
+            .from('schematic_lines')
+            .delete()
+            .in('id', linesToDelete.map(l => l.id));
+        }
+      }
 
-    if (error) {
-      toast.error("Failed to delete meter");
-    } else {
-      toast.success("Meter deleted successfully");
-      fetchMeters();
+      // 2. Delete meter positions on schematics
+      await supabase
+        .from('meter_positions')
+        .delete()
+        .eq('meter_id', deletingMeterId);
+
+      // 3. Delete meter connections (parent-child relationships)
+      await supabase
+        .from('meter_connections')
+        .delete()
+        .or(`parent_meter_id.eq.${deletingMeterId},child_meter_id.eq.${deletingMeterId}`);
+
+      // 4. Delete hierarchical meter readings
+      await supabase
+        .from('hierarchical_meter_readings')
+        .delete()
+        .eq('meter_id', deletingMeterId);
+
+      // 5. Delete meter readings and CSV data using edge function
+      await supabase.functions.invoke('delete-meter-data', {
+        body: { meterIds: [deletingMeterId] }
+      });
+
+      // 6. Finally delete the meter itself
+      const { error } = await supabase
+        .from("meters")
+        .delete()
+        .eq("id", deletingMeterId);
+
+      if (error) {
+        toast.error("Failed to delete meter");
+      } else {
+        toast.success("Meter and all associated data deleted successfully");
+        fetchMeters();
+      }
+    } catch (err) {
+      console.error("Error during meter deletion:", err);
+      toast.error("Failed to delete meter completely");
     }
+    
     setDeletingMeterId(null);
   };
 
