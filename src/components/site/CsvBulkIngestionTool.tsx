@@ -54,9 +54,17 @@ import {
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
+interface ParseQueue {
+  startQueue: (items: any[]) => void;
+  cancelQueue: () => void;
+  isProcessing: boolean;
+  progress: { completed: number; total: number; currentFile: string; isActive: boolean };
+}
+
 interface CsvBulkIngestionToolProps {
   siteId: string;
   onDataChange?: () => void;
+  parseQueue?: ParseQueue;
 }
 
 interface CsvPreview {
@@ -104,7 +112,7 @@ interface FileItem {
   contentHash?: string;
 }
 
-export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIngestionToolProps) {
+export default function CsvBulkIngestionTool({ siteId, onDataChange, parseQueue }: CsvBulkIngestionToolProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [files, setFiles] = useState<FileItem[]>([]);
   const [meters, setMeters] = useState<any[]>([]);
@@ -277,7 +285,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
         meterId: file.meter_id,
         meterNumber: file.meters?.meter_number || 'Unknown',
         size: file.file_size,
-        status: file.parse_status === 'success' ? 'success' : 
+        status: file.parse_status === 'parsed' ? 'success' : 
                 file.parse_status === 'error' ? 'error' : 
                 file.parse_status === 'parsing' ? 'parsing' : 'uploaded',
         isNew: false,
@@ -1008,6 +1016,27 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange }: CsvBulkIn
     
     if (!window.confirm(message)) return;
 
+    // If parseQueue is provided, use background processing
+    if (parseQueue) {
+      const queueItems = filesToParse.map(fileItem => ({
+        meterId: fileItem.meterId!,
+        meterNumber: fileItem.meterNumber || "Unknown",
+        filePath: fileItem.path!,
+        separator: separator === "tab" ? "\t" : 
+                  separator === "comma" ? "," : 
+                  separator === "semicolon" ? ";" : 
+                  separator === "space" ? " " : "\t",
+        dateFormat: columnMapping.dateFormat,
+        timeInterval: parseInt(timeInterval),
+        headerRowNumber: parseInt(headerRowNumber),
+        columnMapping: columnMapping
+      }));
+      
+      parseQueue.startQueue(queueItems);
+      return;
+    }
+
+    // Fallback: inline processing (when parseQueue not provided)
     setIsProcessing(true);
 
     for (const fileItem of filesToParse) {
