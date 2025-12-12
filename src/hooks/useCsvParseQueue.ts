@@ -64,6 +64,9 @@ export function useCsvParseQueue(siteId: string, onDataChange?: () => void) {
           .update({ parse_status: 'parsing', error_message: null })
           .eq('file_path', item.filePath);
 
+        // Trigger UI refresh to show "Parsing..." status
+        onDataChange?.();
+
         const { data, error } = await supabase.functions.invoke('process-meter-csv', {
           body: {
             meterId: item.meterId,
@@ -106,6 +109,9 @@ export function useCsvParseQueue(siteId: string, onDataChange?: () => void) {
         ...prev,
         completed: completedItems,
       }));
+
+      // Trigger UI refresh after each file completes
+      onDataChange?.();
     }
 
     isProcessingRef.current = false;
