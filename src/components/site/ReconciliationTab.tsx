@@ -527,8 +527,22 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       });
       setMeterIndentLevels(indentLevels);
       
+      // Update connections map based on schematic connections
+      const newConnectionsMap = new Map<string, string[]>();
+      schematicConnections.forEach(conn => {
+        if (!newConnectionsMap.has(conn.parent_meter_id)) {
+          newConnectionsMap.set(conn.parent_meter_id, []);
+        }
+        newConnectionsMap.get(conn.parent_meter_id)!.push(conn.child_meter_id);
+      });
+      setMeterConnectionsMap(newConnectionsMap);
+      
+      // Auto-expand all parent meters
+      setExpandedMeters(new Set(newConnectionsMap.keys()));
+      
       toast.success("Meter hierarchy restored from schematic");
-      await fetchBasicMeters();
+      
+      toast.success("Meter hierarchy restored from schematic");
     } catch (error) {
       console.error('Error resetting hierarchy:', error);
       toast.error("Failed to reset hierarchy");
