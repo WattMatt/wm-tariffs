@@ -102,7 +102,7 @@ export function useMeterHierarchy({ siteId }: UseMeterHierarchyOptions) {
     }
   }, [indentLevelsStorageKey]);
 
-  // Fetch basic meters
+  // Fetch basic meters with data availability and parent relationships
   const fetchBasicMeters = useCallback(async () => {
     try {
       setIsLoadingMeters(true);
@@ -118,13 +118,93 @@ export function useMeterHierarchy({ siteId }: UseMeterHierarchyOptions) {
         return;
       }
       
+      // Check data availability for each meter (parallel queries)
+      const metersWithData = await Promise.all(
+        meters.map(async (meter) => {
+          const { data: readings } = await supabase
+            .from("meter_readings")
+            .select("id")
+            .eq("meter_id", meter.id)
+            .limit(1);
+          
+          return {
+            ...meter,
+            hasData: readings && readings.length > 0,
+          };
+        })
+      );
+      
+      // Fetch meter connections for parent-child relationships
+      const { data: connections } = await supabase
+        .from("meter_connections")
+        .select(`
+          parent_meter_id,
+          child_meter_id,
+          parent:meters!meter_connections_parent_meter_id_fkey(site_id),
+          child:meters!meter_connections_child_meter_id_fkey(site_id)
+        `);
+      
+      // Filter to only connections where BOTH meters are in the current site
+      let siteConnections = connections?.filter(conn => 
+        conn.parent?.site_id === siteId && conn.child?.site_id === siteId
+      ) || [];
+      
+      // If no connections in meter_connections table, fall back to schematic_lines
+      if (siteConnections.length === 0) {
+        const schematicConnections = await fetchSchematicConnectionsFromDb(siteId);
+        siteConnections = schematicConnections.map(conn => ({
+          parent_meter_id: conn.parent_meter_id,
+          child_meter_id: conn.child_meter_id,
+          parent: { site_id: siteId },
+          child: { site_id: siteId }
+        }));
+      }
+      
+      // Build parent info map and connections map
+      const parentInfoMap = new Map<string, string>();
+      const connectionsMap = new Map<string, string[]>();
+      
+      siteConnections.forEach(conn => {
+        const parentMeter = metersWithData.find(m => m.id === conn.parent_meter_id);
+        if (parentMeter) {
+          parentInfoMap.set(conn.child_meter_id, parentMeter.meter_number);
+        }
+        
+        if (!connectionsMap.has(conn.parent_meter_id)) {
+          connectionsMap.set(conn.parent_meter_id, []);
+        }
+        connectionsMap.get(conn.parent_meter_id)!.push(conn.child_meter_id);
+      });
+      
+      setMeterParentInfo(parentInfoMap);
+      setMeterConnectionsMap(connectionsMap);
+      
+      // Build indent levels from connections
+      const indentLevels = new Map<string, number>();
+      const calculateIndentLevel = (meterId: string, visited = new Set<string>()): number => {
+        if (visited.has(meterId)) return 0;
+        visited.add(meterId);
+        
+        // Find if this meter is a child of another
+        for (const [parentId, children] of connectionsMap.entries()) {
+          if (children.includes(meterId)) {
+            return 1 + calculateIndentLevel(parentId, visited);
+          }
+        }
+        return 0;
+      };
+      
+      metersWithData.forEach(meter => {
+        indentLevels.set(meter.id, calculateIndentLevel(meter.id));
+      });
+      
       // Check for saved meter order
       const savedMeterOrder = (window as any).__savedMeterOrder;
-      let finalMeters = meters;
+      let finalMeters = metersWithData;
       
       if (savedMeterOrder && savedMeterOrder.length > 0) {
-        const orderedMeters: typeof meters = [];
-        const metersById = new Map(meters.map(m => [m.id, m]));
+        const orderedMeters: typeof metersWithData = [];
+        const metersById = new Map(metersWithData.map(m => [m.id, m]));
         
         savedMeterOrder.forEach((meterId: string) => {
           const meter = metersById.get(meterId);
@@ -149,11 +229,18 @@ export function useMeterHierarchy({ siteId }: UseMeterHierarchyOptions) {
         setSelectedMeterId(finalMeters[0].id);
       }
       
-      // Load saved indent levels
+      // Merge with saved indent levels (user overrides)
       const savedIndentLevels = loadIndentLevelsFromStorage();
-      if (savedIndentLevels.size > 0) {
-        setMeterIndentLevels(savedIndentLevels);
-      }
+      const mergedIndentLevels = new Map(indentLevels);
+      savedIndentLevels.forEach((level, meterId) => {
+        if (mergedIndentLevels.has(meterId)) {
+          mergedIndentLevels.set(meterId, level);
+        }
+      });
+      setMeterIndentLevels(mergedIndentLevels);
+      
+      // Auto-expand all parent meters
+      setExpandedMeters(new Set(connectionsMap.keys()));
     } catch (error) {
       console.error("Error fetching basic meters:", error);
     } finally {
