@@ -21,6 +21,95 @@ interface AggregatedData {
   [column: string]: number;
 }
 
+// ===== CORRUPTION DETECTION THRESHOLDS =====
+// These are generous defaults - 10,000 kWh per 30 mins = 20MW sustained power
+const CORRUPTION_THRESHOLDS = {
+  maxKwhPer30Min: 10000,    // Max kWh for a single 30-min reading
+  maxKvaPer30Min: 50000,    // Max kVA for a single 30-min reading
+  maxMetadataValue: 100000, // Max for any metadata column (P1, P2, S, etc.)
+};
+
+interface CorruptionCorrection {
+  meterId: string;
+  meterNumber: string;
+  timestamp: string;
+  fieldName: string;
+  originalValue: number;
+  correctedValue: number;
+  reason: string;
+}
+
+// Track all corrections made during this run
+const corruptionCorrections: CorruptionCorrection[] = [];
+
+/**
+ * Check if a value exceeds the corruption threshold for a given field type
+ */
+function isValueCorrupt(value: number, fieldName: string): boolean {
+  const absValue = Math.abs(value);
+  const fieldLower = fieldName.toLowerCase();
+  
+  if (fieldLower === 'kwh_value' || fieldLower.includes('kwh') || /^p\d+$/i.test(fieldLower)) {
+    return absValue > CORRUPTION_THRESHOLDS.maxKwhPer30Min;
+  }
+  
+  if (fieldLower.includes('kva') || fieldLower === 's') {
+    return absValue > CORRUPTION_THRESHOLDS.maxKvaPer30Min;
+  }
+  
+  return absValue > CORRUPTION_THRESHOLDS.maxMetadataValue;
+}
+
+/**
+ * Validate and correct a value, returning the corrected value and logging the correction
+ */
+function validateAndCorrectValue(
+  value: number,
+  fieldName: string,
+  meterId: string,
+  meterNumber: string,
+  timestamp: string,
+  prevValue: number | null = null,
+  nextValue: number | null = null
+): number {
+  if (!isValueCorrupt(value, fieldName)) {
+    return value;
+  }
+  
+  // Determine corrected value - interpolate from neighbors if available
+  let correctedValue = 0;
+  let reason = '';
+  
+  if (prevValue !== null && nextValue !== null && !isValueCorrupt(prevValue, fieldName) && !isValueCorrupt(nextValue, fieldName)) {
+    correctedValue = (prevValue + nextValue) / 2;
+    reason = `Interpolated from neighbors (${prevValue.toFixed(2)}, ${nextValue.toFixed(2)})`;
+  } else if (prevValue !== null && !isValueCorrupt(prevValue, fieldName)) {
+    correctedValue = prevValue;
+    reason = `Used previous value (${prevValue.toFixed(2)})`;
+  } else if (nextValue !== null && !isValueCorrupt(nextValue, fieldName)) {
+    correctedValue = nextValue;
+    reason = `Used next value (${nextValue.toFixed(2)})`;
+  } else {
+    correctedValue = 0;
+    reason = 'Zeroed out (no valid neighbors)';
+  }
+  
+  // Log the correction
+  console.warn(`⚠️ CORRUPT VALUE DETECTED: ${meterNumber} @ ${timestamp} - ${fieldName}: ${value.toLocaleString()} → ${correctedValue.toFixed(2)} (${reason})`);
+  
+  corruptionCorrections.push({
+    meterId,
+    meterNumber,
+    timestamp,
+    fieldName,
+    originalValue: value,
+    correctedValue,
+    reason
+  });
+  
+  return correctedValue;
+}
+
 // Helper to round timestamp to nearest 30-min slot
 const roundToSlot = (timestamp: string): string => {
   const date = new Date(timestamp);
@@ -200,24 +289,79 @@ Deno.serve(async (req) => {
         console.log(`  ${meterNumberMap.get(id)}: ${readingsByMeter.get(id) || 0} readings`);
       });
 
-      // Step 4: Copy to hierarchical_meter_readings using upsert
+      // Step 4: Validate and copy to hierarchical_meter_readings using upsert
+      // Apply corruption detection to prevent bad data from propagating
+      console.log('Validating readings for corruption before copying...');
+      
       const COPY_BATCH_SIZE = 1000;
       let copiedCount = 0;
       let copyErrors = 0;
+      let corruptValuesDetected = 0;
 
       for (let i = 0; i < allLeafReadings.length; i += COPY_BATCH_SIZE) {
-        const batch = allLeafReadings.slice(i, i + COPY_BATCH_SIZE).map(reading => ({
-          meter_id: reading.meter_id,
-          reading_timestamp: reading.reading_timestamp,
-          kwh_value: reading.kwh_value,
-          kva_value: reading.kva_value,
-          metadata: {
-            ...reading.metadata,
-            source: 'Copied',
-            copied_from: 'meter_readings',
-            copied_at: new Date().toISOString()
+        const batch = allLeafReadings.slice(i, i + COPY_BATCH_SIZE).map((reading, batchIdx) => {
+          const globalIdx = i + batchIdx;
+          const meterNum = meterNumberMap.get(reading.meter_id) || reading.meter_id;
+          
+          // Validate kwh_value
+          let validatedKwh = reading.kwh_value;
+          if (isValueCorrupt(validatedKwh, 'kwh_value')) {
+            const prevReading = globalIdx > 0 ? allLeafReadings[globalIdx - 1] : null;
+            const nextReading = globalIdx < allLeafReadings.length - 1 ? allLeafReadings[globalIdx + 1] : null;
+            const prevKwh = prevReading?.meter_id === reading.meter_id ? prevReading.kwh_value : null;
+            const nextKwh = nextReading?.meter_id === reading.meter_id ? nextReading.kwh_value : null;
+            
+            validatedKwh = validateAndCorrectValue(
+              reading.kwh_value, 'kwh_value', reading.meter_id, meterNum, 
+              reading.reading_timestamp, prevKwh, nextKwh
+            );
+            corruptValuesDetected++;
           }
-        }));
+          
+          // Validate kva_value
+          let validatedKva = reading.kva_value;
+          if (validatedKva !== null && isValueCorrupt(validatedKva, 'kva_value')) {
+            const prevReading = globalIdx > 0 ? allLeafReadings[globalIdx - 1] : null;
+            const nextReading = globalIdx < allLeafReadings.length - 1 ? allLeafReadings[globalIdx + 1] : null;
+            const prevKva = prevReading?.meter_id === reading.meter_id ? prevReading.kva_value : null;
+            const nextKva = nextReading?.meter_id === reading.meter_id ? nextReading.kva_value : null;
+            
+            validatedKva = validateAndCorrectValue(
+              validatedKva, 'kva_value', reading.meter_id, meterNum,
+              reading.reading_timestamp, prevKva, nextKva
+            );
+            corruptValuesDetected++;
+          }
+          
+          // Validate metadata imported_fields
+          const validatedMetadata = { ...reading.metadata };
+          if (validatedMetadata?.imported_fields) {
+            const importedFields = { ...validatedMetadata.imported_fields } as Record<string, any>;
+            Object.entries(importedFields).forEach(([key, value]) => {
+              const numValue = Number(value);
+              if (!isNaN(numValue) && isValueCorrupt(numValue, key)) {
+                importedFields[key] = validateAndCorrectValue(
+                  numValue, key, reading.meter_id, meterNum, reading.reading_timestamp
+                );
+                corruptValuesDetected++;
+              }
+            });
+            validatedMetadata.imported_fields = importedFields;
+          }
+          
+          return {
+            meter_id: reading.meter_id,
+            reading_timestamp: reading.reading_timestamp,
+            kwh_value: validatedKwh,
+            kva_value: validatedKva,
+            metadata: {
+              ...validatedMetadata,
+              source: 'Copied',
+              copied_from: 'meter_readings',
+              copied_at: new Date().toISOString()
+            }
+          };
+        });
         
         const { error: insertError } = await supabase
           .from('hierarchical_meter_readings')
@@ -233,6 +377,10 @@ Deno.serve(async (req) => {
           copiedCount += batch.length;
           console.log(`Copied batch: ${copiedCount}/${allLeafReadings.length}`);
         }
+      }
+      
+      if (corruptValuesDetected > 0) {
+        console.log(`⚠️ CORRUPTION SUMMARY: Detected and corrected ${corruptValuesDetected} corrupt values during leaf meter copy`);
       }
 
       // Step 5: Validate the copy
@@ -556,8 +704,12 @@ Deno.serve(async (req) => {
       console.log(`Solar meters identified (will subtract values): ${Array.from(solarMeterIds).map(id => meterNumberMap.get(id) || id).join(', ')}`);
     }
 
+    // Aggregate readings by timestamp with corruption detection
+    let aggregationCorruptCount = 0;
+    
     allReadings.forEach(reading => {
       const slot = roundToSlot(reading.reading_timestamp);
+      const meterNum = meterNumberMap.get(reading.meter_id) || reading.meter_id;
       
       if (!groupedData.has(slot)) {
         groupedData.set(slot, {});
@@ -574,8 +726,24 @@ Deno.serve(async (req) => {
         columns.forEach(col => {
           const value = importedFields[col];
           if (value !== null && value !== undefined) {
-            const numValue = Number(value);
+            let numValue = Number(value);
             if (!isNaN(numValue)) {
+              // CORRUPTION CHECK: Validate each value during aggregation
+              if (isValueCorrupt(numValue, col)) {
+                console.warn(`⚠️ CORRUPT VALUE during aggregation: ${meterNum} @ ${slot} - ${col}: ${numValue.toLocaleString()} → 0 (zeroed)`);
+                corruptionCorrections.push({
+                  meterId: reading.meter_id,
+                  meterNumber: meterNum,
+                  timestamp: slot,
+                  fieldName: col,
+                  originalValue: numValue,
+                  correctedValue: 0,
+                  reason: 'Zeroed during aggregation (exceeds threshold)'
+                });
+                numValue = 0;
+                aggregationCorruptCount++;
+              }
+              
               // For solar meters, SUBTRACT instead of ADD (inverted factor)
               if (isSolarMeter) {
                 group[col] = (group[col] || 0) - numValue;
@@ -587,6 +755,10 @@ Deno.serve(async (req) => {
         });
       }
     });
+    
+    if (aggregationCorruptCount > 0) {
+      console.log(`⚠️ AGGREGATION CORRUPTION SUMMARY: Zeroed ${aggregationCorruptCount} corrupt values during parent meter aggregation`);
+    }
 
     console.log(`Aggregated data into ${groupedData.size} time slots`);
 
