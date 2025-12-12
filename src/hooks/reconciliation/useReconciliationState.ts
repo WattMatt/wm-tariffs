@@ -76,6 +76,7 @@ export function useReconciliationState({ siteId }: UseReconciliationStateOptions
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
   const [isBulkProcessing, setIsBulkProcessing] = useState(false);
   const [bulkProgress, setBulkProgress] = useState<BulkProgress>({ currentDocument: '', current: 0, total: 0 });
+  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   
   // Refs for stable access
   const previewDataRef = useRef<any>(null);
@@ -224,6 +225,8 @@ export function useReconciliationState({ siteId }: UseReconciliationStateOptions
     setIsBulkProcessing,
     bulkProgress,
     setBulkProgress,
+    currentJobId,
+    setCurrentJobId,
     
     // Actions
     resetReconciliationState,

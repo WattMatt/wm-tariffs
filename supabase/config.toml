@@ -38,3 +38,6 @@ verify_jwt = false
 
 [functions.migrate-readings-source]
 verify_jwt = false
+
+[functions.run-bulk-reconciliation]
+verify_jwt = false

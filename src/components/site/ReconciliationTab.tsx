@@ -144,6 +144,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     selectedDocumentIds, setSelectedDocumentIds,
     isBulkProcessing, setIsBulkProcessing,
     bulkProgress, setBulkProgress,
+    currentJobId, setCurrentJobId,
   } = reconciliationState;
 
   // Meter hierarchy
@@ -876,22 +877,14 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       availableMeters,
       enableRevenue: true, // Bulk reconciliation always calculates revenue
       meterCorrections,
-      getMetersWithUploadedCsvs: execution.getMetersWithUploadedCsvs,
-      updateMeterCategoryWithHierarchy: execution.updateMeterCategoryWithHierarchy,
-      saveReconciliationSettings: settings.saveReconciliationSettings,
-      saveReconciliationRun: execution.saveReconciliationRun,
+      selectedColumns: Array.from(selectedColumnsRef.current),
+      columnOperations: Object.fromEntries(columnOperationsRef.current),
+      columnFactors: Object.fromEntries(columnFactorsRef.current),
+      meterAssignments: Object.fromEntries(meterAssignments),
+      meterOrder: availableMeters.map(m => m.id),
       setIsBulkProcessing,
       setBulkProgress,
-      setSelectedDocumentIds,
-      setIsLoading,
-      setFailedMeters,
-      setHierarchicalCsvResults,
-      setReconciliationData,
-      setAvailableMeters,
-      setIsColumnsOpen,
-      setIsMetersOpen,
-      setIsCancelling,
-      setIsGeneratingCsvs,
+      setCurrentJobId,
     });
   };
 
