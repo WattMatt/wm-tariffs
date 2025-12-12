@@ -1092,7 +1092,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
             onUserSetDates={() => setUserSetDates(true)}
           />
 
-          <Button onClick={handlePreview} disabled={isLoadingPreview || !dateFrom || !dateTo || !selectedMeterId} className="w-full">
+          <Button onClick={handlePreview} disabled={isLoadingPreview || !dateFrom || !dateTo} className="w-full">
             <Eye className="mr-2 h-4 w-4" />
             {isLoadingPreview ? "Loading Preview..." : "Preview Meter Data"}
           </Button>
