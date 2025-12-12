@@ -464,6 +464,13 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     setMetersFullyLoaded(false);
     
     try {
+      // CRITICAL: Clear saved meter_order from site_reconciliation_settings
+      // This forces the next load to rebuild from schematic connections
+      await supabase
+        .from('site_reconciliation_settings')
+        .update({ meter_order: [] })
+        .eq('site_id', siteId);
+      
       // Fetch connections from schematic_lines
       const schematicConnections = await fetchSchematicConnections();
       
@@ -539,8 +546,6 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       
       // Auto-expand all parent meters
       setExpandedMeters(new Set(newConnectionsMap.keys()));
-      
-      toast.success("Meter hierarchy restored from schematic");
       
       toast.success("Meter hierarchy restored from schematic");
     } catch (error) {
