@@ -1,5 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import type { DateRange, DocumentDateRange, HierarchicalCsvResult, MeterConnection } from './types';
+import { isValueCorrupt } from '@/lib/dataValidation';
 
 /**
  * Fetch overall date range for all meters in a site
@@ -139,11 +140,27 @@ export async function fetchHierarchicalDataFromReadings(
       const columnMaxValues: Record<string, number> = {};
       
       allReadings.forEach(r => {
-        totalKwh += r.kwh_value || 0;
+        // Validate kwh_value before adding
+        let kwhValue = r.kwh_value || 0;
+        const kwhValidation = isValueCorrupt(kwhValue, 'kwh_value');
+        if (kwhValidation.isCorrupt) {
+          console.warn(`Corrupt kwh_value detected in hierarchical data: ${kwhValue} - zeroing out`);
+          kwhValue = 0;
+        }
+        totalKwh += kwhValue;
+        
         const metadata = r.metadata as any;
         const imported = metadata?.imported_fields || {};
         Object.entries(imported).forEach(([key, value]) => {
-          const numValue = Number(value) || 0;
+          let numValue = Number(value) || 0;
+          
+          // CORRUPTION CHECK: Validate each imported field value
+          const validationResult = isValueCorrupt(numValue, key);
+          if (validationResult.isCorrupt) {
+            console.warn(`Corrupt value detected in hierarchical data for ${key}: ${numValue} - zeroing out`);
+            numValue = 0;
+          }
+          
           const operation = columnOperations?.get(key) || 'sum';
           
           if (operation === 'max') {
