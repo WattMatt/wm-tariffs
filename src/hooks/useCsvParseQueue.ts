@@ -58,6 +58,12 @@ export function useCsvParseQueue(siteId: string, onDataChange?: () => void) {
       }));
 
       try {
+        // Update database status to 'parsing' before processing
+        await supabase
+          .from('meter_csv_files')
+          .update({ parse_status: 'parsing', error_message: null })
+          .eq('file_path', item.filePath);
+
         const { data, error } = await supabase.functions.invoke('process-meter-csv', {
           body: {
             meterId: item.meterId,

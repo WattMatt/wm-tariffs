@@ -53,6 +53,7 @@ interface Meter {
   is_duplicate?: boolean;
   has_pending_csv?: boolean;
   has_error_csv?: boolean;
+  has_parsing_csv?: boolean;
 }
 
 interface TariffStructure {
@@ -225,6 +226,13 @@ export default function MetersTab({ siteId }: MetersTabProps) {
             .eq("meter_id", meter.id)
             .eq("parse_status", "error");
           
+          // Check for parsing CSV files (currently being parsed)
+          const { count: parsingCount } = await supabase
+            .from("meter_csv_files")
+            .select("*", { count: "exact", head: true })
+            .eq("meter_id", meter.id)
+            .eq("parse_status", "parsing");
+          
           // Check for parsed CSV files (those with parsed_file_path)
           const { count: parsedFilesCount } = await supabase
             .from("meter_csv_files")
@@ -242,10 +250,11 @@ export default function MetersTab({ siteId }: MetersTabProps) {
           const hasGeneratedCsv = (generatedCount ?? 0) > 0;
           const hasPendingCsv = (pendingCount ?? 0) > 0;
           const hasErrorCsv = (errorCount ?? 0) > 0;
+          const hasParsingCsv = (parsingCount ?? 0) > 0;
           const hasParsed = (parsedFilesCount ?? 0) > 0;
           const hasSchematicPosition = (positionsCount ?? 0) > 0;
           
-          console.log(`Meter ${meter.meter_number}: Uploaded: ${hasUploadedCsv}, Generated: ${hasGeneratedCsv}, Pending: ${hasPendingCsv}, Error: ${hasErrorCsv}, Parsed: ${hasParsed}, On Schematic: ${hasSchematicPosition}`);
+          console.log(`Meter ${meter.meter_number}: Uploaded: ${hasUploadedCsv}, Generated: ${hasGeneratedCsv}, Pending: ${hasPendingCsv}, Error: ${hasErrorCsv}, Parsing: ${hasParsingCsv}, Parsed: ${hasParsed}, On Schematic: ${hasSchematicPosition}`);
           
           return {
             ...meter,
@@ -253,6 +262,7 @@ export default function MetersTab({ siteId }: MetersTabProps) {
             has_generated_csv: hasGeneratedCsv,
             has_pending_csv: hasPendingCsv,
             has_error_csv: hasErrorCsv,
+            has_parsing_csv: hasParsingCsv,
             has_parsed: hasParsed,
             has_schematic_position: hasSchematicPosition
           };
@@ -1079,8 +1089,19 @@ export default function MetersTab({ siteId }: MetersTabProps) {
                             Duplicate
                           </Badge>
                         )}
+                        {/* Parsing Badge - Blue with spinner */}
+                        {meter.has_parsing_csv && (
+                          <Badge 
+                            variant="outline" 
+                            className="gap-1 bg-blue-500/10 border-blue-500/50 text-blue-600 dark:text-blue-400 animate-pulse"
+                            title="CSV is currently being parsed"
+                          >
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                            Parsing...
+                          </Badge>
+                        )}
                         {/* Error Badge - Red */}
-                        {meter.has_error_csv && (
+                        {meter.has_error_csv && !meter.has_parsing_csv && (
                           <Badge 
                             variant="outline" 
                             className="gap-1 bg-destructive/10 border-destructive/50 text-destructive cursor-pointer hover:bg-destructive/20 transition-colors"
