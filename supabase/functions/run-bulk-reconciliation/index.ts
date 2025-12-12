@@ -394,7 +394,8 @@ async function calculateReconciliation(
     let hasMore = true;
     
     while (hasMore) {
-      let query = supabase
+      // Build query - use .contains() for JSONB filter (indexed, prevents timeouts)
+      const baseQuery = supabase
         .from(tableName)
         .select('kwh_value, kva_value, metadata')
         .eq('meter_id', meter.id)
@@ -403,9 +404,10 @@ async function calculateReconciliation(
         .order('reading_timestamp', { ascending: true })
         .range(offset, offset + pageSize - 1);
       
-      if (isParent) {
-        query = query.eq('metadata->>source', 'hierarchical_aggregation');
-      }
+      // For parent meters, filter by hierarchical_aggregation source using contains (faster than ->>)
+      const query = isParent 
+        ? baseQuery.contains('metadata', { source: 'hierarchical_aggregation' })
+        : baseQuery;
       
       const { data: pageData, error } = await query;
       
@@ -422,6 +424,8 @@ async function calculateReconciliation(
         hasMore = false;
       }
     }
+    
+    console.log(`Meter ${meter.meter_number} (${isParent ? 'parent' : 'leaf'}): ${readings.length} readings fetched`);
 
     // Calculate totals
     let totalKwh = 0;
@@ -518,17 +522,54 @@ function buildReconciliationData(meterResults: MeterResult[]) {
     }
   });
 
-  // Calculate totals
-  const councilTotal = councilBulk.reduce((sum, m) => sum + (m.hierarchicalTotalKwh || m.totalKwh), 0);
-  const bulkTotal = bulkMeters.reduce((sum, m) => sum + (m.hierarchicalTotalKwh || m.totalKwh), 0);
-  const solarTotal = solarMeters.reduce((sum, m) => sum + Math.abs(m.hierarchicalTotalKwh || m.totalKwh), 0);
-  const tenantTotal = tenantMeters.reduce((sum, m) => sum + (m.hierarchicalTotalKwh || m.totalKwh), 0);
-  const checkTotal = checkMeters.reduce((sum, m) => sum + (m.hierarchicalTotalKwh || m.totalKwh), 0);
+  // Calculate totals with validation
+  const safeSum = (meters: MeterResult[]) => {
+    return meters.reduce((sum, m) => {
+      const value = m.hierarchicalTotalKwh ?? m.totalKwh ?? 0;
+      // Skip NaN, Infinity, or extremely large values (data corruption)
+      if (!isFinite(value) || Math.abs(value) > 1e12) {
+        console.warn(`Skipping corrupt value for meter ${m.meter_number}: ${value}`);
+        return sum;
+      }
+      return sum + value;
+    }, 0);
+  };
 
-  const totalSupply = councilTotal + solarTotal;
-  const distributionTotal = bulkTotal + tenantTotal + checkTotal;
-  const discrepancy = totalSupply - distributionTotal;
-  const recoveryRate = totalSupply !== 0 ? (distributionTotal / totalSupply) * 100 : 0;
+  // Grid supply = councilBulk (this becomes bulk_total in the database - matches frontend naming)
+  const gridSupplyTotal = safeSum(councilBulk);
+  const bulkMeterTotal = safeSum(bulkMeters);
+  const solarTotal = solarMeters.reduce((sum, m) => {
+    const value = Math.abs(m.hierarchicalTotalKwh ?? m.totalKwh ?? 0);
+    if (!isFinite(value) || value > 1e12) return sum;
+    return sum + value;
+  }, 0);
+  const tenantTotal = safeSum(tenantMeters);
+  const checkTotal = safeSum(checkMeters);
+
+  // Frontend formula: totalSupply = gridSupply + solar, recovery = tenant / totalSupply
+  const totalSupply = gridSupplyTotal + Math.max(0, solarTotal);
+  const distributionTotal = bulkMeterTotal + tenantTotal + checkTotal;
+  const discrepancy = totalSupply - tenantTotal;
+  
+  // Calculate recovery rate with validation
+  let recoveryRate = totalSupply > 0 ? (tenantTotal / totalSupply) * 100 : 0;
+  
+  // Validate recovery rate - clamp to reasonable range
+  if (!isFinite(recoveryRate)) {
+    console.warn(`Invalid recovery rate calculated: ${recoveryRate}, setting to 0`);
+    recoveryRate = 0;
+  } else if (recoveryRate < -1000 || recoveryRate > 1000) {
+    console.warn(`Suspicious recovery rate: ${recoveryRate}%, clamping to valid range`);
+    recoveryRate = Math.max(-1000, Math.min(1000, recoveryRate));
+  }
+
+  console.log(`=== RECONCILIATION TOTALS ===`);
+  console.log(`Grid Supply (councilBulk): ${gridSupplyTotal.toFixed(2)} kWh`);
+  console.log(`Solar: ${solarTotal.toFixed(2)} kWh`);
+  console.log(`Tenant: ${tenantTotal.toFixed(2)} kWh`);
+  console.log(`Total Supply: ${totalSupply.toFixed(2)} kWh`);
+  console.log(`Recovery Rate: ${recoveryRate.toFixed(2)}%`);
+  console.log(`Discrepancy: ${discrepancy.toFixed(2)} kWh`);
 
   return {
     councilBulk,
@@ -540,8 +581,9 @@ function buildReconciliationData(meterResults: MeterResult[]) {
     distribution: [...bulkMeters, ...checkMeters, ...tenantMeters],
     otherMeters,
     unassignedMeters,
-    councilTotal,
-    bulkTotal,
+    // IMPORTANT: bulkTotal = gridSupplyTotal (matches what frontend/database expect)
+    bulkTotal: gridSupplyTotal,
+    councilTotal: gridSupplyTotal,
     solarTotal,
     tenantTotal,
     checkTotal,
@@ -564,6 +606,22 @@ async function saveReconciliationRun(
   allMeters: any[],
   enableRevenue: boolean
 ) {
+  // Validate all values before saving
+  const validateNumber = (value: any, fallback = 0): number => {
+    const num = Number(value);
+    if (!isFinite(num)) return fallback;
+    return num;
+  };
+
+  const bulkTotal = validateNumber(reconciliationData.bulkTotal);
+  const solarTotal = validateNumber(reconciliationData.solarTotal);
+  const tenantTotal = validateNumber(reconciliationData.tenantTotal);
+  const totalSupply = validateNumber(reconciliationData.totalSupply);
+  const recoveryRate = validateNumber(reconciliationData.recoveryRate);
+  const discrepancy = validateNumber(reconciliationData.discrepancy);
+
+  console.log(`Saving run: bulk=${bulkTotal}, solar=${solarTotal}, tenant=${tenantTotal}, recovery=${recoveryRate}%`);
+
   // Insert reconciliation run
   const { data: run, error: runError } = await supabase
     .from('reconciliation_runs')
@@ -572,12 +630,12 @@ async function saveReconciliationRun(
       run_name: runName,
       date_from: dateFrom,
       date_to: dateTo,
-      bulk_total: reconciliationData.bulkTotal || 0,
-      solar_total: reconciliationData.solarTotal || 0,
-      tenant_total: reconciliationData.tenantTotal || 0,
-      total_supply: reconciliationData.totalSupply || 0,
-      recovery_rate: reconciliationData.recoveryRate || 0,
-      discrepancy: reconciliationData.discrepancy || 0,
+      bulk_total: bulkTotal,
+      solar_total: solarTotal,
+      tenant_total: tenantTotal,
+      total_supply: totalSupply,
+      recovery_rate: recoveryRate,
+      discrepancy: discrepancy,
       revenue_enabled: enableRevenue
     })
     .select()
