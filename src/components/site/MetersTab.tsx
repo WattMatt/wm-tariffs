@@ -11,13 +11,14 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, Gauge, Upload, Pencil, Trash2, Database, Trash, Eye, MapPin, ArrowUpDown, ArrowUp, ArrowDown, ChevronDown, AlertCircle, Clock } from "lucide-react";
+import { Plus, Gauge, Upload, Pencil, Trash2, Database, Trash, Eye, MapPin, ArrowUpDown, ArrowUp, ArrowDown, ChevronDown, AlertCircle, Clock, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import CsvImportDialog from "./CsvImportDialog";
 import MeterReadingsView from "./MeterReadingsView";
 import CsvBulkIngestionTool from "./CsvBulkIngestionTool";
 import SingleCsvUploadDialog from "./SingleCsvUploadDialog";
 import SingleMeterCsvParseDialog from "./SingleMeterCsvParseDialog";
+import { useCsvParseQueue } from "@/hooks/useCsvParseQueue";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -67,6 +68,7 @@ interface MetersTabProps {
 
 export default function MetersTab({ siteId }: MetersTabProps) {
   const navigate = useNavigate();
+  const csvParseQueue = useCsvParseQueue(siteId, () => fetchMeters());
   const [meters, setMeters] = useState<Meter[]>([]);
   const [tariffStructures, setTariffStructures] = useState<TariffStructure[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -763,7 +765,13 @@ export default function MetersTab({ siteId }: MetersTabProps) {
               </Button>
             </>
           )}
-          <CsvBulkIngestionTool siteId={siteId} onDataChange={fetchMeters} />
+          {csvParseQueue.isProcessing && (
+            <Badge variant="outline" className="animate-pulse gap-1.5">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Parsing {csvParseQueue.progress.completed}/{csvParseQueue.progress.total}
+            </Badge>
+          )}
+          <CsvBulkIngestionTool siteId={siteId} onDataChange={fetchMeters} parseQueue={csvParseQueue} />
           <Dialog open={isDialogOpen} onOpenChange={handleCloseDialog}>
             <DialogTrigger asChild>
               <Button className="gap-2">
