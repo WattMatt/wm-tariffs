@@ -238,8 +238,9 @@ Deno.serve(async (req) => {
         );
       }
 
-      // Step 3: Fetch all leaf meter readings from meter_readings
-      const PAGE_SIZE = 1000;
+      // Step 3: Fetch leaf meter readings INDIVIDUALLY to avoid timeout
+      // Using IN clause with many meters causes expensive multi-range scans
+      const PAGE_SIZE = 2000;
       let allLeafReadings: Array<{
         reading_timestamp: string;
         kwh_value: number;
@@ -248,33 +249,40 @@ Deno.serve(async (req) => {
         meter_id: string;
       }> = [];
 
-      let offset = 0;
-      let hasMore = true;
+      console.log(`Fetching readings for ${leafMeterIds.length} leaf meters individually...`);
+      
+      for (const meterId of leafMeterIds) {
+        const meterNum = meterNumberMap.get(meterId) || meterId;
+        let meterReadings: typeof allLeafReadings = [];
+        let offset = 0;
+        let hasMore = true;
 
-      while (hasMore) {
-        // Fetch ALL readings for leaf meters - no source filter restriction
-        // Only exclude Hierarchical source_files to prevent recursion
-        const { data: pageData, error: readingsError } = await supabase
-          .from('meter_readings')
-          .select('reading_timestamp, kwh_value, kva_value, metadata, meter_id')
-          .in('meter_id', leafMeterIds)
-          .gte('reading_timestamp', dateFrom)
-          .lte('reading_timestamp', dateTo)
-          .order('reading_timestamp', { ascending: true })
-          .range(offset, offset + PAGE_SIZE - 1);
+        while (hasMore) {
+          const { data: pageData, error: readingsError } = await supabase
+            .from('meter_readings')
+            .select('reading_timestamp, kwh_value, kva_value, metadata, meter_id')
+            .eq('meter_id', meterId)
+            .gte('reading_timestamp', dateFrom)
+            .lte('reading_timestamp', dateTo)
+            .order('reading_timestamp', { ascending: true })
+            .range(offset, offset + PAGE_SIZE - 1);
 
-        if (readingsError) {
-          throw new Error(`Failed to fetch leaf readings: ${readingsError.message}`);
+          if (readingsError) {
+            console.error(`Error fetching readings for ${meterNum}:`, readingsError);
+            throw new Error(`Failed to fetch readings for ${meterNum}: ${readingsError.message}`);
+          }
+
+          if (pageData && pageData.length > 0) {
+            meterReadings = meterReadings.concat(pageData);
+            offset += pageData.length;
+            hasMore = pageData.length === PAGE_SIZE;
+          } else {
+            hasMore = false;
+          }
         }
-
-        if (pageData && pageData.length > 0) {
-          allLeafReadings = allLeafReadings.concat(pageData);
-          offset += pageData.length;
-          hasMore = pageData.length === PAGE_SIZE;
-          console.log(`Fetched ${offset} readings so far...`);
-        } else {
-          hasMore = false;
-        }
+        
+        console.log(`  ${meterNum}: ${meterReadings.length} readings`);
+        allLeafReadings = allLeafReadings.concat(meterReadings);
       }
 
       console.log(`Total leaf meter readings fetched: ${allLeafReadings.length}`);
