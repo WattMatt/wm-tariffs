@@ -716,15 +716,82 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       return;
     }
 
+    // Check if we need to generate hierarchy first
+    const parentMeters = availableMeters.filter(meter => {
+      const children = meterConnectionsMap.get(meter.id);
+      return children && children.length > 0;
+    });
+    
+    // STEP 1: Generate hierarchy if parent meters exist and hierarchy not yet generated
+    if (parentMeters.length > 0 && !hierarchyGenerated) {
+      toast.info("Generating hierarchy first...");
+      setIsGeneratingHierarchy(true);
+      cancelReconciliationRef.current = false;
+      
+      try {
+        const hierarchySuccess = await runner.runHierarchyGeneration(
+          dateFrom,
+          dateTo,
+          timeFrom,
+          timeTo,
+          availableMeters
+        );
+        
+        if (!hierarchySuccess) {
+          toast.error("Failed to generate hierarchy - cannot proceed with reconciliation");
+          setIsGeneratingHierarchy(false);
+          return;
+        }
+      } finally {
+        setIsGeneratingHierarchy(false);
+      }
+    }
+
+    // STEP 2: If revenue is requested and energy hasn't been calculated yet, run energy first
+    const shouldRunRevenue = enableRevenue !== undefined ? enableRevenue : revenueReconciliationEnabled;
+    
+    if (shouldRunRevenue && (!reconciliationData || !reconciliationData.meters || reconciliationData.meters.length === 0)) {
+      toast.info("Calculating energy first...");
+      const energyResult = await runner.runReconciliation({
+        dateFrom,
+        dateTo,
+        timeFrom,
+        timeTo,
+        enableRevenue: false, // Energy only
+        availableMeters,
+        meterConnectionsMap,
+        hierarchyGenerated: true, // Already generated above
+        meterCorrections,
+        getMetersWithUploadedCsvs: execution.getMetersWithUploadedCsvs,
+        updateMeterCategoryWithHierarchy: execution.updateMeterCategoryWithHierarchy,
+        saveReconciliationSettings,
+        setIsLoading,
+        setFailedMeters,
+        setHierarchicalCsvResults,
+        setReconciliationData,
+        setAvailableMeters,
+        setIsColumnsOpen,
+        setIsMetersOpen,
+        setIsCancelling,
+        setIsGeneratingCsvs,
+      });
+      
+      if (!energyResult) {
+        toast.error("Failed to calculate energy - cannot proceed with revenue");
+        return;
+      }
+    }
+
+    // STEP 3: Run the requested reconciliation (energy or revenue)
     const result = await runner.runReconciliation({
       dateFrom,
       dateTo,
       timeFrom,
       timeTo,
-      enableRevenue: enableRevenue !== undefined ? enableRevenue : revenueReconciliationEnabled,
+      enableRevenue: shouldRunRevenue,
       availableMeters,
       meterConnectionsMap,
-      hierarchyGenerated,
+      hierarchyGenerated: parentMeters.length > 0 ? true : hierarchyGenerated, // Mark as generated if we just did it
       meterCorrections,
       getMetersWithUploadedCsvs: execution.getMetersWithUploadedCsvs,
       updateMeterCategoryWithHierarchy: execution.updateMeterCategoryWithHierarchy,
@@ -741,7 +808,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     });
 
     return result;
-  }, [dateFrom, dateTo, timeFrom, timeTo, revenueReconciliationEnabled, availableMeters, meterConnectionsMap, hierarchyGenerated, meterCorrections, runner, execution, saveReconciliationSettings]);
+  }, [dateFrom, dateTo, timeFrom, timeTo, revenueReconciliationEnabled, availableMeters, meterConnectionsMap, hierarchyGenerated, meterCorrections, runner, execution, saveReconciliationSettings, reconciliationData]);
 
   const cancelReconciliation = () => {
     if (!isCancelling) {
