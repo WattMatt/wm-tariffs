@@ -5,6 +5,86 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// ===== CORRUPTION DETECTION THRESHOLDS (copied from generate-hierarchical-csv) =====
+const CORRUPTION_THRESHOLDS = {
+  maxKwhPer30Min: 10000,    // Max kWh for a single 30-min reading
+  maxKvaPer30Min: 50000,    // Max kVA for a single 30-min reading
+  maxMetadataValue: 100000, // Max for any metadata column (P1, P2, S, etc.)
+};
+
+interface CorruptionCorrection {
+  meterId: string;
+  meterNumber: string;
+  timestamp: string;
+  fieldName: string;
+  originalValue: number;
+  correctedValue: number;
+  reason: string;
+}
+
+// Track all corrections made during this run
+const corruptionCorrections: CorruptionCorrection[] = [];
+
+function isValueCorrupt(value: number, fieldName: string): boolean {
+  const absValue = Math.abs(value);
+  const fieldLower = fieldName.toLowerCase();
+  
+  if (fieldLower === 'kwh_value' || fieldLower.includes('kwh') || /^p\d+$/i.test(fieldLower)) {
+    return absValue > CORRUPTION_THRESHOLDS.maxKwhPer30Min;
+  }
+  
+  if (fieldLower.includes('kva') || fieldLower === 's') {
+    return absValue > CORRUPTION_THRESHOLDS.maxKvaPer30Min;
+  }
+  
+  return absValue > CORRUPTION_THRESHOLDS.maxMetadataValue;
+}
+
+function validateAndCorrectValue(
+  value: number,
+  fieldName: string,
+  meterId: string,
+  meterNumber: string,
+  timestamp: string,
+  prevValue: number | null = null,
+  nextValue: number | null = null
+): number {
+  if (!isValueCorrupt(value, fieldName)) {
+    return value;
+  }
+  
+  let correctedValue = 0;
+  let reason = '';
+  
+  if (prevValue !== null && nextValue !== null && !isValueCorrupt(prevValue, fieldName) && !isValueCorrupt(nextValue, fieldName)) {
+    correctedValue = (prevValue + nextValue) / 2;
+    reason = `Interpolated from neighbors (${prevValue.toFixed(2)}, ${nextValue.toFixed(2)})`;
+  } else if (prevValue !== null && !isValueCorrupt(prevValue, fieldName)) {
+    correctedValue = prevValue;
+    reason = `Used previous value (${prevValue.toFixed(2)})`;
+  } else if (nextValue !== null && !isValueCorrupt(nextValue, fieldName)) {
+    correctedValue = nextValue;
+    reason = `Used next value (${nextValue.toFixed(2)})`;
+  } else {
+    correctedValue = 0;
+    reason = 'Zeroed out (no valid neighbors)';
+  }
+  
+  console.warn(`⚠️ CORRUPT VALUE DETECTED: ${meterNumber} @ ${timestamp} - ${fieldName}: ${value.toLocaleString()} → ${correctedValue.toFixed(2)} (${reason})`);
+  
+  corruptionCorrections.push({
+    meterId,
+    meterNumber,
+    timestamp,
+    fieldName,
+    originalValue: value,
+    correctedValue,
+    reason
+  });
+  
+  return correctedValue;
+}
+
 interface BulkReconciliationRequest {
   siteId: string;
   documentPeriodIds: string[];
@@ -397,7 +477,7 @@ async function calculateReconciliation(
       // Build query - use .contains() for JSONB filter (indexed, prevents timeouts)
       const baseQuery = supabase
         .from(tableName)
-        .select('kwh_value, kva_value, metadata')
+        .select('reading_timestamp, kwh_value, kva_value, metadata')
         .eq('meter_id', meter.id)
         .gte('reading_timestamp', dateFrom)
         .lte('reading_timestamp', dateTo)
@@ -427,22 +507,48 @@ async function calculateReconciliation(
     
     console.log(`Meter ${meter.meter_number} (${isParent ? 'parent' : 'leaf'}): ${readings.length} readings fetched`);
 
-    // Calculate totals
+    // Calculate totals WITH CORRUPTION DETECTION
     let totalKwh = 0;
     const columnTotals: Record<string, number> = {};
     const columnMaxValues: Record<string, number> = {};
     
-    readings.forEach(r => {
-      totalKwh += r.kwh_value || 0;
+    readings.forEach((r, index) => {
+      // Get neighbor values for interpolation
+      const prevReading = index > 0 ? readings[index - 1] : null;
+      const nextReading = index < readings.length - 1 ? readings[index + 1] : null;
+      const timestamp = r.reading_timestamp || 'unknown';
+      
+      // Validate kwh_value using existing corruption detection
+      const rawKwh = r.kwh_value || 0;
+      const validatedKwh = validateAndCorrectValue(
+        rawKwh, 'kwh_value', meter.id, meter.meter_number, timestamp,
+        prevReading?.kwh_value ?? null,
+        nextReading?.kwh_value ?? null
+      );
+      totalKwh += validatedKwh;
+      
       const metadata = r.metadata as any;
       const imported = metadata?.imported_fields || {};
       
       Object.entries(imported).forEach(([key, value]) => {
-        const numValue = Number(value) || 0;
+        const rawValue = Number(value) || 0;
+        
+        // Get neighbor values for this specific column
+        const prevMeta = prevReading?.metadata as any;
+        const nextMeta = nextReading?.metadata as any;
+        const prevValue = prevMeta?.imported_fields?.[key] !== undefined ? Number(prevMeta.imported_fields[key]) : null;
+        const nextValue = nextMeta?.imported_fields?.[key] !== undefined ? Number(nextMeta.imported_fields[key]) : null;
+        
+        // Validate using existing corruption detection
+        const validatedValue = validateAndCorrectValue(
+          rawValue, key, meter.id, meter.meter_number, timestamp,
+          prevValue, nextValue
+        );
+        
         const factor = Number(meterConfig.columnFactors?.[key] || 1);
         const operation = meterConfig.columnOperations?.[key] || 'sum';
         
-        const adjustedValue = numValue * factor;
+        const adjustedValue = validatedValue * factor;
         
         if (operation === 'max' || key.toLowerCase().includes('kva')) {
           columnMaxValues[key] = Math.max(columnMaxValues[key] || 0, adjustedValue);
@@ -451,6 +557,10 @@ async function calculateReconciliation(
         }
       });
     });
+    
+    if (corruptionCorrections.length > 0) {
+      console.log(`Meter ${meter.meter_number}: ${corruptionCorrections.length} corrupt values detected and corrected`);
+    }
 
     // Calculate total from selected columns
     const selectedCols = meterConfig.selectedColumns || [];
