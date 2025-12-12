@@ -652,18 +652,30 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       return;
     }
 
-    // Auto-select meter if none selected
+    // Auto-select meter if none selected - fetch on-demand if needed
     let meterToUse = selectedMeterId;
-    if (!meterToUse) {
-      if (availableMeters.length > 0) {
-        const bulkMeter = availableMeters.find(m => m.meter_type === "bulk_meter");
-        meterToUse = bulkMeter?.id || availableMeters[0].id;
-        setSelectedMeterId(meterToUse);
-        toast.info(`Auto-selected meter: ${bulkMeter?.meter_number || availableMeters[0].meter_number}`);
-      } else {
-        toast.error("Please wait for meters to load");
+    let metersToCheck = availableMeters;
+    
+    // If no meters loaded yet, fetch them on-demand (don't wait for background loading)
+    if (metersToCheck.length === 0) {
+      const { data: meters } = await supabase
+        .from("meters")
+        .select("id, meter_number, meter_type")
+        .eq("site_id", siteId)
+        .order("meter_number");
+      
+      if (!meters || meters.length === 0) {
+        toast.error("No meters found for this site");
         return;
       }
+      metersToCheck = meters;
+    }
+    
+    if (!meterToUse) {
+      const bulkMeter = metersToCheck.find(m => m.meter_type === "bulk_meter");
+      meterToUse = bulkMeter?.id || metersToCheck[0].id;
+      setSelectedMeterId(meterToUse);
+      toast.info(`Auto-selected meter: ${bulkMeter?.meter_number || metersToCheck[0].meter_number}`);
     }
 
     setIsLoadingPreview(true);
