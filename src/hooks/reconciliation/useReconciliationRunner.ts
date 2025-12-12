@@ -1125,22 +1125,16 @@ export function useReconciliationRunner(options: UseReconciliationRunnerOptions)
 
       console.log(`Preview: Fetched ${readings.length} readings for meter ${selectedMeter.meter_number}`);
 
-      // Extract available columns from column_mapping configuration
+      // Extract available columns from actual meter readings data (authoritative source)
       const availableColumns = new Set<string>();
-      if (columnMapping && columnMapping.renamedHeaders) {
-        Object.values(columnMapping.renamedHeaders).forEach((headerName: any) => {
-          if (headerName && typeof headerName === 'string') {
-            availableColumns.add(headerName);
-          }
-        });
-      } else if (readings.length > 0) {
-        const metadata = readings[0].metadata as any;
+      readings.forEach(reading => {
+        const metadata = reading.metadata as any;
         if (metadata && metadata.imported_fields) {
           Object.keys(metadata.imported_fields).forEach(key => {
             availableColumns.add(key);
           });
         }
-      }
+      });
 
       console.log('Column Mapping:', columnMapping);
       console.log('Available Columns:', Array.from(availableColumns));
