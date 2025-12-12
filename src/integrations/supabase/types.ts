@@ -44,6 +44,62 @@ export type Database = {
         }
         Relationships: []
       }
+      bulk_reconciliation_jobs: {
+        Row: {
+          completed_periods: number
+          created_at: string | null
+          created_by: string | null
+          current_period: string | null
+          document_period_ids: string[]
+          enable_revenue: boolean
+          error_message: string | null
+          id: string
+          meter_config: Json | null
+          site_id: string
+          status: string
+          total_periods: number
+          updated_at: string | null
+        }
+        Insert: {
+          completed_periods?: number
+          created_at?: string | null
+          created_by?: string | null
+          current_period?: string | null
+          document_period_ids?: string[]
+          enable_revenue?: boolean
+          error_message?: string | null
+          id?: string
+          meter_config?: Json | null
+          site_id: string
+          status?: string
+          total_periods?: number
+          updated_at?: string | null
+        }
+        Update: {
+          completed_periods?: number
+          created_at?: string | null
+          created_by?: string | null
+          current_period?: string | null
+          document_period_ids?: string[]
+          enable_revenue?: boolean
+          error_message?: string | null
+          id?: string
+          meter_config?: Json | null
+          site_id?: string
+          status?: string
+          total_periods?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bulk_reconciliation_jobs_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clients: {
         Row: {
           code: string
