@@ -134,29 +134,29 @@ export function useMeterHierarchy({ siteId }: UseMeterHierarchyOptions) {
         })
       );
       
-      // Fetch meter connections for parent-child relationships
-      const { data: connections } = await supabase
-        .from("meter_connections")
-        .select(`
-          parent_meter_id,
-          child_meter_id,
-          parent:meters!meter_connections_parent_meter_id_fkey(site_id),
-          child:meters!meter_connections_child_meter_id_fkey(site_id)
-        `);
+      // Fetch parent-child relationships - schematic_lines is authoritative source (per memory)
+      const schematicConnections = await fetchSchematicConnectionsFromDb(siteId);
+      let siteConnections = schematicConnections.map(conn => ({
+        parent_meter_id: conn.parent_meter_id,
+        child_meter_id: conn.child_meter_id,
+      }));
       
-      // Filter to only connections where BOTH meters are in the current site
-      let siteConnections = connections?.filter(conn => 
-        conn.parent?.site_id === siteId && conn.child?.site_id === siteId
-      ) || [];
-      
-      // If no connections in meter_connections table, fall back to schematic_lines
+      // Fall back to meter_connections table if schematic has no connections
       if (siteConnections.length === 0) {
-        const schematicConnections = await fetchSchematicConnectionsFromDb(siteId);
-        siteConnections = schematicConnections.map(conn => ({
+        const { data: connections } = await supabase
+          .from("meter_connections")
+          .select(`
+            parent_meter_id,
+            child_meter_id,
+            parent:meters!meter_connections_parent_meter_id_fkey(site_id),
+            child:meters!meter_connections_child_meter_id_fkey(site_id)
+          `);
+        
+        siteConnections = (connections?.filter(conn => 
+          conn.parent?.site_id === siteId && conn.child?.site_id === siteId
+        ) || []).map(conn => ({
           parent_meter_id: conn.parent_meter_id,
           child_meter_id: conn.child_meter_id,
-          parent: { site_id: siteId },
-          child: { site_id: siteId }
         }));
       }
       
