@@ -1125,22 +1125,51 @@ export function useReconciliationRunner(options: UseReconciliationRunnerOptions)
 
       console.log(`Preview: Fetched ${readings.length} readings for meter ${selectedMeter.meter_number}`);
 
-      // Extract available columns from actual meter readings data (authoritative source)
-      const availableColumns = new Set<string>();
-      readings.forEach(reading => {
-        const metadata = reading.metadata as any;
-        if (metadata && metadata.imported_fields) {
-          Object.keys(metadata.imported_fields).forEach(key => {
-            availableColumns.add(key);
-          });
-        }
-      });
+      // Extract available columns from uploaded CSV files (parse_status='parsed') - preserves order
+      // Query for any uploaded CSV file from this site to get the column order
+      const { data: uploadedCsvFiles } = await supabase
+        .from('meter_csv_files')
+        .select('column_mapping')
+        .eq('site_id', siteId)
+        .eq('parse_status', 'parsed')
+        .not('column_mapping', 'is', null)
+        .limit(1);
+
+      const orderedColumns: string[] = [];
+      const columnMapping2 = uploadedCsvFiles?.[0]?.column_mapping as { renamedHeaders?: Record<string, string> } | null;
+      const renamedHeaders = columnMapping2?.renamedHeaders;
+      
+      if (renamedHeaders) {
+        // Keys are numeric indices (0, 1, 2...), sort them to preserve CSV column order
+        const sortedKeys = Object.keys(renamedHeaders).sort((a, b) => Number(a) - Number(b));
+        sortedKeys.forEach(key => {
+          const colName = renamedHeaders[key];
+          // Exclude Time column as it's not a data column
+          if (colName && typeof colName === 'string' && colName !== 'Time') {
+            orderedColumns.push(colName);
+          }
+        });
+      }
+      
+      // Fallback: if no uploaded CSV found, extract from readings (unordered)
+      if (orderedColumns.length === 0) {
+        const columnsSet = new Set<string>();
+        readings.forEach(reading => {
+          const metadata = reading.metadata as any;
+          if (metadata && metadata.imported_fields) {
+            Object.keys(metadata.imported_fields).forEach(key => {
+              columnsSet.add(key);
+            });
+          }
+        });
+        orderedColumns.push(...Array.from(columnsSet));
+      }
 
       console.log('Column Mapping:', columnMapping);
-      console.log('Available Columns:', Array.from(availableColumns));
+      console.log('Available Columns (ordered):', orderedColumns);
 
       // Auto-select all columns initially
-      onSelectedColumns?.(new Set(availableColumns));
+      onSelectedColumns?.(new Set(orderedColumns));
 
       // Calculate totals and store raw values for operations
       const totalKwh = readings.reduce((sum, r) => sum + Number(r.kwh_value || 0), 0);
@@ -1169,7 +1198,7 @@ export function useReconciliationRunner(options: UseReconciliationRunnerOptions)
         firstReading: readings[0],
         lastReading: readings[readings.length - 1],
         sampleReadings: readings.slice(0, 5),
-        availableColumns: Array.from(availableColumns),
+        availableColumns: orderedColumns,
         totalKwh,
         columnTotals,
         columnValues
@@ -1182,7 +1211,7 @@ export function useReconciliationRunner(options: UseReconciliationRunnerOptions)
         if (preLoadedSettings) {
           if (preLoadedSettings.selected_columns && preLoadedSettings.selected_columns.length > 0) {
             const validSelectedColumns = preLoadedSettings.selected_columns.filter((col: string) => 
-              availableColumns.has(col)
+              orderedColumns.includes(col)
             );
             if (validSelectedColumns.length > 0) {
               onSelectedColumns?.(new Set(validSelectedColumns));
@@ -1211,7 +1240,7 @@ export function useReconciliationRunner(options: UseReconciliationRunnerOptions)
           if (savedSettings) {
             if (savedSettings.selected_columns && savedSettings.selected_columns.length > 0) {
               const validSelectedColumns = savedSettings.selected_columns.filter((col: string) => 
-                availableColumns.has(col)
+                orderedColumns.includes(col)
               );
               if (validSelectedColumns.length > 0) {
                 onSelectedColumns?.(new Set(validSelectedColumns));
