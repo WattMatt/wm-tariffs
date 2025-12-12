@@ -652,9 +652,18 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       return;
     }
 
-    if (!selectedMeterId) {
-      toast.error("Please select a meter to preview");
-      return;
+    // Auto-select meter if none selected
+    let meterToUse = selectedMeterId;
+    if (!meterToUse) {
+      if (availableMeters.length > 0) {
+        const bulkMeter = availableMeters.find(m => m.meter_type === "bulk_meter");
+        meterToUse = bulkMeter?.id || availableMeters[0].id;
+        setSelectedMeterId(meterToUse);
+        toast.info(`Auto-selected meter: ${bulkMeter?.meter_number || availableMeters[0].meter_number}`);
+      } else {
+        toast.error("Please wait for meters to load");
+        return;
+      }
     }
 
     setIsLoadingPreview(true);
@@ -665,7 +674,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         dateTo,
         timeFrom,
         timeTo,
-        selectedMeterId,
+        meterToUse,
         meterDateRange,
         loadFullMeterHierarchy,
         metersFullyLoaded
