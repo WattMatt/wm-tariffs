@@ -134,6 +134,7 @@ interface ReconciliationResultsViewProps {
     total: number;
   };
   meterCorrections?: Map<string, CorrectedReading[]>;
+  isSavedRun?: boolean;
 }
 
 // Smart CSV download button that shows dropdown when both parsed and generated CSVs exist
@@ -244,6 +245,7 @@ export default function ReconciliationResultsView({
   isBulkProcessing = false,
   bulkProgress = { currentDocument: '', current: 0, total: 0 },
   meterCorrections = new Map(),
+  isSavedRun = false,
 }: ReconciliationResultsViewProps) {
   const [expandedMeters, setExpandedMeters] = useState<Set<string>>(new Set());
   const [correctionsDialogOpen, setCorrectionsDialogOpen] = useState(false);
@@ -656,39 +658,44 @@ export default function ReconciliationResultsView({
       )}
       
       <Tabs defaultValue="energy" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 h-auto p-1 gap-2 bg-transparent">
-          <TabsTrigger 
-            value="hierarchy" 
-            onClick={handleHierarchyTabClick}
-            disabled={!canReconcile || isLoadingEnergy || isLoadingRevenue}
-            className="gap-2 h-12 bg-muted text-foreground hover:bg-muted/80 data-[state=active]:bg-muted/90 data-[state=active]:text-foreground data-[state=active]:shadow-md disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
-          >
-            {isGeneratingHierarchy ? (
-              <>
-                {isCancelling ? (
-                  <X className="h-4 w-4" />
-                ) : (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                )}
-                <span>
-                  {isCancelling 
-                    ? 'Cancelling...' 
-                    : `Generating... ${csvGenerationProgress.current}/${csvGenerationProgress.total}`
-                  }
-                </span>
-              </>
-            ) : hierarchyGenerated ? (
-              <>
-                <GitBranch className="h-4 w-4" />
-                <span>Hierarchy</span>
-              </>
-            ) : (
-              <>
-                <GitBranch className="h-4 w-4" />
-                <span>Generate Hierarchy</span>
-              </>
-            )}
-          </TabsTrigger>
+        <TabsList className={cn(
+          "grid w-full h-auto p-1 gap-2 bg-transparent",
+          isSavedRun ? "grid-cols-2" : "grid-cols-3"
+        )}>
+          {!isSavedRun && (
+            <TabsTrigger 
+              value="hierarchy" 
+              onClick={handleHierarchyTabClick}
+              disabled={!canReconcile || isLoadingEnergy || isLoadingRevenue}
+              className="gap-2 h-12 bg-muted text-foreground hover:bg-muted/80 data-[state=active]:bg-muted/90 data-[state=active]:text-foreground data-[state=active]:shadow-md disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
+            >
+              {isGeneratingHierarchy ? (
+                <>
+                  {isCancelling ? (
+                    <X className="h-4 w-4" />
+                  ) : (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  )}
+                  <span>
+                    {isCancelling 
+                      ? 'Cancelling...' 
+                      : `Generating... ${csvGenerationProgress.current}/${csvGenerationProgress.total}`
+                    }
+                  </span>
+                </>
+              ) : hierarchyGenerated ? (
+                <>
+                  <GitBranch className="h-4 w-4" />
+                  <span>Hierarchy</span>
+                </>
+              ) : (
+                <>
+                  <GitBranch className="h-4 w-4" />
+                  <span>Generate Hierarchy</span>
+                </>
+              )}
+            </TabsTrigger>
+          )}
           <TabsTrigger 
             value="energy" 
             onClick={handleEnergyTabClick}

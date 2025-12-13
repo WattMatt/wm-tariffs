@@ -68,6 +68,31 @@ interface MeterResult {
   avg_cost_per_kwh: number;
   cost_calculation_error: string | null;
   hierarchical_total: number;
+  
+  // Direct values (from uploaded CSV)
+  direct_total_kwh: number | null;
+  direct_readings_count: number | null;
+  direct_column_totals: any | null;
+  direct_column_max_values: any | null;
+  
+  // Hierarchical values (from generated hierarchy)
+  hierarchical_column_totals: any | null;
+  hierarchical_column_max_values: any | null;
+  hierarchical_readings_count: number | null;
+  
+  // Direct revenue
+  direct_total_cost: number | null;
+  direct_energy_cost: number | null;
+  direct_fixed_charges: number | null;
+  direct_demand_charges: number | null;
+  direct_avg_cost_per_kwh: number | null;
+  
+  // Hierarchical revenue
+  hierarchical_total_cost: number | null;
+  hierarchical_energy_cost: number | null;
+  hierarchical_fixed_charges: number | null;
+  hierarchical_demand_charges: number | null;
+  hierarchical_avg_cost_per_kwh: number | null;
 }
 
 export default function ReconciliationHistoryTab({ siteId, siteName }: ReconciliationHistoryTabProps) {
@@ -515,6 +540,35 @@ export default function ReconciliationHistoryTab({ siteId, siteName }: Reconcili
                     avgCostPerKwh: m.avg_cost_per_kwh,
                     costCalculationError: m.cost_calculation_error || undefined,
                     hierarchicalTotal: m.hierarchical_total,
+                    // Direct values
+                    directTotalKwh: m.direct_total_kwh ?? undefined,
+                    directReadingsCount: m.direct_readings_count ?? undefined,
+                    directColumnTotals: m.direct_column_totals ?? undefined,
+                    directColumnMaxValues: m.direct_column_max_values ?? undefined,
+                    // Hierarchical values
+                    hierarchicalTotalKwh: m.hierarchical_total ?? undefined,
+                    hierarchicalColumnTotals: m.hierarchical_column_totals ?? undefined,
+                    hierarchicalColumnMaxValues: m.hierarchical_column_max_values ?? undefined,
+                    // Direct revenue
+                    directRevenue: m.direct_total_cost ? {
+                      energyCost: m.direct_energy_cost || 0,
+                      fixedCharges: m.direct_fixed_charges || 0,
+                      demandCharges: m.direct_demand_charges || 0,
+                      totalCost: m.direct_total_cost,
+                      avgCostPerKwh: m.direct_avg_cost_per_kwh || 0,
+                      tariffName: m.tariff_name || 'Unknown',
+                      hasError: false,
+                    } : undefined,
+                    // Hierarchical revenue
+                    hierarchicalRevenue: m.hierarchical_total_cost ? {
+                      energyCost: m.hierarchical_energy_cost || 0,
+                      fixedCharges: m.hierarchical_fixed_charges || 0,
+                      demandCharges: m.hierarchical_demand_charges || 0,
+                      totalCost: m.hierarchical_total_cost,
+                      avgCostPerKwh: m.hierarchical_avg_cost_per_kwh || 0,
+                      tariffName: m.tariff_name || 'Unknown',
+                      hasError: false,
+                    } : undefined,
                   });
                   
                   if (selectedRun.meter_order && selectedRun.meter_order.length > 0) {
@@ -562,6 +616,7 @@ export default function ReconciliationHistoryTab({ siteId, siteName }: Reconcili
                 showDownloadButtons={false}
                 hasPreviewData={true}
                 canReconcile={true}
+                isSavedRun={true}
               />
 
               {/* Notes Section */}
