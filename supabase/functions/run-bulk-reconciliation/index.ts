@@ -500,7 +500,7 @@ function sortParentMetersByDepth(
   });
 }
 
-// Paginated fetch helper
+// Paginated fetch helper - optimized for fewer queries
 async function fetchPaginatedReadings(
   supabase: any,
   tableName: string,
@@ -511,7 +511,7 @@ async function fetchPaginatedReadings(
 ): Promise<any[]> {
   let readings: any[] = [];
   let offset = 0;
-  const pageSize = 1000;
+  const pageSize = 2000; // Larger page size to reduce queries
   let hasMore = true;
   
   while (hasMore) {
@@ -546,6 +546,64 @@ async function fetchPaginatedReadings(
   }
   
   return readings;
+}
+
+// Batch fetch readings for multiple meters to reduce query count
+async function fetchReadingsForMeters(
+  supabase: any,
+  tableName: string,
+  meterIds: string[],
+  dateFrom: string,
+  dateTo: string,
+  sourceFilter?: { key: string; value: string } | null
+): Promise<Map<string, any[]>> {
+  const readingsMap = new Map<string, any[]>();
+  
+  // Initialize empty arrays for all meters
+  meterIds.forEach(id => readingsMap.set(id, []));
+  
+  let offset = 0;
+  const pageSize = 5000; // Larger batch for multi-meter fetch
+  let hasMore = true;
+  
+  while (hasMore) {
+    let query = supabase
+      .from(tableName)
+      .select('meter_id, reading_timestamp, kwh_value, kva_value, metadata')
+      .in('meter_id', meterIds)
+      .gte('reading_timestamp', dateFrom)
+      .lte('reading_timestamp', dateTo)
+      .order('meter_id', { ascending: true })
+      .order('reading_timestamp', { ascending: true })
+      .range(offset, offset + pageSize - 1);
+    
+    if (sourceFilter) {
+      query = query.contains('metadata', { [sourceFilter.key]: sourceFilter.value });
+    }
+    
+    const { data: pageData, error } = await query;
+    
+    if (error) {
+      console.error(`Error batch fetching from ${tableName}:`, error);
+      break;
+    }
+    
+    if (pageData && pageData.length > 0) {
+      // Group by meter_id
+      pageData.forEach((row: any) => {
+        const existing = readingsMap.get(row.meter_id) || [];
+        existing.push(row);
+        readingsMap.set(row.meter_id, existing);
+      });
+      
+      offset += pageSize;
+      hasMore = pageData.length === pageSize;
+    } else {
+      hasMore = false;
+    }
+  }
+  
+  return readingsMap;
 }
 
 // Process readings and calculate totals with corruption detection
@@ -619,7 +677,7 @@ function processReadings(
   };
 }
 
-// UPDATED: Calculate reconciliation - fetch from BOTH tables for ALL meters
+// UPDATED: Calculate reconciliation - batch fetch from BOTH tables for ALL meters
 async function calculateReconciliation(
   supabase: any,
   siteId: string,
@@ -632,39 +690,65 @@ async function calculateReconciliation(
   const meterResults: MeterResult[] = [];
   const parentMeterIds = new Set(meterConnectionsMap.keys());
   const corrections: CorruptionCorrection[] = [];
+  
+  const meterIds = allMeters.map(m => m.id);
+  const parentIds = allMeters.filter(m => parentMeterIds.has(m.id)).map(m => m.id);
+  const leafIds = allMeters.filter(m => !parentMeterIds.has(m.id)).map(m => m.id);
 
+  console.log(`Batch fetching readings for ${meterIds.length} meters (${parentIds.length} parents, ${leafIds.length} leaves)...`);
+
+  // BATCH fetch all DIRECT readings from meter_readings (no source filter)
+  console.log('Fetching direct readings from meter_readings...');
+  const directReadingsMap = await fetchReadingsForMeters(
+    supabase,
+    'meter_readings',
+    meterIds,
+    dateFrom,
+    dateTo,
+    null // No filter - get all readings
+  );
+  console.log(`Fetched direct readings for ${directReadingsMap.size} meters`);
+  
+  // BATCH fetch HIERARCHICAL readings - separately for parents and leaves
+  const hierarchicalReadingsMap = new Map<string, any[]>();
+  
+  // Fetch for parent meters (source='hierarchical_aggregation')
+  if (parentIds.length > 0) {
+    console.log(`Fetching hierarchical readings for ${parentIds.length} parent meters...`);
+    const parentHierMap = await fetchReadingsForMeters(
+      supabase,
+      'hierarchical_meter_readings',
+      parentIds,
+      dateFrom,
+      dateTo,
+      { key: 'source', value: 'hierarchical_aggregation' }
+    );
+    parentHierMap.forEach((readings, id) => hierarchicalReadingsMap.set(id, readings));
+  }
+  
+  // Fetch for leaf meters (source='Copied')
+  if (leafIds.length > 0) {
+    console.log(`Fetching hierarchical readings for ${leafIds.length} leaf meters...`);
+    const leafHierMap = await fetchReadingsForMeters(
+      supabase,
+      'hierarchical_meter_readings',
+      leafIds,
+      dateFrom,
+      dateTo,
+      { key: 'source', value: 'Copied' }
+    );
+    leafHierMap.forEach((readings, id) => hierarchicalReadingsMap.set(id, readings));
+  }
+  
+  console.log(`Fetched hierarchical readings for ${hierarchicalReadingsMap.size} meters`);
+
+  // Process each meter
   for (const meter of allMeters) {
     const isParent = parentMeterIds.has(meter.id);
     const assignment = meterConfig.meterAssignments?.[meter.id] || 'unassigned';
     
-    // ALWAYS fetch from BOTH tables for ALL meters
-    
-    // 1. Fetch DIRECT data from meter_readings (uploaded CSVs)
-    // Filter: source is 'Parsed' or null (legacy data without source field)
-    const directReadings = await fetchPaginatedReadings(
-      supabase,
-      'meter_readings',
-      meter.id,
-      dateFrom,
-      dateTo,
-      null // No filter - get all readings from meter_readings
-    );
-    
-    // 2. Fetch HIERARCHICAL data from hierarchical_meter_readings
-    // For parent meters: get hierarchical_aggregation source
-    // For leaf meters: get Copied source
-    const hierarchicalReadings = await fetchPaginatedReadings(
-      supabase,
-      'hierarchical_meter_readings',
-      meter.id,
-      dateFrom,
-      dateTo,
-      isParent 
-        ? { key: 'source', value: 'hierarchical_aggregation' }
-        : { key: 'source', value: 'Copied' }
-    );
-    
-    console.log(`Meter ${meter.meter_number}: Direct=${directReadings.length}, Hierarchical=${hierarchicalReadings.length}`);
+    const directReadings = directReadingsMap.get(meter.id) || [];
+    const hierarchicalReadings = hierarchicalReadingsMap.get(meter.id) || [];
     
     // Process DIRECT readings
     const directData = processReadings(directReadings, meter, meterConfig, corrections);
