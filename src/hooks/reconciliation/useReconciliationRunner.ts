@@ -607,6 +607,13 @@ export function useReconciliationRunner(options: UseReconciliationRunnerOptions)
       const metersWithTariffs = meterData.filter(m => (m.tariff_structure_id || m.assigned_tariff_name) && (m.totalKwhPositive > 0 || hierarchicalCsvData.has(m.id)));
       onRevenueProgress?.({ current: 0, total: metersWithTariffs.length * 2 }); // *2 for both calculations
 
+      // Fetch parent meter IDs (meters that have children) for cost accumulation logic
+      const { data: connections } = await supabase
+        .from("meter_connections")
+        .select("parent_meter_id")
+        .in("parent_meter_id", meterIds);
+      const parentMeterIds = new Set<string>((connections || []).map(c => c.parent_meter_id));
+
       const meterRevenues = new Map();
       let gridSupplyCost = 0;
       let solarCost = 0;
@@ -668,18 +675,29 @@ export function useReconciliationRunner(options: UseReconciliationRunnerOptions)
             
             // Use hierarchical for main meterRevenues (backward compatibility)
             meterRevenues.set(meter.id, hierarchicalCostResult);
+          }
 
+          // Accumulate costs: use hierarchical for parent meters, direct for leaf meters
+          const isParentMeter = parentMeterIds.has(meter.id);
+          const directCostResult = directMeterRevenues.get(meter.id);
+          const hierarchicalCostResult = hierarchicalMeterRevenues.get(meter.id);
+          const costToAccumulate = isParentMeter 
+            ? (hierarchicalCostResult?.totalCost || 0) 
+            : (directCostResult?.totalCost || 0);
+          const kwhToAccumulate = isParentMeter ? hierarchicalKwh : directKwh;
+
+          if (costToAccumulate > 0) {
             const assignment = meterAssignments.get(meter.id);
             if (assignment === "grid_supply") {
-              gridSupplyCost += hierarchicalCostResult.totalCost;
+              gridSupplyCost += costToAccumulate;
             } else if (assignment === "solar_energy") {
-              solarCost += hierarchicalCostResult.totalCost;
+              solarCost += costToAccumulate;
             } else if (meter.meter_type === "tenant_meter") {
-              tenantCost += hierarchicalCostResult.totalCost;
+              tenantCost += costToAccumulate;
             }
 
-            totalKwhWithTariffs += hierarchicalKwh;
-            totalCostCalculated += hierarchicalCostResult.totalCost;
+            totalKwhWithTariffs += kwhToAccumulate;
+            totalCostCalculated += costToAccumulate;
           }
           progressCount++;
           onRevenueProgress?.({ current: progressCount, total: metersWithTariffs.length * 2 });
@@ -714,18 +732,29 @@ export function useReconciliationRunner(options: UseReconciliationRunnerOptions)
             
             // Use hierarchical for main meterRevenues (backward compatibility)
             meterRevenues.set(meter.id, hierarchicalCostResult);
+          }
 
+          // Accumulate costs: use hierarchical for parent meters, direct for leaf meters
+          const isParentMeter = parentMeterIds.has(meter.id);
+          const directCostResult = directMeterRevenues.get(meter.id);
+          const hierarchicalCostResult = hierarchicalMeterRevenues.get(meter.id);
+          const costToAccumulate = isParentMeter 
+            ? (hierarchicalCostResult?.totalCost || 0) 
+            : (directCostResult?.totalCost || 0);
+          const kwhToAccumulate = isParentMeter ? hierarchicalKwh : directKwh;
+
+          if (costToAccumulate > 0) {
             const assignment = meterAssignments.get(meter.id);
             if (assignment === "grid_supply") {
-              gridSupplyCost += hierarchicalCostResult.totalCost;
+              gridSupplyCost += costToAccumulate;
             } else if (assignment === "solar_energy") {
-              solarCost += hierarchicalCostResult.totalCost;
+              solarCost += costToAccumulate;
             } else if (meter.meter_type === "tenant_meter") {
-              tenantCost += hierarchicalCostResult.totalCost;
+              tenantCost += costToAccumulate;
             }
 
-            totalKwhWithTariffs += hierarchicalKwh;
-            totalCostCalculated += hierarchicalCostResult.totalCost;
+            totalKwhWithTariffs += kwhToAccumulate;
+            totalCostCalculated += costToAccumulate;
           }
           progressCount++;
           onRevenueProgress?.({ current: progressCount, total: metersWithTariffs.length * 2 });
