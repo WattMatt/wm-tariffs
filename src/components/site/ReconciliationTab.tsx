@@ -687,9 +687,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
         timeFrom,
         timeTo,
         meterToUse,
-        meterDateRange,
-        loadFullMeterHierarchy,
-        metersFullyLoaded
+        meterDateRange
       );
     } finally {
       setIsLoadingPreview(false);
