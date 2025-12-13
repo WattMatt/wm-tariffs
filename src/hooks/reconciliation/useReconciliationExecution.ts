@@ -509,9 +509,34 @@ export function useReconciliationExecution(options: UseReconciliationExecutionOp
       }
     }
 
-    // Prepare meter results for insertion
+    // Helper to filter column data by selected columns only
+    const selectedCols = selectedColumnsRef.current;
+    const filterBySelectedColumns = (columns: Record<string, number> | null | undefined): Record<string, number> | null => {
+      if (!columns) return null;
+      const filtered: Record<string, number> = {};
+      for (const [key, value] of Object.entries(columns)) {
+        if (selectedCols.has(key)) {
+          filtered[key] = value;
+        }
+      }
+      return Object.keys(filtered).length > 0 ? filtered : null;
+    };
+
+    // Prepare meter results for insertion with direct vs hierarchical separation
     const meterResults = allMeters.map(meter => {
       const revenueInfo = reconciliationData.revenueData?.meterRevenues.get(meter.id);
+      
+      // Get hierarchical values from meter or calculated maps
+      const hierTotal = meter.hierarchicalTotalKwh ?? hierarchicalTotals.get(meter.id) ?? 0;
+      const hierColTotals = meter.hierarchicalColumnTotals || hierarchicalColumnTotals.get(meter.id) || null;
+      const hierColMaxValues = meter.hierarchicalColumnMaxValues || hierarchicalColumnMaxValues.get(meter.id) || null;
+      
+      // Get direct values from meter
+      const directTotal = meter.directTotalKwh ?? meter.totalKwh ?? 0;
+      const directColTotals = meter.directColumnTotals || meter.columnTotals || null;
+      const directColMaxValues = meter.directColumnMaxValues || meter.columnMaxValues || null;
+      const directReadingsCount = meter.directReadingsCount ?? meter.readingsCount ?? 0;
+      
       return {
         reconciliation_run_id: run.id,
         meter_id: meter.id,
@@ -521,22 +546,46 @@ export function useReconciliationExecution(options: UseReconciliationExecutionOp
         location: meter.location || null,
         assignment: meter.assignment,
         tariff_structure_id: meter.tariff_structure_id,
-        total_kwh: meter.totalKwh || 0,
+        // Legacy fields (for backward compatibility) - use hierarchical if available, otherwise direct
+        total_kwh: hierTotal || directTotal || 0,
         total_kwh_positive: meter.totalKwhPositive || 0,
         total_kwh_negative: meter.totalKwhNegative || 0,
-        hierarchical_total: meter.hierarchicalTotalKwh ?? hierarchicalTotals.get(meter.id) ?? 0,
         readings_count: meter.readingsCount || 0,
-        column_totals: meter.columnTotals || hierarchicalColumnTotals.get(meter.id) || null,
-        column_max_values: meter.columnMaxValues || hierarchicalColumnMaxValues.get(meter.id) || null,
+        column_totals: filterBySelectedColumns(hierColTotals) || filterBySelectedColumns(directColTotals),
+        column_max_values: filterBySelectedColumns(hierColMaxValues) || filterBySelectedColumns(directColMaxValues),
+        // New direct columns - filtered by selected columns
+        direct_total_kwh: directTotal,
+        direct_readings_count: directReadingsCount,
+        direct_column_totals: filterBySelectedColumns(directColTotals),
+        direct_column_max_values: filterBySelectedColumns(directColMaxValues),
+        // New hierarchical columns - filtered by selected columns
+        hierarchical_total: hierTotal,
+        hierarchical_column_totals: filterBySelectedColumns(hierColTotals),
+        hierarchical_column_max_values: filterBySelectedColumns(hierColMaxValues),
+        hierarchical_readings_count: meter.hierarchicalReadingsCount ?? 0,
+        // Error tracking
         has_error: meter.hasError || false,
         error_message: meter.errorMessage || null,
+        // Revenue - primary values (based on hierarchical if available)
         tariff_name: revenueInfo?.tariffName || null,
         energy_cost: revenueInfo?.energyCost || 0,
         fixed_charges: revenueInfo?.fixedCharges || 0,
         demand_charges: revenueInfo?.demandCharges || 0,
         total_cost: revenueInfo?.totalCost || 0,
         avg_cost_per_kwh: revenueInfo?.avgCostPerKwh || 0,
-        cost_calculation_error: revenueInfo?.hasError ? revenueInfo.errorMessage : null
+        cost_calculation_error: revenueInfo?.hasError ? revenueInfo.errorMessage : null,
+        // Direct revenue fields (TODO: calculate separately in future if needed)
+        direct_total_cost: 0,
+        direct_energy_cost: 0,
+        direct_fixed_charges: 0,
+        direct_demand_charges: 0,
+        direct_avg_cost_per_kwh: 0,
+        // Hierarchical revenue fields (copy from main revenue which is based on hierarchical)
+        hierarchical_total_cost: revenueInfo?.totalCost || 0,
+        hierarchical_energy_cost: revenueInfo?.energyCost || 0,
+        hierarchical_fixed_charges: revenueInfo?.fixedCharges || 0,
+        hierarchical_demand_charges: revenueInfo?.demandCharges || 0,
+        hierarchical_avg_cost_per_kwh: revenueInfo?.avgCostPerKwh || 0,
       };
     });
 
@@ -546,14 +595,16 @@ export function useReconciliationExecution(options: UseReconciliationExecutionOp
 
     if (resultsError) throw resultsError;
 
-    // Update parent meters with CSV values if available
+    // Update parent meters with CSV values if available - filtered by selected columns
     if (hierarchicalCsvResults && hierarchicalCsvResults.size > 0) {
       for (const [meterId, csvData] of hierarchicalCsvResults) {
         await supabase
           .from('reconciliation_meter_results')
           .update({
-            column_totals: csvData.columnTotals,
-            hierarchical_total: csvData.totalKwh
+            column_totals: filterBySelectedColumns(csvData.columnTotals),
+            hierarchical_total: csvData.totalKwh,
+            hierarchical_column_totals: filterBySelectedColumns(csvData.columnTotals),
+            hierarchical_column_max_values: filterBySelectedColumns(csvData.columnMaxValues),
           })
           .eq('reconciliation_run_id', run.id)
           .eq('meter_id', meterId);
@@ -564,7 +615,7 @@ export function useReconciliationExecution(options: UseReconciliationExecutionOp
     // after reconciliation save completes. The old Canvas-based generation produced corrupted output.
 
     return run.id;
-  }, [siteId, meterConnectionsMap, calculateHierarchicalTotals]);
+  }, [siteId, meterConnectionsMap, calculateHierarchicalTotals, selectedColumnsRef]);
 
   /**
    * Check which meters have uploaded (not generated) CSV files

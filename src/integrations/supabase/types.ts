@@ -671,11 +671,28 @@ export type Database = {
           cost_calculation_error: string | null
           created_at: string | null
           demand_charges: number | null
+          direct_avg_cost_per_kwh: number | null
+          direct_column_max_values: Json | null
+          direct_column_totals: Json | null
+          direct_demand_charges: number | null
+          direct_energy_cost: number | null
+          direct_fixed_charges: number | null
+          direct_readings_count: number | null
+          direct_total_cost: number | null
+          direct_total_kwh: number | null
           energy_cost: number | null
           error_message: string | null
           fixed_charges: number | null
           has_error: boolean | null
+          hierarchical_avg_cost_per_kwh: number | null
+          hierarchical_column_max_values: Json | null
+          hierarchical_column_totals: Json | null
+          hierarchical_demand_charges: number | null
+          hierarchical_energy_cost: number | null
+          hierarchical_fixed_charges: number | null
+          hierarchical_readings_count: number | null
           hierarchical_total: number | null
+          hierarchical_total_cost: number | null
           id: string
           location: string | null
           meter_id: string
@@ -699,11 +716,28 @@ export type Database = {
           cost_calculation_error?: string | null
           created_at?: string | null
           demand_charges?: number | null
+          direct_avg_cost_per_kwh?: number | null
+          direct_column_max_values?: Json | null
+          direct_column_totals?: Json | null
+          direct_demand_charges?: number | null
+          direct_energy_cost?: number | null
+          direct_fixed_charges?: number | null
+          direct_readings_count?: number | null
+          direct_total_cost?: number | null
+          direct_total_kwh?: number | null
           energy_cost?: number | null
           error_message?: string | null
           fixed_charges?: number | null
           has_error?: boolean | null
+          hierarchical_avg_cost_per_kwh?: number | null
+          hierarchical_column_max_values?: Json | null
+          hierarchical_column_totals?: Json | null
+          hierarchical_demand_charges?: number | null
+          hierarchical_energy_cost?: number | null
+          hierarchical_fixed_charges?: number | null
+          hierarchical_readings_count?: number | null
           hierarchical_total?: number | null
+          hierarchical_total_cost?: number | null
           id?: string
           location?: string | null
           meter_id: string
@@ -727,11 +761,28 @@ export type Database = {
           cost_calculation_error?: string | null
           created_at?: string | null
           demand_charges?: number | null
+          direct_avg_cost_per_kwh?: number | null
+          direct_column_max_values?: Json | null
+          direct_column_totals?: Json | null
+          direct_demand_charges?: number | null
+          direct_energy_cost?: number | null
+          direct_fixed_charges?: number | null
+          direct_readings_count?: number | null
+          direct_total_cost?: number | null
+          direct_total_kwh?: number | null
           energy_cost?: number | null
           error_message?: string | null
           fixed_charges?: number | null
           has_error?: boolean | null
+          hierarchical_avg_cost_per_kwh?: number | null
+          hierarchical_column_max_values?: Json | null
+          hierarchical_column_totals?: Json | null
+          hierarchical_demand_charges?: number | null
+          hierarchical_energy_cost?: number | null
+          hierarchical_fixed_charges?: number | null
+          hierarchical_readings_count?: number | null
           hierarchical_total?: number | null
+          hierarchical_total_cost?: number | null
           id?: string
           location?: string | null
           meter_id?: string
