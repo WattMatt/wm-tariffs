@@ -584,14 +584,17 @@ export function useReconciliationRunner(options: UseReconciliationRunnerOptions)
     const recoveryRate = totalSupply > 0 ? (tenantTotal / totalSupply) * 100 : 0;
     const discrepancy = totalSupply - tenantTotal;
 
-    // Revenue calculation
+    // Revenue calculation - calculate BOTH direct and hierarchical revenue
     let revenueData: RevenueData | null = null;
+    const directMeterRevenues = new Map<string, any>();
+    const hierarchicalMeterRevenues = new Map<string, any>();
+    
     if (enableRevenue) {
       setIsCalculatingRevenue?.(true);
       toast.info("Calculating revenue for meters with tariffs...");
 
-      const metersWithTariffs = meterData.filter(m => (m.tariff_structure_id || m.assigned_tariff_name) && m.totalKwhPositive > 0);
-      onRevenueProgress?.({ current: 0, total: metersWithTariffs.length });
+      const metersWithTariffs = meterData.filter(m => (m.tariff_structure_id || m.assigned_tariff_name) && (m.totalKwhPositive > 0 || m.directTotalKwh > 0 || m.hierarchicalTotalKwh > 0));
+      onRevenueProgress?.({ current: 0, total: metersWithTariffs.length * 2 }); // *2 for both calculations
 
       const meterRevenues = new Map();
       let gridSupplyCost = 0;
@@ -599,61 +602,115 @@ export function useReconciliationRunner(options: UseReconciliationRunnerOptions)
       let tenantCost = 0;
       let totalKwhWithTariffs = 0;
       let totalCostCalculated = 0;
+      let progressCount = 0;
 
       for (const meter of meterData) {
-        const meterMaxKva = Object.entries(meter.columnMaxValues || {})
+        // Get max kVA values for both direct and hierarchical
+        const directMaxKva = Object.entries(meter.directColumnMaxValues || meter.columnMaxValues || {})
+          .filter(([key]) => key.toLowerCase().includes('kva') || key.toLowerCase() === 's (kva)')
+          .reduce((max, [, value]) => Math.max(max, Number(value) || 0), 0);
+        
+        const hierarchicalMaxKva = Object.entries(meter.hierarchicalColumnMaxValues || meter.columnMaxValues || {})
           .filter(([key]) => key.toLowerCase().includes('kva') || key.toLowerCase() === 's (kva)')
           .reduce((max, [, value]) => Math.max(max, Number(value) || 0), 0);
 
-        if (meter.assigned_tariff_name && meter.totalKwhPositive > 0) {
-          const costResult = await calculateMeterCostAcrossPeriods(
-            meter.id,
-            siteData.supply_authority_id,
-            meter.assigned_tariff_name,
-            new Date(startDateTime),
-            new Date(endDateTime),
-            meter.totalKwhPositive,
-            meterMaxKva
-          );
+        // Get kWh values for both direct and hierarchical
+        const directKwh = meter.directTotalKwh ?? meter.totalKwhPositive ?? 0;
+        const hierarchicalKwh = meter.hierarchicalTotalKwh ?? meter.totalKwhPositive ?? meter.totalKwh ?? 0;
 
-          meterRevenues.set(meter.id, costResult);
-          onRevenueProgress?.({ current: meterRevenues.size, total: metersWithTariffs.length });
-
-          const assignment = meterAssignments.get(meter.id);
-          if (assignment === "grid_supply") {
-            gridSupplyCost += costResult.totalCost;
-          } else if (assignment === "solar_energy") {
-            solarCost += costResult.totalCost;
-          } else if (meter.meter_type === "tenant_meter") {
-            tenantCost += costResult.totalCost;
+        if (meter.assigned_tariff_name && (directKwh > 0 || hierarchicalKwh > 0)) {
+          // Calculate DIRECT revenue
+          if (directKwh > 0) {
+            const directCostResult = await calculateMeterCostAcrossPeriods(
+              meter.id,
+              siteData.supply_authority_id,
+              meter.assigned_tariff_name,
+              new Date(startDateTime),
+              new Date(endDateTime),
+              directKwh,
+              directMaxKva
+            );
+            directMeterRevenues.set(meter.id, directCostResult);
           }
+          progressCount++;
+          onRevenueProgress?.({ current: progressCount, total: metersWithTariffs.length * 2 });
 
-          totalKwhWithTariffs += meter.totalKwh;
-          totalCostCalculated += costResult.totalCost;
-        } else if (meter.tariff_structure_id && meter.totalKwhPositive > 0) {
-          const costResult = await calculateMeterCost(
-            meter.id,
-            meter.tariff_structure_id,
-            new Date(startDateTime),
-            new Date(endDateTime),
-            meter.totalKwhPositive,
-            meterMaxKva
-          );
+          // Calculate HIERARCHICAL revenue
+          if (hierarchicalKwh > 0) {
+            const hierarchicalCostResult = await calculateMeterCostAcrossPeriods(
+              meter.id,
+              siteData.supply_authority_id,
+              meter.assigned_tariff_name,
+              new Date(startDateTime),
+              new Date(endDateTime),
+              hierarchicalKwh,
+              hierarchicalMaxKva
+            );
+            hierarchicalMeterRevenues.set(meter.id, hierarchicalCostResult);
+            
+            // Use hierarchical for main meterRevenues (backward compatibility)
+            meterRevenues.set(meter.id, hierarchicalCostResult);
 
-          meterRevenues.set(meter.id, costResult);
-          onRevenueProgress?.({ current: meterRevenues.size, total: metersWithTariffs.length });
+            const assignment = meterAssignments.get(meter.id);
+            if (assignment === "grid_supply") {
+              gridSupplyCost += hierarchicalCostResult.totalCost;
+            } else if (assignment === "solar_energy") {
+              solarCost += hierarchicalCostResult.totalCost;
+            } else if (meter.meter_type === "tenant_meter") {
+              tenantCost += hierarchicalCostResult.totalCost;
+            }
 
-          const assignment = meterAssignments.get(meter.id);
-          if (assignment === "grid_supply") {
-            gridSupplyCost += costResult.totalCost;
-          } else if (assignment === "solar_energy") {
-            solarCost += costResult.totalCost;
-          } else if (meter.meter_type === "tenant_meter") {
-            tenantCost += costResult.totalCost;
+            totalKwhWithTariffs += hierarchicalKwh;
+            totalCostCalculated += hierarchicalCostResult.totalCost;
           }
+          progressCount++;
+          onRevenueProgress?.({ current: progressCount, total: metersWithTariffs.length * 2 });
+          
+        } else if (meter.tariff_structure_id && (directKwh > 0 || hierarchicalKwh > 0)) {
+          // Calculate DIRECT revenue
+          if (directKwh > 0) {
+            const directCostResult = await calculateMeterCost(
+              meter.id,
+              meter.tariff_structure_id,
+              new Date(startDateTime),
+              new Date(endDateTime),
+              directKwh,
+              directMaxKva
+            );
+            directMeterRevenues.set(meter.id, directCostResult);
+          }
+          progressCount++;
+          onRevenueProgress?.({ current: progressCount, total: metersWithTariffs.length * 2 });
 
-          totalKwhWithTariffs += meter.totalKwh;
-          totalCostCalculated += costResult.totalCost;
+          // Calculate HIERARCHICAL revenue
+          if (hierarchicalKwh > 0) {
+            const hierarchicalCostResult = await calculateMeterCost(
+              meter.id,
+              meter.tariff_structure_id,
+              new Date(startDateTime),
+              new Date(endDateTime),
+              hierarchicalKwh,
+              hierarchicalMaxKva
+            );
+            hierarchicalMeterRevenues.set(meter.id, hierarchicalCostResult);
+            
+            // Use hierarchical for main meterRevenues (backward compatibility)
+            meterRevenues.set(meter.id, hierarchicalCostResult);
+
+            const assignment = meterAssignments.get(meter.id);
+            if (assignment === "grid_supply") {
+              gridSupplyCost += hierarchicalCostResult.totalCost;
+            } else if (assignment === "solar_energy") {
+              solarCost += hierarchicalCostResult.totalCost;
+            } else if (meter.meter_type === "tenant_meter") {
+              tenantCost += hierarchicalCostResult.totalCost;
+            }
+
+            totalKwhWithTariffs += hierarchicalKwh;
+            totalCostCalculated += hierarchicalCostResult.totalCost;
+          }
+          progressCount++;
+          onRevenueProgress?.({ current: progressCount, total: metersWithTariffs.length * 2 });
         }
       }
 
@@ -670,19 +727,33 @@ export function useReconciliationRunner(options: UseReconciliationRunnerOptions)
       };
     }
 
+    // Attach directRevenue and hierarchicalRevenue to each meter
+    const attachRevenue = (meters: any[]) => meters.map(m => ({
+      ...m,
+      directRevenue: directMeterRevenues.get(m.id) || null,
+      hierarchicalRevenue: hierarchicalMeterRevenues.get(m.id) || null,
+    }));
+
+    const enrichedGridSupplyMeters = attachRevenue(gridSupplyMeters);
+    const enrichedSolarEnergyMeters = attachRevenue(solarEnergyMeters);
+    const enrichedCheckMeters = attachRevenue(checkMeters);
+    const enrichedTenantMeters = attachRevenue(tenantMeters);
+    const enrichedUnassignedMeters = attachRevenue(unassignedMeters);
+    const enrichedSafeMeters = attachRevenue(safeMeters);
+
     return {
-      meterData: safeMeters,
+      meterData: enrichedSafeMeters,
       errors,
       reconciliationData: {
-        bulkMeters: gridSupplyMeters,
-        checkMeters,
-        otherMeters: [...solarEnergyMeters, ...unassignedMeters],
-        tenantMeters,
-        councilBulk: gridSupplyMeters,
-        solarMeters: solarEnergyMeters,
-        distribution: tenantMeters,
-        distributionMeters: tenantMeters,
-        unassignedMeters,
+        bulkMeters: enrichedGridSupplyMeters,
+        checkMeters: enrichedCheckMeters,
+        otherMeters: [...enrichedSolarEnergyMeters, ...enrichedUnassignedMeters],
+        tenantMeters: enrichedTenantMeters,
+        councilBulk: enrichedGridSupplyMeters,
+        solarMeters: enrichedSolarEnergyMeters,
+        distribution: enrichedTenantMeters,
+        distributionMeters: enrichedTenantMeters,
+        unassignedMeters: enrichedUnassignedMeters,
         bulkTotal,
         councilTotal: bulkTotal,
         otherTotal,
