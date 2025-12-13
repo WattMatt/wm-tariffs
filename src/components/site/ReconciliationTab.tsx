@@ -903,9 +903,29 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       columnFactors: Object.fromEntries(columnFactorsRef.current),
       meterAssignments: Object.fromEntries(meterAssignments),
       meterOrder: availableMeters.map(m => m.id),
+      // Pass the exact same functions as manual buttons use
+      runHierarchyGeneration: runner.runHierarchyGeneration,
+      runReconciliation: runner.runReconciliation,
+      saveReconciliationRun: execution.saveReconciliationRun,
+      getMetersWithUploadedCsvs: execution.getMetersWithUploadedCsvs,
+      updateMeterCategoryWithHierarchy: execution.updateMeterCategoryWithHierarchy,
+      saveReconciliationSettings,
+      // State setters
+      setIsLoading,
+      setFailedMeters,
+      setHierarchicalCsvResults,
+      setReconciliationData,
+      setAvailableMeters,
+      setIsColumnsOpen,
+      setIsMetersOpen,
+      setIsCancelling,
+      setIsGeneratingCsvs,
+      // Callbacks
       setIsBulkProcessing,
       setBulkProgress,
       setCurrentJobId,
+      // Cancel ref
+      cancelRef: cancelReconciliationRef,
     });
   };
 
