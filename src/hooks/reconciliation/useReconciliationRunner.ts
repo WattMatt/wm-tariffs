@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { calculateMeterCost, calculateMeterCostAcrossPeriods } from '@/lib/costCalculation';
 import { isValueCorrupt, type CorrectedReading } from '@/lib/dataValidation';
-import { sortParentMetersByDepth, getFullDateTime } from '@/lib/reconciliation';
+import { sortParentMetersByDepth, getFullDateTime, fetchHierarchicalDataFromReadings } from '@/lib/reconciliation';
 import type { ReconciliationResult, RevenueData, MeterResult } from './useReconciliationExecution';
 
 export interface PreviewData {
@@ -593,7 +593,18 @@ export function useReconciliationRunner(options: UseReconciliationRunnerOptions)
       setIsCalculatingRevenue?.(true);
       toast.info("Calculating revenue for meters with tariffs...");
 
-      const metersWithTariffs = meterData.filter(m => (m.tariff_structure_id || m.assigned_tariff_name) && (m.totalKwhPositive > 0 || m.directTotalKwh > 0 || m.hierarchicalTotalKwh > 0));
+      // Fetch hierarchical data from hierarchical_meter_readings table BEFORE revenue calculation
+      const meterIds = safeMeters.map(m => m.id);
+      console.log(`Fetching hierarchical data for ${meterIds.length} meters for revenue calculation...`);
+      const hierarchicalCsvData = await fetchHierarchicalDataFromReadings(
+        meterIds,
+        startDateTime,
+        endDateTime,
+        columnOperationsRef?.current
+      );
+      console.log(`Fetched hierarchical data for ${hierarchicalCsvData.size} meters`);
+
+      const metersWithTariffs = meterData.filter(m => (m.tariff_structure_id || m.assigned_tariff_name) && (m.totalKwhPositive > 0 || hierarchicalCsvData.has(m.id)));
       onRevenueProgress?.({ current: 0, total: metersWithTariffs.length * 2 }); // *2 for both calculations
 
       const meterRevenues = new Map();
@@ -605,18 +616,25 @@ export function useReconciliationRunner(options: UseReconciliationRunnerOptions)
       let progressCount = 0;
 
       for (const meter of meterData) {
-        // Get max kVA values for both direct and hierarchical
-        const directMaxKva = Object.entries(meter.directColumnMaxValues || meter.columnMaxValues || {})
+        // DIRECT data comes from meter_readings (already in meter object from processSingleMeter)
+        // meter.totalKwh, meter.totalKwhPositive, meter.columnMaxValues are from meter_readings table
+        const directMaxKva = Object.entries(meter.columnMaxValues || {})
           .filter(([key]) => key.toLowerCase().includes('kva') || key.toLowerCase() === 's (kva)')
           .reduce((max, [, value]) => Math.max(max, Number(value) || 0), 0);
         
-        const hierarchicalMaxKva = Object.entries(meter.hierarchicalColumnMaxValues || meter.columnMaxValues || {})
-          .filter(([key]) => key.toLowerCase().includes('kva') || key.toLowerCase() === 's (kva)')
-          .reduce((max, [, value]) => Math.max(max, Number(value) || 0), 0);
+        // HIERARCHICAL data comes from hierarchical_meter_readings table (fetched above)
+        const hierarchicalData = hierarchicalCsvData.get(meter.id);
+        const hierarchicalMaxKva = hierarchicalData 
+          ? Object.entries(hierarchicalData.columnMaxValues || {})
+              .filter(([key]) => key.toLowerCase().includes('kva') || key.toLowerCase() === 's (kva)')
+              .reduce((max, [, value]) => Math.max(max, Number(value) || 0), 0)
+          : 0;
 
-        // Get kWh values for both direct and hierarchical
-        const directKwh = meter.directTotalKwh ?? meter.totalKwhPositive ?? 0;
-        const hierarchicalKwh = meter.hierarchicalTotalKwh ?? meter.totalKwhPositive ?? meter.totalKwh ?? 0;
+        // Get kWh values from correct sources
+        // Direct: from meter_readings (processSingleMeter result)
+        const directKwh = meter.totalKwhPositive ?? meter.totalKwh ?? 0;
+        // Hierarchical: from hierarchical_meter_readings (fetched above)
+        const hierarchicalKwh = hierarchicalData?.totalKwh ?? 0;
 
         if (meter.assigned_tariff_name && (directKwh > 0 || hierarchicalKwh > 0)) {
           // Calculate DIRECT revenue
