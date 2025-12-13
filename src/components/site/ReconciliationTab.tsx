@@ -707,13 +707,15 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     cancelReconciliationRef.current = false;
 
     try {
-      await runner.runHierarchyGeneration(
+      const result = await runner.runHierarchyGeneration(
         dateFrom,
         dateTo,
         timeFrom,
         timeTo,
         availableMeters
       );
+      // Result now includes hierarchicalCsvResults, but for manual button we don't need to capture it
+      // as the state is updated via callbacks
     } finally {
       setIsGeneratingHierarchy(false);
     }
@@ -748,7 +750,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
       cancelReconciliationRef.current = false;
       
       try {
-        const hierarchySuccess = await runner.runHierarchyGeneration(
+        const hierarchyResult = await runner.runHierarchyGeneration(
           dateFrom,
           dateTo,
           timeFrom,
@@ -756,7 +758,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           availableMeters
         );
         
-        if (!hierarchySuccess) {
+        if (!hierarchyResult.success) {
           toast.error("Failed to generate hierarchy - cannot proceed with reconciliation");
           setIsGeneratingHierarchy(false);
           return;
