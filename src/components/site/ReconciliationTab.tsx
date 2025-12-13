@@ -370,13 +370,7 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
           readingsCount: count || 0
         });
 
-        // Only auto-set dates if user hasn't manually set them
-        if (!userSetDates) {
-          setDateFrom(earliest);
-          setDateTo(latest);
-          setTimeFrom(format(earliest, "HH:mm"));
-          setTimeTo(format(latest, "HH:mm"));
-        }
+        // DO NOT auto-populate dates - user must manually select dates or choose a document period
       } catch (error) {
         console.error("Error fetching meter date range:", error);
       }

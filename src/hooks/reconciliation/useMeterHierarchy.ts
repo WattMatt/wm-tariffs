@@ -738,12 +738,45 @@ export function useMeterHierarchy({ siteId }: UseMeterHierarchyOptions) {
     }
   }, [siteId, selectedMeterId, fetchSchematicConnections, loadIndentLevelsFromStorage]);
 
-  // Load on mount
+  // Load on mount with cleanup to prevent stale updates
   useEffect(() => {
-    fetchDateRanges();
-    fetchBasicMeters();
-    fetchDocumentDateRanges();
-  }, [siteId]);
+    let isMounted = true;
+    
+    const loadData = async () => {
+      try {
+        // Fetch date ranges first
+        if (isMounted) {
+          setIsLoadingDateRanges(true);
+          const range = await fetchDateRangesFromDb(siteId);
+          if (isMounted) {
+            setTotalDateRange(range);
+            setIsLoadingDateRanges(false);
+          }
+        }
+        
+        // Fetch basic meters
+        if (isMounted) {
+          await fetchBasicMeters();
+        }
+        
+        // Fetch document date ranges
+        if (isMounted) {
+          await fetchDocumentDateRanges();
+        }
+      } catch (error) {
+        console.error("Error loading initial data:", error);
+        if (isMounted) {
+          setIsLoadingDateRanges(false);
+        }
+      }
+    };
+    
+    loadData();
+    
+    return () => { 
+      isMounted = false;
+    };
+  }, [siteId, fetchBasicMeters, fetchDocumentDateRanges]);
 
   // Fetch CSV info when meters change
   useEffect(() => {
