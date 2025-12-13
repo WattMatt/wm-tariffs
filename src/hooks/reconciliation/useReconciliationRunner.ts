@@ -1040,16 +1040,9 @@ export function useReconciliationRunner(options: UseReconciliationRunnerOptions)
     timeFrom: string,
     timeTo: string,
     selectedMeterId: string,
-    meterDateRange: { earliest: Date | null; latest: Date | null },
-    loadFullMeterHierarchy: () => Promise<void>,
-    metersFullyLoaded: boolean
+    meterDateRange: { earliest: Date | null; latest: Date | null }
   ): Promise<boolean> => {
     try {
-      // Load full meter hierarchy if not already loaded
-      if (!metersFullyLoaded) {
-        toast.info("Loading meter hierarchy...");
-        await loadFullMeterHierarchy();
-      }
 
       const fullDateTimeFrom = getFullDateTime(dateFrom, timeFrom);
       const fullDateTimeTo = getFullDateTime(dateTo, timeTo);
