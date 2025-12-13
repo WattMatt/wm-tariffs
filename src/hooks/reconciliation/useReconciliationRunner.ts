@@ -83,7 +83,7 @@ export interface BulkReconcileOptions {
   meterAssignments: Record<string, string>;
   meterOrder: string[];
   // Functions from hooks - exact same as manual buttons
-  runHierarchyGeneration: (dateFrom: Date, dateTo: Date, timeFrom: string, timeTo: string, meters: any[]) => Promise<boolean>;
+  runHierarchyGeneration: (dateFrom: Date, dateTo: Date, timeFrom: string, timeTo: string, meters: any[]) => Promise<{ success: boolean; hierarchicalCsvResults: Map<string, any> }>;
   runReconciliation: (options: RunReconciliationOptions) => Promise<any>;
   saveReconciliationRun: (runName: string, notes: string | null, dateFrom: string, dateTo: string, reconciliationData: any, availableMeters: any[], hierarchicalCsvResults: Map<string, any>) => Promise<string>;
   getMetersWithUploadedCsvs: (meterIds: string[]) => Promise<Set<string>>;
@@ -851,6 +851,7 @@ export function useReconciliationRunner(options: UseReconciliationRunnerOptions)
 
   /**
    * Run hierarchy generation - copy leaf meters and generate parent CSVs
+   * Returns success status AND the hierarchical CSV results map
    */
   const runHierarchyGeneration = useCallback(async (
     dateFrom: Date,
@@ -858,15 +859,17 @@ export function useReconciliationRunner(options: UseReconciliationRunnerOptions)
     timeFrom: string,
     timeTo: string,
     availableMeters: Array<{ id: string; meter_number: string }>
-  ): Promise<boolean> => {
+  ): Promise<{ success: boolean; hierarchicalCsvResults: Map<string, { totalKwh: number; columnTotals: Record<string, number>; columnMaxValues: Record<string, number>; rowCount: number }> }> => {
+    const emptyResult = { success: false, hierarchicalCsvResults: new Map<string, { totalKwh: number; columnTotals: Record<string, number>; columnMaxValues: Record<string, number>; rowCount: number }>() };
+    
     if (!previewDataRef.current) {
       toast.error("Please preview data first");
-      return false;
+      return emptyResult;
     }
 
     if (selectedColumnsRef.current.size === 0) {
       toast.error("Please select at least one column to calculate");
-      return false;
+      return emptyResult;
     }
 
     onCsvGenerationProgress?.({ current: 0, total: 0 });
@@ -912,22 +915,29 @@ export function useReconciliationRunner(options: UseReconciliationRunnerOptions)
 
       console.log(`Fresh meter connections loaded: ${freshConnectionsMap.size} parent meters`);
       
-      // ===== STEP 0.5: Clear ALL hierarchical_meter_readings for this site =====
-      console.log('Clearing ALL hierarchical_meter_readings for site...');
+      // ===== STEP 0.5: Clear ALL hierarchical_meter_readings for this site (batched to avoid timeout) =====
+      console.log('Clearing ALL hierarchical_meter_readings for site (batched)...');
       const siteMetersIds = availableMeters.map(m => m.id);
+      const BATCH_SIZE = 50;
+      let totalCleared = 0;
       
-      const { error: clearError } = await supabase
-        .from('hierarchical_meter_readings')
-        .delete()
-        .in('meter_id', siteMetersIds)
-        .gte('reading_timestamp', fullDateTimeFrom)
-        .lte('reading_timestamp', fullDateTimeTo);
-      
-      if (clearError) {
-        console.warn('Failed to clear hierarchical_meter_readings:', clearError);
-      } else {
-        console.log('Cleared hierarchical_meter_readings for date range');
+      for (let i = 0; i < siteMetersIds.length; i += BATCH_SIZE) {
+        const batch = siteMetersIds.slice(i, i + BATCH_SIZE);
+        const { error: clearError, count } = await supabase
+          .from('hierarchical_meter_readings')
+          .delete()
+          .in('meter_id', batch)
+          .gte('reading_timestamp', fullDateTimeFrom)
+          .lte('reading_timestamp', fullDateTimeTo);
+        
+        if (clearError) {
+          console.warn(`Failed to clear batch ${i / BATCH_SIZE + 1}:`, clearError);
+        } else {
+          totalCleared += count || 0;
+        }
       }
+      
+      console.log(`Cleared ${totalCleared} hierarchical_meter_readings for date range`)
 
       // ===== STEP 1: Copy ALL leaf meters upfront =====
       console.log('STEP 1: Copying ALL leaf meters to hierarchical_meter_readings...');
@@ -1088,12 +1098,12 @@ export function useReconciliationRunner(options: UseReconciliationRunnerOptions)
         onHierarchyCsvData?.(csvResults);
         onHierarchyGenerated?.(true);
         toast.success(`Generated ${sortedParentMeters.length} hierarchical CSV file(s)`);
+        return { success: true, hierarchicalCsvResults: csvResults };
       } else {
         toast.info("No parent meters found - no hierarchical CSVs needed");
         onHierarchyGenerated?.(true);
+        return { success: true, hierarchicalCsvResults: new Map() };
       }
-      
-      return true;
     } catch (error: any) {
       console.error("Error generating hierarchy:", error);
       if (!cancelRef.current) {
@@ -1103,7 +1113,7 @@ export function useReconciliationRunner(options: UseReconciliationRunnerOptions)
       }
       onHierarchyGenerated?.(false);
       onHierarchyCsvData?.(new Map());
-      return false;
+      return { success: false, hierarchicalCsvResults: new Map() };
     } finally {
       onCsvGenerationProgress?.({ current: 0, total: 0 });
     }
@@ -1697,9 +1707,11 @@ export function useReconciliationRunner(options: UseReconciliationRunnerOptions)
           return children && children.length > 0;
         });
 
+        let hierarchicalCsvResults = new Map<string, any>();
+        
         if (parentMeters.length > 0) {
           console.log(`Generating hierarchy for ${parentMeters.length} parent meters...`);
-          const hierarchySuccess = await runHierarchyGeneration(
+          const hierarchyResult = await runHierarchyGeneration(
             dateFrom,
             dateTo,
             timeFrom,
@@ -1707,9 +1719,13 @@ export function useReconciliationRunner(options: UseReconciliationRunnerOptions)
             availableMeters
           );
 
-          if (!hierarchySuccess) {
+          if (!hierarchyResult.success) {
             throw new Error('Failed to generate hierarchy');
           }
+          
+          // Capture the actual hierarchical CSV results
+          hierarchicalCsvResults = hierarchyResult.hierarchicalCsvResults;
+          console.log(`Captured hierarchical CSV results for ${hierarchicalCsvResults.size} parent meters`);
         }
 
         // STEP 2: Run reconciliation with revenue (same as "Calculate Energy" + "Calculate Revenue" buttons)
@@ -1742,13 +1758,10 @@ export function useReconciliationRunner(options: UseReconciliationRunnerOptions)
           throw new Error('Reconciliation calculation failed');
         }
 
-        // STEP 3: Save the reconciliation run (same as clicking Save after manual reconciliation)
+        // STEP 3: Save the reconciliation run with ACTUAL hierarchical results
         const runName = `Bulk: ${periodLabel}`;
         const dateFromStr = getFullDateTime(dateFrom, timeFrom);
         const dateToStr = getFullDateTime(dateTo, timeTo);
-        
-        // Get the current hierarchical CSV results from the reconciliation
-        const currentHierarchicalResults = new Map<string, any>();
         
         await saveReconciliationRun(
           runName,
@@ -1757,7 +1770,7 @@ export function useReconciliationRunner(options: UseReconciliationRunnerOptions)
           dateToStr,
           reconciliationResult,
           availableMeters,
-          currentHierarchicalResults
+          hierarchicalCsvResults  // Pass actual results instead of empty map
         );
 
         successCount++;
