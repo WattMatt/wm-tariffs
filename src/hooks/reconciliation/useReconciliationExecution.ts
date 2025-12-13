@@ -430,7 +430,10 @@ export function useReconciliationExecution(options: UseReconciliationExecutionOp
     const { hierarchicalTotals, hierarchicalColumnTotals, hierarchicalColumnMaxValues } =
       calculateHierarchicalTotals(allMeters, meterConnectionsMap);
 
-    // Calculate revenue for parent meters using hierarchical totals
+    // Calculate revenue for ALL meters - both direct and hierarchical costs
+    const directMeterRevenues = new Map<string, any>();
+    const hierarchicalMeterRevenues = new Map<string, any>();
+    
     if (reconciliationData.revenueData) {
       const { data: siteData } = await supabase
         .from("sites")
@@ -439,73 +442,89 @@ export function useReconciliationExecution(options: UseReconciliationExecutionOp
         .single();
       
       if (siteData?.supply_authority_id) {
-        const meterRevenues = new Map(reconciliationData.revenueData.meterRevenues);
+        // Copy existing revenue data as hierarchical baseline
+        const existingRevenues = new Map(reconciliationData.revenueData.meterRevenues);
         
-        // Process all parent meters in parallel
-        const parentMeterPromises = allMeters
-          .filter(meter => {
-            const hierarchicalTotal = meter.hierarchicalTotalKwh ?? hierarchicalTotals.get(meter.id);
-            const existingRevenue = meterRevenues.get(meter.id);
-            return hierarchicalTotal && hierarchicalTotal > 0 && 
-                   (!existingRevenue || (existingRevenue as any).totalCost === 0);
-          })
-          .map(async (meter) => {
-            const hierarchicalTotal = meter.hierarchicalTotalKwh ?? hierarchicalTotals.get(meter.id) ?? 0;
-            const meterMaxKva = Object.entries(meter.columnMaxValues || {})
-              .filter(([key]) => key.toLowerCase().includes('kva') || key.toLowerCase() === 's (kva)')
-              .reduce((max, [, value]) => Math.max(max, Number(value) || 0), 0);
-            
-            try {
-              if (meter.assigned_tariff_name) {
-                const costResult = await calculateMeterCostAcrossPeriods(
-                  meter.id,
-                  siteData.supply_authority_id,
-                  meter.assigned_tariff_name,
-                  new Date(dateFrom),
-                  new Date(dateTo),
-                  hierarchicalTotal,
-                  meterMaxKva
+        // Calculate BOTH direct and hierarchical revenue for all meters
+        const meterRevenuePromises = allMeters.map(async (meter) => {
+          const directTotal = meter.directTotalKwh ?? meter.totalKwh ?? 0;
+          const hierarchicalTotal = meter.hierarchicalTotalKwh ?? hierarchicalTotals.get(meter.id) ?? 0;
+          
+          // Get max kVA from direct readings
+          const directColMaxValues = meter.directColumnMaxValues || meter.columnMaxValues || {};
+          const directMaxKva = Object.entries(directColMaxValues)
+            .filter(([key]) => key.toLowerCase().includes('kva') || key.toLowerCase() === 's (kva)')
+            .reduce((max, [, value]) => Math.max(max, Number(value) || 0), 0);
+          
+          // Get max kVA from hierarchical readings
+          const hierColMaxValues = meter.hierarchicalColumnMaxValues || hierarchicalColumnMaxValues.get(meter.id) || {};
+          const hierarchicalMaxKva = Object.entries(hierColMaxValues)
+            .filter(([key]) => key.toLowerCase().includes('kva') || key.toLowerCase() === 's (kva)')
+            .reduce((max, [, value]) => Math.max(max, Number(value) || 0), 0);
+          
+          let directCostResult = null;
+          let hierarchicalCostResult = existingRevenues.get(meter.id) || null;
+          
+          const tariffName = meter.assigned_tariff_name;
+          const tariffId = meter.tariff_structure_id;
+          
+          try {
+            // Calculate DIRECT cost if there's direct data and a tariff
+            if (directTotal > 0 && (tariffName || tariffId)) {
+              if (tariffName) {
+                directCostResult = await calculateMeterCostAcrossPeriods(
+                  meter.id, siteData.supply_authority_id, tariffName,
+                  new Date(dateFrom), new Date(dateTo),
+                  directTotal, directMaxKva
                 );
-                return { meter, costResult };
-              } else if (meter.tariff_structure_id) {
-                const costResult = await calculateMeterCost(
-                  meter.id,
-                  meter.tariff_structure_id,
-                  new Date(dateFrom),
-                  new Date(dateTo),
-                  hierarchicalTotal,
-                  meterMaxKva
+              } else if (tariffId) {
+                directCostResult = await calculateMeterCost(
+                  meter.id, tariffId,
+                  new Date(dateFrom), new Date(dateTo),
+                  directTotal, directMaxKva
                 );
-                return { meter, costResult };
               }
-            } catch (error) {
-              console.error(`Failed to calculate revenue for parent meter ${meter.meter_number}:`, error);
-              return {
-                meter,
-                costResult: {
-                  hasError: true,
-                  errorMessage: error instanceof Error ? error.message : 'Cost calculation failed',
-                  totalCost: 0,
-                  energyCost: 0,
-                  fixedCharges: 0,
-                  demandCharges: 0,
-                  avgCostPerKwh: 0,
-                  tariffName: meter.assigned_tariff_name || null
-                }
-              };
             }
-            return null;
-          });
+            
+            // Calculate HIERARCHICAL cost if there's hierarchical data and no existing revenue
+            if (hierarchicalTotal > 0 && (tariffName || tariffId) && !hierarchicalCostResult) {
+              if (tariffName) {
+                hierarchicalCostResult = await calculateMeterCostAcrossPeriods(
+                  meter.id, siteData.supply_authority_id, tariffName,
+                  new Date(dateFrom), new Date(dateTo),
+                  hierarchicalTotal, hierarchicalMaxKva
+                );
+              } else if (tariffId) {
+                hierarchicalCostResult = await calculateMeterCost(
+                  meter.id, tariffId,
+                  new Date(dateFrom), new Date(dateTo),
+                  hierarchicalTotal, hierarchicalMaxKva
+                );
+              }
+            }
+          } catch (error) {
+            console.error(`Failed to calculate revenue for meter ${meter.meter_number}:`, error);
+            const errorResult = {
+              hasError: true,
+              errorMessage: error instanceof Error ? error.message : 'Cost calculation failed',
+              totalCost: 0, energyCost: 0, fixedCharges: 0, demandCharges: 0, avgCostPerKwh: 0,
+              tariffName: tariffName || null
+            };
+            if (!directCostResult) directCostResult = errorResult;
+            if (!hierarchicalCostResult) hierarchicalCostResult = errorResult;
+          }
+          
+          return { meter, directCostResult, hierarchicalCostResult };
+        });
 
-        const results = await Promise.allSettled(parentMeterPromises);
+        const results = await Promise.allSettled(meterRevenuePromises);
         results.forEach((result) => {
           if (result.status === 'fulfilled' && result.value) {
-            const { meter, costResult } = result.value;
-            meterRevenues.set(meter.id, costResult);
+            const { meter, directCostResult, hierarchicalCostResult } = result.value;
+            if (directCostResult) directMeterRevenues.set(meter.id, directCostResult);
+            if (hierarchicalCostResult) hierarchicalMeterRevenues.set(meter.id, hierarchicalCostResult);
           }
         });
-        
-        reconciliationData.revenueData.meterRevenues = meterRevenues;
       }
     }
 
@@ -524,8 +543,6 @@ export function useReconciliationExecution(options: UseReconciliationExecutionOp
 
     // Prepare meter results for insertion with direct vs hierarchical separation
     const meterResults = allMeters.map(meter => {
-      const revenueInfo = reconciliationData.revenueData?.meterRevenues.get(meter.id);
-      
       // Get hierarchical values from meter or calculated maps
       const hierTotal = meter.hierarchicalTotalKwh ?? hierarchicalTotals.get(meter.id) ?? 0;
       const hierColTotals = meter.hierarchicalColumnTotals || hierarchicalColumnTotals.get(meter.id) || null;
@@ -536,6 +553,10 @@ export function useReconciliationExecution(options: UseReconciliationExecutionOp
       const directColTotals = meter.directColumnTotals || meter.columnTotals || null;
       const directColMaxValues = meter.directColumnMaxValues || meter.columnMaxValues || null;
       const directReadingsCount = meter.directReadingsCount ?? meter.readingsCount ?? 0;
+      
+      // Get both direct and hierarchical revenue
+      const directRevenue = directMeterRevenues.get(meter.id);
+      const hierRevenue = hierarchicalMeterRevenues.get(meter.id);
       
       return {
         reconciliation_run_id: run.id,
@@ -566,26 +587,27 @@ export function useReconciliationExecution(options: UseReconciliationExecutionOp
         // Error tracking
         has_error: meter.hasError || false,
         error_message: meter.errorMessage || null,
-        // Revenue - primary values (based on hierarchical if available)
-        tariff_name: revenueInfo?.tariffName || null,
-        energy_cost: revenueInfo?.energyCost || 0,
-        fixed_charges: revenueInfo?.fixedCharges || 0,
-        demand_charges: revenueInfo?.demandCharges || 0,
-        total_cost: revenueInfo?.totalCost || 0,
-        avg_cost_per_kwh: revenueInfo?.avgCostPerKwh || 0,
-        cost_calculation_error: revenueInfo?.hasError ? revenueInfo.errorMessage : null,
-        // Direct revenue fields (TODO: calculate separately in future if needed)
-        direct_total_cost: 0,
-        direct_energy_cost: 0,
-        direct_fixed_charges: 0,
-        direct_demand_charges: 0,
-        direct_avg_cost_per_kwh: 0,
-        // Hierarchical revenue fields (copy from main revenue which is based on hierarchical)
-        hierarchical_total_cost: revenueInfo?.totalCost || 0,
-        hierarchical_energy_cost: revenueInfo?.energyCost || 0,
-        hierarchical_fixed_charges: revenueInfo?.fixedCharges || 0,
-        hierarchical_demand_charges: revenueInfo?.demandCharges || 0,
-        hierarchical_avg_cost_per_kwh: revenueInfo?.avgCostPerKwh || 0,
+        // Revenue - primary values (prefer hierarchical for legacy compatibility)
+        tariff_name: hierRevenue?.tariffName || directRevenue?.tariffName || null,
+        energy_cost: hierRevenue?.energyCost || directRevenue?.energyCost || 0,
+        fixed_charges: hierRevenue?.fixedCharges || directRevenue?.fixedCharges || 0,
+        demand_charges: hierRevenue?.demandCharges || directRevenue?.demandCharges || 0,
+        total_cost: hierRevenue?.totalCost || directRevenue?.totalCost || 0,
+        avg_cost_per_kwh: hierRevenue?.avgCostPerKwh || directRevenue?.avgCostPerKwh || 0,
+        cost_calculation_error: (hierRevenue?.hasError ? hierRevenue.errorMessage : null) || 
+                               (directRevenue?.hasError ? directRevenue.errorMessage : null),
+        // Direct revenue fields - calculated from direct kWh
+        direct_total_cost: directRevenue?.totalCost || 0,
+        direct_energy_cost: directRevenue?.energyCost || 0,
+        direct_fixed_charges: directRevenue?.fixedCharges || 0,
+        direct_demand_charges: directRevenue?.demandCharges || 0,
+        direct_avg_cost_per_kwh: directRevenue?.avgCostPerKwh || 0,
+        // Hierarchical revenue fields - calculated from hierarchical kWh
+        hierarchical_total_cost: hierRevenue?.totalCost || 0,
+        hierarchical_energy_cost: hierRevenue?.energyCost || 0,
+        hierarchical_fixed_charges: hierRevenue?.fixedCharges || 0,
+        hierarchical_demand_charges: hierRevenue?.demandCharges || 0,
+        hierarchical_avg_cost_per_kwh: hierRevenue?.avgCostPerKwh || 0,
       };
     });
 
