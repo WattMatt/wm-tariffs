@@ -446,35 +446,60 @@ export default function ReconciliationResultsView({
             {((meter.hasData !== false || childIds.length > 0) && !meter.hasError) && (
               <>
                 {isRevenueView ? (
-                  // Revenue View - Show only costs
-                  <div className="text-right">
-                    {meterRevenue && !meterRevenue.hasError ? (
-                      <>
-                        <div className="text-sm font-medium text-primary">
-                          R {meterRevenue.totalCost.toFixed(2)}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          Total Cost
-                        </div>
-                      </>
-                    ) : meterRevenue?.hasError ? (
-                      <>
-                        <div className="text-sm font-medium text-destructive">
-                          Calculation Error
-                        </div>
-                        <div className="text-xs text-destructive">
-                          {meterRevenue.errorMessage}
-                        </div>
-                      </>
-                    ) : (
-                      <>
+                  // Revenue View - Show costs with Hierarchical vs Direct comparison
+                  <div className="flex items-center gap-4">
+                    {/* Hierarchical Revenue (primary) */}
+                    <div className="text-right">
+                      {meter.hierarchicalRevenue && !meter.hierarchicalRevenue.hasError ? (
+                        <>
+                          <div className="text-sm font-medium text-primary">
+                            R {meter.hierarchicalRevenue.totalCost.toFixed(2)}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            Hierarchical
+                          </div>
+                        </>
+                      ) : meterRevenue && !meterRevenue.hasError ? (
+                        <>
+                          <div className="text-sm font-medium text-primary">
+                            R {meterRevenue.totalCost.toFixed(2)}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            Total Cost
+                          </div>
+                        </>
+                      ) : meterRevenue?.hasError ? (
+                        <>
+                          <div className="text-sm font-medium text-destructive">
+                            Calculation Error
+                          </div>
+                          <div className="text-xs text-destructive">
+                            {meterRevenue.errorMessage}
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="text-sm font-medium text-muted-foreground">
+                            No tariff assigned
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            Cannot calculate cost
+                          </div>
+                        </>
+                      )}
+                    </div>
+                    
+                    {/* Direct Revenue (comparison) - only show if different */}
+                    {meter.directRevenue && !meter.directRevenue.hasError &&
+                     meter.directRevenue.totalCost !== meter.hierarchicalRevenue?.totalCost && (
+                      <div className="text-right border-l border-border/50 pl-4">
                         <div className="text-sm font-medium text-muted-foreground">
-                          No tariff assigned
+                          R {meter.directRevenue.totalCost.toFixed(2)}
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          Cannot calculate cost
+                          Direct
                         </div>
-                      </>
+                      </div>
                     )}
                   </div>
                 ) : (
@@ -525,36 +550,98 @@ export default function ReconciliationResultsView({
           </div>
         </div>
 
-        {isRevenueView && meterRevenue && !meterRevenue.hasError && (
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-2 pt-2 border-t border-border/50">
-            <div className="text-xs">
-              <span className="text-muted-foreground">Tariff: </span>
-              <span className="font-medium">{meterRevenue.tariffName}</span>
-            </div>
-            <div className="text-xs">
-              <span className="text-muted-foreground">Energy Cost: </span>
-              <span className="font-medium">R {meterRevenue.energyCost.toFixed(2)}</span>
-            </div>
-            <div className="text-xs">
-              <span className="text-muted-foreground">Fixed Charges: </span>
-              <span className="font-medium">R {meterRevenue.fixedCharges.toFixed(2)}</span>
-            </div>
-            <div className="text-xs">
-              <span className="text-muted-foreground">Demand Charges: </span>
-              <span className="font-medium">R {meterRevenue.demandCharges.toFixed(2)}</span>
-            </div>
-            <div className="text-xs">
-              <span className="text-muted-foreground">Avg Cost/kWh: </span>
-              <span className="font-medium">R {meterRevenue.avgCostPerKwh.toFixed(4)}</span>
-            </div>
-          </div>
-        )}
-        
-        {isRevenueView && meterRevenue?.hasError && (
-          <div className="pt-2 border-t border-border/50">
-            <div className="text-xs text-destructive">
-              {meterRevenue.errorMessage}
-            </div>
+        {isRevenueView && (meter.hierarchicalRevenue || meter.directRevenue || meterRevenue) && (
+          <div className="pt-2 border-t border-border/50 space-y-2">
+            {/* Hierarchical Revenue Details */}
+            {meter.hierarchicalRevenue && !meter.hierarchicalRevenue.hasError && (
+              <div>
+                <div className="text-xs font-medium text-primary mb-1">Hierarchical:</div>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                  <div className="text-xs">
+                    <span className="text-muted-foreground">Tariff: </span>
+                    <span className="font-medium text-primary">{meter.hierarchicalRevenue.tariffName}</span>
+                  </div>
+                  <div className="text-xs">
+                    <span className="text-muted-foreground">Energy Cost: </span>
+                    <span className="font-medium text-primary">R {meter.hierarchicalRevenue.energyCost.toFixed(2)}</span>
+                  </div>
+                  <div className="text-xs">
+                    <span className="text-muted-foreground">Fixed Charges: </span>
+                    <span className="font-medium text-primary">R {meter.hierarchicalRevenue.fixedCharges.toFixed(2)}</span>
+                  </div>
+                  <div className="text-xs">
+                    <span className="text-muted-foreground">Demand Charges: </span>
+                    <span className="font-medium text-primary">R {meter.hierarchicalRevenue.demandCharges.toFixed(2)}</span>
+                  </div>
+                  <div className="text-xs">
+                    <span className="text-muted-foreground">Avg Cost/kWh: </span>
+                    <span className="font-medium text-primary">R {meter.hierarchicalRevenue.avgCostPerKwh.toFixed(4)}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {/* Direct Revenue Details */}
+            {meter.directRevenue && !meter.directRevenue.hasError && (
+              <div>
+                <div className="text-xs font-medium text-muted-foreground mb-1">Direct:</div>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                  <div className="text-xs">
+                    <span className="text-muted-foreground">Tariff: </span>
+                    <span className="font-medium">{meter.directRevenue.tariffName}</span>
+                  </div>
+                  <div className="text-xs">
+                    <span className="text-muted-foreground">Energy Cost: </span>
+                    <span className="font-medium">R {meter.directRevenue.energyCost.toFixed(2)}</span>
+                  </div>
+                  <div className="text-xs">
+                    <span className="text-muted-foreground">Fixed Charges: </span>
+                    <span className="font-medium">R {meter.directRevenue.fixedCharges.toFixed(2)}</span>
+                  </div>
+                  <div className="text-xs">
+                    <span className="text-muted-foreground">Demand Charges: </span>
+                    <span className="font-medium">R {meter.directRevenue.demandCharges.toFixed(2)}</span>
+                  </div>
+                  <div className="text-xs">
+                    <span className="text-muted-foreground">Avg Cost/kWh: </span>
+                    <span className="font-medium">R {meter.directRevenue.avgCostPerKwh.toFixed(4)}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {/* Fallback to meterRevenue if no direct/hierarchical */}
+            {!meter.hierarchicalRevenue && !meter.directRevenue && meterRevenue && !meterRevenue.hasError && (
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                <div className="text-xs">
+                  <span className="text-muted-foreground">Tariff: </span>
+                  <span className="font-medium">{meterRevenue.tariffName}</span>
+                </div>
+                <div className="text-xs">
+                  <span className="text-muted-foreground">Energy Cost: </span>
+                  <span className="font-medium">R {meterRevenue.energyCost.toFixed(2)}</span>
+                </div>
+                <div className="text-xs">
+                  <span className="text-muted-foreground">Fixed Charges: </span>
+                  <span className="font-medium">R {meterRevenue.fixedCharges.toFixed(2)}</span>
+                </div>
+                <div className="text-xs">
+                  <span className="text-muted-foreground">Demand Charges: </span>
+                  <span className="font-medium">R {meterRevenue.demandCharges.toFixed(2)}</span>
+                </div>
+                <div className="text-xs">
+                  <span className="text-muted-foreground">Avg Cost/kWh: </span>
+                  <span className="font-medium">R {meterRevenue.avgCostPerKwh.toFixed(4)}</span>
+                </div>
+              </div>
+            )}
+            
+            {/* Error display */}
+            {(meter.hierarchicalRevenue?.hasError || meter.directRevenue?.hasError || meterRevenue?.hasError) && (
+              <div className="text-xs text-destructive">
+                {meter.hierarchicalRevenue?.errorMessage || meter.directRevenue?.errorMessage || meterRevenue?.errorMessage}
+              </div>
+            )}
           </div>
         )}
 
