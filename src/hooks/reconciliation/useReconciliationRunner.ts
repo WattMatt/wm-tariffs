@@ -76,16 +76,35 @@ export interface BulkReconcileOptions {
   availableMeters: any[];
   enableRevenue: boolean;
   meterCorrections: Map<string, CorrectedReading[]>;
-  // Meter config for edge function
+  // Meter config
   selectedColumns: string[];
   columnOperations: Record<string, string>;
   columnFactors: Record<string, string>;
   meterAssignments: Record<string, string>;
   meterOrder: string[];
+  // Functions from hooks - exact same as manual buttons
+  runHierarchyGeneration: (dateFrom: Date, dateTo: Date, timeFrom: string, timeTo: string, meters: any[]) => Promise<boolean>;
+  runReconciliation: (options: RunReconciliationOptions) => Promise<any>;
+  saveReconciliationRun: (runName: string, notes: string | null, dateFrom: string, dateTo: string, reconciliationData: any, availableMeters: any[], hierarchicalCsvResults: Map<string, any>) => Promise<string>;
+  getMetersWithUploadedCsvs: (meterIds: string[]) => Promise<Set<string>>;
+  updateMeterCategoryWithHierarchy: (meters: MeterResult[], csvResults: Map<string, any>, metersWithUploadedCsvs: Set<string>) => MeterResult[];
+  saveReconciliationSettings: () => Promise<void>;
+  // State setters needed by runReconciliation
+  setIsLoading: (loading: boolean) => void;
+  setFailedMeters: (meters: Map<string, string>) => void;
+  setHierarchicalCsvResults: (results: Map<string, any>) => void;
+  setReconciliationData: (data: any) => void;
+  setAvailableMeters: (fn: (prev: any[]) => any[]) => void;
+  setIsColumnsOpen: (open: boolean) => void;
+  setIsMetersOpen: (open: boolean) => void;
+  setIsCancelling: (cancelling: boolean) => void;
+  setIsGeneratingCsvs: (generating: boolean) => void;
   // Callbacks
   setIsBulkProcessing: (processing: boolean) => void;
   setBulkProgress: (progress: { currentDocument: string; current: number; total: number }) => void;
   setCurrentJobId: (jobId: string | null) => void;
+  // Cancel ref
+  cancelRef: React.MutableRefObject<boolean>;
 }
 
 export interface ProcessedMeterData {
@@ -1517,22 +1536,35 @@ export function useReconciliationRunner(options: UseReconciliationRunnerOptions)
 
   /**
    * Run bulk reconciliation for multiple document periods
-   * Calls edge function to run in background - persists even if browser closes
+   * Uses the EXACT SAME functions as manual buttons - no reimplementation
    */
   const runBulkReconcile = useCallback(async (options: BulkReconcileOptions) => {
     const {
       selectedDocumentIds,
       documentDateRanges,
+      meterConnectionsMap,
       availableMeters,
       enableRevenue,
-      selectedColumns,
-      columnOperations,
-      columnFactors,
-      meterAssignments,
-      meterOrder,
+      meterCorrections,
+      runHierarchyGeneration,
+      runReconciliation,
+      saveReconciliationRun,
+      getMetersWithUploadedCsvs,
+      updateMeterCategoryWithHierarchy,
+      saveReconciliationSettings,
+      setIsLoading,
+      setFailedMeters,
+      setHierarchicalCsvResults,
+      setReconciliationData,
+      setAvailableMeters,
+      setIsColumnsOpen,
+      setIsMetersOpen,
+      setIsCancelling,
+      setIsGeneratingCsvs,
       setIsBulkProcessing,
       setBulkProgress,
       setCurrentJobId,
+      cancelRef,
     } = options;
 
     if (selectedDocumentIds.length === 0) {
@@ -1540,96 +1572,139 @@ export function useReconciliationRunner(options: UseReconciliationRunnerOptions)
       return;
     }
 
-    setIsBulkProcessing(true);
-    setBulkProgress({
-      currentDocument: 'Starting...',
-      current: 0,
-      total: selectedDocumentIds.length
-    });
+    // Get the selected periods in order
+    const selectedPeriods = documentDateRanges
+      .filter(d => selectedDocumentIds.includes(d.id))
+      .sort((a, b) => new Date(a.period_start).getTime() - new Date(b.period_start).getTime());
 
-    try {
-      // Call edge function to start background processing
-      const { data, error } = await supabase.functions.invoke('run-bulk-reconciliation', {
-        body: {
-          siteId,
-          documentPeriodIds: selectedDocumentIds,
-          documentDateRanges: documentDateRanges.filter(d => selectedDocumentIds.includes(d.id)),
-          enableRevenue,
-          meterConfig: {
-            selectedColumns,
-            columnOperations,
-            columnFactors,
-            meterAssignments,
-            meterOrder
+    setIsBulkProcessing(true);
+    setCurrentJobId('frontend-bulk'); // Indicate frontend processing
+    
+    let successCount = 0;
+    let failedCount = 0;
+
+    for (let i = 0; i < selectedPeriods.length; i++) {
+      const period = selectedPeriods[i];
+      
+      // Check for cancellation
+      if (cancelRef.current) {
+        toast.info(`Bulk reconciliation cancelled after ${successCount} periods`);
+        break;
+      }
+
+      const periodLabel = `${format(new Date(period.period_start), 'd MMM')} - ${format(new Date(period.period_end), 'd MMM yyyy')}`;
+      
+      setBulkProgress({
+        currentDocument: periodLabel,
+        current: i,
+        total: selectedPeriods.length
+      });
+
+      try {
+        // Parse dates from period
+        const dateFrom = new Date(period.period_start);
+        const dateTo = new Date(period.period_end);
+        const timeFrom = format(dateFrom, 'HH:mm');
+        const timeTo = format(dateTo, 'HH:mm');
+
+        console.log(`Bulk reconciliation: Processing period ${i + 1}/${selectedPeriods.length}: ${periodLabel}`);
+
+        // STEP 1: Generate hierarchy (same as "Generate Hierarchy" button)
+        const parentMeters = availableMeters.filter(meter => {
+          const children = meterConnectionsMap.get(meter.id);
+          return children && children.length > 0;
+        });
+
+        if (parentMeters.length > 0) {
+          console.log(`Generating hierarchy for ${parentMeters.length} parent meters...`);
+          const hierarchySuccess = await runHierarchyGeneration(
+            dateFrom,
+            dateTo,
+            timeFrom,
+            timeTo,
+            availableMeters
+          );
+
+          if (!hierarchySuccess) {
+            throw new Error('Failed to generate hierarchy');
           }
         }
-      });
 
-      if (error) {
-        throw new Error(error.message);
+        // STEP 2: Run reconciliation with revenue (same as "Calculate Energy" + "Calculate Revenue" buttons)
+        console.log(`Running reconciliation for period ${periodLabel}...`);
+        const reconciliationResult = await runReconciliation({
+          dateFrom,
+          dateTo,
+          timeFrom,
+          timeTo,
+          enableRevenue: enableRevenue, // Always true for bulk
+          availableMeters,
+          meterConnectionsMap,
+          hierarchyGenerated: parentMeters.length > 0,
+          meterCorrections,
+          getMetersWithUploadedCsvs,
+          updateMeterCategoryWithHierarchy,
+          saveReconciliationSettings,
+          setIsLoading,
+          setFailedMeters,
+          setHierarchicalCsvResults,
+          setReconciliationData,
+          setAvailableMeters,
+          setIsColumnsOpen,
+          setIsMetersOpen,
+          setIsCancelling,
+          setIsGeneratingCsvs,
+        });
+
+        if (!reconciliationResult) {
+          throw new Error('Reconciliation calculation failed');
+        }
+
+        // STEP 3: Save the reconciliation run (same as clicking Save after manual reconciliation)
+        const runName = `Bulk: ${periodLabel}`;
+        const dateFromStr = getFullDateTime(dateFrom, timeFrom);
+        const dateToStr = getFullDateTime(dateTo, timeTo);
+        
+        // Get the current hierarchical CSV results from the reconciliation
+        const currentHierarchicalResults = new Map<string, any>();
+        
+        await saveReconciliationRun(
+          runName,
+          `Auto-generated by bulk reconciliation`,
+          dateFromStr,
+          dateToStr,
+          reconciliationResult,
+          availableMeters,
+          currentHierarchicalResults
+        );
+
+        successCount++;
+        console.log(`Successfully saved reconciliation for ${periodLabel}`);
+
+      } catch (error: any) {
+        console.error(`Failed to process period ${periodLabel}:`, error);
+        failedCount++;
+        // Continue with next period instead of stopping entirely
+        toast.error(`Failed: ${periodLabel} - ${error.message}`, { duration: 3000 });
       }
-
-      if (!data?.jobId) {
-        throw new Error('No job ID returned from edge function');
-      }
-
-      const jobId = data.jobId;
-      setCurrentJobId(jobId);
-      
-      console.log('Bulk reconciliation job started:', jobId);
-      toast.success("Bulk reconciliation started in background - you can close this page", {
-        duration: 5000,
-        description: "Progress will be tracked and you can check results later"
-      });
-
-      // Set up realtime subscription to track progress
-      const channel = supabase
-        .channel(`bulk-job-${jobId}`)
-        .on(
-          'postgres_changes',
-          {
-            event: 'UPDATE',
-            schema: 'public',
-            table: 'bulk_reconciliation_jobs',
-            filter: `id=eq.${jobId}`
-          },
-          (payload: any) => {
-            const job = payload.new;
-            console.log('Job update received:', job);
-            
-            setBulkProgress({
-              currentDocument: job.current_period || '',
-              current: job.completed_periods || 0,
-              total: job.total_periods || selectedDocumentIds.length
-            });
-
-            if (job.status === 'complete') {
-              setIsBulkProcessing(false);
-              setCurrentJobId(null);
-              toast.success(`Bulk reconciliation complete! ${job.completed_periods} reconciliation(s) saved.`);
-              supabase.removeChannel(channel);
-            } else if (job.status === 'failed') {
-              setIsBulkProcessing(false);
-              setCurrentJobId(null);
-              toast.error(`Bulk reconciliation failed: ${job.error_message || 'Unknown error'}`);
-              supabase.removeChannel(channel);
-            } else if (job.status === 'cancelled') {
-              setIsBulkProcessing(false);
-              setCurrentJobId(null);
-              toast.info('Bulk reconciliation was cancelled');
-              supabase.removeChannel(channel);
-            }
-          }
-        )
-        .subscribe();
-
-    } catch (error: any) {
-      console.error("Bulk reconciliation error:", error);
-      toast.error(`Failed to start bulk reconciliation: ${error.message}`);
-      setIsBulkProcessing(false);
-      setCurrentJobId(null);
     }
-  }, [siteId]);
+
+    // Final status
+    setBulkProgress({
+      currentDocument: 'Complete',
+      current: selectedPeriods.length,
+      total: selectedPeriods.length
+    });
+
+    setIsBulkProcessing(false);
+    setCurrentJobId(null);
+
+    if (failedCount === 0) {
+      toast.success(`Bulk reconciliation complete! ${successCount} reconciliation(s) saved.`);
+    } else {
+      toast.warning(`Bulk reconciliation finished: ${successCount} saved, ${failedCount} failed.`);
+    }
+  }, []);
 
   return {
     runHierarchyGeneration,
