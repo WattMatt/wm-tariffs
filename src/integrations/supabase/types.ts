@@ -826,6 +826,8 @@ export type Database = {
         Row: {
           avg_cost_per_kwh: number | null
           bulk_total: number
+          common_area_cost: number | null
+          common_area_kwh: number | null
           created_at: string | null
           created_by: string | null
           date_from: string
@@ -851,6 +853,8 @@ export type Database = {
         Insert: {
           avg_cost_per_kwh?: number | null
           bulk_total?: number
+          common_area_cost?: number | null
+          common_area_kwh?: number | null
           created_at?: string | null
           created_by?: string | null
           date_from: string
@@ -876,6 +880,8 @@ export type Database = {
         Update: {
           avg_cost_per_kwh?: number | null
           bulk_total?: number
+          common_area_cost?: number | null
+          common_area_kwh?: number | null
           created_at?: string | null
           created_by?: string | null
           date_from?: string
