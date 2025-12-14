@@ -32,6 +32,20 @@ export interface MeterResult {
   hierarchicalColumnMaxValues?: Record<string, number>;
   hierarchicalReadingsCount?: number;
   assignment?: string;
+  directRevenue?: {
+    energyCost: number;
+    fixedCharges: number;
+    demandCharges: number;
+    totalCost: number;
+    avgCostPerKwh: number;
+  };
+  hierarchicalRevenue?: {
+    energyCost: number;
+    fixedCharges: number;
+    demandCharges: number;
+    totalCost: number;
+    avgCostPerKwh: number;
+  };
 }
 
 export interface ReconciliationResult {
@@ -396,16 +410,11 @@ export function useReconciliationExecution(options: UseReconciliationExecutionOp
     const otherMeters = allCategoryMeters.filter(m => m.meter_type === 'other');
     const commonAreaKwh = otherMeters.reduce((sum, m) => sum + (m.totalKwh || 0), 0);
     
-    // Calculate common area cost from revenue data
-    let commonAreaCost = 0;
-    if (reconciliationData.revenueData) {
-      otherMeters.forEach(meter => {
-        const meterRevenue = reconciliationData.revenueData!.meterRevenues.get(meter.id);
-        if (meterRevenue) {
-          commonAreaCost += meterRevenue.totalCost || 0;
-        }
-      });
-    }
+    // Calculate common area cost from revenue attached to meter objects
+    const commonAreaCost = otherMeters.reduce((sum, meter) => {
+      const totalCost = meter.hierarchicalRevenue?.totalCost || meter.directRevenue?.totalCost || 0;
+      return sum + totalCost;
+    }, 0);
 
     // Insert reconciliation run
     const { data: run, error: runError } = await supabase

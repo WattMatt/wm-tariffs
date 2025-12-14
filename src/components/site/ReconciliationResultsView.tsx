@@ -999,12 +999,12 @@ export default function ReconciliationResultsView({
               {(() => {
                 const totalSupplyCost = revenueData.gridSupplyCost + revenueData.solarCost;
                 
-                // Calculate common area cost (other type meters)
+                // Calculate common area cost (other type meters) - use revenue attached to meter object
                 const commonAreaCost = meters
                   .filter(meter => meter.meter_type === "other")
                   .reduce((sum, meter) => {
-                    const meterRevenue = revenueData.meterRevenues.get(meter.id);
-                    return sum + (meterRevenue?.totalCost || 0);
+                    const totalCost = meter.hierarchicalRevenue?.totalCost || meter.directRevenue?.totalCost || 0;
+                    return sum + totalCost;
                   }, 0);
                 
                 // Calculate unaccounted revenue (Total Supply Cost - Metered Revenue - Common Area Cost)
