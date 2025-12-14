@@ -512,7 +512,7 @@ export default function ReconciliationHistoryTab({ siteId, siteName }: Reconcili
                 totalSupply={selectedRun.total_supply}
                 recoveryRate={selectedRun.recovery_rate}
                 discrepancy={selectedRun.discrepancy}
-                distributionTotal={selectedRun.total_supply - selectedRun.bulk_total - selectedRun.solar_total}
+                distributionTotal={selectedRun.tenant_total}
                 meters={(() => {
                   // Sort meters by saved meter_order to preserve hierarchy
                   const meterResults = selectedRun.reconciliation_meter_results;
