@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useWakeLock } from "@/hooks/useWakeLock";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -110,6 +111,9 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
     timeFrom: reconciliationState.timeFrom,
     timeTo: reconciliationState.timeTo,
   });
+
+  // Wake lock to keep screen awake during bulk reconciliation
+  const { request: requestWakeLock, release: releaseWakeLock, isSupported: wakeLockSupported } = useWakeLock();
 
   // ==================== DESTRUCTURE HOOK VALUES ====================
   // Reconciliation state
@@ -885,42 +889,52 @@ export default function ReconciliationTab({ siteId, siteName }: ReconciliationTa
   };
 
   const handleBulkReconcile = async () => {
-    await runner.runBulkReconcile({
-      selectedDocumentIds,
-      documentDateRanges,
-      meterConnectionsMap,
-      availableMeters,
-      enableRevenue: true, // Bulk reconciliation always calculates revenue
-      meterCorrections,
-      selectedColumns: Array.from(selectedColumnsRef.current),
-      columnOperations: Object.fromEntries(columnOperationsRef.current),
-      columnFactors: Object.fromEntries(columnFactorsRef.current),
-      meterAssignments: Object.fromEntries(meterAssignments),
-      meterOrder: availableMeters.map(m => m.id),
-      // Pass the exact same functions as manual buttons use
-      runHierarchyGeneration: runner.runHierarchyGeneration,
-      runReconciliation: runner.runReconciliation,
-      saveReconciliationRun: execution.saveReconciliationRun,
-      getMetersWithUploadedCsvs: execution.getMetersWithUploadedCsvs,
-      updateMeterCategoryWithHierarchy: execution.updateMeterCategoryWithHierarchy,
-      saveReconciliationSettings,
-      // State setters
-      setIsLoading,
-      setFailedMeters,
-      setHierarchicalCsvResults,
-      setReconciliationData,
-      setAvailableMeters,
-      setIsColumnsOpen,
-      setIsMetersOpen,
-      setIsCancelling,
-      setIsGeneratingCsvs,
-      // Callbacks
-      setIsBulkProcessing,
-      setBulkProgress,
-      setCurrentJobId,
-      // Cancel ref
-      cancelRef: cancelReconciliationRef,
-    });
+    // Request wake lock to keep screen awake during bulk processing
+    if (wakeLockSupported) {
+      await requestWakeLock();
+    }
+
+    try {
+      await runner.runBulkReconcile({
+        selectedDocumentIds,
+        documentDateRanges,
+        meterConnectionsMap,
+        availableMeters,
+        enableRevenue: true, // Bulk reconciliation always calculates revenue
+        meterCorrections,
+        selectedColumns: Array.from(selectedColumnsRef.current),
+        columnOperations: Object.fromEntries(columnOperationsRef.current),
+        columnFactors: Object.fromEntries(columnFactorsRef.current),
+        meterAssignments: Object.fromEntries(meterAssignments),
+        meterOrder: availableMeters.map(m => m.id),
+        // Pass the exact same functions as manual buttons use
+        runHierarchyGeneration: runner.runHierarchyGeneration,
+        runReconciliation: runner.runReconciliation,
+        saveReconciliationRun: execution.saveReconciliationRun,
+        getMetersWithUploadedCsvs: execution.getMetersWithUploadedCsvs,
+        updateMeterCategoryWithHierarchy: execution.updateMeterCategoryWithHierarchy,
+        saveReconciliationSettings,
+        // State setters
+        setIsLoading,
+        setFailedMeters,
+        setHierarchicalCsvResults,
+        setReconciliationData,
+        setAvailableMeters,
+        setIsColumnsOpen,
+        setIsMetersOpen,
+        setIsCancelling,
+        setIsGeneratingCsvs,
+        // Callbacks
+        setIsBulkProcessing,
+        setBulkProgress,
+        setCurrentJobId,
+        // Cancel ref
+        cancelRef: cancelReconciliationRef,
+      });
+    } finally {
+      // Release wake lock when done (success, error, or cancel)
+      await releaseWakeLock();
+    }
   };
 
   // Note: downloadMeterCSV, downloadMeterCsvFile, downloadAllMetersCSV moved to useDownloadUtils hook
