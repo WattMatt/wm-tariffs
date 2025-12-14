@@ -846,7 +846,17 @@ export default function ReconciliationResultsView({
         <TabsContent value="energy" className="space-y-6">
           {meters && meters.length > 0 && (
           <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+          {(() => {
+            // Calculate common area kWh (other type meters)
+            const commonAreaKwh = meters
+              .filter(meter => meter.meter_type === "other")
+              .reduce((sum, meter) => sum + (meter.totalKwh || 0), 0);
+            
+            // Calculate unaccounted loss (Total Supply - Metered Consumption - Common Area)
+            const unaccountedLoss = totalSupply - distributionTotal - commonAreaKwh;
+            
+            return (
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
             <Card className="border-border/50">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -907,7 +917,7 @@ export default function ReconciliationResultsView({
                 <CardTitle className="text-sm font-medium text-muted-foreground">
                   Metered Consumption
                 </CardTitle>
-                <div className="text-xs text-muted-foreground mt-1">Distribution</div>
+                <div className="text-xs text-muted-foreground mt-1">Tenants</div>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
@@ -924,27 +934,48 @@ export default function ReconciliationResultsView({
             <Card className="border-border/50">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Unmetered Loss
+                  Common Area
                 </CardTitle>
-                <div className="text-xs text-muted-foreground mt-1">Discrepancy</div>
+                <div className="text-xs text-muted-foreground mt-1">Other Meters</div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-orange-600">
+                  {commonAreaKwh.toFixed(2)} kWh
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  {totalSupply > 0 
+                    ? ((commonAreaKwh / totalSupply) * 100).toFixed(2) 
+                    : '0.00'}%
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-border/50">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Unaccounted Loss
+                </CardTitle>
+                <div className="text-xs text-muted-foreground mt-1">Unexplained</div>
               </CardHeader>
               <CardContent>
                 <div
                   className={cn(
                     "text-2xl font-bold",
-                    discrepancy > 0 ? "text-warning" : "text-accent"
+                    unaccountedLoss > 0 ? "text-destructive" : "text-accent"
                   )}
                 >
-                  {discrepancy.toFixed(2)} kWh
+                  {unaccountedLoss.toFixed(2)} kWh
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">
                   {totalSupply > 0 
-                    ? ((Math.abs(discrepancy) / totalSupply) * 100).toFixed(2) 
+                    ? ((Math.abs(unaccountedLoss) / totalSupply) * 100).toFixed(2) 
                     : '0.00'}%
                 </div>
               </CardContent>
             </Card>
           </div>
+            );
+          })()}
 
           <Card className="border-border/50">
             <CardHeader>
@@ -968,18 +999,19 @@ export default function ReconciliationResultsView({
               {(() => {
                 const totalSupplyCost = revenueData.gridSupplyCost + revenueData.solarCost;
                 
-                // Calculate total revenue lost (other type meters)
-                const totalRevenueLost = meters
-                  .filter(meter => {
-                    return meter.meter_type === "other";
-                  })
+                // Calculate common area cost (other type meters)
+                const commonAreaCost = meters
+                  .filter(meter => meter.meter_type === "other")
                   .reduce((sum, meter) => {
                     const meterRevenue = revenueData.meterRevenues.get(meter.id);
                     return sum + (meterRevenue?.totalCost || 0);
                   }, 0);
                 
+                // Calculate unaccounted revenue (Total Supply Cost - Metered Revenue - Common Area Cost)
+                const unaccountedRevenue = totalSupplyCost - revenueData.tenantCost - commonAreaCost;
+                
                 return (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
                 <Card className="border-border/50">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -1040,7 +1072,7 @@ export default function ReconciliationResultsView({
                     <CardTitle className="text-sm font-medium text-muted-foreground">
                       Metered Revenue
                     </CardTitle>
-                    <div className="text-xs text-muted-foreground mt-1">Distribution</div>
+                    <div className="text-xs text-muted-foreground mt-1">Tenants</div>
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-bold">
@@ -1057,17 +1089,39 @@ export default function ReconciliationResultsView({
                 <Card className="border-border/50">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium text-muted-foreground">
-                      Total Revenue Lost
+                      Common Area Cost
                     </CardTitle>
                     <div className="text-xs text-muted-foreground mt-1">Other Meters</div>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold text-warning">
-                      R {totalRevenueLost.toFixed(2)}
+                    <div className="text-2xl font-bold text-orange-600">
+                      R {commonAreaCost.toFixed(2)}
                     </div>
                     <div className="text-xs text-muted-foreground mt-1">
                       {totalSupplyCost > 0 
-                        ? ((totalRevenueLost / totalSupplyCost) * 100).toFixed(2) 
+                        ? ((commonAreaCost / totalSupplyCost) * 100).toFixed(2) 
+                        : '0.00'}%
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-border/50">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">
+                      Unaccounted Revenue
+                    </CardTitle>
+                    <div className="text-xs text-muted-foreground mt-1">Unexplained</div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className={cn(
+                      "text-2xl font-bold",
+                      unaccountedRevenue > 0 ? "text-destructive" : "text-accent"
+                    )}>
+                      R {unaccountedRevenue.toFixed(2)}
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      {totalSupplyCost > 0 
+                        ? ((Math.abs(unaccountedRevenue) / totalSupplyCost) * 100).toFixed(2) 
                         : '0.00'}%
                     </div>
                   </CardContent>

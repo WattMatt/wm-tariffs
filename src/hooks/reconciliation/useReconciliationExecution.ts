@@ -383,6 +383,30 @@ export function useReconciliationExecution(options: UseReconciliationExecutionOp
     const { data: { user } } = await supabase.auth.getUser();
     const meterOrder = availableMeters.map(m => m.id);
 
+    // Calculate common area values from "other" type meters
+    const allCategoryMeters = [
+      ...(reconciliationData.bulkMeters || []),
+      ...(reconciliationData.solarMeters || []),
+      ...(reconciliationData.tenantMeters || []),
+      ...(reconciliationData.checkMeters || []),
+      ...(reconciliationData.unassignedMeters || []),
+      ...(reconciliationData.otherMeters || [])
+    ];
+    
+    const otherMeters = allCategoryMeters.filter(m => m.meter_type === 'other');
+    const commonAreaKwh = otherMeters.reduce((sum, m) => sum + (m.totalKwh || 0), 0);
+    
+    // Calculate common area cost from revenue data
+    let commonAreaCost = 0;
+    if (reconciliationData.revenueData) {
+      otherMeters.forEach(meter => {
+        const meterRevenue = reconciliationData.revenueData!.meterRevenues.get(meter.id);
+        if (meterRevenue) {
+          commonAreaCost += meterRevenue.totalCost || 0;
+        }
+      });
+    }
+
     // Insert reconciliation run
     const { data: run, error: runError } = await supabase
       .from('reconciliation_runs')
@@ -405,7 +429,9 @@ export function useReconciliationExecution(options: UseReconciliationExecutionOp
         tenant_cost: reconciliationData.revenueData?.tenantCost || 0,
         total_revenue: reconciliationData.revenueData?.totalRevenue || 0,
         avg_cost_per_kwh: reconciliationData.revenueData?.avgCostPerKwh || 0,
-        meter_order: meterOrder
+        meter_order: meterOrder,
+        common_area_kwh: commonAreaKwh,
+        common_area_cost: commonAreaCost
       })
       .select()
       .single();

@@ -41,6 +41,8 @@ interface ReconciliationRun {
   total_revenue: number;
   avg_cost_per_kwh: number;
   meter_order: string[];
+  common_area_kwh: number;
+  common_area_cost: number;
   reconciliation_meter_results: MeterResult[];
 }
 
