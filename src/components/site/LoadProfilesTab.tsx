@@ -200,7 +200,10 @@ export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
         
         // Extract columns from metadata only
         const columnMapping = csvFile?.column_mapping as any;
-        if (columnMapping && columnMapping.renamedHeaders) {
+        const hasRenamedHeaders = columnMapping?.renamedHeaders && 
+          Object.keys(columnMapping.renamedHeaders).length > 0;
+        
+        if (hasRenamedHeaders) {
           Object.values(columnMapping.renamedHeaders).forEach((headerName: any) => {
             if (headerName && typeof headerName === 'string' && 
                 !headerName.toLowerCase().includes('time') && 
