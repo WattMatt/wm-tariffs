@@ -66,11 +66,28 @@ export default function CostCalculationTab({ siteId }: CostCalculationTabProps) 
         return;
       }
 
+      // Helper function to extract kWh from reading metadata
+      const extractKwhValue = (reading: { metadata?: any }): number => {
+        const importedFields = reading.metadata?.imported_fields;
+        if (!importedFields) return 0;
+        const kwhFieldNames = ['P1 (kWh)', 'P1', 'kWh', 'kwh', 'Value', 'value'];
+        for (const fieldName of kwhFieldNames) {
+          if (importedFields[fieldName] !== undefined) {
+            return Number(importedFields[fieldName]) || 0;
+          }
+        }
+        for (const [, value] of Object.entries(importedFields)) {
+          const num = Number(value);
+          if (!isNaN(num)) return num;
+        }
+        return 0;
+      };
+
       // Fetch readings for date range
       const readingsPromises = meters.map((meter) =>
         supabase
           .from("meter_readings")
-          .select("kwh_value")
+          .select("reading_timestamp, metadata")
           .eq("meter_id", meter.id)
           .gte("reading_timestamp", dateFrom.toISOString())
           .lte("reading_timestamp", dateTo.toISOString())
@@ -78,7 +95,7 @@ export default function CostCalculationTab({ siteId }: CostCalculationTabProps) 
 
       const readingsResults = await Promise.all(readingsPromises);
       const totalKwh = readingsResults.reduce((sum, result) => {
-        const meterTotal = result.data?.reduce((s, r) => s + Number(r.kwh_value), 0) || 0;
+        const meterTotal = result.data?.reduce((s, r) => s + extractKwhValue(r), 0) || 0;
         return sum + meterTotal;
       }, 0);
 
@@ -96,7 +113,7 @@ export default function CostCalculationTab({ siteId }: CostCalculationTabProps) 
         // TOU calculation based on time periods
         const { data: readings } = await supabase
           .from("meter_readings")
-          .select("kwh_value, reading_timestamp")
+          .select("reading_timestamp, metadata")
           .in("meter_id", meters.map(m => m.id))
           .gte("reading_timestamp", dateFrom.toISOString())
           .lte("reading_timestamp", dateTo.toISOString());
@@ -128,7 +145,7 @@ export default function CostCalculationTab({ siteId }: CostCalculationTabProps) 
             });
             
             if (period) {
-              energyCost += (Number(reading.kwh_value) * period.energy_charge_cents) / 100;
+              energyCost += (extractKwhValue(reading) * period.energy_charge_cents) / 100;
             }
           }
         }

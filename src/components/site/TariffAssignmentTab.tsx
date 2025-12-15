@@ -1639,15 +1639,32 @@ export default function TariffAssignmentTab({
       if (!tariffId) continue;
 
       try {
+        // Helper function to extract kWh from reading metadata
+        const extractKwhValue = (reading: { metadata?: any }): number => {
+          const importedFields = reading.metadata?.imported_fields;
+          if (!importedFields) return 0;
+          const kwhFieldNames = ['P1 (kWh)', 'P1', 'kWh', 'kwh', 'Value', 'value'];
+          for (const fieldName of kwhFieldNames) {
+            if (importedFields[fieldName] !== undefined) {
+              return Number(importedFields[fieldName]) || 0;
+            }
+          }
+          for (const [, value] of Object.entries(importedFields)) {
+            const num = Number(value);
+            if (!isNaN(num)) return num;
+          }
+          return 0;
+        };
+
         // Fetch total kWh for the period
         const { data: readingsData } = await supabase
           .from("meter_readings")
-          .select("kwh_value")
+          .select("reading_timestamp, metadata")
           .eq("meter_id", meter.id)
           .gte("reading_timestamp", doc.periodStart)
           .lte("reading_timestamp", doc.periodEnd);
 
-        const totalKwh = readingsData?.reduce((sum, r) => sum + Number(r.kwh_value), 0) || 0;
+        const totalKwh = readingsData?.reduce((sum, r) => sum + extractKwhValue(r), 0) || 0;
 
         const result = await calculateMeterCost(
           meter.id,

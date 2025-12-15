@@ -58,18 +58,35 @@ export default function Reconciliation() {
       return;
     }
 
+    // Helper function to extract kWh from reading metadata
+    const extractKwhValue = (reading: { metadata?: any }): number => {
+      const importedFields = reading.metadata?.imported_fields;
+      if (!importedFields) return 0;
+      const kwhFieldNames = ['P1 (kWh)', 'P1', 'kWh', 'kwh', 'Value', 'value'];
+      for (const fieldName of kwhFieldNames) {
+        if (importedFields[fieldName] !== undefined) {
+          return Number(importedFields[fieldName]) || 0;
+        }
+      }
+      for (const [, value] of Object.entries(importedFields)) {
+        const num = Number(value);
+        if (!isNaN(num)) return num;
+      }
+      return 0;
+    };
+
     // Fetch readings for each meter within date range
     const meterData = await Promise.all(
       meters.map(async (meter) => {
         const { data: readings } = await supabase
           .from("meter_readings")
-          .select("kwh_value")
+          .select("reading_timestamp, metadata")
           .eq("meter_id", meter.id)
           .gte("reading_timestamp", dateFrom.toISOString())
           .lte("reading_timestamp", dateTo.toISOString())
           .order("reading_timestamp");
 
-        const totalKwh = readings?.reduce((sum, r) => sum + Number(r.kwh_value), 0) || 0;
+        const totalKwh = readings?.reduce((sum, r) => sum + extractKwhValue(r), 0) || 0;
 
         return {
           ...meter,

@@ -275,8 +275,6 @@ export type Database = {
         Row: {
           created_at: string | null
           id: string
-          kva_value: number | null
-          kwh_value: number
           metadata: Json | null
           meter_id: string
           reading_timestamp: string
@@ -285,8 +283,6 @@ export type Database = {
         Insert: {
           created_at?: string | null
           id?: string
-          kva_value?: number | null
-          kwh_value: number
           metadata?: Json | null
           meter_id: string
           reading_timestamp: string
@@ -295,8 +291,6 @@ export type Database = {
         Update: {
           created_at?: string | null
           id?: string
-          kva_value?: number | null
-          kwh_value?: number
           metadata?: Json | null
           meter_id?: string
           reading_timestamp?: string
@@ -505,8 +499,6 @@ export type Database = {
         Row: {
           created_at: string | null
           id: string
-          kva_value: number | null
-          kwh_value: number
           metadata: Json | null
           meter_id: string
           reading_timestamp: string
@@ -515,8 +507,6 @@ export type Database = {
         Insert: {
           created_at?: string | null
           id?: string
-          kva_value?: number | null
-          kwh_value: number
           metadata?: Json | null
           meter_id: string
           reading_timestamp: string
@@ -525,8 +515,6 @@ export type Database = {
         Update: {
           created_at?: string | null
           id?: string
-          kva_value?: number | null
-          kwh_value?: number
           metadata?: Json | null
           meter_id?: string
           reading_timestamp?: string
