@@ -491,9 +491,10 @@ Deno.serve(async (req) => {
         // Mark this timestamp as seen to prevent duplicates within this CSV
         existingTimestamps.add(isoTimestamp);
 
-        // Add the main value column to extraFields with its renamed header
-        if (columnMapping && columnMapping.renamedHeaders && columnMapping.valueColumn) {
-          const valueColumnName = columnMapping.renamedHeaders[columnMapping.valueColumn];
+        // Add the main value column to extraFields with its renamed header or original CSV header
+        if (columnMapping && columnMapping.valueColumn !== undefined) {
+          const valueColIdx = parseInt(columnMapping.valueColumn.toString());
+          const valueColumnName = columnMapping.renamedHeaders?.[valueColIdx] || headerColumns[valueColIdx];
           if (valueColumnName) {
             extraFields[valueColumnName] = value;
           }
