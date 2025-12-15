@@ -525,40 +525,28 @@ export default function MetersTab({ siteId }: MetersTabProps) {
     const headers: string[] = [];
     
     // Add timestamp header
-    const timestampHeader = columnMapping?.renamedHeaders?.[columnMapping.dateColumn] || 'Timestamp';
+    const timestampHeader = columnMapping?.renamedHeaders?.[columnMapping.datetimeColumn] || 'Timestamp';
     headers.push(timestampHeader);
-    
-    // Add kWh value header (from the valueColumn)
-    const kwhHeader = columnMapping?.renamedHeaders?.[columnMapping.valueColumn] || 'kWh Value';
-    headers.push(kwhHeader);
-    
-    // Only add kva_value if it exists in any reading
-    const hasKva = readings.some(r => r.kva_value !== null);
-    if (hasKva && columnMapping?.kvaColumn && columnMapping.kvaColumn !== '-1') {
-      const kvaHeader = columnMapping.renamedHeaders?.[columnMapping.kvaColumn] || 'kVA Value';
-      headers.push(kvaHeader);
-    }
     
     // Add all metadata field names as separate columns (these already use renamed headers)
     const metadataFields = Array.from(allFieldNames).sort();
     headers.push(...metadataFields);
+
+    // Helper to extract a value from imported_fields
+    const extractFieldValue = (metadata: any, fieldName: string): any => {
+      return metadata?.imported_fields?.[fieldName] ?? '—';
+    };
 
     // Convert readings to row format
     const rows = readings.map(reading => {
       const metadata = reading.metadata as any;
       const row: any = {
         [timestampHeader]: reading.reading_timestamp,
-        [kwhHeader]: reading.kwh_value,
       };
-      
-      if (hasKva && columnMapping?.kvaColumn && columnMapping.kvaColumn !== '-1') {
-        const kvaHeader = columnMapping.renamedHeaders?.[columnMapping.kvaColumn] || 'kVA Value';
-        row[kvaHeader] = reading.kva_value;
-      }
       
       // Add metadata fields
       metadataFields.forEach(field => {
-        row[field] = metadata?.imported_fields?.[field] ?? '—';
+        row[field] = extractFieldValue(metadata, field);
       });
       
       return row;

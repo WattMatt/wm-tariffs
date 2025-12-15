@@ -12,10 +12,26 @@ import { toast } from "sonner";
 interface MeterReading {
   id: string;
   reading_timestamp: string;
-  kwh_value: number;
   metadata: any;
   uploaded_by: string | null;
 }
+
+// Helper to extract kWh value from metadata.imported_fields
+const extractKwhValue = (metadata: any): number => {
+  const importedFields = metadata?.imported_fields;
+  if (!importedFields) return 0;
+  const kwhFieldNames = ['P1 (kWh)', 'P1', 'kWh', 'kwh', 'Value', 'value'];
+  for (const fieldName of kwhFieldNames) {
+    if (importedFields[fieldName] !== undefined) {
+      return Number(importedFields[fieldName]) || 0;
+    }
+  }
+  for (const [, value] of Object.entries(importedFields)) {
+    const num = Number(value);
+    if (!isNaN(num)) return num;
+  }
+  return 0;
+};
 
 interface MeterReadingsViewProps {
   isOpen: boolean;
@@ -106,9 +122,10 @@ export default function MeterReadingsView({ isOpen, onClose, meterId, meterNumbe
 
   const handleEdit = (reading: MeterReading) => {
     setEditingId(reading.id);
+    const kwhValue = extractKwhValue(reading.metadata);
     setEditValues({
       timestamp: new Date(reading.reading_timestamp).toISOString().slice(0, 16),
-      value: reading.kwh_value.toString(),
+      value: kwhValue.toString(),
     });
   };
 
@@ -236,7 +253,7 @@ export default function MeterReadingsView({ isOpen, onClose, meterId, meterNumbe
                             className="w-32"
                           />
                         ) : (
-                          <span className="font-mono">{reading.kwh_value.toFixed(3)}</span>
+                          <span className="font-mono">{extractKwhValue(reading.metadata).toFixed(3)}</span>
                         )}
                       </TableCell>
                       {getMetadataColumns().map(col => (

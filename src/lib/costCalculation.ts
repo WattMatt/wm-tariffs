@@ -22,8 +22,55 @@ export interface CostCalculationResult {
 }
 
 export interface MeterReading {
-  kwh_value: number;
   reading_timestamp: string;
+  metadata?: {
+    imported_fields?: Record<string, number>;
+  };
+}
+
+/**
+ * Extract kWh value from a meter reading's metadata.imported_fields
+ * Uses the first numeric field available
+ */
+function extractKwhFromReading(reading: MeterReading): number {
+  const importedFields = reading.metadata?.imported_fields;
+  if (!importedFields) return 0;
+  
+  // Priority order for kWh extraction
+  const kwhFieldNames = ['P1 (kWh)', 'P1', 'kWh', 'kwh', 'Value', 'value', 'kwh_value'];
+  
+  for (const fieldName of kwhFieldNames) {
+    if (importedFields[fieldName] !== undefined) {
+      return Number(importedFields[fieldName]) || 0;
+    }
+  }
+  
+  // Fallback: first numeric value
+  for (const [, value] of Object.entries(importedFields)) {
+    const num = Number(value);
+    if (!isNaN(num)) return num;
+  }
+  
+  return 0;
+}
+
+/**
+ * Extract kVA value from a meter reading's metadata.imported_fields
+ */
+function extractKvaFromReading(reading: MeterReading): number {
+  const importedFields = reading.metadata?.imported_fields;
+  if (!importedFields) return 0;
+  
+  // Priority order for kVA extraction
+  const kvaFieldNames = ['S (kVA)', 'S', 'kVA', 'kva', 'kva_value'];
+  
+  for (const fieldName of kvaFieldNames) {
+    if (importedFields[fieldName] !== undefined) {
+      return Number(importedFields[fieldName]) || 0;
+    }
+  }
+  
+  return 0;
 }
 
 /**
@@ -133,7 +180,7 @@ export async function calculateMeterCost(
       // For TOU tariffs and seasonal tariffs, we need individual readings with timestamps
       const { data: readingsData, error: readingsError } = await supabase
         .from("meter_readings")
-        .select("kwh_value, reading_timestamp")
+        .select("reading_timestamp, metadata")
         .eq("meter_id", meterId)
         .gte("reading_timestamp", dateFrom.toISOString())
         .lte("reading_timestamp", dateTo.toISOString());
@@ -151,18 +198,19 @@ export async function calculateMeterCost(
         };
       }
 
-      readings = readingsData || [];
-      calculatedTotalKwh = readings.reduce((sum, r) => sum + Number(r.kwh_value), 0);
+      readings = (readingsData || []) as MeterReading[];
+      calculatedTotalKwh = readings.reduce((sum, r) => sum + extractKwhFromReading(r), 0);
     } else if (!totalKwh) {
       // For block tariffs, calculate total if not provided
       const { data: readingsData } = await supabase
         .from("meter_readings")
-        .select("kwh_value")
+        .select("reading_timestamp, metadata")
         .eq("meter_id", meterId)
         .gte("reading_timestamp", dateFrom.toISOString())
         .lte("reading_timestamp", dateTo.toISOString());
 
-      calculatedTotalKwh = (readingsData || []).reduce((sum, r) => sum + Number(r.kwh_value), 0);
+      const fetchedReadings = (readingsData || []) as MeterReading[];
+      calculatedTotalKwh = fetchedReadings.reduce((sum, r) => sum + extractKwhFromReading(r), 0);
     }
 
     let energyCost = 0;
@@ -197,7 +245,7 @@ export async function calculateMeterCost(
         });
 
         if (period) {
-          energyCost += (Number(reading.kwh_value) * period.energy_charge_cents) / 100;
+          energyCost += (extractKwhFromReading(reading) * period.energy_charge_cents) / 100;
         }
       }
     } else {
@@ -310,18 +358,19 @@ export async function calculateMeterCost(
       let maxKvaValue = maxKva || 0;
       
       if (!maxKvaValue) {
-        // Fallback: Try to fetch from meter_readings.kva_value column
+        // Fallback: Try to fetch max kVA from meter_readings metadata.imported_fields
         const { data: kvaData } = await supabase
           .from("meter_readings")
-          .select("kva_value")
+          .select("metadata")
           .eq("meter_id", meterId)
           .gte("reading_timestamp", dateFrom.toISOString())
-          .lte("reading_timestamp", dateTo.toISOString())
-          .order("kva_value", { ascending: false })
-          .limit(1)
-          .maybeSingle();
+          .lte("reading_timestamp", dateTo.toISOString());
 
-        maxKvaValue = kvaData?.kva_value || 0;
+        // Find max kVA from all readings
+        maxKvaValue = (kvaData || []).reduce((max, r) => {
+          const kva = extractKvaFromReading(r as MeterReading);
+          return kva > max ? kva : max;
+        }, 0);
       }
       
       console.log('🔍 [Cost Calculation Debug] Max kVA value:', maxKvaValue, '(provided:', maxKva, ')');
@@ -473,12 +522,12 @@ export async function calculateMeterCostAcrossPeriods(
       // Fetch readings for this segment
       const { data: readingsData } = await supabase
         .from("meter_readings")
-        .select("kwh_value")
+        .select("reading_timestamp, metadata")
         .eq("meter_id", meterId)
         .gte("reading_timestamp", segmentStart.toISOString())
         .lte("reading_timestamp", segmentEnd.toISOString());
 
-      const segmentKwh = (readingsData || []).reduce((sum, r) => sum + Number(r.kwh_value), 0);
+      const segmentKwh = (readingsData || []).reduce((sum, r) => sum + extractKwhFromReading(r as MeterReading), 0);
 
       // Calculate cost for this segment - pass maxKva for demand charges
       const segmentResult = await calculateMeterCost(
