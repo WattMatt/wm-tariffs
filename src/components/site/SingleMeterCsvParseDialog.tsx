@@ -42,13 +42,13 @@ interface SingleMeterCsvParseDialogProps {
 }
 
 interface ColumnMapping {
-  dateColumn: number | string;
-  timeColumn: number | string;
-  valueColumn: number | string;
-  kvaColumn: number | string;
-  dateFormat: string;
-  timeFormat: string;
-  dateTimeFormat?: string;
+  dateColumn: number | string | null;
+  timeColumn: number | string | null;
+  valueColumn: number | string | null;
+  kvaColumn: number | string | null;
+  dateFormat: string | null;
+  timeFormat: string | null;
+  dateTimeFormat?: string | null;
   renamedHeaders?: Record<string, string>;
   columnDataTypes?: Record<string, 'datetime' | 'float' | 'int' | 'string' | 'boolean'>;
 }
@@ -77,13 +77,13 @@ export default function SingleMeterCsvParseDialog({
   const [previewData, setPreviewData] = useState<{ rows: string[][], headers: string[] } | null>(null);
   const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({});
   const [columnMapping, setColumnMapping] = useState<ColumnMapping>({
-    dateColumn: "0",
-    timeColumn: "1",
-    valueColumn: "2",
-    kvaColumn: "-1",
-    dateFormat: "auto",
-    timeFormat: "auto",
-    dateTimeFormat: "YYYY-MM-DD HH:mm:ss",
+    dateColumn: null,
+    timeColumn: null,
+    valueColumn: null,
+    kvaColumn: null,
+    dateFormat: null,
+    timeFormat: null,
+    dateTimeFormat: null,
     renamedHeaders: {},
     columnDataTypes: {}
   });
@@ -334,6 +334,101 @@ export default function SingleMeterCsvParseDialog({
                 </CardContent>
               </Card>
 
+              {/* Column Assignment Section - Required */}
+              {previewData && (
+                <Card className="border-primary/50">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <Settings2 className="w-4 h-4" />
+                      Column Assignment <span className="text-destructive">*</span>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 border rounded-md bg-muted/20">
+                      <div className="space-y-2">
+                        <Label>Date/DateTime Column <span className="text-destructive">*</span></Label>
+                        <Select 
+                          value={columnMapping.dateColumn?.toString() ?? ""} 
+                          onValueChange={(v) => setColumnMapping(prev => ({ ...prev, dateColumn: v }))}
+                        >
+                          <SelectTrigger className={`bg-background ${columnMapping.dateColumn === null ? 'border-destructive' : ''}`}>
+                            <SelectValue placeholder="Select column" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-background z-50">
+                            {previewData.headers.map((header, idx) => (
+                              <SelectItem key={idx} value={idx.toString()}>
+                                {columnMapping.renamedHeaders?.[idx] || header || `Column ${idx + 1}`}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Time Column (optional)</Label>
+                        <Select 
+                          value={columnMapping.timeColumn?.toString() ?? "-1"} 
+                          onValueChange={(v) => setColumnMapping(prev => ({ ...prev, timeColumn: v }))}
+                        >
+                          <SelectTrigger className="bg-background">
+                            <SelectValue placeholder="None" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-background z-50">
+                            <SelectItem value="-1">None (combined datetime)</SelectItem>
+                            {previewData.headers.map((header, idx) => (
+                              <SelectItem key={idx} value={idx.toString()}>
+                                {columnMapping.renamedHeaders?.[idx] || header || `Column ${idx + 1}`}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Value Column (kWh) <span className="text-destructive">*</span></Label>
+                        <Select 
+                          value={columnMapping.valueColumn?.toString() ?? ""} 
+                          onValueChange={(v) => setColumnMapping(prev => ({ ...prev, valueColumn: v }))}
+                        >
+                          <SelectTrigger className={`bg-background ${columnMapping.valueColumn === null ? 'border-destructive' : ''}`}>
+                            <SelectValue placeholder="Select column" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-background z-50">
+                            {previewData.headers.map((header, idx) => (
+                              <SelectItem key={idx} value={idx.toString()}>
+                                {columnMapping.renamedHeaders?.[idx] || header || `Column ${idx + 1}`}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>kVA Column (optional)</Label>
+                        <Select 
+                          value={columnMapping.kvaColumn?.toString() ?? "-1"} 
+                          onValueChange={(v) => setColumnMapping(prev => ({ ...prev, kvaColumn: v }))}
+                        >
+                          <SelectTrigger className="bg-background">
+                            <SelectValue placeholder="None" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-background z-50">
+                            <SelectItem value="-1">None</SelectItem>
+                            {previewData.headers.map((header, idx) => (
+                              <SelectItem key={idx} value={idx.toString()}>
+                                {columnMapping.renamedHeaders?.[idx] || header || `Column ${idx + 1}`}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    {(columnMapping.dateColumn === null || columnMapping.valueColumn === null) && (
+                      <p className="text-sm text-destructive mt-2">
+                        Please select the Date/DateTime column and Value column before parsing.
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
               {/* Column Interpretation Section */}
               {previewData && (
                 <Card className="bg-muted/30">
@@ -514,7 +609,7 @@ export default function SingleMeterCsvParseDialog({
           </Button>
           <Button
             onClick={handleParse}
-            disabled={!selectedFile || !previewData || isParsing}
+            disabled={!selectedFile || !previewData || isParsing || columnMapping.dateColumn === null || columnMapping.valueColumn === null}
             className="gap-2"
           >
             <Play className="w-4 h-4" />
