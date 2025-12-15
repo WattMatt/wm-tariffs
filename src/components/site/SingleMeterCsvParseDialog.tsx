@@ -561,7 +561,7 @@ export default function SingleMeterCsvParseDialog({
           </Button>
           <Button
             onClick={handleParse}
-            disabled={!selectedFile || !previewData || isParsing || columnMapping.dateColumn === null || columnMapping.valueColumn === null}
+            disabled={!selectedFile || !previewData || isParsing || columnMapping.datetimeColumn === null}
             className="gap-2"
           >
             <Play className="w-4 h-4" />
