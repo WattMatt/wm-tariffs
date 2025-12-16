@@ -13,18 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Plus, FileText, Upload, Eye, Trash2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-
-interface Schematic {
-  id: string;
-  name: string;
-  description: string | null;
-  file_path: string;
-  file_type: string;
-  page_number: number;
-  total_pages: number;
-  created_at: string;
-  converted_image_path: string | null;
-}
+import { Schematic, getFileTypeIcon } from "@/types/schematic";
 
 interface SchematicsTabProps {
   siteId: string;
@@ -257,11 +246,6 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
     }
   };
 
-  const getFileTypeIcon = (type: string) => {
-    if (type === "application/pdf") return "📄";
-    if (type.startsWith("image/")) return "🖼️";
-    return "📋";
-  };
 
   const handleDeleteClick = (schematic: Schematic) => {
     setSchematicToDelete(schematic);
