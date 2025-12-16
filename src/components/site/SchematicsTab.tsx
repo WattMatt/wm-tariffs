@@ -14,6 +14,7 @@ import { Plus, FileText, Upload, Eye, Trash2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Schematic, getFileTypeIcon } from "@/types/schematic";
+import { uploadFile, deleteFiles } from "@/lib/storageUtils";
 
 interface SchematicsTabProps {
   siteId: string;
