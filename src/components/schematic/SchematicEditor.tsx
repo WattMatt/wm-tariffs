@@ -102,6 +102,7 @@ import { MeterFormFields } from "./MeterFormFields";
 import { MeterConnectionsManager } from "./MeterConnectionsManager";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import { generateStoragePath, sanitizeName } from "@/lib/storagePaths";
+import { MeterPosition } from "@/types/schematic";
 
 
 interface SchematicEditorProps {
@@ -112,14 +113,6 @@ interface SchematicEditorProps {
   extractedMeters?: any[];
   onExtractedMetersUpdate?: (meters: any[]) => void;
   highlightedMeterId?: string;
-}
-
-interface MeterPosition {
-  id: string;
-  meter_id: string;
-  x_position: number;
-  y_position: number;
-  label: string;
 }
 
 

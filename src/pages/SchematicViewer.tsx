@@ -15,72 +15,20 @@ import { MeterDataExtractor } from "@/components/schematic/MeterDataExtractor";
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
-
-interface SchematicData {
-  id: string;
-  name: string;
-  description: string | null;
-  file_path: string;
-  file_type: string;
-  page_number: number;
-  total_pages: number;
-  site_id: string;
-  sites: { name: string; clients: { name: string } | null } | null;
-  converted_image_path: string | null;
-}
-
-interface MeterPosition {
-  id: string;
-  x_position: number;
-  y_position: number;
-  label: string | null;
-  meter_id: string;
-  meters: {
-    meter_number: string;
-    meter_type: string;
-  } | null;
-}
-
-interface MeterConnection {
-  id: string;
-  child_meter_id: string;
-  parent_meter_id: string;
-}
-
-interface ExtractedMeterData {
-  meter_number: string;
-  name: string;
-  area: string | null; // Changed to string to preserve "m²" unit
-  rating: string;
-  cable_specification: string;
-  serial_number: string;
-  ct_type: string;
-  meter_type: string;
-  location?: string;
-  tariff?: string;
-  status?: 'pending' | 'approved' | 'rejected';
-  position?: { x: number; y: number };
-  scale_x?: number;
-  scale_y?: number;
-  isDragging?: boolean;
-}
-
-interface EditableMeterFields {
-  meter_number: string;
-  name: string;
-  area: string;
-  rating: string;
-  cable_specification: string;
-  serial_number: string;
-  ct_type: string;
-}
+import { 
+  SchematicWithSite, 
+  MeterPositionWithMeter, 
+  MeterConnection, 
+  ExtractedMeterData,
+  EditableMeterFields 
+} from "@/types/schematic";
 
 export default function SchematicViewer() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [schematic, setSchematic] = useState<SchematicData | null>(null);
+  const [schematic, setSchematic] = useState<SchematicWithSite | null>(null);
   const [imageUrl, setImageUrl] = useState<string>("");
-  const [meterPositions, setMeterPositions] = useState<MeterPosition[]>([]);
+  const [meterPositions, setMeterPositions] = useState<MeterPositionWithMeter[]>([]);
   const [meterConnections, setMeterConnections] = useState<MeterConnection[]>([]);
   const [editMode, setEditMode] = useState(true);
   const [highlightedMeterId, setHighlightedMeterId] = useState<string | null>(null);
