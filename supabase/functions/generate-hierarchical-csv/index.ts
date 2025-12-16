@@ -243,8 +243,6 @@ Deno.serve(async (req) => {
       const PAGE_SIZE = 2000;
       let allLeafReadings: Array<{
         reading_timestamp: string;
-        kwh_value: number;
-        kva_value: number | null;
         metadata: Record<string, any> | null;
         meter_id: string;
       }> = [];
@@ -260,7 +258,7 @@ Deno.serve(async (req) => {
         while (hasMore) {
           const { data: pageData, error: readingsError } = await supabase
             .from('meter_readings')
-            .select('reading_timestamp, kwh_value, kva_value, metadata, meter_id')
+            .select('reading_timestamp, metadata, meter_id')
             .eq('meter_id', meterId)
             .gte('reading_timestamp', dateFrom)
             .lte('reading_timestamp', dateTo)
@@ -311,37 +309,7 @@ Deno.serve(async (req) => {
           const globalIdx = i + batchIdx;
           const meterNum = meterNumberMap.get(reading.meter_id) || reading.meter_id;
           
-          // Validate kwh_value
-          let validatedKwh = reading.kwh_value;
-          if (isValueCorrupt(validatedKwh, 'kwh_value')) {
-            const prevReading = globalIdx > 0 ? allLeafReadings[globalIdx - 1] : null;
-            const nextReading = globalIdx < allLeafReadings.length - 1 ? allLeafReadings[globalIdx + 1] : null;
-            const prevKwh = prevReading?.meter_id === reading.meter_id ? prevReading.kwh_value : null;
-            const nextKwh = nextReading?.meter_id === reading.meter_id ? nextReading.kwh_value : null;
-            
-            validatedKwh = validateAndCorrectValue(
-              reading.kwh_value, 'kwh_value', reading.meter_id, meterNum, 
-              reading.reading_timestamp, prevKwh, nextKwh
-            );
-            corruptValuesDetected++;
-          }
-          
-          // Validate kva_value
-          let validatedKva = reading.kva_value;
-          if (validatedKva !== null && isValueCorrupt(validatedKva, 'kva_value')) {
-            const prevReading = globalIdx > 0 ? allLeafReadings[globalIdx - 1] : null;
-            const nextReading = globalIdx < allLeafReadings.length - 1 ? allLeafReadings[globalIdx + 1] : null;
-            const prevKva = prevReading?.meter_id === reading.meter_id ? prevReading.kva_value : null;
-            const nextKva = nextReading?.meter_id === reading.meter_id ? nextReading.kva_value : null;
-            
-            validatedKva = validateAndCorrectValue(
-              validatedKva, 'kva_value', reading.meter_id, meterNum,
-              reading.reading_timestamp, prevKva, nextKva
-            );
-            corruptValuesDetected++;
-          }
-          
-          // Validate metadata imported_fields
+          // Validate metadata imported_fields for corruption
           const validatedMetadata = { ...reading.metadata };
           if (validatedMetadata?.imported_fields) {
             const importedFields = { ...validatedMetadata.imported_fields } as Record<string, any>;
@@ -360,8 +328,6 @@ Deno.serve(async (req) => {
           return {
             meter_id: reading.meter_id,
             reading_timestamp: reading.reading_timestamp,
-            kwh_value: validatedKwh,
-            kva_value: validatedKva,
             metadata: {
               ...validatedMetadata,
               source: 'Copied',
@@ -492,8 +458,6 @@ Deno.serve(async (req) => {
     
     let allReadings: Array<{
       reading_timestamp: string;
-      kwh_value: number;
-      kva_value: number | null;
       metadata: Record<string, any> | null;
       meter_id: string;
     }> = [];
@@ -509,7 +473,7 @@ Deno.serve(async (req) => {
       while (hasMore) {
         const { data: pageData, error: fetchError } = await supabase
           .from('hierarchical_meter_readings')
-          .select('reading_timestamp, kwh_value, kva_value, metadata, meter_id')
+          .select('reading_timestamp, metadata, meter_id')
           .eq('meter_id', childMeterId)  // Single meter = efficient index lookup
           .gte('reading_timestamp', dateFrom)
           .lte('reading_timestamp', dateTo)
@@ -566,8 +530,6 @@ Deno.serve(async (req) => {
         // Fetch leaf meter readings from meter_readings - one meter at a time to avoid timeout
         const leafReadings: Array<{
           reading_timestamp: string;
-          kwh_value: number;
-          kva_value: number | null;
           metadata: Record<string, any> | null;
           meter_id: string;
         }> = [];
@@ -581,7 +543,7 @@ Deno.serve(async (req) => {
           while (hasMore) {
             const { data: pageData, error: leafErr } = await supabase
               .from('meter_readings')
-              .select('reading_timestamp, kwh_value, kva_value, metadata, meter_id')
+              .select('reading_timestamp, metadata, meter_id')
               .eq('meter_id', leafMeterId)
               .gte('reading_timestamp', dateFrom)
               .lte('reading_timestamp', dateTo)
@@ -614,8 +576,6 @@ Deno.serve(async (req) => {
           const readingsToInsert = leafReadings.map(r => ({
             meter_id: r.meter_id,
             reading_timestamp: r.reading_timestamp,
-            kwh_value: r.kwh_value,
-            kva_value: r.kva_value,
             metadata: {
               ...(r.metadata || {}),
               source: 'Copied'
@@ -653,7 +613,7 @@ Deno.serve(async (req) => {
             while (hasMore) {
               const { data: retryData, error: retryErr } = await supabase
                 .from('hierarchical_meter_readings')
-                .select('reading_timestamp, kwh_value, kva_value, metadata, meter_id')
+                .select('reading_timestamp, metadata, meter_id')
                 .eq('meter_id', childMeterId)
                 .gte('reading_timestamp', dateFrom)
                 .lte('reading_timestamp', dateTo)
@@ -926,11 +886,8 @@ Deno.serve(async (req) => {
       header_row_number: 2,
       separator: ',',
       column_mapping: {
-        dateColumn: '0',
-        timeColumn: '-1',
-        valueColumn: '1',
-        kvaColumn: columns.findIndex(c => c.toLowerCase().includes('kva') || c.toLowerCase().includes('s (kva')).toString(),
-        dateTimeFormat: 'YYYY-MM-DD HH:mm:ss',
+        datetimeColumn: '0',
+        datetimeFormat: 'YYYY-MM-DD HH:mm:ss',
         renamedHeaders: Object.fromEntries(columns.map((col, idx) => [(idx + 1).toString(), col])),
         columnDataTypes: Object.fromEntries(columns.map((_, idx) => [(idx + 1).toString(), 'float']))
       },
@@ -961,16 +918,9 @@ Deno.serve(async (req) => {
     const parentReadings = sortedTimestamps.map(timestamp => {
       const data = groupedData.get(timestamp)!;
       
-      const p1Value = data['P1 (kWh)'] || data['P1'] || 0;
-      const p2Value = data['P2 (kWh)'] || data['P2'] || 0;
-      const timestampKwh = p1Value + p2Value;
-      const kvaValue = data['S (kVA)'] || data['S'] || null;
-      
       return {
         meter_id: parentMeterId,
         reading_timestamp: timestamp,
-        kwh_value: timestampKwh,
-        kva_value: kvaValue,
         metadata: {
           source: 'hierarchical_aggregation',
           generated_at: new Date().toISOString(),
