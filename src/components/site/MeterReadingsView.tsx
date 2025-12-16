@@ -130,11 +130,41 @@ export default function MeterReadingsView({ isOpen, onClose, meterId, meterNumbe
   };
 
   const handleSave = async (id: string) => {
+    // Find the reading to get the existing metadata
+    const reading = readings.find(r => r.id === id);
+    if (!reading) return;
+    
+    // Find the kWh field name to update in imported_fields
+    const importedFields = reading.metadata?.imported_fields || {};
+    const kwhFieldNames = ['P1 (kWh)', 'P1', 'kWh', 'kwh', 'Value', 'value'];
+    let kwhFieldKey: string | null = null;
+    
+    for (const fieldName of kwhFieldNames) {
+      if (importedFields[fieldName] !== undefined) {
+        kwhFieldKey = fieldName;
+        break;
+      }
+    }
+    
+    // If no existing kWh field found, use 'P1 (kWh)' as default
+    if (!kwhFieldKey) {
+      kwhFieldKey = 'P1 (kWh)';
+    }
+    
+    // Update the metadata with the new value
+    const updatedMetadata = {
+      ...reading.metadata,
+      imported_fields: {
+        ...importedFields,
+        [kwhFieldKey]: parseFloat(editValues.value)
+      }
+    };
+    
     const { error } = await supabase
       .from("meter_readings")
       .update({
         reading_timestamp: new Date(editValues.timestamp).toISOString(),
-        kwh_value: parseFloat(editValues.value),
+        metadata: updatedMetadata,
       })
       .eq("id", id);
 

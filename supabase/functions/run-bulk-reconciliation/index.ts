@@ -517,7 +517,7 @@ async function fetchPaginatedReadings(
   while (hasMore) {
     let query = supabase
       .from(tableName)
-      .select('reading_timestamp, kwh_value, kva_value, metadata')
+      .select('reading_timestamp, metadata')
       .eq('meter_id', meterId)
       .gte('reading_timestamp', dateFrom)
       .lte('reading_timestamp', dateTo)
@@ -569,7 +569,7 @@ async function fetchReadingsForMeters(
   while (hasMore) {
     let query = supabase
       .from(tableName)
-      .select('meter_id, reading_timestamp, kwh_value, kva_value, metadata')
+      .select('meter_id, reading_timestamp, metadata')
       .in('meter_id', meterIds)
       .gte('reading_timestamp', dateFrom)
       .lte('reading_timestamp', dateTo)
@@ -622,18 +622,31 @@ function processReadings(
     const nextReading = index < readings.length - 1 ? readings[index + 1] : null;
     const timestamp = r.reading_timestamp || 'unknown';
     
-    // Validate kwh_value
-    const rawKwh = r.kwh_value || 0;
-    const validatedKwh = validateAndCorrectValue(
-      rawKwh, 'kwh_value', meter.id, meter.meter_number, timestamp,
-      prevReading?.kwh_value ?? null,
-      nextReading?.kwh_value ?? null,
-      corrections
-    );
-    totalKwh += validatedKwh;
-    
     const metadata = r.metadata as any;
     const imported = metadata?.imported_fields || {};
+    
+    // Extract kWh from imported_fields
+    const kwhKeys = Object.keys(imported).filter(k => 
+      k.toLowerCase().includes('kwh') || k.toLowerCase() === 'p1' || k.toLowerCase().includes('p1')
+    );
+    let rawKwh = 0;
+    if (kwhKeys.length > 0) {
+      rawKwh = Number(imported[kwhKeys[0]]) || 0;
+    }
+    
+    // Find previous/next values for same kWh key
+    const prevMeta = prevReading?.metadata as any;
+    const nextMeta = nextReading?.metadata as any;
+    const prevKwh = kwhKeys.length > 0 && prevMeta?.imported_fields?.[kwhKeys[0]] !== undefined 
+      ? Number(prevMeta.imported_fields[kwhKeys[0]]) : null;
+    const nextKwh = kwhKeys.length > 0 && nextMeta?.imported_fields?.[kwhKeys[0]] !== undefined 
+      ? Number(nextMeta.imported_fields[kwhKeys[0]]) : null;
+    
+    const validatedKwh = validateAndCorrectValue(
+      rawKwh, kwhKeys[0] || 'kwh', meter.id, meter.meter_number, timestamp,
+      prevKwh, nextKwh, corrections
+    );
+    totalKwh += validatedKwh;
     
     Object.entries(imported).forEach(([key, value]) => {
       const rawValue = Number(value) || 0;

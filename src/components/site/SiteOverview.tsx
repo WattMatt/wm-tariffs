@@ -106,11 +106,20 @@ export default function SiteOverview({ siteId, siteName }: SiteOverviewProps) {
       const { data: readings } = meterIds.length > 0
         ? await supabase
             .from("meter_readings")
-            .select("reading_timestamp, kwh_value, meter_id")
+            .select("reading_timestamp, metadata, meter_id")
             .in("meter_id", meterIds)
             .gte("reading_timestamp", sixMonthsAgo.toISOString())
             .order("reading_timestamp")
         : { data: [] };
+
+      // Helper to extract kWh from metadata
+      const extractKwh = (metadata: any): number => {
+        const imported = metadata?.imported_fields || {};
+        const kwhKeys = Object.keys(imported).filter(k => 
+          k.toLowerCase().includes('kwh') || k.toLowerCase() === 'p1' || k.toLowerCase().includes('p1')
+        );
+        return kwhKeys.length > 0 ? Number(imported[kwhKeys[0]]) || 0 : 0;
+      };
 
       // Calculate monthly consumption
       const monthlyConsumption: Record<string, number> = {};
@@ -120,7 +129,7 @@ export default function SiteOverview({ siteId, siteName }: SiteOverviewProps) {
           if (!monthlyConsumption[month]) {
             monthlyConsumption[month] = 0;
           }
-          monthlyConsumption[month] += Number(reading.kwh_value);
+          monthlyConsumption[month] += extractKwh(reading.metadata);
         });
       }
 
@@ -142,7 +151,7 @@ export default function SiteOverview({ siteId, siteName }: SiteOverviewProps) {
       let totalConsumption = 0;
       if (readings && readings.length > 0) {
         readings.forEach(r => {
-          totalConsumption += Number(r.kwh_value);
+          totalConsumption += extractKwh(r.metadata);
         });
       }
       const avgMonthlyConsumption = consumptionTrend.length > 0 

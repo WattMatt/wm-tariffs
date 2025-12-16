@@ -39,7 +39,7 @@ export function useDownloadUtils(options: UseDownloadUtilsOptions) {
       while (hasMore) {
         const { data: pageData, error } = await supabase
           .from("meter_readings")
-          .select("reading_timestamp, kwh_value, kva_value, metadata")
+          .select("reading_timestamp, metadata")
           .eq("meter_id", meter.id)
           .gte("reading_timestamp", fullDateTimeFrom)
           .lte("reading_timestamp", fullDateTimeTo)
@@ -67,18 +67,13 @@ export function useDownloadUtils(options: UseDownloadUtilsOptions) {
         return;
       }
 
-      // Transform readings to CSV format
+      // Transform readings to CSV format - all values come from metadata.imported_fields
       const csvData = allReadings.map(reading => {
         const row: any = {
           timestamp: format(new Date(reading.reading_timestamp), "yyyy-MM-dd HH:mm:ss"),
-          kwh: reading.kwh_value,
         };
 
-        if (reading.kva_value) {
-          row.kva = reading.kva_value;
-        }
-
-        // Add metadata fields if available
+        // Add all metadata fields
         if (reading.metadata && (reading.metadata as any).imported_fields) {
           const importedFields = (reading.metadata as any).imported_fields;
           Object.entries(importedFields).forEach(([key, value]) => {
