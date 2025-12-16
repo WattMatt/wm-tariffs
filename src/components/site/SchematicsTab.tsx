@@ -212,39 +212,9 @@ export default function SchematicsTab({ siteId }: SchematicsTabProps) {
         toast.info("Converting PDF to image for faster viewing...");
         
         try {
-          // Import PDF.js
-          const pdfjsLib = await import('pdfjs-dist');
-          
-          // Set worker using Vite-compatible approach
-          pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-            'pdfjs-dist/build/pdf.worker.min.mjs',
-            import.meta.url
-          ).toString();
-          
-          // Load PDF from the uploaded file
-          const arrayBuffer = await selectedFile.arrayBuffer();
-          const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-          
-          // Get first page
-          const page = await pdf.getPage(1);
-          const viewport = page.getViewport({ scale: 2.0 }); // 2x scale for better quality
-          
-          // Create canvas
-          const canvas = document.createElement('canvas');
-          const context = canvas.getContext('2d');
-          canvas.width = viewport.width;
-          canvas.height = viewport.height;
-          
-          // Render PDF page to canvas
-          await page.render({
-            canvasContext: context!,
-            viewport: viewport,
-          } as any).promise;
-          
-          // Convert canvas to blob
-          const blob = await new Promise<Blob>((resolve) => {
-            canvas.toBlob((blob) => resolve(blob!), 'image/png');
-          });
+          // Use shared PDF conversion utility
+          const { convertPdfFileToImage } = await import('@/lib/pdfConversion');
+          const { blob } = await convertPdfFileToImage(selectedFile, { scale: 2.0 });
           
           // Generate path for converted image
           const convertedImageName = `${timestamp}-${selectedFile.name.replace('.pdf', '')}_converted.png`;

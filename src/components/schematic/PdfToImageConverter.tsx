@@ -3,10 +3,6 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Loader2, FileImage } from "lucide-react";
-import { Document, Page, pdfjs } from 'react-pdf';
-
-// Set up PDF.js worker
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 interface PdfToImageConverterProps {
   pdfUrl: string;
@@ -22,46 +18,14 @@ export const PdfToImageConverter = ({ pdfUrl, onImageGenerated }: PdfToImageConv
     try {
       console.log('Loading PDF:', pdfUrl);
       
-      // Load the PDF
-      const loadingTask = pdfjs.getDocument(pdfUrl);
-      const pdf = await loadingTask.promise;
+      // Use shared PDF conversion utility
+      const { convertPdfUrlToImage } = await import('@/lib/pdfConversion');
+      const { dataUrl } = await convertPdfUrlToImage(pdfUrl, { scale: 2.0 });
       
-      console.log('PDF loaded, converting first page to image...');
-      
-      // Get the first page
-      const page = await pdf.getPage(1);
-      
-      // Set scale for high quality
-      const scale = 2.0;
-      const viewport = page.getViewport({ scale });
-      
-      // Create canvas
-      const canvas = document.createElement('canvas');
-      const context = canvas.getContext('2d');
-      
-      if (!context) {
-        throw new Error('Could not get canvas context');
-      }
-      
-      canvas.height = viewport.height;
-      canvas.width = viewport.width;
-      
-      // Render PDF page to canvas
-      const renderContext = {
-        canvasContext: context,
-        viewport: viewport,
-        canvas: canvas
-      };
-      
-      await page.render(renderContext).promise;
-      
-      console.log('PDF rendered to canvas, converting to image...');
-      
-      // Convert canvas to data URL
-      const imageDataUrl = canvas.toDataURL('image/png', 1.0);
+      console.log('PDF converted to image successfully');
       
       toast.success('PDF converted to image successfully!');
-      onImageGenerated(imageDataUrl);
+      onImageGenerated(dataUrl);
       setShowDialog(false);
     } catch (error) {
       console.error('Error converting PDF to image:', error);
