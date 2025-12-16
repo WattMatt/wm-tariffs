@@ -117,7 +117,7 @@ export async function fetchHierarchicalDataFromReadings(
     while (hasMore) {
       const { data: pageData } = await supabase
         .from('hierarchical_meter_readings')
-        .select('kwh_value, kva_value, metadata')
+        .select('metadata')
         .eq('meter_id', meterId)
         .gte('reading_timestamp', dateFrom)
         .lte('reading_timestamp', dateTo)
@@ -140,17 +140,23 @@ export async function fetchHierarchicalDataFromReadings(
       const columnMaxValues: Record<string, number> = {};
       
       allReadings.forEach(r => {
-        // Validate kwh_value before adding
-        let kwhValue = r.kwh_value || 0;
-        const kwhValidation = isValueCorrupt(kwhValue, 'kwh_value');
-        if (kwhValidation.isCorrupt) {
-          console.warn(`Corrupt kwh_value detected in hierarchical data: ${kwhValue} - zeroing out`);
-          kwhValue = 0;
-        }
-        totalKwh += kwhValue;
-        
         const metadata = r.metadata as any;
         const imported = metadata?.imported_fields || {};
+        
+        // Extract kWh from imported_fields - look for P1 (kWh) or similar columns
+        const kwhKeys = Object.keys(imported).filter(k => 
+          k.toLowerCase().includes('kwh') || k.toLowerCase() === 'p1' || k.toLowerCase().includes('p1')
+        );
+        if (kwhKeys.length > 0) {
+          let kwhValue = Number(imported[kwhKeys[0]]) || 0;
+          const kwhValidation = isValueCorrupt(kwhValue, kwhKeys[0]);
+          if (kwhValidation.isCorrupt) {
+            console.warn(`Corrupt kWh value detected in hierarchical data: ${kwhValue} - zeroing out`);
+            kwhValue = 0;
+          }
+          totalKwh += kwhValue;
+        }
+        
         Object.entries(imported).forEach(([key, value]) => {
           let numValue = Number(value) || 0;
           
