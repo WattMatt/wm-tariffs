@@ -183,7 +183,7 @@ export function useReconciliationRunner(options: UseReconciliationRunnerOptions)
 
           const { data: pageReadings, error: pageError } = await supabase
             .from("meter_readings")
-            .select("kwh_value, reading_timestamp, metadata")
+            .select("reading_timestamp, metadata")
             .eq("meter_id", meter.id)
             .gte("reading_timestamp", fullDateTimeFrom)
             .lte("reading_timestamp", fullDateTimeTo)
@@ -1311,8 +1311,8 @@ export function useReconciliationRunner(options: UseReconciliationRunnerOptions)
       // Auto-select all columns initially
       onSelectedColumns?.(new Set(orderedColumns));
 
-      // Calculate totals and store raw values for operations
-      const totalKwh = readings.reduce((sum, r) => sum + Number(r.kwh_value || 0), 0);
+      // Calculate totals from imported_fields
+      let totalKwh = 0;
       const columnTotals: Record<string, number> = {};
       const columnValues: Record<string, number[]> = {};
       
@@ -1483,7 +1483,7 @@ export function useReconciliationRunner(options: UseReconciliationRunnerOptions)
           while (hasMore) {
             const { data: pageData } = await supabase
               .from('hierarchical_meter_readings')
-              .select('kwh_value, kva_value, metadata')
+              .select('metadata')
               .eq('meter_id', meterId)
               .gte('reading_timestamp', fullDateTimeFrom)
               .lte('reading_timestamp', fullDateTimeTo)
@@ -1506,9 +1506,17 @@ export function useReconciliationRunner(options: UseReconciliationRunnerOptions)
             const columnMaxValues: Record<string, number> = {};
             
             allReadings.forEach(r => {
-              totalKwh += r.kwh_value || 0;
               const metadata = r.metadata as any;
               const imported = metadata?.imported_fields || {};
+              
+              // Extract kWh from imported_fields
+              const kwhKeys = Object.keys(imported).filter(k => 
+                k.toLowerCase().includes('kwh') || k.toLowerCase() === 'p1' || k.toLowerCase().includes('p1')
+              );
+              if (kwhKeys.length > 0) {
+                totalKwh += Number(imported[kwhKeys[0]]) || 0;
+              }
+              
               Object.entries(imported).forEach(([key, value]) => {
                 const numValue = Number(value) || 0;
                 const operation = columnOperationsRef.current.get(key) || 'sum';

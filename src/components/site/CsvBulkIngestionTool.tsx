@@ -1468,8 +1468,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange, parseQueue 
                                   <p className="text-muted-foreground font-medium">Core Fields:</p>
                                   <ul className="list-disc list-inside space-y-0.5 text-muted-foreground ml-2">
                                     <li>Date & Time → <code className="text-[10px] bg-background px-1 rounded">reading_timestamp</code></li>
-                                    <li>kWh Value → <code className="text-[10px] bg-background px-1 rounded">kwh_value</code></li>
-                                    <li>kVA Value → <code className="text-[10px] bg-background px-1 rounded">kva_value</code> (if present)</li>
+                                    <li>All Values → <code className="text-[10px] bg-background px-1 rounded">metadata.imported_fields</code></li>
                                   </ul>
                                 </div>
                                 <p className="text-[10px] text-muted-foreground pt-1 border-t">

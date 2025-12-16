@@ -26,8 +26,9 @@ interface Meter {
 
 interface ReadingData {
   reading_timestamp: string;
-  kva_value: number | null;
-  kwh_value: number | null;
+  metadata: {
+    imported_fields?: Record<string, any>;
+  } | null;
 }
 
 export default function LoadProfilesTab({ siteId }: LoadProfilesTabProps) {
