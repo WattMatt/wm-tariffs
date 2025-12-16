@@ -3,7 +3,7 @@
  */
 
 import { supabase } from '@/integrations/supabase/client';
-import { dataURLtoBlob } from './canvasRenderer';
+import { dataURLtoBlob } from '@/lib/storageUtils';
 import type { StoragePath } from './types';
 
 export type ChartFormat = 'png' | 'svg';

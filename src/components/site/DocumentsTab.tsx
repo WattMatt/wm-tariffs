@@ -19,6 +19,7 @@ import { Canvas as FabricCanvas, Image as FabricImage, Rect as FabricRect, Circl
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { DatePicker } from "@/components/ui/date-picker";
 import { generateStoragePath } from "@/lib/storagePaths";
+import { downloadAndSaveFile, deleteFile, deleteFiles, getSignedUrl } from "@/lib/storageUtils";
 
 // Set up PDF.js worker
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
@@ -1157,17 +1158,9 @@ export default function DocumentsTab({ siteId, onUploadProgressChange }: Documen
 
   const handleDownload = async (filePath: string, fileName: string) => {
     try {
-      const { data } = await supabase.storage
-        .from("client-files")
-        .download(filePath);
-
-      if (data) {
-        const url = URL.createObjectURL(data);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = fileName;
-        a.click();
-        URL.revokeObjectURL(url);
+      const success = await downloadAndSaveFile(filePath, fileName);
+      if (!success) {
+        toast.error("Failed to download document");
       }
     } catch (error) {
       console.error("Download error:", error);
@@ -1177,7 +1170,7 @@ export default function DocumentsTab({ siteId, onUploadProgressChange }: Documen
 
   const handleDelete = async (id: string, filePath: string) => {
     try {
-      await supabase.storage.from("client-files").remove([filePath]);
+      await deleteFile(filePath);
       await supabase.from("site_documents").delete().eq("id", id);
       toast.success("Document deleted");
       fetchDocuments();
@@ -1228,12 +1221,14 @@ export default function DocumentsTab({ siteId, onUploadProgressChange }: Documen
 
     try {
       const docsToDelete = documents.filter(doc => selectedDocuments.has(doc.id));
+      const filePaths = docsToDelete.map(doc => doc.file_path);
       
+      // Delete all files at once
+      await deleteFiles(filePaths);
+      
+      // Delete database records
       await Promise.all(
-        docsToDelete.map(async (doc) => {
-          await supabase.storage.from("client-files").remove([doc.file_path]);
-          await supabase.from("site_documents").delete().eq("id", doc.id);
-        })
+        docsToDelete.map(doc => supabase.from("site_documents").delete().eq("id", doc.id))
       );
 
       toast.success(`${selectedDocuments.size} document(s) deleted`);
