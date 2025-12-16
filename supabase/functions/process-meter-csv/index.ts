@@ -20,11 +20,10 @@ Deno.serve(async (req) => {
       meterId, 
       filePath, 
       separator = "\t", 
-      dateFormat = "auto", 
       timeInterval = 30, 
       headerRowNumber = 1,
       columnMapping = null,
-      targetTable = 'meter_readings' // NEW: specify which table to insert into
+      targetTable = 'meter_readings'
     } = await req.json();
 
     // If csvFileId is provided but not filePath, fetch it from the database
@@ -43,14 +42,15 @@ Deno.serve(async (req) => {
       }
       
       actualFilePath = csvFile.file_path;
-      isGeneratedCsv = !!csvFile.generated_date_from;  // If generated_date_from exists, this is a generated CSV
+      isGeneratedCsv = !!csvFile.generated_date_from;
     }
 
     if (!actualFilePath) {
       throw new Error('No file path provided and could not fetch from csvFileId');
     }
 
-    console.log(`Processing CSV for meter ${meterId} from ${actualFilePath} with separator "${separator}", dateFormat "${dateFormat}", timeInterval ${timeInterval} minutes, headerRowNumber: ${headerRowNumber}`);
+    console.log(`Processing CSV for meter ${meterId} from ${actualFilePath}`);
+    console.log(`Separator: "${separator}", timeInterval: ${timeInterval} minutes, headerRowNumber: ${headerRowNumber}`);
     console.log('Column Mapping:', JSON.stringify(columnMapping, null, 2));
     console.log(`Target table: ${targetTable}`);
 
@@ -72,13 +72,11 @@ Deno.serve(async (req) => {
     const lines = csvText.split('\n');
     
     console.log(`Processing ${lines.length} lines`);
-    
-    // Log first few lines for debugging
     console.log('First 3 lines:', lines.slice(0, 3));
 
     // Parse header to identify all columns
     let headerColumns: string[] = [];
-    let startLineIndex = 0; // Track where data rows start
+    let startLineIndex = 0;
     
     if (lines.length > 0 && headerRowNumber > 0) {
       const headerLine = lines[headerRowNumber - 1].trim();
@@ -90,20 +88,15 @@ Deno.serve(async (req) => {
         headerColumns = headerLine.split(splitRegex).filter(col => col.trim());
       }
       console.log(`Header columns (${headerColumns.length}):`, headerColumns);
-      startLineIndex = headerRowNumber; // Skip header row(s) when processing data
-    } else {
-      console.log('No header row - all rows will be treated as data');
+      startLineIndex = headerRowNumber;
     }
 
-    // Skip duplicate check - users manage their own data cleanup
     const existingTimestamps = new Set();
-
-    // Process rows
     const readings: any[] = [];
     let skipped = 0;
     let parseErrors = 0;
     const errors: string[] = [];
-    let rowIndexForInterval = 0; // Track row index for interval-based timestamps
+    let rowIndexForInterval = 0;
 
     // Helper function to parse value based on data type
     const parseByDataType = (value: string, dataType: string): any => {
@@ -135,7 +128,6 @@ Deno.serve(async (req) => {
     // Helper function to parse datetime according to format
     const parseDateTimeByFormat = (dateTimeStr: string, format: string): Date | null => {
       try {
-        // Parse datetime based on format pattern
         const formatPatterns: Record<string, RegExp> = {
           'YYYY-MM-DD HH:mm:ss': /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/,
           'YYYY-MM-DD HH:mm': /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/,
@@ -155,13 +147,11 @@ Deno.serve(async (req) => {
 
         const match = dateTimeStr.match(pattern);
         if (!match) {
-          console.log(`DateTime string "${dateTimeStr}" doesn't match format "${format}"`);
           return null;
         }
 
         let year: number, month: number, day: number, hours: number, minutes: number, seconds: number = 0;
 
-        // Extract values based on format
         if (format.startsWith('YYYY-MM-DD') || format.startsWith('YYYY/MM/DD')) {
           [, year, month, day, hours, minutes, seconds = 0] = match.map(Number);
         } else if (format.startsWith('DD/MM/YYYY') || format.startsWith('DD-MM-YYYY')) {
@@ -172,7 +162,6 @@ Deno.serve(async (req) => {
           return null;
         }
 
-        // Create date treating input as UTC (no timezone conversion)
         return new Date(Date.UTC(year, month - 1, day, hours, minutes, seconds));
       } catch (err) {
         console.error(`Error parsing datetime: ${(err as Error).message}`);
@@ -180,323 +169,141 @@ Deno.serve(async (req) => {
       }
     };
 
+    // Get datetime column index from column mapping
+    const datetimeColumn = columnMapping?.datetimeColumn;
+    const datetimeFormat = columnMapping?.datetimeFormat;
+    const columnDataTypes = columnMapping?.columnDataTypes || {};
+    const renamedHeaders = columnMapping?.renamedHeaders || {};
+
+    console.log(`DateTime column: ${datetimeColumn}, format: ${datetimeFormat}`);
+
     for (let i = startLineIndex; i < lines.length; i++) {
       const line = lines[i].trim();
       if (!line) continue;
 
-      // Split by the specified separator (multiple consecutive separators treated as one)
       let columns: string[];
       if (separator === ' ') {
-        // For space: split by one or more spaces
         columns = line.split(/\s+/).filter(col => col.trim());
       } else {
-        // For other separators: split by one or more occurrences
         const escapedSeparator = separator.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const splitRegex = new RegExp(escapedSeparator + '+');
         columns = line.split(splitRegex).filter(col => col.trim());
       }
       
-      // Log first data row for debugging
       if (i === startLineIndex) {
         console.log(`First data row columns (${columns.length}):`, columns);
       }
       
-      if (columns.length < 2) continue;
+      if (columns.length < 1) continue;
 
       try {
-        // Handle different column layouts
-        let dateStr, timeStr, valueStr, kvaStr = null;
-        const extraFields: Record<string, any> = {};
-        
-        // Use column mapping if provided
-        if (columnMapping) {
-          // Helper function to get column value, handling splits
-          const getColumnValue = (columnId: string | number): string | null => {
-            // Handle split columns - format: "colIdx_split_partIdx"
-            const colIdStr = columnId.toString();
-            const parts = colIdStr.split('_');
-            
-            if (parts[0] && parts[1] === 'split' && parts[2]) {
-              // Split column
-              const colIdx = parseInt(parts[0]);
-              const partIdx = parseInt(parts[2]);
-              const value = columns[colIdx]?.trim();
-              
-              if (!value) return null;
-              
-              // Find the split config for this column
-              const splitConfig = columnMapping.splitColumns?.[colIdx];
-              if (splitConfig) {
-                const sepChar = 
-                  splitConfig.separator === "space" ? " " :
-                  splitConfig.separator === "comma" ? "," :
-                  splitConfig.separator === "dash" ? "-" :
-                  splitConfig.separator === "slash" ? "/" : ":";
-                const splitParts = value.split(sepChar);
-                return splitParts[partIdx] || null;
-              }
-            } else {
-              // Regular column - parse as integer
-              const colIdx = typeof columnId === 'number' ? columnId : parseInt(colIdStr);
-              if (isNaN(colIdx)) return null;
-              return columns[colIdx]?.trim() || null;
-            }
-            
-            return null;
-          };
-          
-          dateStr = getColumnValue(columnMapping.dateColumn);
-          timeStr = columnMapping.timeColumn && columnMapping.timeColumn !== "-1" ? getColumnValue(columnMapping.timeColumn) : null;
-          valueStr = getColumnValue(columnMapping.valueColumn)?.replace(',', '.');
-          kvaStr = columnMapping.kvaColumn && columnMapping.kvaColumn !== "-1" ? getColumnValue(columnMapping.kvaColumn)?.replace(',', '.') : null;
-          
-          // Log extracted values for first row only
-          if (i === startLineIndex) {
-            console.log('DIAGNOSTIC - First row extraction:');
-            console.log(`  dateColumn: ${columnMapping.dateColumn} -> dateStr: "${dateStr}"`);
-            console.log(`  timeColumn: ${columnMapping.timeColumn} -> timeStr: "${timeStr}"`);
-            console.log(`  valueColumn: ${columnMapping.valueColumn} -> valueStr: "${valueStr}"`);
-            console.log(`  kvaColumn: ${columnMapping.kvaColumn} -> kvaStr: "${kvaStr}"`);
-          }
-          
-          // Capture extra columns (with renamed headers if provided)
-          for (let colIdx = 0; colIdx < columns.length; colIdx++) {
-            const splitConfig = columnMapping.splitColumns?.[colIdx];
-            
-            if (splitConfig) {
-              // Handle split columns - each part might be used elsewhere or be metadata
-              splitConfig.parts.forEach((part: any, partIdx: number) => {
-                const isUsedAsCore = 
-                  part.columnId === columnMapping.dateColumn ||
-                  part.columnId === columnMapping.timeColumn ||
-                  part.columnId === columnMapping.valueColumn ||
-                  part.columnId === columnMapping.kvaColumn;
-                
-                if (!isUsedAsCore) {
-                  const colValue = getColumnValue(part.columnId);
-                  if (colValue && colValue !== '' && colValue !== '-') {
-                    const colName = part.name || `Column_${colIdx}_Part_${partIdx}`;
-                    // Get data type for this column, default to auto-detect
-                    const dataType = columnMapping.columnDataTypes?.[part.columnId] || 'string';
-                    const parsedValue = parseByDataType(colValue, dataType);
-                    if (parsedValue !== null) {
-                      extraFields[colName] = parsedValue;
-                    }
-                  }
-                }
-              });
-            } else {
-              // Regular column - skip if used as a core field
-              const colIdStr = colIdx.toString();
-              if (colIdStr === columnMapping.dateColumn || 
-                  colIdStr === columnMapping.timeColumn || 
-                  colIdStr === columnMapping.valueColumn || 
-                  colIdStr === columnMapping.kvaColumn) {
-                continue;
-              }
-              
-              const colValue = columns[colIdx]?.trim();
-              if (colValue && colValue !== '' && colValue !== '-') {
-                // Use renamed header if available, otherwise use original header
-                const colName = columnMapping.renamedHeaders?.[colIdx] || headerColumns[colIdx] || `Column_${colIdx + 1}`;
-                // Get data type for this column, default to auto-detect
-                const dataType = columnMapping.columnDataTypes?.[colIdx.toString()] || 'string';
-                const parsedValue = parseByDataType(colValue, dataType);
-                if (parsedValue !== null) {
-                  extraFields[colName] = parsedValue;
-                }
-              }
-            }
-          }
-        } else if (columns.length === 2) {
-          // Format: DateTime Value
-          dateStr = columns[0]?.trim();
-          valueStr = columns[1]?.trim()?.replace(',', '.');
-          timeStr = null;
+        let dateTimeStr: string | null = null;
+        const importedFields: Record<string, any> = {};
+
+        // Extract datetime from the specified column
+        if (datetimeColumn !== null && datetimeColumn !== undefined) {
+          const dtColIdx = typeof datetimeColumn === 'string' ? parseInt(datetimeColumn) : datetimeColumn;
+          dateTimeStr = columns[dtColIdx]?.trim() || null;
         } else {
-          // Format: Date Time Value [Extra Columns...]
-          dateStr = columns[0]?.trim();
-          timeStr = columns[1]?.trim();
-          valueStr = columns[2]?.trim()?.replace(',', '.');
-          
-          // Capture all extra columns beyond the first 3
-          for (let colIdx = 3; colIdx < columns.length; colIdx++) {
-            const colValue = columns[colIdx]?.trim();
-            if (colValue && colValue !== '' && colValue !== '-') {
-              const colName = headerColumns[colIdx] || `Column_${colIdx + 1}`;
-              
-              // Check if this is the kVA column
-              const colNameLower = colName.toLowerCase();
-              if (colNameLower.includes('kva') || colNameLower === 's (kva)') {
-                kvaStr = colValue.replace(',', '.');
-                continue; // Don't add to extraFields, it's a core field
-              }
-              
-              // Try to parse as number, otherwise store as string
-              const numValue = parseFloat(colValue.replace(',', '.'));
-              extraFields[colName] = isNaN(numValue) ? colValue : numValue;
-            }
-          }
+          // Fallback: use first column as datetime
+          dateTimeStr = columns[0]?.trim() || null;
         }
 
-        if (!dateStr || !valueStr) {
-          if (i === startLineIndex) {
-            console.log(`⚠️ SKIPPING FIRST ROW - Missing required fields: dateStr="${dateStr}", valueStr="${valueStr}"`);
-          }
+        if (!dateTimeStr) {
+          if (errors.length < 5) errors.push(`Line ${i + 1}: No datetime value found`);
+          parseErrors++;
           continue;
         }
 
-        let date: Date;
+        // Parse the datetime
+        let date: Date | null = null;
         
-        // Check if dateStr contains both date and time (combined format)
-        if (!timeStr && (dateStr.includes(' ') || dateStr.includes('T'))) {
-          // Combined DateTime format - use user-specified format if available
-          const dateTimeFormat = columnMapping?.dateTimeFormat || 'YYYY-MM-DD HH:mm:ss';
-          
-          // Try parsing with user-specified format first
-          const parsedDate = parseDateTimeByFormat(dateStr, dateTimeFormat);
-          
-          if (parsedDate && !isNaN(parsedDate.getTime())) {
-            date = parsedDate;
+        if (datetimeFormat) {
+          date = parseDateTimeByFormat(dateTimeStr, datetimeFormat);
+        }
+        
+        // Fallback to auto-detect if format parsing failed
+        if (!date) {
+          // Try ISO format or space-separated datetime
+          if (dateTimeStr.includes('T') || dateTimeStr.includes(' ')) {
+            const isoStr = dateTimeStr.includes('T') ? dateTimeStr : dateTimeStr.replace(' ', 'T');
+            date = new Date(isoStr);
+            if (isNaN(date.getTime())) {
+              // Manual parsing fallback
+              const dateOnlyStr = dateTimeStr.split(' ')[0] || dateTimeStr.split('T')[0];
+              const timeOnlyStr = dateTimeStr.split(' ')[1] || dateTimeStr.split('T')[1] || '00:00:00';
+              const dateParts = dateOnlyStr.split(/[\/\-]/);
+              const timeParts = timeOnlyStr.split(':');
+              
+              if (dateParts.length >= 3) {
+                let year: number, month: number, day: number;
+                if (parseInt(dateParts[0]) > 31) {
+                  [year, month, day] = dateParts.map(Number);
+                } else {
+                  [day, month, year] = dateParts.map(Number);
+                }
+                const [hours = 0, minutes = 0, seconds = 0] = timeParts.map(Number);
+                date = new Date(Date.UTC(year, month - 1, day, hours, minutes, seconds));
+              }
+            }
           } else {
-            // Fallback: try ISO format
-            const isoDateStr = dateStr.includes('T') ? dateStr : dateStr.replace(' ', 'T');
-            date = new Date(isoDateStr);
-          }
-          
-          if (isNaN(date.getTime())) {
-            // Fallback: try manual parsing if ISO parse fails
-            const dateOnlyStr = dateStr.split(' ')[0] || dateStr.split('T')[0];
-            const timeOnlyStr = dateStr.split(' ')[1] || dateStr.split('T')[1] || '00:00:00';
-            const dateParts = dateOnlyStr.split(/[\/\-]/);
-            const timeParts = timeOnlyStr.split(':');
-            
+            // Just a date, use interval for time
+            const dateParts = dateTimeStr.split(/[\/\-]/);
             if (dateParts.length >= 3) {
               let year: number, month: number, day: number;
-              
-              // Auto-detect date format
               if (parseInt(dateParts[0]) > 31) {
-                // YYYY/MM/DD or YYYY-MM-DD
                 [year, month, day] = dateParts.map(Number);
-              } else if (parseInt(dateParts[1]) > 12) {
-                // DD/MM/YYYY
-                [day, month, year] = dateParts.map(Number);
               } else {
-                // Assume YYYY-MM-DD for ISO format
-                [year, month, day] = dateParts.map(Number);
+                [day, month, year] = dateParts.map(Number);
               }
-              
-              const [hours = 0, minutes = 0, seconds = 0] = timeParts.map(Number);
-              
-              // Create date treating input as UTC (no timezone conversion)
-              date = new Date(Date.UTC(year, month - 1, day, hours, minutes, seconds));
+              const totalMinutes = rowIndexForInterval * timeInterval;
+              const hours = Math.floor(totalMinutes / 60);
+              const minutes = totalMinutes % 60;
+              date = new Date(Date.UTC(year, month - 1, day, hours, minutes, 0));
+              rowIndexForInterval++;
             }
           }
-          
-          rowIndexForInterval++; // Keep counter for logging purposes
-        } else {
-          // Separate date and time columns
-          const dateParts = dateStr.split(/[\/\- ]/);
-          if (dateParts.length < 3) {
-            if (errors.length < 5) errors.push(`Line ${i + 1}: Invalid date format "${dateStr}"`);
-            parseErrors++;
-            continue;
-          }
-
-          let year: number, month: number, day: number;
-          
-          // Determine date format based on user selection
-          if (dateFormat === "YYYY-MM-DD") {
-            // YYYY/MM/DD or YYYY-MM-DD
-            [year, month, day] = dateParts.map(Number);
-          } else if (dateFormat === "DD/MM/YYYY") {
-            // DD/MM/YYYY
-            [day, month, year] = dateParts.map(Number);
-          } else if (dateFormat === "MM/DD/YYYY") {
-            // MM/DD/YYYY
-            [month, day, year] = dateParts.map(Number);
-          } else {
-            // Auto-detect
-            if (parseInt(dateParts[0]) > 31) {
-              // YYYY/MM/DD or YYYY-MM-DD
-              [year, month, day] = dateParts.map(Number);
-            } else if (parseInt(dateParts[1]) > 12) {
-              // DD/MM/YYYY (day in second position is > 12, so must be day)
-              [day, month, year] = dateParts.map(Number);
-            } else {
-              // Assume DD/MM/YYYY as default for ambiguous dates
-              [day, month, year] = dateParts.map(Number);
-            }
-          }
-
-          // Parse time - handle both HH:MM:SS and decimal formats, or use interval-based calculation
-          let hours = 0, minutes = 0, seconds = 0;
-          
-          if (timeStr) {
-            if (timeStr.includes(':')) {
-              // HH:MM:SS or HH:MM format
-              const timeParts = timeStr.split(':');
-              [hours, minutes, seconds = 0] = timeParts.map(Number);
-            } else {
-              // Decimal format (e.g., 0.5 = 12 hours, 0.04166667 = 1 hour)
-              const decimalTime = parseFloat(timeStr);
-              if (isNaN(decimalTime)) {
-                if (errors.length < 5) errors.push(`Line ${i + 1}: Invalid time format "${timeStr}"`);
-                parseErrors++;
-                continue;
-              }
-              
-              // Convert decimal days to hours/minutes/seconds
-              const totalSeconds = decimalTime * 24 * 60 * 60;
-              hours = Math.floor(totalSeconds / 3600);
-              minutes = Math.floor((totalSeconds % 3600) / 60);
-              seconds = Math.floor(totalSeconds % 60);
-            }
-          } else {
-            // No time column - use interval-based calculation
-            const totalMinutes = rowIndexForInterval * timeInterval;
-            hours = Math.floor(totalMinutes / 60);
-            minutes = totalMinutes % 60;
-            rowIndexForInterval++; // Increment for next row
-          }
-
-          // Create date treating input as UTC (no timezone conversion)
-          date = new Date(Date.UTC(year, month - 1, day, hours, minutes, seconds));
         }
 
-        if (isNaN(date.getTime())) {
-          if (errors.length < 5) errors.push(`Line ${i + 1}: Invalid date/time`);
+        if (!date || isNaN(date.getTime())) {
+          if (errors.length < 5) errors.push(`Line ${i + 1}: Invalid datetime "${dateTimeStr}"`);
           parseErrors++;
           continue;
         }
-
-        const value = parseFloat(valueStr);
-        if (isNaN(value)) {
-          if (errors.length < 5) errors.push(`Line ${i + 1}: Invalid value "${valueStr}"`);
-          parseErrors++;
-          continue;
-        }
-
-        // Parse kVA value if present
-        const kvaValue = kvaStr ? parseFloat(kvaStr) : null;
 
         const isoTimestamp = date.toISOString();
 
-        // Skip duplicates (both from DB and within this CSV file)
+        // Skip duplicates
         if (existingTimestamps.has(isoTimestamp)) {
           skipped++;
           continue;
         }
-
-        // Mark this timestamp as seen to prevent duplicates within this CSV
         existingTimestamps.add(isoTimestamp);
 
-        // Add the main value column to extraFields with its renamed header or original CSV header
-        if (columnMapping && columnMapping.valueColumn !== undefined) {
-          const valueColIdx = parseInt(columnMapping.valueColumn.toString());
-          const valueColumnName = columnMapping.renamedHeaders?.[valueColIdx] || headerColumns[valueColIdx];
-          if (valueColumnName) {
-            extraFields[valueColumnName] = value;
+        // Process ALL columns and store in imported_fields based on data types
+        for (let colIdx = 0; colIdx < columns.length; colIdx++) {
+          // Skip the datetime column - it's already processed
+          if (datetimeColumn !== null && datetimeColumn !== undefined) {
+            const dtColIdx = typeof datetimeColumn === 'string' ? parseInt(datetimeColumn) : datetimeColumn;
+            if (colIdx === dtColIdx) continue;
+          }
+
+          const colValue = columns[colIdx]?.trim();
+          if (!colValue || colValue === '' || colValue === '-') continue;
+
+          // Get the column name (renamed or original)
+          const colKey = colIdx.toString();
+          const columnName = renamedHeaders[colKey] || headerColumns[colIdx] || `Column_${colIdx + 1}`;
+          
+          // Get data type for this column
+          const dataType = columnDataTypes[colKey] || 'string';
+          
+          // Only store float and int types in imported_fields
+          if (dataType === 'float' || dataType === 'int') {
+            const parsedValue = parseByDataType(colValue, dataType);
+            if (parsedValue !== null) {
+              importedFields[columnName] = parsedValue;
+            }
           }
         }
 
@@ -507,16 +314,14 @@ Deno.serve(async (req) => {
           imported_at: new Date().toISOString(),
         };
         
-        // Only add imported_fields if there are extra columns
-        if (Object.keys(extraFields).length > 0) {
-          metadata.imported_fields = extraFields;
+        // Always add imported_fields (even if empty for consistency)
+        if (Object.keys(importedFields).length > 0) {
+          metadata.imported_fields = importedFields;
         }
 
         readings.push({
           meter_id: meterId,
           reading_timestamp: isoTimestamp,
-          kwh_value: value,
-          kva_value: kvaValue,
           metadata: metadata,
         });
       } catch (err: any) {
@@ -530,19 +335,18 @@ Deno.serve(async (req) => {
       console.log('Sample errors:', errors);
     }
 
-    // Insert in batches - use the specified target table
+    // Insert in batches
     if (readings.length > 0) {
       const batchSize = 1000;
       let inserted = 0;
 
       for (let i = 0; i < readings.length; i += batchSize) {
         const batch = readings.slice(i, i + batchSize);
-        // Use upsert to prevent duplicate key errors - update existing records if they exist
         const { error: insertError } = await supabase
-          .from(targetTable) // Use dynamic table name
+          .from(targetTable)
           .upsert(batch, { 
             onConflict: 'meter_id,reading_timestamp',
-            ignoreDuplicates: false // Update existing records with new data
+            ignoreDuplicates: false
           });
 
         if (insertError) {
@@ -559,19 +363,15 @@ Deno.serve(async (req) => {
     let parsedFilePath: string | null = null;
     try {
       // Create standardized CSV from parsed readings
-      const csvHeaders = ['reading_timestamp', 'kwh_value', 'kva_value', 'metadata'];
+      const csvHeaders = ['reading_timestamp', 'metadata'];
       const csvRows = readings.map(reading => [
         reading.reading_timestamp,
-        reading.kwh_value,
-        reading.kva_value || '',
         JSON.stringify(reading.metadata || {})
       ]);
       
-      // Generate CSV content
       const csvContent = [
         csvHeaders.join(','),
         ...csvRows.map(row => row.map(val => {
-          // Escape values containing commas or quotes
           const str = String(val);
           if (str.includes(',') || str.includes('"') || str.includes('\n')) {
             return `"${str.replace(/"/g, '""')}"`;
@@ -580,12 +380,10 @@ Deno.serve(async (req) => {
         }).join(','))
       ].join('\n');
       
-      // Generate parsed file path
       const originalFileName = actualFilePath.split('/').pop()?.replace('.csv', '') || 'parsed';
       const parsedFileName = `${originalFileName}_parsed.csv`;
       const tempParsedPath = actualFilePath.replace('/Meters/CSVs/', '/Meters/ParsedCSVs/').replace(fileName, parsedFileName);
       
-      // Upload parsed CSV to storage
       const { error: uploadError } = await supabase.storage
         .from('client-files')
         .upload(tempParsedPath, new Blob([csvContent], { type: 'text/csv' }), { 
@@ -603,11 +401,10 @@ Deno.serve(async (req) => {
       console.error('Error storing parsed CSV:', parseStoreError);
     }
 
-    // Update the tracking table with parse results only if we got here successfully
+    // Update the tracking table
     const { error: updateError } = await supabase
       .from('meter_csv_files')
       .update({
-        // Use 'generated' for hierarchical CSVs, 'parsed' for uploaded CSVs
         parse_status: readings.length > 0 ? (isGeneratedCsv ? 'generated' : 'parsed') : 'error',
         parsed_at: new Date().toISOString(),
         readings_inserted: readings.length,

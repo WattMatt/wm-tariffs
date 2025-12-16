@@ -79,19 +79,10 @@ interface CsvPreview {
 }
 
 interface ColumnMapping {
-  dateColumn: number | string; // string for split columns like "0_split_1"
-  timeColumn: number | string;
-  valueColumn: number | string;
-  kvaColumn: number | string;
-  dateFormat: string;
-  timeFormat: string;
-  dateTimeFormat?: string; // Format for combined datetime columns
-  renamedHeaders?: Record<string, string>; // key can be "0_split_1" for split columns
-  splitColumns?: Record<number, { 
-    separator: string; 
-    parts: Array<{ name: string; columnId: string }> 
-  }>;
-  columnDataTypes?: Record<string, 'datetime' | 'float' | 'int' | 'string' | 'boolean'>; // data type for each column
+  datetimeColumn: number | string | null; // Column containing datetime - NO DEFAULT, must be set by user
+  datetimeFormat: string | null; // Format for datetime parsing - NO DEFAULT, must be set by user
+  renamedHeaders?: Record<string, string> | null; // Custom names for columns
+  columnDataTypes?: Record<string, 'datetime' | 'float' | 'int' | 'string' | 'boolean'> | null; // Data type for each column
 }
 
 interface FileItem {
@@ -125,60 +116,24 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange, parseQueue 
   const [previewFile, setPreviewFile] = useState<FileItem | null>(null);
   const [previewData, setPreviewData] = useState<{ rows: string[][], headers: string[] } | null>(null);
   const [columnMapping, setColumnMapping] = useState<ColumnMapping>({
-    dateColumn: "0",
-    timeColumn: "1",
-    valueColumn: "2",
-    kvaColumn: "-1",
-    dateFormat: "auto",
-    timeFormat: "auto",
-    dateTimeFormat: "YYYY-MM-DD HH:mm:ss",
-    renamedHeaders: {},
-    splitColumns: {},
-    columnDataTypes: {}
+    datetimeColumn: null,
+    datetimeFormat: null,
+    renamedHeaders: null,
+    columnDataTypes: null
   });
   const [editingHeader, setEditingHeader] = useState<{id: string, value: string} | null>(null);
-  const [splitPreview, setSplitPreview] = useState<{index: number, parts: string[]} | null>(null);
-  const [tempColumnState, setTempColumnState] = useState<{
-    columnIdx: number;
-    newName: string;
-    splitSeparator: string;
-    splitParts: Array<{ name: string; columnId: string }>;
-    assignedType: 'date' | 'time' | 'value' | 'kva' | 'none';
-    dataType: 'datetime' | 'float' | 'int' | 'string';
-  } | null>(null);
   const [openPopover, setOpenPopover] = useState<string | null>(null);
   const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({});
   
-  // Get all available columns including split parts
+  // Get all available columns - simplified, no split columns
   const getAvailableColumns = () => {
     if (!previewData) return [];
     
-    const columns: Array<{ id: string; name: string; isSplit: boolean }> = [];
-    
-    previewData.headers.forEach((header, idx) => {
-      const splitConfig = columnMapping.splitColumns?.[idx];
-      
-      if (splitConfig) {
-        // Add each split part as a separate column
-        splitConfig.parts.forEach((part) => {
-          columns.push({
-            id: part.columnId,
-            name: part.name || `${header} (Part ${part.columnId.split('_')[2]})`,
-            isSplit: true
-          });
-        });
-      } else {
-        // Regular column
-        const displayName = columnMapping.renamedHeaders?.[idx] || header || `Col ${idx + 1}`;
-        columns.push({
-          id: idx.toString(),
-          name: displayName,
-          isSplit: false
-        });
-      }
-    });
-    
-    return columns;
+    return previewData.headers.map((header, idx) => ({
+      id: idx.toString(),
+      name: columnMapping.renamedHeaders?.[idx.toString()] || header || `Col ${idx + 1}`,
+      isSplit: false
+    }));
   };
   const [activeTab, setActiveTab] = useState<string>("upload");
   const [previewingFile, setPreviewingFile] = useState<FileItem | null>(null);
@@ -894,23 +849,26 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange, parseQueue 
                (lower.includes('s') && lower.includes('(kva)'));
       });
       
-      // Initialize with detected values, but all columns are available
+      // Initialize with detected values - NO DEFAULTS for datetimeColumn
       const initialHeaders: Record<string, string> = {};
+      const initialDataTypes: Record<string, 'datetime' | 'float' | 'int' | 'string' | 'boolean'> = {};
+      
       headers.forEach((header, idx) => {
-        initialHeaders[idx] = header;
+        initialHeaders[idx.toString()] = header;
+        // Auto-detect data types based on column name and content
+        const lower = header.toLowerCase();
+        if (idx === dateColIdx) {
+          initialDataTypes[idx.toString()] = 'datetime';
+        } else if (lower.includes('kwh') || lower.includes('kva') || lower.includes('(kwh)') || lower.includes('(kva)')) {
+          initialDataTypes[idx.toString()] = 'float';
+        }
       });
       
       setColumnMapping({
-        dateColumn: dateColIdx >= 0 ? dateColIdx.toString() : "-1",
-        timeColumn: "-1", // No separate time column by default if date contains timestamp
-        valueColumn: valueColIdx >= 0 ? valueColIdx.toString() : "-1",
-        kvaColumn: kvaColIdx >= 0 ? kvaColIdx.toString() : "-1",
-        dateFormat: columnMapping.dateFormat,
-        timeFormat: columnMapping.timeFormat,
-        dateTimeFormat: dateTimeFormat,
+        datetimeColumn: dateColIdx >= 0 ? dateColIdx : null, // Set detected datetime column, or null if not found
+        datetimeFormat: dateTimeFormat || null,
         renamedHeaders: initialHeaders,
-        splitColumns: {},
-        columnDataTypes: {}
+        columnDataTypes: initialDataTypes
       });
     } catch (err: any) {
       console.error("Preview error:", err);
@@ -1026,7 +984,6 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange, parseQueue 
                   separator === "comma" ? "," : 
                   separator === "semicolon" ? ";" : 
                   separator === "space" ? " " : "\t",
-        dateFormat: columnMapping.dateFormat,
         timeInterval: parseInt(timeInterval),
         headerRowNumber: parseInt(headerRowNumber),
         columnMapping: columnMapping
@@ -1053,7 +1010,6 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange, parseQueue 
                     separator === "comma" ? "," : 
                     separator === "semicolon" ? ";" : 
                     separator === "space" ? " " : "\t",
-          dateFormat: columnMapping.dateFormat,
           timeInterval: parseInt(timeInterval),
           headerRowNumber: parseInt(headerRowNumber),
           columnMapping: columnMapping
@@ -1130,7 +1086,6 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange, parseQueue 
                       separator === "comma" ? "," : 
                       separator === "semicolon" ? ";" : 
                       separator === "space" ? " " : "\t",
-            dateFormat: columnMapping.dateFormat,
             timeInterval: parseInt(timeInterval),
             headerRowNumber: parseInt(headerRowNumber),
             columnMapping: columnMapping
@@ -1584,200 +1539,136 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange, parseQueue 
                   <div className="space-y-3 mt-4">
                     <div className="text-sm font-semibold text-foreground">Column Interpretation</div>
                     <div className="p-4 border rounded-md bg-muted/20 space-y-4">
+                      {/* DateTime Column Selection */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-3 bg-background border rounded-md">
+                        <div>
+                          <Label className="text-xs mb-1">DateTime Column</Label>
+                          <Select
+                            value={columnMapping.datetimeColumn?.toString() || ""}
+                            onValueChange={(val) => {
+                              const newMapping = {...columnMapping};
+                              newMapping.datetimeColumn = val ? parseInt(val) : null;
+                              // Also set the data type for this column
+                              if (val) {
+                                newMapping.columnDataTypes = {
+                                  ...newMapping.columnDataTypes,
+                                  [val]: 'datetime'
+                                };
+                              }
+                              setColumnMapping(newMapping);
+                            }}
+                          >
+                            <SelectTrigger className="h-8 text-xs bg-background">
+                              <SelectValue placeholder="Select datetime column" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-background z-50">
+                              {previewData.headers.map((header, idx) => (
+                                <SelectItem key={idx} value={idx.toString()}>
+                                  {header || `Column ${idx + 1}`}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label className="text-xs mb-1">DateTime Format</Label>
+                          <Select
+                            value={columnMapping.datetimeFormat || ""}
+                            onValueChange={(val) => {
+                              const newMapping = {...columnMapping};
+                              newMapping.datetimeFormat = val || null;
+                              setColumnMapping(newMapping);
+                            }}
+                          >
+                            <SelectTrigger className="h-8 text-xs bg-background">
+                              <SelectValue placeholder="Select format" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-background z-50">
+                              <SelectItem value="YYYY-MM-DD HH:mm:ss">YYYY-MM-DD HH:mm:ss</SelectItem>
+                              <SelectItem value="YYYY-MM-DD HH:mm">YYYY-MM-DD HH:mm</SelectItem>
+                              <SelectItem value="DD/MM/YYYY HH:mm:ss">DD/MM/YYYY HH:mm:ss</SelectItem>
+                              <SelectItem value="DD/MM/YYYY HH:mm">DD/MM/YYYY HH:mm</SelectItem>
+                              <SelectItem value="MM/DD/YYYY HH:mm:ss">MM/DD/YYYY HH:mm:ss</SelectItem>
+                              <SelectItem value="YYYY/MM/DD HH:mm:ss">YYYY/MM/DD HH:mm:ss</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      
+                      {/* Column Data Types */}
+                      <div className="text-xs font-medium text-muted-foreground mt-4 mb-2">Column Data Types & Names</div>
                       {previewData.headers.map((header, idx) => {
-                        const splitConfig = columnMapping.splitColumns?.[idx];
-                        
-                        // Render regular column (always show parent column)
-                        const displayName = columnMapping.renamedHeaders?.[idx] || header || `Column ${idx + 1}`;
+                        const displayName = columnMapping.renamedHeaders?.[idx.toString()] || header || `Column ${idx + 1}`;
                         const columnId = idx.toString();
-                        const currentAssignment = 
-                          idx.toString() === columnMapping.dateColumn ? 'date' :
-                          idx.toString() === columnMapping.timeColumn ? 'time' :
-                          idx.toString() === columnMapping.valueColumn ? 'value' :
-                          idx.toString() === columnMapping.kvaColumn ? 'kva' : 'none';
                         const currentDataType = columnMapping.columnDataTypes?.[columnId] || 'string';
+                        const isDatetimeColumn = columnMapping.datetimeColumn?.toString() === columnId;
                         
                         return (
-                          <div key={idx} className="space-y-2">
-                            <div className="p-3 border rounded-md bg-background">
-                              <div className="flex items-start gap-3">
-                                <Checkbox
-                                  checked={visibleColumns[columnId] !== false}
-                                  onCheckedChange={(checked) => {
-                                    setVisibleColumns(prev => ({
-                                      ...prev,
-                                      [columnId]: checked === true
-                                    }));
-                                  }}
-                                  className="shrink-0 mt-6"
-                                />
-                                <div className="flex-1">
-                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                    <div>
-                                      <Label className="text-xs mb-1">Column Name</Label>
-                                      <Input
-                                        value={displayName}
-                                        onChange={(e) => {
-                                          const newMapping = {...columnMapping};
-                                          newMapping.renamedHeaders = {
-                                            ...newMapping.renamedHeaders,
-                                            [idx]: e.target.value
-                                          };
-                                          setColumnMapping(newMapping);
-                                        }}
-                                        className="h-8 text-xs"
-                                        placeholder="Column name"
-                                      />
-                                    </div>
-                                    <div>
-                                      <Label className="text-xs mb-1">Data Type</Label>
-                                      <Select
-                                        value={currentDataType}
-                                        onValueChange={(type: 'datetime' | 'string' | 'int' | 'float' | 'boolean') => {
-                                          const newMapping = {...columnMapping};
-                                          newMapping.columnDataTypes = {
-                                            ...newMapping.columnDataTypes,
-                                            [columnId]: type
-                                          };
-                                          setColumnMapping(newMapping);
-                                        }}
-                                      >
-                                        <SelectTrigger className="h-8 text-xs bg-background">
-                                          <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent className="bg-background z-50">
-                                          <SelectItem value="datetime">Datetime</SelectItem>
-                                          <SelectItem value="string">String</SelectItem>
-                                          <SelectItem value="int">Integer</SelectItem>
-                                          <SelectItem value="float">Float</SelectItem>
-                                          <SelectItem value="boolean">Boolean</SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                    </div>
-                                    <div>
-                                      <Label className="text-xs mb-1">Split Column By</Label>
-                                      <Select
-                                        value={splitConfig ? splitConfig.separator : 'none'}
-                                        onValueChange={(sep) => {
-                                          if (sep === "none") {
-                                            // Remove split
-                                            const newMapping = {...columnMapping};
-                                            const newSplits = {...newMapping.splitColumns};
-                                            delete newSplits[idx];
-                                            newMapping.splitColumns = newSplits;
-                                            setColumnMapping(newMapping);
-                                            setSplitPreview(null);
-                                          } else {
-                                            // Show split preview
-                                            const sampleValue = previewData.rows[0]?.[idx] || "";
-                                            const sepChar = 
-                                              sep === "space" ? " " :
-                                              sep === "comma" ? "," :
-                                              sep === "dash" ? "-" :
-                                              sep === "slash" ? "/" : ":";
-                                            const parts = sampleValue.split(sepChar);
-                                            setSplitPreview({index: idx, parts});
-                                            
-                                            // Create split config
-                                            const newMapping = {...columnMapping};
-                                            newMapping.splitColumns = {
-                                              ...newMapping.splitColumns,
-                                              [idx]: {
-                                                separator: sep,
-                                                parts: parts.map((_, i) => ({
-                                                  name: `${displayName} Part ${i + 1}`,
-                                                  columnId: `${idx}_split_${i}`
-                                                }))
-                                              }
-                                            };
-                                            setColumnMapping(newMapping);
-                                            toast.success("Column split applied");
-                                          }
-                                        }}
-                                      >
-                                        <SelectTrigger className="h-8 text-xs bg-background">
-                                          <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent className="bg-background z-50">
-                                          <SelectItem value="none">No Split</SelectItem>
-                                          <SelectItem value="space">Space ( )</SelectItem>
-                                          <SelectItem value="comma">Comma (,)</SelectItem>
-                                          <SelectItem value="dash">Dash (-)</SelectItem>
-                                          <SelectItem value="colon">Colon (:)</SelectItem>
-                                          <SelectItem value="slash">Slash (/)</SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                    </div>
+                          <div key={idx} className="p-3 border rounded-md bg-background">
+                            <div className="flex items-start gap-3">
+                              <Checkbox
+                                checked={visibleColumns[columnId] !== false}
+                                onCheckedChange={(checked) => {
+                                  setVisibleColumns(prev => ({
+                                    ...prev,
+                                    [columnId]: checked === true
+                                  }));
+                                }}
+                                className="shrink-0 mt-6"
+                              />
+                              <div className="flex-1">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                  <div>
+                                    <Label className="text-xs mb-1">Column Name</Label>
+                                    <Input
+                                      value={displayName}
+                                      onChange={(e) => {
+                                        const newMapping = {...columnMapping};
+                                        newMapping.renamedHeaders = {
+                                          ...newMapping.renamedHeaders,
+                                          [idx.toString()]: e.target.value
+                                        };
+                                        setColumnMapping(newMapping);
+                                      }}
+                                      className="h-8 text-xs"
+                                      placeholder="Column name"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label className="text-xs mb-1">Data Type</Label>
+                                    <Select
+                                      value={isDatetimeColumn ? 'datetime' : currentDataType}
+                                      onValueChange={(type: 'datetime' | 'string' | 'int' | 'float' | 'boolean') => {
+                                        const newMapping = {...columnMapping};
+                                        newMapping.columnDataTypes = {
+                                          ...newMapping.columnDataTypes,
+                                          [columnId]: type
+                                        };
+                                        // If setting to datetime, also set as datetime column
+                                        if (type === 'datetime') {
+                                          newMapping.datetimeColumn = idx;
+                                        }
+                                        setColumnMapping(newMapping);
+                                      }}
+                                      disabled={isDatetimeColumn}
+                                    >
+                                      <SelectTrigger className="h-8 text-xs bg-background">
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent className="bg-background z-50">
+                                        <SelectItem value="datetime">Datetime</SelectItem>
+                                        <SelectItem value="string">String</SelectItem>
+                                        <SelectItem value="int">Integer</SelectItem>
+                                        <SelectItem value="float">Float</SelectItem>
+                                        <SelectItem value="boolean">Boolean</SelectItem>
+                                      </SelectContent>
+                                    </Select>
                                   </div>
                                 </div>
                               </div>
                             </div>
-                            
-                            {/* Split Column Parts - Grouped Together */}
-                            {splitConfig && (
-                              <div className="ml-8 p-3 border rounded-md bg-muted/30 space-y-2">
-                                <div className="text-xs font-medium text-muted-foreground mb-2">Split Parts:</div>
-                                {splitConfig.parts.map((part, partIdx) => {
-                                  const partColumnId = part.columnId;
-                                  const partDataType = columnMapping.columnDataTypes?.[partColumnId] || 'string';
-                                  
-                                  return (
-                                    <div key={partIdx} className="flex items-start gap-3 p-2 bg-background rounded border">
-                                      <Checkbox
-                                        checked={visibleColumns[partColumnId] !== false}
-                                        onCheckedChange={(checked) => {
-                                          setVisibleColumns(prev => ({
-                                            ...prev,
-                                            [partColumnId]: checked === true
-                                          }));
-                                        }}
-                                        className="shrink-0 mt-6"
-                                      />
-                                      <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
-                                        <div>
-                                          <Label className="text-xs mb-1">Part {partIdx + 1} Name</Label>
-                                          <Input
-                                            value={part.name}
-                                            onChange={(e) => {
-                                              const newMapping = {...columnMapping};
-                                              if (newMapping.splitColumns?.[idx]) {
-                                                newMapping.splitColumns[idx].parts[partIdx].name = e.target.value;
-                                                setColumnMapping(newMapping);
-                                              }
-                                            }}
-                                            className="h-8 text-xs"
-                                            placeholder="Part name"
-                                          />
-                                        </div>
-                                        <div>
-                                          <Label className="text-xs mb-1">Data Type</Label>
-                                          <Select
-                                            value={partDataType}
-                                            onValueChange={(type: 'datetime' | 'float' | 'int' | 'string') => {
-                                              const newMapping = {...columnMapping};
-                                              newMapping.columnDataTypes = {
-                                                ...newMapping.columnDataTypes,
-                                                [partColumnId]: type
-                                              };
-                                              setColumnMapping(newMapping);
-                                            }}
-                                          >
-                                            <SelectTrigger className="h-8 text-xs bg-background">
-                                              <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent className="bg-background z-50">
-                                              <SelectItem value="string">String (Text)</SelectItem>
-                                              <SelectItem value="int">Integer</SelectItem>
-                                              <SelectItem value="float">Float (Decimal)</SelectItem>
-                                              <SelectItem value="datetime">DateTime</SelectItem>
-                                            </SelectContent>
-                                          </Select>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
+                            {isDatetimeColumn && (
+                              <Badge variant="secondary" className="mt-2 ml-8 text-xs">DateTime Column</Badge>
                             )}
                           </div>
                         );
@@ -1808,27 +1699,10 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange, parseQueue 
                       <thead className="sticky top-0 z-10 bg-background">
                         <tr className="border-b">
                           {previewData.headers.map((header, idx) => {
-                            const displayName = columnMapping.renamedHeaders?.[idx] || header || `Col ${idx + 1}`;
-                            const isSplit = columnMapping.splitColumns?.[idx];
-                            
-                            if (isSplit) {
-                              // Render each split part as a separate header if visible
-                              return isSplit.parts.map((part, partIdx) => {
-                                const columnId = part.columnId;
-                                if (visibleColumns[columnId] === false) return null;
-                                
-                                return (
-                                  <th key={`${idx}_${partIdx}`} className="px-3 py-2 text-left font-medium whitespace-nowrap border-r bg-muted/20">
-                                    <div className="font-semibold text-xs">
-                                      {part.name}
-                                    </div>
-                                  </th>
-                                );
-                              });
-                            }
-                            
-                            // Check visibility for regular column
+                            const displayName = columnMapping.renamedHeaders?.[idx.toString()] || header || `Col ${idx + 1}`;
                             const columnId = idx.toString();
+                            
+                            // Check visibility for column
                             if (visibleColumns[columnId] === false) return null;
                             
                             return (
@@ -1845,39 +1719,14 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange, parseQueue 
                         {previewData.rows.slice(0, 10).map((row, rowIdx) => (
                           <tr key={rowIdx} className="border-b hover:bg-muted/30">
                             {previewData.headers.map((_, colIdx) => {
-                              const splitConfig = columnMapping.splitColumns?.[colIdx];
+                              const columnId = colIdx.toString();
+                              if (visibleColumns[columnId] === false) return null;
                               
-                              if (splitConfig) {
-                                // Render each split part as a separate cell if visible
-                                const cellValue = row[colIdx] || '';
-                                const sepChar = 
-                                  splitConfig.separator === "space" ? " " :
-                                  splitConfig.separator === "comma" ? "," :
-                                  splitConfig.separator === "dash" ? "-" :
-                                  splitConfig.separator === "slash" ? "/" : ":";
-                                const parts = cellValue.split(sepChar);
-                                
-                                return splitConfig.parts.map((part, partIdx) => {
-                                  const columnId = part.columnId;
-                                  if (visibleColumns[columnId] === false) return null;
-                                  
-                                  return (
-                                    <td key={`${colIdx}_${partIdx}`} className="px-3 py-2 whitespace-nowrap border-r bg-muted/20">
-                                      {parts[partIdx] || ''}
-                                    </td>
-                                  );
-                                });
-                              } else {
-                                // Regular cell - check visibility
-                                const columnId = colIdx.toString();
-                                if (visibleColumns[columnId] === false) return null;
-                                
-                                return (
-                                  <td key={colIdx} className="px-3 py-2 whitespace-nowrap border-r">
-                                    {row[colIdx] || ''}
-                                  </td>
-                                );
-                              }
+                              return (
+                                <td key={colIdx} className="px-3 py-2 whitespace-nowrap border-r">
+                                  {row[colIdx] || ''}
+                                </td>
+                              );
                             })}
                           </tr>
                         ))}
