@@ -9,11 +9,7 @@ import Dashboard from "./pages/Dashboard";
 import Clients from "./pages/Clients";
 import ClientDetail from "./pages/ClientDetail";
 import SiteDetail from "./pages/SiteDetail";
-import Sites from "./pages/Sites";
-import Meters from "./pages/Meters";
-import Reconciliation from "./pages/Reconciliation";
 import Users from "./pages/Users";
-import Schematics from "./pages/Schematics";
 import SchematicViewer from "./pages/SchematicViewer";
 import Tariffs from "./pages/Tariffs";
 import LoadProfile from "./pages/LoadProfile";
@@ -35,11 +31,6 @@ const App = () => (
           <Route path="/clients" element={<Clients />} />
           <Route path="/clients/:id" element={<ClientDetail />} />
           <Route path="/sites/:id" element={<SiteDetail />} />
-          {/* Legacy routes for backwards compatibility */}
-          <Route path="/sites" element={<Sites />} />
-          <Route path="/meters" element={<Meters />} />
-          <Route path="/reconciliation" element={<Reconciliation />} />
-          <Route path="/schematics" element={<Schematics />} />
           <Route path="/schematics/:id" element={<SchematicViewer />} />
           <Route path="/tariffs" element={<Tariffs />} />
           <Route path="/load-profile" element={<LoadProfile />} />
