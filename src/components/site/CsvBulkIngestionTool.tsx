@@ -65,6 +65,8 @@ interface CsvBulkIngestionToolProps {
   siteId: string;
   onDataChange?: () => void;
   parseQueue?: ParseQueue;
+  reparseMeterIds?: string[]; // When provided, opens in reparse mode with only these meters' files
+  onReparseDialogClose?: () => void; // Callback when reparse dialog closes
 }
 
 interface CsvPreview {
@@ -106,8 +108,9 @@ interface FileItem {
   contentHash?: string;
 }
 
-export default function CsvBulkIngestionTool({ siteId, onDataChange, parseQueue }: CsvBulkIngestionToolProps) {
-  const [isOpen, setIsOpen] = useState(false);
+export default function CsvBulkIngestionTool({ siteId, onDataChange, parseQueue, reparseMeterIds, onReparseDialogClose }: CsvBulkIngestionToolProps) {
+  const isReparseMode = reparseMeterIds && reparseMeterIds.length > 0;
+  const [isOpen, setIsOpen] = useState(isReparseMode ? true : false);
   const [files, setFiles] = useState<FileItem[]>([]);
   const [meters, setMeters] = useState<any[]>([]);
   const [separator, setSeparator] = useState<string>("tab");
@@ -161,12 +164,28 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange, parseQueue 
       isSplit: false
     }));
   };
-  const [activeTab, setActiveTab] = useState<string>("upload");
+  const [activeTab, setActiveTab] = useState<string>(isReparseMode ? "parse" : "upload");
   const [previewingFile, setPreviewingFile] = useState<FileItem | null>(null);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
+
+  // Open dialog when entering reparse mode
+  useEffect(() => {
+    if (reparseMeterIds && reparseMeterIds.length > 0) {
+      setIsOpen(true);
+      setActiveTab("parse");
+    }
+  }, [reparseMeterIds]);
+
+  // Handle dialog close
+  const handleDialogClose = (open: boolean) => {
+    setIsOpen(open);
+    if (!open && isReparseMode && onReparseDialogClose) {
+      onReparseDialogClose();
+    }
+  };
 
   // Load fresh data from database whenever dialog opens or tab changes
   useEffect(() => {
@@ -196,7 +215,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange, parseQueue 
         supabase.removeChannel(channel);
       };
     }
-  }, [isOpen, activeTab, siteId]); // Refresh when dialog opens or tab changes
+  }, [isOpen, activeTab, siteId]);
 
   // Regenerate previews when separator changes
   useEffect(() => {
@@ -247,7 +266,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange, parseQueue 
     try {
       console.log('Loading saved files from database for site:', siteId);
       
-      const { data: files, error } = await supabase
+      let query = supabase
         .from('meter_csv_files')
         .select(`
           *,
@@ -255,6 +274,14 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange, parseQueue 
         `)
         .eq('site_id', siteId)
         .order('created_at', { ascending: false });
+
+      // Filter by reparseMeterIds if in reparse mode
+      if (reparseMeterIds && reparseMeterIds.length > 0) {
+        query = query.in('meter_id', reparseMeterIds);
+        console.log(`Filtering for ${reparseMeterIds.length} meters in reparse mode`);
+      }
+
+      const { data: files, error } = await query;
 
       if (error) throw error;
 
@@ -1251,18 +1278,23 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange, parseQueue 
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
-        <Button variant="default" className="gap-2">
-          <Upload className="w-4 h-4" />
-          CSV Bulk Ingestion
-        </Button>
-      </DialogTrigger>
+    <Dialog open={isOpen} onOpenChange={handleDialogClose}>
+      {!isReparseMode && (
+        <DialogTrigger asChild>
+          <Button variant="default" className="gap-2">
+            <Upload className="w-4 h-4" />
+            CSV Bulk Ingestion
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
-          <DialogTitle>CSV Bulk Ingestion Tool</DialogTitle>
+          <DialogTitle>{isReparseMode ? `Reparse CSV Files (${reparseMeterIds?.length || 0} meters)` : 'CSV Bulk Ingestion Tool'}</DialogTitle>
           <DialogDescription>
-            Upload multiple CSV files, preview and transform your data, and ingest with a single click
+            {isReparseMode 
+              ? 'Review column mappings and reparse CSV files for selected meters'
+              : 'Upload multiple CSV files, preview and transform your data, and ingest with a single click'
+            }
           </DialogDescription>
         </DialogHeader>
 
