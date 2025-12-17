@@ -160,21 +160,40 @@ export default function SingleMeterCsvParseDialog({
     }
   };
 
+  // Derive datetimeColumn from columnDataTypes
+  const getDerivedDatetimeColumn = () => {
+    if (!columnMapping.columnDataTypes) return null;
+    const datetimeEntry = Object.entries(columnMapping.columnDataTypes).find(([_, type]) => type === 'datetime');
+    return datetimeEntry ? datetimeEntry[0] : null;
+  };
+
   const handleParse = async () => {
     if (!selectedFile) {
       toast.error("No CSV file selected");
       return;
     }
 
+    const derivedDatetimeColumn = getDerivedDatetimeColumn();
+    if (!derivedDatetimeColumn) {
+      toast.error("Please set a column's Data Type to 'DateTime' before parsing");
+      return;
+    }
+
     setIsParsing(true);
     try {
+      // Build final column mapping with derived datetimeColumn
+      const finalColumnMapping = {
+        ...columnMapping,
+        datetimeColumn: derivedDatetimeColumn
+      };
+
       // Update the CSV file record with the configuration
       const { error: updateError } = await supabase
         .from('meter_csv_files')
         .update({
           separator,
           header_row_number: parseInt(headerRowNumber),
-          column_mapping: columnMapping as any,
+          column_mapping: finalColumnMapping as any,
           parse_status: 'pending'
         })
         .eq('id', selectedFile.id);
@@ -191,7 +210,7 @@ export default function SingleMeterCsvParseDialog({
                      separator === "semicolon" ? ";" : 
                      separator === "space" ? " " : "\t",
           headerRowNumber: parseInt(headerRowNumber),
-          columnMapping
+          columnMapping: finalColumnMapping
         }
       });
 
@@ -324,62 +343,7 @@ export default function SingleMeterCsvParseDialog({
                 </CardContent>
               </Card>
 
-              {/* DateTime Column Selection */}
-              {previewData && (
-                <Card className="border-primary/50">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-sm flex items-center gap-2">
-                      <Settings2 className="w-4 h-4" />
-                      DateTime Column <span className="text-destructive">*</span>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 border rounded-md bg-muted/20">
-                      <div className="space-y-2">
-                        <Label>DateTime Column <span className="text-destructive">*</span></Label>
-                        <Select 
-                          value={columnMapping.datetimeColumn?.toString() ?? ""} 
-                          onValueChange={(v) => setColumnMapping(prev => ({ ...prev, datetimeColumn: v }))}
-                        >
-                          <SelectTrigger className={`bg-background ${columnMapping.datetimeColumn === null ? 'border-destructive' : ''}`}>
-                            <SelectValue placeholder="Select column" />
-                          </SelectTrigger>
-                          <SelectContent className="bg-background z-50">
-                            {previewData.headers.map((header, idx) => (
-                              <SelectItem key={idx} value={idx.toString()}>
-                                {columnMapping.renamedHeaders?.[idx] || header || `Column ${idx + 1}`}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>DateTime Format</Label>
-                        <Select 
-                          value={columnMapping.datetimeFormat ?? ""} 
-                          onValueChange={(v) => setColumnMapping(prev => ({ ...prev, datetimeFormat: v }))}
-                        >
-                          <SelectTrigger className="bg-background">
-                            <SelectValue placeholder="Auto-detect" />
-                          </SelectTrigger>
-                          <SelectContent className="bg-background z-50">
-                            <SelectItem value="YYYY-MM-DD HH:mm:ss">YYYY-MM-DD HH:mm:ss</SelectItem>
-                            <SelectItem value="YYYY-MM-DD HH:mm">YYYY-MM-DD HH:mm</SelectItem>
-                            <SelectItem value="DD/MM/YYYY HH:mm:ss">DD/MM/YYYY HH:mm:ss</SelectItem>
-                            <SelectItem value="DD/MM/YYYY HH:mm">DD/MM/YYYY HH:mm</SelectItem>
-                            <SelectItem value="MM/DD/YYYY HH:mm:ss">MM/DD/YYYY HH:mm:ss</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                    {columnMapping.datetimeColumn === null && (
-                      <p className="text-sm text-destructive mt-2">
-                        Please select the DateTime column before parsing.
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
-              )}
+              {/* DateTime column is now selected via Column Interpretation section below */}
 
               {/* Column Interpretation Section */}
               {previewData && (
@@ -483,17 +447,26 @@ export default function SingleMeterCsvParseDialog({
                                       </SelectContent>
                                     </Select>
                                   </div>
-                                  <div>
-                                    <Label className="text-xs mb-1">Split Column By</Label>
-                                    <Select value="none" disabled>
-                                      <SelectTrigger className="h-8 text-xs bg-background">
-                                        <SelectValue />
-                                      </SelectTrigger>
-                                      <SelectContent className="bg-background z-50">
-                                        <SelectItem value="none">No Split</SelectItem>
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
+                                  {currentDataType === 'datetime' && (
+                                    <div>
+                                      <Label className="text-xs mb-1">DateTime Format</Label>
+                                      <Select 
+                                        value={columnMapping.datetimeFormat ?? ""} 
+                                        onValueChange={(v) => setColumnMapping(prev => ({ ...prev, datetimeFormat: v }))}
+                                      >
+                                        <SelectTrigger className="h-8 text-xs bg-background">
+                                          <SelectValue placeholder="Auto-detect" />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-background z-50">
+                                          <SelectItem value="YYYY-MM-DD HH:mm:ss">YYYY-MM-DD HH:mm:ss</SelectItem>
+                                          <SelectItem value="YYYY-MM-DD HH:mm">YYYY-MM-DD HH:mm</SelectItem>
+                                          <SelectItem value="DD/MM/YYYY HH:mm:ss">DD/MM/YYYY HH:mm:ss</SelectItem>
+                                          <SelectItem value="DD/MM/YYYY HH:mm">DD/MM/YYYY HH:mm</SelectItem>
+                                          <SelectItem value="MM/DD/YYYY HH:mm:ss">MM/DD/YYYY HH:mm:ss</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             </div>
@@ -561,7 +534,7 @@ export default function SingleMeterCsvParseDialog({
           </Button>
           <Button
             onClick={handleParse}
-            disabled={!selectedFile || !previewData || isParsing || columnMapping.datetimeColumn === null}
+            disabled={!selectedFile || !previewData || isParsing || !getDerivedDatetimeColumn()}
             className="gap-2"
           >
             <Play className="w-4 h-4" />

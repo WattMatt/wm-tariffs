@@ -1538,69 +1538,12 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange, parseQueue 
                   <div className="space-y-3 mt-4">
                     <div className="text-sm font-semibold text-foreground">Column Interpretation</div>
                     <div className="p-4 border rounded-md bg-muted/20 space-y-4">
-                      {/* DateTime Column Selection */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-3 bg-background border rounded-md">
-                        <div>
-                          <Label className="text-xs mb-1">DateTime Column</Label>
-                          <Select
-                            value={columnMapping.datetimeColumn?.toString() || ""}
-                            onValueChange={(val) => {
-                              const newMapping = {...columnMapping};
-                              newMapping.datetimeColumn = val ? parseInt(val) : null;
-                              // Also set the data type for this column
-                              if (val) {
-                                newMapping.columnDataTypes = {
-                                  ...newMapping.columnDataTypes,
-                                  [val]: 'datetime'
-                                };
-                              }
-                              setColumnMapping(newMapping);
-                            }}
-                          >
-                            <SelectTrigger className="h-8 text-xs bg-background">
-                              <SelectValue placeholder="Select datetime column" />
-                            </SelectTrigger>
-                            <SelectContent className="bg-background z-50">
-                              {previewData.headers.map((header, idx) => (
-                                <SelectItem key={idx} value={idx.toString()}>
-                                  {header || `Column ${idx + 1}`}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div>
-                          <Label className="text-xs mb-1">DateTime Format</Label>
-                          <Select
-                            value={columnMapping.datetimeFormat || ""}
-                            onValueChange={(val) => {
-                              const newMapping = {...columnMapping};
-                              newMapping.datetimeFormat = val || null;
-                              setColumnMapping(newMapping);
-                            }}
-                          >
-                            <SelectTrigger className="h-8 text-xs bg-background">
-                              <SelectValue placeholder="Select format" />
-                            </SelectTrigger>
-                            <SelectContent className="bg-background z-50">
-                              <SelectItem value="YYYY-MM-DD HH:mm:ss">YYYY-MM-DD HH:mm:ss</SelectItem>
-                              <SelectItem value="YYYY-MM-DD HH:mm">YYYY-MM-DD HH:mm</SelectItem>
-                              <SelectItem value="DD/MM/YYYY HH:mm:ss">DD/MM/YYYY HH:mm:ss</SelectItem>
-                              <SelectItem value="DD/MM/YYYY HH:mm">DD/MM/YYYY HH:mm</SelectItem>
-                              <SelectItem value="MM/DD/YYYY HH:mm:ss">MM/DD/YYYY HH:mm:ss</SelectItem>
-                              <SelectItem value="YYYY/MM/DD HH:mm:ss">YYYY/MM/DD HH:mm:ss</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                      
                       {/* Column Data Types */}
                       <div className="text-xs font-medium text-muted-foreground mt-4 mb-2">Column Data Types & Names</div>
                       {previewData.headers.map((header, idx) => {
                         const displayName = columnMapping.renamedHeaders?.[idx.toString()] || header || `Column ${idx + 1}`;
                         const columnId = idx.toString();
                         const currentDataType = columnMapping.columnDataTypes?.[columnId] || 'string';
-                        const isDatetimeColumn = columnMapping.datetimeColumn?.toString() === columnId;
                         
                         return (
                           <div key={idx} className="p-3 border rounded-md bg-background">
@@ -1636,20 +1579,22 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange, parseQueue 
                                   <div>
                                     <Label className="text-xs mb-1">Data Type</Label>
                                     <Select
-                                      value={isDatetimeColumn ? 'datetime' : currentDataType}
+                                      value={currentDataType}
                                       onValueChange={(type: 'datetime' | 'string' | 'int' | 'float' | 'boolean') => {
                                         const newMapping = {...columnMapping};
                                         newMapping.columnDataTypes = {
                                           ...newMapping.columnDataTypes,
                                           [columnId]: type
                                         };
-                                        // If setting to datetime, also set as datetime column
+                                        // If setting to datetime, derive datetimeColumn
                                         if (type === 'datetime') {
                                           newMapping.datetimeColumn = idx;
+                                        } else if (newMapping.datetimeColumn === idx) {
+                                          // Clear datetimeColumn if this column was datetime but now changed
+                                          newMapping.datetimeColumn = null;
                                         }
                                         setColumnMapping(newMapping);
                                       }}
-                                      disabled={isDatetimeColumn}
                                     >
                                       <SelectTrigger className="h-8 text-xs bg-background">
                                         <SelectValue />
@@ -1663,12 +1608,34 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange, parseQueue 
                                       </SelectContent>
                                     </Select>
                                   </div>
+                                  {currentDataType === 'datetime' && (
+                                    <div className="md:col-span-2">
+                                      <Label className="text-xs mb-1">DateTime Format</Label>
+                                      <Select
+                                        value={columnMapping.datetimeFormat || ""}
+                                        onValueChange={(val) => {
+                                          const newMapping = {...columnMapping};
+                                          newMapping.datetimeFormat = val || null;
+                                          setColumnMapping(newMapping);
+                                        }}
+                                      >
+                                        <SelectTrigger className="h-8 text-xs bg-background">
+                                          <SelectValue placeholder="Auto-detect" />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-background z-50">
+                                          <SelectItem value="YYYY-MM-DD HH:mm:ss">YYYY-MM-DD HH:mm:ss</SelectItem>
+                                          <SelectItem value="YYYY-MM-DD HH:mm">YYYY-MM-DD HH:mm</SelectItem>
+                                          <SelectItem value="DD/MM/YYYY HH:mm:ss">DD/MM/YYYY HH:mm:ss</SelectItem>
+                                          <SelectItem value="DD/MM/YYYY HH:mm">DD/MM/YYYY HH:mm</SelectItem>
+                                          <SelectItem value="MM/DD/YYYY HH:mm:ss">MM/DD/YYYY HH:mm:ss</SelectItem>
+                                          <SelectItem value="YYYY/MM/DD HH:mm:ss">YYYY/MM/DD HH:mm:ss</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             </div>
-                            {isDatetimeColumn && (
-                              <Badge variant="secondary" className="mt-2 ml-8 text-xs">DateTime Column</Badge>
-                            )}
                           </div>
                         );
                       })}
