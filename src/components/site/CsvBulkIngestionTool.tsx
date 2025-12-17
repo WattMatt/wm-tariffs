@@ -83,6 +83,8 @@ interface ColumnMapping {
   datetimeFormat: string | null; // Format for datetime parsing - NO DEFAULT, must be set by user
   renamedHeaders?: Record<string, string> | null; // Custom names for columns
   columnDataTypes?: Record<string, 'datetime' | 'float' | 'int' | 'string' | 'boolean'> | null; // Data type for each column
+  columnSplits?: Record<number, string> | null; // Split configuration for columns
+  splitColumnNames?: Record<string, string> | null; // Custom names for split parts
 }
 
 interface FileItem {
@@ -1008,7 +1010,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange, parseQueue 
                   separator === "space" ? " " : "\t",
         timeInterval: parseInt(timeInterval),
         headerRowNumber: parseInt(headerRowNumber),
-        columnMapping: columnMapping
+        columnMapping: { ...columnMapping, columnSplits, splitColumnNames }
       }));
       
       parseQueue.startQueue(queueItems);
@@ -1034,7 +1036,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange, parseQueue 
                     separator === "space" ? " " : "\t",
           timeInterval: parseInt(timeInterval),
           headerRowNumber: parseInt(headerRowNumber),
-          columnMapping: columnMapping
+          columnMapping: { ...columnMapping, columnSplits, splitColumnNames }
         }
         });
 
@@ -1110,7 +1112,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange, parseQueue 
                       separator === "space" ? " " : "\t",
             timeInterval: parseInt(timeInterval),
             headerRowNumber: parseInt(headerRowNumber),
-            columnMapping: columnMapping
+            columnMapping: { ...columnMapping, columnSplits, splitColumnNames }
           }
       });
 
