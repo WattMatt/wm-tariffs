@@ -121,9 +121,31 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange, parseQueue 
     renamedHeaders: null,
     columnDataTypes: null
   });
+  const [columnSplits, setColumnSplits] = useState<Record<number, string>>({});
+  const [splitColumnNames, setSplitColumnNames] = useState<Record<string, string>>({});
   const [editingHeader, setEditingHeader] = useState<{id: string, value: string} | null>(null);
   const [openPopover, setOpenPopover] = useState<string | null>(null);
   const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({});
+
+  // Helper function to apply column splits
+  const applySplits = (row: any[], columnIndex: number): any[] => {
+    const splitType = columnSplits[columnIndex];
+    if (!splitType || splitType === 'none') return [row[columnIndex]];
+    
+    const cell = row[columnIndex]?.toString() || '';
+    const delimiterMap: Record<string, string | RegExp> = {
+      tab: '\t',
+      comma: ',',
+      semicolon: ';',
+      space: /\s+/
+    };
+    
+    const delimiter = delimiterMap[splitType];
+    if (delimiter instanceof RegExp) {
+      return cell.split(delimiter);
+    }
+    return cell.split(delimiter);
+  };
   
   // Get all available columns - simplified, no split columns
   const getAvailableColumns = () => {
@@ -1633,6 +1655,24 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange, parseQueue 
                                       </Select>
                                     </div>
                                   )}
+                                  <div>
+                                    <Label className="text-xs mb-1">Split Column By</Label>
+                                    <Select 
+                                      value={columnSplits[idx] || 'none'} 
+                                      onValueChange={(val) => setColumnSplits(prev => ({...prev, [idx]: val}))}
+                                    >
+                                      <SelectTrigger className="h-8 text-xs bg-background">
+                                        <SelectValue placeholder="No split" />
+                                      </SelectTrigger>
+                                      <SelectContent className="bg-background z-50">
+                                        <SelectItem value="none">No split</SelectItem>
+                                        <SelectItem value="tab">Split by Tab</SelectItem>
+                                        <SelectItem value="comma">Split by Comma</SelectItem>
+                                        <SelectItem value="semicolon">Split by Semicolon</SelectItem>
+                                        <SelectItem value="space">Split by Space</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
                                 </div>
                               </div>
                             </div>

@@ -77,8 +77,30 @@ export default function SingleMeterCsvParseDialog({
     renamedHeaders: {},
     columnDataTypes: {}
   });
+  const [columnSplits, setColumnSplits] = useState<Record<number, string>>({});
+  const [splitColumnNames, setSplitColumnNames] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
+
+  // Helper function to apply column splits
+  const applySplits = (row: any[], columnIndex: number): any[] => {
+    const splitType = columnSplits[columnIndex];
+    if (!splitType || splitType === 'none') return [row[columnIndex]];
+    
+    const cell = row[columnIndex]?.toString() || '';
+    const delimiterMap: Record<string, string | RegExp> = {
+      tab: '\t',
+      comma: ',',
+      semicolon: ';',
+      space: /\s+/
+    };
+    
+    const delimiter = delimiterMap[splitType];
+    if (delimiter instanceof RegExp) {
+      return cell.split(delimiter);
+    }
+    return cell.split(delimiter);
+  };
 
   useEffect(() => {
     if (isOpen && meterId) {
@@ -467,6 +489,24 @@ export default function SingleMeterCsvParseDialog({
                                       </Select>
                                     </div>
                                   )}
+                                  <div>
+                                    <Label className="text-xs mb-1">Split Column By</Label>
+                                    <Select 
+                                      value={columnSplits[idx] || 'none'} 
+                                      onValueChange={(val) => setColumnSplits(prev => ({...prev, [idx]: val}))}
+                                    >
+                                      <SelectTrigger className="h-8 text-xs bg-background">
+                                        <SelectValue placeholder="No split" />
+                                      </SelectTrigger>
+                                      <SelectContent className="bg-background z-50">
+                                        <SelectItem value="none">No split</SelectItem>
+                                        <SelectItem value="tab">Split by Tab</SelectItem>
+                                        <SelectItem value="comma">Split by Comma</SelectItem>
+                                        <SelectItem value="semicolon">Split by Semicolon</SelectItem>
+                                        <SelectItem value="space">Split by Space</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
                                 </div>
                               </div>
                             </div>
