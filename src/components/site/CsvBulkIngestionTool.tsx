@@ -85,6 +85,7 @@ interface ColumnMapping {
   columnDataTypes?: Record<string, 'datetime' | 'float' | 'int' | 'string' | 'boolean'> | null; // Data type for each column
   columnSplits?: Record<number, string> | null; // Split configuration for columns
   splitColumnNames?: Record<string, string> | null; // Custom names for split parts
+  splitColumnDataTypes?: Record<string, 'datetime' | 'float' | 'int' | 'string' | 'boolean'> | null; // Data types for split parts
 }
 
 interface FileItem {
@@ -125,6 +126,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange, parseQueue 
   });
   const [columnSplits, setColumnSplits] = useState<Record<number, string>>({});
   const [splitColumnNames, setSplitColumnNames] = useState<Record<string, string>>({});
+  const [splitColumnDataTypes, setSplitColumnDataTypes] = useState<Record<string, 'datetime' | 'float' | 'int' | 'string' | 'boolean'>>({});
   const [editingHeader, setEditingHeader] = useState<{id: string, value: string} | null>(null);
   const [openPopover, setOpenPopover] = useState<string | null>(null);
   const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({});
@@ -1010,7 +1012,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange, parseQueue 
                   separator === "space" ? " " : "\t",
         timeInterval: parseInt(timeInterval),
         headerRowNumber: parseInt(headerRowNumber),
-        columnMapping: { ...columnMapping, columnSplits, splitColumnNames }
+        columnMapping: { ...columnMapping, columnSplits, splitColumnNames, splitColumnDataTypes }
       }));
       
       parseQueue.startQueue(queueItems);
@@ -1036,7 +1038,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange, parseQueue 
                     separator === "space" ? " " : "\t",
           timeInterval: parseInt(timeInterval),
           headerRowNumber: parseInt(headerRowNumber),
-          columnMapping: { ...columnMapping, columnSplits, splitColumnNames }
+          columnMapping: { ...columnMapping, columnSplits, splitColumnNames, splitColumnDataTypes }
         }
         });
 
@@ -1112,7 +1114,7 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange, parseQueue 
                       separator === "space" ? " " : "\t",
             timeInterval: parseInt(timeInterval),
             headerRowNumber: parseInt(headerRowNumber),
-            columnMapping: { ...columnMapping, columnSplits, splitColumnNames }
+            columnMapping: { ...columnMapping, columnSplits, splitColumnNames, splitColumnDataTypes }
           }
       });
 
@@ -1679,21 +1681,38 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange, parseQueue 
                                 {/* Split Part Names - shown when column is split */}
                                 {columnSplits[idx] && columnSplits[idx] !== 'none' && previewData?.rows[0] && (
                                   <div className="mt-3 p-3 border rounded-md bg-accent/5">
-                                    <Label className="text-xs mb-2 block text-muted-foreground">Split Part Names</Label>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                    <Label className="text-xs mb-2 block text-muted-foreground">Split Part Configuration</Label>
+                                    <div className="space-y-2">
                                       {applySplits(previewData.rows[0], idx).map((part, partIdx) => {
                                         const columnKey = `${idx}-${partIdx}`;
                                         return (
-                                          <div key={columnKey}>
+                                          <div key={columnKey} className="flex items-center gap-2">
                                             <Input
                                               value={splitColumnNames[columnKey] || ''}
                                               onChange={(e) => setSplitColumnNames(prev => ({
                                                 ...prev,
                                                 [columnKey]: e.target.value
                                               }))}
-                                              className="h-7 text-xs"
+                                              className="h-7 text-xs flex-1"
                                               placeholder={`Part ${partIdx + 1} (${part?.toString().substring(0, 10) || '...'})`}
                                             />
+                                            <Select
+                                              value={splitColumnDataTypes[columnKey] || 'string'}
+                                              onValueChange={(val: 'datetime' | 'float' | 'int' | 'string' | 'boolean') => 
+                                                setSplitColumnDataTypes(prev => ({...prev, [columnKey]: val}))
+                                              }
+                                            >
+                                              <SelectTrigger className="h-7 text-xs w-28 bg-background">
+                                                <SelectValue />
+                                              </SelectTrigger>
+                                              <SelectContent className="bg-background z-50">
+                                                <SelectItem value="datetime">Datetime</SelectItem>
+                                                <SelectItem value="float">Float</SelectItem>
+                                                <SelectItem value="int">Integer</SelectItem>
+                                                <SelectItem value="string">String</SelectItem>
+                                                <SelectItem value="boolean">Boolean</SelectItem>
+                                              </SelectContent>
+                                            </Select>
                                           </div>
                                         );
                                       })}
