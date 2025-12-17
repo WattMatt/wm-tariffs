@@ -536,26 +536,49 @@ export default function SingleMeterCsvParseDialog({
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            {previewData.headers.map((header, idx) => (
-                              <TableHead key={idx} className="whitespace-nowrap">
-                                <div className="flex flex-col gap-1">
-                                  <span>{getColumnName(idx)}</span>
-                                  <Badge variant="outline" className="w-fit text-xs">
-                                    {columnMapping.columnDataTypes?.[idx] || 'string'}
-                                  </Badge>
-                                </div>
-                              </TableHead>
-                            ))}
+                            {previewData.headers.flatMap((header, idx) => {
+                              const splitType = columnSplits[idx];
+                              if (splitType && splitType !== 'none' && previewData.rows[0]) {
+                                const splitParts = applySplits(previewData.rows[0], idx);
+                                return splitParts.map((_, partIdx) => {
+                                  const columnKey = `${idx}-${partIdx}`;
+                                  const splitName = splitColumnNames[columnKey] || `${getColumnName(idx)} [${partIdx + 1}]`;
+                                  return (
+                                    <TableHead key={columnKey} className="whitespace-nowrap">
+                                      <div className="flex flex-col gap-1">
+                                        <span>{splitName}</span>
+                                        <Badge variant="outline" className="w-fit text-xs bg-accent/10">
+                                          split
+                                        </Badge>
+                                      </div>
+                                    </TableHead>
+                                  );
+                                });
+                              }
+                              return (
+                                <TableHead key={idx} className="whitespace-nowrap">
+                                  <div className="flex flex-col gap-1">
+                                    <span>{getColumnName(idx)}</span>
+                                    <Badge variant="outline" className="w-fit text-xs">
+                                      {columnMapping.columnDataTypes?.[idx] || 'string'}
+                                    </Badge>
+                                  </div>
+                                </TableHead>
+                              );
+                            })}
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {previewData.rows.slice(0, 10).map((row, rowIdx) => (
                             <TableRow key={rowIdx}>
-                              {row.map((cell, cellIdx) => (
-                                <TableCell key={cellIdx} className="font-mono text-xs whitespace-nowrap">
-                                  {cell}
-                                </TableCell>
-                              ))}
+                              {row.flatMap((cell, cellIdx) => {
+                                const splitParts = applySplits(row, cellIdx);
+                                return splitParts.map((part, partIdx) => (
+                                  <TableCell key={`${cellIdx}-${partIdx}`} className="font-mono text-xs whitespace-nowrap">
+                                    {part?.toString() || '—'}
+                                  </TableCell>
+                                ));
+                              })}
                             </TableRow>
                           ))}
                         </TableBody>

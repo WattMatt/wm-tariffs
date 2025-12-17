@@ -1704,12 +1704,28 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange, parseQueue 
                     <table className="text-xs border-collapse w-full">
                       <thead className="sticky top-0 z-10 bg-background">
                         <tr className="border-b">
-                          {previewData.headers.map((header, idx) => {
+                          {previewData.headers.flatMap((header, idx) => {
                             const displayName = columnMapping.renamedHeaders?.[idx.toString()] || header || `Col ${idx + 1}`;
                             const columnId = idx.toString();
                             
                             // Check visibility for column
-                            if (visibleColumns[columnId] === false) return null;
+                            if (visibleColumns[columnId] === false) return [];
+                            
+                            const splitType = columnSplits[idx];
+                            if (splitType && splitType !== 'none' && previewData.rows[0]) {
+                              const splitParts = applySplits(previewData.rows[0], idx);
+                              return splitParts.map((_, partIdx) => {
+                                const columnKey = `${idx}-${partIdx}`;
+                                const splitName = splitColumnNames[columnKey] || `${displayName} [${partIdx + 1}]`;
+                                return (
+                                  <th key={columnKey} className="px-3 py-2 text-left font-medium whitespace-nowrap border-r bg-accent/10">
+                                    <div className="font-semibold text-xs">
+                                      {splitName}
+                                    </div>
+                                  </th>
+                                );
+                              });
+                            }
                             
                             return (
                               <th key={idx} className="px-3 py-2 text-left font-medium whitespace-nowrap border-r">
@@ -1724,15 +1740,16 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange, parseQueue 
                       <tbody>
                         {previewData.rows.slice(0, 10).map((row, rowIdx) => (
                           <tr key={rowIdx} className="border-b hover:bg-muted/30">
-                            {previewData.headers.map((_, colIdx) => {
+                            {previewData.headers.flatMap((_, colIdx) => {
                               const columnId = colIdx.toString();
-                              if (visibleColumns[columnId] === false) return null;
+                              if (visibleColumns[columnId] === false) return [];
                               
-                              return (
-                                <td key={colIdx} className="px-3 py-2 whitespace-nowrap border-r">
-                                  {row[colIdx] || ''}
+                              const splitParts = applySplits(row, colIdx);
+                              return splitParts.map((part, partIdx) => (
+                                <td key={`${colIdx}-${partIdx}`} className="px-3 py-2 whitespace-nowrap border-r">
+                                  {part?.toString() || '—'}
                                 </td>
-                              );
+                              ));
                             })}
                           </tr>
                         ))}
