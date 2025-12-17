@@ -1674,6 +1674,30 @@ export default function CsvBulkIngestionTool({ siteId, onDataChange, parseQueue 
                                     </Select>
                                   </div>
                                 </div>
+                                {/* Split Part Names - shown when column is split */}
+                                {columnSplits[idx] && columnSplits[idx] !== 'none' && previewData?.rows[0] && (
+                                  <div className="mt-3 p-3 border rounded-md bg-accent/5">
+                                    <Label className="text-xs mb-2 block text-muted-foreground">Split Part Names</Label>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                      {applySplits(previewData.rows[0], idx).map((part, partIdx) => {
+                                        const columnKey = `${idx}-${partIdx}`;
+                                        return (
+                                          <div key={columnKey}>
+                                            <Input
+                                              value={splitColumnNames[columnKey] || ''}
+                                              onChange={(e) => setSplitColumnNames(prev => ({
+                                                ...prev,
+                                                [columnKey]: e.target.value
+                                              }))}
+                                              className="h-7 text-xs"
+                                              placeholder={`Part ${partIdx + 1} (${part?.toString().substring(0, 10) || '...'})`}
+                                            />
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </div>
