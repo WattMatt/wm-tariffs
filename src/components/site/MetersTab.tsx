@@ -94,7 +94,7 @@ export default function MetersTab({ siteId }: MetersTabProps) {
   const [selectedMeterIds, setSelectedMeterIds] = useState<Set<string>>(new Set());
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [isBulkCsvDeleting, setIsBulkCsvDeleting] = useState(false);
-  const [isBulkReparsing, setIsBulkReparsing] = useState(false);
+  const [reparseMeterIds, setReparseMeterIds] = useState<string[] | undefined>(undefined);
   const [csvDeletionProgress, setCsvDeletionProgress] = useState({ filesDeleted: 0, totalMeters: 0, processedMeters: 0 });
   const [parseDialogOpen, setParseDialogOpen] = useState(false);
   const [parseMeterId, setParseMeterId] = useState<string | null>(null);
@@ -712,67 +712,15 @@ export default function MetersTab({ siteId }: MetersTabProps) {
     }
   };
 
-  const handleBulkReparse = async () => {
+  const handleBulkReparse = () => {
     if (selectedMeterIds.size === 0) return;
-    
-    const confirmed = window.confirm(
-      `Reparse CSV files for ${selectedMeterIds.size} selected meter${selectedMeterIds.size !== 1 ? 's' : ''}?\n\n` +
-      `This will:\n` +
-      `• Use stored column mappings for each file\n` +
-      `• Overwrite existing readings (upsert behavior)\n\n` +
-      `Make sure column mappings are configured correctly before reparsing.`
-    );
-    
-    if (!confirmed) return;
-    
-    setIsBulkReparsing(true);
-    
-    try {
-      const meterIds = Array.from(selectedMeterIds);
-      
-      // Fetch all CSV files for selected meters
-      const { data: csvFiles, error } = await supabase
-        .from('meter_csv_files')
-        .select('id, meter_id, file_path, file_name, separator, header_row_number, column_mapping')
-        .in('meter_id', meterIds)
-        .not('file_path', 'is', null);
-      
-      if (error) throw error;
-      
-      if (!csvFiles || csvFiles.length === 0) {
-        toast.error("No CSV files found for selected meters");
-        setIsBulkReparsing(false);
-        return;
-      }
-      
-      // Map CSV files to parse queue items
-      const parseItems = csvFiles.map(file => {
-        const meter = meters.find(m => m.id === file.meter_id);
-        const columnMapping = (file.column_mapping || {}) as any;
-        
-        return {
-          meterId: file.meter_id,
-          meterNumber: meter?.meter_number || 'Unknown',
-          filePath: file.file_path,
-          separator: file.separator || 'tab',
-          dateFormat: columnMapping.datetimeFormat || 'YYYY-MM-DD HH:mm',
-          timeInterval: 30,
-          headerRowNumber: file.header_row_number || 1,
-          columnMapping: columnMapping
-        };
-      });
-      
-      // Start the parse queue
-      csvParseQueue.startQueue(parseItems);
-      toast.info(`Started reparsing ${parseItems.length} CSV file${parseItems.length !== 1 ? 's' : ''}...`);
-      setSelectedMeterIds(new Set());
-      
-    } catch (error) {
-      console.error('Error starting bulk reparse:', error);
-      toast.error("Failed to start bulk reparse: " + (error instanceof Error ? error.message : 'Unknown error'));
-    } finally {
-      setIsBulkReparsing(false);
-    }
+    // Set the meter IDs to trigger the reparse dialog
+    setReparseMeterIds(Array.from(selectedMeterIds));
+  };
+
+  const handleReparseDialogClose = () => {
+    setReparseMeterIds(undefined);
+    setSelectedMeterIds(new Set());
   };
 
   const handleViewOnSchematic = async (meterId: string) => {
@@ -858,7 +806,7 @@ export default function MetersTab({ siteId }: MetersTabProps) {
               <Button
                 variant="outline"
                 onClick={handleBulkReparse}
-                disabled={isBulkReparsing || csvParseQueue.isProcessing}
+                disabled={csvParseQueue.isProcessing}
                 className="gap-2"
               >
                 <RefreshCw className="w-4 h-4" />
@@ -892,7 +840,13 @@ export default function MetersTab({ siteId }: MetersTabProps) {
               Parsing {csvParseQueue.progress.completed}/{csvParseQueue.progress.total}
             </Badge>
           )}
-          <CsvBulkIngestionTool siteId={siteId} onDataChange={fetchMeters} parseQueue={csvParseQueue} />
+          <CsvBulkIngestionTool 
+            siteId={siteId} 
+            onDataChange={fetchMeters} 
+            parseQueue={csvParseQueue}
+            reparseMeterIds={reparseMeterIds}
+            onReparseDialogClose={handleReparseDialogClose}
+          />
           <Dialog open={isDialogOpen} onOpenChange={handleCloseDialog}>
             <DialogTrigger asChild>
               <Button className="gap-2">
