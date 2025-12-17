@@ -46,6 +46,8 @@ interface ColumnMapping {
   datetimeFormat: string | null;
   renamedHeaders?: Record<string, string>;
   columnDataTypes?: Record<string, 'datetime' | 'float' | 'int' | 'string' | 'boolean'>;
+  columnSplits?: Record<number, string>;
+  splitColumnNames?: Record<string, string>;
 }
 
 interface CsvFile {
@@ -203,10 +205,12 @@ export default function SingleMeterCsvParseDialog({
 
     setIsParsing(true);
     try {
-      // Build final column mapping with derived datetimeColumn
+      // Build final column mapping with derived datetimeColumn and split configuration
       const finalColumnMapping = {
         ...columnMapping,
-        datetimeColumn: derivedDatetimeColumn
+        datetimeColumn: derivedDatetimeColumn,
+        columnSplits,
+        splitColumnNames
       };
 
       // Update the CSV file record with the configuration
