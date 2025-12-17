@@ -169,13 +169,30 @@ Deno.serve(async (req) => {
       }
     };
 
+    // Helper function to get split delimiter
+    const getSplitDelimiter = (splitType: string): string | RegExp | null => {
+      const delimiterMap: Record<string, string | RegExp> = {
+        tab: '\t',
+        comma: ',',
+        semicolon: ';',
+        space: /\s+/
+      };
+      return delimiterMap[splitType] || null;
+    };
+
     // Get datetime column index from column mapping
     const datetimeColumn = columnMapping?.datetimeColumn;
     const datetimeFormat = columnMapping?.datetimeFormat;
     const columnDataTypes = columnMapping?.columnDataTypes || {};
     const renamedHeaders = columnMapping?.renamedHeaders || {};
+    const columnSplits = columnMapping?.columnSplits || {};
+    const splitColumnNames = columnMapping?.splitColumnNames || {};
+    const splitColumnDataTypes = columnMapping?.splitColumnDataTypes || {};
 
     console.log(`DateTime column: ${datetimeColumn}, format: ${datetimeFormat}`);
+    console.log(`Column splits:`, JSON.stringify(columnSplits));
+    console.log(`Split column names:`, JSON.stringify(splitColumnNames));
+    console.log(`Split column data types:`, JSON.stringify(splitColumnDataTypes));
 
     for (let i = startLineIndex; i < lines.length; i++) {
       const line = lines[i].trim();
@@ -291,18 +308,54 @@ Deno.serve(async (req) => {
           const colValue = columns[colIdx]?.trim();
           if (!colValue || colValue === '' || colValue === '-') continue;
 
-          // Get the column name (renamed or original)
           const colKey = colIdx.toString();
-          const columnName = renamedHeaders[colKey] || headerColumns[colIdx] || `Column_${colIdx + 1}`;
           
-          // Get data type for this column
-          const dataType = columnDataTypes[colKey] || 'string';
-          
-          // Only store float and int types in imported_fields
-          if (dataType === 'float' || dataType === 'int') {
-            const parsedValue = parseByDataType(colValue, dataType);
-            if (parsedValue !== null) {
-              importedFields[columnName] = parsedValue;
+          // Check if this column should be split
+          const splitType = columnSplits[colIdx] || columnSplits[colKey];
+          if (splitType && splitType !== 'none') {
+            const delimiter = getSplitDelimiter(splitType);
+            if (delimiter) {
+              let parts: string[];
+              if (delimiter instanceof RegExp) {
+                parts = colValue.split(delimiter);
+              } else {
+                parts = colValue.split(delimiter);
+              }
+              
+              // Process each split part
+              for (let partIdx = 0; partIdx < parts.length; partIdx++) {
+                const partValue = parts[partIdx]?.trim();
+                if (!partValue || partValue === '' || partValue === '-') continue;
+                
+                const partKey = `${colIdx}-${partIdx}`;
+                // Get custom name for this part, or generate default
+                const partName = splitColumnNames[partKey] || `${headerColumns[colIdx] || `Column_${colIdx + 1}`}_Part${partIdx + 1}`;
+                // Get data type for this part
+                const partDataType = splitColumnDataTypes[partKey] || 'string';
+                
+                // Only store float and int types in imported_fields
+                if (partDataType === 'float' || partDataType === 'int') {
+                  const parsedValue = parseByDataType(partValue, partDataType);
+                  if (parsedValue !== null) {
+                    importedFields[partName] = parsedValue;
+                  }
+                }
+              }
+            }
+          } else {
+            // Non-split column - process normally
+            // Get the column name (renamed or original)
+            const columnName = renamedHeaders[colKey] || headerColumns[colIdx] || `Column_${colIdx + 1}`;
+            
+            // Get data type for this column
+            const dataType = columnDataTypes[colKey] || 'string';
+            
+            // Only store float and int types in imported_fields
+            if (dataType === 'float' || dataType === 'int') {
+              const parsedValue = parseByDataType(colValue, dataType);
+              if (parsedValue !== null) {
+                importedFields[columnName] = parsedValue;
+              }
             }
           }
         }
