@@ -48,6 +48,7 @@ interface ColumnMapping {
   columnDataTypes?: Record<string, 'datetime' | 'float' | 'int' | 'string' | 'boolean'>;
   columnSplits?: Record<number, string>;
   splitColumnNames?: Record<string, string>;
+  splitColumnDataTypes?: Record<string, 'datetime' | 'float' | 'int' | 'string' | 'boolean'>;
 }
 
 interface CsvFile {
@@ -81,6 +82,7 @@ export default function SingleMeterCsvParseDialog({
   });
   const [columnSplits, setColumnSplits] = useState<Record<number, string>>({});
   const [splitColumnNames, setSplitColumnNames] = useState<Record<string, string>>({});
+  const [splitColumnDataTypes, setSplitColumnDataTypes] = useState<Record<string, 'datetime' | 'float' | 'int' | 'string' | 'boolean'>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
 
@@ -210,7 +212,8 @@ export default function SingleMeterCsvParseDialog({
         ...columnMapping,
         datetimeColumn: derivedDatetimeColumn,
         columnSplits,
-        splitColumnNames
+        splitColumnNames,
+        splitColumnDataTypes
       };
 
       // Update the CSV file record with the configuration
@@ -515,21 +518,38 @@ export default function SingleMeterCsvParseDialog({
                                 {/* Split Part Names - shown when column is split */}
                                 {columnSplits[idx] && columnSplits[idx] !== 'none' && previewData?.rows[0] && (
                                   <div className="mt-3 p-3 border rounded-md bg-accent/5">
-                                    <Label className="text-xs mb-2 block text-muted-foreground">Split Part Names</Label>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                    <Label className="text-xs mb-2 block text-muted-foreground">Split Part Configuration</Label>
+                                    <div className="space-y-2">
                                       {applySplits(previewData.rows[0], idx).map((part, partIdx) => {
                                         const columnKey = `${idx}-${partIdx}`;
                                         return (
-                                          <div key={columnKey}>
+                                          <div key={columnKey} className="flex items-center gap-2">
                                             <Input
                                               value={splitColumnNames[columnKey] || ''}
                                               onChange={(e) => setSplitColumnNames(prev => ({
                                                 ...prev,
                                                 [columnKey]: e.target.value
                                               }))}
-                                              className="h-7 text-xs"
+                                              className="h-7 text-xs flex-1"
                                               placeholder={`Part ${partIdx + 1} (${part?.toString().substring(0, 10) || '...'})`}
                                             />
+                                            <Select
+                                              value={splitColumnDataTypes[columnKey] || 'string'}
+                                              onValueChange={(val: 'datetime' | 'float' | 'int' | 'string' | 'boolean') => 
+                                                setSplitColumnDataTypes(prev => ({...prev, [columnKey]: val}))
+                                              }
+                                            >
+                                              <SelectTrigger className="h-7 text-xs w-28 bg-background">
+                                                <SelectValue />
+                                              </SelectTrigger>
+                                              <SelectContent className="bg-background z-50">
+                                                <SelectItem value="datetime">Datetime</SelectItem>
+                                                <SelectItem value="float">Float</SelectItem>
+                                                <SelectItem value="int">Integer</SelectItem>
+                                                <SelectItem value="string">String</SelectItem>
+                                                <SelectItem value="boolean">Boolean</SelectItem>
+                                              </SelectContent>
+                                            </Select>
                                           </div>
                                         );
                                       })}
